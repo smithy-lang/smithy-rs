@@ -52,15 +52,15 @@ class ServerOperationRegistryGenerator(
         renderOperationRegistryBuilderStruct(writer)
         renderOperationRegistryBuilderError(writer)
         renderOperationRegistryBuilderDefault(writer)
-        renderOperationRegistryBuilderImpl(writer)
+        renderOperationRegistryBuilderImplementation(writer)
         renderRouterImplFromOperationRegistryBuilder(writer)
     }
 
     /*
-     * Renders the OperationRegistry structure, holding all the operations and their generic inputs.
+     * Renders the `OperationRegistry` structure, holding all the operations and their generic inputs.
      */
     private fun renderOperationRegistryStruct(writer: RustWriter) {
-        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation
+        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation.
         Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlock(
             """
@@ -81,11 +81,10 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Renders the OperationRegistryBuilder structure, used to build the OperationRegistry and then convert it
-     * into a Smithy Router.
+     * Renders the `OperationRegistryBuilder` structure, used to build the `OperationRegistry`, which can then be converted into a Smithy router.
      */
     private fun renderOperationRegistryBuilderStruct(writer: RustWriter) {
-        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation
+        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation.
         Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlock(
             """
@@ -106,11 +105,10 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Renders the OperationRegistryBuilder Error type, used to error out in case there are uninitialized fields.
-     * This structs implement Debug, Display and std::error::Error.
+     * Renders the `OperationRegistryBuilderError` type, used to error out in case there are uninitialized fields.
+     * This enum implement `Debug`, `Display` and `std::error::Error`.
      */
     private fun renderOperationRegistryBuilderError(writer: RustWriter) {
-        // derive[Debug] is needed to impl std::error::Error
         Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
         writer.rustTemplate(
             """
@@ -131,8 +129,8 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Renders the OperationRegistryBuilder Default implementation , used to create a new builder that can be
-     * later filled with operations and their routees.
+     * Renders the `OperationRegistryBuilder` `Default` implementation, used to create a new builder that can be
+     * populated with the service's operations.
      */
     private fun renderOperationRegistryBuilderDefault(writer: RustWriter) {
         writer.rustBlockTemplate(
@@ -155,11 +153,11 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Renders the OperationRegistryBuilder implementation, where operations and their routes
-     * are stored. The build() method converts the builder into a real OperationRegistry instance.
+     * Renders the `OperationRegistryBuilder` implementation, where operations are stored.
+     * The `build()` method converts the builder into an `OperationRegistry` instance.
      */
     private fun renderOperationRegistryBuilderImpl(writer: RustWriter) {
-        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation
+        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation.
         Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlockTemplate(
             """
@@ -195,15 +193,15 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Renders the conversion between the OperationRegistry and the Router via the into() method.
+     * Renders the conversion code between the `OperationRegistry` and the `Router` via the `std::convert::From` trait.
      */
     private fun renderRouterImplFromOperationRegistryBuilder(writer: RustWriter) {
-        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation
+        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation.
         val operationsTraitBounds = operations
             .mapIndexed { i, operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
                 """Op$i: crate::operation_handler::Handler<B, In$i, crate::input::${operationName}Input>,
-            In$i: 'static"""
+                In$i: 'static"""
             }.joinToString(separator = ",\n")
         Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlockTemplate(
@@ -237,7 +235,7 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Renders the PhantomData generic members.
+     * Renders the `PhantomData` generic members.
      */
     private fun phantomMembers(): String {
         return operationNames
@@ -246,7 +244,7 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Generate the requestSpecs for an operation based on its route.
+     * Generate the `RequestSpec`s for an operation based on its HTTP-bound route.
      */
     private fun OperationShape.requestSpec(): String {
         val httpTrait = httpBindingResolver.httpTrait(this)

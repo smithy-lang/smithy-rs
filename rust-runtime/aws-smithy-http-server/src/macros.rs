@@ -221,5 +221,4 @@ macro_rules! opaque_future {
     };
 }
 
-// Allow export of opaque_future macro.
 pub use opaque_future;

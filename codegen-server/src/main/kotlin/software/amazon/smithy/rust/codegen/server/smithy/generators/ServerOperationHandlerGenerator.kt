@@ -50,17 +50,17 @@ class ServerOperationHandlerGenerator(
     }
 
     /*
-     * Renders the implementation of the Handler trait for all available operations.
-     * Handlers are implemented for FnOnce signatures with and without state management.
+     * Renders the implementation of the `Handler` trait for all operations.
+     * Handlers are implemented for `FnOnce` function types whose signatures take in state or not.
      */
-    private fun renderHandlersImpl(writer: RustWriter) {
+    private fun renderHandlerImplementations(writer: RustWriter) {
         operations.map { operation ->
             val operationName = symbolProvider.toSymbol(operation).name
             val inputName = "crate::input::${operationName}Input"
             val inputWrapperName = "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
             val outputWrapperName = "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
             val stateList = listOf<Boolean>(true, false)
-            // We need different implementation with or without state management.
+            // We need two implementations: one for functions taking in state, and one for functions not taking in state.
             stateList.map { state ->
                 val fnSignature = if (state) {
                     "impl<B, Fun, Fut, S> Handler<B, $serverCrate::Extension<S>, $inputName> for Fun"
@@ -78,11 +78,11 @@ class ServerOperationHandlerGenerator(
                 ) {
                     val callImpl = if (state) {
                         """let state = match $serverCrate::Extension::<S>::from_request(&mut req).await {
-                        Ok(v) => v,
-                        Err(r) => return r.into_response().map($serverCrate::body::box_body)
+                            Ok(v) => v,
+                            Err(r) => return r.into_response().map($serverCrate::body::box_body)
                         };
                         let input_inner = input_wrapper.into();
-                            let output_inner = self(input_inner, state).await;"""
+                        let output_inner = self(input_inner, state).await;"""
                     } else {
                         """let input_inner = input_wrapper.into();
                             let output_inner = self(input_inner).await;"""
@@ -111,8 +111,9 @@ class ServerOperationHandlerGenerator(
     }
 
     /*
-     * Generates the trait bounds of the Handler trait implementation, depending on the presence of state
-     * and fallible vs infallible results.
+     * Generates the trait bounds of the `Handler` trait implementation, depending on:
+     *     - the presence of state; and
+     *     - whether the operation is fallible or not.
      */
     private fun operationTraitBounds(operation: OperationShape, inputName: String, state: Boolean): String {
         val inputFn = if (state) {
@@ -137,8 +138,8 @@ class ServerOperationHandlerGenerator(
     }
 
     /*
-     * This method is used to "generate" the OperationHandler struct, the Handler trait and all the
-     * code needed to support the indirection used to call the user defined functions, AKA operations
+     * This method is used to "generate" the `OperationHandler` struct, the `Handler` trait and all the
+     * code needed to support the indirection used to call the user defined functions, which implement the service's operations.
      * implementations.
      *
      * TODO: remove this hacky function and move this piece of code into an inlinable crate. The crate should
