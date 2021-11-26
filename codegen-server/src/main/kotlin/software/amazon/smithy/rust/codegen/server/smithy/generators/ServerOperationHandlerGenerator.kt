@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -39,6 +40,7 @@ class ServerOperationHandlerGenerator(
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
+        "Phantom" to ServerRuntimeType.Phantom,
         "http" to RuntimeType.http,
     )
 
@@ -48,7 +50,7 @@ class ServerOperationHandlerGenerator(
     }
 
     /*
-     * Render the implementation of the Handler trait for all available operations.
+     * Renders the implementation of the Handler trait for all available operations.
      * Handlers are implemented for FnOnce signatures with and without state management.
      */
     private fun renderHandlersImpl(writer: RustWriter) {
@@ -108,6 +110,10 @@ class ServerOperationHandlerGenerator(
         }
     }
 
+    /*
+     * Generates the trait bounds of the Handler trait implementation, depending on the presence of state
+     * and fallible vs infallible results.
+     */
     private fun operationTraitBounds(operation: OperationShape, inputName: String, state: Boolean): String {
         val inputFn = if (state) {
             """S: Send + Clone + Sync + 'static,
@@ -148,7 +154,7 @@ class ServerOperationHandlerGenerator(
             pub struct OperationHandler<H, B, R, I> {
                 handler: H,
                 ##[allow(clippy::type_complexity)]
-                _marker: std::marker::PhantomData<fn() -> (B, R, I)>,
+                _marker: #{Phantom}<fn() -> (B, R, I)>,
             }
             impl<H, B, R, I> Clone for OperationHandler<H, B, R, I>
             where
@@ -157,7 +163,7 @@ class ServerOperationHandlerGenerator(
                 fn clone(&self) -> Self {
                     Self {
                         handler: self.handler.clone(),
-                        _marker: std::marker::PhantomData,
+                        _marker: #{Phantom},
                     }
                 }
             }
@@ -165,7 +171,7 @@ class ServerOperationHandlerGenerator(
             pub fn operation<H, B, R, I>(handler: H) -> OperationHandler<H, B, R, I> {
                 OperationHandler {
                     handler,
-                    _marker: std::marker::PhantomData,
+                    _marker: #{Phantom},
                 }
             }
             impl<H, B, R, I> #{Tower}::Service<#{http}::Request<B>> for OperationHandler<H, B, R, I>

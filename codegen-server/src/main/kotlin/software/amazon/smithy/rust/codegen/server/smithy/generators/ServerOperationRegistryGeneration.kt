@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
@@ -44,16 +43,30 @@ class ServerOperationRegistryGenerator(
         "Display" to RuntimeType.Display,
         "StdError" to RuntimeType.StdError
     )
+    // TODO: the content-type should be taken from somewhere else.
     private val httpBindingResolver: HttpBindingResolver =
         HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
+    private val operationRegistryName = "${service.getContextualName(service)}OperationRegistry"
+    private val operationRegistryBuilderName = "${operationRegistryName}Builder"
+    private val genericArguments = "B, " + operations.mapIndexed { i, _ -> "Op$i, In$i" }.joinToString()
+    private val operationRegistryNameWithArguments = "$operationRegistryName<$genericArguments>"
+    private val operationRegistryBuilderNameWithArguments = "$operationRegistryBuilderName<$genericArguments>"
 
     fun render(writer: RustWriter) {
-        // Registry
-        Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
-        val genericArguments = operations.mapIndexed { i, _ -> "Op$i, In$i" }.joinToString()
-        val operationsGenericArguments = "B, $genericArguments"
-        val operationRegistryName = "${service.getContextualName(service)}OperationRegistry"
-        val operationRegistryNameWithArguments = "$operationRegistryName<$operationsGenericArguments>"
+        renderOperationRegistryStruct(writer)
+        renderOperationRegistryBuilderStruct(writer)
+        renderOperationRegistryBuilderError(writer)
+        renderOperationRegistryBuilderDefault(writer)
+        renderOperationRegistryBuilderImpl(writer)
+        renderRouterImplFromOperationRegistryBuilder(writer)
+    }
+
+    /*
+     * Renders the OperationRegistry structure, holding all the operations and their generic inputs.
+     */
+    private fun renderOperationRegistryStruct(writer: RustWriter) {
+        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation
+        Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlock(
             """
             pub struct $operationRegistryNameWithArguments
@@ -62,19 +75,47 @@ class ServerOperationRegistryGenerator(
             val members = operationNames
                 .mapIndexed { i, operationName -> "$operationName: Op$i" }
                 .joinToString(separator = ",\n")
-            val phantomMembers = operationNames
-                .mapIndexed { i, _ -> "In$i" }
-                .joinToString(separator = ",\n")
-            rust(
+            rustTemplate(
                 """
                 $members,
-                _phantom: std::marker::PhantomData<(B, $phantomMembers)>,
-                """
+                _phantom: #{Phantom}<(B, ${phantomMembers()})>,
+                """,
+                *codegenScope
             )
         }
-        // Builder error
-        val operationRegistryBuilderName = "${operationRegistryName}Builder"
-        val operationRegistryBuilderNameWithArguments = "$operationRegistryBuilderName<$operationsGenericArguments>"
+    }
+
+    /*
+     * Renders the OperationRegistryBuilder structure, used to build the OperationRegistry and then convert it
+     * into a Smithy Router.
+     */
+    private fun renderOperationRegistryBuilderStruct(writer: RustWriter) {
+        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation
+        Attribute.Custom("allow(clippy::all)").render(writer)
+        writer.rustBlock(
+            """
+            pub struct $operationRegistryBuilderNameWithArguments
+            """.trimIndent()
+        ) {
+            val members = operationNames
+                .mapIndexed { i, operationName -> "$operationName: Option<Op$i>" }
+                .joinToString(separator = ",\n")
+            rustTemplate(
+                """
+                $members,
+                _phantom: #{Phantom}<(B, ${phantomMembers()})>,
+                """,
+                *codegenScope
+            )
+        }
+    }
+
+    /*
+     * Renders the OperationRegistryBuilder Error type, used to error out in case there are uninitialized fields.
+     * This structs implement Debug, Display and std::error::Error.
+     */
+    private fun renderOperationRegistryBuilderError(writer: RustWriter) {
+        // derive[Debug] is needed to impl std::error::Error
         Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
         writer.rustTemplate(
             """
@@ -92,29 +133,16 @@ class ServerOperationRegistryGenerator(
             """.trimIndent(),
             *codegenScope
         )
-        // Builder
-        writer.rustBlock(
-            """
-            pub struct $operationRegistryBuilderNameWithArguments
-            """.trimIndent()
-        ) {
-            val members = operationNames
-                .mapIndexed { i, operationName -> "$operationName: Option<Op$i>" }
-                .joinToString(separator = ",\n")
-            val phantomMembers = operationNames
-                .mapIndexed { i, _ -> "In$i" }
-                .joinToString(separator = ",\n")
-            rust(
-                """
-                $members,
-                _phantom: std::marker::PhantomData<(B, $phantomMembers)>,
-                """
-            )
-        }
-        // Builder default
+    }
+
+    /*
+     * Renders the OperationRegistryBuilder Default implementation , used to create a new builder that can be
+     * later filled with operations and their routees.
+     */
+    private fun renderOperationRegistryBuilderDefault(writer: RustWriter) {
         writer.rustBlockTemplate(
             """
-            impl<$operationsGenericArguments> Default for $operationRegistryBuilderNameWithArguments
+            impl<$genericArguments> Default for $operationRegistryBuilderNameWithArguments
             """.trimIndent()
         ) {
             val defaultOperations = operationNames.map { operationName ->
@@ -123,15 +151,24 @@ class ServerOperationRegistryGenerator(
             rustTemplate(
                 """
                 fn default() -> Self {
-                    Self { $defaultOperations, _phantom: std::marker::PhantomData }
+                    Self { $defaultOperations, _phantom: #{Phantom} }
                 }
-                """.trimIndent()
+                """,
+                *codegenScope
             )
         }
-        // Builder impl
+    }
+
+    /*
+     * Renders the OperationRegistryBuilder implementation, where operations and their routes
+     * are stored. The build() method converts the builder into a real OperationRegistry instance.
+     */
+    private fun renderOperationRegistryBuilderImpl(writer: RustWriter) {
+        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation
+        Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlockTemplate(
             """
-            impl<$operationsGenericArguments> $operationRegistryBuilderNameWithArguments
+            impl<$genericArguments> $operationRegistryBuilderNameWithArguments
             """.trimIndent(),
             *codegenScope
         ) {
@@ -154,32 +191,37 @@ class ServerOperationRegistryGenerator(
                 """
                 $registerOperations
                 pub fn build(self) -> Result<$operationRegistryNameWithArguments, ${operationRegistryBuilderName}Error> {
-                    Ok($operationRegistryName { $registerOperationsBuilder, _phantom: std::marker::PhantomData })
+                    Ok($operationRegistryName { $registerOperationsBuilder, _phantom: #{Phantom} })
                 }
-                """.trimIndent(),
+                """,
                 *codegenScope
             )
         }
+    }
 
+    /*
+     * Renders the conversion between the OperationRegistry and the Router via the into() method.
+     */
+    private fun renderRouterImplFromOperationRegistryBuilder(writer: RustWriter) {
+        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation
+        val operationsTraitBounds = operationNames
+            .mapIndexed { i, operationName ->
+                """Op$i: crate::operation_handler::Handler<B, In$i, crate::input::${operationName}Input>,
+            In$i: 'static"""
+            }.joinToString(separator = ",\n")
+        Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlockTemplate(
             """
-            impl<$operationsGenericArguments> From<$operationRegistryNameWithArguments> for #{Router}<B>
+            impl<$genericArguments> From<$operationRegistryNameWithArguments> for #{Router}<B>
             where
                 B: Send + 'static,
-                ${operationsTraitBounds()}
+                $operationsTraitBounds
             """.trimIndent(),
             *codegenScope
         ) {
             rustBlock("fn from(registry: $operationRegistryNameWithArguments) -> Self") {
-                val operationInOutWrappers = operations.map {
-                    val operationName = symbolProvider.toSymbol(it).name
-                    Pair(
-                        "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}",
-                        "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
-                    )
-                }
                 val requestSpecsVarNames = operationNames.map { "${it}_request_spec" }
-                val routes = requestSpecsVarNames.zip(operationNames).zip(operationInOutWrappers) { (requestSpecVarName, operationName), (inputWrapper, outputWrapper) ->
+                val routes = requestSpecsVarNames.zip(operationNames) { requestSpecVarName, operationName ->
                     ".route($requestSpecVarName, crate::operation_handler::operation(registry.$operationName))"
                 }.joinToString(separator = "\n")
 
@@ -198,20 +240,23 @@ class ServerOperationRegistryGenerator(
         }
     }
 
-    private fun operationsTraitBounds(): String = operations
-        .mapIndexed { i, operation ->
-            val operationName = symbolProvider.toSymbol(operation).name
-            val inputName = "crate::input::${operationName}Input"
-            """Op$i: crate::operation_handler::Handler<B, In$i, $inputName>,
-            In$i: 'static"""
-        }.joinToString(separator = ",\n")
+    /*
+     * Renders the PhantomData generic members.
+     */
+    private fun phantomMembers(): String {
+        return operationNames
+            .mapIndexed { i, _ -> "In$i" }
+            .joinToString(separator = ",\n")
+    }
 
+    /*
+     * Generate the requestSpecs for an operation based on its route.
+     */
     private fun OperationShape.requestSpec(): String {
         val httpTrait = httpBindingResolver.httpTrait(this)
         val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
 
-        // TODO Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
-
+        // TODO: Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
         val pathSegments = httpTrait.uri.segments.map {
             "$namespace::PathSegment::" +
                 if (it.isGreedyLabel) "Greedy"
