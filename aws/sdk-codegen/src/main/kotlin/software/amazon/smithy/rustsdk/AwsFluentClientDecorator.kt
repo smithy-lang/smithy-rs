@@ -183,30 +183,27 @@ private class AwsFluentClientDocs(codegenContext: CodegenContext) : FluentClient
                         /// ## Examples
                         /// **Constructing a client and invoking an operation**
                         /// ```rust,no_run
-                        /// ##[tokio::main]
-                        /// async fn main() -> Result<(), $crateName::Error> {
-                        ///     let config = #{aws_config}::load_from_env().await;
+                        /// ## async fn docs() {
+                        ///     // create a shared configuration. This can be used & shared between multiple service clients.
+                        ///     let shared_config = #{aws_config}::load_from_env().await;
                         ///     let client = $crateName::Client::new(&shared_config);
                         ///     // invoke an operation
                         ///     /* let rsp = client
                         ///         .<operationname>().
                         ///         .<param>("some value")
                         ///         .send().await; */
-                        ///     Ok(())
-                        /// }
+                        /// ## }
                         /// ```
                         /// **Constructing a client with custom configuration**
                         /// ```rust,no_run
                         /// use #{aws_config}::RetryConfig;
-                        /// ##[tokio::main]
-                        /// async fn example() -> Result<(), $crateName::Error> {
+                        /// ## async fn docs() {
                         ///     let shared_config = #{aws_config}::load_from_env().await;
                         ///     let config = $crateName::config::Builder::from(&shared_config)
                         ///         .retry_config(RetryConfig::disabled())
                         ///         .build();
                         ///     let client = $crateName::Client::from_conf(config);
-                        ///     Ok(())
-                        /// }
+                        /// ## }
                         """,
                         *codegenScope
                     )

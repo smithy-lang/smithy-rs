@@ -50,7 +50,7 @@ class LibRsGenerator(
                 The entry point for must customers will be [`Client`]. [`Client`] exposes one method for each API offered
                 by the service.
 
-                Some APIs require complex arguments. These are available in [`model`].
+                Some APIs require complex or nested arguments. These exist in [`model`].
 
                 Lastly, errors that can be returned by the service are contained within [`error`]. [`Error`] defines a meta
                 error encompassing all possible errors that can be returned by the service.
