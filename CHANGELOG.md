@@ -5,6 +5,7 @@ vNext (Month Day, Year)
 - Improve docs on `aws-smithy-client` (smithy-rs#855)
 - Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
 - `SdkError` now includes a variant `TimeoutError` for when a request times out (smithy-rs#885)
+- Avoid serializing repetitive `xmlns` attributes in generated XML serializers. (aws-sdk-rust#301, smithy-rs#892)
 
 **Breaking Changes**
 - (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
