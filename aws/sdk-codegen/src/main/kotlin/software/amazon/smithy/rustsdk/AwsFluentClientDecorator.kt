@@ -5,12 +5,16 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -22,9 +26,12 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ClientGenerics
+import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.util.expectTrait
 
 private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig).copy(optional = true)
@@ -67,7 +74,10 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
                         "AwsFluentClient_retry" to types.smithyClientRetry,
                     )
                 ),
-                customizations = listOf(AwsPresignedFluentBuilderMethod(codegenContext.runtimeConfig))
+                customizations = listOf(
+                    AwsPresignedFluentBuilderMethod(codegenContext.runtimeConfig),
+                    AwsFluentClientDocs(codegenContext)
+                )
             ).render(writer)
             AwsFluentClientExtensions(types).render(writer)
         }
@@ -140,6 +150,69 @@ private class AwsFluentClientExtensions(private val types: Types) {
                 "aws_hyper" to types.awsHyper,
                 "aws_types" to types.awsTypes
             )
+        }
+    }
+}
+
+private class AwsFluentClientDocs(codegenContext: CodegenContext) : FluentClientCustomization() {
+    private val serviceName = codegenContext.serviceShape.expectTrait<TitleTrait>().value
+    private val serviceShape = codegenContext.serviceShape
+    private val crateName = codegenContext.moduleUseName()
+    private val codegenScope =
+        arrayOf("aws_config" to codegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
+
+    // Usage docs on STS must be suppressed—aws-config cannot be added as a dev-dependency because it would create
+    // a circular dependency
+    private fun suppressUsageDocs(): Boolean =
+        serviceShape.id == ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615")
+
+    override fun section(section: FluentClientSection): Writable {
+        return when (section) {
+            is FluentClientSection.FluentClientDocs -> writable {
+                rustTemplate(
+                    """
+                    /// Client for $serviceName
+                    ///
+                    /// Client for invoking operations on $serviceName. Each operation on $serviceName is a method on this
+                    /// this struct. `.send()` MUST be invoked on the generated operations to dispatch the request to the service."""
+                )
+                if (!suppressUsageDocs()) {
+                    rustTemplate(
+                        """
+                        ///
+                        /// ## Examples
+                        /// **Constructing a client and invoking an operation**
+                        /// ```rust,no_run
+                        /// ##[tokio::main]
+                        /// async fn main() -> Result<(), $crateName::Error> {
+                        ///     let config = #{aws_config}::load_from_env().await;
+                        ///     let client = $crateName::Client::new(&shared_config);
+                        ///     // invoke an operation
+                        ///     /* let rsp = client
+                        ///         .<operationname>().
+                        ///         .<param>("some value")
+                        ///         .send().await; */
+                        ///     Ok(())
+                        /// }
+                        /// ```
+                        /// **Constructing a client with custom configuration**
+                        /// ```rust,no_run
+                        /// use #{aws_config}::RetryConfig;
+                        /// ##[tokio::main]
+                        /// async fn example() -> Result<(), $crateName::Error> {
+                        ///     let shared_config = #{aws_config}::load_from_env().await;
+                        ///     let config = $crateName::config::Builder::from(&shared_config)
+                        ///         .retry_config(RetryConfig::disabled())
+                        ///         .build();
+                        ///     let client = $crateName::Client::from_conf(config);
+                        ///     Ok(())
+                        /// }
+                        """,
+                        *codegenScope
+                    )
+                }
+            }
+            else -> emptySection
         }
     }
 }

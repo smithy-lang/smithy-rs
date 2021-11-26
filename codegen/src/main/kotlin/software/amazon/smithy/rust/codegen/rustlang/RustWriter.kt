@@ -24,6 +24,34 @@ import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.utils.CodeWriter
 import java.util.function.BiFunction
 
+/**
+ * # RustWriter (and Friends)
+ *
+ * RustWriter contains a set of features to make generating Rust code much more ergonomic ontop of the Smithy CodeWriter
+ * interface.
+ *
+ * ## Recommended Patterns
+ * For templating large blocks of Rust code, the preferred method is [rustTemplate]. This enables sharing a set of template
+ * variables by creating a "codegenScope."
+ *
+ * ```kotlin
+ * fun requestHeaders(): Writeable { ... }
+ * let codegenScope = arrayOf("http" to CargoDependency.http)
+ * let writer = RustWriter() // in normal code, you would normally get a RustWriter passed to you
+ * writer.rustTemplate("""
+ *  // regular types can be rendered directly
+ *  let request = #{http}::Request::builder().uri("http://example.com");
+ *  // writeables can be rendered with `:W`
+ *  let request_headers = #{request_headers:W};
+ * """, *codegenScope, "request_headers" to requestHeaders())
+ * ```
+ *
+ * For short snippets of code [rust] can be used. This is equivalent but only positional arguments can be used.
+ *
+ * For formatting blocks where the block content generation requires looping, [rustBlock] and the equivalent [rustBlockTemplate]
+ * are the recommended approach.
+ */
+
 fun <T : CodeWriter> T.withBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
@@ -103,7 +131,7 @@ fun <T : CodeWriter> T.rust(
     this.write(contents.trim(), *args)
 }
 
-// `RuntimeType`: `#D` => [`NameOfType`](link_to_type)
+/* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
     check(scope.distinctBy { it.first.toLowerCase() }.size == scope.size) { "Duplicate cased keys not supported" }
     return template.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult ->
@@ -202,6 +230,10 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMis
     return this
 }
 
+fun RustWriter.superDocs(text: String, vararg args: Any): RustWriter {
+    return docs(text, newlinePrefix = "//! ", args = args)
+}
+
 /**
  * Write RustDoc-style docs into the writer
  *
@@ -281,6 +313,7 @@ class RustWriter private constructor(
         }
         putFormatter('T', formatter)
         putFormatter('D', RustDocLinker())
+        putFormatter('W', RustWriteableInjector())
     }
 
     fun module(): String? = if (filename.startsWith("src") && filename.endsWith(".rs")) {
@@ -407,6 +440,20 @@ class RustWriter private constructor(
                 is Symbol -> "[`${t.name}`](${t.rustType().qualifiedName()})"
                 else -> throw CodegenException("Invalid type provided to RustDocLinker ($t) expected Symbol")
             }
+        }
+    }
+
+    /**
+     * Formatter to enable formatting any [writable] with the #W formatter.
+     */
+    inner class RustWriteableInjector : BiFunction<Any, String, String> {
+        @Suppress("UNCHECKED_CAST")
+        override fun apply(t: Any, u: String): String {
+            val func = t as RustWriter.() -> Unit
+            val innerWriter = RustWriter(filename, namespace, printWarning = false)
+            func(innerWriter)
+            innerWriter.dependencies.forEach { addDependency(it) }
+            return innerWriter.toString().trimEnd()
         }
     }
 
