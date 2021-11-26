@@ -18,8 +18,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
-import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -28,6 +26,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  */
 class ServerOperationRegistryGenerator(
     codegenContext: CodegenContext,
+    private val httpBindingResolver: HttpBindingResolver,
     private val operations: List<OperationShape>,
 ) {
     private val serverCrate = "aws_smithy_http_server"
@@ -43,9 +42,6 @@ class ServerOperationRegistryGenerator(
         "Display" to RuntimeType.Display,
         "StdError" to RuntimeType.StdError
     )
-    // TODO: the content-type should be taken from somewhere else.
-    private val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
     private val operationRegistryName = "${service.getContextualName(service)}OperationRegistry"
     private val operationRegistryBuilderName = "${operationRegistryName}Builder"
     private val genericArguments = "B, " + operations.mapIndexed { i, _ -> "Op$i, In$i" }.joinToString()
@@ -204,8 +200,9 @@ class ServerOperationRegistryGenerator(
      */
     private fun renderRouterImplFromOperationRegistryBuilder(writer: RustWriter) {
         // A lot of things can become pretty complex in this type as it will hold 2 generics per operation
-        val operationsTraitBounds = operationNames
-            .mapIndexed { i, operationName ->
+        val operationsTraitBounds = operations
+            .mapIndexed { i, operation ->
+                val operationName = symbolProvider.toSymbol(operation).name
                 """Op$i: crate::operation_handler::Handler<B, In$i, crate::input::${operationName}Input>,
             In$i: 'static"""
             }.joinToString(separator = ",\n")

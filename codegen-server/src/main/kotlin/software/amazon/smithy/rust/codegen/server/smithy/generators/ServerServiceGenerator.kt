@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 
 /**
  * ServerServiceGenerator
@@ -24,6 +25,7 @@ class ServerServiceGenerator(
     private val rustCrate: RustCrate,
     private val protocolGenerator: ProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
+    private val httpBindingResolver: HttpBindingResolver,
     private val context: CodegenContext,
     private val decorator: RustCodegenDecorator,
 ) {
@@ -58,7 +60,7 @@ class ServerServiceGenerator(
                 .render(writer)
         }
         rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->
-            ServerOperationRegistryGenerator(context, operations)
+            ServerOperationRegistryGenerator(context, httpBindingResolver, operations)
                 .render(writer)
         }
     }

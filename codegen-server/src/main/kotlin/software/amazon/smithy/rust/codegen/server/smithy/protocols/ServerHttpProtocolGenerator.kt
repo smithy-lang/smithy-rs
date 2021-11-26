@@ -88,7 +88,7 @@ private class ServerHttpProtocolImplGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val httpBindingResolver = protocol.httpBindingResolver
+    val httpBindingResolver = protocol.httpBindingResolver
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
 
