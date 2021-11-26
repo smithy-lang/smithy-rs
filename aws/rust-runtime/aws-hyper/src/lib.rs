@@ -98,10 +98,15 @@ pub fn https() -> StandardClient {
 }
 
 mod static_tests {
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(any(feature = "native-tls", feature = "rustls"))]
     #[allow(dead_code)]
     fn construct_default_client() {
+        #[cfg(feature = "rustls")]
         let c = crate::Client::https();
+        // If we are compiling this function & rustls is not enabled, then native-tls MUST be enabled
+        #[cfg(not(feature = "rustls"))]
+        let c = crate::Client::native_tls();
+
         fn is_send_sync<T: Send + Sync>(_c: T) {}
         is_send_sync(c);
     }

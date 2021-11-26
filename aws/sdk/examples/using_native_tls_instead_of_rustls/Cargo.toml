@@ -1,0 +1,16 @@
+[package]
+name = "using_native_tls_instead_of_rustls"
+version = "0.1.0"
+authors = ["Zelda Hessler zhessler@amazon.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config" , default-features = false, features = ["default-provider", "native-tls", "rt-tokio", "dns", "tcp-connector"] }
+aws-sdk-s3 = { package = "aws-sdk-s3", path = "../../build/aws-sdk/sdk/s3", default-features = false, features = ["native-tls", "client"] }
+aws-sdk-sts = { package = "aws-sdk-sts", path = "../../build/aws-sdk/sdk/sts", default-features = false, features = ["native-tls", "client"] }
+aws-hyper = { package = "aws-hyper", path = "../../build/aws-sdk/sdk/aws-hyper", default-features = false, features = ["native-tls"] }
+aws-smithy-client = { package = "aws-smithy-client", path = "../../build/aws-sdk/sdk/aws-smithy-client", default-features = false, features = ["native-tls"] }
+tokio = { version = "1", features = ["full"] }
+tracing-subscriber = "0.2.18"

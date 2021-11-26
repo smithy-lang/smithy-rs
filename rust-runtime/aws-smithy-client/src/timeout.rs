@@ -282,7 +282,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rustls"))]
 mod test {
     use std::sync::Arc;
     use std::time::Duration;

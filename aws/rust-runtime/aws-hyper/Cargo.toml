@@ -16,7 +16,7 @@ rustls = ["hyper-rustls", "aws-smithy-client/rustls"]
 aws-endpoint = { path = "../aws-endpoint" }
 aws-http = { path = "../aws-http" }
 aws-sig-auth = { path = "../aws-sig-auth" }
-aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
+aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", default-features = false }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-http-tower = { path = "../../../rust-runtime/aws-smithy-http-tower" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }

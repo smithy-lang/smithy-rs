@@ -13,18 +13,23 @@
 //! with `rustls` will be constructed during client creation. However, if you are creating a Smithy
 //! [`Client`](crate::Client), directly, use the `https()` method to match the default behavior:
 //! ```rust
+//! # #[cfg(feature = "https")]
+//! # fn example() {
 //! use aws_smithy_client::Client;
 //! use aws_smithy_client::erase::DynConnector;
 //!
 //! // TODO: replace this with your middleware
 //! type MyMiddleware = tower::layer::util::Identity;
 //! let client = Client::<DynConnector, MyMiddleware>::https();
+//! # }
 //! ```
 //!
 //! ### Create a Hyper client with a custom timeout
 //! One common use case for constructing a connector directly is setting `CONNECT` timeouts. Since the
 //! internal connector is cheap to clone, you can also use this to share a connector between multiple services.
 //! ```rust
+//! # #[cfg(feature = "https")]
+//! # fn example() {
 //! use std::time::Duration;
 //! use aws_smithy_client::{Client, conns, hyper_ext};
 //! use aws_smithy_client::erase::DynConnector;
@@ -36,6 +41,7 @@
 //! type MyMiddleware = tower::layer::util::Identity;
 //! // once you have a connector, use it to construct a Smithy client:
 //! let client = Client::<DynConnector, MyMiddleware>::new(DynConnector::new(connector));
+//! # }
 //! ```
 
 use std::error::Error;
@@ -168,6 +174,8 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// between multiple Smithy clients.
 ///
 /// ```rust
+/// # #[cfg(feature = "https")]
+/// # fn example() {
 /// use tower::layer::util::Identity;
 /// use aws_smithy_client::{conns, hyper_ext};
 /// use aws_smithy_client::erase::DynConnector;
@@ -176,6 +184,7 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// // this client can then be used when constructing a Smithy Client
 /// // TODO: replace `Identity` with your middleware implementation
 /// let client = aws_smithy_client::Client::<DynConnector, Identity>::new(DynConnector::new(hyper_connector));
+/// # }
 /// ```
 pub struct Builder {
     timeout: timeout::Settings,
@@ -507,7 +516,8 @@ mod timeout_middleware {
         }
     }
 
-    #[cfg(test)]
+    // These tests run forever unless rustls is enabled
+    #[cfg(all(test, feature = "rustls"))]
     mod test {
         use std::time::Duration;
 
@@ -595,7 +605,8 @@ mod timeout_middleware {
     }
 }
 
-#[cfg(test)]
+// These tests run forever unless rustls is enabled
+#[cfg(all(test, feature = "rustls"))]
 mod test {
     use std::io::{Error, ErrorKind};
     use std::pin::Pin;

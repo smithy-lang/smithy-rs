@@ -124,7 +124,8 @@ impl<C, R> Builder<C, (), R> {
     /// Use a function-like middleware that directly maps each request.
     ///
     /// ```rust
-    /// use aws_smithy_client::Builder;
+    /// # #[cfg(feature = "https")]
+    /// # fn not_main() {
     /// use aws_smithy_http::body::SdkBody;
     /// let client = Builder::new()
     ///   .https()
@@ -133,6 +134,7 @@ impl<C, R> Builder<C, (), R> {
     ///   })
     ///   .build();
     /// # client.check();
+    /// # }
     /// ```
     pub fn middleware_fn<F>(self, map: F) -> Builder<C, tower::util::MapRequestLayer<F>, R>
     where

@@ -60,6 +60,10 @@ pub mod conns {
         HTTPS_NATIVE_ROOTS.clone()
     }
 
+    #[cfg(feature = "rustls")]
+    pub type Rustls =
+        crate::hyper_ext::Adapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
+
     #[cfg(feature = "native-tls")]
     pub fn native_tls() -> NativeTls {
         hyper_tls::HttpsConnector::new()
@@ -67,10 +71,6 @@ pub mod conns {
 
     #[cfg(feature = "native-tls")]
     pub type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
-
-    #[cfg(feature = "rustls")]
-    pub type Rustls =
-        crate::hyper_ext::Adapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
 }
 
 use std::error::Error;
@@ -259,5 +259,15 @@ where
         let _ = |o: static_tests::ValidTestOperation| {
             let _ = self.call_raw(o);
         };
+    }
+}
+
+#[cfg(all(test, feature = "native-tls"))]
+mod test {
+    use super::conns;
+
+    #[test]
+    fn test_can_create_native_tls_conn() {
+        let _ = conns::native_tls();
     }
 }
