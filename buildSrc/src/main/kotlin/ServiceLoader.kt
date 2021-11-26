@@ -89,7 +89,15 @@ data class AwsService(
     val humanName: String
 ) {
     fun files(): List<File> = listOf(modelFile) + extraFiles
-    fun Project.examples(): Boolean = projectDir.resolve("examples").resolve(module).exists()
+    fun Project.examples(): File = projectDir.resolve("examples").resolve(module)
+    /**
+     * Generate a link to the examples for a given service
+     */
+    fun examplesUri(project: Project) = if (project.examples().exists()) {
+        "https://github.com/awslabs/aws-sdk-rust/tree/main/examples/$module"
+    } else {
+        null
+    }
 }
 
 fun AwsService.crate(): String = "aws-sdk-$module"
