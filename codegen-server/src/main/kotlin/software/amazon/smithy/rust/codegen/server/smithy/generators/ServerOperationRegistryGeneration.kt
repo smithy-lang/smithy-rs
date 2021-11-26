@@ -39,7 +39,6 @@ class ServerOperationRegistryGenerator(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "Phantom" to ServerRuntimeType.Phantom,
-        "Display" to RuntimeType.Display,
         "StdError" to RuntimeType.StdError
     )
     private val operationRegistryName = "${service.getContextualName(service)}OperationRegistry"
@@ -118,7 +117,7 @@ class ServerOperationRegistryGenerator(
             pub enum ${operationRegistryBuilderName}Error {
                 UninitializedField(&'static str)
             }
-            impl #{Display} for ${operationRegistryBuilderName}Error {
+            impl std::fmt::Display for ${operationRegistryBuilderName}Error {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         Self::UninitializedField(v) => write!(f, "{}", v),
