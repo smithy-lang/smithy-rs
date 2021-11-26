@@ -41,8 +41,8 @@ class ServerOperationRegistryGenerator(
         "Phantom" to ServerRuntimeType.Phantom,
         "StdError" to RuntimeType.StdError
     )
-    private val operationRegistryName = "${service.getContextualName(service)}OperationRegistry"
-    private val operationRegistryBuilderName = "${operationRegistryName}Builder"
+    private val operationRegistryName = "OperationRegistry"
+    private val operationRegistryBuilderName = "OperationRegistryBuilder"
     private val genericArguments = "B, " + operations.mapIndexed { i, _ -> "Op$i, In$i" }.joinToString()
     private val operationRegistryNameWithArguments = "$operationRegistryName<$genericArguments>"
     private val operationRegistryBuilderNameWithArguments = "$operationRegistryBuilderName<$genericArguments>"
@@ -53,7 +53,7 @@ class ServerOperationRegistryGenerator(
         renderOperationRegistryBuilderError(writer)
         renderOperationRegistryBuilderDefault(writer)
         renderOperationRegistryBuilderImplementation(writer)
-        renderRouterImplFromOperationRegistryBuilder(writer)
+        renderRouterImplementationFromOperationRegistryBuilder(writer)
     }
 
     /*
@@ -156,7 +156,7 @@ class ServerOperationRegistryGenerator(
      * Renders the `OperationRegistryBuilder` implementation, where operations are stored.
      * The `build()` method converts the builder into an `OperationRegistry` instance.
      */
-    private fun renderOperationRegistryBuilderImpl(writer: RustWriter) {
+    private fun renderOperationRegistryBuilderImplementation(writer: RustWriter) {
         // A lot of things can become pretty complex in this type as it will hold 2 generics per operation.
         Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlockTemplate(
@@ -195,7 +195,7 @@ class ServerOperationRegistryGenerator(
     /*
      * Renders the conversion code between the `OperationRegistry` and the `Router` via the `std::convert::From` trait.
      */
-    private fun renderRouterImplFromOperationRegistryBuilder(writer: RustWriter) {
+    private fun renderRouterImplementationFromOperationRegistryBuilder(writer: RustWriter) {
         // A lot of things can become pretty complex in this type as it will hold 2 generics per operation.
         val operationsTraitBounds = operations
             .mapIndexed { i, operation ->

@@ -46,66 +46,63 @@ class ServerOperationHandlerGenerator(
 
     fun render(writer: RustWriter) {
         renderStaticRust(writer)
-        renderHandlersImpl(writer)
+        renderHandlerImplementations(writer, false)
+        renderHandlerImplementations(writer, true)
     }
 
     /*
      * Renders the implementation of the `Handler` trait for all operations.
      * Handlers are implemented for `FnOnce` function types whose signatures take in state or not.
      */
-    private fun renderHandlerImplementations(writer: RustWriter) {
+    private fun renderHandlerImplementations(writer: RustWriter, state: Boolean) {
         operations.map { operation ->
             val operationName = symbolProvider.toSymbol(operation).name
             val inputName = "crate::input::${operationName}Input"
             val inputWrapperName = "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
             val outputWrapperName = "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
-            val stateList = listOf<Boolean>(true, false)
-            // We need two implementations: one for functions taking in state, and one for functions not taking in state.
-            stateList.map { state ->
-                val fnSignature = if (state) {
-                    "impl<B, Fun, Fut, S> Handler<B, $serverCrate::Extension<S>, $inputName> for Fun"
+            val fnSignature = if (state) {
+                "impl<B, Fun, Fut, S> Handler<B, $serverCrate::Extension<S>, $inputName> for Fun"
+            } else {
+                "impl<B, Fun, Fut> Handler<B, (), $inputName> for Fun"
+            }
+            writer.rustBlockTemplate(
+                """
+                ##[axum::async_trait]
+                $fnSignature
+                where
+                    ${operationTraitBounds(operation, inputName, state)}
+                """.trimIndent(),
+                *codegenScope
+            ) {
+                val callImpl = if (state) {
+                    """let state = match $serverCrate::Extension::<S>::from_request(&mut req).await {
+                    Ok(v) => v,
+                    Err(r) => return r.into_response().map($serverCrate::body::box_body)
+                    };
+                    let input_inner = input_wrapper.into();
+                    let output_inner = self(input_inner, state).await;"""
                 } else {
-                    "impl<B, Fun, Fut> Handler<B, (), $inputName> for Fun"
+                    """let input_inner = input_wrapper.into();
+                        let output_inner = self(input_inner).await;"""
                 }
-                writer.rustBlockTemplate(
+                rustTemplate(
                     """
-                    ##[axum::async_trait]
-                    $fnSignature
-                    where
-                        ${operationTraitBounds(operation, inputName, state)}
-                    """.trimIndent(),
-                    *codegenScope
-                ) {
-                    val callImpl = if (state) {
-                        """let state = match $serverCrate::Extension::<S>::from_request(&mut req).await {
+                    type Sealed = sealed::Hidden;
+                    async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::BoxBody> {
+                        let mut req = #{Axum}::extract::RequestParts::new(req);
+                        use #{Axum}::extract::FromRequest;
+                        use #{Axum}::response::IntoResponse;
+                        let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
-                            Err(r) => return r.into_response().map($serverCrate::body::box_body)
+                            Err(r) => return r.into_response().map(#{SmithyHttpServer}::body::box_body)
                         };
-                        let input_inner = input_wrapper.into();
-                        let output_inner = self(input_inner, state).await;"""
-                    } else {
-                        """let input_inner = input_wrapper.into();
-                            let output_inner = self(input_inner).await;"""
+                        $callImpl
+                        let output_wrapper: $outputWrapperName = output_inner.into();
+                        output_wrapper.into_response().map(#{SmithyHttpServer}::body::box_body)
                     }
-                    rustTemplate(
-                        """
-                        type Sealed = sealed::Hidden;
-                        async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::BoxBody> {
-                            let mut req = #{Axum}::extract::RequestParts::new(req);
-                            use #{Axum}::extract::FromRequest;
-                            use #{Axum}::response::IntoResponse;
-                            let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
-                                Ok(v) => v,
-                                Err(r) => return r.into_response().map(#{SmithyHttpServer}::body::box_body)
-                            };
-                            $callImpl
-                            let output_wrapper: $outputWrapperName = output_inner.into();
-                            output_wrapper.into_response().map(#{SmithyHttpServer}::body::box_body)
-                        }
-                        """,
-                        *codegenScope
-                    )
-                }
+                    """,
+                    *codegenScope
+                )
             }
         }
     }
