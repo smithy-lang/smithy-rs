@@ -1,6 +1,5 @@
 use anyhow::{bail, Context, Result};
 use clap::{App, Arg, SubCommand};
-use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
@@ -84,11 +83,13 @@ fn check_readmes() -> Result<()> {
     if failed > 0 {
         bail!("{} crates were missing READMEs", failed)
     } else {
+        eprintln!("All crates have READMEs!");
         Ok(())
     }
 }
 
+// TODO:
 // fn check_authors()
-// fn check_all_features()
+// fn check_docs_all_features()
 // fn check_doc_targets()
 // fn check_license()
