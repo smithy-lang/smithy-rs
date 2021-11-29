@@ -11,7 +11,7 @@ pub(crate) mod macros;
 pub mod body;
 mod clone_box_service;
 pub mod error;
-mod handler;
+mod extension;
 
 // Only the code-generated operation registry should instantiate routers.
 // We therefore hide it in the documentation.
@@ -27,7 +27,11 @@ pub use self::body::{Body, BoxBody, HttpBody};
 #[doc(inline)]
 pub use self::error::Error;
 #[doc(inline)]
+pub use self::extension::Extension;
+#[doc(inline)]
 pub use self::routing::Router;
+#[doc(inline)]
+pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 /// Alias for a type-erased error type.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

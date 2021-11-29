@@ -29,7 +29,6 @@ use tower_http::map_response_body::MapResponseBodyLayer;
 
 pub mod future;
 mod into_make_service;
-pub mod operation_handler;
 pub mod request_spec;
 mod route;
 
