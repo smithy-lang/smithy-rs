@@ -50,7 +50,8 @@ fun testRustSettings(
     moduleRepository: String? = null,
     runtimeConfig: RuntimeConfig = RuntimeConfig(),
     codegenConfig: CodegenConfig = CodegenConfig(),
-    license: String? = null
+    license: String? = null,
+    examplesUri: String? = null,
 ) = RustSettings(
     service,
     moduleName,
@@ -61,6 +62,7 @@ fun testRustSettings(
     runtimeConfig,
     codegenConfig,
     license,
+    examplesUri,
     model
 )
 
