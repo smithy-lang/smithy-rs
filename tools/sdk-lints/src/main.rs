@@ -1,12 +1,30 @@
 use crate::lint_cargo_toml::{check_crate_author, check_crate_license, check_docs_rs, fix_docs_rs};
 use anyhow::{bail, Context, Result};
 use clap::{App, Arg, SubCommand};
+use lazy_static::lazy_static;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
 
 mod anchor;
 mod lint_cargo_toml;
+
+fn load_repo_root() -> Result<PathBuf> {
+    let output = Command::new("git")
+        .arg("rev-parse")
+        .arg("--show-toplevel")
+        .output()
+        .with_context(|| "couldn't load repo root")?;
+    Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
+}
+
+lazy_static! {
+    static ref REPO_ROOT: PathBuf = load_repo_root().unwrap();
+}
+
+fn repo_root() -> &'static Path {
+    REPO_ROOT.as_path()
+}
 
 fn main() -> Result<()> {
     let matches = clap_app().get_matches();
@@ -88,15 +106,6 @@ fn clap_app() -> App<'static, 'static> {
         )
 }
 
-fn repo_root() -> Result<PathBuf> {
-    let output = Command::new("git")
-        .arg("rev-parse")
-        .arg("--show-toplevel")
-        .output()
-        .with_context(|| "couldn't load repo root")?;
-    Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
-}
-
 fn ls(path: impl AsRef<Path>) -> Result<impl Iterator<Item = PathBuf>> {
     Ok(fs::read_dir(path.as_ref())
         .with_context(|| format!("failed to ls: {:?}", path.as_ref()))?
@@ -106,7 +115,7 @@ fn ls(path: impl AsRef<Path>) -> Result<impl Iterator<Item = PathBuf>> {
 }
 
 fn smithy_rs_crates() -> Result<impl Iterator<Item = PathBuf>> {
-    let smithy_crate_root = repo_root()?.join("rust-runtime");
+    let smithy_crate_root = repo_root().join("rust-runtime");
     Ok(ls(smithy_crate_root)?.filter(|path| is_crate(path.as_path())))
 }
 
@@ -115,7 +124,7 @@ fn is_crate(path: &Path) -> bool {
 }
 
 fn aws_runtime_crates() -> Result<impl Iterator<Item = PathBuf>> {
-    let aws_crate_root = repo_root()?.join("aws").join("rust-runtime");
+    let aws_crate_root = repo_root().join("aws").join("rust-runtime");
     Ok(ls(aws_crate_root)?.filter(|path| is_crate(path.as_path())))
 }
 
@@ -130,7 +139,7 @@ fn all_cargo_tomls() -> Result<impl Iterator<Item = PathBuf>> {
 fn check_authors() -> Result<()> {
     let mut failed = 0;
     for toml in all_cargo_tomls()? {
-        let local_path = toml.strip_prefix(repo_root()?).expect("relative to root");
+        let local_path = toml.strip_prefix(repo_root()).expect("relative to root");
         let result = check_crate_author(toml.as_path())
             .with_context(|| format!("Error in {:?}", local_path));
         if let Err(e) = result {
@@ -150,7 +159,7 @@ fn check_authors() -> Result<()> {
 fn check_license() -> Result<()> {
     let mut failed = 0;
     for toml in all_cargo_tomls()? {
-        let local_path = toml.strip_prefix(repo_root()?).expect("relative to root");
+        let local_path = toml.strip_prefix(repo_root()).expect("relative to root");
         let result = check_crate_license(toml.as_path())
             .with_context(|| format!("Error in {:?}", local_path));
         if let Err(e) = result {
@@ -170,7 +179,7 @@ fn check_license() -> Result<()> {
 fn check_docsrs_metadata() -> Result<()> {
     let mut failed = 0;
     for toml in all_cargo_tomls()? {
-        let local_path = toml.strip_prefix(repo_root()?).expect("relative to root");
+        let local_path = toml.strip_prefix(repo_root()).expect("relative to root");
         let result =
             check_docs_rs(toml.as_path()).with_context(|| format!("Error in {:?}", local_path));
         if let Err(e) = result {
@@ -195,7 +204,7 @@ fn check_readmes() -> Result<()> {
         eprintln!(
             "{:?} is missing a README",
             bad_crate
-                .strip_prefix(repo_root()?)
+                .strip_prefix(repo_root())
                 .expect("must be relative to repo root")
         );
         failed += 1;
@@ -232,9 +241,9 @@ fn fix_docs_rs_metadata() -> Result<()> {
             .unwrap_or_default();
     }
     if num_fixed > 0 {
-        bail!("Updated {} READMEs with footer.", num_fixed);
+        bail!("Updated {} metadata files", num_fixed);
     } else {
-        eprintln!("All READMEs have correct footers");
+        eprintln!("All crates have correct metadata");
         Ok(())
     }
 }

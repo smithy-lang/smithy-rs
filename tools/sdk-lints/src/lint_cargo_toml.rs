@@ -108,7 +108,7 @@ pub(crate) fn check_docs_rs(path: impl AsRef<Path>) -> Result<()> {
         Some(metadata) => metadata,
         None => bail!("mising `[docs.rs.metadata]` section"),
     };
-    if metadata.all_features {
+    if !metadata.all_features {
         bail!("all-features must be set to true")
     }
     if metadata.targets != ["x86_64-unknown-linux-gnu"] {
