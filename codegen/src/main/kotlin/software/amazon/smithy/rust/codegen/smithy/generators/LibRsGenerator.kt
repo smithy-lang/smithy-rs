@@ -47,7 +47,7 @@ class LibRsGenerator(
                 """
                 ## Crate Organization
 
-                The entry point for must customers will be [`Client`]. [`Client`] exposes one method for each API offered
+                The entry point for most customers will be [`Client`]. [`Client`] exposes one method for each API offered
                 by the service.
 
                 Some APIs require complex or nested arguments. These exist in [`model`].
@@ -55,7 +55,8 @@ class LibRsGenerator(
                 Lastly, errors that can be returned by the service are contained within [`error`]. [`Error`] defines a meta
                 error encompassing all possible errors that can be returned by the service.
 
-                The other modules within this crate and not required for normal usage."""
+                The other modules within this crate and not required for normal usage.
+                """
             )
 
             val examples = customizations.map { it.section(LibRsSection.ModuleDocumentation("Examples")) }

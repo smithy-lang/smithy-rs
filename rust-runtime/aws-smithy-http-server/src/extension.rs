@@ -39,12 +39,14 @@ use async_trait::async_trait;
 use axum::extract::{FromRequest, RequestParts};
 use std::ops::Deref;
 
-/// Extractor that gets a value from request extensions.
+/// Extractor that gets a value from [request extensions].
 ///
 /// This is commonly used to share state across handlers.
 ///
 /// If the extension is missing it will reject the request with a `500 Internal
 /// Server Error` response.
+///
+/// [request extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
 #[derive(Debug, Clone, Copy)]
 pub struct Extension<T>(pub T);
 
