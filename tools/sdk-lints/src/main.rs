@@ -115,6 +115,7 @@ fn fix_readmes() -> Result<()> {
     let readmes = smithy_crates
         .into_iter()
         .chain(aws_crates.into_iter())
+        .filter(|dir| dir.is_dir() && dir.join("Cargo.toml").exists())
         .map(|pkg| pkg.join("README.md"));
     let mut num_fixed = 0;
     for readme in readmes {
@@ -138,12 +139,12 @@ fn anchors(name: &str) -> (String, String) {
 const ANCHOR_START: &str = "<!-- anchor_start:";
 const ANCHOR_END: &str = "<!-- anchor_end:";
 
-const README_FOOTER: &str = "This crate is part of the [AWS SDK for Rust](https://awslabs.github.io/aws-sdk-rust/) \
-and the [smithy-rs](https://github.com/awslabs/smithy-rs) code generator. In most cases, it should not be used directly.";
+const README_FOOTER: &str = "\nThis crate is part of the [AWS SDK for Rust](https://awslabs.github.io/aws-sdk-rust/) \
+and the [smithy-rs](https://github.com/awslabs/smithy-rs) code generator. In most cases, it should not be used directly.\n";
 
 fn fix_readme(path: impl AsRef<Path>) -> Result<bool> {
-    let mut contents =
-        fs::read_to_string(path.as_ref()).with_context(|| "failure to read readme")?;
+    let mut contents = fs::read_to_string(path.as_ref())
+        .with_context(|| format!("failure to read readme: {:?}", path.as_ref()))?;
     let updated = replace_anchor(&mut contents, &anchors("footer"), README_FOOTER)?;
     fs::write(path.as_ref(), contents)?;
     Ok(updated)
