@@ -37,7 +37,7 @@
 use crate::BoxError;
 use std::{error::Error as StdError, fmt};
 
-/// Errors that can happen when using `aws-smithy-server`.
+/// Errors that can happen when using this crate.
 #[derive(Debug)]
 pub struct Error {
     inner: BoxError,

@@ -3,17 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! An HTTP router that adheres to the [Smithy specification].
+//! HTTP routing that adheres to the [Smithy specification].
 //!
-//! The router is a [`tower::Service`] that routes incoming requests to other `Service`s
-//! based on the requests' URI and HTTP method.
-//! It currently does not support Smithy's [endpoint trait].
-//!
-//! **This router should not be used directly**; it should only be used by generated code from the
-//! Smithy model.
-//!
-//! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#http-trait
-//! [endpoint trait]: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
+//! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 
 use self::{future::RouterFuture, request_spec::RequestSpec};
 use crate::body::{box_body, Body, BoxBody, HttpBody};
@@ -34,7 +26,15 @@ mod route;
 
 pub use self::{into_make_service::IntoMakeService, route::Route};
 
-/// The router type for composing handlers and services.
+/// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
+/// based on the request's URI and HTTP method, adhering to the [Smithy specification].
+/// It currently does not support Smithy's [endpoint trait].
+///
+/// You should not **instantiate** this router directly; it will be created for you from the
+/// code generated from your Smithy model by `smithy-rs`.
+///
+/// [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
+/// [endpoint trait]: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
 #[derive(Debug)]
 pub struct Router<B = Body> {
     routes: Vec<(Route<B>, RequestSpec)>,
@@ -83,10 +83,10 @@ where
     /// response is another service.
     ///
     /// This is useful when running your application with hyper's
-    /// [`Server`](hyper::server::Server).
+    /// [`Server`].
     ///
+    /// [`Server`]: hyper::server::Server
     /// [`MakeService`]: tower::make::MakeService
-    #[doc(hidden)]
     pub fn into_make_service(self) -> IntoMakeService<Self> {
         IntoMakeService::new(self)
     }
@@ -96,8 +96,7 @@ where
     /// All requests to the router will be processed by the layer's
     /// corresponding middleware.
     ///
-    /// This can be used to add additional processing to a request for a group
-    /// of routes.
+    /// This can be used to add additional processing to all routes.
     pub fn layer<L, NewReqBody, NewResBody>(self, layer: L) -> Router<NewReqBody>
     where
         L: Layer<Route<B>>,

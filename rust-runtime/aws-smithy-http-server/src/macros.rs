@@ -32,7 +32,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-//! Macros implementation
+//! Macros implementation.
 
 // Define a single rejection type
 macro_rules! define_rejection {
