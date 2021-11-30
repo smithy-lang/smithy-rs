@@ -146,6 +146,7 @@ fn check_authors() -> Result<()> {
     }
 }
 
+/// Check that all crates have correct licensing
 fn check_license() -> Result<()> {
     let mut failed = 0;
     for toml in all_cargo_tomls()? {
@@ -165,6 +166,7 @@ fn check_license() -> Result<()> {
     }
 }
 
+/// Check that all crates have correct `[package.metadata.docs.rs]` settings
 fn check_docsrs_metadata() -> Result<()> {
     let mut failed = 0;
     for toml in all_cargo_tomls()? {
@@ -184,6 +186,7 @@ fn check_docsrs_metadata() -> Result<()> {
     }
 }
 
+/// Checks that all crates have README files
 fn check_readmes() -> Result<()> {
     let no_readme = all_runtime_crates()?.filter(|dir| !dir.join("README.md").exists());
 
