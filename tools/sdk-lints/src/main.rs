@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
 
+mod anchor;
+
 fn main() -> Result<()> {
     let matches = clap_app().get_matches();
     if let Some(subcommand) = matches.subcommand_matches("check") {
@@ -65,31 +67,34 @@ fn repo_root() -> Result<PathBuf> {
     Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
 }
 
-fn ls(path: impl AsRef<Path>) -> Result<Vec<PathBuf>> {
+fn ls(path: impl AsRef<Path>) -> Result<impl Iterator<Item = PathBuf>> {
     Ok(fs::read_dir(path.as_ref())
         .with_context(|| format!("failed to ls: {:?}", path.as_ref()))?
         .map(|res| res.map(|e| e.path()))
-        .collect::<Result<Vec<_>, io::Error>>()?)
+        .collect::<Result<Vec<_>, io::Error>>()?
+        .into_iter())
 }
 
-fn smithy_rs_crates() -> Result<Vec<PathBuf>> {
+fn smithy_rs_crates() -> Result<impl Iterator<Item = PathBuf>> {
     let smithy_crate_root = repo_root()?.join("rust-runtime");
-    ls(smithy_crate_root)
+    Ok(ls(smithy_crate_root)?.filter(|path| is_crate(path.as_path())))
 }
 
-fn aws_runtime_crates() -> Result<Vec<PathBuf>> {
+fn is_crate(path: &Path) -> bool {
+    path.is_dir() && path.join("Cargo.toml").exists()
+}
+
+fn aws_runtime_crates() -> Result<impl Iterator<Item = PathBuf>> {
     let aws_crate_root = repo_root()?.join("aws").join("rust-runtime");
-    ls(aws_crate_root)
+    Ok(ls(aws_crate_root)?.filter(|path| is_crate(path.as_path())))
+}
+
+fn all_runtime_crates() -> Result<impl Iterator<Item = PathBuf>> {
+    Ok(aws_runtime_crates()?.chain(smithy_rs_crates()?))
 }
 
 fn check_readmes() -> Result<()> {
-    let smithy_crates = smithy_rs_crates().with_context(|| "couldn't load smithy root")?;
-    let aws_crates = aws_runtime_crates().with_context(|| "couldn't load aws crate root")?;
-    let no_readme = smithy_crates
-        .into_iter()
-        .chain(aws_crates.into_iter())
-        .filter(|dir| dir.is_dir() && dir.join("Cargo.toml").exists())
-        .filter(|dir| !dir.join("README.md").exists());
+    let no_readme = all_runtime_crates()?.filter(|dir| !dir.join("README.md").exists());
 
     let mut failed = 0;
     for bad_crate in no_readme {
@@ -110,13 +115,7 @@ fn check_readmes() -> Result<()> {
 }
 
 fn fix_readmes() -> Result<()> {
-    let smithy_crates = smithy_rs_crates().with_context(|| "couldn't load smithy root")?;
-    let aws_crates = aws_runtime_crates().with_context(|| "couldn't load aws crate root")?;
-    let readmes = smithy_crates
-        .into_iter()
-        .chain(aws_crates.into_iter())
-        .filter(|dir| dir.is_dir() && dir.join("Cargo.toml").exists())
-        .map(|pkg| pkg.join("README.md"));
+    let readmes = all_runtime_crates()?.map(|pkg| pkg.join("README.md"));
     let mut num_fixed = 0;
     for readme in readmes {
         num_fixed += fix_readme(readme)?.then(|| 1).unwrap_or_default();
@@ -129,94 +128,15 @@ fn fix_readmes() -> Result<()> {
     }
 }
 
-fn anchors(name: &str) -> (String, String) {
-    (
-        format!("{}{} -->", ANCHOR_START, name),
-        format!("{}{} -->", ANCHOR_END, name),
-    )
-}
-
-const ANCHOR_START: &str = "<!-- anchor_start:";
-const ANCHOR_END: &str = "<!-- anchor_end:";
-
 const README_FOOTER: &str = "\nThis crate is part of the [AWS SDK for Rust](https://awslabs.github.io/aws-sdk-rust/) \
 and the [smithy-rs](https://github.com/awslabs/smithy-rs) code generator. In most cases, it should not be used directly.\n";
 
 fn fix_readme(path: impl AsRef<Path>) -> Result<bool> {
     let mut contents = fs::read_to_string(path.as_ref())
         .with_context(|| format!("failure to read readme: {:?}", path.as_ref()))?;
-    let updated = replace_anchor(&mut contents, &anchors("footer"), README_FOOTER)?;
+    let updated = anchor::replace_anchor(&mut contents, &anchor::anchors("footer"), README_FOOTER)?;
     fs::write(path.as_ref(), contents)?;
     Ok(updated)
-}
-
-fn replace_anchor(
-    haystack: &mut String,
-    anchors: &(String, String),
-    new_content: &str,
-) -> Result<bool> {
-    let anchor_start = anchors.0.as_str();
-    let anchor_end = anchors.1.as_str();
-    let start = haystack.find(&anchor_start);
-    if start.is_none() {
-        if haystack.contains(anchor_end) {
-            bail!("found end anchor but no start anchor");
-        }
-        haystack.push('\n');
-        haystack.push_str(anchor_start);
-        haystack.push_str(new_content);
-        haystack.push_str(anchor_end);
-        return Ok(true);
-    }
-    let start = start.unwrap_or_else(|| haystack.find(&anchor_start).expect("must be present"));
-    let end = match haystack[start..].find(&anchor_end) {
-        Some(end) => end + start,
-        None => bail!("expected matching end anchor {}", anchor_end),
-    };
-    let prefix = &haystack[..start + anchor_start.len()];
-    let suffix = &haystack[end..];
-    let mut out = String::new();
-    out.push_str(prefix);
-    out.push_str(new_content);
-    out.push_str(suffix);
-    if haystack != &out {
-        *haystack = out;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::{anchors, replace_anchor};
-
-    #[test]
-    fn updates_empty() {
-        let mut text = "this is the start".to_string();
-        assert!(replace_anchor(&mut text, &anchors("foo"), "hello!").unwrap());
-        assert_eq!(
-            text,
-            "this is the start\n<!-- anchor_start:foo -->hello!<!-- anchor_end:foo -->"
-        );
-    }
-
-    #[test]
-    fn updates_existing() {
-        let mut text =
-            "this is the start\n<!-- anchor_start:foo -->hello!<!-- anchor_end:foo -->".to_string();
-        assert!(replace_anchor(&mut text, &anchors("foo"), "goodbye!").unwrap());
-        assert_eq!(
-            text,
-            "this is the start\n<!-- anchor_start:foo -->goodbye!<!-- anchor_end:foo -->"
-        );
-
-        // no replacement should return false
-        assert_eq!(
-            replace_anchor(&mut text, &anchors("foo"), "goodbye!").unwrap(),
-            false
-        )
-    }
 }
 
 // TODO:
