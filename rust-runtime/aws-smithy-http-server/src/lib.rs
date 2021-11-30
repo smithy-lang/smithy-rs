@@ -11,7 +11,6 @@
 pub(crate) mod macros;
 
 pub mod body;
-mod clone_box_service;
 pub mod error;
 mod extension;
 pub mod routing;

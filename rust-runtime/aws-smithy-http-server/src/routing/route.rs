@@ -32,10 +32,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-use crate::{
-    body::{Body, BoxBody},
-    clone_box_service::CloneBoxService,
-};
+use crate::body::{Body, BoxBody};
 use http::{Request, Response};
 use pin_project::pin_project;
 use std::{
@@ -45,12 +42,14 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-use tower::Service;
-use tower::{util::Oneshot, ServiceExt};
+use tower::{
+    util::{BoxCloneService, Oneshot},
+    Service, ServiceExt,
+};
 
 /// How routes are stored inside a [`Router`](super::Router).
 pub struct Route<B = Body> {
-    service: CloneBoxService<Request<B>, Response<BoxBody>, Infallible>,
+    service: BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
 }
 
 impl<B> Route<B> {
@@ -59,7 +58,7 @@ impl<B> Route<B> {
         T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
         T::Future: Send + 'static,
     {
-        Self { service: CloneBoxService::new(svc) }
+        Self { service: BoxCloneService::new(svc) }
     }
 }
 
@@ -95,11 +94,11 @@ impl<B> Service<Request<B>> for Route<B> {
 #[pin_project]
 pub struct RouteFuture<B> {
     #[pin]
-    future: Oneshot<CloneBoxService<Request<B>, Response<BoxBody>, Infallible>, Request<B>>,
+    future: Oneshot<BoxCloneService<Request<B>, Response<BoxBody>, Infallible>, Request<B>>,
 }
 
 impl<B> RouteFuture<B> {
-    pub(crate) fn new(future: Oneshot<CloneBoxService<Request<B>, Response<BoxBody>, Infallible>, Request<B>>) -> Self {
+    pub(crate) fn new(future: Oneshot<BoxCloneService<Request<B>, Response<BoxBody>, Infallible>, Request<B>>) -> Self {
         RouteFuture { future }
     }
 }
