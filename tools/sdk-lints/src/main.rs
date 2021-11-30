@@ -1,3 +1,4 @@
+use crate::lint_cargo_toml::{check_crate_author, check_crate_license, check_docs_rs, fix_docs_rs};
 use anyhow::{bail, Context, Result};
 use clap::{App, Arg, SubCommand};
 use std::path::{Path, PathBuf};
@@ -5,6 +6,7 @@ use std::process::Command;
 use std::{fs, io};
 
 mod anchor;
+mod lint_cargo_toml;
 
 fn main() -> Result<()> {
     let matches = clap_app().get_matches();
@@ -13,10 +15,20 @@ fn main() -> Result<()> {
         if subcommand.is_present("readme") || all {
             check_readmes()?;
         }
+        if subcommand.is_present("cargotoml") || all {
+            check_authors()?;
+            check_license()?;
+        }
+        if subcommand.is_present("docsrs-metadata") || all {
+            check_docsrs_metadata()?;
+        }
     } else if let Some(subcommand) = matches.subcommand_matches("fix") {
         let all = subcommand.is_present("all");
         if subcommand.is_present("readme") || all {
             fix_readmes()?;
+        }
+        if subcommand.is_present("docsrs-metadata") || all {
+            fix_docs_rs_metadata()?;
         }
     } else {
         clap_app().print_long_help().unwrap();
@@ -35,6 +47,18 @@ fn clap_app() -> App<'static, 'static> {
                         .long("readme"),
                 )
                 .arg(
+                    Arg::with_name("cargotoml")
+                        .takes_value(false)
+                        .required(false)
+                        .long("authors"),
+                )
+                .arg(
+                    Arg::with_name("docsrs-metadata")
+                        .takes_value(false)
+                        .required(false)
+                        .long("docsrs-metadata"),
+                )
+                .arg(
                     Arg::with_name("all")
                         .takes_value(false)
                         .required(false)
@@ -48,6 +72,12 @@ fn clap_app() -> App<'static, 'static> {
                         .takes_value(false)
                         .required(false)
                         .long("readme"),
+                )
+                .arg(
+                    Arg::with_name("docsrs-metadata")
+                        .takes_value(false)
+                        .required(false)
+                        .long("docsrs-metadata"),
                 )
                 .arg(
                     Arg::with_name("all")
@@ -93,6 +123,67 @@ fn all_runtime_crates() -> Result<impl Iterator<Item = PathBuf>> {
     Ok(aws_runtime_crates()?.chain(smithy_rs_crates()?))
 }
 
+fn all_cargo_tomls() -> Result<impl Iterator<Item = PathBuf>> {
+    Ok(all_runtime_crates()?.map(|pkg| pkg.join("Cargo.toml")))
+}
+
+fn check_authors() -> Result<()> {
+    let mut failed = 0;
+    for toml in all_cargo_tomls()? {
+        let local_path = toml.strip_prefix(repo_root()?).expect("relative to root");
+        let result = check_crate_author(toml.as_path())
+            .with_context(|| format!("Error in {:?}", local_path));
+        if let Err(e) = result {
+            failed += 1;
+            eprintln!("{}", e);
+        }
+    }
+    if failed > 0 {
+        bail!("{} crates had incorrect crate authors", failed)
+    } else {
+        eprintln!("All crates had correct authorship!");
+        Ok(())
+    }
+}
+
+fn check_license() -> Result<()> {
+    let mut failed = 0;
+    for toml in all_cargo_tomls()? {
+        let local_path = toml.strip_prefix(repo_root()?).expect("relative to root");
+        let result = check_crate_license(toml.as_path())
+            .with_context(|| format!("Error in {:?}", local_path));
+        if let Err(e) = result {
+            failed += 1;
+            eprintln!("{:?}", e);
+        }
+    }
+    if failed > 0 {
+        bail!("{} crates had incorrect crate licenses", failed)
+    } else {
+        eprintln!("All crates had correct licenses!");
+        Ok(())
+    }
+}
+
+fn check_docsrs_metadata() -> Result<()> {
+    let mut failed = 0;
+    for toml in all_cargo_tomls()? {
+        let local_path = toml.strip_prefix(repo_root()?).expect("relative to root");
+        let result =
+            check_docs_rs(toml.as_path()).with_context(|| format!("Error in {:?}", local_path));
+        if let Err(e) = result {
+            failed += 1;
+            eprintln!("{:?}", e);
+        }
+    }
+    if failed > 0 {
+        bail!("{} crates had incorrect docsrs metadata", failed)
+    } else {
+        eprintln!("All crates had correct docsrs metadata!");
+        Ok(())
+    }
+}
+
 fn check_readmes() -> Result<()> {
     let no_readme = all_runtime_crates()?.filter(|dir| !dir.join("README.md").exists());
 
@@ -119,6 +210,23 @@ fn fix_readmes() -> Result<()> {
     let mut num_fixed = 0;
     for readme in readmes {
         num_fixed += fix_readme(readme)?.then(|| 1).unwrap_or_default();
+    }
+    if num_fixed > 0 {
+        bail!("Updated {} READMEs with footer.", num_fixed);
+    } else {
+        eprintln!("All READMEs have correct footers");
+        Ok(())
+    }
+}
+
+fn fix_docs_rs_metadata() -> Result<()> {
+    let cargo_tomls = all_cargo_tomls()?;
+    let mut num_fixed = 0;
+    for cargo_toml in cargo_tomls {
+        num_fixed += fix_docs_rs(cargo_toml.as_path())
+            .with_context(|| format!("{:?}", cargo_toml))?
+            .then(|| 1)
+            .unwrap_or_default();
     }
     if num_fixed > 0 {
         bail!("Updated {} READMEs with footer.", num_fixed);
