@@ -12,6 +12,7 @@ vNext (Month Day, Year)
 - Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
 - [Added a new example showing how to set all currently supported timeouts](./sdk/examples/setting_timeouts/src/main.rs)
 - Add a new check so that the SDK doesn't emit an irrelevant `$HOME` dir warning when running in a Lambda (aws-sdk-rust#307)
+- Add docs.rs metadata section to all crates to document all features
 
 **Breaking changes**
 
