@@ -24,6 +24,10 @@ jobs:
         components: ${{ env.rust_toolchain_components }}
         default: true
     - run: cargo run -- check --all
+      name: run checks
+      working-directory: tools/sdk-lints
+    - run: cargo run -- fix --all
+      name: run fixes
       working-directory: tools/sdk-lints
   style:
     name: Kotlin style checks
