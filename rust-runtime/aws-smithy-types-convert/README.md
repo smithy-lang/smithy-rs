@@ -12,6 +12,6 @@ By default, no features are enabled. Using the conversions requires enabling one
 aws-smithy-types-convert = { version = "VERSION", features = ["convert-chrono"] }
 ```
 
-Currently, the follow conversions are supported:
+Currently, the following conversions are supported:
 * `convert-chrono`: Conversions between `DateTime` and [chrono](https://docs.rs/chrono/latest/chrono/).
 * `convert-time`: Conversions between `DateTime` and [time](https://docs.rs/time/latest/time/).

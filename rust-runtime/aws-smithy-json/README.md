@@ -1,3 +1,3 @@
 # aws-smithy-json
 
-JSON serialization and deserialization primitives for Smithy-based services.
+JSON serialization and deserialization primitives for smithy-rs generated services.
