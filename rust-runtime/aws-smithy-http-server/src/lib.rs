@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! HTTP server runtime and utilities, loosely based on Axum.
+//! HTTP server runtime and utilities, loosely based on [axum].
+//!
+//! [axum]: https://docs.rs/axum/latest/axum/
 
 #[macro_use]
 pub(crate) mod macros;
@@ -12,10 +14,6 @@ pub mod body;
 mod clone_box_service;
 pub mod error;
 mod extension;
-
-// Only the code-generated operation registry should instantiate routers.
-// We therefore hide it in the documentation.
-#[doc(hidden)]
 pub mod routing;
 
 #[doc(hidden)]
