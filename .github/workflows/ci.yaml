@@ -13,6 +13,22 @@ env:
   java_version: 11
 
 jobs:
+  repo-lint:
+    name: smithy-rs custom repo lints
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
+    - run: cargo run -- check --all
+      name: run checks
+      working-directory: tools/sdk-lints
+    - run: cargo run -- fix --all
+      name: run fixes
+      working-directory: tools/sdk-lints
   style:
     name: Kotlin style checks
     runs-on: ubuntu-latest
