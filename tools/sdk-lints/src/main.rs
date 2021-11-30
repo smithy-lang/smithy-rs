@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use crate::lint_cargo_toml::{check_crate_author, check_crate_license, check_docs_rs, fix_docs_rs};
 use anyhow::{bail, Context, Result};
 use clap::{App, Arg, SubCommand};
