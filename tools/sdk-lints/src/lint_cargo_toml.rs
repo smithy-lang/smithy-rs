@@ -87,7 +87,7 @@ pub(crate) fn check_crate_author(path: impl AsRef<Path>) -> Result<()> {
     if !package.authors.iter().any(|s| s == expected_author) {
         bail!(
             "missing `{}` in package author list ({:?})",
-            RUST_SDK_TEAM,
+            expected_author,
             package.authors
         )
     }
