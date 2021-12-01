@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! HTTP server runtime and utilities, loosely based on Axum.
+//! HTTP server runtime and utilities, loosely based on [axum].
+//!
+//! [axum]: https://docs.rs/axum/latest/axum/
 
 #[macro_use]
 pub(crate) mod macros;
@@ -11,11 +13,7 @@ pub(crate) mod macros;
 pub mod body;
 mod clone_box_service;
 pub mod error;
-mod handler;
-
-// Only the code-generated operation registry should instantiate routers.
-// We therefore hide it in the documentation.
-#[doc(hidden)]
+mod extension;
 pub mod routing;
 
 #[doc(hidden)]
@@ -27,7 +25,11 @@ pub use self::body::{Body, BoxBody, HttpBody};
 #[doc(inline)]
 pub use self::error::Error;
 #[doc(inline)]
+pub use self::extension::Extension;
+#[doc(inline)]
 pub use self::routing::Router;
+#[doc(inline)]
+pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 /// Alias for a type-erased error type.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

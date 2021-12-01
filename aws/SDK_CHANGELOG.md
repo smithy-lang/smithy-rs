@@ -1,11 +1,20 @@
 vNext (Month Day, Year)
 =======================
+**New this release**
+- Add docs.rs metadata section to all crates to document all features
+- [Added a new example showing how to set all currently supported timeouts](./sdk/examples/setting_timeouts/src/main.rs)
+- Add a new check so that the SDK doesn't emit an irrelevant `$HOME` dir warning when running in a Lambda (aws-sdk-rust#307)
+- :bug: Don't capture empty session tokens from the `AWS_SESSION_TOKEN` environment variable (aws-sdk-rust#316, smithy-rs#906)
 
 v0.0.26-alpha (November 23rd, 2021)
 ===================================
 
-**TODO upon release**
-- Update README & aws-sdk-rust CI for MSRV upgrade to 1.54
+**New this release**
+- :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
+  - `SdkError` now includes a variant `TimeoutError` for when a request times out  (smithy-rs#885)
+- Improve docs on `aws-smithy-client` (smithy-rs#855)
+- Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
+
 
 **Breaking Changes**
 - `RetryConfigBuilder::merge_with` has been renamed to `RetryConfigBuilder::take_unset_from`

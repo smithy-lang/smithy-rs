@@ -217,6 +217,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
+            protocolGeneratorFactory.protocol(codegenContext).httpBindingResolver,
             codegenContext,
             codegenDecorator
         )

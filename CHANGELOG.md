@@ -1,8 +1,7 @@
 vNext (Month Day, Year)
 =======================
 **New this week**
-
-**Breaking changes**
+- Add docs.rs metadata section to all crates to document all features
 
 v0.30.0-alpha (November 23rd, 2021)
 ===================================

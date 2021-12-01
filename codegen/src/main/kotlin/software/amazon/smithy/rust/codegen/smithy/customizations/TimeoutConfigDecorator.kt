@@ -94,7 +94,8 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     /// Set the timeout_config for the builder
                     ///
                     /// ## Examples
-                    /// ```rust
+                    ///
+                    /// ```no_run
                     /// ## use std::time::Duration;
                     /// use $moduleUseName::config::Config;
                     /// use #{TimeoutConfig};
@@ -111,7 +112,8 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     /// Set the timeout_config for the builder
                     ///
                     /// ## Examples
-                    /// ```rust
+                    ///
+                    /// ```no_run
                     /// ## use std::time::Duration;
                     /// use $moduleUseName::config::{Builder, Config};
                     /// use #{TimeoutConfig};
