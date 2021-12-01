@@ -4,7 +4,7 @@
  */
 
 import { FederatedPrincipal, OpenIdConnectProvider, Role } from "@aws-cdk/aws-iam";
-import { Construct } from "@aws-cdk/core";
+import { Construct, Tags } from "@aws-cdk/core";
 
 /// This thumbprint is used to validate GitHub's identity to AWS.
 ///
@@ -27,6 +27,10 @@ export class GitHubOidcRole extends Construct {
 
     constructor(scope: Construct, id: string, properties: Properties) {
         super(scope, id);
+
+        // Tag the resources created by this construct to make identifying resources easier
+        Tags.of(this).add("construct-name", properties.name);
+        Tags.of(this).add("construct-type", "GitHubOidcRole");
 
         this.oidcProvider = new OpenIdConnectProvider(this, "oidc-provider", {
             url: "https://token.actions.githubusercontent.com",
