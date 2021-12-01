@@ -39,7 +39,8 @@ struct Metadata {
     rustdoc_args: Vec<String>,
 }
 
-const RUST_TEAM: &str = "AWS Rust SDK Team <aws-sdk-rust@amazon.com>";
+const RUST_SDK_TEAM: &str = "AWS Rust SDK Team <aws-sdk-rust@amazon.com>";
+const SERVER_TEAM: &str = "Smithy Rust Server <smithy-rs-server@amazon.com>";
 const SERVER_CRATES: &[&str] = &["aws-smithy-http-server"];
 
 /// Check crate licensing
@@ -78,23 +79,25 @@ pub(crate) fn check_crate_author(path: impl AsRef<Path>) -> Result<()> {
         Some(package) => package,
         None => bail!("missing `[package]` section"),
     };
-    if SERVER_CRATES.contains(&package.name.as_str()) {
-        return Ok(());
-    }
-    if !package.authors.iter().any(|s| s == RUST_TEAM) {
+    let expected_author = if SERVER_CRATES.contains(&package.name.as_str()) {
+        SERVER_TEAM
+    } else {
+        RUST_SDK_TEAM
+    };
+    if !package.authors.iter().any(|s| s == expected_author) {
         bail!(
             "missing `{}` in package author list ({:?})",
-            RUST_TEAM,
+            expected_author,
             package.authors
         )
     }
     Ok(())
 }
 
-/// Check docsrs for a Cargo.toml
+/// Check Cargo.toml for a valid docs.rs metadata section
 ///
 /// This function validates:
-/// - it is valid TOMl
+/// - it is valid TOML
 /// - it contains a package.metadata.docs.rs section
 /// - All of the standard docs.rs settings are respected
 pub(crate) fn check_docs_rs(path: impl AsRef<Path>) -> Result<()> {
@@ -134,7 +137,7 @@ pub(crate) fn fix_docs_rs(path: impl AsRef<Path>) -> Result<bool> {
     let mut cargo_toml = read_to_string(path.as_ref()).context("failed to read Cargo.toml")?;
     let updated = replace_anchor(
         &mut cargo_toml,
-        &("[package.metadata.docs.rs]", "# End of doc.rs metadata"),
+        &("[package.metadata.docs.rs]", "# End of docs.rs metadata"),
         DEFAULT_DOCS_RS_SECTION,
     )?;
     if updated {
