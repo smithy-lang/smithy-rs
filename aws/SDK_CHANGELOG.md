@@ -13,6 +13,7 @@ vNext (Month Day, Year)
 - [Added a new example showing how to set all currently supported timeouts](./sdk/examples/setting_timeouts/src/main.rs)
 - Add a new check so that the SDK doesn't emit an irrelevant `$HOME` dir warning when running in a Lambda (aws-sdk-rust#307)
 - :bug: Don't capture empty session tokens from the `AWS_SESSION_TOKEN` environment variable (aws-sdk-rust#316, smithy-rs#906)
+- Add docs.rs metadata section to all crates to document all features
 
 **Breaking changes**
 
