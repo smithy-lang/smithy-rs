@@ -8,3 +8,6 @@ edition = "2018"
 [dependencies]
 clap = "2"
 anyhow = "1"
+cargo_toml = "0.10.1"
+serde = { version = "1", features = ["derive"]}
+lazy_static = "1.4.0"

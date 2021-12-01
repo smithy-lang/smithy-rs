@@ -15,3 +15,9 @@ thiserror = "1"
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test" }
 base64 = "0.13.0"
 proptest = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of doc.rs metadata

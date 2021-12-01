@@ -37,3 +37,9 @@ tower-http = { version = "0.1", features = ["add-extension", "map-response-body"
 
 [dev-dependencies]
 pretty_assertions = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of doc.rs metadata

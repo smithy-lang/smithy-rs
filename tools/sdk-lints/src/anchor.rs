@@ -17,11 +17,11 @@ const ANCHOR_END: &str = "<!-- anchor_end:";
 
 pub fn replace_anchor(
     haystack: &mut String,
-    anchors: &(String, String),
+    anchors: &(impl AsRef<str>, impl AsRef<str>),
     new_content: &str,
 ) -> anyhow::Result<bool> {
-    let anchor_start = anchors.0.as_str();
-    let anchor_end = anchors.1.as_str();
+    let anchor_start = anchors.0.as_ref();
+    let anchor_end = anchors.1.as_ref();
     let start = haystack.find(&anchor_start);
     if start.is_none() {
         if haystack.contains(anchor_end) {
