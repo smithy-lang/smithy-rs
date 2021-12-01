@@ -1,3 +1,6 @@
+#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#  SPDX-License-Identifier: Apache-2.0.
+
 """
 Generate a list of services which have non-trivial unit tests
 
@@ -8,8 +11,6 @@ This script generates output like `-p aws-sdk-s3 -p aws-sdk-dynamodb`. It is int
 cargo test $(python test-services.py)
 ```
 """
-#  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-#  SPDX-License-Identifier: Apache-2.0.
 
 import os
 from pathlib import Path

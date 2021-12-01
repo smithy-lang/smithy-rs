@@ -7,11 +7,13 @@ use crate::lint_cargo_toml::{check_crate_author, check_crate_license, check_docs
 use anyhow::{bail, Context, Result};
 use clap::{App, Arg, SubCommand};
 use lazy_static::lazy_static;
+use std::env::set_current_dir;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
 
 mod anchor;
+mod copyright;
 mod lint_cargo_toml;
 
 fn load_repo_root() -> Result<PathBuf> {
@@ -23,8 +25,30 @@ fn load_repo_root() -> Result<PathBuf> {
     Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
 }
 
+fn load_vcs_files() -> Result<Vec<PathBuf>> {
+    let tracked_files = Command::new("git")
+        .arg("ls-tree")
+        .arg("-r")
+        .arg("HEAD")
+        .arg("--name-only")
+        .current_dir(load_repo_root()?)
+        .output()
+        .context("couldn't load VCS tracked files")?;
+    let mut output = String::from_utf8(tracked_files.stdout)?;
+    let changed_files = Command::new("git")
+        .arg("diff")
+        .arg("--name-only")
+        .output()?;
+    output.push_str(std::str::from_utf8(changed_files.stdout.as_slice())?);
+    let files = output
+        .lines()
+        .map(|line| PathBuf::from(line.trim().to_string()));
+    Ok(files.collect())
+}
+
 lazy_static! {
     static ref REPO_ROOT: PathBuf = load_repo_root().unwrap();
+    static ref VCS_FILES: Vec<PathBuf> = load_vcs_files().unwrap();
 }
 
 fn repo_root() -> &'static Path {
@@ -32,6 +56,7 @@ fn repo_root() -> &'static Path {
 }
 
 fn main() -> Result<()> {
+    set_current_dir(repo_root())?;
     let matches = clap_app().get_matches();
     if let Some(subcommand) = matches.subcommand_matches("check") {
         let all = subcommand.is_present("all");
@@ -44,6 +69,9 @@ fn main() -> Result<()> {
         }
         if subcommand.is_present("docsrs-metadata") || all {
             check_docsrs_metadata()?;
+        }
+        if subcommand.is_present("license") || all {
+            check_license_header()?;
         }
     } else if let Some(subcommand) = matches.subcommand_matches("fix") {
         let all = subcommand.is_present("all");
@@ -80,6 +108,12 @@ fn clap_app() -> App<'static, 'static> {
                         .takes_value(false)
                         .required(false)
                         .long("docsrs-metadata"),
+                )
+                .arg(
+                    Arg::with_name("license")
+                        .takes_value(false)
+                        .required(false)
+                        .long("license"),
                 )
                 .arg(
                     Arg::with_name("all")
@@ -149,7 +183,7 @@ fn check_authors() -> Result<()> {
             .with_context(|| format!("Error in {:?}", local_path));
         if let Err(e) = result {
             failed += 1;
-            eprintln!("{}", e);
+            eprintln!("{:?}", e);
         }
     }
     if failed > 0 {
@@ -158,6 +192,22 @@ fn check_authors() -> Result<()> {
         eprintln!("All crates had correct authorship!");
         Ok(())
     }
+}
+
+fn check_license_header() -> Result<()> {
+    let mut failed = 0;
+    for license in VCS_FILES.iter() {
+        let result = copyright::check_copyright_header(license);
+        if let Err(e) = result {
+            failed += 1;
+            eprintln!("{:?}", e);
+        }
+    }
+    if failed > 0 {
+        bail!("{} files missing license headers", failed)
+    }
+    eprintln!("All files had correct license headers");
+    Ok(())
 }
 
 /// Check that all crates have correct licensing
@@ -263,9 +313,3 @@ fn fix_readme(path: impl AsRef<Path>) -> Result<bool> {
     fs::write(path.as_ref(), contents)?;
     Ok(updated)
 }
-
-// TODO:
-// fn check_authors()
-// fn check_docs_all_features()
-// fn check_doc_targets()
-// fn check_license()
