@@ -405,3 +405,21 @@ jobs:
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: sdk.tar
+
+  experiment-oidc-assume-role:
+    name: Assume role into AWS account with OIDC
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-west-2
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - name: Assume role into AWS
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        role-to-assume: arn:aws:iam::933462191672:role/smithy-rs-github-oidc-role
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Verify assume role succeeded
+      run: aws sts get-caller-identity
