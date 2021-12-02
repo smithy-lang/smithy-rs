@@ -14,7 +14,7 @@ const EXPECTED_CONTENTS: &[&str] = &[
     "SPDX-License-Identifier: Apache-2.0.",
 ];
 
-const NEEDS_HEADER: [&str; 4] = ["sh", "py", "rs", "kt"];
+const NEEDS_HEADER: [&str; 5] = ["sh", "py", "rs", "kt", "ts"];
 
 pub(crate) fn check_copyright_header(path: impl AsRef<Path>) -> Result<()> {
     if !needs_copyright_header(path.as_ref()) {
