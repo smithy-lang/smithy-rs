@@ -27,20 +27,10 @@ import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndRun
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.shouldCompile
-import software.amazon.smithy.rust.codegen.testutil.shouldParseAsRust
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.util.lookup
-import software.amazon.smithy.rust.testutil.shouldMatchResource
 
 class RustWriterTest {
-    @Test
-    fun `empty file`() {
-        val sut = RustWriter.forModule("empty")
-        sut.toString().shouldParseAsRust()
-        sut.toString().shouldCompile()
-        sut.toString().shouldMatchResource(javaClass, "empty.rs")
-    }
-
     @Test
     fun `inner modules correctly handle dependencies`() {
         val sut = RustWriter.forModule("parent")
