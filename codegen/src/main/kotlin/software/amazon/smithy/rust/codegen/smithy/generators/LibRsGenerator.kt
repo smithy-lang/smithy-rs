@@ -11,8 +11,8 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.rustlang.escape
+import software.amazon.smithy.rust.codegen.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
@@ -22,6 +22,10 @@ sealed class LibRsSection(name: String) : Section(name) {
     object Attributes : LibRsSection("Attributes")
     data class ModuleDocumentation(val subsection: String) : LibRsSection("ModuleDocumentation")
     object Body : LibRsSection("Body")
+    companion object {
+        val Examples = "Examples"
+        val CrateOrganization = "CrateOrganization"
+    }
 }
 
 typealias LibRsCustomization = NamedSectionGenerator<LibRsSection>
@@ -43,25 +47,16 @@ class LibRsGenerator(
             val libraryDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value ?: settings.moduleName
             containerDocs(escape(libraryDocs))
             // TODO: replace "service" below with the title trait
-            containerDocs(
-                """
-                ## Crate Organization
+            val crateLayout = customizations.map { it.section(LibRsSection.ModuleDocumentation(LibRsSection.CrateOrganization)) }.filter { !it.isEmpty() }
+            if (crateLayout.isNotEmpty()) {
+                containerDocs("\n## Crate Organization")
+                crateLayout.forEach { it(this) }
+            }
 
-                The entry point for must customers will be [`Client`]. [`Client`] exposes one method for each API offered
-                by the service.
-
-                Some APIs require complex or nested arguments. These exist in [`model`].
-
-                Lastly, errors that can be returned by the service are contained within [`error`]. [`Error`] defines a meta
-                error encompassing all possible errors that can be returned by the service.
-
-                The other modules within this crate and not required for normal usage."""
-            )
-
-            val examples = customizations.map { it.section(LibRsSection.ModuleDocumentation("Examples")) }
-                .filter { it != writable { } }
+            val examples = customizations.map { it.section(LibRsSection.ModuleDocumentation(LibRsSection.Examples)) }
+                .filter { section -> !section.isEmpty() }
             if (examples.isNotEmpty() || settings.examplesUri != null) {
-                containerDocs("## Examples")
+                containerDocs("\n## Examples")
                 examples.forEach { it(this) }
 
                 // TODO: Render a basic example for all crates (eg. select first operation and render an example of usage)

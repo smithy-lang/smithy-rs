@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
  * For a runtime type that is used in the client, or in both the client and the server, use [RuntimeType] directly.
  */
 object ServerRuntimeType {
-    val DeriveBuilder = RuntimeType("Builder", dependency = ServerCargoDependency.DeriveBuilder, namespace = "derive_builder")
+    val Phantom = RuntimeType("PhantomData", dependency = null, namespace = "std::marker")
 
     fun Router(runtimeConfig: RuntimeConfig) =
         RuntimeType("Router", CargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")

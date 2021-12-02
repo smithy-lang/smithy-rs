@@ -1,18 +1,34 @@
 vNext (Month Day, Year)
 =======================
+**New this week**
+- Fix typos in module documentation for generated crates (smithy-rs#920)
+- Avoid serializing repetitive `xmlns` attributes in generated XML serializers. (aws-sdk-rust#301, smithy-rs#892)
 
-**New this release**
+**Breaking changes**
+
+v0.32.0 (December 2nd, 2021)
+=======================
+
+- This release was a version bump to fix a version number conflict in crates.io
+
+v0.31.0 (December 2nd, 2021)
+=======================
+**New this week**
+- Add docs.rs metadata section to all crates to document all features
+
+
+v0.30.0-alpha (November 23rd, 2021)
+===================================
+
+**New this week**
 - Improve docs on `aws-smithy-client` (smithy-rs#855)
 - Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
 - `SdkError` now includes a variant `TimeoutError` for when a request times out (smithy-rs#885)
-- Avoid serializing repetitive `xmlns` attributes in generated XML serializers. (aws-sdk-rust#301, smithy-rs#892)
+- Timeouts for requests are now configurable. You can set separate timeouts for each individual request attempt and all attempts made for a request. (smithy-rs#831)
 
 **Breaking Changes**
 - (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
 
-**New this week**
-
-- Timeouts for requests are now configurable. You can set separate timeouts for each individual request attempt and all attempts made for a request. (smithy-rs#831)
 
 v0.29.0-alpha (November 11th, 2021)
 ===================================
