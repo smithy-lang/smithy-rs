@@ -1,9 +1,4 @@
-vNext (Month Day, Year)
-=======================
-**New this week**
-- Fix typos in module documentation for generated crates (smithy-rs#920)
-
-**Breaking changes**
+<!-- Do not manually edit this file, use `update-changelogs` -->
 
 v0.32.0 (December 2nd, 2021)
 =======================

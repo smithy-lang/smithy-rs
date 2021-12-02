@@ -3,16 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use crate::changelog::check_changelog_next;
 use crate::lint_cargo_toml::{check_crate_author, check_crate_license, check_docs_rs, fix_docs_rs};
 use anyhow::{bail, Context, Result};
-use clap::{App, Arg, SubCommand};
 use lazy_static::lazy_static;
 use std::env::set_current_dir;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
+use structopt::StructOpt;
 
 mod anchor;
+mod changelog;
 mod copyright;
 mod lint_cargo_toml;
 
@@ -23,6 +25,40 @@ fn load_repo_root() -> Result<PathBuf> {
         .output()
         .with_context(|| "couldn't load repo root")?;
     Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
+}
+
+#[derive(Debug, StructOpt)]
+enum Args {
+    Check {
+        #[structopt(long)]
+        all: bool,
+        #[structopt(long)]
+        readme: bool,
+        #[structopt(long)]
+        cargo_toml: bool,
+        #[structopt(long)]
+        docsrs_metadata: bool,
+        #[structopt(long)]
+        changelog: bool,
+        #[structopt(long)]
+        license: bool,
+    },
+    Fix {
+        #[structopt(long)]
+        readme: bool,
+        #[structopt(long)]
+        docsrs_metadata: bool,
+        #[structopt(long)]
+        all: bool,
+    },
+    UpdateChangelog {
+        #[structopt(long)]
+        smithy_version: String,
+        #[structopt(long)]
+        sdk_version: String,
+        #[structopt(long)]
+        date: String,
+    },
 }
 
 fn load_vcs_files() -> Result<Vec<PathBuf>> {
@@ -57,92 +93,61 @@ fn repo_root() -> &'static Path {
 
 fn main() -> Result<()> {
     set_current_dir(repo_root())?;
-    let matches = clap_app().get_matches();
-    if let Some(subcommand) = matches.subcommand_matches("check") {
-        let all = subcommand.is_present("all");
-        if subcommand.is_present("readme") || all {
-            check_readmes()?;
+    let opt = Args::from_args();
+    match opt {
+        Args::Check {
+            all,
+            readme,
+            cargo_toml,
+            docsrs_metadata,
+            changelog,
+            license,
+        } => {
+            if readme || all {
+                check_readmes()?;
+            }
+            if cargo_toml || all {
+                check_authors()?;
+                check_license()?;
+            }
+
+            if docsrs_metadata || all {
+                check_docsrs_metadata()?;
+            }
+
+            if license || all {
+                check_license_header()?;
+            }
+            if changelog || all {
+                check_changelog_next(repo_root().join("CHANGELOG.next.toml"))?;
+            }
         }
-        if subcommand.is_present("cargotoml") || all {
-            check_authors()?;
-            check_license()?;
+        Args::Fix {
+            readme,
+            docsrs_metadata,
+            all,
+        } => {
+            if readme || all {
+                fix_readmes()?
+            }
+            if docsrs_metadata || all {
+                fix_docs_rs_metadata()?
+            }
         }
-        if subcommand.is_present("docsrs-metadata") || all {
-            check_docsrs_metadata()?;
-        }
-        if subcommand.is_present("license") || all {
-            check_license_header()?;
-        }
-    } else if let Some(subcommand) = matches.subcommand_matches("fix") {
-        let all = subcommand.is_present("all");
-        if subcommand.is_present("readme") || all {
-            fix_readmes()?;
-        }
-        if subcommand.is_present("docsrs-metadata") || all {
-            fix_docs_rs_metadata()?;
-        }
-    } else {
-        clap_app().print_long_help().unwrap();
+        Args::UpdateChangelog {
+            smithy_version,
+            sdk_version,
+            date,
+        } => changelog::update_changelogs(
+            repo_root().join("CHANGELOG.next.toml"),
+            repo_root().join("CHANGELOG.md"),
+            repo_root().join("aws/SDK_CHANGELOG.md"),
+            &smithy_version,
+            &sdk_version,
+            &date,
+        )?,
     }
     Ok(())
-}
-
-fn clap_app() -> App<'static, 'static> {
-    App::new("smithy-rs linter")
-        .subcommand(
-            SubCommand::with_name("check")
-                .arg(
-                    Arg::with_name("readme")
-                        .takes_value(false)
-                        .required(false)
-                        .long("readme"),
-                )
-                .arg(
-                    Arg::with_name("cargotoml")
-                        .takes_value(false)
-                        .required(false)
-                        .long("authors"),
-                )
-                .arg(
-                    Arg::with_name("docsrs-metadata")
-                        .takes_value(false)
-                        .required(false)
-                        .long("docsrs-metadata"),
-                )
-                .arg(
-                    Arg::with_name("license")
-                        .takes_value(false)
-                        .required(false)
-                        .long("license"),
-                )
-                .arg(
-                    Arg::with_name("all")
-                        .takes_value(false)
-                        .required(false)
-                        .long("all"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("fix")
-                .arg(
-                    Arg::with_name("readme")
-                        .takes_value(false)
-                        .required(false)
-                        .long("readme"),
-                )
-                .arg(
-                    Arg::with_name("docsrs-metadata")
-                        .takes_value(false)
-                        .required(false)
-                        .long("docsrs-metadata"),
-                )
-                .arg(
-                    Arg::with_name("all")
-                        .takes_value(false)
-                        .required(false)
-                        .long("all"),
-                ),
-        )
 }
 
 fn ls(path: impl AsRef<Path>) -> Result<impl Iterator<Item = PathBuf>> {
