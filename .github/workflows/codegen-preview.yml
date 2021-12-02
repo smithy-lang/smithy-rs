@@ -1,49 +1,25 @@
 name: codegen diff preview
-# This job will generate a branch containing exclusively codegen output and push it to GitHub
-# once the branch is deployed, it will comment on GitHub with a link where you can see the generated diff.
+# This job will generate a codegen diff, upload it to S3, and link to it in a comment on the PR.
 on:
-  push:
-    branches:
-    # this is a load-bearing branch filter: if this isn't here, you may
-    # end up generating diffs for __generated-* branches which would lead to infinite recursion...
-    - main
   pull_request:
     types:
     - opened
     - reopened
-    - closed
     - synchronize
 env:
   java_version: 11
 jobs:
-  cleanup-branch:
-    if: ${{ github.event.action == 'closed' }}
+  generate-diff:
     runs-on: ubuntu-latest
-    name: cleanup generated code branch
+    name: Generate diff and upload to S3
+    env:
+      AWS_REGION: us-west-2
+      DIFF_FILE_NAME: diff-${{ github.context.pull_request.base.sha }}-${{ github.sha }}.html
+      S3_BUCKET_NAME: ${{ secrets.CODEGEN_DIFF_ACTION_S3_BUCKET_NAME }}
+    permissions:
+      id-token: write
+      contents: read
     steps:
-    - name: gen branch output
-      run: echo "::set-output name=branchname::${GITHUB_HEAD_REF##*/}"
-      id: branch_output
-    - uses: actions/github-script@v5
-      with:
-        script: |
-          console.log("deleting the generated code branch");
-          await github.rest.git.deleteRef({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            ref: "heads/__generated-${{ steps.branch_output.outputs.branchname }}"
-          })
-
-  push-generated-code:
-    runs-on: ubuntu-latest
-    name: Push generated code to a branch
-    if: ${{ github.event.action != 'closed' }}
-    steps:
-    # this is not technically necessary because of the branch filter above, but better to check
-    # twice than have an infinitely recursing PR job
-    - name: Assert we aren't already on a generated branch
-      run: |
-        [[ ${GITHUB_HEAD_REF:-$GITHUB_REF} != "*__generated*" ]]
     - uses: actions/checkout@v2
     - uses: actions/cache@v2
       name: Gradle Cache
@@ -54,29 +30,41 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
+    # JDK is needed to generate code
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
-    - name: mk-generated
-      run: ./tools/mk-generated.sh
-    - name: push generated branch
+    # Node is needed to run diff2html
+    - name: Set up NodeJS
+      uses: actions/setup-node@v2
+      with:
+        node-version: '16'
+    - name: Install diff2html-cli
+      run: npm install -g diff2html-cli@5.1.11
+    # This generates the diff HTML named ${DIFF_FILE_NAME}
+    - name: Generate diff
       run: |
-        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-        git push -f origin "$(git rev-parse --abbrev-ref HEAD)"
-    - name: finalize
-      run: echo "generated output pushed to $(git rev-parse --abbrev-ref HEAD)"
-    - name: gen branch output
-      run: echo "::set-output name=branchname::$(git rev-parse --abbrev-ref HEAD)"
-      id: branch_output
+        echo "Diff will be generated into ${DIFF_FILE_NAME}"
+        ./tools/codegen-diff-revisions.sh . ${{ github.context.pull_request.base.sha }}
+    - uses: aws-actions/configure-aws-credentials@v1
+      name: Acquire credentials for uploading to S3
+      with:
+        role-to-assume: ${{ secrets.CODEGEN_DIFF_ACTION_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Upload diff to S3
+      run: aws s3 cp "${DIFF_FILE_NAME}" "s3://${S3_BUCKET_NAME}/${DIFF_FILE_NAME}"
     - uses: actions/github-script@v5
       # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"
       if: ${{ github.head_ref != null }}
       with:
         script: |
+          const { DIFF_FILE_NAME } = process.env;
+
           await github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: `A new generated diff is ready to view: https://github.com/${context.repo.owner}/${context.repo.repo}/compare/__generated-main...${{ steps.branch_output.outputs.branchname }}`
+            body: `A new generated diff is ready to view: https://dfzuyhsjp8czs.cloudfront.net/${DIFF_FILE_NAME}`
           })
