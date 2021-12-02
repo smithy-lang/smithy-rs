@@ -276,6 +276,12 @@ fun writable(w: Writable): Writable = w
 
 fun writable(w: String): Writable = writable { rust(w) }
 
+fun Writable.isEmpty(): Boolean {
+    val writer = RustWriter.root()
+    this(writer)
+    return writer.toString() == RustWriter.root().toString()
+}
+
 class RustWriter private constructor(
     private val filename: String,
     val namespace: String,

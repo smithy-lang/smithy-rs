@@ -147,7 +147,7 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
 
     companion object {
         private val logger = Logger.getLogger("RustCodegenSPILoader")
-        fun fromClasspath(context: PluginContext): CombinedCodegenDecorator {
+        fun fromClasspath(context: PluginContext, vararg extras: RustCodegenDecorator): CombinedCodegenDecorator {
             val decorators = ServiceLoader.load(
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader)
@@ -155,7 +155,7 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
                 .onEach {
                     logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                 }.toList()
-            return CombinedCodegenDecorator(decorators + RequiredCustomizations() + FluentClientDecorator())
+            return CombinedCodegenDecorator(decorators + RequiredCustomizations() + FluentClientDecorator() + extras)
         }
     }
 }

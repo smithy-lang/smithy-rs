@@ -1,6 +1,7 @@
 vNext (Month Day, Year)
 =======================
 **New this week**
+- Fix typos in module documentation for generated crates (smithy-rs#920)
 
 **Breaking changes**
 
