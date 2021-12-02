@@ -29,8 +29,8 @@
 set -e
 
 generate_and_commit_generated_code() {
-    ./gradlew :aws:sdk:assemble
-    ./gradlew :codegen-server-test:assemble
+    ./gradlew --no-build-cache :aws:sdk:assemble
+    ./gradlew --no-build-cache :codegen-server-test:assemble
 
     # Move generated code into codegen-diff/ directory
     rm -rf codegen-diff/
