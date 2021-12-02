@@ -14,7 +14,7 @@ jobs:
     name: Generate diff and upload to S3
     env:
       AWS_REGION: us-west-2
-      DIFF_FILE_NAME: diff-${{ github.context.pull_request.base.sha }}-${{ github.sha }}.html
+      DIFF_FILE_NAME: diff-${{ github.event.pull_request.base.sha }}-${{ github.sha }}.html
       S3_BUCKET_NAME: ${{ secrets.CODEGEN_DIFF_ACTION_S3_BUCKET_NAME }}
     permissions:
       id-token: write
@@ -46,7 +46,7 @@ jobs:
     - name: Generate diff
       run: |
         echo "Diff will be generated into ${DIFF_FILE_NAME}"
-        ./tools/codegen-diff-revisions.sh . ${{ github.context.pull_request.base.sha }}
+        ./tools/codegen-diff-revisions.sh . ${{ github.event.pull_request.base.sha }}
     - uses: aws-actions/configure-aws-credentials@v1
       name: Acquire credentials for uploading to S3
       with:
