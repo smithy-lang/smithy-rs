@@ -81,8 +81,7 @@ generate_and_commit_generated_code() {
     set -e
     if [[ ${RESULT} -eq 0 ]]; then
         # No diff? Place the empty diff file in the right place
-        SCRIPT_PATH="$(dirname $(realpath $0))"
-        cp "${SCRIPT_PATH}/empty-codegen-diff.html" "${OUTPUT_FILE_NAME}"
+        cp "tools/empty-codegen-diff.html" "${OUTPUT_FILE_NAME}"
     else
         # Generate HTML diff. This uses the diff2html-cli, which defers to `git diff` under the hood.
         # All arguments after the first `--` go to the `git diff` command.
