@@ -11,8 +11,8 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.rustlang.escape
+import software.amazon.smithy.rust.codegen.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
@@ -55,14 +55,14 @@ class LibRsGenerator(
                 Lastly, errors that can be returned by the service are contained within [`error`]. [`Error`] defines a meta
                 error encompassing all possible errors that can be returned by the service.
 
-                The other modules within this crate and not required for normal usage.
-                """
+                The other modules within this crate are not required for normal usage.
+                """.trimEnd()
             )
 
             val examples = customizations.map { it.section(LibRsSection.ModuleDocumentation("Examples")) }
-                .filter { it != writable { } }
+                .filter { section -> !section.isEmpty() }
             if (examples.isNotEmpty() || settings.examplesUri != null) {
-                containerDocs("## Examples")
+                containerDocs("\n## Examples")
                 examples.forEach { it(this) }
 
                 // TODO: Render a basic example for all crates (eg. select first operation and render an example of usage)

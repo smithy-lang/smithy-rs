@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.lang
 
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldContainOnlyOnce
 import org.junit.jupiter.api.Test
@@ -18,7 +19,9 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docs
+import software.amazon.smithy.rust.codegen.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndRun
@@ -111,5 +114,11 @@ class RustWriterTest {
         val sut = RustWriter.forModule("lib")
         sut.docs("A link! #D", symbol)
         sut.toString() shouldContain "/// A link! [`Foo`](crate::model::Foo)"
+    }
+
+    @Test
+    fun `empty writable`() {
+        val w = writable {}
+        w.isEmpty() shouldBe true
     }
 }
