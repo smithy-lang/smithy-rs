@@ -79,7 +79,9 @@ generate_and_commit_generated_code() {
         __tmp-localonly-base __tmp-localonly-head -- codegen-diff
 
     # Clean-up that's only really useful when testing the script in local-dev
-    git checkout main
-    git branch -D __tmp-localonly-base
-    git branch -D __tmp-localonly-head
+    if [ "${GITHUB_ACTIONS}" -ne "true" ]; then
+        git checkout main
+        git branch -D __tmp-localonly-base
+        git branch -D __tmp-localonly-head
+    fi
 } >&2
