@@ -58,6 +58,7 @@ generate_and_commit_generated_code() {
     REPOSITORY_ROOT="$1"
     BASE_COMMIT_SHA="$2"
     HEAD_COMMIT_SHA=$(git rev-parse HEAD)
+    OUTPUT_FILE_NAME="diff-${BASE_COMMIT_SHA}-${HEAD_COMMIT_SHA}.html"
     cd "${REPOSITORY_ROOT}"
 
     git diff --quiet || (echo 'working tree not clean, aborting' && exit 1)
@@ -73,10 +74,21 @@ generate_and_commit_generated_code() {
     git checkout ${BASE_COMMIT_SHA} -b __tmp-localonly-base
     generate_and_commit_generated_code
 
-    # Generate HTML diff. This uses the diff2html-cli, which defers to `git diff` under the hood.
-    # All arguments after the first `--` go to the `git diff` command.
-    diff2html -s line -f html -d word -i command -F "diff-${BASE_COMMIT_SHA}-${HEAD_COMMIT_SHA}.html" -- \
-        -U20 __tmp-localonly-base __tmp-localonly-head -- codegen-diff
+    # Check to see if there's a diff
+    set +e
+    git diff --quiet __tmp-localonly-base __tmp-localonly-head -- codegen-diff
+    RESULT=$?
+    set -e
+    if [[ ${RESULT} -eq 0 ]]; then
+        # No diff? Place the empty diff file in the right place
+        SCRIPT_PATH="$(dirname $(realpath $0))"
+        cp "${SCRIPT_PATH}/empty-codegen-diff.html" "${OUTPUT_FILE_NAME}"
+    else
+        # Generate HTML diff. This uses the diff2html-cli, which defers to `git diff` under the hood.
+        # All arguments after the first `--` go to the `git diff` command.
+        diff2html -s line -f html -d word -i command -F "${OUTPUT_FILE_NAME}" -- \
+            -U20 __tmp-localonly-base __tmp-localonly-head -- codegen-diff
+    fi
 
     # Clean-up that's only really useful when testing the script in local-dev
     if [[ "${GITHUB_ACTIONS}" != "true" ]]; then
