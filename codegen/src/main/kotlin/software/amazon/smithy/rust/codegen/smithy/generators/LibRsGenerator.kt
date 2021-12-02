@@ -22,6 +22,10 @@ sealed class LibRsSection(name: String) : Section(name) {
     object Attributes : LibRsSection("Attributes")
     data class ModuleDocumentation(val subsection: String) : LibRsSection("ModuleDocumentation")
     object Body : LibRsSection("Body")
+    companion object {
+        val Examples = "Examples"
+        val CrateOrganization = "CrateOrganization"
+    }
 }
 
 typealias LibRsCustomization = NamedSectionGenerator<LibRsSection>
@@ -43,23 +47,13 @@ class LibRsGenerator(
             val libraryDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value ?: settings.moduleName
             containerDocs(escape(libraryDocs))
             // TODO: replace "service" below with the title trait
-            containerDocs(
-                """
-                ## Crate Organization
+            val crateLayout = customizations.map { it.section(LibRsSection.ModuleDocumentation(LibRsSection.CrateOrganization)) }.filter { !it.isEmpty() }
+            if (crateLayout.isNotEmpty()) {
+                containerDocs("\n## Crate Organization")
+                crateLayout.forEach { it(this) }
+            }
 
-                The entry point for most customers will be [`Client`]. [`Client`] exposes one method for each API offered
-                by the service.
-
-                Some APIs require complex or nested arguments. These exist in [`model`].
-
-                Lastly, errors that can be returned by the service are contained within [`error`]. [`Error`] defines a meta
-                error encompassing all possible errors that can be returned by the service.
-
-                The other modules within this crate are not required for normal usage.
-                """.trimEnd()
-            )
-
-            val examples = customizations.map { it.section(LibRsSection.ModuleDocumentation("Examples")) }
+            val examples = customizations.map { it.section(LibRsSection.ModuleDocumentation(LibRsSection.Examples)) }
                 .filter { section -> !section.isEmpty() }
             if (examples.isNotEmpty() || settings.examplesUri != null) {
                 containerDocs("\n## Examples")
