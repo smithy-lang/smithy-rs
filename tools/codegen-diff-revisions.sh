@@ -76,10 +76,10 @@ generate_and_commit_generated_code() {
     # Generate HTML diff. This uses the diff2html-cli, which defers to `git diff` under the hood.
     # All arguments after the first `--` go to the `git diff` command.
     diff2html -s line -f html -d word -i command -F "diff-${BASE_COMMIT_SHA}-${HEAD_COMMIT_SHA}.html" -- \
-        __tmp-localonly-base __tmp-localonly-head -- codegen-diff
+        -U20 __tmp-localonly-base __tmp-localonly-head -- codegen-diff
 
     # Clean-up that's only really useful when testing the script in local-dev
-    if [ "${GITHUB_ACTIONS}" -ne "true" ]; then
+    if [[ "${GITHUB_ACTIONS}" != "true" ]]; then
         git checkout main
         git branch -D __tmp-localonly-base
         git branch -D __tmp-localonly-head
