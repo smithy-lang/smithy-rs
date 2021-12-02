@@ -80,8 +80,20 @@ generate_and_commit_generated_code() {
     RESULT=$?
     set -e
     if [[ ${RESULT} -eq 0 ]]; then
-        # No diff? Place the empty diff file in the right place
-        cp "tools/empty-codegen-diff.html" "${OUTPUT_FILE_NAME}"
+        # No diff? Output an empty diff HTML file
+        cat >"${OUTPUT_FILE_NAME}" <<EOF
+<!doctype html>
+<html lang="en">
+<head>
+    <metadata charset="utf-8">
+    <title>No codegen changes</title>
+</head>
+<body>
+    <h1>No codegen changes</h1>
+    <p>There are no codegen changes for this PR revision.</p>
+</body>
+</html>
+EOF
     else
         # Generate HTML diff. This uses the diff2html-cli, which defers to `git diff` under the hood.
         # All arguments after the first `--` go to the `git diff` command.
