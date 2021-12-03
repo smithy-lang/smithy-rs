@@ -6,8 +6,8 @@
 
 import "source-map-support/register";
 import * as cdk from "@aws-cdk/core";
-import { CodeGenDiffStack } from "../lib/codegen-diff-stack";
+import { PullRequestCdnStack } from "../lib/smithy-rs/pull-request-cdn-stack";
 
 const app = new cdk.App();
 
-new CodeGenDiffStack(app, "codegen-diff-stack", {});
+new PullRequestCdnStack(app, "smithy-rs-pull-request-cdn-stack", {});

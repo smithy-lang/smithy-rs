@@ -5,12 +5,12 @@
 
 import * as cdk from "@aws-cdk/core";
 import { Duration, RemovalPolicy, Tags } from "@aws-cdk/core";
-import { CloudFrontS3Cdn } from "./constructs/cloudfront-s3-cdn";
-import { GitHubOidcRole } from "./constructs/github-oidc-role";
+import { CloudFrontS3Cdn } from "../constructs/cloudfront-s3-cdn";
+import { GitHubOidcRole } from "../constructs/github-oidc-role";
 
-export class CodeGenDiffStack extends cdk.Stack {
+export class PullRequestCdnStack extends cdk.Stack {
     public readonly smithyRsOidcRole: GitHubOidcRole;
-    public readonly diffCdn: CloudFrontS3Cdn;
+    public readonly pullRequestCdn: CloudFrontS3Cdn;
 
     constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
         super(scope, id, props);
@@ -19,18 +19,26 @@ export class CodeGenDiffStack extends cdk.Stack {
         Tags.of(this).add("stack", id);
 
         this.smithyRsOidcRole = new GitHubOidcRole(this, "smithy-rs", {
-            name: "codegen-diff-smithy-rs",
+            name: "smithy-rs-pull-request",
             githubOrg: "awslabs",
             githubRepo: "smithy-rs",
         });
 
-        this.diffCdn = new CloudFrontS3Cdn(this, "diff-cdn", {
-            name: "codegen-diff-smithy-rs",
+        this.pullRequestCdn = new CloudFrontS3Cdn(this, "pull-request-cdn", {
+            name: "smithy-rs-pull-request",
             lifecycleRules: [
                 {
-                    id: "delete-old-diffs",
+                    id: "delete-old-codegen-diffs",
                     enabled: true,
                     expiration: Duration.days(90),
+                    prefix: "codegen-diff/",
+                },
+                {
+                    id: "delete-old-docs",
+                    enabled: true,
+                    // The docs are huge, so keep them for a much shorter period of time
+                    expiration: Duration.days(14),
+                    prefix: "docs/",
                 },
             ],
             // Delete the bucket and all its files if deleting the stack
@@ -38,6 +46,6 @@ export class CodeGenDiffStack extends cdk.Stack {
         });
 
         // Grant the OIDC role permission to write to the CDN bucket
-        this.diffCdn.bucket.grantWrite(this.smithyRsOidcRole.oidcRole);
+        this.pullRequestCdn.bucket.grantWrite(this.smithyRsOidcRole.oidcRole);
     }
 }

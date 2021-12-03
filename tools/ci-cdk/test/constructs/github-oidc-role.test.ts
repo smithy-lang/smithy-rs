@@ -51,6 +51,16 @@ test("it should have an OIDC provider and access role", () => {
                 Version: "2012-10-17",
             },
             RoleName: "some-name-github-oidc-role",
+            Tags: [
+                {
+                    Key: "construct-name",
+                    Value: "some-name",
+                },
+                {
+                    Key: "construct-type",
+                    Value: "GitHubOidcRole",
+                },
+            ],
         }),
     );
 });
