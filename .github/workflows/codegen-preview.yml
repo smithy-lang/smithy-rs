@@ -8,6 +8,8 @@ on:
     - synchronize
 env:
   java_version: 11
+  rust_version: 1.54.0
+
 jobs:
   generate-diff:
     runs-on: ubuntu-latest
@@ -64,11 +66,72 @@ jobs:
       if: ${{ github.head_ref != null }}
       with:
         script: |
-          const { DIFF_FILE_NAME } = process.env;
-
           await github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: '${{ steps.generate-diff.outputs.bot-message }}'
+          })
+
+  generate-doc-preview:
+    runs-on: ubuntu-latest
+    name: Generate rustdoc preview and upload to S3
+    env:
+      AWS_REGION: us-west-2
+      S3_BUCKET_NAME: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME }}
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+      # JDK is needed to generate code
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        default: true
+    - name: Generate doc preview
+      # Only generate two of the smallest services since these get huge. One of these must be
+      # STS since aws-config depends on it. STS and Transcribe Streaming were chosen below to stay
+      # small while still representing most features. Combined, they are about 11 MB at time of writing.
+      run: |
+        ./gradlew -Paws.services=+sts,+transcribestreaming :aws:sdk:assemble
+        pushd aws/sdk/build/aws-sdk
+        # Remove example crates from workspace
+        sed -i '/examples/d' Cargo.toml
+        cargo doc --no-deps --all-features
+        popd
+        ./tools/generate-doc-preview-index.sh
+    - uses: aws-actions/configure-aws-credentials@v1
+      name: Acquire credentials for uploading to S3
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Upload diff to S3
+      run: |
+        aws s3 cp target/doc "s3://${S3_BUCKET_NAME}/docs/${{ github.event.pull_request.head.sha }}" --recursive
+    - uses: actions/github-script@v5
+      # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"
+      if: ${{ github.head_ref != null }}
+      with:
+        script: |
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: 'A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/${{ github.event.pull_request.head.sha }}/index.html) is ready to view.'
           })
