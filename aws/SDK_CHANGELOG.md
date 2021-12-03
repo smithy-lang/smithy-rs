@@ -1,5 +1,4 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
-
 v0.2.0 (December 2nd, 2021)
 ===========================
 

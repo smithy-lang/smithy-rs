@@ -1,5 +1,4 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
-
 v0.32.0 (December 2nd, 2021)
 =======================
 
@@ -9,6 +8,7 @@ v0.31.0 (December 2nd, 2021)
 =======================
 **New this week**
 - Add docs.rs metadata section to all crates to document all features
+
 
 v0.30.0-alpha (November 23rd, 2021)
 ===================================
