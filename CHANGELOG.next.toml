@@ -1,0 +1,42 @@
+# Example changelog entries
+# [[aws-sdk-rust]]
+# message = "Fix typos in module documentation for generated crates"
+# references = ["smithy-rs#920"]
+# meta = { "breaking" = false, "tada" = false, "bug" = false }
+# author = "rcoh"
+#
+# [[smithy-rs]]
+# message = "Fix typos in module documentation for generated crates"
+# references = ["smithy-rs#920"]
+# meta = { "breaking" = false, "tada" = false, "bug" = false }
+# author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Fix typos in module documentation for generated crates"
+references = ["smithy-rs#920"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Fix typos in module documentation for generated crates"
+references = ["smithy-rs#920"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Avoid serializing repetitive `xmlns` attributes in generated XML serializers."
+references = ["aws-sdk-rust#301", "smithy-rs#892"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Avoid serializing repetitive `xmlns` attributes when serializing XML. This reduces the length of serialized requests and should improve compatibility with localstack."
+references = ["aws-sdk-rust#301", "smithy-rs#892"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Add changelog automation to sdk-lints"
+references = ["smithy-rs#922", "smithy-rs#914"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
