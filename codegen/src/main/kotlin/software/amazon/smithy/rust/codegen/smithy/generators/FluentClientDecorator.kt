@@ -296,6 +296,8 @@ class FluentClientGenerator(
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
+            // Testing if codegen diff works with forks
+
             ##[derive(Debug)]
             pub(crate) struct Handle${generics.decl} {
                 client: #{client}::Client${generics.inst},
