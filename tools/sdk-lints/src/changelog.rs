@@ -237,7 +237,7 @@ fn validate(entry: &ChangelogEntry) -> Result<()> {
             ),
             Some(("aws-sdk-rust" | "smithy-rs", number)) if number.parse::<u32>().is_ok() => {}
             _other => bail!(
-                "unexpected reference format: {} (expected aws-sdk-rust/smithy-rs#number",
+                "unexpected reference format: {} (expected aws-sdk-rust/smithy-rs#number)",
                 reference
             ),
         }

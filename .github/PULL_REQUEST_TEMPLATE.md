@@ -12,7 +12,7 @@
 
 ## Checklist
 <!--- If a checkbox below is not applicable, then please DELETE it rather than leaving it unchecked -->
-- [ ] I have updated `CHANGELOG.md` if I made changes to the smithy-rs codegen or runtime crates
-- [ ] I have updated `aws/SDK_CHANGELOG.md` if I made changes to the AWS SDK, generated SDK code, or SDK runtime crates
+- [ ] I have updated `CHANGELOG.next.toml` if I made changes to the smithy-rs codegen or runtime crates
+- [ ] I have updated `CHANGELOG.next.toml` if I made changes to the AWS SDK, generated SDK code, or SDK runtime crates
 
 By submitting this pull request, I confirm that you can use, modify, copy, and redistribute this contribution, under the terms of your choice.

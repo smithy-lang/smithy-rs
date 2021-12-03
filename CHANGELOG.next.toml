@@ -22,3 +22,9 @@ message = "Fix typos in module documentation for generated crates"
 references = ["smithy-rs#920"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Add changelog automation to sdk-lints"
+references = ["smithy-rs#todo"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
