@@ -296,6 +296,8 @@ class FluentClientGenerator(
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
+            // This is a demo of the codegen diffing. Don't keep this change.
+
             ##[derive(Debug)]
             pub(crate) struct Handle${generics.decl} {
                 client: #{client}::Client${generics.inst},
