@@ -76,7 +76,7 @@ def main():
     generate_and_commit_generated_code(base_commit_sha)
 
     bot_message = make_diffs(base_commit_sha, head_commit_sha)
-    write_to_file(f"{OUTPUT_PATH}/bot_message", bot_message)
+    write_to_file(f"{OUTPUT_PATH}/bot-message", bot_message)
 
     # Clean-up that's only really useful when testing the script in local-dev
     if not running_in_github_actions():
