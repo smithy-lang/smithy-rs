@@ -14,8 +14,7 @@ jobs:
     name: Generate diff and upload to S3
     env:
       AWS_REGION: us-west-2
-      DIFF_FILE_NAME: diff-${{ github.event.pull_request.base.sha }}-${{ github.sha }}.html
-      S3_BUCKET_NAME: ${{ secrets.CODEGEN_DIFF_ACTION_S3_BUCKET_NAME }}
+      S3_BUCKET_NAME: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME }}
     permissions:
       id-token: write
       contents: read
@@ -43,19 +42,19 @@ jobs:
         node-version: '16'
     - name: Install diff2html-cli
       run: npm install -g diff2html-cli@5.1.11
-    # This generates the diff HTML named ${DIFF_FILE_NAME}
     - name: Generate diff
+      id: generate-diff
       run: |
-        echo "Diff will be generated into ${DIFF_FILE_NAME}"
-        ./tools/codegen-diff-revisions.sh . ${{ github.event.pull_request.base.sha }}
+        ./tools/codegen-diff-revisions.py . ${{ github.event.pull_request.base.sha }}
+        echo "::set-output name=bot-message::$(cat tmp-codegen-diff/bot-message)"
     - uses: aws-actions/configure-aws-credentials@v1
       name: Acquire credentials for uploading to S3
       with:
-        role-to-assume: ${{ secrets.CODEGEN_DIFF_ACTION_ROLE_ARN }}
+        role-to-assume: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
         role-session-name: GitHubActions
         aws-region: us-west-2
     - name: Upload diff to S3
-      run: aws s3 cp "${DIFF_FILE_NAME}" "s3://${S3_BUCKET_NAME}/${DIFF_FILE_NAME}"
+      run: aws s3 cp tmp-codegen-diff/${{ github.event.pull_request.base.sha }} "s3://${S3_BUCKET_NAME}/${{ github.event.pull_request.base.sha }}" --recursive
     - uses: actions/github-script@v5
       # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"
       if: ${{ github.head_ref != null }}
@@ -67,5 +66,5 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: `A new generated diff is ready to view: https://dfzuyhsjp8czs.cloudfront.net/${DIFF_FILE_NAME}`
+            body: `${{ steps.generate-diff.outputs.bot-message }}`
           })
