@@ -11,8 +11,6 @@ use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::result::SdkError;
-use aws_smithy_types::retry;
-use aws_smithy_types::retry::RetryConfig;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;

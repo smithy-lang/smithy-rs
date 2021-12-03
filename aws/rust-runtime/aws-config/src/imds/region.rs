@@ -12,10 +12,10 @@ use crate::imds;
 use crate::imds::client::LazyClient;
 use crate::meta::region::{future, ProvideRegion};
 use crate::provider_config::ProviderConfig;
-use aws_smithy_async::rt::sleep::AsyncSleep;
+
 use aws_types::os_shim_internal::Env;
 use aws_types::region::Region;
-use std::sync::Arc;
+
 use tracing::Instrument;
 
 /// IMDSv2 Region Provider
@@ -24,7 +24,6 @@ use tracing::Instrument;
 #[derive(Debug)]
 pub struct ImdsRegionProvider {
     client: LazyClient,
-    sleep: Arc<dyn AsyncSleep>,
     env: Env,
 }
 
@@ -110,9 +109,6 @@ impl Builder {
         ImdsRegionProvider {
             client,
             env: provider_config.env(),
-            sleep: provider_config
-                .sleep()
-                .expect("no default sleep implementation provided"),
         }
     }
 }
