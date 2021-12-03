@@ -30,6 +30,7 @@ import os
 import sys
 import subprocess
 import tempfile
+import shlex
 
 
 HEAD_BRANCH_NAME = "__tmp-localonly-head"
@@ -99,7 +100,7 @@ def generate_and_commit_generated_code(revision_sha):
     run(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
     run(f"find {OUTPUT_PATH}/codegen-server-test | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
-        f"xargs rm -f")
+        f"xargs rm -f", shell=True)
 
     run(f"git add -f {OUTPUT_PATH}")
     run(f"git -c 'user.name=GitHub Action (generated code preview)' "
@@ -202,25 +203,16 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-# Checks a command result for success and exits the process if it failed
-def expect_cmd_success(command, result):
-    if result.returncode != 0:
-        eprint(f"Command `{command}` failed with status code {result.returncode}")
-        eprint("stderr:\n" + result.stderr.decode("utf-8"))
-        eprint("stdout:\n" + result.stdout.decode("utf-8"))
-        sys.exit(1)
-
-
 # Runs a shell command
-def run(command):
-    result = subprocess.run(command, stdout=sys.stderr, stderr=sys.stderr, shell=True)
-    expect_cmd_success(command, result)
+def run(command, shell=False):
+    if not shell:
+        command = shlex.split(command)
+    subprocess.run(command, stdout=sys.stderr, stderr=sys.stderr, shell=shell, check=True)
 
 
 # Returns the output from a shell command. Bails if the command failed
 def get_cmd_output(command):
-    result = subprocess.run(command, capture_output=True, shell=True)
-    expect_cmd_success(command, result)
+    result = subprocess.run(command, capture_output=True, shell=True, check=True)
     return result.stdout.decode("utf-8").strip()
 
 
