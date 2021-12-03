@@ -40,6 +40,7 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val awsTypes = awsTypes(runtimeConfig).asType()
     val awsHyper = awsHyperDep.asType()
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
+    val awsSmithyClient = smithyClientDep.asType()
 
     val AwsMiddleware = RuntimeType("AwsMiddleware", awsHyperDep, "aws_hyper")
     val DynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
@@ -113,15 +114,20 @@ private class AwsFluentClientExtensions(private val types: Types) {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
                     let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
                     let sleep_impl = conf.sleep_impl.clone();
-                    let mut client = #{aws_hyper}::Client::new(conn)
-                        .with_retry_config(retry_config.into())
-                        .with_timeout_config(timeout_config);
-
-                    client.set_sleep_impl(sleep_impl);
+                    let mut builder = #{aws_smithy_client}::Builder::new()
+                        .connector(conn)
+                        .middleware(#{aws_hyper}::AwsMiddleware::new());
+                    builder.set_retry_config(retry_config.into());
+                    builder.set_timeout_config(timeout_config);
+                    if let Some(sleep_impl) = sleep_impl {
+                        builder.set_sleep_impl(Some(sleep_impl));
+                    }
+                    let client = builder.build();
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,
                 "aws_hyper" to types.awsHyper,
+                "aws_smithy_client" to types.awsSmithyClient
             )
         }
         writer.rustBlock("impl Client<aws_smithy_client::erase::DynConnector, aws_hyper::AwsMiddleware, aws_smithy_client::retry::Standard>") {
@@ -139,15 +145,20 @@ private class AwsFluentClientExtensions(private val types: Types) {
                     let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
                     let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
                     let sleep_impl = conf.sleep_impl.clone();
-                    let mut client = #{aws_hyper}::Client::https()
-                        .with_retry_config(retry_config.into())
-                        .with_timeout_config(timeout_config);
+                    let mut builder = #{aws_smithy_client}::Builder::dyn_https()
+                        .middleware(#{aws_hyper}::AwsMiddleware::default());
+                    builder.set_retry_config(retry_config.into());
+                    builder.set_timeout_config(timeout_config);
+                    if let Some(sleep_impl) = sleep_impl {
+                        builder.set_sleep_impl(Some(sleep_impl));
+                    }
+                    let client = builder.build();
 
-                    client.set_sleep_impl(sleep_impl);
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,
                 "aws_hyper" to types.awsHyper,
+                "aws_smithy_client" to types.awsSmithyClient,
                 "aws_types" to types.awsTypes
             )
         }

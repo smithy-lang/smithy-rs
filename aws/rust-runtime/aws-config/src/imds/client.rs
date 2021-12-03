@@ -553,17 +553,16 @@ impl Builder {
             self.token_ttl.unwrap_or(DEFAULT_TOKEN_TTL),
             retry_config.clone(),
             timeout_config.clone(),
+            config.sleep(),
         );
         let middleware = ImdsMiddleware { token_loader };
-        let mut inner_client = aws_smithy_client::Builder::new()
+        let inner_client = aws_smithy_client::Builder::new()
             .connector(connector.clone())
             .middleware(middleware)
+            .sleep_impl(config.sleep())
             .build()
             .with_retry_config(retry_config)
             .with_timeout_config(timeout_config);
-        if let Some(sleep) = config.sleep() {
-            inner_client = inner_client.with_sleep_impl(sleep);
-        }
 
         let client = Client {
             endpoint,
@@ -724,8 +723,8 @@ pub(crate) mod test {
     use std::error::Error;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-    use aws_hyper::DynConnector;
     use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::{capture_request, TestConnection};
     use aws_smithy_http::body::SdkBody;
     use aws_types::os_shim_internal::{Env, Fs, ManualTimeSource, TimeSource};
@@ -736,6 +735,7 @@ pub(crate) mod test {
     use crate::imds::client::{Client, EndpointMode, ImdsError};
     use crate::provider_config::ProviderConfig;
     use http::header::USER_AGENT;
+    use tracing::log::LevelFilter;
 
     const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
     const TOKEN_B: &str = "alternatetoken==";
@@ -941,8 +941,11 @@ pub(crate) mod test {
 
     /// 500 error during token acquisition should be retried
     #[tokio::test]
-    #[traced_test]
+    //#[traced_test]
     async fn retry_token_failure() {
+        env_logger::builder()
+            .filter_level(LevelFilter::Debug)
+            .init();
         let connection = TestConnection::new(vec![
             (
                 token_request("http://169.254.169.254", 21600),
@@ -1011,7 +1014,6 @@ pub(crate) mod test {
     }
 
     /// Verify that the end-to-end real client has a 1-second connect timeout
-    #[ignore]
     #[tokio::test]
     async fn one_second_connect_timeout() {
         let client = Client::builder()
@@ -1028,7 +1030,8 @@ pub(crate) mod test {
         assert!(now.elapsed().unwrap() > Duration::from_secs(1));
         assert!(now.elapsed().unwrap() < Duration::from_secs(2));
         match resp {
-            ImdsError::FailedToLoadToken(err) if format!("{}", err).contains("timed out") => {} // ok,
+            ImdsError::FailedToLoadToken(err)
+                if format!("{}", err).contains("HTTP connect timeout") => {} // ok,
             other => panic!(
                 "wrong error, expected construction failure with TimedOutError inside: {}",
                 other

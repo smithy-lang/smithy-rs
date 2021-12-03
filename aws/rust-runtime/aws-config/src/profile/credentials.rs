@@ -21,6 +21,7 @@
 //! build it from `~/.aws/credentials` and `~/.aws/config`.
 //! - `exec` which contains a chain representation of providers to implement passing bootstrapped credentials
 //! through a series of providers.
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
@@ -427,7 +428,7 @@ impl Builder {
             });
         let factory = exec::named::NamedProviderFactory::new(named_providers);
         let connector = expect_connector(conf.default_connector());
-        let core_client = aws_hyper::Client::new(connector.clone());
+        let core_client = conf.sdk_client();
 
         ProfileFileCredentialsProvider {
             factory,

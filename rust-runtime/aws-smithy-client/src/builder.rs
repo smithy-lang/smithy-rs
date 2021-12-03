@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use crate::{bounds, erase, retry, Client, TriState};
-use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_types::timeout::TimeoutConfig;
@@ -126,8 +126,7 @@ impl<C, R> Builder<C, (), R> {
     /// ```no_run
     /// use aws_smithy_client::Builder;
     /// use aws_smithy_http::body::SdkBody;
-    /// let client = Builder::new()
-    ///   .https()
+    /// let client = Builder::dyn_https()
     ///   .middleware_fn(|req: aws_smithy_http::operation::Request| {
     ///     req
     ///   })
@@ -181,6 +180,18 @@ impl<C, M> Builder<C, M> {
     /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
     pub fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) {
         self.sleep_impl = async_sleep.into();
+    }
+
+    /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
+    pub fn sleep_impl(mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) -> Self {
+        self.set_sleep_impl(async_sleep);
+        self
+    }
+
+    /// Sets the sleep implementation to [`default_async_sleep`].
+    pub fn default_async_sleep(mut self) -> Self {
+        self.sleep_impl = TriState::or_unset(default_async_sleep());
+        self
     }
 }
 
@@ -256,5 +267,36 @@ where
     /// # }
     pub fn build_dyn(self) -> erase::DynClient<R> {
         self.build().into_dyn()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::erase::DynConnector;
+    use crate::never::NeverConnector;
+    use tower::layer::util::Identity;
+    use tracing_test::traced_test;
+
+    #[traced_test]
+    #[test]
+    fn warn_on_no_sleep() {
+        let _ = crate::Builder::new()
+            .connector(DynConnector::new(NeverConnector::new()))
+            .middleware(Identity::new())
+            .build();
+        assert!(logs_contain("No sleep implementation set"));
+        assert!(logs_contain("WARN"));
+    }
+
+    #[traced_test]
+    #[test]
+    fn no_warn_disabled_sleep() {
+        let mut builder = crate::Builder::new()
+            .connector(DynConnector::new(NeverConnector::new()))
+            .middleware(Identity::new());
+        // explicitly disable the sleep implementation to suppress logging
+        builder.set_sleep_impl(None);
+        let _ = builder.build();
+        assert!(!logs_contain("No sleep implementation set"));
     }
 }

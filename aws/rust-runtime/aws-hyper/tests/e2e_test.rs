@@ -18,7 +18,7 @@ use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
 use aws_endpoint::set_endpoint_resolver;
 use aws_http::user_agent::AwsUserAgent;
 use aws_http::AwsErrorRetryPolicy;
-use aws_hyper::Client;
+use aws_hyper::AwsMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
 
 use aws_smithy_client::test_connection::TestConnection;
@@ -32,6 +32,8 @@ use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::region::Region;
 use aws_types::Credentials;
 use aws_types::SigningService;
+
+type Client<C> = aws_smithy_client::Client<C, AwsMiddleware>;
 
 #[derive(Clone)]
 struct TestOperationParser;
@@ -114,7 +116,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsErrorRetryPolicy> {
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 #[test]
 fn test_default_client() {
-    let client = Client::https();
+    let client = Client::dyn_https();
     let _ = client.call(test_operation());
 }
 

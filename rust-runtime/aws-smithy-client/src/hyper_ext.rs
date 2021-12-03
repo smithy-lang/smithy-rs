@@ -13,12 +13,12 @@
 //! with `rustls` will be constructed during client creation. However, if you are creating a Smithy
 //! [`Client`](crate::Client), directly, use the `https()` method to match the default behavior:
 //! ```no_run
-//! use aws_smithy_client::Client;
+//! use aws_smithy_client::Builder;
 //! use aws_smithy_client::erase::DynConnector;
 //!
 //! // TODO: replace this with your middleware
 //! type MyMiddleware = tower::layer::util::Identity;
-//! let client = Client::<DynConnector, MyMiddleware>::https();
+//! let client = Builder::<DynConnector, MyMiddleware>::dyn_https().build();
 //! ```
 //!
 //! ### Create a Hyper client with a custom timeout
@@ -52,6 +52,7 @@ use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_types::retry::ErrorKind;
 
+use crate::erase::DynConnector;
 use crate::{timeout, Builder as ClientBuilder};
 
 use self::timeout_middleware::{ConnectTimeout, HttpReadTimeout, HttpTimeoutError};
@@ -251,19 +252,18 @@ impl Builder {
 }
 
 #[cfg(any(feature = "rustls", feature = "native_tls"))]
-impl<M> crate::Client<crate::erase::DynConnector, M>
+impl<M> crate::Builder<crate::erase::DynConnector, M>
 where
     M: Default,
-    M: crate::bounds::SmithyMiddleware<crate::erase::DynConnector> + Send + Sync + 'static,
 {
-    /// Create a Smithy client that uses HTTPS and the [standard retry
+    /// Create a Smithy client builder with an HTTPS connector and the [standard retry
     /// policy](crate::retry::Standard) over the default middleware implementation.
     ///
     /// For convenience, this constructor type-erases the concrete TLS connector backend used using
     /// dynamic dispatch. This comes at a slight runtime performance cost. See
     /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use
     /// [`Builder::rustls`](ClientBuilder::rustls) or `Builder::native_tls` instead.
-    pub fn https() -> Self {
+    pub fn dyn_https() -> Self {
         #[cfg(feature = "rustls")]
         let with_https = |b: ClientBuilder<_>| b.rustls();
         // If we are compiling this function & rustls is not enabled, then native-tls MUST be enabled
@@ -272,8 +272,27 @@ where
 
         with_https(ClientBuilder::new())
             .middleware(M::default())
+            .map_connector(DynConnector::new)
+    }
+}
+
+#[cfg(any(feature = "rustls", feature = "native_tls"))]
+impl<M> crate::Client<crate::erase::DynConnector, M>
+where
+    M: Default,
+    M: crate::bounds::SmithyMiddleware<crate::erase::DynConnector> + Send + Sync + 'static,
+{
+    /// Create a Smithy client builder with an HTTPS connector and the [standard retry
+    /// policy](crate::retry::Standard) over the default middleware implementation.
+    ///
+    /// For convenience, this constructor type-erases the concrete TLS connector backend used using
+    /// dynamic dispatch. This comes at a slight runtime performance cost. See
+    /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use
+    /// [`Builder::rustls`](ClientBuilder::rustls) or `Builder::native_tls` instead.
+    pub fn dyn_https() -> Self {
+        ClientBuilder::<DynConnector, M>::dyn_https()
+            .default_async_sleep()
             .build()
-            .into_dyn_connector()
     }
 }
 
@@ -283,15 +302,8 @@ impl<M, R> ClientBuilder<(), M, R> {
     pub fn rustls(self) -> ClientBuilder<Adapter<crate::conns::Https>, M, R> {
         self.connector(Adapter::builder().build(crate::conns::https()))
     }
-
-    /// Connect to the service over HTTPS using Rustls.
-    ///
-    /// This is exactly equivalent to [`Builder::rustls`](ClientBuilder::rustls). If you instead wish to use `native_tls`,
-    /// use `Builder::native_tls`.
-    pub fn https(self) -> ClientBuilder<Adapter<crate::conns::Https>, M, R> {
-        self.rustls()
-    }
 }
+
 #[cfg(feature = "native-tls")]
 impl<M, R> ClientBuilder<(), M, R> {
     /// Connect to the service over HTTPS using the native TLS library on your platform.

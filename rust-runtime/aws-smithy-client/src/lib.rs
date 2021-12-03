@@ -79,7 +79,7 @@ use std::sync::Arc;
 use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 
 use crate::timeout::generate_timeout_service_params_from_timeout_config;
-use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
+use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
@@ -130,14 +130,11 @@ where
     /// Create a Smithy client that the given connector, a middleware default, the [standard
     /// retry policy](crate::retry::Standard), and the [`default_async_sleep`] sleep implementation.
     pub fn new(connector: C) -> Self {
-        let mut client = Builder::new()
+        Builder::new()
             .connector(connector)
             .middleware(M::default())
-            .build();
-
-        client.set_sleep_impl(default_async_sleep());
-
-        client
+            .default_async_sleep()
+            .build()
     }
 }
 
@@ -152,7 +149,9 @@ impl<C, M> Client<C, M> {
         self.set_retry_config(config);
         self
     }
+}
 
+impl<C, M, R> Client<C, M, R> {
     /// Set the client's timeout configuration.
     pub fn set_timeout_config(&mut self, config: TimeoutConfig) {
         self.timeout_config = config;
@@ -167,9 +166,6 @@ impl<C, M> Client<C, M> {
     /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
         self.sleep_impl = sleep_impl.clone().into();
-        if let Some(sleep_impl) = sleep_impl {
-            self.retry_policy.with_sleep_impl(sleep_impl);
-        }
     }
 
     /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
@@ -226,6 +222,7 @@ where
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
         if matches!(&self.sleep_impl, TriState::Unset) {
+            // during requests, debug log (a warning is emitted during client construction)
             tracing::debug!(NO_SLEEP_WARNING);
         }
         let connector = self.connector.clone();
@@ -237,7 +234,10 @@ where
 
         let svc = ServiceBuilder::new()
             .layer(TimeoutLayer::new(timeout_servic_params.api_call))
-            .retry(self.retry_policy.new_request_policy())
+            .retry(
+                self.retry_policy
+                    .new_request_policy(self.sleep_impl.clone().into()),
+            )
             .layer(TimeoutLayer::new(timeout_servic_params.api_call_attempt))
             .layer(ParseResponseLayer::<O, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
@@ -270,7 +270,7 @@ where
 }
 
 pub(crate) const NO_SLEEP_WARNING: &str = "No sleep implementation set. This will prevent retries \
-from occurring. If this is what you intended, you can suppress this error with `Client::set_sleep_impl(None)`. \
+from occurring. If this is what you intended, you can suppress this error with `aws_smithy_client::Client::set_sleep_impl(None)`. \
 If this is not what you intended, consider using `aws-config` to provide a default sleep implementation \
 or setting a sleep implementation manually.";
 
@@ -283,6 +283,16 @@ enum TriState<T> {
     Disabled,
     Unset,
     Set(T),
+}
+
+impl<T> TriState<T> {
+    /// Create a TriState, returning `Unset` when `None` is passed
+    pub fn or_unset(t: Option<T>) -> Self {
+        match t {
+            Some(t) => Self::Set(t),
+            None => Self::Unset,
+        }
+    }
 }
 
 impl<T> Default for TriState<T> {

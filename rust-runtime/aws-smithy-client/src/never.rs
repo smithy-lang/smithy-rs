@@ -15,6 +15,8 @@ use std::task::{Context, Poll};
 use tokio::net::TcpStream;
 
 use crate::erase::boxclone::BoxFuture;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::result::ConnectorError;
 use tower::BoxError;
 
 /// A service that will never return whatever it is you want
@@ -48,6 +50,10 @@ impl<Req, Resp, Err> NeverService<Req, Resp, Err> {
         }
     }
 }
+
+/// A Connector that can be use with [`aws_smithy_client::Client`] that never returns a response.
+pub type NeverConnector =
+    NeverService<http::Request<SdkBody>, http::Response<SdkBody>, ConnectorError>;
 
 /// Streams that never return data
 mod stream {

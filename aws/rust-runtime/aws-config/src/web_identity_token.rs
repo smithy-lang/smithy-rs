@@ -66,6 +66,8 @@ use aws_types::os_shim_internal::{Env, Fs};
 use crate::connector::expect_connector;
 use crate::provider_config::ProviderConfig;
 use crate::sts;
+use aws_hyper::AwsMiddleware;
+use aws_smithy_client::erase::DynConnector;
 use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
@@ -82,7 +84,7 @@ const ENV_VAR_SESSION_NAME: &str = "AWS_ROLE_SESSION_NAME";
 pub struct WebIdentityTokenCredentialsProvider {
     source: Source,
     fs: Fs,
-    client: aws_hyper::StandardClient,
+    client: aws_smithy_client::Client<DynConnector, AwsMiddleware>,
     region: Option<Region>,
 }
 
@@ -209,8 +211,8 @@ impl Builder {
     /// builder, this function will panic.
     pub fn build(self) -> WebIdentityTokenCredentialsProvider {
         let conf = self.config.unwrap_or_default();
-        let connector = expect_connector(conf.default_connector());
-        let client = aws_hyper::Client::new(connector);
+        let _connector = expect_connector(conf.default_connector());
+        let client = conf.sdk_client();
         let source = self.source.unwrap_or_else(|| Source::Env(conf.env()));
         WebIdentityTokenCredentialsProvider {
             source,
@@ -223,7 +225,7 @@ impl Builder {
 
 async fn load_credentials(
     fs: &Fs,
-    client: &aws_hyper::StandardClient,
+    client: &aws_smithy_client::Client<DynConnector, AwsMiddleware>,
     region: &Region,
     token_file: impl AsRef<Path>,
     role_arn: &str,
