@@ -12,7 +12,7 @@
 //! In the basic case, customers should not need to use this module. A default implementation of Hyper
 //! with `rustls` will be constructed during client creation. However, if you are creating a Smithy
 //! [`Client`](crate::Client), directly, use the `https()` method to match the default behavior:
-//! ```rust
+//! ```no_run,no_run
 //! use aws_smithy_client::Client;
 //! use aws_smithy_client::erase::DynConnector;
 //!
@@ -24,7 +24,7 @@
 //! ### Create a Hyper client with a custom timeout
 //! One common use case for constructing a connector directly is setting `CONNECT` timeouts. Since the
 //! internal connector is cheap to clone, you can also use this to share a connector between multiple services.
-//! ```rust
+//! ```no_run,no_run
 //! use std::time::Duration;
 //! use aws_smithy_client::{Client, conns, hyper_ext};
 //! use aws_smithy_client::erase::DynConnector;
@@ -166,7 +166,7 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
 /// Construct a HyperAdapter with the default HTTP implementation (rustls). This can be useful when you want to share a Hyper connector
 /// between multiple Smithy clients.
 ///
-/// ```rust
+/// ```no_run,no_run
 /// use tower::layer::util::Identity;
 /// use aws_smithy_client::{conns, hyper_ext};
 /// use aws_smithy_client::erase::DynConnector;

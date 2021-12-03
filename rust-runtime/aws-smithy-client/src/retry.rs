@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::{SdkError, SdkSuccess};
+use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::operation;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::retry::ClassifyResponse;
@@ -65,7 +66,7 @@ impl Config {
     ///
     /// By default, `base` is a randomly generated value between 0 and 1. In tests, it can
     /// be helpful to override this:
-    /// ```rust
+    /// ```no_run
     /// use aws_smithy_client::retry::Config;
     /// let conf = Config::default().with_base(||1_f64);
     /// ```
@@ -121,6 +122,7 @@ const RETRY_COST: usize = 5;
 pub struct Standard {
     config: Config,
     shared_state: CrossRequestRetryState,
+    sleep_impl: Option<Arc<dyn AsyncSleep>>,
 }
 
 impl Standard {
@@ -129,12 +131,19 @@ impl Standard {
         Self {
             shared_state: CrossRequestRetryState::new(config.initial_retry_tokens),
             config,
+            sleep_impl: None,
         }
     }
 
     /// Set the configuration for this retry policy.
     pub fn with_config(&mut self, config: Config) -> &mut Self {
         self.config = config;
+        self
+    }
+
+    /// Set the sleep implementation for this retry policy
+    pub fn with_sleep_impl(&mut self, sleep_impl: Arc<dyn AsyncSleep>) -> &mut Self {
+        self.sleep_impl = Some(sleep_impl);
         self
     }
 }
@@ -147,6 +156,7 @@ impl NewRequestPolicy for Standard {
             local: RequestLocalRetryState::new(),
             shared: self.shared_state.clone(),
             config: self.config.clone(),
+            sleep: self.sleep_impl.clone(),
         }
     }
 }
@@ -236,6 +246,7 @@ pub struct RetryHandler {
     local: RequestLocalRetryState,
     shared: CrossRequestRetryState,
     config: Config,
+    sleep: Option<Arc<dyn AsyncSleep>>,
 }
 
 #[cfg(test)]
@@ -283,6 +294,7 @@ impl RetryHandler {
             },
             shared: self.shared.clone(),
             config: self.config.clone(),
+            sleep: self.sleep.clone(),
         };
 
         Some((next, backoff))
@@ -296,13 +308,17 @@ where
     Handler: Clone,
     R: ClassifyResponse<SdkSuccess<T>, SdkError<E>>,
 {
-    type Future = Pin<Box<dyn Future<Output = Self> + Send + Sync>>;
+    type Future = Pin<Box<dyn Future<Output = Self> + Send>>;
 
     fn retry(
         &self,
         req: &Operation<Handler, R>,
         result: Result<&SdkSuccess<T>, &SdkError<E>>,
     ) -> Option<Self::Future> {
+        let sleep = match &self.sleep {
+            Some(sleep) => sleep,
+            None => return None,
+        };
         let policy = req.retry_policy();
         let retry = policy.classify(result);
         let (next, dur) = match retry {
@@ -312,12 +328,13 @@ where
             _ => return None,
         };
 
+        let sleep_future = sleep.sleep(dur);
         let fut = async move {
-            tokio::time::sleep(dur).await;
+            sleep_future.await;
             next
         }
         .instrument(tracing::info_span!("retry", kind = &debug(retry)));
-        Some(check_send_sync(Box::pin(fut)))
+        Some(check_send(Box::pin(fut)))
     }
 
     fn clone_request(&self, req: &Operation<Handler, R>) -> Option<Operation<Handler, R>> {
@@ -325,14 +342,17 @@ where
     }
 }
 
-fn check_send_sync<T: Send + Sync>(t: T) -> T {
+fn check_send<T: Send>(t: T) -> T {
     t
 }
 
 #[cfg(test)]
 mod test {
+
     use crate::retry::{Config, NewRequestPolicy, RetryHandler, Standard};
+
     use aws_smithy_types::retry::ErrorKind;
+
     use std::time::Duration;
 
     fn test_config() -> Config {

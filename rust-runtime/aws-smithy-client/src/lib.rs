@@ -25,7 +25,7 @@ pub mod dvr;
 #[cfg(feature = "test-util")]
 pub mod test_connection;
 
-#[cfg(feature = "hyper")]
+#[cfg(feature = "client-hyper")]
 pub mod hyper_ext;
 
 // The types in this module are only used to write the bounds in [`Client::check`]. Customers will
@@ -34,13 +34,13 @@ pub mod hyper_ext;
 #[doc(hidden)]
 pub mod static_tests;
 
-#[cfg(feature = "hyper")]
+#[cfg(feature = "client-hyper")]
 pub mod never;
 pub mod timeout;
 pub use timeout::TimeoutLayer;
 
 /// Type aliases for standard connection types.
-#[cfg(feature = "hyper")]
+#[cfg(feature = "client-hyper")]
 #[allow(missing_docs)]
 pub mod conns {
 
@@ -166,7 +166,10 @@ impl<C, M> Client<C, M> {
 
     /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
-        self.sleep_impl = sleep_impl;
+        self.sleep_impl = sleep_impl.clone();
+        if let Some(sleep_impl) = sleep_impl {
+            self.retry_policy.with_sleep_impl(sleep_impl);
+        }
     }
 
     /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.

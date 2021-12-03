@@ -67,7 +67,7 @@ impl<M, R> Builder<(), M, R> {
 
     /// Use a function that directly maps each request to a response as a connector.
     ///
-    /// ```rust
+    /// ```no_run
     /// use aws_smithy_client::Builder;
     /// use aws_smithy_http::body::SdkBody;
     /// let client = Builder::new()
@@ -123,7 +123,7 @@ impl<C, R> Builder<C, (), R> {
 
     /// Use a function-like middleware that directly maps each request.
     ///
-    /// ```rust
+    /// ```no_run
     /// use aws_smithy_client::Builder;
     /// use aws_smithy_http::body::SdkBody;
     /// let client = Builder::new()
@@ -236,7 +236,7 @@ where
     /// Note that if you're using the standard retry mechanism, [`retry::Standard`], `DynClient<R>`
     /// is equivalent to [`Client`] with no type arguments.
     ///
-    /// ```rust
+    /// ```no_run
     /// # #[cfg(feature = "https")]
     /// # fn not_main() {
     /// use aws_smithy_client::{Builder, Client};
