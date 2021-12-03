@@ -147,8 +147,6 @@ class ServerOperationHandlerGenerator(
     private fun renderStaticRust(writer: RustWriter) {
         writer.rustTemplate(
             """
-            // This is a demo of the codegen diffing. Don't keep this change.
-
             /// Struct that holds a handler, that is, a function provided by the user that implements the
             /// Smithy operation.
             pub struct OperationHandler<H, B, R, I> {
