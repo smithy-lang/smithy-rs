@@ -44,6 +44,10 @@ struct ChangelogEntry {
 }
 
 impl ChangelogEntry {
+    /// Write a changelog entry to [out]
+    ///
+    /// Example output:
+    /// `- Add a feature (smithy-rs#123, @contributor)`
     fn render(&self, mut out: &mut String) {
         let mut meta = String::new();
         if self.meta.bug {
@@ -98,6 +102,7 @@ impl Changelog {
     }
 }
 
+/// Ensure that there are no uncommited changes to the changelog
 fn no_uncommited_changes(path: &Path) -> Result<()> {
     let unstaged = !Command::new("git")
         .arg("diff")
@@ -113,7 +118,7 @@ fn no_uncommited_changes(path: &Path) -> Result<()> {
         .status()?
         .success();
     if unstaged || staged {
-        bail!("Unstaged changes to {}", path.display())
+        bail!("Uncommitted changes to {}", path.display())
     }
     Ok(())
 }
@@ -126,8 +131,9 @@ pub(crate) fn update_changelogs(
     aws_sdk_rust_version: &str,
     date: &str,
 ) -> Result<()> {
-    no_uncommited_changes(changelog_next.as_ref())
-        .context("CHANGELOG.next.toml had unstaged changes")?;
+    no_uncommited_changes(changelog_next.as_ref()).context(
+        "CHANGELOG.next.toml had unstaged changes. Refusing to perform changelog update.",
+    )?;
     let changelog = check_changelog_next(changelog_next.as_ref())?;
     for (entries, path, version) in [
         (changelog.smithy_rs, smithy_rs.as_ref(), smithy_rs_version),
@@ -148,6 +154,7 @@ pub(crate) fn update_changelogs(
         std::fs::write(path, update)?;
     }
     std::fs::write(changelog_next.as_ref(), EXAMPLE_ENTRY.trim())?;
+    eprintln!("Changelogs updated!");
     Ok(())
 }
 
@@ -214,6 +221,7 @@ fn render(entries: Vec<ChangelogEntry>, version: &str, date: &str) -> String {
     out
 }
 
+/// Validate a changelog entry to ensure it follows standards
 fn validate(entry: &ChangelogEntry) -> Result<()> {
     if entry.author.is_empty() {
         bail!("Author must be set (was empty)");
@@ -246,6 +254,7 @@ fn validate(entry: &ChangelogEntry) -> Result<()> {
     Ok(())
 }
 
+/// Validate that `CHANGELOG.next.toml` follows best practices
 pub(crate) fn check_changelog_next(path: impl AsRef<Path>) -> Result<Changelog> {
     let contents = std::fs::read_to_string(path).context("failed to read CHANGELOG.next")?;
     let parsed: Changelog = toml::from_str(&contents).context("Invalid changelog format")?;
