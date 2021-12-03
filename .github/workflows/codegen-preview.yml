@@ -54,7 +54,7 @@ jobs:
         role-session-name: GitHubActions
         aws-region: us-west-2
     - name: Upload diff to S3
-      run: aws s3 cp tmp-codegen-diff/${{ github.event.pull_request.base.sha }} "s3://${S3_BUCKET_NAME}/${{ github.event.pull_request.base.sha }}" --recursive
+      run: aws s3 cp tmp-codegen-diff/${{ github.event.pull_request.base.sha }} "s3://${S3_BUCKET_NAME}/codegen-diff/${{ github.event.pull_request.base.sha }}" --recursive
     - uses: actions/github-script@v5
       # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"
       if: ${{ github.head_ref != null }}
@@ -66,5 +66,5 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: `${{ steps.generate-diff.outputs.bot-message }}`
+            body: '${{ steps.generate-diff.outputs.bot-message }}'.replaceAll('\\n', '\n')
           })

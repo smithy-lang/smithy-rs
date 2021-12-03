@@ -169,7 +169,7 @@ def diff_link(diff_text, empty_diff_text, diff_location, alternate_text, alterna
     if diff_location is None:
         return empty_diff_text
     else:
-        return f"[{diff_text}]({CDN_URL}/{diff_location}) ([{alternate_text}]({CDN_URL}/{alternate_location}))"
+        return f"[{diff_text}]({CDN_URL}/codegen-diff/{diff_location}) ([{alternate_text}]({CDN_URL}/codegen-diff/{alternate_location}))"
 
 
 def make_diffs(base_commit_sha, head_commit_sha):
@@ -186,9 +186,10 @@ def make_diffs(base_commit_sha, head_commit_sha):
                           sdk_ws, 'ignoring whitespace', sdk_nows)
     server_links = diff_link('Server Test', 'No codegen difference in the Server Test',
                              server_ws, 'ignoring whitespace', server_nows)
-    return "A new generated diff is ready to view.\n"\
-        f"- {sdk_links}\n"\
-        f"- {server_links}\n"
+    # Save escaped newlines so that the GitHub Action script gets the whole message
+    return "A new generated diff is ready to view.\\n"\
+        f"- {sdk_links}\\n"\
+        f"- {server_links}\\n"
 
 
 def write_to_file(path, text):
