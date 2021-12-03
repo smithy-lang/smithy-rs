@@ -12,6 +12,12 @@ repos:
     entry: ./.pre-commit-hooks/kotlin-block-quotes.py
     language: python
     files: ^.*\.kt$
+  - id: license-header-check
+    name: License Header Check
+    entry: ./.pre-commit-hooks/license-header.sh
+    language: system
+    files: ^.*$
+    pass_filenames: false
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
   rev: v1.6.1
   hooks:

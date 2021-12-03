@@ -1,13 +1,21 @@
 vNext (Month Day, Year)
 =======================
 **New this week**
+- Fix typos in module documentation for generated crates (smithy-rs#920)
+- Avoid serializing repetitive `xmlns` attributes in generated XML serializers. (aws-sdk-rust#301, smithy-rs#892)
 
 **Breaking changes**
+
+v0.32.0 (December 2nd, 2021)
+=======================
+
+- This release was a version bump to fix a version number conflict in crates.io
 
 v0.31.0 (December 2nd, 2021)
 =======================
 **New this week**
 - Add docs.rs metadata section to all crates to document all features
+
 
 v0.30.0-alpha (November 23rd, 2021)
 ===================================

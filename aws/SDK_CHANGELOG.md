@@ -1,6 +1,14 @@
 vNext (Month Day, Year)
 =======================
 **New this release**
+- Fix typos in module documentation for generated crates (smithy-rs#920)
+- Avoid serializing repetitive `xmlns` attributes in generated XML serializers. This reduces the length of serialized requests and should improve compatibility with localstack. (aws-sdk-rust#301, smithy-rs#892)
+
+
+v0.2.0 (December 2nd, 2021)
+===========================
+
+- This release was a version bump to fix a version number conflict in crates.io
 
 v0.1.0 (December 2nd, 2021)
 ===========================
