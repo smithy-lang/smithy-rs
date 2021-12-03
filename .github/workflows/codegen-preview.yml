@@ -66,5 +66,5 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '${{ steps.generate-diff.outputs.bot-message }}'.replaceAll('\\n', '\n')
+            body: '${{ steps.generate-diff.outputs.bot-message }}'
           })
