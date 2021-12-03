@@ -13,21 +13,20 @@ use std::time::{Duration, UNIX_EPOCH};
 use bytes::Bytes;
 use http::header::{AUTHORIZATION, USER_AGENT};
 use http::{self, Uri};
-use tokio::time::Instant;
 
 use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
 use aws_endpoint::set_endpoint_resolver;
 use aws_http::user_agent::AwsUserAgent;
 use aws_http::AwsErrorRetryPolicy;
-use aws_hyper::{Client, RetryConfig};
+use aws_hyper::Client;
 use aws_sig_auth::signer::OperationSigningConfig;
-use aws_smithy_async::rt::sleep::TokioSleep;
+
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
-use aws_smithy_http::result::SdkError;
+
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
 use aws_types::credentials::SharedCredentialsProvider;
 use aws_types::region::Region;
