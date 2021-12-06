@@ -104,7 +104,6 @@ class JsonParserGenerator(
             ) {
                 rustTemplate(
                     """
-                    // CMON $unusedMut
                     let mut tokens_owned = #{json_token_iter}(#{or_empty}(value)).peekable();
                     let tokens = &mut tokens_owned;
                     #{expect_start_object}(tokens.next())?;
@@ -202,7 +201,7 @@ class JsonParserGenerator(
     override fun serverInputParser(operationShape: OperationShape): RuntimeType {
         val inputShape = operationShape.inputShape(model)
         val includedMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
-        val fnName = symbolProvider.deserializeFunctionName(inputShape)
+        val fnName = symbolProvider.deserializeFunctionName(operationShape)
         return structureParser(fnName, inputShape, includedMembers)
     }
 
