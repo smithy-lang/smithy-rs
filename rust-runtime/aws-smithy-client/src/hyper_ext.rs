@@ -260,7 +260,7 @@ impl Builder {
     }
 }
 
-#[cfg(any(feature = "rustls", feature = "native_tls"))]
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
 impl<M> crate::Client<crate::erase::DynConnector, M>
 where
     M: Default,

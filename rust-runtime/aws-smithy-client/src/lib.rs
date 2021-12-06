@@ -223,15 +223,15 @@ where
     {
         let connector = self.connector.clone();
 
-        let timeout_servic_params = generate_timeout_service_params_from_timeout_config(
+        let timeout_service_params = generate_timeout_service_params_from_timeout_config(
             &self.timeout_config,
             self.sleep_impl.clone(),
         );
 
         let svc = ServiceBuilder::new()
-            .layer(TimeoutLayer::new(timeout_servic_params.api_call))
+            .layer(TimeoutLayer::new(timeout_service_params.api_call))
             .retry(self.retry_policy.new_request_policy())
-            .layer(TimeoutLayer::new(timeout_servic_params.api_call_attempt))
+            .layer(TimeoutLayer::new(timeout_service_params.api_call_attempt))
             .layer(ParseResponseLayer::<O, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.

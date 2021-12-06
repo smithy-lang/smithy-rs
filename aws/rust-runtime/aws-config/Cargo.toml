@@ -22,19 +22,19 @@ tcp-connector = ["tokio/net", "tower"]
 # SSO is not supported
 sso = []
 
-rustls = ["aws-smithy-client/rustls"]
-native-tls = ["aws-smithy-client/native-tls"]
+rustls = ["aws-smithy-client/rustls", "aws-hyper/rustls"]
+native-tls = ["aws-smithy-client/native-tls", "aws-hyper/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio"]
 
 # Tokio based DNS-resolver for ECS validation
 dns = ["tokio/rt"]
 
-default = ["default-provider", "rustls", "rt-tokio", "dns", "tcp-connector"]
+default = ["default-provider", "rt-tokio", "dns", "tcp-connector"]
 
 [dependencies]
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", optional = true }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
-aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", default-features = false }
+aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", optional = true }
 aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["sync"], optional = true }
