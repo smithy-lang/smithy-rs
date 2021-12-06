@@ -1,10 +1,4 @@
-vNext (Month Day, Year)
-=======================
-**New this release**
-- Fix typos in module documentation for generated crates (smithy-rs#920)
-- Avoid serializing repetitive `xmlns` attributes in generated XML serializers. This reduces the length of serialized requests and should improve compatibility with localstack. (aws-sdk-rust#301, smithy-rs#892)
-
-
+<!-- Do not manually edit this file, use `update-changelogs` -->
 v0.2.0 (December 2nd, 2021)
 ===========================
 
