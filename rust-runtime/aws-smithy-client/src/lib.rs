@@ -119,7 +119,7 @@ pub struct Client<
     middleware: Middleware,
     retry_policy: RetryPolicy,
     timeout_config: TimeoutConfig,
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    sleep_impl: TriState<Arc<dyn AsyncSleep>>,
 }
 
 // Quick-create for people who just want "the default".
@@ -166,7 +166,7 @@ impl<C, M> Client<C, M> {
 
     /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
-        self.sleep_impl = sleep_impl.clone();
+        self.sleep_impl = sleep_impl.clone().into();
         if let Some(sleep_impl) = sleep_impl {
             self.retry_policy.with_sleep_impl(sleep_impl);
         }
@@ -225,11 +225,14 @@ where
         bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
+        if matches!(&self.sleep_impl, TriState::Unset) {
+            tracing::debug!(NO_SLEEP_WARNING);
+        }
         let connector = self.connector.clone();
 
         let timeout_servic_params = generate_timeout_service_params_from_timeout_config(
             &self.timeout_config,
-            self.sleep_impl.clone(),
+            self.sleep_impl.clone().into(),
         );
 
         let svc = ServiceBuilder::new()
@@ -263,5 +266,45 @@ where
         let _ = |o: static_tests::ValidTestOperation| {
             let _ = self.call_raw(o);
         };
+    }
+}
+
+pub(crate) const NO_SLEEP_WARNING: &str = "No sleep implementation set. This will prevent retries \
+from occurring. If this is what you intended, you can suppress this error with `Client::set_sleep_impl(None)`. \
+If this is not what you intended, consider using `aws-config` to provide a default sleep implementation \
+or setting a sleep implementation manually.";
+
+/// Utility for tracking set vs. unset vs explicitly disabled
+///
+/// If someone explicitly disables something, we don't need to warn them that it may be missing. This
+/// enum impls `From`/`Into` `Option<T>` for ease of use.
+#[derive(Debug, Clone, Eq, PartialEq)]
+enum TriState<T> {
+    Disabled,
+    Unset,
+    Set(T),
+}
+
+impl<T> Default for TriState<T> {
+    fn default() -> Self {
+        Self::Unset
+    }
+}
+
+impl<T> From<Option<T>> for TriState<T> {
+    fn from(t: Option<T>) -> Self {
+        match t {
+            Some(t) => TriState::Set(t),
+            None => TriState::Disabled,
+        }
+    }
+}
+
+impl<T> From<TriState<T>> for Option<T> {
+    fn from(t: TriState<T>) -> Self {
+        match t {
+            TriState::Disabled | TriState::Unset => None,
+            TriState::Set(t) => Some(t),
+        }
     }
 }
