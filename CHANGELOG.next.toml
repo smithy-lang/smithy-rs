@@ -10,6 +10,17 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
+[[aws-sdk-rust]]
+message = "Use provided `sleep_impl` for retries instead of using Tokio directly."
+references = ["smithy-rs#923"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Use provided `sleep_impl` for retries instead of using Tokio directly."
+references = ["smithy-rs#923"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
 
 [[aws-sdk-rust]]
 message = "Fix typos in module documentation for generated crates"

@@ -70,7 +70,7 @@ fn user_agent() -> AwsUserAgent {
 ///
 /// ## Endpoint configuration list
 /// 1. Explicit configuration of `Endpoint` via the [builder](Builder):
-/// ```rust
+/// ```no_run
 /// use aws_config::imds::client::Client;
 /// use http::Uri;
 /// # async fn docs() {
@@ -92,7 +92,7 @@ fn user_agent() -> AwsUserAgent {
 /// ```
 ///
 /// 4. An explicitly set endpoint mode:
-/// ```rust
+/// ```no_run
 /// use aws_config::imds::client::{Client, EndpointMode};
 /// # async fn docs() {
 /// let client = Client::builder().endpoint_mode(EndpointMode::IpV6).build().await;
@@ -170,7 +170,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```no_run
     /// use aws_config::imds::client::Client;
     /// # async fn docs() {
     /// let client = Client::builder().build().await.expect("valid client");
@@ -456,7 +456,7 @@ impl Builder {
     /// Configure generic options of the [`Client`]
     ///
     /// # Examples
-    /// ```rust
+    /// ```no_run
     /// use aws_config::imds::Client;
     /// # async fn test() {
     /// use aws_config::provider_config::ProviderConfig;
@@ -555,12 +555,16 @@ impl Builder {
             timeout_config.clone(),
         );
         let middleware = ImdsMiddleware { token_loader };
-        let inner_client = aws_smithy_client::Builder::new()
+        let mut inner_client = aws_smithy_client::Builder::new()
             .connector(connector.clone())
             .middleware(middleware)
             .build()
             .with_retry_config(retry_config)
             .with_timeout_config(timeout_config);
+        if let Some(sleep) = config.sleep() {
+            inner_client = inner_client.with_sleep_impl(sleep);
+        }
+
         let client = Client {
             endpoint,
             inner: inner_client,
@@ -721,6 +725,7 @@ pub(crate) mod test {
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use aws_hyper::DynConnector;
+    use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::test_connection::{capture_request, TestConnection};
     use aws_smithy_http::body::SdkBody;
     use aws_types::os_shim_internal::{Env, Fs, ManualTimeSource, TimeSource};
@@ -770,9 +775,11 @@ pub(crate) mod test {
         SdkBody: From<T>,
         T: Send + 'static,
     {
+        tokio::time::pause();
         super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
+                    .with_sleep(TokioSleep::new())
                     .with_http_connector(DynConnector::new(conn.clone())),
             )
             .build()
@@ -827,11 +834,13 @@ pub(crate) mod test {
             ),
         ]);
         let mut time_source = ManualTimeSource::new(UNIX_EPOCH);
+        tokio::time::pause();
         let client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
                     .with_http_connector(DynConnector::new(connection.clone()))
-                    .with_time_source(TimeSource::manual(&time_source)),
+                    .with_time_source(TimeSource::manual(&time_source))
+                    .with_sleep(TokioSleep::new()),
             )
             .endpoint_mode(EndpointMode::IpV6)
             .token_ttl(Duration::from_secs(600))
@@ -876,6 +885,7 @@ pub(crate) mod test {
                 imds_response(r#"test-imds-output3"#),
             ),
         ]);
+        tokio::time::pause();
         let mut time_source = ManualTimeSource::new(UNIX_EPOCH);
         let client = super::Client::builder()
             .configure(

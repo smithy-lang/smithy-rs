@@ -51,7 +51,7 @@
 //! Unless overridden with [`static_configuration`](Builder::static_configuration), the provider will
 //! load configuration from environment variables.
 //!
-//! ```rust
+//! ```no_run
 //! # async fn test() {
 //! use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
 //! use aws_config::provider_config::ProviderConfig;
@@ -178,7 +178,7 @@ impl Builder {
     /// Configure generic options of the [WebIdentityTokenCredentialsProvider]
     ///
     /// # Examples
-    /// ```rust
+    /// ```no_run
     /// # async fn test() {
     /// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
     /// use aws_config::provider_config::ProviderConfig;
