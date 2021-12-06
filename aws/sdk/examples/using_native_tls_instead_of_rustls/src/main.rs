@@ -22,3 +22,23 @@ async fn main() -> Result<(), aws_sdk_s3::Error> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    /// You can run this test to ensure that this example is only using `native-tls`
+    /// and that nothing is pulling in `rustls` as a dependency
+    #[test]
+    #[should_panic = "error: package ID specification `rustls` did not match any packages"]
+    fn test_rustls_is_not_in_dependency_tree() {
+        let cargo_command = std::process::Command::new("/Users/zhessler/.cargo/bin/cargo")
+            .arg("tree")
+            .arg("--invert")
+            .arg("rustls")
+            .output()
+            .expect("failed to run 'cargo tree'");
+
+        let stderr = String::from_utf8_lossy(&cargo_command.stderr);
+
+        panic!("{}", stderr);
+    }
+}
