@@ -52,13 +52,11 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.utils.StringUtils
-import java.util.logging.Logger
 
 class JsonParserGenerator(
     codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
 ) : StructuredDataParserGenerator {
-    private val logger = Logger.getLogger(javaClass.name)
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
