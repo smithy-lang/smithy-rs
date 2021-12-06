@@ -47,7 +47,7 @@ class AwsReadmeDecorator : RustCodegenDecorator {
                 """
                 # $moduleName
 
-                **Please Note: The SDK is currently released as an alpha and is intended strictly for
+                **Please Note: The SDK is currently in Developer Preview and is intended strictly for
                 feedback purposes only. Do not use this SDK for production workloads.**
                 """.trimIndent() +
                     "\n\n$description\n\n" +

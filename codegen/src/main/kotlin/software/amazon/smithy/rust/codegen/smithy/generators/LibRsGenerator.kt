@@ -9,8 +9,9 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.docs
+import software.amazon.smithy.rust.codegen.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.rustlang.escape
+import software.amazon.smithy.rust.codegen.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
@@ -19,7 +20,12 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 
 sealed class LibRsSection(name: String) : Section(name) {
     object Attributes : LibRsSection("Attributes")
+    data class ModuleDocumentation(val subsection: String) : LibRsSection("ModuleDocumentation")
     object Body : LibRsSection("Body")
+    companion object {
+        val Examples = "Examples"
+        val CrateOrganization = "CrateOrganization"
+    }
 }
 
 typealias LibRsCustomization = NamedSectionGenerator<LibRsSection>
@@ -39,7 +45,27 @@ class LibRsGenerator(
             }
 
             val libraryDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value ?: settings.moduleName
-            docs(escape(libraryDocs), newlinePrefix = "//! ")
+            containerDocs(escape(libraryDocs))
+            // TODO: replace "service" below with the title trait
+            val crateLayout = customizations.map { it.section(LibRsSection.ModuleDocumentation(LibRsSection.CrateOrganization)) }.filter { !it.isEmpty() }
+            if (crateLayout.isNotEmpty()) {
+                containerDocs("\n## Crate Organization")
+                crateLayout.forEach { it(this) }
+            }
+
+            val examples = customizations.map { it.section(LibRsSection.ModuleDocumentation(LibRsSection.Examples)) }
+                .filter { section -> !section.isEmpty() }
+            if (examples.isNotEmpty() || settings.examplesUri != null) {
+                containerDocs("\n## Examples")
+                examples.forEach { it(this) }
+
+                // TODO: Render a basic example for all crates (eg. select first operation and render an example of usage)
+                settings.examplesUri?.also { uri ->
+                    containerDocs("Examples can be found [here]($uri).")
+                }
+            }
+
+            // TODO: Automated feature documentation
         }
         modules.forEach { it.render(writer) }
         customizations.forEach { it.section(LibRsSection.Body)(writer) }
