@@ -184,7 +184,7 @@ class ServerProtocolTestGenerator(
         httpRequestTestCase.body.orNull()?.also { body ->
             rustTemplate(
                 """
-                let http_request = http::Request::builder()
+                ##[allow(unused_mut)] let mut http_request = http::Request::builder()
                     .uri(${httpRequestTestCase.uri.dq()})
                     .body(#{SmithyHttpServer}::Body::from(#{Bytes}::from_static(b${body.dq()}))).unwrap();
                 """,
