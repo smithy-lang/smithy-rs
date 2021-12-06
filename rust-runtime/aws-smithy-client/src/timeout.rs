@@ -29,7 +29,7 @@ use tower::Layer;
 pub struct Settings {
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
-    tls_negotiation_timeout: Option<Duration>,
+    _tls_negotiation_timeout: Option<Duration>,
 }
 
 impl Settings {

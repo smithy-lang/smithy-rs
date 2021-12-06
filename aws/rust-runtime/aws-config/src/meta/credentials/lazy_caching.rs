@@ -128,7 +128,7 @@ mod builder {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// use aws_types::Credentials;
     /// use aws_config::meta::credentials::provide_credentials_fn;
     /// use aws_config::meta::credentials::LazyCachingCredentialsProvider;

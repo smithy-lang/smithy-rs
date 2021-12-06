@@ -144,7 +144,7 @@ impl ProviderConfig {
     ///
     ///
     /// # Examples
-    /// ```rust
+    /// ```no_run
     /// use aws_config::provider_config::ProviderConfig;
     /// use aws_sdk_sts::Region;
     /// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
@@ -173,7 +173,7 @@ impl ProviderConfig {
     /// Create a default provider config with the region region automatically loaded from the default chain.
     ///
     /// # Examples
-    /// ```rust
+    /// ```no_run
     /// # async fn test() {
     /// use aws_config::provider_config::ProviderConfig;
     /// use aws_sdk_sts::Region;
