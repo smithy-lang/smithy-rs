@@ -11,6 +11,18 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
 [[aws-sdk-rust]]
+message = "Runtime crates (other than aws-config) no longer have default features. You must now specify the features that you want when you add a dependency to your `Cargo.toml`."
+references = ["smithy-rs#930"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "zhessler"
+
+[[smithy-rs]]
+message = "Runtime crates no longer have default features. You must now specify the features that you want when you add a dependency to your `Cargo.toml`."
+references = ["smithy-rs#930"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "zhessler"
+
+[[aws-sdk-rust]]
 message = "Use provided `sleep_impl` for retries instead of using Tokio directly."
 references = ["smithy-rs#923"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
