@@ -41,8 +41,8 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val awsHyper = awsHyperDep.asType()
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
 
-    val AwsMiddleware = RuntimeType("AwsMiddleware", awsHyperDep, "aws_hyper")
-    val DynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
+    val awsMiddleware = RuntimeType("AwsMiddleware", awsHyperDep, "aws_hyper")
+    val dynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
 }
 
 class AwsFluentClientDecorator : RustCodegenDecorator {
@@ -69,8 +69,8 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
                     middlewareDefault = "#{AwsFluentClient_AwsMiddleware}",
                     retryDefault = "#{AwsFluentClient_retry}::Standard",
                     codegenScope = listOf(
-                        "AwsFluentClient_AwsMiddleware" to types.AwsMiddleware,
-                        "AwsFluentClient_DynConnector" to types.DynConnector,
+                        "AwsFluentClient_AwsMiddleware" to types.awsMiddleware,
+                        "AwsFluentClient_DynConnector" to types.dynConnector,
                         "AwsFluentClient_retry" to types.smithyClientRetry,
                     )
                 ),
@@ -82,9 +82,10 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
             AwsFluentClientExtensions(types).render(writer)
         }
         val awsHyper = "aws-hyper"
-        rustCrate.mergeFeature(Feature("client", default = true, listOf(awsHyper, "aws-smithy-client")))
-        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsHyper/rustls")))
-        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls")))
+        val awsSmithyClient = "aws-smithy-client"
+        rustCrate.mergeFeature(Feature("client", default = true, listOf(awsSmithyClient, awsHyper)))
+        rustCrate.mergeFeature(Feature("rustls", default = false, listOf("$awsHyper/rustls", "$awsSmithyClient/rustls")))
+        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls", "$awsSmithyClient/native-tls")))
     }
 
     override fun libRsCustomizations(

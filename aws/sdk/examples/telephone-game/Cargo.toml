@@ -9,9 +9,9 @@ description = "Play a game of telephone with AWS"
 
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
-aws-sdk-polly = { package = "aws-sdk-polly", path = "../../build/aws-sdk/sdk/polly" }
-aws-sdk-s3 = { package = "aws-sdk-s3", path = "../../build/aws-sdk/sdk/s3" }
-aws-sdk-transcribe = { package = "aws-sdk-transcribe", path = "../../build/aws-sdk/sdk/transcribe" }
+aws-sdk-polly = { package = "aws-sdk-polly", path = "../../build/aws-sdk/sdk/polly", features = ["rustls"] }
+aws-sdk-s3 = { package = "aws-sdk-s3", path = "../../build/aws-sdk/sdk/s3", features = ["rustls"] }
+aws-sdk-transcribe = { package = "aws-sdk-transcribe", path = "../../build/aws-sdk/sdk/transcribe", features = ["rustls"] }
 anyhow = "1.0.44"
 clap = "2.33.3"
 rodio = "0.14.0"

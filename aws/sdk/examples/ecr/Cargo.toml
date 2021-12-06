@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
-aws-sdk-ecr = { path = "../../build/aws-sdk/sdk/ecr" }
+aws-sdk-ecr = { path = "../../build/aws-sdk/sdk/ecr", features = ["rustls"] }
 tokio = { version = "1", features = ["full"]}
 structopt = { version = "0.3", default-features = false }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }

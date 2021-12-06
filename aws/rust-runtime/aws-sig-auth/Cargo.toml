@@ -12,7 +12,7 @@ sign-eventstream = ["aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
 default = []
 
 [dependencies]
-aws-sigv4 = { path = "../aws-sigv4" }
+aws-sigv4 = { path = "../aws-sigv4", features = ["sign-http"] }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-types = { path = "../aws-types" }

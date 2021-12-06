@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
-aws-sdk-autoscaling = { path = "../../build/aws-sdk/sdk/autoscaling" }
+aws-sdk-autoscaling = { path = "../../build/aws-sdk/sdk/autoscaling", features = ["rustls"] }
 tokio = { version = "1", features = ["full"] }
 structopt = { version = "0.3", default-features = false }
 tracing-subscriber = "0.2.18"

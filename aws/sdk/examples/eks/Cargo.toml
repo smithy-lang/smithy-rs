@@ -9,4 +9,4 @@ aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 structopt = { version = "0.3", default-features = false }
 tokio = { version = "1", features = ["full"]}
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
-aws-sdk-eks = { path = "../../build/aws-sdk/sdk/eks" }
+aws-sdk-eks = { path = "../../build/aws-sdk/sdk/eks", features = ["rustls"] }

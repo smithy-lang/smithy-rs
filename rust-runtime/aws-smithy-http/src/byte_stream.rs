@@ -95,13 +95,11 @@ use crate::body::SdkBody;
 use bytes::Buf;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
-use http_body::combinators::BoxBody;
 use http_body::Body;
 use pin_project::pin_project;
 use std::error::Error as StdError;
 use std::fmt::{Debug, Formatter};
 use std::io::IoSlice;
-use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -255,7 +253,7 @@ impl ByteStream {
     /// ```
     #[cfg(feature = "bytestream-util")]
     #[cfg_attr(docsrs, doc(cfg(feature = "bytestream-util")))]
-    pub async fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
+    pub async fn from_path(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
         let path = path.as_ref();
         let path_buf = path.to_path_buf();
         let sz = tokio::fs::metadata(path)
@@ -263,10 +261,9 @@ impl ByteStream {
             .map_err(|err| Error(err.into()))?
             .len();
         let body_loader = move || {
-            SdkBody::from_dyn(BoxBody::new(bytestream_util::PathBody::from_path(
-                path_buf.as_path(),
-                sz,
-            )))
+            SdkBody::from_dyn(http_body::combinators::BoxBody::new(
+                bytestream_util::PathBody::from_path(path_buf.as_path(), sz),
+            ))
         };
         Ok(ByteStream::new(SdkBody::retryable(body_loader)))
     }
@@ -283,7 +280,9 @@ impl ByteStream {
             .await
             .map_err(|err| Error(err.into()))?
             .len();
-        let body = SdkBody::from_dyn(BoxBody::new(bytestream_util::PathBody::from_file(file, sz)));
+        let body = SdkBody::from_dyn(http_body::combinators::BoxBody::new(
+            bytestream_util::PathBody::from_file(file, sz),
+        ));
         Ok(ByteStream::new(body))
     }
 }

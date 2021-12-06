@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
-aws-sdk-ebs = { package = "aws-sdk-ebs", path = "../../build/aws-sdk/sdk/ebs" }
-aws-sdk-ec2 = { package = "aws-sdk-ec2", path = "../../build/aws-sdk/sdk/ec2" }
+aws-sdk-ebs = { package = "aws-sdk-ebs", path = "../../build/aws-sdk/sdk/ebs", features = ["rustls"] }
+aws-sdk-ec2 = { package = "aws-sdk-ec2", path = "../../build/aws-sdk/sdk/ec2", features = ["rustls"] }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["full"]}
 base64 = "0.13.0"

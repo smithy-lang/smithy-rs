@@ -10,7 +10,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 bytestream-util = ["tokio/fs", "tokio-util/io"]
 event-stream = ["aws-smithy-eventstream"]
-default = ["bytestream-util"]
+default = []
 
 [dependencies]
 aws-smithy-eventstream = { path = "../aws-smithy-eventstream", optional = true }

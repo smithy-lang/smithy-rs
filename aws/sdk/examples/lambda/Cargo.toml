@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
-ec2 = { package = "aws-sdk-ec2", path = "../../build/aws-sdk/sdk/ec2" }
-lambda = { package = "aws-sdk-lambda", path = "../../build/aws-sdk/sdk/lambda" }
+ec2 = { package = "aws-sdk-ec2", path = "../../build/aws-sdk/sdk/ec2", features = ["rustls"] }
+lambda = { package = "aws-sdk-lambda", path = "../../build/aws-sdk/sdk/lambda", features = ["rustls"] }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["full"] }
 structopt = { version = "0.3", default-features = false }
