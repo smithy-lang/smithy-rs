@@ -14,6 +14,11 @@ HEAD_COMMIT_SHA=$(git rev-parse HEAD)
 DOC_TITLE_CONTEXT=$(git log -1 --oneline)
 cd $(git rev-parse --show-toplevel)/target/doc
 
+if [[ "${GITHUB_ACTIONS}" == "true" ]]; then
+    echo "Fetching base revision ${BASE_COMMIT_SHA} from GitHub..."
+    git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin ${BASE_COMMIT_SHA}
+fi
+
 CHANGED_RUNTIME_CRATES_FILE=$(mktemp)
 git diff --name-only $BASE_COMMIT_SHA -- $(git rev-parse --show-toplevel)/rust-runtime | cut -d '/' -f2 | sed 's/-/_/g' | sort | uniq > "${CHANGED_RUNTIME_CRATES_FILE}"
 
