@@ -10,6 +10,25 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """
+Removed inaccurate log message when a client was used without a sleep implementation, and
+improved context and call to action in logged messages around missing sleep implementations.
+"""
+references = ["aws-sdk-rust#317", "smithy-rs#907"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+Removed spamming log message when a client was used without a sleep implementation, and
+improved context and call to action in logged messages around missing sleep implementations.
+"""
+references = ["aws-sdk-rust#317", "smithy-rs#907"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
 [[aws-sdk-rust]]
 message = '''
 If you directly depend on AWS or Smithy runtime crates _(e.g., AWS crates not named `aws-config` or prefixed with `aws-sdk-`)_,
