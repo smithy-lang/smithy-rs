@@ -13,7 +13,7 @@
 
 [[aws-sdk-rust]]
 message = """
-Removed spamming log message when a client was used without a sleep implementation, and
+Removed inaccurate log message when a client was used without a sleep implementation, and
 improved context and call to action in logged messages around missing sleep implementations.
 """
 references = ["aws-sdk-rust#317", "smithy-rs#907"]
