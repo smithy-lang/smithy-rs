@@ -8,7 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-bytestream-util = ["tokio/fs", "tokio-util/io"]
+rt-tokio = ["tokio/rt", "tokio/fs", "tokio-util/io"]
 event-stream = ["aws-smithy-eventstream"]
 
 [dependencies]

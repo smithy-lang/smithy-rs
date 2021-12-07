@@ -55,7 +55,7 @@ class EventStreamSymbolProvider(
                     .rustType(rustType)
                     .addReference(error)
                     .addReference(initial)
-                    .addDependency(CargoDependency.SmithyHttp(runtimeConfig).withFeature("event-stream").withFeature("bytestream-util"))
+                    .addDependency(CargoDependency.SmithyHttp(runtimeConfig).withFeature("event-stream").withFeature("rt-tokio"))
                     .build()
             }
         }

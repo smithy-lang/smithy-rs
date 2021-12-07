@@ -7,7 +7,6 @@
 //!
 //! | Feature           | Description |
 //! |-------------------|-------------|
-//! | `bytestream-util` | ByteStream provides misuse-resistant primitives to make it easier to handle common patterns with streaming data. |
 //! | `event-stream`    | Provides Sender/Receiver implementations for Event Stream codegen. |
 //! | `rt-tokio`        | Run async code with the `tokio` runtime |
 //! | `test-util`       | Include various testing utils |

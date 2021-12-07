@@ -74,7 +74,7 @@
 //!
 //! ### Create a ByteStream from a file
 //!
-//! _Note: This is only available with `bytestream-util` enabled._
+//! _Note: This is only available with `rt-tokio` enabled._
 //!
 //! ```rust
 //! use aws_smithy_http::byte_stream::ByteStream;
@@ -103,7 +103,7 @@ use std::io::IoSlice;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-#[cfg(feature = "bytestream-util")]
+#[cfg(feature = "rt-tokio")]
 mod bytestream_util;
 
 /// Stream of binary data
@@ -251,8 +251,8 @@ impl ByteStream {
     ///     ByteStream::from_path("docs/rows.csv").await.expect("file should be readable")
     /// }
     /// ```
-    #[cfg(feature = "bytestream-util")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "bytestream-util")))]
+    #[cfg(feature = "rt-tokio")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_path(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
         let path = path.as_ref();
         let path_buf = path.to_path_buf();
@@ -272,8 +272,8 @@ impl ByteStream {
     ///
     /// NOTE: This will NOT result in a retryable ByteStream. For a ByteStream that can be retried in the case of
     /// upstream failures, use [`ByteStream::from_path`](ByteStream::from_path)
-    #[cfg(feature = "bytestream-util")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "bytestream-util")))]
+    #[cfg(feature = "rt-tokio")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_file(file: tokio::fs::File) -> Result<Self, Error> {
         let sz = file
             .metadata()
@@ -480,7 +480,7 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "bytestream-util")]
+    #[cfg(feature = "rt-tokio")]
     #[tokio::test]
     async fn path_based_bytestreams() -> Result<(), Box<dyn Error>> {
         use std::io::Write;

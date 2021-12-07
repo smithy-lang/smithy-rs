@@ -16,7 +16,7 @@ NOTE: THIS IS HIGHLY EXPERIMENTAL AND SHOULD NOT BE USED YET.
 publish = false
 
 [dependencies]
-aws-smithy-http = { path = "../aws-smithy-http", features = ["bytestream-util"] }
+aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-json = { path = "../aws-smithy-json" }
 axum = { version = "0.3", features = [ "http1", "http2", "headers", "mime", "tower-log" ], default-features = false }

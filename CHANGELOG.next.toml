@@ -23,7 +23,7 @@ the formerly default features from those crates must now be explicitly set in yo
 | `aws-sigv4 = "VERSION"`         | `aws-sigv4 = { version = "VERSION", features = ["sign-http"] }` |
 | `aws-smithy-async = "VERSION"`  | `aws-smithy-async = { version = "VERSION", features = ["rt-tokio"] }` |
 | `aws-smithy-client = "VERSION"` | `aws-smithy-client = { version = "VERSION", features = ["client-hyper", "rustls", "rt-tokio"] }` |
-| `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["bytestream-util"] }` |
+| `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["rt-tokio"] }` |
 '''
 references = ["smithy-rs#930"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
@@ -40,7 +40,7 @@ Runtime crates no longer have default features. You must now specify the feature
 | `aws-sigv4 = "VERSION"`         | `aws-sigv4 = { version = "VERSION", features = ["sign-http"] }` |
 | `aws-smithy-async = "VERSION"`  | `aws-smithy-async = { version = "VERSION", features = ["rt-tokio"] }` |
 | `aws-smithy-client = "VERSION"` | `aws-smithy-client = { version = "VERSION", features = ["client-hyper", "rustls", "rt-tokio"] }` |
-| `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["bytestream-util"] }` |
+| `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["rt-tokio"] }` |
 '''
 references = ["smithy-rs#930"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
