@@ -176,6 +176,8 @@ jobs:
       working-directory: ${{ matrix.runtime }}/rust-runtime/
       env:
         RUSTDOCFLAGS: -D warnings
+    - name: Additional per-crate checks
+      run: ./tools/additional-per-crate-checks.sh ${{ matrix.runtime }}/rust-runtime/
 
   generate-sdk:
     name: AWS Rust SDK Tier 1 - Generate
