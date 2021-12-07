@@ -66,5 +66,5 @@ interface StructuredDataParserGenerator {
      * }
      * ```
      */
-    fun serverInputParser(operationShape: OperationShape): RuntimeType
+    fun serverInputParser(operationShape: OperationShape): RuntimeType?
 }
