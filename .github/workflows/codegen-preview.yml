@@ -123,14 +123,14 @@ jobs:
 
         cargo doc --no-deps --all-features
         popd
-        ./tools/generate-doc-preview-index.sh
+        ./tools/generate-doc-preview-index.sh ${{ github.event.pull_request.base.sha }}
     - uses: aws-actions/configure-aws-credentials@v1
       name: Acquire credentials for uploading to S3
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
         role-session-name: GitHubActions
         aws-region: us-west-2
-    - name: Upload diff to S3
+    - name: Upload doc preview to S3
       run: |
         aws s3 cp target/doc "s3://${S3_BUCKET_NAME}/docs/${{ github.event.pull_request.head.sha }}" --recursive
     - uses: actions/github-script@v5
