@@ -735,7 +735,6 @@ pub(crate) mod test {
     use crate::imds::client::{Client, EndpointMode, ImdsError};
     use crate::provider_config::ProviderConfig;
     use http::header::USER_AGENT;
-    use tracing::log::LevelFilter;
 
     const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
     const TOKEN_B: &str = "alternatetoken==";
