@@ -18,8 +18,8 @@ for path in *; do
         echo
         echo "# Running additional checks for ${path}..."
         echo
-        pushd "${path}"
+        pushd "${path}" &>/dev/null
         ./additional-ci
-        popd
+        popd &>/dev/null
     fi
 done
