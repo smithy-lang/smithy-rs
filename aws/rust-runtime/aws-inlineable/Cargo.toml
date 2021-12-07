@@ -12,7 +12,7 @@ publish = false
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
-aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["bytestream-util"] }
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../../rust-runtime/aws-types" }
 aws-sig-auth = { path = "../../rust-runtime/aws-sig-auth" }

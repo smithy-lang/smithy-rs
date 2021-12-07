@@ -13,7 +13,7 @@ sign-eventstream = ["aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
 [dependencies]
 aws-sigv4 = { path = "../aws-sigv4", features = ["sign-http"] }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
-aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["bytestream-util"] }
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-types = { path = "../aws-types" }
 http = "0.2.2"
 # Trying this out as an experiment. thiserror can be removed and replaced with hand written error

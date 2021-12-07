@@ -13,7 +13,7 @@ aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper", features = ["rustls"] 
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
-aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http", features = ["bytestream-util"] }
+aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test" }
 bytes = "1"

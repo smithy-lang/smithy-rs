@@ -35,8 +35,8 @@ Runtime crates no longer have default features. You must now specify the feature
 
 **Upgrade guide**
 
-| before | after |
-|--------|-------|
+| before                          | after |
+|---------------------------------|-------|
 | `aws-sigv4 = "VERSION"`         | `aws-sigv4 = { version = "VERSION", features = ["sign-http"] }` |
 | `aws-smithy-async = "VERSION"`  | `aws-smithy-async = { version = "VERSION", features = ["rt-tokio"] }` |
 | `aws-smithy-client = "VERSION"` | `aws-smithy-client = { version = "VERSION", features = ["client-hyper", "rustls", "rt-tokio"] }` |
