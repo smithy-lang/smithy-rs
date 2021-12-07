@@ -941,11 +941,8 @@ pub(crate) mod test {
 
     /// 500 error during token acquisition should be retried
     #[tokio::test]
-    //#[traced_test]
+    #[traced_test]
     async fn retry_token_failure() {
-        env_logger::builder()
-            .filter_level(LevelFilter::Debug)
-            .init();
         let connection = TestConnection::new(vec![
             (
                 token_request("http://169.254.169.254", 21600),

@@ -62,10 +62,11 @@ usage examples can be found on the [aws_hyper docs](https://docs.rs/aws-hyper).
 """
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "rcoh"
-references = ["smithy-rs#todo"]
+references = ["smithy-rs#940"]
 
 [[smithy-rs]]
-message = "`aws_smithy_client::Client::https()` has been renamed to `dyn_https()`. This is to clearly distinguish it from `rustls` and `native_tls` which do not use a boxed connector.
+message = """`aws_smithy_client::Client::https()` has been renamed to `dyn_https()`.
+This is to clearly distinguish it from `rustls` and `native_tls` which do not use a boxed connector."""
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "rcoh"
-references = ["smithy-rs#todo"]
+references = ["smithy-rs#940"]
