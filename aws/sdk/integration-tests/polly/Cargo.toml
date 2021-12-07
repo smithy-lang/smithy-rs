@@ -12,7 +12,7 @@ aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper", features = ["rustls"]}
 aws-sdk-polly = { path = "../../build/aws-sdk/sdk/polly" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
-aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http", features = ["bytestream-util"] }
 bytes = "1"
 http = "0.2.3"
 tokio = { version = "1", features = ["full"]}

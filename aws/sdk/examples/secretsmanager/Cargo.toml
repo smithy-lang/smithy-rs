@@ -7,7 +7,7 @@ description = "Example usage of the SecretManager service"
 
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
-secretsmanager = { package = "aws-sdk-secretsmanager", path = "../../build/aws-sdk/sdk/secretsmanager", features = ["rustls"] }
+secretsmanager = { package = "aws-sdk-secretsmanager", path = "../../build/aws-sdk/sdk/secretsmanager" }
 aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper", features = ["rustls"] }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 

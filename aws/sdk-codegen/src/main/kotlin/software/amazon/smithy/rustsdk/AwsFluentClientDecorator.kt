@@ -83,8 +83,8 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
         }
         val awsHyper = "aws-hyper"
         val awsSmithyClient = "aws-smithy-client"
-        rustCrate.mergeFeature(Feature("client", default = true, listOf(awsSmithyClient, awsHyper)))
-        rustCrate.mergeFeature(Feature("rustls", default = false, listOf("$awsHyper/rustls", "$awsSmithyClient/rustls")))
+        rustCrate.mergeFeature(Feature("client", default = true, listOf()))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsHyper/rustls", "$awsSmithyClient/rustls")))
         rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls", "$awsSmithyClient/native-tls")))
     }
 

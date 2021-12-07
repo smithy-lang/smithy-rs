@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 aws-smithy-types-convert = { path = "../../build/aws-sdk/sdk/aws-smithy-types-convert", features = ["convert-chrono"] }
-aws-sdk-cognitoidentity = { path = "../../build/aws-sdk/sdk/cognitoidentity", features = ["rustls"] }
+aws-sdk-cognitoidentity = { path = "../../build/aws-sdk/sdk/cognitoidentity" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4"

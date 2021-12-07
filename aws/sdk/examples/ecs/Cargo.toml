@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 tokio = { version = "1", features = ["full"]}
-aws-sdk-ecs = { path = "../../build/aws-sdk/sdk/ecs", features = ["rustls"] }
+aws-sdk-ecs = { path = "../../build/aws-sdk/sdk/ecs" }

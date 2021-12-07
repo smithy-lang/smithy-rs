@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
-aws-sdk-apigatewaymanagement = { path = "../../build/aws-sdk/sdk/apigatewaymanagement", features = ["rustls"] }
+aws-sdk-apigatewaymanagement = { path = "../../build/aws-sdk/sdk/apigatewaymanagement" }
 http = "0.2.5"
 tokio = { version = "1", features = ["full"] }
 structopt = { version = "0.3", default-features = false }
