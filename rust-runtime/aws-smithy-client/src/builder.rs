@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use crate::{bounds, erase, retry, Client, TriState};
+use crate::{bounds, erase, retry, Client, TriState, MISSING_SLEEP_IMPL_RECOMMENDATION};
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
@@ -216,8 +216,22 @@ impl<C, M, R> Builder<C, M, R> {
     /// Build a Smithy service [`Client`].
     pub fn build(self) -> Client<C, M, R> {
         if matches!(self.sleep_impl, TriState::Unset) {
-            tracing::warn!("{}", crate::NO_SLEEP_WARNING);
+            if self.timeout_config.has_timeouts() {
+                tracing::warn!(
+                    "One or more timeouts were set, but no `sleep_impl` was passed into the \
+                    builder. Timeouts and retry both require a sleep implementation. No timeouts \
+                    will occur with the current configuration. {}",
+                    MISSING_SLEEP_IMPL_RECOMMENDATION
+                );
+            } else {
+                tracing::warn!(
+                    "Retries require a `sleep_impl`, but none was passed into the builder. \
+                    No retries will occur with the current configuration. {}",
+                    MISSING_SLEEP_IMPL_RECOMMENDATION
+                );
+            }
         }
+
         Client {
             connector: self.connector,
             retry_policy: self.retry_policy,
@@ -256,5 +270,63 @@ where
     /// # }
     pub fn build_dyn(self) -> erase::DynClient<R> {
         self.build().into_dyn()
+    }
+}
+
+#[cfg(all(test, feature = "test-util", feature = "rt-tokio"))]
+mod tests {
+    use super::*;
+    use crate::test_connection::TestConnection;
+    use aws_smithy_async::rt::sleep::default_async_sleep;
+    use std::time::Duration;
+
+    const TIMEOUTS_WITHOUT_SLEEP_MSG: &str =
+        "One or more timeouts were set, but no `sleep_impl` was passed into the builder";
+    const RETRIES_WITHOUT_SLEEP_MSG: &str =
+        "Retries require a `sleep_impl`, but none was passed into the builder.";
+    const RECOMMENDATION_MSG: &str =
+        "consider using the `aws-config` crate to load a shared config";
+
+    #[test]
+    #[tracing_test::traced_test]
+    fn sleep_impl_given_no_warns() {
+        let mut builder = Builder::new()
+            .connector(TestConnection::<SdkBody>::new(Vec::new()))
+            .middleware(tower::layer::util::Identity::new());
+        builder.set_sleep_impl(default_async_sleep());
+        builder.build();
+
+        assert!(!logs_contain(TIMEOUTS_WITHOUT_SLEEP_MSG));
+        assert!(!logs_contain(RETRIES_WITHOUT_SLEEP_MSG));
+        assert!(!logs_contain(RECOMMENDATION_MSG));
+    }
+
+    #[test]
+    #[tracing_test::traced_test]
+    fn timeout_missing_sleep_impl_warn() {
+        let mut builder = Builder::new()
+            .connector(TestConnection::<SdkBody>::new(Vec::new()))
+            .middleware(tower::layer::util::Identity::new());
+        builder.set_timeout_config(
+            TimeoutConfig::new().with_connect_timeout(Some(Duration::from_secs(1))),
+        );
+        builder.build();
+
+        assert!(logs_contain(TIMEOUTS_WITHOUT_SLEEP_MSG));
+        assert!(!logs_contain(RETRIES_WITHOUT_SLEEP_MSG));
+        assert!(logs_contain(RECOMMENDATION_MSG));
+    }
+
+    #[test]
+    #[tracing_test::traced_test]
+    fn retry_missing_sleep_impl_warn() {
+        Builder::new()
+            .connector(TestConnection::<SdkBody>::new(Vec::new()))
+            .middleware(tower::layer::util::Identity::new())
+            .build();
+
+        assert!(!logs_contain(TIMEOUTS_WITHOUT_SLEEP_MSG));
+        assert!(logs_contain(RETRIES_WITHOUT_SLEEP_MSG));
+        assert!(logs_contain(RECOMMENDATION_MSG));
     }
 }

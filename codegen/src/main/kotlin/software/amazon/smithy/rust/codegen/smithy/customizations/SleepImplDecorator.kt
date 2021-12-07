@@ -16,8 +16,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 
 /* Example Generated Code */
 /*
+/// Service config.
+///
 pub struct Config {
-    pub(crate) sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    pub(crate) sleep_impl: Option<std::sync::Arc<dyn aws_smithy_async::rt::sleep::AsyncSleep>>,
 }
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -26,39 +28,90 @@ impl std::fmt::Debug for Config {
     }
 }
 impl Config {
+    /// Constructs a config builder.
     pub fn builder() -> Builder {
         Builder::default()
     }
 }
+/// Builder for creating a `Config`.
 #[derive(Default)]
 pub struct Builder {
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    sleep_impl: Option<std::sync::Arc<dyn aws_smithy_async::rt::sleep::AsyncSleep>>,
 }
 impl Builder {
+    /// Constructs a config builder.
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
+    /// Set the sleep_impl for the builder
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use test_smithy_test1832442648477221704::config::Config;
+    /// use aws_smithy_async::rt::sleep::AsyncSleep;
+    /// use aws_smithy_async::rt::sleep::Sleep;
+    ///
+    /// #[derive(Debug)]
+    /// pub struct ForeverSleep;
+    ///
+    /// impl AsyncSleep for ForeverSleep {
+    ///     fn sleep(&self, duration: std::time::Duration) -> Sleep {
+    ///         Sleep::new(std::future::pending())
+    ///     }
+    /// }
+    ///
+    /// let sleep_impl = std::sync::Arc::new(ForeverSleep);
+    /// let config = Config::builder().sleep_impl(sleep_impl).build();
+    /// ```
+    pub fn sleep_impl(
+        mut self,
+        sleep_impl: std::sync::Arc<dyn aws_smithy_async::rt::sleep::AsyncSleep>,
+    ) -> Self {
         self.set_sleep_impl(Some(sleep_impl));
         self
     }
+
+    /// Set the sleep_impl for the builder
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use test_smithy_test1832442648477221704::config::{Builder, Config};
+    /// use aws_smithy_async::rt::sleep::AsyncSleep;
+    /// use aws_smithy_async::rt::sleep::Sleep;
+    ///
+    /// #[derive(Debug)]
+    /// pub struct ForeverSleep;
+    ///
+    /// impl AsyncSleep for ForeverSleep {
+    ///     fn sleep(&self, duration: std::time::Duration) -> Sleep {
+    ///         Sleep::new(std::future::pending())
+    ///     }
+    /// }
+    ///
+    /// fn set_never_ending_sleep_impl(builder: &mut Builder) {
+    ///     let sleep_impl = std::sync::Arc::new(ForeverSleep);
+    ///     builder.set_sleep_impl(Some(sleep_impl));
+    /// }
+    ///
+    /// let mut builder = Config::builder();
+    /// set_never_ending_sleep_impl(&mut builder);
+    /// let config = builder.build();
+    /// ```
     pub fn set_sleep_impl(
         &mut self,
-        sleep_impl: Option<Arc<dyn AsyncSleep>>,
+        sleep_impl: Option<std::sync::Arc<dyn aws_smithy_async::rt::sleep::AsyncSleep>>,
     ) -> &mut Self {
         self.sleep_impl = sleep_impl;
         self
     }
+    /// Builds a [`Config`].
     pub fn build(self) -> Config {
         Config {
-            sleep_impl: self.sleep_impl,
+            sleep_impl: self.sleep_impl
         }
     }
-}
-#[test]
-fn test_1() {
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<Config>();
 }
  */
 
@@ -77,8 +130,10 @@ class SleepImplDecorator : RustCodegenDecorator {
 class SleepImplProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
     private val sleepModule = smithyAsyncRtSleep(codegenContext.runtimeConfig)
     private val moduleUseName = codegenContext.moduleUseName()
-    private val codegenScope =
-        arrayOf("AsyncSleep" to sleepModule.member("AsyncSleep"), "Sleep" to sleepModule.member("Sleep"))
+    private val codegenScope = arrayOf(
+        "AsyncSleep" to sleepModule.member("AsyncSleep"),
+        "Sleep" to sleepModule.member("Sleep"),
+    )
 
     override fun section(section: ServiceConfig) = writable {
         when (section) {

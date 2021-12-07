@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.smithy.customizations.SleepImplProviderConfig
+import software.amazon.smithy.rust.codegen.smithy.customizations.RetryConfigProviderConfig
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.testutil.rustSettings
 import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
 
-internal class SleepImplProviderConfigTest {
+internal class RetryConfigDecoratorTest {
     private val baseModel = """
         namespace test
         use aws.protocols#awsQuery
@@ -38,6 +38,6 @@ internal class SleepImplProviderConfigTest {
         val project = TestWorkspace.testProject()
         val codegenContext = testCodegenContext(model, settings = project.rustSettings(model))
 
-        validateConfigCustomizations(SleepImplProviderConfig(codegenContext), project)
+        validateConfigCustomizations(RetryConfigProviderConfig(codegenContext), project)
     }
 }
