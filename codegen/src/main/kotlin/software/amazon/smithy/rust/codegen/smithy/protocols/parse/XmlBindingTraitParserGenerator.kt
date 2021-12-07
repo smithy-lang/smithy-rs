@@ -243,7 +243,7 @@ class XmlBindingTraitParserGenerator(
         TODO("Document shapes are not supported by rest XML")
     }
 
-    override fun serverInputParser(operationShape: OperationShape): RuntimeType {
+    override fun serverInputParser(operationShape: OperationShape): RuntimeType? {
         TODO("Not yet implemented")
     }
 
