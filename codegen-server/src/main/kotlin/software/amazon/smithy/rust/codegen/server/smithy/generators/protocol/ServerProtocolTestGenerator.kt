@@ -209,7 +209,7 @@ class ServerProtocolTestGenerator(
             rust("""*http_request.uri_mut() = "${httpRequestTestCase.uri}?$queryParams".parse().unwrap();""")
         }
         httpRequestTestCase.host.orNull()?.also {
-            rust("// TODO: support endpoint trait")
+            rust("""todo!("endpoint trait not supported yet");""")
         }
         checkQueryParams(this, httpRequestTestCase.queryParams)
         checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
@@ -316,7 +316,7 @@ class ServerProtocolTestGenerator(
             *codegenScope,
         )
         if (operationShape.outputShape(model).hasStreamingMember(model)) {
-            rustWriter.rust("""panic!("streaming types aren't supported")""")
+            rustWriter.rust("""todo!("streaming types aren't supported yet");""")
         } else {
             rustWriter.rust("assert_eq!(input, expected);")
         }
