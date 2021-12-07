@@ -1026,8 +1026,7 @@ pub(crate) mod test {
         assert!(now.elapsed().unwrap() > Duration::from_secs(1));
         assert!(now.elapsed().unwrap() < Duration::from_secs(2));
         match resp {
-            ImdsError::FailedToLoadToken(err)
-                if format!("{}", err).contains("HTTP connect timeout") => {} // ok,
+            ImdsError::FailedToLoadToken(err) if format!("{}", err).contains("timeout") => {} // ok,
             other => panic!(
                 "wrong error, expected construction failure with TimedOutError inside: {}",
                 other
