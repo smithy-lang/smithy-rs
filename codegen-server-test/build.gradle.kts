@@ -24,10 +24,7 @@ data class CodegenTest(val service: String, val module: String, val extraConfig:
 
 val CodegenTests = listOf(
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    // TODO: this is kept here commented to allow to add the RestJson protocol test
-    // quickly when continuting the test development. As of now the tests do not generate
-    // valid tests and will fail the build.
-    // CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
+    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs")
 )
 

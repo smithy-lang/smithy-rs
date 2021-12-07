@@ -298,12 +298,14 @@ private class ServerHttpProtocolImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_request"
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
+        val includedMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
+        val unusedVars = if (includedMembers.isEmpty()) "##[allow(unused_variables)] " else ""
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 """
                 pub async fn $fnName<B>(
-                    request: &mut #{Axum}::extract::RequestParts<B>
+                    ${unusedVars}request: &mut #{Axum}::extract::RequestParts<B>
                 ) -> std::result::Result<
                     #{I},
                     #{SmithyRejection}
@@ -462,7 +464,7 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let status = output.$memberName
-                        .ok_or(#{SmithyHttpServer}::rejection::Serialize::from(${(memberName + " missing or empty").dq()}))?;
+                        .ok_or_else(|| #{SmithyHttpServer}::rejection::Serialize::from(${(memberName + " missing or empty").dq()}))?;
                     let http_status: u16 = std::convert::TryFrom::<i32>::try_from(status)
                         .map_err(|_| #{SmithyHttpServer}::rejection::Serialize::from(${("invalid status code").dq()}))?;
                     """.trimIndent(),
@@ -484,7 +486,8 @@ private class ServerHttpProtocolImplGenerator(
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
-        structuredDataParser.serverInputParser(operationShape).also { parser ->
+        val parser = structuredDataParser.serverInputParser(operationShape)
+        if (parser != null) {
             rustTemplate(
                 """
                 let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;

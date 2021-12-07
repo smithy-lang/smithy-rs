@@ -93,8 +93,8 @@ class JsonParserGenerator(
         structureShape: StructureShape,
         includedMembers: List<MemberShape>
     ): RuntimeType {
-        val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
+            val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
             it.rustBlockTemplate(
                 "pub fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
                 "Builder" to structureShape.builderSymbol(symbolProvider),
@@ -196,9 +196,12 @@ class JsonParserGenerator(
         )
     }
 
-    override fun serverInputParser(operationShape: OperationShape): RuntimeType {
-        val inputShape = operationShape.inputShape(model)
+    override fun serverInputParser(operationShape: OperationShape): RuntimeType? {
         val includedMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
+        if (includedMembers.isEmpty()) {
+            return null
+        }
+        val inputShape = operationShape.inputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
         return structureParser(fnName, inputShape, includedMembers)
     }
