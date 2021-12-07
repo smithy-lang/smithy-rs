@@ -5,15 +5,15 @@
 
 //! A Hyper-based Smithy service client.
 //!
-//! | Feature         | Description |
-//! |-----------------|-------------|
-//! | bytestream-util | ByteStream provides misuse-resistant primitives to make it easier to handle common patterns with streaming data. |
-//! | event-stream    | Provides Sender/Receiver implementations for Event Stream codegen. |
-//! | rt-tokio        | Run async code with the `tokio` runtime |
-//! | test-util       | Include various testing utils |
-//! | native-tls      | Use `native-tls` as the HTTP client's TLS implementation |
-//! | rustls          | Use `rustls` as the HTTP client's TLS implementation |
-//! | client-hyper    | Use `hyper` to handle HTTP requests |
+//! | Feature           | Description |
+//! |-------------------|-------------|
+//! | `bytestream-util` | ByteStream provides misuse-resistant primitives to make it easier to handle common patterns with streaming data. |
+//! | `event-stream`    | Provides Sender/Receiver implementations for Event Stream codegen. |
+//! | `rt-tokio`        | Run async code with the `tokio` runtime |
+//! | `test-util`       | Include various testing utils |
+//! | `native-tls`      | Use `native-tls` as the HTTP client's TLS implementation |
+//! | `rustls`          | Use `rustls` as the HTTP client's TLS implementation |
+//! | `client-hyper`    | Use `hyper` to handle HTTP requests |
 
 #![warn(
     missing_debug_implementations,
@@ -22,26 +22,6 @@
     rust_2018_idioms
 )]
 
-use std::error::Error;
-use std::sync::Arc;
-
-use tower::{Layer, Service, ServiceBuilder, ServiceExt};
-
-use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::operation::Operation;
-use aws_smithy_http::response::ParseHttpResponse;
-pub use aws_smithy_http::result::{SdkError, SdkSuccess};
-use aws_smithy_http::retry::ClassifyResponse;
-use aws_smithy_http_tower::dispatch::DispatchLayer;
-use aws_smithy_http_tower::parse_response::ParseResponseLayer;
-use aws_smithy_types::retry::ProvideErrorKind;
-use aws_smithy_types::timeout::TimeoutConfig;
-pub use builder::Builder;
-pub use timeout::TimeoutLayer;
-
-use crate::timeout::generate_timeout_service_params_from_timeout_config;
-
 pub mod bounds;
 pub mod erase;
 pub mod retry;
@@ -49,6 +29,8 @@ pub mod retry;
 // https://github.com/rust-lang/rust/issues/72081
 #[allow(rustdoc::private_doc_tests)]
 mod builder;
+pub use builder::Builder;
+
 #[cfg(feature = "test-util")]
 pub mod dvr;
 #[cfg(feature = "test-util")]
@@ -66,6 +48,7 @@ pub mod static_tests;
 #[cfg(feature = "client-hyper")]
 pub mod never;
 pub mod timeout;
+pub use timeout::TimeoutLayer;
 
 /// Type aliases for standard connection types.
 #[cfg(feature = "client-hyper")]
@@ -100,6 +83,22 @@ pub mod conns {
     pub type Rustls =
         crate::hyper_ext::Adapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
 }
+
+use std::error::Error;
+use std::sync::Arc;
+use tower::{Layer, Service, ServiceBuilder, ServiceExt};
+
+use crate::timeout::generate_timeout_service_params_from_timeout_config;
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::operation::Operation;
+use aws_smithy_http::response::ParseHttpResponse;
+pub use aws_smithy_http::result::{SdkError, SdkSuccess};
+use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_http_tower::dispatch::DispatchLayer;
+use aws_smithy_http_tower::parse_response::ParseResponseLayer;
+use aws_smithy_types::retry::ProvideErrorKind;
+use aws_smithy_types::timeout::TimeoutConfig;
 
 /// Smithy service client.
 ///
