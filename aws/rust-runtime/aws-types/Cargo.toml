@@ -8,7 +8,6 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-default = []
 hardcoded-credentials = []
 
 [dependencies]

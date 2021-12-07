@@ -9,7 +9,6 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 sign-eventstream = ["aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
-default = []
 
 [dependencies]
 aws-sigv4 = { path = "../aws-sigv4", features = ["sign-http"] }
