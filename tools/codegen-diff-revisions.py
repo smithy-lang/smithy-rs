@@ -212,7 +212,7 @@ def run(command, shell=False):
 
 # Returns the output from a shell command. Bails if the command failed
 def get_cmd_output(command):
-    result = subprocess.run(command, capture_output=True, shell=True, check=True)
+    result = subprocess.run(shlex.split(command), capture_output=True, check=True)
     return result.stdout.decode("utf-8").strip()
 
 
