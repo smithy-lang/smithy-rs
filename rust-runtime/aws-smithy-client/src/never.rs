@@ -51,7 +51,7 @@ impl<Req, Resp, Err> NeverService<Req, Resp, Err> {
     }
 }
 
-/// A Connector that can be use with [`aws_smithy_client::Client`] that never returns a response.
+/// A Connector that can be use with [`Client`](crate::Client) that never returns a response.
 pub type NeverConnector =
     NeverService<http::Request<SdkBody>, http::Response<SdkBody>, ConnectorError>;
 

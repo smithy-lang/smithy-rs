@@ -127,8 +127,9 @@ impl<C, M> Client<C, M>
 where
     M: Default,
 {
-    /// Create a Smithy client that the given connector, a middleware default, the [standard
-    /// retry policy](crate::retry::Standard), and the [`default_async_sleep`] sleep implementation.
+    /// Create a Smithy client from the given `connector`, a middleware default, the [standard
+    /// retry policy](crate::retry::Standard), and the [`default_async_sleep`](aws_smithy_async::rt::sleep::default_async_sleep)
+    /// sleep implementation.
     pub fn new(connector: C) -> Self {
         Builder::new()
             .connector(connector)
@@ -164,6 +165,8 @@ impl<C, M, R> Client<C, M, R> {
     }
 
     /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
+    ///
+    /// *Note: If `None` is passed, this will prevent the client from using retries or timeouts.*
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
         self.sleep_impl = sleep_impl.clone().into();
     }

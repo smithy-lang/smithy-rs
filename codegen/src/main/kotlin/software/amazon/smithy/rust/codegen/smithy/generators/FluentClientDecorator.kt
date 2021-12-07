@@ -193,8 +193,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
                     /// ```
                     /// use $moduleUseName::{Builder, Client, Config};
                     /// let raw_client =
-                    ///     Builder::new()
-                    ///       .https()
+                    ///     Builder::dyn_https()
                     /// ##     /*
                     ///       .middleware(/* discussed below */)
                     /// ##     */

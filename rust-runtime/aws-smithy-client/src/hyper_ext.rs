@@ -259,6 +259,9 @@ where
     /// Create a Smithy client builder with an HTTPS connector and the [standard retry
     /// policy](crate::retry::Standard) over the default middleware implementation.
     ///
+    /// *Note:* This function **does not** set a sleep implementation to ensure that [`default_async_sleep`](crate::Builder::default_async_sleep)
+    /// or [`set_sleep_impl`](crate::Builder::set_sleep_impl) is called.
+    ///
     /// For convenience, this constructor type-erases the concrete TLS connector backend used using
     /// dynamic dispatch. This comes at a slight runtime performance cost. See
     /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use

@@ -149,6 +149,8 @@ private class AwsFluentClientExtensions(private val types: Types) {
                         .middleware(#{aws_hyper}::AwsMiddleware::default());
                     builder.set_retry_config(retry_config.into());
                     builder.set_timeout_config(timeout_config);
+                    // the builder maintains a try-state. To avoid suppressing the warning when sleep is unset,
+                    // only set it if we actually have a sleep impl.
                     if let Some(sleep_impl) = sleep_impl {
                         builder.set_sleep_impl(Some(sleep_impl));
                     }
