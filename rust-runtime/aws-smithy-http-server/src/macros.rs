@@ -109,6 +109,12 @@ macro_rules! define_rejection {
                 Some(&self.0)
             }
         }
+
+        impl From<&str> for $name {
+            fn from(src: &str) -> Self {
+                Self(Err(src).expect("Unable to convert string into error"))
+            }
+        }
     };
 }
 

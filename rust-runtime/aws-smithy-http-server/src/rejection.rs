@@ -147,6 +147,24 @@ impl From<std::num::ParseIntError> for SmithyRejection {
     }
 }
 
+impl From<std::num::ParseFloatError> for SmithyRejection {
+    fn from(err: std::num::ParseFloatError) -> Self {
+        SmithyRejection::Deserialize(Deserialize::from_err(err))
+    }
+}
+
+impl From<std::str::ParseBoolError> for SmithyRejection {
+    fn from(err: std::str::ParseBoolError) -> Self {
+        SmithyRejection::Deserialize(Deserialize::from_err(err))
+    }
+}
+
+impl From<aws_smithy_types::date_time::DateTimeParseError> for SmithyRejection {
+    fn from(err: aws_smithy_types::date_time::DateTimeParseError) -> Self {
+        SmithyRejection::Deserialize(Deserialize::from_err(err))
+    }
+}
+
 impl From<aws_smithy_http::operation::SerializationError> for SmithyRejection {
     fn from(err: aws_smithy_http::operation::SerializationError) -> Self {
         SmithyRejection::Serialize(Serialize::from_err(err))
