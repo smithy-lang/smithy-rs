@@ -318,6 +318,44 @@ jobs:
         # so we have to manually restore the target directory override
         CARGO_TARGET_DIR: ../target
 
+  unused-sdk-dependencies:
+    name: AWS Rust SDK Tier 1 - Unused dependencies
+    needs: generate-sdk
+    runs-on: ubuntu-latest
+    steps:
+    # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ github.job }}
+        target-dir: ../target
+    - uses: actions-rs/toolchain@v1
+      with:
+        # Cargo udeps requires nightly
+        toolchain: nightly
+        default: true
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-tier1-${{ github.sha }}
+        path: artifact
+    - name: untar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
+    - name: Install `cargo udeps`
+      run: cargo install cargo-udeps
+    - name: Check for unused dependencies with default features
+      run: cargo udeps
+      working-directory: aws-sdk
+    - name: Check for unused dependencies with `--all-features`
+      run: cargo udeps --all-features
+      working-directory: aws-sdk
+    env:
+      # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
+      # so we have to manually restore the target directory override
+      CARGO_TARGET_DIR: ../target
+
   standalone-integration-tests-check:
     name: AWS Rust SDK Standalone Integration Tests - cargo check
     needs: generate-sdk
