@@ -42,7 +42,7 @@ where
     type Policy;
 
     /// Create a new policy mechanism instance.
-    fn new_request_policy(&self) -> Self::Policy;
+    fn new_request_policy(&self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> Self::Policy;
 }
 
 /// Retry Policy Configuration
@@ -122,7 +122,6 @@ const RETRY_COST: usize = 5;
 pub struct Standard {
     config: Config,
     shared_state: CrossRequestRetryState,
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
 }
 
 impl Standard {
@@ -131,7 +130,6 @@ impl Standard {
         Self {
             shared_state: CrossRequestRetryState::new(config.initial_retry_tokens),
             config,
-            sleep_impl: None,
         }
     }
 
@@ -140,23 +138,17 @@ impl Standard {
         self.config = config;
         self
     }
-
-    /// Set the sleep implementation for this retry policy
-    pub fn with_sleep_impl(&mut self, sleep_impl: Arc<dyn AsyncSleep>) -> &mut Self {
-        self.sleep_impl = Some(sleep_impl);
-        self
-    }
 }
 
 impl NewRequestPolicy for Standard {
     type Policy = RetryHandler;
 
-    fn new_request_policy(&self) -> Self::Policy {
+    fn new_request_policy(&self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> Self::Policy {
         RetryHandler {
             local: RequestLocalRetryState::new(),
             shared: self.shared_state.clone(),
             config: self.config.clone(),
-            sleep: self.sleep_impl.clone(),
+            sleep_impl,
         }
     }
 }
@@ -246,7 +238,7 @@ pub struct RetryHandler {
     local: RequestLocalRetryState,
     shared: CrossRequestRetryState,
     config: Config,
-    sleep: Option<Arc<dyn AsyncSleep>>,
+    sleep_impl: Option<Arc<dyn AsyncSleep>>,
 }
 
 #[cfg(test)]
@@ -294,7 +286,7 @@ impl RetryHandler {
             },
             shared: self.shared.clone(),
             config: self.config.clone(),
-            sleep: self.sleep.clone(),
+            sleep_impl: self.sleep_impl.clone(),
         };
 
         Some((next, backoff))
@@ -315,12 +307,17 @@ where
         req: &Operation<Handler, R>,
         result: Result<&SdkSuccess<T>, &SdkError<E>>,
     ) -> Option<Self::Future> {
-        let sleep = match &self.sleep {
-            Some(sleep) => sleep,
-            None => return None,
-        };
         let policy = req.retry_policy();
         let retry = policy.classify(result);
+        let sleep = match &self.sleep_impl {
+            Some(sleep) => sleep,
+            None => {
+                if retry != RetryKind::NotRetryable {
+                    tracing::debug!("cannot retry because no sleep implementation exists");
+                }
+                return None;
+            }
+        };
         let (next, dur) = match retry {
             RetryKind::Explicit(dur) => (self.clone(), dur),
             RetryKind::NotRetryable => return None,
@@ -368,7 +365,7 @@ mod test {
 
     #[test]
     fn eventual_success() {
-        let policy = Standard::new(test_config()).new_request_policy();
+        let policy = Standard::new(test_config()).new_request_policy(None);
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -388,7 +385,7 @@ mod test {
 
     #[test]
     fn no_more_attempts() {
-        let policy = Standard::new(test_config()).new_request_policy();
+        let policy = Standard::new(test_config()).new_request_policy(None);
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -410,7 +407,7 @@ mod test {
     fn no_quota() {
         let mut conf = test_config();
         conf.initial_retry_tokens = 5;
-        let policy = Standard::new(conf).new_request_policy();
+        let policy = Standard::new(conf).new_request_policy(None);
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -425,7 +422,7 @@ mod test {
     fn backoff_timing() {
         let mut conf = test_config();
         conf.max_attempts = 5;
-        let policy = Standard::new(conf).new_request_policy();
+        let policy = Standard::new(conf).new_request_policy(None);
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
@@ -460,7 +457,7 @@ mod test {
         let mut conf = test_config();
         conf.max_attempts = 5;
         conf.max_backoff = Duration::from_secs(3);
-        let policy = Standard::new(conf).new_request_policy();
+        let policy = Standard::new(conf).new_request_policy(None);
         let (policy, dur) = policy
             .attempt_retry(Err(ErrorKind::ServerError))
             .expect("should retry");
