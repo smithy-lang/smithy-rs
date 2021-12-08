@@ -13,6 +13,16 @@
 
 [[aws-sdk-rust]]
 message = """
+`aws-config` will now work as intended for users that want to use `native-tls` instead of `rustls`. Previously, it was
+difficult to ensure that `rustls` was not in use. Also, there is now an example of how to use `native-tls` and a test
+that ensures `rustls` is not in the dependency tree
+"""
+references = ["aws-sdk-rust#304"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "zhessler"
+
+[[aws-sdk-rust]]
+message = """
 Removed inaccurate log message when a client was used without a sleep implementation, and
 improved context and call to action in logged messages around missing sleep implementations.
 """
