@@ -9,9 +9,9 @@ edition = "2018"
 
 [dev-dependencies]
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
-aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper"}
+aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper", features = ["rustls"]}
 aws-sdk-glacier = { path = "../../build/aws-sdk/sdk/glacier" }
-aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
+aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test"}
 bytes = "1"
 http = "0.2.3"

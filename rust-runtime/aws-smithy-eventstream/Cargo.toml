@@ -9,7 +9,6 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 derive-arbitrary = ["arbitrary"]
-default = []
 
 [dependencies]
 arbitrary = { version = "1", optional = true, features = ["derive"] }

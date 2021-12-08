@@ -12,11 +12,11 @@ repository = "https://github.com/awslabs/smithy-rs"
 default-provider = ["profile", "imds", "meta", "sts", "environment", "http-provider"]
 profile = ["sts", "web-identity-token", "meta", "environment", "imds", "http-provider"]
 meta = ["tokio/sync"]
-imds = ["profile", "aws-smithy-http", "aws-smithy-http-tower", "aws-smithy-json", "tower", "aws-http", "meta"]
+imds = ["profile", "aws-smithy-http/rt-tokio", "aws-smithy-http-tower", "aws-smithy-json", "tower", "aws-http", "meta"]
 environment = ["meta"]
 sts = ["aws-sdk-sts", "aws-hyper"]
 web-identity-token = ["sts", "profile"]
-http-provider = ["aws-hyper", "aws-smithy-json", "aws-smithy-http", "tower", "tokio/sync"]
+http-provider = ["aws-hyper", "aws-smithy-json", "aws-smithy-http/rt-tokio", "tower", "tokio/sync"]
 tcp-connector = ["tokio/net", "tower"]
 
 # SSO is not supported
