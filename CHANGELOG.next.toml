@@ -125,7 +125,7 @@ author = "rcoh"
 references = ["smithy-rs#940"]
 
 [[aws-sdk-rust]]
-message = "The features `aws-hyper/rustls` and `aws-hyper/nativetls` have been removed. If you were using these, use the identical features on `aws-smithy-client`."
+message = "The features `aws-hyper/rustls` and `aws-hyper/native-tls` have been removed. If you were using these, use the identical features on `aws-smithy-client`."
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 references = ["smithy-rs#947"]
 author = "rcoh"
