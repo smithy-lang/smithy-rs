@@ -22,8 +22,8 @@ tcp-connector = ["tokio/net", "tower"]
 # SSO is not supported
 sso = []
 
-rustls = ["aws-smithy-client/rustls", "aws-sdk-sts/rustls", "aws-hyper/rustls"]
-native-tls = ["aws-smithy-client/native-tls", "aws-sdk-sts/native-tls", "aws-hyper/native-tls"]
+rustls = ["aws-smithy-client/rustls", "aws-hyper/rustls"]
+native-tls = ["aws-smithy-client/native-tls", "aws-hyper/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio"]
 
 # Tokio based DNS-resolver for ECS validation
