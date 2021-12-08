@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use crate::{bounds, erase, retry, Client, TriState, MISSING_SLEEP_IMPL_RECOMMENDATION};
-use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_types::timeout::TimeoutConfig;
@@ -125,9 +125,15 @@ impl<C, R> Builder<C, (), R> {
     ///
     /// ```no_run
     /// use aws_smithy_client::Builder;
+    /// use aws_smithy_client::erase::DynConnector;
+    /// use aws_smithy_client::never::NeverConnector;
     /// use aws_smithy_http::body::SdkBody;
+    /// let my_connector = DynConnector::new(
+    ///     // Your own connector here or use `dyn_https()`
+    ///     # NeverConnector::new()
+    /// );
     /// let client = Builder::new()
-    ///   .https()
+    ///   .connector(my_connector)
     ///   .middleware_fn(|req: aws_smithy_http::operation::Request| {
     ///     req
     ///   })
@@ -181,6 +187,18 @@ impl<C, M> Builder<C, M> {
     /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
     pub fn set_sleep_impl(&mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) {
         self.sleep_impl = async_sleep.into();
+    }
+
+    /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
+    pub fn sleep_impl(mut self, async_sleep: Option<Arc<dyn AsyncSleep>>) -> Self {
+        self.set_sleep_impl(async_sleep);
+        self
+    }
+
+    /// Sets the sleep implementation to [`default_async_sleep`].
+    pub fn default_async_sleep(mut self) -> Self {
+        self.sleep_impl = TriState::or_unset(default_async_sleep());
+        self
     }
 }
 
@@ -273,12 +291,20 @@ where
     }
 }
 
-#[cfg(all(test, feature = "test-util", feature = "rt-tokio"))]
+#[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_connection::TestConnection;
-    use aws_smithy_async::rt::sleep::default_async_sleep;
+    use crate::never::NeverConnector;
+    use aws_smithy_async::rt::sleep::Sleep;
     use std::time::Duration;
+
+    #[derive(Clone, Debug)]
+    struct StubSleep;
+    impl AsyncSleep for StubSleep {
+        fn sleep(&self, _duration: Duration) -> Sleep {
+            todo!()
+        }
+    }
 
     const TIMEOUTS_WITHOUT_SLEEP_MSG: &str =
         "One or more timeouts were set, but no `sleep_impl` was passed into the builder";
@@ -290,11 +316,11 @@ mod tests {
     #[test]
     #[tracing_test::traced_test]
     fn sleep_impl_given_no_warns() {
-        let mut builder = Builder::new()
-            .connector(TestConnection::<SdkBody>::new(Vec::new()))
-            .middleware(tower::layer::util::Identity::new());
-        builder.set_sleep_impl(default_async_sleep());
-        builder.build();
+        let _client = Builder::new()
+            .connector(NeverConnector::new())
+            .middleware(tower::layer::util::Identity::new())
+            .sleep_impl(Some(Arc::new(StubSleep)))
+            .build();
 
         assert!(!logs_contain(TIMEOUTS_WITHOUT_SLEEP_MSG));
         assert!(!logs_contain(RETRIES_WITHOUT_SLEEP_MSG));
@@ -305,7 +331,7 @@ mod tests {
     #[tracing_test::traced_test]
     fn timeout_missing_sleep_impl_warn() {
         let mut builder = Builder::new()
-            .connector(TestConnection::<SdkBody>::new(Vec::new()))
+            .connector(NeverConnector::new())
             .middleware(tower::layer::util::Identity::new());
         builder.set_timeout_config(
             TimeoutConfig::new().with_connect_timeout(Some(Duration::from_secs(1))),
@@ -321,7 +347,7 @@ mod tests {
     #[tracing_test::traced_test]
     fn retry_missing_sleep_impl_warn() {
         Builder::new()
-            .connector(TestConnection::<SdkBody>::new(Vec::new()))
+            .connector(NeverConnector::new())
             .middleware(tower::layer::util::Identity::new())
             .build();
 
