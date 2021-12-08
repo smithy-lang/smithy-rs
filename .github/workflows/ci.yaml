@@ -14,7 +14,7 @@ env:
 
 jobs:
   repo-lint:
-    name: smithy-rs custom repo lints
+    name: Repo Lints
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -29,65 +29,26 @@ jobs:
     - run: cargo run -- fix --all
       name: run fixes
       working-directory: tools/sdk-lints
-  style:
-    name: Kotlin style checks
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Set up JDK
-      uses: actions/setup-java@v1
-      with:
-        java-version: ${{ env.java_version }}
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-    - name: ktlint
-      run: ./gradlew ktlint
 
-  unit-tests:
-    name: Codegen unit tests
+  codegen-tests:
+    name: Codegen Tests
     runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-    - uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
-        components: ${{ env.rust_toolchain_components }}
-        default: true
-    - name: Set up JDK
-      uses: actions/setup-java@v1
-      with:
-        java-version: ${{ env.java_version }}
-    - name: client tests
-      run: ./gradlew :codegen:test
-    - name: aws tests
-      run: ./gradlew :aws:sdk-codegen:test
-    - name: server tests
-      run: ./gradlew :codegen-server:test
-
-  integration-tests:
-    name: Codegen integration tests
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+        - name: Kotlin Style
+          run: ./gradlew ktlint
+        - name: Client Unit Tests
+          run: ./gradlew :codegen:test
+        - name: SDK Unit Tests
+          run: ./gradlew :aws:sdk-codegen:test
+        - name: Server Unit Tests
+          run: ./gradlew :codegen-server:test
+        - name: Client Integration Tests
+          run: ./gradlew :codegen-test:test
+        - name: Server Integration Tests
+          run: ./gradlew :codegen-server-test:test
     steps:
     - uses: actions/checkout@v2
     - uses: actions/cache@v2
@@ -99,14 +60,11 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
-    - uses: actions/cache@v2
-      name: Cargo Cache
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        target-dir: ./target
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
@@ -116,31 +74,11 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
-    - name: client integration-tests
-      run: ./gradlew :codegen-test:test
-    - uses: actions/upload-artifact@v2
-      name: Upload Client Codegen Output for inspection
-        # Always upload the output even if the tests failed
-      if: ${{ always() }}
-      with:
-        name: client-codegen-output
-        path: |
-          codegen-test/build/smithyprojections/codegen-test/*/rust-codegen/
-          codegen-test/build/smithyprojections/codegen-test/Cargo.toml
-    - name: server integration-tests
-      run: ./gradlew :codegen-server-test:test
-    - uses: actions/upload-artifact@v2
-      name: Upload Server Codegen Output for inspection
-        # Always upload the output even if the tests failed
-      if: ${{ always() }}
-      with:
-        name: server-codegen-output
-        path: |
-          codegen-server-test/build/smithyprojections/codegen-server-test/*/rust-server-codegen/
-          codegen-server-test/build/smithyprojections/codegen-server-test/Cargo.toml
+    - name: ${{ matrix.test.name }}
+      run: ${{ matrix.test.run }}
 
   runtime-tests:
-    name: Rust runtime tests
+    name: Rust Runtime Tests
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -151,9 +89,8 @@ jobs:
     # Pinned to the commit hash of v1.3.0
     - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
       with:
-        working-directory: ${{ matrix.runtime }}/rust-runtime/
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
-        target-dir: ../target
+        target-dir: ./target
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
