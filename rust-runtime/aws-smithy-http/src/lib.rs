@@ -8,11 +8,11 @@
 //! - Endpoint support
 //! - HTTP header deserialization
 //! - Event streams
-//! - `ByteStream`: _(supported on crate feature `rt-tokio` only)_ a misuse-resistant abstraction for streaming binary data
+//! - `ByteStream`: a misuse-resistant abstraction for streaming binary data
 //!
 //! | Feature        | Description |
 //! |----------------|-------------|
-//! | `rt-tokio`     | Provides features that are dependent on `tokio` including the `ByteStream` utils |
+//! | `rt-tokio`     | Provides features that are dependent on `tokio` including the `ByteStream::from_path` util |
 //! | `event-stream` | Provides Sender/Receiver implementations for Event Stream codegen. |
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
