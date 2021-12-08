@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use std::collections::HashMap;
+use std::time::Duration;
+
 use aws_config::meta::region::RegionProviderChain;
 use aws_http::AwsErrorRetryPolicy;
-use aws_hyper::{SdkError, SdkSuccess};
+use aws_hyper::AwsMiddleware;
 use aws_sdk_dynamodb::client::fluent_builders::Query;
 use aws_sdk_dynamodb::error::DescribeTableError;
 use aws_sdk_dynamodb::input::DescribeTableInput;
@@ -16,13 +19,12 @@ use aws_sdk_dynamodb::model::{
 use aws_sdk_dynamodb::operation::DescribeTable;
 use aws_sdk_dynamodb::output::DescribeTableOutput;
 use aws_sdk_dynamodb::{Client, Config, Error, Region, PKG_VERSION};
-
+use aws_smithy_client::erase::DynConnector;
 use aws_smithy_http::operation::Operation;
+use aws_smithy_http::result::{SdkError, SdkSuccess};
 use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_types::retry::RetryKind;
 use serde_json::Value;
-use std::collections::HashMap;
-use std::time::Duration;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -77,7 +79,7 @@ async fn main() -> Result<(), Error> {
 
     let client = Client::new(&shared_config);
 
-    let raw_client = aws_hyper::Client::https();
+    let raw_client = aws_smithy_client::Client::<DynConnector, AwsMiddleware>::dyn_https();
 
     let table_exists = client
         .list_tables()
