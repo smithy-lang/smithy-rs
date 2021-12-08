@@ -20,7 +20,7 @@ pub mod protocols;
 pub mod rejection;
 
 #[doc(inline)]
-pub use self::body::{Body, HttpBody};
+pub use self::body::{boxed, to_boxed, Body, BoxBody, HttpBody};
 #[doc(inline)]
 pub use self::error::Error;
 #[doc(inline)]

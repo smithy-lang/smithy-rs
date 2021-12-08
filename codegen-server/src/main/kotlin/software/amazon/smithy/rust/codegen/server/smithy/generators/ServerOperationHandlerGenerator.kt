@@ -34,8 +34,9 @@ class ServerOperationHandlerGenerator(
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name }
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "Axum" to ServerCargoDependency.Axum.asType(),
-        "PinProject" to ServerCargoDependency.PinProject.asType(),
+        "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
+        "AxumCore" to ServerCargoDependency.AxumCore.asType(),
+        "PinProjectLite" to ServerCargoDependency.PinProjectLite.asType(),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
@@ -67,7 +68,7 @@ class ServerOperationHandlerGenerator(
             }
             writer.rustBlockTemplate(
                 """
-                ##[axum::async_trait]
+                ##[#{AsyncTrait}::async_trait]
                 $fnSignature
                 where
                     ${operationTraitBounds(operation, inputName, state)}
@@ -77,7 +78,7 @@ class ServerOperationHandlerGenerator(
                 val callImpl = if (state) {
                     """let state = match $serverCrate::Extension::<S>::from_request(&mut req).await {
                     Ok(v) => v,
-                    Err(r) => return r.into_response().map($serverCrate::body::box_body)
+                    Err(r) => return r.into_response().map($serverCrate::boxed)
                     };
                     let input_inner = input_wrapper.into();
                     let output_inner = self(input_inner, state).await;"""
@@ -89,16 +90,16 @@ class ServerOperationHandlerGenerator(
                     """
                     type Sealed = sealed::Hidden;
                     async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::BoxBody> {
-                        let mut req = #{Axum}::extract::RequestParts::new(req);
-                        use #{Axum}::extract::FromRequest;
-                        use #{Axum}::response::IntoResponse;
+                        let mut req = #{AxumCore}::extract::RequestParts::new(req);
+                        use #{AxumCore}::extract::FromRequest;
+                        use #{AxumCore}::response::IntoResponse;
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
-                            Err(r) => return r.into_response().map(#{SmithyHttpServer}::body::box_body)
+                            Err(r) => return r.into_response().map(#{SmithyHttpServer}::boxed)
                         };
                         $callImpl
                         let output_wrapper: $outputWrapperName = output_inner.into();
-                        output_wrapper.into_response().map(#{SmithyHttpServer}::body::box_body)
+                        output_wrapper.into_response().map(#{SmithyHttpServer}::boxed)
                     }
                     """,
                     *codegenScope
@@ -193,7 +194,8 @@ class ServerOperationHandlerGenerator(
                 }
             }
             type WrapResultInResponseFn = fn(#{http}::Response<#{SmithyHttpServer}::BoxBody>) -> Result<#{http}::Response<#{SmithyHttpServer}::BoxBody>, std::convert::Infallible>;
-            use #{PinProject};
+            ##[allow(unused)]
+            use #{PinProjectLite}::pin_project;
             use #{SmithyHttpServer}::opaque_future;
             opaque_future! {
                 /// Response future for [`OperationHandler`].
@@ -206,7 +208,7 @@ class ServerOperationHandlerGenerator(
                 pub struct Hidden;
                 impl HiddenTrait for Hidden {}
             }
-            ##[axum::async_trait]
+            ##[#{AsyncTrait}::async_trait]
             pub trait Handler<B, T, Fut>: Clone + Send + Sized + 'static {
                 ##[doc(hidden)]
                 type Sealed: sealed::HiddenTrait;
