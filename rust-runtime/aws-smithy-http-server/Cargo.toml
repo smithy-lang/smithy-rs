@@ -19,20 +19,20 @@ publish = false
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-json = { path = "../aws-smithy-json" }
-axum = { version = "0.3", features = [ "http1", "http2", "headers", "mime", "tower-log" ], default-features = false }
 async-trait = "0.1"
+axum-core = "0.1"
 bytes = "1.1"
 futures-util = { version = "0.3", default-features = false }
 http = "0.2"
 http-body = "0.4"
 hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp"] }
 mime = "0.3"
-pin-project = "1.0"
+pin-project-lite = "0.2"
 regex = "1.0"
 serde_urlencoded = "0.7"
 thiserror = "1"
 tokio = { version = "1.0", features = ["full"] }
-tower = "0.4"
+tower = { version = "0.4.11", features = ["util"], default-features = false }
 tower-http = { version = "0.1", features = ["add-extension", "map-response-body"] }
 
 [dev-dependencies]

@@ -5,7 +5,7 @@
 
 //! Protocol helpers.
 use crate::rejection::{ContentTypeRejection, MimeParsingFailed, MissingJsonContentType};
-use axum::extract::RequestParts;
+use axum_core::extract::RequestParts;
 
 /// Validate that the request had the standard JSON content-type header.
 pub fn check_json_content_type<B>(req: &RequestParts<B>) -> Result<(), ContentTypeRejection> {
