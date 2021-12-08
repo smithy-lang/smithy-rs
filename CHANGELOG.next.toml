@@ -30,6 +30,40 @@ meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = '''
+If you directly depend on AWS or Smithy runtime crates _(e.g., AWS crates not named `aws-config` or prefixed with `aws-sdk-`)_,
+the formerly default features from those crates must now be explicitly set in your `Cargo.toml`.
+
+
+**Upgrade guide**
+
+| before                          | after |
+|---------------------------------|-------|
+| `aws-smithy-async = "VERSION"`  | `aws-smithy-async = { version = "VERSION", features = ["rt-tokio"] }` |
+| `aws-smithy-client = "VERSION"` | `aws-smithy-client = { version = "VERSION", features = ["client-hyper", "rustls", "rt-tokio"] }` |
+| `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["rt-tokio"] }` |
+'''
+references = ["smithy-rs#930"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "zhessler"
+
+[[smithy-rs]]
+message = '''
+Runtime crates no longer have default features. You must now specify the features that you want when you add a dependency to your `Cargo.toml`.
+
+**Upgrade guide**
+
+| before                          | after |
+|---------------------------------|-------|
+| `aws-smithy-async = "VERSION"`  | `aws-smithy-async = { version = "VERSION", features = ["rt-tokio"] }` |
+| `aws-smithy-client = "VERSION"` | `aws-smithy-client = { version = "VERSION", features = ["client-hyper", "rustls", "rt-tokio"] }` |
+| `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["rt-tokio"] }` |
+'''
+references = ["smithy-rs#930"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "zhessler"
+
+[[aws-sdk-rust]]
 message = "Use provided `sleep_impl` for retries instead of using Tokio directly."
 references = ["smithy-rs#923"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }

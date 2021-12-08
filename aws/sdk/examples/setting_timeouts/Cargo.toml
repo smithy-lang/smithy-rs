@@ -9,6 +9,6 @@ edition = "2018"
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 aws-sdk-s3 = { package = "aws-sdk-s3", path = "../../build/aws-sdk/sdk/s3" }
-aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client" }
+aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["rustls"] }
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.2.18"

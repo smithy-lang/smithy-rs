@@ -4,6 +4,16 @@
  */
 
 //! A Hyper-based Smithy service client.
+//!
+//! | Feature           | Description |
+//! |-------------------|-------------|
+//! | `event-stream`    | Provides Sender/Receiver implementations for Event Stream codegen. |
+//! | `rt-tokio`        | Run async code with the `tokio` runtime |
+//! | `test-util`       | Include various testing utils |
+//! | `native-tls`      | Use `native-tls` as the HTTP client's TLS implementation |
+//! | `rustls`          | Use `rustls` as the HTTP client's TLS implementation |
+//! | `client-hyper`    | Use `hyper` to handle HTTP requests |
+
 #![warn(
     missing_debug_implementations,
     missing_docs,
@@ -42,7 +52,6 @@ pub use timeout::TimeoutLayer;
 #[cfg(feature = "client-hyper")]
 #[allow(missing_docs)]
 pub mod conns {
-
     #[cfg(feature = "rustls")]
     pub type Https = hyper_rustls::HttpsConnector<hyper::client::HttpConnector>;
 

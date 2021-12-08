@@ -12,7 +12,6 @@ use aws_smithy_async::future::never::Never;
 use std::marker::PhantomData;
 
 use std::task::{Context, Poll};
-use tokio::net::TcpStream;
 
 use crate::erase::boxclone::BoxFuture;
 use aws_smithy_http::body::SdkBody;
@@ -58,7 +57,7 @@ pub type NeverConnector =
 #[cfg(feature = "rt-tokio")]
 #[allow(dead_code)]
 /// A service where the underlying TCP connection never connects
-pub type NeverConnected = NeverService<Uri, TcpStream, BoxError>;
+pub type NeverConnected = NeverService<Uri, tokio::net::TcpStream, BoxError>;
 
 /// Streams that never return data
 pub(crate) mod stream {

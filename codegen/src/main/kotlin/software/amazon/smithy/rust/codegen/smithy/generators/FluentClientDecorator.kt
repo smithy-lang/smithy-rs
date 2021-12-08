@@ -9,7 +9,6 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -55,7 +54,7 @@ class FluentClientDecorator : RustCodegenDecorator {
             return
         }
 
-        val module = RustMetadata(additionalAttributes = listOf(Attribute.Cfg.feature("client")), public = true)
+        val module = RustMetadata(public = true)
         rustCrate.withModule(
             RustModule(
                 "client",
@@ -69,8 +68,6 @@ class FluentClientDecorator : RustCodegenDecorator {
                 customizations = listOf(GenericFluentClient(codegenContext))
             ).render(writer)
         }
-        val smithyClient = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
-        rustCrate.mergeFeature(Feature("client", true, listOf(smithyClient.name)))
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-client/rustls")))
         rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("aws-smithy-client/native-tls")))
     }
@@ -86,7 +83,6 @@ class FluentClientDecorator : RustCodegenDecorator {
         return baseCustomizations + object : LibRsCustomization() {
             override fun section(section: LibRsSection) = when (section) {
                 is LibRsSection.Body -> writable {
-                    Attribute.Cfg.feature("client").render(this)
                     rust("pub use client::{Client, Builder};")
                 }
                 else -> emptySection
@@ -138,7 +134,7 @@ data class ClientGenerics(
 }
 
 class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
-    val moduleUseName = codegenContext.moduleUseName()
+    private val moduleUseName = codegenContext.moduleUseName()
     private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig).copy(optional = true)
     private val codegenScope = arrayOf("client" to clientDep.asType())
     override fun section(section: FluentClientSection): Writable {
@@ -169,7 +165,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
                     /// - A "middleware" (`M`) that modifies requests prior to them being
                     ///   sent to the request. Most commonly, middleware will decide what
                     ///   endpoint the requests should be sent to, as well as perform
-                    ///   authentcation and authorization of requests (such as SigV4).
+                    ///   authentication and authorization of requests (such as SigV4).
                     ///   You can also have middleware that performs request/response
                     ///   tracing, throttling, or other middleware-like tasks.
                     /// - A retry policy (`R`) that dictates the behavior for requests that
@@ -232,7 +228,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
                     ///         let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new())); _signer: MapRequestLaye
                     ///         let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage); _endpoint_resolver: MapRequestLayer<Aw
                     ///         let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new()); _user_agent: MapRequestLayer<UserAgentSt
-                    ///         // These layers can be considered as occuring in order, that is:
+                    ///         // These layers can be considered as occurring in order, that is:
                     ///         // 1. Resolve an endpoint
                     ///         // 2. Add a user agent
                     ///         // 3. Sign

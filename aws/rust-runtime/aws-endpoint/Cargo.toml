@@ -8,10 +8,10 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
-aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http"}
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-types = { path = "../aws-types" }
 http = "0.2.3"
-regex = { version = "1", default-features = false, features = ["std"]}
+regex = { version = "1", default-features = false, features = ["std"] }
 tracing = "0.1"
 
 [package.metadata.docs.rs]

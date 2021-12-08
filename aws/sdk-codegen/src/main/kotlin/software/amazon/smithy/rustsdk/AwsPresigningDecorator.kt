@@ -17,7 +17,6 @@ import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -30,7 +29,6 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -89,15 +87,6 @@ class AwsPresigningDecorator internal constructor(
 
     override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
-
-    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
-        val hasPresignedOps = codegenContext.model.shapes().anyMatch { shape ->
-            shape is OperationShape && presignableOperations.containsKey(shape.id)
-        }
-        if (hasPresignedOps) {
-            rustCrate.mergeFeature(Feature("client", default = true, listOf("tower")))
-        }
-    }
 
     override fun operationCustomizations(
         codegenContext: CodegenContext,
@@ -184,7 +173,6 @@ class AwsInputPresignedMethod(
         documentPresignedMethod(hasConfigArg = true)
         rustBlockTemplate(
             """
-            ##[cfg(feature = "client")]
             pub async fn presigned(
                 self,
                 config: &crate::config::Config,
