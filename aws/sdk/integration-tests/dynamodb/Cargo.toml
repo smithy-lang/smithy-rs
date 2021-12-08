@@ -9,7 +9,7 @@ edition = "2018"
 
 [dependencies]
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
-aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper", features = ["rustls"] }
+aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper" }
 aws-sdk-dynamodb = { path = "../../build/aws-sdk/sdk/dynamodb" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }

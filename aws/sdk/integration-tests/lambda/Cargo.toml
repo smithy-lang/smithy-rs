@@ -7,7 +7,7 @@ edition = "2018"
 [dev-dependencies]
 async-stream = "0.3"
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
-aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper", features = ["rustls"] }
+aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper" }
 aws-sdk-lambda = { path = "../../build/aws-sdk/sdk/lambda" }
 base64 = "0.13"
 bytes = "1"
