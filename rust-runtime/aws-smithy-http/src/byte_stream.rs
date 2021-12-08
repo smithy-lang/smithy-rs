@@ -132,7 +132,7 @@ mod bytestream_util;
 ///
 ///     _Note: An import of `StreamExt` is required to use `try_next()`._
 ///
-///     For use-cases where holding the entire ByteStream in memory is unecessary, use the
+///     For use-cases where holding the entire ByteStream in memory is unnecessary, use the
 ///     `Stream` implementation:
 ///     ```rust
 ///     # mod crc32 {
@@ -177,7 +177,7 @@ mod bytestream_util;
 ///
 /// 3. **From an `SdkBody` directly**: For more advanced / custom use cases, a ByteStream can be created directly
 /// from an SdkBody. **When created from an SdkBody, care must be taken to ensure retriability.** An SdkBody is retryable
-/// when constructured from in-memory data or when using [`SdkBody::retryable`](crate::body::SdkBody::retryable).
+/// when constructed from in-memory data or when using [`SdkBody::retryable`](crate::body::SdkBody::retryable).
 ///     ```rust
 ///     use aws_smithy_http::byte_stream::ByteStream;
 ///     use aws_smithy_http::body::SdkBody;
