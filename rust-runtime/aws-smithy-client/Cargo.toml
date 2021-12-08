@@ -8,7 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-rt-tokio = ["aws-smithy-async/rt-tokio"]
+rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/net"]
 test-util = ["aws-smithy-protocol-test", "serde/derive", "rustls"]
 default = ["client-hyper", "rustls", "rt-tokio"]
 native-tls = ["client-hyper", "hyper-tls", "rt-tokio"]

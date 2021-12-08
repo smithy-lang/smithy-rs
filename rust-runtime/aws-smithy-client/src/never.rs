@@ -12,6 +12,7 @@ use aws_smithy_async::future::never::Never;
 use std::marker::PhantomData;
 
 use std::task::{Context, Poll};
+use tokio::net::TcpStream;
 
 use crate::erase::boxclone::BoxFuture;
 use aws_smithy_http::body::SdkBody;
@@ -54,17 +55,18 @@ impl<Req, Resp, Err> NeverService<Req, Resp, Err> {
 pub type NeverConnector =
     NeverService<http::Request<SdkBody>, http::Response<SdkBody>, ConnectorError>;
 
+#[cfg(feature = "rt-tokio")]
+#[allow(dead_code)]
+/// A service where the underlying TCP connection never connects
+pub type NeverConnected = NeverService<Uri, TcpStream, BoxError>;
+
 /// Streams that never return data
 pub(crate) mod stream {
     use std::io::Error;
     use std::pin::Pin;
 
-    use crate::never::NeverService;
-    use http::Uri;
     use std::task::{Context, Poll};
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-    use tokio::net::TcpStream;
-    use tower::BoxError;
 
     /// A stream that will never return or accept any data
     #[non_exhaustive]
@@ -104,10 +106,6 @@ pub(crate) mod stream {
             Poll::Pending
         }
     }
-
-    #[allow(dead_code)]
-    /// A service where the underlying TCP connection never connects
-    pub type NeverConnected = NeverService<Uri, TcpStream, BoxError>;
 }
 
 /// A service that will connect but never send any data

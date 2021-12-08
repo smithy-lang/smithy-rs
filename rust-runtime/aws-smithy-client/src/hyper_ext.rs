@@ -533,7 +533,7 @@ mod timeout_middleware {
         use aws_smithy_http::body::SdkBody;
 
         use crate::hyper_ext::Adapter;
-        use crate::never::{stream::NeverConnected, NeverReplies};
+        use crate::never::{NeverConnected, NeverReplies};
         use crate::timeout;
 
         #[allow(unused)]
