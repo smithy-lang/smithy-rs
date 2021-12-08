@@ -30,6 +30,40 @@ meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = '''
+If you directly depend on AWS or Smithy runtime crates _(e.g., AWS crates not named `aws-config` or prefixed with `aws-sdk-`)_,
+the formerly default features from those crates must now be explicitly set in your `Cargo.toml`.
+
+
+**Upgrade guide**
+
+| before                          | after |
+|---------------------------------|-------|
+| `aws-smithy-async = "VERSION"`  | `aws-smithy-async = { version = "VERSION", features = ["rt-tokio"] }` |
+| `aws-smithy-client = "VERSION"` | `aws-smithy-client = { version = "VERSION", features = ["client-hyper", "rustls", "rt-tokio"] }` |
+| `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["rt-tokio"] }` |
+'''
+references = ["smithy-rs#930"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "zhessler"
+
+[[smithy-rs]]
+message = '''
+Runtime crates no longer have default features. You must now specify the features that you want when you add a dependency to your `Cargo.toml`.
+
+**Upgrade guide**
+
+| before                          | after |
+|---------------------------------|-------|
+| `aws-smithy-async = "VERSION"`  | `aws-smithy-async = { version = "VERSION", features = ["rt-tokio"] }` |
+| `aws-smithy-client = "VERSION"` | `aws-smithy-client = { version = "VERSION", features = ["client-hyper", "rustls", "rt-tokio"] }` |
+| `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["rt-tokio"] }` |
+'''
+references = ["smithy-rs#930"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "zhessler"
+
+[[aws-sdk-rust]]
 message = "Use provided `sleep_impl` for retries instead of using Tokio directly."
 references = ["smithy-rs#923"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
@@ -69,4 +103,29 @@ author = "rcoh"
 message = "Add changelog automation to sdk-lints"
 references = ["smithy-rs#922", "smithy-rs#914"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """
+`aws_hyper::Client` which was just a re-export of `aws_smithy_types::Client` with generics set has been removed. If you used
+`aws_hyper::Client` or `aws_hyper::Client::https()` you can update your code to use `aws_smithy_client::Builder::https()`. Other
+usage examples can be found on the [aws_hyper docs](https://docs.rs/aws-hyper).
+
+**Note**: `aws-hyper` will be removed in a coming release and `AwsMiddleware` will be migrated elsewhere.
+"""
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+references = ["smithy-rs#940"]
+
+[[smithy-rs]]
+message = """`aws_smithy_client::Client::https()` has been renamed to `dyn_https()`.
+This is to clearly distinguish it from `rustls` and `native_tls` which do not use a boxed connector."""
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+references = ["smithy-rs#940"]
+
+[[aws-sdk-rust]]
+message = "The features `aws-hyper/rustls` and `aws-hyper/native-tls` have been removed. If you were using these, use the identical features on `aws-smithy-client`."
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+references = ["smithy-rs#947"]
 author = "rcoh"

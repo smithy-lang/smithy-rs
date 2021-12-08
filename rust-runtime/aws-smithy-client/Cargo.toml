@@ -8,9 +8,8 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-rt-tokio = ["aws-smithy-async/rt-tokio"]
+rt-tokio = ["tokio/net", "aws-smithy-async/rt-tokio", "aws-smithy-http/rt-tokio"]
 test-util = ["aws-smithy-protocol-test", "serde/derive", "rustls"]
-default = ["client-hyper", "rustls", "rt-tokio"]
 native-tls = ["client-hyper", "hyper-tls", "rt-tokio"]
 rustls = ["client-hyper", "hyper-rustls", "rt-tokio", "lazy_static"]
 client-hyper = ["hyper"]
@@ -41,10 +40,10 @@ serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
-tracing-test = "0.1.0"
 tower-test = "0.4.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tracing-test = "0.2.1"
 
 [package.metadata.docs.rs]
 all-features = true
