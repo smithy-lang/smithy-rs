@@ -42,7 +42,7 @@ use std::error::Error;
 use std::sync::Arc;
 
 use http::Uri;
-use hyper::client::connect::Connection;
+use hyper::client::connect::{Connected, Connection};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tower::{BoxError, Service};
 
@@ -53,6 +53,7 @@ use aws_smithy_http::result::ConnectorError;
 use aws_smithy_types::retry::ErrorKind;
 
 use crate::erase::DynConnector;
+use crate::never::stream::EmptyStream;
 use crate::{timeout, Builder as ClientBuilder};
 
 use self::timeout_middleware::{ConnectTimeout, HttpReadTimeout, HttpTimeoutError};
@@ -532,7 +533,7 @@ mod timeout_middleware {
         use aws_smithy_http::body::SdkBody;
 
         use crate::hyper_ext::Adapter;
-        use crate::never::{NeverConnected, NeverReplies};
+        use crate::never::{stream::NeverConnected, NeverReplies};
         use crate::timeout;
 
         #[allow(unused)]
@@ -606,6 +607,13 @@ mod timeout_middleware {
             );
             assert_elapsed!(now, Duration::from_secs(2));
         }
+    }
+}
+
+/// Make `EmptyStream` compatible with Hyper
+impl Connection for EmptyStream {
+    fn connected(&self) -> Connected {
+        Connected::new()
     }
 }
 

@@ -34,7 +34,6 @@ pub mod hyper_ext;
 #[doc(hidden)]
 pub mod static_tests;
 
-#[cfg(feature = "client-hyper")]
 pub mod never;
 pub mod timeout;
 pub use timeout::TimeoutLayer;
@@ -226,22 +225,26 @@ where
     {
         if matches!(&self.sleep_impl, TriState::Unset) {
             // during requests, debug log (a warning is emitted during client construction)
-            tracing::debug!(NO_SLEEP_WARNING);
+            tracing::debug!(
+                "Client does not have a sleep implementation. Timeouts and retry \
+                will not work without this. {}",
+                MISSING_SLEEP_IMPL_RECOMMENDATION
+            );
         }
         let connector = self.connector.clone();
 
-        let timeout_servic_params = generate_timeout_service_params_from_timeout_config(
+        let timeout_service_params = generate_timeout_service_params_from_timeout_config(
             &self.timeout_config,
             self.sleep_impl.clone().into(),
         );
 
         let svc = ServiceBuilder::new()
-            .layer(TimeoutLayer::new(timeout_servic_params.api_call))
+            .layer(TimeoutLayer::new(timeout_service_params.api_call))
             .retry(
                 self.retry_policy
                     .new_request_policy(self.sleep_impl.clone().into()),
             )
-            .layer(TimeoutLayer::new(timeout_servic_params.api_call_attempt))
+            .layer(TimeoutLayer::new(timeout_service_params.api_call_attempt))
             .layer(ParseResponseLayer::<O, Retry>::new())
             // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.
@@ -272,10 +275,12 @@ where
     }
 }
 
-pub(crate) const NO_SLEEP_WARNING: &str = "No sleep implementation set. This will prevent retries \
-from occurring. If this is what you intended, you can suppress this error with `aws_smithy_client::Client::set_sleep_impl(None)`. \
-If this is not what you intended, consider using `aws-config` to provide a default sleep implementation \
-or setting a sleep implementation manually.";
+pub(crate) const MISSING_SLEEP_IMPL_RECOMMENDATION: &str =
+    "If this was intentional, you can suppress this message with `Client::set_sleep_impl(None). \
+     Otherwise, unless you have a good reason to use the low-level service \
+     client API, consider using the `aws-config` crate to load a shared config from \
+     the environment, and construct a fluent client from that. If you need to use the low-level \
+     service client API, then pass in a sleep implementation to make timeouts and retry work.";
 
 /// Utility for tracking set vs. unset vs explicitly disabled
 ///
