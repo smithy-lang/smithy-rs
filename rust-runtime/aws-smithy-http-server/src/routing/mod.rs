@@ -150,7 +150,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{body::box_body, routing::request_spec::*};
+    use crate::{body::boxed, routing::request_spec::*};
     use futures_util::Future;
     use http::Method;
     use std::pin::Pin;
@@ -176,7 +176,7 @@ mod tests {
 
         #[inline]
         fn call(&mut self, req: Request<B>) -> Self::Future {
-            let body = box_body(Body::from(format!("{} :: {}", self.0, req.uri().to_string())));
+            let body = boxed(Body::from(format!("{} :: {}", self.0, req.uri().to_string())));
             let fut = async { Ok(Response::builder().status(&http::StatusCode::OK).body(body).unwrap()) };
             Box::pin(fut)
         }

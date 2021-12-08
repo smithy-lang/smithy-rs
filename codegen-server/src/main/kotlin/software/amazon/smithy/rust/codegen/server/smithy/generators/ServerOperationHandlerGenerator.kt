@@ -42,11 +42,11 @@ class ServerOperationHandlerGenerator(
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
         "Phantom" to ServerRuntimeType.Phantom,
+        "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
         "http" to RuntimeType.http,
     )
 
     fun render(writer: RustWriter) {
-        renderStaticRust(writer)
         renderHandlerImplementations(writer, false)
         renderHandlerImplementations(writer, true)
     }
@@ -62,9 +62,9 @@ class ServerOperationHandlerGenerator(
             val inputWrapperName = "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
             val outputWrapperName = "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
             val fnSignature = if (state) {
-                "impl<B, Fun, Fut, S> Handler<B, $serverCrate::Extension<S>, $inputName> for Fun"
+                "impl<B, Fun, Fut, S> #{ServerOperationHandler}::Handler<B, $serverCrate::Extension<S>, $inputName> for Fun"
             } else {
-                "impl<B, Fun, Fut> Handler<B, (), $inputName> for Fun"
+                "impl<B, Fun, Fut> #{ServerOperationHandler}::Handler<B, (), $inputName> for Fun"
             }
             writer.rustBlockTemplate(
                 """
@@ -88,7 +88,7 @@ class ServerOperationHandlerGenerator(
                 }
                 rustTemplate(
                     """
-                    type Sealed = sealed::Hidden;
+                    type Sealed = #{ServerOperationHandler}::sealed::Hidden;
                     async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::BoxBody> {
                         let mut req = #{AxumCore}::extract::RequestParts::new(req);
                         use #{AxumCore}::extract::FromRequest;
@@ -133,90 +133,5 @@ class ServerOperationHandlerGenerator(
             B::Error: Into<$serverCrate::BoxError>,
             $serverCrate::rejection::SmithyRejection: From<<B as $serverCrate::HttpBody>::Error>
         """
-    }
-
-    /*
-     * This method is used to "generate" the `OperationHandler` struct, the `Handler` trait and all the
-     * code needed to support the indirection used to call the user defined functions, which implement the service's operations.
-     * implementations.
-     *
-     * TODO: remove this hacky function and move this piece of code into an inlinable crate. The crate should
-     *       be server specific, so we do not step on the client codegen feet. We choose to just add a static
-     *       string since there are changes needed in the Inlinable class to be able to support server specific
-     *       functionalities.
-     */
-    private fun renderStaticRust(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            /// Struct that holds a handler, that is, a function provided by the user that implements the
-            /// Smithy operation.
-            pub struct OperationHandler<H, B, R, I> {
-                handler: H,
-                ##[allow(clippy::type_complexity)]
-                _marker: #{Phantom}<fn() -> (B, R, I)>,
-            }
-            impl<H, B, R, I> Clone for OperationHandler<H, B, R, I>
-            where
-                H: Clone,
-            {
-                fn clone(&self) -> Self {
-                    Self {
-                        handler: self.handler.clone(),
-                        _marker: #{Phantom},
-                    }
-                }
-            }
-            /// Construct an [`OperationHandler`] out of a function implementing the operation.
-            pub fn operation<H, B, R, I>(handler: H) -> OperationHandler<H, B, R, I> {
-                OperationHandler {
-                    handler,
-                    _marker: #{Phantom},
-                }
-            }
-            impl<H, B, R, I> #{Tower}::Service<#{http}::Request<B>> for OperationHandler<H, B, R, I>
-            where
-                H: Handler<B, R, I>,
-                B: Send + 'static,
-            {
-                type Response = #{http}::Response<#{SmithyHttpServer}::BoxBody>;
-                type Error = std::convert::Infallible;
-                type Future = OperationHandlerFuture;
-
-                ##[inline]
-                fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
-                    std::task::Poll::Ready(Ok(()))
-                }
-
-                fn call(&mut self, req: #{http}::Request<B>) -> Self::Future {
-                    use #{FuturesUtil}::FutureExt;
-                    let future = Handler::call(self.handler.clone(), req).map(Ok::<_, std::convert::Infallible> as _);
-                    OperationHandlerFuture::new(future)
-                }
-            }
-            type WrapResultInResponseFn = fn(#{http}::Response<#{SmithyHttpServer}::BoxBody>) -> Result<#{http}::Response<#{SmithyHttpServer}::BoxBody>, std::convert::Infallible>;
-            ##[allow(unused)]
-            use #{PinProjectLite}::pin_project;
-            use #{SmithyHttpServer}::opaque_future;
-            opaque_future! {
-                /// Response future for [`OperationHandler`].
-                pub type OperationHandlerFuture =
-                    #{FuturesUtil}::future::Map<#{FuturesUtil}::future::BoxFuture<'static, #{http}::Response<#{SmithyHttpServer}::BoxBody>>, WrapResultInResponseFn>;
-            }
-            pub(crate) mod sealed {
-                ##![allow(unreachable_pub, missing_docs, missing_debug_implementations)]
-                pub trait HiddenTrait {}
-                pub struct Hidden;
-                impl HiddenTrait for Hidden {}
-            }
-            ##[#{AsyncTrait}::async_trait]
-            pub trait Handler<B, T, Fut>: Clone + Send + Sized + 'static {
-                ##[doc(hidden)]
-                type Sealed: sealed::HiddenTrait;
-
-                async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::BoxBody>;
-            }
-            """,
-            *codegenScope
-        )
     }
 }

@@ -52,7 +52,7 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
  *
  * CodegenVisitor deduplicates inline dependencies by (module, name) during code generation.
  */
-class InlineDependency(
+open class InlineDependency(
     name: String,
     val module: RustModule,
     val extraDependencies: List<RustDependency> = listOf(),
@@ -92,7 +92,7 @@ class InlineDependency(
             }
         }
 
-        private fun forRustFile(name: String, vararg additionalDependencies: RustDependency) =
+        fun forRustFile(name: String, vararg additionalDependencies: RustDependency) =
             forRustFile(name, "inlineable", *additionalDependencies)
 
         fun eventStream(runtimeConfig: RuntimeConfig) =
