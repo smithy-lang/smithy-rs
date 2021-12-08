@@ -10,7 +10,7 @@ edition = "2018"
 [dev-dependencies]
 aws-endpoint = { path = "../../build/aws-sdk/sdk/aws-endpoint" }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
-aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper", features = ["rustls"]}
+aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper" }
 aws-sdk-iam = { path = "../../build/aws-sdk/sdk/iam" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }

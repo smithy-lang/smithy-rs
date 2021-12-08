@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 
 private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig).copy(optional = true)
-    private val awsHyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true)
+    private val awsHyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper")
 
     val awsTypes = awsTypes(runtimeConfig).asType()
     val awsHyper = awsHyperDep.asType()
@@ -81,10 +81,9 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
             ).render(writer)
             AwsFluentClientExtensions(types).render(writer)
         }
-        val awsHyper = "aws-hyper"
         val awsSmithyClient = "aws-smithy-client"
-        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsHyper/rustls", "$awsSmithyClient/rustls")))
-        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("$awsHyper/native-tls", "$awsSmithyClient/native-tls")))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsSmithyClient/rustls")))
+        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("$awsSmithyClient/native-tls")))
     }
 
     override fun libRsCustomizations(
