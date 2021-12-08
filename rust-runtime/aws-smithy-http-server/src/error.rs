@@ -45,7 +45,7 @@ pub struct Error {
 
 impl Error {
     /// Create a new `Error` from a boxable error.
-    pub fn new(error: impl Into<BoxError>) -> Self {
+    pub(crate) fn new(error: impl Into<BoxError>) -> Self {
         Self { inner: error.into() }
     }
 }
