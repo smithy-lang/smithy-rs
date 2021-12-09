@@ -38,6 +38,7 @@ class ServerOperationRegistryGenerator(
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
         "Phantom" to ServerRuntimeType.Phantom,
         "StdError" to RuntimeType.StdError
     )
@@ -200,8 +201,8 @@ class ServerOperationRegistryGenerator(
         val operationsTraitBounds = operations
             .mapIndexed { i, operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
-                """Op$i: crate::operation_handler::Handler<B, In$i, crate::input::${operationName}Input>,
-                In$i: 'static"""
+                """Op$i: #{ServerOperationHandler}::Handler<B, In$i, crate::input::${operationName}Input>,
+                In$i: 'static + Send"""
             }.joinToString(separator = ",\n")
         Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlockTemplate(
@@ -216,7 +217,7 @@ class ServerOperationRegistryGenerator(
             rustBlock("fn from(registry: $operationRegistryNameWithArguments) -> Self") {
                 val requestSpecsVarNames = operationNames.map { "${it}_request_spec" }
                 val routes = requestSpecsVarNames.zip(operationNames) { requestSpecVarName, operationName ->
-                    ".route($requestSpecVarName, crate::operation_handler::operation(registry.$operationName))"
+                    ".route($requestSpecVarName, #{ServerOperationHandler}::operation(registry.$operationName))"
                 }.joinToString(separator = "\n")
 
                 val requestSpecs = requestSpecsVarNames.zip(operations) { requestSpecVarName, operation ->

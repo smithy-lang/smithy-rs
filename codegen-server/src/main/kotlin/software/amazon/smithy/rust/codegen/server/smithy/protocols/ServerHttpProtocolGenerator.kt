@@ -93,7 +93,8 @@ private class ServerHttpProtocolImplGenerator(
     private val operationSerModule = RustModule.private("operation_ser")
 
     private val codegenScope = arrayOf(
-        "Axum" to ServerCargoDependency.Axum.asType(),
+        "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
+        "AxumCore" to ServerCargoDependency.AxumCore.asType(),
         "DateTime" to RuntimeType.DateTime(runtimeConfig),
         "HttpBody" to CargoDependency.HttpBody.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
@@ -137,13 +138,13 @@ private class ServerHttpProtocolImplGenerator(
             // It will first offer the streaming input to the parser and potentially read the body into memory
             // if an error occurred or if the streaming parser indicates that it needs the full data to proceed.
             """
-            async fn from_request(_req: &mut #{Axum}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
+            async fn from_request(_req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
                 todo!("Streaming support for input shapes is not yet supported in `smithy-rs`")
             }
             """.trimIndent()
         } else {
             """
-            async fn from_request(req: &mut #{Axum}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
+            async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
                 Ok($inputName(#{parse_request}(req).await?))
             }
             """.trimIndent()
@@ -151,8 +152,8 @@ private class ServerHttpProtocolImplGenerator(
         rustTemplate(
             """
             pub struct $inputName(pub #{I});
-            ##[#{Axum}::async_trait]
-            impl<B> #{Axum}::extract::FromRequest<B> for $inputName
+            ##[#{AsyncTrait}::async_trait]
+            impl<B> #{AxumCore}::extract::FromRequest<B> for $inputName
             where
                 B: #{SmithyHttpServer}::HttpBody + Send,
                 B::Data: Send,
@@ -184,13 +185,13 @@ private class ServerHttpProtocolImplGenerator(
                     Self::Output(o) => {
                         match #{serialize_response}(&o) {
                             Ok(response) => response,
-                            Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).expect("unable to build response from output")
+                            Err(e) => #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from output")
                         }
                     },
                     Self::Error(err) => {
                         match #{serialize_error}(&err) {
                             Ok(response) => response,
-                            Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).expect("unable to build response from error")
+                            Err(e) => #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from error")
                         }
                     }
                 }
@@ -204,12 +205,9 @@ private class ServerHttpProtocolImplGenerator(
                     Output(#{O}),
                     Error(#{E})
                 }
-                ##[#{Axum}::async_trait]
-                impl #{Axum}::response::IntoResponse for $outputName {
-                    type Body = #{SmithyHttpServer}::Body;
-                    type BodyError = <Self::Body as #{SmithyHttpServer}::HttpBody>::Error;
-
-                    fn into_response(self) -> #{http}::Response<Self::Body> {
+                ##[#{AsyncTrait}::async_trait]
+                impl #{AxumCore}::response::IntoResponse for $outputName {
+                    fn into_response(self) -> #{AxumCore}::response::Response {
                         $intoResponseImpl
                     }
                 }
@@ -227,7 +225,7 @@ private class ServerHttpProtocolImplGenerator(
                 """
                 match #{serialize_response}(&self.0) {
                     Ok(response) => response,
-                    Err(e) => #{http}::Response::builder().body(Self::Body::from(e.to_string())).expect("unable to build response from output")
+                    Err(e) => #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from output")
                 }
                 """.trimIndent()
             }
@@ -236,12 +234,9 @@ private class ServerHttpProtocolImplGenerator(
             rustTemplate(
                 """
                 pub struct $outputName(pub #{O});
-                ##[#{Axum}::async_trait]
-                impl #{Axum}::response::IntoResponse for $outputName {
-                    type Body = #{SmithyHttpServer}::Body;
-                    type BodyError = <Self::Body as #{SmithyHttpServer}::HttpBody>::Error;
-
-                    fn into_response(self) -> #{http}::Response<Self::Body> {
+                ##[#{AsyncTrait}::async_trait]
+                impl #{AxumCore}::response::IntoResponse for $outputName {
+                    fn into_response(self) -> #{AxumCore}::response::Response {
                         $handleSerializeOutput
                     }
                 }
@@ -305,7 +300,7 @@ private class ServerHttpProtocolImplGenerator(
             it.rustBlockTemplate(
                 """
                 pub async fn $fnName<B>(
-                    ${unusedVars}request: &mut #{Axum}::extract::RequestParts<B>
+                    ${unusedVars}request: &mut #{AxumCore}::extract::RequestParts<B>
                 ) -> std::result::Result<
                     #{I},
                     #{SmithyRejection}
@@ -337,7 +332,7 @@ private class ServerHttpProtocolImplGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(output: &#{O}) -> std::result::Result<#{http}::Response<#{SmithyHttpServer}::Body>, #{SmithyRejection}>",
+                "pub fn $fnName(output: &#{O}) -> std::result::Result<#{AxumCore}::response::Response, #{SmithyRejection}>",
                 *codegenScope,
                 "O" to outputSymbol,
             ) {
@@ -357,7 +352,7 @@ private class ServerHttpProtocolImplGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(error: &#{E}) -> std::result::Result<#{http}::Response<#{SmithyHttpServer}::Body>, #{SmithyRejection}>",
+                "pub fn $fnName(error: &#{E}) -> std::result::Result<#{AxumCore}::response::Response, #{SmithyRejection}>",
                 *codegenScope,
                 "E" to errorSymbol
             ) {
@@ -377,7 +372,7 @@ private class ServerHttpProtocolImplGenerator(
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
         val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
-        rustTemplate("let response: #{http}::Response<#{SmithyHttpServer}::Body>;", *codegenScope)
+        rustTemplate("let response: #{AxumCore}::response::Response;", *codegenScope)
         withBlock("match error {", "};") {
             operationShape.errors.forEach {
                 val variantShape = model.expectShape(it, StructureShape::class.java)
@@ -406,7 +401,7 @@ private class ServerHttpProtocolImplGenerator(
                             ?: errorTrait.defaultHttpStatusCode
                     rustTemplate(
                         """
-                        response = #{http}::Response::builder().status($status).body(#{SmithyHttpServer}::Body::from(payload))?;
+                        response = #{http}::Response::builder().status($status).body(#{SmithyHttpServer}::body::to_boxed(payload))?;
                         """,
                         *codegenScope
                     )
@@ -438,7 +433,7 @@ private class ServerHttpProtocolImplGenerator(
         }
         rustTemplate(
             """
-            response.body(#{SmithyHttpServer}::Body::from(payload))?
+            response.body(#{SmithyHttpServer}::body::to_boxed(payload))?
             """,
             *codegenScope,
         )

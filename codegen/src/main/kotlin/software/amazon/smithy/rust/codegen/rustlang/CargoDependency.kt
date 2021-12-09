@@ -92,7 +92,7 @@ class InlineDependency(
             }
         }
 
-        private fun forRustFile(name: String, vararg additionalDependencies: RustDependency) =
+        fun forRustFile(name: String, vararg additionalDependencies: RustDependency) =
             forRustFile(name, "inlineable", *additionalDependencies)
 
         fun eventStream(runtimeConfig: RuntimeConfig) =
