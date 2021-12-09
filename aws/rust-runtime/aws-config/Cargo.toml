@@ -32,7 +32,7 @@ dns = ["tokio/rt"]
 default = ["default-provider", "rustls", "rt-tokio", "dns", "tcp-connector"]
 
 [dependencies]
-aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", optional = true }
+aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false, optional = true }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client" }
 aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
