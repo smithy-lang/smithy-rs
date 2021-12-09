@@ -47,12 +47,10 @@ macro_rules! define_rejection {
         pub struct $name;
 
         #[allow(deprecated)]
-        impl axum::response::IntoResponse for $name {
-            type Body = http_body::Full<bytes::Bytes>;
-            type BodyError = std::convert::Infallible;
+        impl axum_core::response::IntoResponse for $name {
 
-            fn into_response(self) -> http::Response<Self::Body> {
-                let mut res = http::Response::new(http_body::Full::from($body));
+            fn into_response(self) -> axum_core::response::Response {
+                let mut res = http::Response::new(axum_core::body::boxed(http_body::Full::from($body)));
                 *res.status_mut() = http::StatusCode::$status;
                 res
             }
@@ -65,6 +63,12 @@ macro_rules! define_rejection {
         }
 
         impl std::error::Error for $name {}
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self
+            }
+        }
     };
 
     (
@@ -80,19 +84,19 @@ macro_rules! define_rejection {
         impl $name {
             pub fn from_err<E>(err: E) -> Self
             where
-                E: Into<crate::BoxError>,
+                E: Into<$crate::BoxError>,
             {
                 Self(crate::Error::new(err))
             }
         }
 
-        impl IntoResponse for $name {
-            type Body = http_body::Full<bytes::Bytes>;
-            type BodyError = std::convert::Infallible;
+        impl axum_core::response::IntoResponse for $name {
 
-            fn into_response(self) -> http::Response<Self::Body> {
+            fn into_response(self) -> axum_core::response::Response {
+                let body = http_body::Full::from(format!(concat!($body, ": {}"), self.0));
+                let body = $crate::body::boxed(body);
                 let mut res =
-                    http::Response::new(http_body::Full::from(format!(concat!($body, ": {}"), self.0)));
+                    http::Response::new(body);
                 *res.status_mut() = http::StatusCode::$status;
                 res
             }
@@ -136,11 +140,9 @@ macro_rules! composite_rejection {
             ),+
         }
 
-        impl axum::response::IntoResponse for $name {
-            type Body = http_body::Full<bytes::Bytes>;
-            type BodyError = std::convert::Infallible;
+        impl axum_core::response::IntoResponse for $name {
 
-            fn into_response(self) -> http::Response<Self::Body> {
+            fn into_response(self) -> axum_core::response::Response {
                 match self {
                     $(
                         Self::$variant(inner) => inner.into_response(),
@@ -192,10 +194,11 @@ macro_rules! opaque_future {
     };
 
     ($(#[$m:meta])* pub type $name:ident<$($param:ident),*> = $actual:ty;) => {
-            $(#[$m])*
-            #[pin_project::pin_project]
-            pub struct $name<$($param),*> {
-                #[pin] future: $actual,
+            pin_project_lite::pin_project! {
+                $(#[$m])*
+                pub struct $name<$($param),*> {
+                    #[pin] future: $actual,
+                }
             }
 
         impl<$($param),*> $name<$($param),*> {

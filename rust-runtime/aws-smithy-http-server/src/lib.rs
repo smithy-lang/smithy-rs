@@ -11,7 +11,6 @@
 pub(crate) mod macros;
 
 pub mod body;
-mod clone_box_service;
 pub mod error;
 mod extension;
 pub mod routing;
@@ -21,7 +20,7 @@ pub mod protocols;
 pub mod rejection;
 
 #[doc(inline)]
-pub use self::body::{Body, BoxBody, HttpBody};
+pub use self::body::{boxed, to_boxed, Body, BoxBody, HttpBody};
 #[doc(inline)]
 pub use self::error::Error;
 #[doc(inline)]
@@ -32,7 +31,7 @@ pub use self::routing::Router;
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 /// Alias for a type-erased error type.
-pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+pub use axum_core::BoxError;
 
 #[cfg(test)]
 mod test_helpers;

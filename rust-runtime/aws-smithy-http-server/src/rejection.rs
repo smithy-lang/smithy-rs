@@ -4,8 +4,6 @@
  */
 
 //! Rejection response types.
-use axum::response::IntoResponse;
-
 define_rejection! {
     #[status = INTERNAL_SERVER_ERROR]
     #[body = "Cannot have two request body extractors for a single request"]

@@ -36,7 +36,7 @@
 
 use super::rejection::{ExtensionRejection, ExtensionsAlreadyExtracted, MissingExtension};
 use async_trait::async_trait;
-use axum::extract::{FromRequest, RequestParts};
+use axum_core::extract::{FromRequest, RequestParts};
 use std::ops::Deref;
 
 /// Extractor that gets a value from [request extensions].
