@@ -12,6 +12,12 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Fix incorrect argument order in the builder for `LazyCachingCredentialsProvider`"
+references = ["smithy-rs#949"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "a-xp"
+
+[[aws-sdk-rust]]
 message = """
 Removed inaccurate log message when a client was used without a sleep implementation, and
 improved context and call to action in logged messages around missing sleep implementations.
