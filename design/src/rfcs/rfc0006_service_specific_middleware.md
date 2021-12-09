@@ -52,5 +52,5 @@ can easily configure `AwsFluentClientGenerator` to insert different types based 
 
 - [ ] Move aws-hyper into aws-inlineable. Update comments as needed including with a usage example about how customers can augment it.
 - [ ] Refactor `ClientGenerics` to contain a RuntimeType instead of a string and configure. Update `AwsFluentClientDecorator`.
-- [ ] Update all code and examples use `aws-hyper` to use service-specific middleware.
+- [ ] Update all code and examples that use `aws-hyper` to use service-specific middleware.
 - [ ] Push an updated README to aws-hyper deprecating the package, explaining what happened. Do _not_ yank previous versions since those will be relied on by older SDK versions.
