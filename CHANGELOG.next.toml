@@ -12,6 +12,12 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Fix incorrect argument order in the builder for `LazyCachingCredentialsProvider`"
+references = ["smithy-rs#949"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "a-xp"
+
+[[aws-sdk-rust]]
 message = """
 `aws-config` will now work as intended for users that want to use `native-tls` instead of `rustls`. Previously, it was
 difficult to ensure that `rustls` was not in use. Also, there is now an example of how to use `native-tls` and a test

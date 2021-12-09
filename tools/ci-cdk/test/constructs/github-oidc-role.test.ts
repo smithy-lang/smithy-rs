@@ -7,24 +7,20 @@ import { Match, Template } from "@aws-cdk/assertions";
 import * as cdk from "@aws-cdk/core";
 import { Stack } from "@aws-cdk/core";
 import { GitHubOidcRole } from "../../lib/constructs/github-oidc-role";
+import { OidcProviderStack } from "../../lib/oidc-provider-stack";
 
-test("it should have an OIDC provider and access role", () => {
+test("it should have an OIDC access role", () => {
     const app = new cdk.App();
+    const oidcStack = new OidcProviderStack(app, "oidc-provider-stack", {});
     const stack = new Stack(app, "test-stack");
 
     new GitHubOidcRole(stack, "test", {
         name: "some-name",
         githubOrg: "some-org",
         githubRepo: "some-repo",
+        oidcProvider: oidcStack.githubActionsOidcProvider,
     });
     const template = Template.fromStack(stack);
-
-    // Verify the OIDC provider
-    template.hasResourceProperties("Custom::AWSCDKOpenIdConnectProvider", {
-        ClientIDList: ["sts.amazonaws.com"],
-        ThumbprintList: ["A031C46782E6E6C662C2C87C76DA9AA62CCABD8E"],
-        Url: "https://token.actions.githubusercontent.com",
-    });
 
     // Verify the OIDC role to be assumed
     template.hasResourceProperties(
@@ -42,7 +38,7 @@ test("it should have an OIDC provider and access role", () => {
                         },
                         Principal: {
                             Federated: {
-                                Ref: Match.anyValue(),
+                                "Fn::ImportValue": Match.anyValue(),
                             },
                         },
                         Effect: "Allow",

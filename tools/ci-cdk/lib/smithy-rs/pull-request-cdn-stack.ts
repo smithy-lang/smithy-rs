@@ -3,16 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+import { OpenIdConnectProvider } from "@aws-cdk/aws-iam";
 import * as cdk from "@aws-cdk/core";
-import { Duration, RemovalPolicy, Tags } from "@aws-cdk/core";
+import { Duration, RemovalPolicy, StackProps, Tags } from "@aws-cdk/core";
 import { CloudFrontS3Cdn } from "../constructs/cloudfront-s3-cdn";
 import { GitHubOidcRole } from "../constructs/github-oidc-role";
+
+export interface Properties extends StackProps {
+    githubActionsOidcProvider: OpenIdConnectProvider;
+}
 
 export class PullRequestCdnStack extends cdk.Stack {
     public readonly smithyRsOidcRole: GitHubOidcRole;
     public readonly pullRequestCdn: CloudFrontS3Cdn;
 
-    constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+    constructor(scope: cdk.Construct, id: string, props: Properties) {
         super(scope, id, props);
 
         // Tag the resources created by this stack to make identifying resources easier
@@ -22,6 +27,7 @@ export class PullRequestCdnStack extends cdk.Stack {
             name: "smithy-rs-pull-request",
             githubOrg: "awslabs",
             githubRepo: "smithy-rs",
+            oidcProvider: props.githubActionsOidcProvider,
         });
 
         this.pullRequestCdn = new CloudFrontS3Cdn(this, "pull-request-cdn", {

@@ -7,7 +7,12 @@
 import "source-map-support/register";
 import * as cdk from "@aws-cdk/core";
 import { PullRequestCdnStack } from "../lib/smithy-rs/pull-request-cdn-stack";
+import { OidcProviderStack } from "../lib/oidc-provider-stack";
 
 const app = new cdk.App();
 
-new PullRequestCdnStack(app, "smithy-rs-pull-request-cdn-stack", {});
+const oidcProviderStack = new OidcProviderStack(app, "oidc-provider-stack", {});
+
+new PullRequestCdnStack(app, "smithy-rs-pull-request-cdn-stack", {
+    githubActionsOidcProvider: oidcProviderStack.githubActionsOidcProvider,
+});

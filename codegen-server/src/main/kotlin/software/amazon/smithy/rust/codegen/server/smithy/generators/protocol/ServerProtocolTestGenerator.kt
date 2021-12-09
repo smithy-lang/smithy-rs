@@ -72,7 +72,7 @@ class ServerProtocolTestGenerator(
         "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
-        "Axum" to ServerCargoDependency.Axum.asType(),
+        "AxumCore" to ServerCargoDependency.AxumCore.asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
     )
 
@@ -272,7 +272,7 @@ class ServerProtocolTestGenerator(
         rustTemplate(
             """
             let output = super::$operationImpl;
-            use #{Axum}::response::IntoResponse;
+            use #{AxumCore}::response::IntoResponse;
             let http_response = output.into_response();
             """,
             *codegenScope,
@@ -308,8 +308,8 @@ class ServerProtocolTestGenerator(
         val operationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustWriter.rustTemplate(
             """
-            use #{Axum}::extract::FromRequest;
-            let mut http_request = #{Axum}::extract::RequestParts::new(http_request);
+            use #{AxumCore}::extract::FromRequest;
+            let mut http_request = #{AxumCore}::extract::RequestParts::new(http_request);
             let input_wrapper = super::$operationName::from_request(&mut http_request).await.expect("failed to parse request");
             let input = input_wrapper.0;
             """,

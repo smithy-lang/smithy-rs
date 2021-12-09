@@ -8,7 +8,7 @@
 //! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 
 use self::{future::RouterFuture, request_spec::RequestSpec};
-use crate::body::{box_body, Body, BoxBody, HttpBody};
+use crate::body::{boxed, Body, BoxBody, HttpBody};
 use crate::BoxError;
 use http::{Request, Response, StatusCode};
 use std::{
@@ -16,7 +16,8 @@ use std::{
     task::{Context, Poll},
 };
 use tower::layer::Layer;
-use tower::{Service, ServiceBuilder, ServiceExt};
+use tower::util::ServiceExt;
+use tower::{Service, ServiceBuilder};
 use tower_http::map_response_body::MapResponseBodyLayer;
 
 pub mod future;
@@ -106,7 +107,7 @@ where
         NewResBody: HttpBody<Data = bytes::Bytes> + Send + 'static,
         NewResBody::Error: Into<BoxError>,
     {
-        let layer = ServiceBuilder::new().layer_fn(Route::new).layer(MapResponseBodyLayer::new(box_body)).layer(layer);
+        let layer = ServiceBuilder::new().layer_fn(Route::new).layer(MapResponseBodyLayer::new(boxed)).layer(layer);
         let routes =
             self.routes.into_iter().map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec)).collect();
         Router { routes }
@@ -149,7 +150,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{body::box_body, routing::request_spec::*};
+    use crate::{body::boxed, routing::request_spec::*};
     use futures_util::Future;
     use http::Method;
     use std::pin::Pin;
@@ -175,7 +176,7 @@ mod tests {
 
         #[inline]
         fn call(&mut self, req: Request<B>) -> Self::Future {
-            let body = box_body(Body::from(format!("{} :: {}", self.0, req.uri().to_string())));
+            let body = boxed(Body::from(format!("{} :: {}", self.0, req.uri().to_string())));
             let fut = async { Ok(Response::builder().status(&http::StatusCode::OK).body(body).unwrap()) };
             Box::pin(fut)
         }
