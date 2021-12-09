@@ -7,9 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
-import software.amazon.smithy.rust.codegen.rustlang.RustDependency
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 
 /**
@@ -25,22 +22,26 @@ object ServerCargoDependency {
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
 }
 
-class ServerInlineDependency(
-    name: String,
-    module: RustModule,
-    extraDependencies: List<RustDependency> = listOf(),
-    renderer: (RustWriter) -> Unit
-) : InlineDependency(name, module, extraDependencies, renderer) {
-    companion object {
-        fun serverOperationHandler(runtimeConfig: RuntimeConfig): InlineDependency =
-            forRustFile(
-                "server_operation_handler_trait",
-                CargoDependency.SmithyHttpServer(runtimeConfig),
-                CargoDependency.Http,
-                ServerCargoDependency.PinProjectLite,
-                ServerCargoDependency.Tower,
-                ServerCargoDependency.FuturesUtil,
-                ServerCargoDependency.AsyncTrait,
-            )
-    }
+/**
+ * A dependency on a snippet of code
+ *
+ * ServerInlineDependency should not be instantiated directly, rather, it should be constructed with
+ * [software.amazon.smithy.rust.codegen.smithy.RuntimeType.forInlineFun]
+ *
+ * ServerInlineDependencies are created as private modules within the main crate. This is useful for any code that
+ * doesn't need to exist in a shared crate, but must still be generated exactly once during codegen.
+ *
+ * CodegenVisitor deduplicates inline dependencies by (module, name) during code generation.
+ */
+object ServerInlineDependency {
+    fun serverOperationHandler(runtimeConfig: RuntimeConfig): InlineDependency =
+        InlineDependency.forRustFile(
+            "server_operation_handler_trait",
+            CargoDependency.SmithyHttpServer(runtimeConfig),
+            CargoDependency.Http,
+            ServerCargoDependency.PinProjectLite,
+            ServerCargoDependency.Tower,
+            ServerCargoDependency.FuturesUtil,
+            ServerCargoDependency.AsyncTrait,
+        )
 }

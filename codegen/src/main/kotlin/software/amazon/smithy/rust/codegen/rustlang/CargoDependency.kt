@@ -52,7 +52,7 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
  *
  * CodegenVisitor deduplicates inline dependencies by (module, name) during code generation.
  */
-open class InlineDependency(
+class InlineDependency(
     name: String,
     val module: RustModule,
     val extraDependencies: List<RustDependency> = listOf(),
