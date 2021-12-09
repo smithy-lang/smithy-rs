@@ -17,7 +17,7 @@ use tower::Service;
 pub struct OperationHandler<H, B, R, I> {
     handler: H,
     #[allow(clippy::type_complexity)]
-    _marker: PhantomData<fn() -> (B, R, I)>,
+    _marker: PhantomData<(B, R, I)>,
 }
 
 impl<H, B, R, I> Clone for OperationHandler<H, B, R, I>
