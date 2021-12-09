@@ -202,7 +202,7 @@ class ServerOperationRegistryGenerator(
             .mapIndexed { i, operation ->
                 val operationName = symbolProvider.toSymbol(operation).name
                 """Op$i: #{ServerOperationHandler}::Handler<B, In$i, crate::input::${operationName}Input>,
-                In$i: 'static"""
+                In$i: 'static + Send"""
             }.joinToString(separator = ",\n")
         Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlockTemplate(
