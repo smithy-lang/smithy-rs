@@ -24,6 +24,7 @@ apply NotFound @httpResponseTests([
     }
 ])
 
+
 apply GetBucketLocation @httpResponseTests([
     {
         id: "GetBucketLocation",
@@ -180,6 +181,21 @@ apply PutObject @httpRequestTests([
             Key: "test-key",
             ContentLength: 2,
             Body: "ab"
+        }
+    }
+])
+
+apply HeadObject @httpRequestTests([
+    {
+        id: "HeadObjectUriEncoding",
+        documentation: "https://github.com/awslabs/aws-sdk-rust/issues/331",
+
+        method: "HEAD",
+        protocol: "aws.protocols#restXml",
+        uri: "/test-bucket/%3E",
+        params: {
+            Bucket: "test-bucket",
+            Key: ">",
         }
     }
 ])
