@@ -1,4 +1,4 @@
-name: codegen diff preview
+name: PR Bot
 # This job will generate a codegen diff, upload it to S3, and link to it in a comment on the PR.
 on:
   pull_request:

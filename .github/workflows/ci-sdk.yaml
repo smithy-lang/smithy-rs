@@ -1,0 +1,210 @@
+on:
+  push:
+    branches: [main]
+    tags:
+    - '*'
+  pull_request:
+
+name: AWS SDK CI
+
+env:
+  rust_version: 1.54.0
+  rust_toolchain_components: clippy,rustfmt
+  java_version: 11
+
+jobs:
+  generate-smoke-test:
+    name: Smoke Test - Generate
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: Generate the SDK
+      run: ./gradlew :aws:sdk:assemble
+    - name: Generate a list of services with tests
+      run: python aws/sdk/test-services.py > aws/sdk/build/aws-sdk/services-with-tests
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - name: Tar the SDK
+      run: tar -cvf sdk.tar -C aws/sdk/build/aws-sdk/ .
+    - uses: actions/upload-artifact@v2
+      name: Upload SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-smoketest-${{ github.sha }}
+        path: sdk.tar
+
+  smoke-test:
+    name: Smoke Test
+    needs: generate-smoke-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+        - name: Unit Tests
+          run: cargo test $(cat service-with-tests)
+          working-directory: aws-sdk
+        - name: Docs
+          run: cargo doc --no-deps --document-private-items
+          working-directory: aws-sdk
+        - name: Clippy
+          run: cargo clippy
+          working-directory: aws-sdk
+    env:
+      # Disable incremental compilation to reduce disk space use
+      CARGO_INCREMENTAL: 0
+      RUSTFLAGS: -D warnings
+      # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
+      # so we have to manually restore the target directory override
+      CARGO_TARGET_DIR: ../target
+    steps:
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-smoketest-${{ github.sha }}
+        path: artifact
+    - name: untar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        target-dir: ../target
+    - name: ${{ matrix.test.name }}
+      run: ${{ matrix.test.run }}
+      working-directory: ${{ matrix.test.working-directory }}
+
+  unused-sdk-dependencies:
+    name: Smoke Test - Unused dependencies
+    needs: generate-smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ github.job }}
+        target-dir: ../target
+    - uses: actions-rs/toolchain@v1
+      with:
+          # Cargo udeps requires nightly
+        toolchain: nightly
+        default: true
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-smoketest-${{ github.sha }}
+        path: artifact
+    - name: untar
+      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
+    - name: Install `cargo udeps`
+      run: cargo install cargo-udeps
+    - name: Check for unused dependencies with default features
+      run: cargo udeps
+      working-directory: aws-sdk
+    - name: Check for unused dependencies with `--all-features`
+      run: cargo udeps --all-features
+      working-directory: aws-sdk
+    env:
+      # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
+      # so we have to manually restore the target directory override
+      CARGO_TARGET_DIR: ../target
+
+  standalone-integration-tests-check:
+    name: Standalone Integration Tests - cargo check
+    needs: generate-smoke-test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        working-directory: aws/sdk/integration-tests
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        target-dir: ../../../target
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
+    # The integration tests path-depend on crates in the build/ path, so we have to download a generated SDK
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-smoketest-${{ github.sha }}
+        path: artifact
+    - name: untar
+      run: mkdir -p aws/sdk/build/aws-sdk && cd aws/sdk/build/aws-sdk && tar -xvf ../../../../artifact/sdk.tar
+    - name: Check integration tests
+      run: cargo check
+      working-directory: aws/sdk/integration-tests
+      env:
+        RUSTC_FORCE_INCREMENTAL: 1
+        RUSTFLAGS: -D warnings
+
+  all-services-check:
+    name: Full SDK - Generate and cargo check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: Generate and check all services
+      run: ./gradlew -Paws.fullsdk=true :aws:sdk:cargoCheck
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - name: Tar the SDK
+      run: tar -cvf sdk.tar -C aws/sdk/build/aws-sdk/ .
+    - uses: actions/upload-artifact@v2
+      name: Upload SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        path: sdk.tar
