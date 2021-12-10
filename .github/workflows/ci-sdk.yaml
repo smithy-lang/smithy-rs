@@ -115,6 +115,11 @@ jobs:
           # Cargo udeps requires nightly
         toolchain: nightly
         default: true
+    - name: Cache cargo bin
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/bin
+        key: ${{ runner.os }}-${{ env.rust_version }}
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -126,7 +131,10 @@ jobs:
     - name: untar
       run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
     - name: Install `cargo udeps`
-      run: cargo install cargo-udeps
+      run: |
+        if [[ ! -f ~/.cargo/bin/cargo-udeps ]]; then
+          cargo install cargo-udeps
+        fi
     - name: Check for unused dependencies with default features
       run: cargo udeps
       working-directory: aws-sdk
