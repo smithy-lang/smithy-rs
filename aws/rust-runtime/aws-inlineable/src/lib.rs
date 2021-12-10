@@ -29,3 +29,6 @@ pub mod s3_errors;
 
 /// Glacier-specific checksumming behavior
 pub mod glacier_checksums;
+
+/// Default middleware stack for AWS services
+pub mod middleware;
