@@ -86,6 +86,9 @@ structure RegisterServiceInputRequest {
 
     @httpQuery("size")
     size: Integer,
+
+    @httpQueryParams
+    myParams: MapOfListOfStrings,
 }
 
 @documentation("Service register output structure")
@@ -105,7 +108,31 @@ operation Healthcheck {
 
 @documentation("Service healthcheck output structure")
 structure HealthcheckInputRequest {
+    @httpQueryParams
+    myParams: MapOfStrings,
+}
 
+map MapOfStrings {
+    key: String,
+    value: String
+}
+
+map MapOfListOfStrings {
+    key: String,
+    value: ListOfStrings
+}
+
+list ListOfStrings {
+    member: String
+}
+
+map MapOfSetOfStrings {
+    key: String,
+    value: SetOfStrings
+}
+
+set SetOfStrings {
+    member: String
 }
 
 @documentation("Service healthcheck input structure")
