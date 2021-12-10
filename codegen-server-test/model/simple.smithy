@@ -77,6 +77,15 @@ structure RegisterServiceInputRequest {
     @httpLabel
     id: ServiceId,
     name: ServiceName,
+
+    @httpQuery("color")
+    color: String,
+
+    @httpQuery("shape")
+    shape: String,
+
+    @httpQuery("size")
+    size: Integer,
 }
 
 @documentation("Service register output structure")
