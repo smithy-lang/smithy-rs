@@ -583,7 +583,6 @@ private class ServerHttpProtocolImplGenerator(
                 pattern.append(it.content)
             }
         }
-        val errorShape = operationShape.errorSymbol(symbolProvider)
         with(writer) {
             rustTemplate(
                 """
@@ -605,7 +604,6 @@ private class ServerHttpProtocolImplGenerator(
                         }
                         """.trimIndent(),
                         "deserializer" to deserializer,
-                        "E" to errorShape,
                     )
                 }
             }
