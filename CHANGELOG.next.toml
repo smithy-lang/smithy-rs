@@ -12,6 +12,18 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Include non-service-specific examples in the root Cargo workspace so that they can build"
+references = ["smithy-rs#957"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Include non-service-specific examples in the generated root Cargo workspace"
+references = ["smithy-rs#957"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = "Fix incorrect argument order in the builder for `LazyCachingCredentialsProvider`"
 references = ["smithy-rs#949"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
