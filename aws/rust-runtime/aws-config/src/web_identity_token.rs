@@ -65,7 +65,7 @@ use aws_types::os_shim_internal::{Env, Fs};
 
 use crate::provider_config::ProviderConfig;
 use crate::sts;
-use aws_hyper::AwsMiddleware;
+use aws_sdk_sts::middleware::AwsMiddleware;
 use aws_smithy_client::erase::DynConnector;
 use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
 use std::borrow::Cow;

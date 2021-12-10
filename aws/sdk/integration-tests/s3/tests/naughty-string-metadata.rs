@@ -4,7 +4,7 @@
  */
 
 use aws_http::user_agent::AwsUserAgent;
-use aws_hyper::AwsMiddleware;
+use aws_sdk_s3::middleware::AwsMiddleware;
 use aws_sdk_s3::{operation::PutObject, Credentials, Region};
 use aws_smithy_client::test_connection::capture_request;
 use aws_smithy_client::Client as CoreClient;

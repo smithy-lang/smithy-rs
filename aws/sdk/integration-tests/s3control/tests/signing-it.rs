@@ -10,7 +10,7 @@ use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
 use std::time::{Duration, UNIX_EPOCH};
 
-use aws_hyper::AwsMiddleware;
+use aws_sdk_s3control::middleware::AwsMiddleware;
 use aws_smithy_client::Client as CoreClient;
 pub type Client<C> = CoreClient<C, AwsMiddleware>;
 

@@ -5,8 +5,8 @@
 
 //! Assume credentials for a role through the AWS Security Token Service (STS).
 
-use aws_hyper::AwsMiddleware;
 use aws_sdk_sts::error::AssumeRoleErrorKind;
+use aws_sdk_sts::middleware::AwsMiddleware;
 use aws_sdk_sts::operation::AssumeRole;
 use aws_types::credentials::{
     self, future, CredentialsError, ProvideCredentials, SharedCredentialsProvider,

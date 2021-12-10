@@ -10,7 +10,7 @@ mod assume_role;
 use crate::connector::expect_connector;
 use crate::provider_config::{HttpSettings, ProviderConfig};
 pub use assume_role::{AssumeRoleProvider, AssumeRoleProviderBuilder};
-use aws_hyper::AwsMiddleware;
+use aws_sdk_sts::middleware::AwsMiddleware;
 use aws_smithy_client::erase::DynConnector;
 
 impl ProviderConfig {

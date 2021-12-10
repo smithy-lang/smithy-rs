@@ -5,9 +5,9 @@
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_http::AwsErrorRetryPolicy;
-use aws_hyper::AwsMiddleware;
 use aws_sdk_dynamodb::error::DescribeTableError;
 use aws_sdk_dynamodb::input::DescribeTableInput;
+use aws_sdk_dynamodb::middleware::AwsMiddleware;
 use aws_sdk_dynamodb::model::{
     AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
     ScalarAttributeType, Select, TableStatus,

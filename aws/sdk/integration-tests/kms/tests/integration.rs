@@ -4,8 +4,8 @@
  */
 
 use aws_http::user_agent::AwsUserAgent;
-use aws_hyper::AwsMiddleware;
 use aws_sdk_kms as kms;
+use aws_sdk_kms::middleware::AwsMiddleware;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_client::{Client as CoreClient, SdkError};
 use aws_smithy_http::body::SdkBody;

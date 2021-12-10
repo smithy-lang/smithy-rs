@@ -4,7 +4,7 @@
  */
 
 use aws_http::user_agent::AwsUserAgent;
-use aws_hyper::AwsMiddleware;
+use aws_sdk_s3::middleware::AwsMiddleware;
 use aws_sdk_s3::operation::ListObjectsV2;
 use aws_sdk_s3::{Credentials, Region};
 use aws_smithy_client::test_connection::TestConnection;

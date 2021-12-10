@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::Instant;
 
-use aws_hyper::AwsMiddleware;
+use aws_sdk_dynamodb::middleware::AwsMiddleware;
 use aws_smithy_client::Client as CoreClient;
 pub type Client<C> = CoreClient<C, AwsMiddleware>;
 
