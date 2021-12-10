@@ -121,6 +121,6 @@ tasks.register<Exec>("cargoClippy") {
     dependsOn("assemble")
 }
 
-tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
+tasks["test"].finalizedBy("cargoCheck")
 
 tasks["clean"].doFirst { delete("smithy-build.json") }
