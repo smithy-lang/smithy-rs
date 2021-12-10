@@ -101,6 +101,7 @@ private class ServerHttpProtocolImplGenerator(
         "LazyStatic" to CargoDependency.LazyStatic.asType(),
         "PercentEncoding" to CargoDependency.PercentEncoding.asType(),
         "Regex" to CargoDependency.Regex.asType(),
+        "SerdeUrlEncoded" to ServerCargoDependency.SerdeUrlEncoded.asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
         "http" to RuntimeType.http,
@@ -532,6 +533,7 @@ private class ServerHttpProtocolImplGenerator(
             }
         }
         serverRenderUriPathParser(this, operationShape)
+        serverRenderQueryStringParser(this, operationShape)
 
         val err = if (StructureGenerator.fallibleBuilder(inputShape, symbolProvider)) {
             "?"
@@ -594,7 +596,7 @@ private class ServerHttpProtocolImplGenerator(
             )
             rustBlock("if let Some(captures) = RE.captures(request.uri().path())") {
                 pathBindings.forEach {
-                    val deserializer = generateParseLabelFn(it)
+                    val deserializer = generateParsePercentEncodedStrFn(it)
                     rustTemplate(
                         """
                         if let Some(m) = captures.name("${it.locationName}") {
@@ -605,6 +607,45 @@ private class ServerHttpProtocolImplGenerator(
                         """.trimIndent(),
                         "deserializer" to deserializer,
                     )
+                }
+            }
+        }
+    }
+
+    private fun serverRenderQueryStringParser(writer: RustWriter, operationShape: OperationShape) {
+        val queryBindings =
+            httpBindingResolver.requestBindings(operationShape).filter {
+                it.location == HttpLocation.QUERY
+            }
+        val queryParamsBindings =
+            httpBindingResolver.requestBindings(operationShape).filter {
+                it.location == HttpLocation.QUERY_PARAMS
+            }
+        if (queryBindings.isEmpty() && queryParamsBindings.isEmpty()) {
+            return
+        }
+        writer.rustTemplate("""
+                let query_string = request.uri().query().ok_or(#{SmithyHttpServer}::rejection::MissingQueryString)?;
+                let pairs = #{SerdeUrlEncoded}::from_str::<Vec<(&str, &str)>>(query_string)?;
+                """.trimIndent(),
+            *codegenScope
+        )
+        with(writer) {
+            queryBindings.forEach {
+                rust("let mut seen_${it.locationName} = false;")
+            }
+            rustBlock("for (k, v) in pairs") {
+                queryBindings.forEach {
+                    val deserializer = generateParsePercentEncodedStrFn(it)
+                    rustTemplate("""
+                        if !seen_${it.locationName} && k == "${it.locationName}" {
+                            input = input.${it.member.setterName()}(
+                                #{deserializer}(v)?
+                            );
+                            seen_${it.locationName} = true;
+                        }
+                    """.trimIndent(),
+                    "deserializer" to deserializer)
                 }
             }
         }
@@ -627,19 +668,21 @@ private class ServerHttpProtocolImplGenerator(
         )
     }
 
-    private fun generateParseLabelFn(binding: HttpBindingDescriptor): RuntimeType {
-        check(binding.location == HttpLocation.LABEL)
+    private fun generateParsePercentEncodedStrFn(binding: HttpBindingDescriptor): RuntimeType {
+        // HTTP bindings we support that contain percent-encoded data.
+        check(binding.location == HttpLocation.LABEL || binding.location == HttpLocation.QUERY)
+
         val target = model.expectShape(binding.member.target)
         return when {
-            target.isStringShape -> generateParseLabelStringFn(binding)
-            target.isTimestampShape -> generateParseLabelTimestampFn(binding)
-            else -> generateParseLabelPrimitiveFn(binding)
+            target.isStringShape -> generateParsePercentEncodedStrAsStringFn(binding)
+            target.isTimestampShape -> generateParsePercentEncodedStrAsTimestampFn(binding)
+            else -> generateParseStrAsPrimitiveFn(binding)
         }
     }
 
-    private fun generateParseLabelStringFn(binding: HttpBindingDescriptor): RuntimeType {
+    private fun generateParsePercentEncodedStrAsStringFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
-        val fnName = generateParseLabelFnName(binding)
+        val fnName = generateParseStrFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyRejection}>",
@@ -657,9 +700,9 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
-    private fun generateParseLabelTimestampFn(binding: HttpBindingDescriptor): RuntimeType {
+    private fun generateParsePercentEncodedStrAsTimestampFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
-        val fnName = generateParseLabelFnName(binding)
+        val fnName = generateParseStrFnName(binding)
         val index = HttpBindingIndex.of(model)
         val timestampFormat =
             index.determineTimestampFormat(
@@ -687,9 +730,9 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
-    private fun generateParseLabelPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
+    private fun generateParseStrAsPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
-        val fnName = generateParseLabelFnName(binding)
+        val fnName = generateParseStrFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyRejection}>",
@@ -707,9 +750,9 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
-    private fun generateParseLabelFnName(binding: HttpBindingDescriptor): String {
+    private fun generateParseStrFnName(binding: HttpBindingDescriptor): String {
         val containerName = binding.member.container.name.toSnakeCase()
         val memberName = binding.memberName.toSnakeCase()
-        return "parse_label_${containerName}_$memberName"
+        return "parse_str_${containerName}_$memberName"
     }
 }
