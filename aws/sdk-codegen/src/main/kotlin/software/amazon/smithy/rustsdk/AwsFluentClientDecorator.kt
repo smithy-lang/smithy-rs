@@ -31,7 +31,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.util.expectTrait
-import software.amazon.smithy.rustsdk.AwsRuntimeType.baseMiddleware
+import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
 private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig).copy(optional = true)
@@ -40,7 +40,7 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
     val awsSmithyClient = smithyClientDep.asType()
 
-    val awsMiddleware = runtimeConfig.baseMiddleware()
+    val defaultMiddleware = runtimeConfig.defaultMiddleware()
     val dynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
 }
 
@@ -64,7 +64,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
                 codegenContext,
                 generics = ClientGenerics(
                     connectorDefault = types.dynConnector,
-                    middlewareDefault = types.awsMiddleware,
+                    middlewareDefault = types.defaultMiddleware,
                     retryDefault = types.smithyClientRetry.member("Standard"),
                     client = types.awsSmithyClient
                 ),
@@ -98,13 +98,13 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
 private class AwsFluentClientExtensions(private val types: Types) {
     val clientGenerics = ClientGenerics(
         connectorDefault = types.dynConnector,
-        middlewareDefault = types.awsMiddleware,
+        middlewareDefault = types.defaultMiddleware,
         retryDefault = types.smithyClientRetry.member("Standard"),
         client = types.awsSmithyClient
     )
 
     private val codegenScope = arrayOf(
-        "Middleware" to types.awsMiddleware,
+        "Middleware" to types.defaultMiddleware,
         "retry" to types.smithyClientRetry,
         "DynConnector" to types.dynConnector,
         "aws_smithy_client" to types.awsSmithyClient
@@ -165,7 +165,7 @@ private class AwsFluentClientExtensions(private val types: Types) {
                 """,
                 "aws_smithy_client" to types.awsSmithyClient,
                 "aws_types" to types.awsTypes,
-                "Middleware" to types.awsMiddleware
+                "Middleware" to types.defaultMiddleware
             )
         }
     }

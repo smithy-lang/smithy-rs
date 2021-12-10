@@ -46,15 +46,16 @@ object AwsRuntimeType {
         RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", public = true))
     }
 
-    fun RuntimeConfig.baseMiddleware() = RuntimeType.forInlineDependency(
+    fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "middleware", public = true,
             CargoDependency.SmithyHttp(this),
             CargoDependency.SmithyHttpTower(this),
+            CargoDependency.Tower,
             awsHttp(),
             awsEndpoint(),
         )
-    ).member("AwsMiddleware")
+    ).member("DefaultMiddleware")
 }
 
 fun RuntimeConfig.awsRuntimeDependency(name: String, features: Set<String> = setOf()): CargoDependency =

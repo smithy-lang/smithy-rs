@@ -11,7 +11,7 @@ use aws_http::AwsErrorRetryPolicy;
 use aws_sdk_dynamodb::client::fluent_builders::Query;
 use aws_sdk_dynamodb::error::DescribeTableError;
 use aws_sdk_dynamodb::input::DescribeTableInput;
-use aws_sdk_dynamodb::middleware::AwsMiddleware;
+use aws_sdk_dynamodb::middleware::DefaultMiddleware;
 use aws_sdk_dynamodb::model::{
     AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
     ScalarAttributeType, TableStatus,
@@ -79,7 +79,7 @@ async fn main() -> Result<(), Error> {
 
     let client = Client::new(&shared_config);
 
-    let raw_client = aws_smithy_client::Client::<DynConnector, AwsMiddleware>::dyn_https();
+    let raw_client = aws_smithy_client::Client::<DynConnector, DefaultMiddleware>::dyn_https();
 
     let table_exists = client
         .list_tables()

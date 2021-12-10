@@ -7,7 +7,7 @@ use aws_config::meta::region::RegionProviderChain;
 use aws_http::AwsErrorRetryPolicy;
 use aws_sdk_dynamodb::error::DescribeTableError;
 use aws_sdk_dynamodb::input::DescribeTableInput;
-use aws_sdk_dynamodb::middleware::AwsMiddleware;
+use aws_sdk_dynamodb::middleware::DefaultMiddleware;
 use aws_sdk_dynamodb::model::{
     AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
     ScalarAttributeType, Select, TableStatus,
@@ -284,7 +284,7 @@ async fn main() -> Result<(), Error> {
 
     println!("Waiting for table to be ready.");
 
-    let raw_client = aws_smithy_client::Client::<DynConnector, AwsMiddleware>::dyn_https();
+    let raw_client = aws_smithy_client::Client::<DynConnector, DefaultMiddleware>::dyn_https();
 
     raw_client
         .call(wait_for_ready_table(&table, client.conf()).await)

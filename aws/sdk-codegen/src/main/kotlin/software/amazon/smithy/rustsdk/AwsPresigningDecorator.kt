@@ -40,7 +40,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBod
 import software.amazon.smithy.rust.codegen.util.cloneOperation
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
-import software.amazon.smithy.rustsdk.AwsRuntimeType.baseMiddleware
+import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 import kotlin.streams.toList
 
@@ -141,7 +141,7 @@ class AwsInputPresignedMethod(
         "aws_sigv4" to runtimeConfig.awsRuntimeDependency("aws-sigv4").asType(),
         "sig_auth" to runtimeConfig.sigAuth().asType(),
         "tower" to CargoDependency.Tower.asType(),
-        "AwsMiddleware" to runtimeConfig.baseMiddleware()
+        "Middleware" to runtimeConfig.defaultMiddleware()
     )
 
     override fun section(section: OperationSection): Writable = writable {
@@ -222,7 +222,7 @@ class AwsInputPresignedMethod(
             }
             rustTemplate(
                 """
-                let middleware = #{AwsMiddleware}::default();
+                let middleware = #{Middleware}::default();
                 let mut svc = #{tower}::builder::ServiceBuilder::new()
                     .layer(&middleware)
                     .service(#{PresignedRequestService}::new());

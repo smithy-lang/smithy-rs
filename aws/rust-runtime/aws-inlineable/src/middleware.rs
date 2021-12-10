@@ -14,14 +14,14 @@ use aws_sig_auth::middleware::SigV4SigningStage;
 use aws_sig_auth::signer::SigV4Signer;
 use aws_smithy_http_tower::map_request::{AsyncMapRequestLayer, MapRequestLayer};
 use std::fmt::Debug;
-use tower::layer::util::Stack;
+use tower::layer::util::{Identity, Stack};
 use tower::ServiceBuilder;
 
-type AwsMiddlewareStack = Stack<
+type DefaultMiddlewareStack = Stack<
     MapRequestLayer<SigV4SigningStage>,
     Stack<
         AsyncMapRequestLayer<CredentialsStage>,
-        Stack<MapRequestLayer<UserAgentStage>, MapRequestLayer<AwsEndpointStage>>,
+        Stack<MapRequestLayer<UserAgentStage>, Stack<MapRequestLayer<AwsEndpointStage>, Identity>>,
     >,
 >;
 
@@ -34,35 +34,40 @@ type AwsMiddlewareStack = Stack<
 /// 4. Add a user agent to the request
 #[derive(Debug, Default)]
 #[non_exhaustive]
-pub struct AwsMiddleware;
+pub struct DefaultMiddleware;
 
-impl AwsMiddleware {
-    /// Create a new `AwsMiddleware` stack
+impl DefaultMiddleware {
+    /// Create a new `DefaultMiddleware` stack
     ///
-    /// Note: `AwsMiddleware` holds no state.
+    /// Note: `DefaultMiddleware` holds no state.
     pub fn new() -> Self {
-        AwsMiddleware::default()
+        DefaultMiddleware::default()
     }
 }
-impl<S> tower::Layer<S> for AwsMiddleware {
-    type Service = <AwsMiddlewareStack as tower::Layer<S>>::Service;
+
+// define the middleware stack in a non-generic location to reduce code bloat.
+fn base() -> ServiceBuilder<DefaultMiddlewareStack> {
+    let credential_provider = AsyncMapRequestLayer::for_mapper(CredentialsStage::new());
+    let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
+    let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
+    let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
+    // These layers can be considered as occurring in order, that is:
+    // 1. Resolve an endpoint
+    // 2. Add a user agent
+    // 3. Acquire credentials
+    // 4. Sign with credentials
+    // (5. Dispatch over the wire)
+    ServiceBuilder::new()
+        .layer(endpoint_resolver)
+        .layer(user_agent)
+        .layer(credential_provider)
+        .layer(signer)
+}
+
+impl<S> tower::Layer<S> for DefaultMiddleware {
+    type Service = <DefaultMiddlewareStack as tower::Layer<S>>::Service;
 
     fn layer(&self, inner: S) -> Self::Service {
-        let credential_provider = AsyncMapRequestLayer::for_mapper(CredentialsStage::new());
-        let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
-        let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
-        let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
-        // These layers can be considered as occurring in order, that is:
-        // 1. Resolve an endpoint
-        // 2. Add a user agent
-        // 3. Acquire credentials
-        // 4. Sign with credentials
-        // (5. Dispatch over the wire)
-        ServiceBuilder::new()
-            .layer(endpoint_resolver)
-            .layer(user_agent)
-            .layer(credential_provider)
-            .layer(signer)
-            .service(inner)
+        base().service(inner)
     }
 }
