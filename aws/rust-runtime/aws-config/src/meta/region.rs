@@ -13,16 +13,22 @@ use tracing::Instrument;
 /// Load a region by selecting the first from a series of region providers.
 ///
 /// # Examples
-/// ```no_run
-/// use aws_types::region::Region;
-/// use std::env;
-/// use aws_config::meta::region::RegionProviderChain;
-/// // region provider that first checks the `CUSTOM_REGION` environment variable,
-/// // then checks the default provider chain, then falls back to us-east-2
-/// let provider = RegionProviderChain::first_try(env::var("CUSTOM_REGION").ok().map(Region::new))
-///     .or_default_provider()
-///     .or_else(Region::new("us-east-2"));
-/// ```
+///
+#[cfg_attr(
+    feature = "default-provider",
+    doc = r##"
+```no_run
+use aws_types::region::Region;
+use std::env;
+use aws_config::meta::region::RegionProviderChain;
+// region provider that first checks the `CUSTOM_REGION` environment variable,
+// then checks the default provider chain, then falls back to us-east-2
+let provider = RegionProviderChain::first_try(env::var("CUSTOM_REGION").ok().map(Region::new))
+    .or_default_provider()
+    .or_else(Region::new("us-east-2"));
+```
+    "##
+)]
 #[derive(Debug)]
 pub struct RegionProviderChain {
     providers: Vec<Box<dyn ProvideRegion>>,

@@ -44,22 +44,27 @@
 //!   role_arn = arn:aws:iam::123456789012:role/s3-reader
 //!   web_identity_token_file = /token.jwt
 //!   ```
-//!
-//! # Examples
-//! Web Identity Token providers are part of the [default chain](crate::default_provider::credentials).
-//! However, they may be directly constructed if you don't want to use the default provider chain.
-//! Unless overridden with [`static_configuration`](Builder::static_configuration), the provider will
-//! load configuration from environment variables.
-//!
-//! ```no_run
-//! # async fn test() {
-//! use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
-//! use aws_config::provider_config::ProviderConfig;
-//! let provider = WebIdentityTokenCredentialsProvider::builder()
-//!     .configure(&ProviderConfig::with_default_region().await)
-//!     .build();
-//! # }
-//! ```
+#![cfg_attr(
+    feature = "default-provider",
+    doc = r##"
+# Examples
+Web Identity Token providers are part of the [default chain](crate::default_provider::credentials).
+However, they may be directly constructed if you don't want to use the default provider chain.
+Unless overridden with [`static_configuration`](Builder::static_configuration), the provider will
+load configuration from environment variables.
+
+```no_run
+# async fn test() {
+use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
+use aws_config::provider_config::ProviderConfig;
+let provider = WebIdentityTokenCredentialsProvider::builder()
+    .configure(&ProviderConfig::with_default_region().await)
+    .build();
+# }
+```
+    "##
+)]
+
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
 
@@ -178,16 +183,21 @@ pub struct Builder {
 impl Builder {
     /// Configure generic options of the [WebIdentityTokenCredentialsProvider]
     ///
-    /// # Examples
-    /// ```no_run
-    /// # async fn test() {
-    /// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
-    /// use aws_config::provider_config::ProviderConfig;
-    /// let provider = WebIdentityTokenCredentialsProvider::builder()
-    ///     .configure(&ProviderConfig::with_default_region().await)
-    ///     .build();
-    /// # }
-    /// ```
+    #[cfg_attr(
+        feature = "default-provider",
+        doc = r##"
+# Examples
+```no_run
+# async fn test() {
+use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
+use aws_config::provider_config::ProviderConfig;
+let provider = WebIdentityTokenCredentialsProvider::builder()
+    .configure(&ProviderConfig::with_default_region().await)
+    .build();
+# }
+```
+        "##
+    )]
     pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
         self.config = Some(provider_config.clone());
         self
@@ -256,7 +266,7 @@ async fn load_credentials(
     sts::util::into_credentials(resp.credentials, "WebIdentityToken")
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "default-provider"))]
 mod test {
     use crate::web_identity_token::{
         Builder, ENV_VAR_ROLE_ARN, ENV_VAR_SESSION_NAME, ENV_VAR_TOKEN_FILE,

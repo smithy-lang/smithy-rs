@@ -143,18 +143,22 @@ impl ProviderConfig {
     /// when they are enabled as crate features which is usually the correct option. To construct
     /// a `ProviderConfig` without these fields set, use [`ProviderConfig::empty`].
     ///
-    ///
-    /// # Examples
-    /// ```no_run
-    /// use aws_config::provider_config::ProviderConfig;
-    /// use aws_sdk_sts::Region;
-    /// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
-    /// let conf = ProviderConfig::without_region().with_region(Some(Region::new("us-east-1")));
-    ///
-    /// # if cfg!(any(feature = "rustls", feature = "native-tls")) {
-    /// let credential_provider = WebIdentityTokenCredentialsProvider::builder().configure(&conf).build();
-    /// # }
-    /// ```
+    #[cfg_attr(
+        feature = "default-provider",
+        doc = r##"
+# Examples
+```no_run
+use aws_config::provider_config::ProviderConfig;
+use aws_sdk_sts::Region;
+use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
+let conf = ProviderConfig::without_region().with_region(Some(Region::new("us-east-1")));
+
+# if cfg!(any(feature = "rustls", feature = "native-tls")) {
+let credential_provider = WebIdentityTokenCredentialsProvider::builder().configure(&conf).build();
+# }
+```
+        "##
+    )]
     pub fn without_region() -> Self {
         Self::default()
     }

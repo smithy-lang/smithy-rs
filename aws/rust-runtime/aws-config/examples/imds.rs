@@ -3,18 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_config::imds::Client;
-use std::error::Error;
-
 /// IMDSv2 client usage example
 ///
 /// The IMDS client is used with `aws-config` to load credentials and regions, however, you can also
 /// use the client directly. This example demonstrates loading the instance-id from IMDS. More
 /// fetures of IMDS can be found [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html)
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+#[cfg(feature = "imds")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use aws_config::imds::Client;
+
     let imds = Client::builder().build().await?;
     let instance_id = imds.get("/latest/meta-data/instance-id").await?;
     println!("current instance id: {}", instance_id);
     Ok(())
+}
+
+#[cfg(not(feature = "imds"))]
+fn main() {
+    println!("IMDS feature is not enabled.");
 }

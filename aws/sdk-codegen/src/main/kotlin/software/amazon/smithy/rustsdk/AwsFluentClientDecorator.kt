@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
 private class Types(runtimeConfig: RuntimeConfig) {
-    private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig).copy(optional = true)
+    private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig)
     private val awsHyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper")
 
     val awsTypes = awsTypes(runtimeConfig).asType()

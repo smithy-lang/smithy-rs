@@ -20,14 +20,19 @@ use tracing::Instrument;
 ///
 /// # Examples
 ///
-/// ```no_run
-/// use aws_config::meta::credentials::CredentialsProviderChain;
-/// use aws_config::environment::credentials::EnvironmentVariableCredentialsProvider;
-/// use aws_config::profile::ProfileFileCredentialsProvider;
-///
-/// let provider = CredentialsProviderChain::first_try("Environment", EnvironmentVariableCredentialsProvider::new())
-///     .or_else("Profile", ProfileFileCredentialsProvider::builder().build());
-/// ```
+#[cfg_attr(
+    feature = "profile",
+    doc = r##"
+```no_run
+use aws_config::meta::credentials::CredentialsProviderChain;
+use aws_config::environment::credentials::EnvironmentVariableCredentialsProvider;
+use aws_config::profile::ProfileFileCredentialsProvider;
+
+let provider = CredentialsProviderChain::first_try("Environment", EnvironmentVariableCredentialsProvider::new())
+    .or_else("Profile", ProfileFileCredentialsProvider::builder().build());
+```
+    "##
+)]
 #[derive(Debug)]
 pub struct CredentialsProviderChain {
     providers: Vec<(Cow<'static, str>, Box<dyn ProvideCredentials>)>,

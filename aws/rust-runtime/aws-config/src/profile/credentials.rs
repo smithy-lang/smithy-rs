@@ -335,16 +335,21 @@ pub struct Builder {
 impl Builder {
     /// Override the configuration for the [`ProfileFileCredentialsProvider`]
     ///
-    /// # Examples
-    /// ```no_run
-    /// # async fn test() {
-    /// use aws_config::profile::ProfileFileCredentialsProvider;
-    /// use aws_config::provider_config::ProviderConfig;
-    /// let provider = ProfileFileCredentialsProvider::builder()
-    ///     .configure(&ProviderConfig::with_default_region().await)
-    ///     .build();
-    /// # }
-    /// ```
+    #[cfg_attr(
+        feature = "default-provider",
+        doc = r##"
+# Examples
+```no_run
+# async fn test() {
+use aws_config::profile::ProfileFileCredentialsProvider;
+use aws_config::provider_config::ProviderConfig;
+let provider = ProfileFileCredentialsProvider::builder()
+    .configure(&ProviderConfig::with_default_region().await)
+    .build();
+# }
+```
+        "##
+    )]
     pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
         self.provider_config = Some(provider_config.clone());
         self
@@ -462,7 +467,7 @@ async fn build_provider_chain(
     exec::ProviderChain::from_repr(fs.clone(), connector, region.region().await, repr, factory)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "default-provider"))]
 mod test {
     use tracing_test::traced_test;
 
