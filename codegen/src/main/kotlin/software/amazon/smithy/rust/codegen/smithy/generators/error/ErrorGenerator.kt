@@ -85,6 +85,12 @@ class ErrorGenerator(
                 """
                 /// Returns the error message.
                 pub fn message(&self) -> Option<&str> { $message }
+
+                ##[doc(hidden)]
+                /// Returns the error name.
+                pub fn name(&self) -> String {
+                    String::from("${shape.id.name}")
+                }
                 """
             )
         }

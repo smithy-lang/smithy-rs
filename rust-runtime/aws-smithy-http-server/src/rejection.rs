@@ -124,6 +124,7 @@ composite_rejection! {
         ContentTypeRejection,
         BodyAlreadyExtracted,
         HeadersAlreadyExtracted,
+        ExtensionsAlreadyExtracted,
     }
 }
 

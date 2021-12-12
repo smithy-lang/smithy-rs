@@ -68,12 +68,18 @@ class ServerCombinedErrorGenerator(
                     rust("matches!(&self, ${symbol.name}::${errorSymbol.name}(_))")
                 }
             }
+            writer.rust("/// Returns the error name string by matching the correct variant.")
+            writer.rustBlock("pub fn name(&self) -> String") {
+                delegateToVariants {
+                    rust("_inner.name()")
+                }
+            }
         }
 
         writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.StdError) {
             rustBlock("fn source(&self) -> Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
                 delegateToVariants {
-                    rust("Some(_inner)");
+                    rust("Some(_inner)")
                 }
             }
         }

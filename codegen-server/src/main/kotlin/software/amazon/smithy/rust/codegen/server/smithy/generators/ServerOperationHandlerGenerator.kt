@@ -78,7 +78,12 @@ class ServerOperationHandlerGenerator(
                 val callImpl = if (state) {
                     """let state = match $serverCrate::Extension::<S>::from_request(&mut req).await {
                     Ok(v) => v,
-                    Err(r) => return r.into_response().map($serverCrate::boxed)
+                    Err(r) => {
+                        let error = aws_smithy_http_server::ExtensionFrameworkError(r.to_string());
+                        let mut response = r.into_response();
+                        response.extensions_mut().insert(error);
+                        return response.map($serverCrate::boxed);
+                    }
                     };
                     let input_inner = input_wrapper.into();
                     let output_inner = self(input_inner, state).await;"""
@@ -95,7 +100,12 @@ class ServerOperationHandlerGenerator(
                         use #{AxumCore}::response::IntoResponse;
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
-                            Err(r) => return r.into_response().map(#{SmithyHttpServer}::boxed)
+                            Err(r) => {
+                                let error = aws_smithy_http_server::ExtensionFrameworkError(r.to_string());
+                                let mut response = r.into_response();
+                                response.extensions_mut().insert(error);
+                                return response.map($serverCrate::boxed);
+                            }
                         };
                         $callImpl
                         let output_wrapper: $outputWrapperName = output_inner.into();

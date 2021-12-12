@@ -39,6 +39,18 @@ use async_trait::async_trait;
 use axum_core::extract::{FromRequest, RequestParts};
 use std::ops::Deref;
 
+/// Extension type used to store the Smithy model namespace.
+pub struct ExtensionNamespace(pub String);
+
+/// Extension type used to store the Smithy operation name.
+pub struct ExtensionOperationName(pub String);
+
+/// Extension type used to store the type of framework error caught during exection.
+pub struct ExtensionFrameworkError(pub String);
+
+/// Extension type used to store the type of user defined error returned by an operation.
+pub struct ExtensionUserError(pub String);
+
 /// Extractor that gets a value from [request extensions].
 ///
 /// This is commonly used to share state across handlers.
