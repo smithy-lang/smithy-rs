@@ -223,6 +223,7 @@ class ServerProtocolTestGenerator(
                 checkBody(this, body, httpRequestTestCase)
             }
         }
+        checkHttpExtensions(this)
 
         // Explicitly warn if the test case defined parameters that we aren't doing anything with
         with(httpRequestTestCase) {
@@ -320,6 +321,18 @@ class ServerProtocolTestGenerator(
         } else {
             rustWriter.rust("assert_eq!(input, expected);")
         }
+    }
+
+    private fun checkHttpExtensions(rustWriter: RustWriter) {
+        rustWriter.rust(
+            """
+            let extensions = http_request.extensions().expect("unable to extract http request extensions");
+            let namespace = extensions.get::<aws_smithy_http_server::ExtensionNamespace>().expect("extension ExtensionNamespace not found");
+            assert_eq!(namespace.0, ${operationShape.id.getNamespace().dq()});
+            let operation_name = extensions.get::<aws_smithy_http_server::ExtensionOperationName>().expect("extension ExtensionOperationName not found");
+            assert_eq!(operation_name.0, ${operationSymbol.name.dq()});
+            """.trimIndent()
+        )
     }
 
     private fun checkHeaders(rustWriter: RustWriter, headers: Map<String, String>) {
