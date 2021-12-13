@@ -34,10 +34,46 @@
 
 //! Extension extraction to share state across handlers.
 
-use super::rejection::{ExtensionRejection, ExtensionsAlreadyExtracted, MissingExtension};
+use super::rejection::{ExtensionHandlingRejection, ExtensionsAlreadyExtracted, MissingExtension};
 use async_trait::async_trait;
 use axum_core::extract::{FromRequest, RequestParts};
 use std::ops::Deref;
+
+/// Extension type used to store the Smithy model namespace.
+#[derive(Debug, Clone)]
+pub struct ExtensionNamespace(&'static str);
+impl_extension_new_and_deref!(ExtensionNamespace);
+
+/// Extension type used to store the Smithy operation name.
+#[derive(Debug, Clone)]
+pub struct ExtensionOperationName(&'static str);
+impl_extension_new_and_deref!(ExtensionOperationName);
+
+/// Extension type used to store the type of user defined error returned by an operation.
+/// These are modeled errors, defined in the Smithy model.
+#[derive(Debug, Clone)]
+pub struct ExtensionModeledError(&'static str);
+impl_extension_new_and_deref!(ExtensionModeledError);
+
+/// Extension type used to store the type of framework error caught during execution.
+/// These are unmodeled error, or rejection, defined in the runtime crates.
+#[derive(Debug, Clone)]
+pub struct ExtensionRejection(String);
+
+impl ExtensionRejection {
+    /// Returns a new `ExtensionRejection`.
+    pub fn new(value: String) -> ExtensionRejection {
+        ExtensionRejection(value)
+    }
+}
+
+impl Deref for ExtensionRejection {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Extractor that gets a value from [request extensions].
 ///
@@ -56,7 +92,7 @@ where
     T: Clone + Send + Sync + 'static,
     B: Send,
 {
-    type Rejection = ExtensionRejection;
+    type Rejection = ExtensionHandlingRejection;
 
     async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
         let value = req
