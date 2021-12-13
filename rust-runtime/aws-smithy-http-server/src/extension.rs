@@ -47,7 +47,7 @@ pub struct ExtensionNamespace(pub Cow<'static, str>);
 #[derive(Debug, Clone)]
 pub struct ExtensionOperationName(pub Cow<'static, str>);
 
-/// Extension type used to store the type of framework error caught during exection.
+/// Extension type used to store the type of framework error caught during execution.
 /// These are unmodeled error, defined in the runtime crates.
 #[derive(Debug, Clone)]
 pub struct ExtensionUnmodeledError(pub String);
