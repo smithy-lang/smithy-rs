@@ -7,16 +7,20 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
+import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -612,27 +616,78 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
+    // The `httpQueryParams` trait can be applied to structure members that target:
+    //     * a map of string,
+    //     * a map of list of string; or
+    //     * a map of set of string.
+    enum class QueryParamsTargetMapValueType {
+        STRING, LIST, SET;
+
+        fun asRustType(): RustType =
+            when (this) {
+                STRING -> RustType.String
+                LIST -> RustType.Vec(RustType.String)
+                SET -> RustType.HashSet(RustType.String)
+            }
+    }
+
+    private fun queryParamsTargetMapValueType(targetMapValue: Shape): QueryParamsTargetMapValueType =
+        if (targetMapValue.isStringShape) {
+            println(targetMapValue)
+            println("isStringShape")
+            QueryParamsTargetMapValueType.STRING
+        } else if (targetMapValue.isListShape) {
+            println(targetMapValue)
+            println("isListShape")
+            QueryParamsTargetMapValueType.LIST
+        } else if (targetMapValue.isSetShape) {
+            println(targetMapValue)
+            println("isSetShape")
+            QueryParamsTargetMapValueType.SET
+        } else {
+            throw ExpectationNotMetException("""
+                @httpQueryParams trait applied to non-supported target
+                $targetMapValue of type ${targetMapValue.type}
+                """.trimIndent(),
+                targetMapValue.sourceLocation)
+        }
+
     private fun serverRenderQueryStringParser(writer: RustWriter, operationShape: OperationShape) {
         val queryBindings =
             httpBindingResolver.requestBindings(operationShape).filter {
                 it.location == HttpLocation.QUERY
             }
-        val queryParamsBindings =
-            httpBindingResolver.requestBindings(operationShape).filter {
+        // Only a single structure member can be bound to `httpQueryParams`, hence `find`.
+        val queryParamsBinding =
+            httpBindingResolver.requestBindings(operationShape).find {
                 it.location == HttpLocation.QUERY_PARAMS
             }
-        if (queryBindings.isEmpty() && queryParamsBindings.isEmpty()) {
+        if (queryBindings.isEmpty() && queryParamsBinding == null) {
             return
         }
+
+        fun HttpBindingDescriptor.queryParamsBindingTargetMapValueType(): QueryParamsTargetMapValueType  {
+            val queryParamsTarget = model.expectShape(this.member.target)
+            val mapTarget = queryParamsTarget.asMapShape().get()
+            return queryParamsTargetMapValueType(model.expectShape(mapTarget.value.target))
+        }
+
         writer.rustTemplate("""
-                let query_string = request.uri().query().ok_or(#{SmithyHttpServer}::rejection::MissingQueryString)?;
-                let pairs = #{SerdeUrlEncoded}::from_str::<Vec<(&str, &str)>>(query_string)?;
-                """.trimIndent(),
+            let query_string = request.uri().query().ok_or(#{SmithyHttpServer}::rejection::MissingQueryString)?;
+            let pairs = #{SerdeUrlEncoded}::from_str::<Vec<(&str, &str)>>(query_string)?;
+            """.trimIndent(),
             *codegenScope
         )
+
+        if (queryParamsBinding != null) {
+            writer.rustTemplate("let mut query_params: #{HashMap}<String, " +
+                    "${queryParamsBinding.queryParamsBindingTargetMapValueType().asRustType().render()}> = #{HashMap}::new();",
+                "HashMap" to RustType.HashMap.RuntimeType,
+            )
+        }
         with(writer) {
             queryBindings.forEach {
-                rust("let mut seen_${it.locationName} = false;")
+                rust("##[allow(non_snake_case)] let mut seen_${it.locationName} = false;")
             }
             rustBlock("for (k, v) in pairs") {
                 queryBindings.forEach {
@@ -647,6 +702,21 @@ private class ServerHttpProtocolImplGenerator(
                     """.trimIndent(),
                     "deserializer" to deserializer)
                 }
+
+                if (queryParamsBinding != null) {
+                    if (queryParamsBinding.queryParamsBindingTargetMapValueType() == QueryParamsTargetMapValueType.STRING) {
+                        rust("query_params.entry(String::from(k)).or_insert(String::from(v));")
+                    } else {
+                        // TODO, left off here.
+                        rustTemplate("""
+                            let entry = query_params.entry(String::from(k)).or_default();
+                            entry.push(String::from(v));
+                        """.trimIndent())
+                    }
+                }
+            }
+            if (queryParamsBinding != null) {
+                rust("input = input.${queryParamsBinding.member.setterName()}(Some(query_params));")
             }
         }
     }
