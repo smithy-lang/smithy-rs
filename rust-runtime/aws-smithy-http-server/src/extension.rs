@@ -48,12 +48,14 @@ pub struct ExtensionNamespace(pub &'static str);
 pub struct ExtensionOperationName(pub &'static str);
 
 /// Extension type used to store the type of framework error caught during exection.
+/// These are unmodeled error, defined in the runtime crates.
 #[derive(Debug, Clone)]
-pub struct ExtensionFrameworkError(pub String);
+pub struct ExtensionUnmodeledError(pub String);
 
 /// Extension type used to store the type of user defined error returned by an operation.
+/// These are modeled errors, defined in the Smithy model.
 #[derive(Debug, Clone)]
-pub struct ExtensionUserError(pub String);
+pub struct ExtensionModeledError(pub String);
 
 /// Extractor that gets a value from [request extensions].
 ///

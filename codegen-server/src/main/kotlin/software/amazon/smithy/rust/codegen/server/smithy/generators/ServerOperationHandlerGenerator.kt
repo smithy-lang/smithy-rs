@@ -67,7 +67,7 @@ class ServerOperationHandlerGenerator(
                 "impl<B, Fun, Fut> #{ServerOperationHandler}::Handler<B, (), $inputName> for Fun"
             }
             val storeErrorInExtensions = """{
-                let error = aws_smithy_http_server::ExtensionFrameworkError(r.to_string());
+                let error = aws_smithy_http_server::ExtensionUnmodeledError(r.to_string());
                 let mut response = r.into_response();
                 response.extensions_mut().insert(error);
                 return response.map($serverCrate::boxed);
