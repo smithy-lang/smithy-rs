@@ -9,7 +9,6 @@ edition = "2018"
 
 [dev-dependencies]
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
-aws-hyper = { path = "../../build/aws-sdk/sdk/aws-hyper" }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }

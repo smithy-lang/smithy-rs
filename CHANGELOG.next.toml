@@ -157,3 +157,9 @@ message = "Fixed a bug where certain characters caused a panic during URI encodi
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 references = ["smithy-rs#953", "aws-sdk-rust#331"]
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "`aws-hyper::AwsMiddleware` is now generated into generated service clients directly. If you used `aws_hyper::Middleware`, use <service>::middleware::DefaultMiddleware` instead."
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+references = ["smithy-rs#959", "smithy-rs#934"]
+author = "rcoh"
