@@ -72,6 +72,13 @@ class StructureGenerator(
         }
     }
 
+    fun renderServer() {
+        renderStructure()
+        errorTrait?.also { errorTrait ->
+            ErrorGenerator(symbolProvider, writer, shape, errorTrait).renderServer()
+        }
+    }
+
     companion object {
         /** Returns whether a structure shape requires a fallible builder to be generated. */
         fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =

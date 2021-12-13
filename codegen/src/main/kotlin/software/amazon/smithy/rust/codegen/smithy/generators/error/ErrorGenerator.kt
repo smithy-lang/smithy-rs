@@ -64,11 +64,22 @@ class ErrorGenerator(
     private val shape: StructureShape,
     private val error: ErrorTrait
 ) {
+    /*
+     * Renders an error specific for the client implementation.
+     */
     fun render() {
-        renderError()
+        renderError(false)
     }
 
-    private fun renderError() {
+    /*
+     * Renders an error specific for the server implementation, where the [name] method is added to allow
+     * to record encoutered error types inside `http::Extensions`.
+     */
+    fun renderServer() {
+        renderError(true)
+    }
+
+    private fun renderError(isServer: Boolean) {
         val symbol = symbolProvider.toSymbol(shape)
         val messageShape = shape.errorMessageMember()
         val message = messageShape?.let { "self.${symbolProvider.toMemberName(it)}.as_deref()" } ?: "None"
@@ -87,6 +98,17 @@ class ErrorGenerator(
                 pub fn message(&self) -> Option<&str> { $message }
                 """
             )
+            if (isServer) {
+                rust(
+                    """
+                    ##[doc(hidden)]
+                    /// Returns the error name.
+                    pub fn name(&self) -> &'static str {
+                        ${shape.id.name.dq()}
+                    }
+                    """
+                )
+            }
         }
 
         writer.rustBlock("impl #T for ${symbol.name}", stdfmt.member("Display")) {

@@ -101,7 +101,7 @@ composite_rejection! {
     ///
     /// Contains one variant for each way the [`Extension`](super::Extension) extractor
     /// can fail.
-    pub enum ExtensionRejection {
+    pub enum ExtensionHandlingRejection {
         MissingExtension,
         ExtensionsAlreadyExtracted,
     }
@@ -124,6 +124,7 @@ composite_rejection! {
         ContentTypeRejection,
         BodyAlreadyExtracted,
         HeadersAlreadyExtracted,
+        ExtensionsAlreadyExtracted,
     }
 }
 
