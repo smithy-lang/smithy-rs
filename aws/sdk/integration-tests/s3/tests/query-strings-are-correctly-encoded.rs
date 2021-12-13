@@ -13,6 +13,62 @@ use std::time::{Duration, UNIX_EPOCH};
 
 pub type Client<C> = CoreClient<C, AwsMiddleware>;
 
+#[tokio::test]
+async fn test_s3_signer_query_string_with_all_valid_chars() -> Result<(), aws_sdk_s3::Error> {
+    let creds = Credentials::new(
+        "ANOTREAL",
+        "notrealrnrELgWzOk3IfjzDKtFBhDby",
+        Some("notarealsessiontoken".to_string()),
+        None,
+        "test",
+    );
+    let conf = aws_sdk_s3::Config::builder()
+        .credentials_provider(creds)
+        .region(Region::new("us-east-1"))
+        .build();
+    let (conn, rcvr) = capture_request(None);
+
+    let client = Client::new(conn.clone());
+
+    let mut op = ListObjectsV2::builder()
+        .bucket("test-bucket")
+        .prefix(r#":/?#[]@!$&'"(){}~`*+,;=%<>"#)
+        .build()
+        .unwrap()
+        .make_operation(&conf)
+        .await
+        .expect("failed to construct operation");
+    op.properties_mut()
+        .insert(UNIX_EPOCH + Duration::from_secs(1624036048));
+    op.properties_mut().insert(AwsUserAgent::for_tests());
+
+    client.call(op).await.unwrap();
+
+    let expected_req = rcvr.expect_request();
+    let auth_header = expected_req
+        .headers()
+        .get("Authorization")
+        .unwrap()
+        .to_owned();
+
+    // This is a snapshot test taken from a known working test result
+    let snapshot_signature =
+        "Signature=8dfa41f2db599a9fba53393b0ae5da646e5e452fa3685f7a1487d6eade5ec5c8";
+    assert!(
+        auth_header
+            .to_str()
+            .unwrap()
+            .contains(snapshot_signature),
+        "authorization header signature did not match expected signature: got {}, expected it to contain {}",
+        auth_header.to_str().unwrap(),
+        snapshot_signature
+    );
+
+    Ok(())
+}
+
+// // This test can help identify individual characters that break the signing of query strings
+// // This test must be run against an actual bucket
 // #[tokio::test]
 // async fn test_query_strings_are_correctly_encoded() -> Result<(), aws_sdk_s3::Error> {
 //     tracing_subscriber::fmt::init();
@@ -94,58 +150,4 @@ pub type Client<C> = CoreClient<C, AwsMiddleware>;
 //         );
 //         panic!("test failed, see logs for the problem chars")
 //     }
-// }
-
-#[tokio::test]
-async fn test_s3_signer_query_string_with_all_valid_chars() -> Result<(), aws_sdk_s3::Error> {
-    let creds = Credentials::new(
-        "ANOTREAL",
-        "notrealrnrELgWzOk3IfjzDKtFBhDby",
-        Some("notarealsessiontoken".to_string()),
-        None,
-        "test",
-    );
-    let conf = aws_sdk_s3::Config::builder()
-        .credentials_provider(creds)
-        .region(Region::new("us-east-1"))
-        .build();
-    let (conn, rcvr) = capture_request(None);
-
-    let client = Client::new(conn.clone());
-
-    let mut op = ListObjectsV2::builder()
-        .bucket("test-bucket")
-        .prefix(r#":/?#[]@!$&'"(){}~`*+,;=%<>"#)
-        .build()
-        .unwrap()
-        .make_operation(&conf)
-        .await
-        .expect("failed to construct operation");
-    op.properties_mut()
-        .insert(UNIX_EPOCH + Duration::from_secs(1624036048));
-    op.properties_mut().insert(AwsUserAgent::for_tests());
-
-    client.call(op).await.unwrap();
-
-    let expected_req = rcvr.expect_request();
-    let auth_header = expected_req
-        .headers()
-        .get("Authorization")
-        .unwrap()
-        .to_owned();
-
-    // This is a snapshot test taken from a known working test result
-    let snapshot_signature =
-        "Signature=8dfa41f2db599a9fba53393b0ae5da646e5e452fa3685f7a1487d6eade5ec5c8";
-    assert!(
-        auth_header
-            .to_str()
-            .unwrap()
-            .contains(snapshot_signature),
-        "authorization header signature did not match expected signature: got {}, expected it to contain {}",
-        auth_header.to_str().unwrap(),
-        snapshot_signature
-    );
-
-    Ok(())
-}
+//
