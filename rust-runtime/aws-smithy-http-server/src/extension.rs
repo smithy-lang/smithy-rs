@@ -57,7 +57,7 @@ pub struct ExtensionRejection(pub Cow<'static, str>);
 #[derive(Debug, Clone)]
 pub struct ExtensionModeledError(pub Cow<'static, str>);
 
-/// Implement new for all Extension holding a Cow<'static, str>.
+/// Implement `new` for all `Extension`s holding a `Cow<'static, str>`.
 macro_rules! impl_extension_new_static {
     ($name:ident, $sname:expr) => {
         impl $name {
