@@ -15,7 +15,6 @@ pub type Client<C> = CoreClient<C, AwsMiddleware>;
 
 #[tokio::test]
 async fn test_s3_signer_query_string_with_all_valid_chars() -> Result<(), aws_sdk_s3::Error> {
-    tracing_subscriber::fmt::init();
     let creds = Credentials::new(
         "ANOTREAL",
         "notrealrnrELgWzOk3IfjzDKtFBhDby",

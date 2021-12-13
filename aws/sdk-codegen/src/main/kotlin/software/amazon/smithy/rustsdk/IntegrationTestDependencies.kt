@@ -63,6 +63,8 @@ class IntegrationTestDependencies(
                 addDependency(SerdeJson)
                 addDependency(Tokio)
                 addDependency(FuturesUtil)
+                addDependency(Tracing)
+                addDependency(TracingSubscriber)
             }
             if (hasBenches) {
                 addDependency(Criterion)
@@ -95,3 +97,5 @@ private val Hound = CargoDependency("hound", CratesIo("3.4"), DependencyScope.De
 private val SerdeJson = CargoDependency("serde_json", CratesIo("1"), features = emptySet(), scope = DependencyScope.Dev)
 private val Tokio = CargoDependency("tokio", CratesIo("1"), features = setOf("macros", "test-util"), scope = DependencyScope.Dev)
 private val FuturesUtil = CargoDependency("futures-util", CratesIo("0.3"), scope = DependencyScope.Dev)
+private val Tracing = CargoDependency("tracing", CratesIo("0.1"), scope = DependencyScope.Dev)
+private val TracingSubscriber = CargoDependency("tracing-subscriber", CratesIo("0.2"), scope = DependencyScope.Dev)
