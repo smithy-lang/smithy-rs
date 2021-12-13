@@ -197,7 +197,7 @@ private class ServerHttpProtocolImplGenerator(
                     Self::Error(err) => {
                         match #{serialize_error}(&err) {
                             Ok(mut response) => {
-                                response.extensions_mut().insert(aws_smithy_http_server::ExtensionModeledError(err.name()));
+                                response.extensions_mut().insert(aws_smithy_http_server::ExtensionModeledError(std::borrow::Cow::from(err.name())));
                                 response
                             },
                             Err(e) => {
@@ -312,8 +312,8 @@ private class ServerHttpProtocolImplGenerator(
         val requestPrefix = if (operationShape.inputShape(model).hasStreamingMember(model)) { "_" } else { "" }
         return """
             let extensions = ${requestPrefix}req.extensions_mut().ok_or(#{SmithyHttpServer}::rejection::ExtensionsAlreadyExtracted)?;
-            extensions.insert(#{SmithyHttpServer}::ExtensionNamespace(${namespace.dq()}));
-            extensions.insert(#{SmithyHttpServer}::ExtensionOperationName(${operationName.dq()}));
+            extensions.insert(#{SmithyHttpServer}::ExtensionNamespace(std::borrow::Cow::from(${namespace.dq()})));
+            extensions.insert(#{SmithyHttpServer}::ExtensionOperationName(std::borrow::Cow::from(${operationName.dq()})));
         """.trimIndent()
     }
 

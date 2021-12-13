@@ -37,15 +37,15 @@
 use super::rejection::{ExtensionRejection, ExtensionsAlreadyExtracted, MissingExtension};
 use async_trait::async_trait;
 use axum_core::extract::{FromRequest, RequestParts};
-use std::ops::Deref;
+use std::{borrow::Cow, ops::Deref};
 
 /// Extension type used to store the Smithy model namespace.
 #[derive(Debug, Clone)]
-pub struct ExtensionNamespace(pub &'static str);
+pub struct ExtensionNamespace(pub Cow<'static, str>);
 
 /// Extension type used to store the Smithy operation name.
 #[derive(Debug, Clone)]
-pub struct ExtensionOperationName(pub &'static str);
+pub struct ExtensionOperationName(pub Cow<'static, str>);
 
 /// Extension type used to store the type of framework error caught during exection.
 /// These are unmodeled error, defined in the runtime crates.
@@ -55,7 +55,7 @@ pub struct ExtensionUnmodeledError(pub String);
 /// Extension type used to store the type of user defined error returned by an operation.
 /// These are modeled errors, defined in the Smithy model.
 #[derive(Debug, Clone)]
-pub struct ExtensionModeledError(pub String);
+pub struct ExtensionModeledError(pub Cow<'static, str>);
 
 /// Extractor that gets a value from [request extensions].
 ///

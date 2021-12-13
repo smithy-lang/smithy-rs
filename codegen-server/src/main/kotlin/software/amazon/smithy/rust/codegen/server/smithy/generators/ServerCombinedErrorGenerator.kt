@@ -69,7 +69,7 @@ class ServerCombinedErrorGenerator(
                 }
             }
             writer.rust("/// Returns the error name string by matching the correct variant.")
-            writer.rustBlock("pub fn name(&self) -> String") {
+            writer.rustBlock("pub fn name(&self) -> &'static str") {
                 delegateToVariants {
                     rust("_inner.name()")
                 }
