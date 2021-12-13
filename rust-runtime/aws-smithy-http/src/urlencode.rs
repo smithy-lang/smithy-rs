@@ -41,8 +41,6 @@ pub const BASE_SET: &AsciiSet = &CONTROLS
     .add(b'`')
     .add(b'\\');
 
-pub const LABEL_SET: &AsciiSet = &BASE_SET.add(b'`').add(b'?').add(b' ');
-
 #[cfg(test)]
 mod test {
     use crate::urlencode::BASE_SET;

@@ -6,15 +6,15 @@
 //! Formatting values as Smithy
 //! [httpLabel](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait)
 
-use crate::urlencode::LABEL_SET;
+use crate::urlencode::BASE_SET;
 use aws_smithy_types::date_time::{DateTimeFormatError, Format};
 use aws_smithy_types::DateTime;
 use percent_encoding::AsciiSet;
 
-const GREEDY: &AsciiSet = &LABEL_SET.remove(b'/');
+const GREEDY: &AsciiSet = &BASE_SET.remove(b'/');
 
 pub fn fmt_string<T: AsRef<str>>(t: T, greedy: bool) -> String {
-    let uri_set = if greedy { GREEDY } else { LABEL_SET };
+    let uri_set = if greedy { GREEDY } else { BASE_SET };
     percent_encoding::utf8_percent_encode(t.as_ref(), uri_set).to_string()
 }
 

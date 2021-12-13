@@ -30,9 +30,12 @@ async fn test_s3_signer_query_string_with_all_valid_chars() -> Result<(), aws_sd
 
     let client = Client::new(conn.clone());
 
+    // Generate a string containing all printable ASCII chars
+    let prefix: String = (32u8..127).map(char::from).collect();
+
     let mut op = ListObjectsV2::builder()
         .bucket("test-bucket")
-        .prefix(r#":/?#[]@!$&'"(){}~`*+,;=%<>"#)
+        .prefix(&prefix)
         .build()
         .unwrap()
         .make_operation(&conf)
@@ -55,7 +58,7 @@ async fn test_s3_signer_query_string_with_all_valid_chars() -> Result<(), aws_sd
 
     // This is a snapshot test taken from a known working test result
     let snapshot_signature =
-        "Signature=d19648adacd60f7a6ea80bf32d54f7268b7f8bdda0303a19bab6e1fec7ce2728";
+        "Signature=775f88213304a5233ff295f869571554140e3db171a2d4a64f63902c49f79880";
     assert!(
         auth_header
             .to_str()
