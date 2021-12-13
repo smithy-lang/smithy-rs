@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -667,52 +668,57 @@ private class ServerHttpProtocolImplGenerator(
             return queryParamsTargetMapValueType(model.expectShape(mapTarget.value.target))
         }
 
-        writer.rustTemplate("""
-            let query_string = request.uri().query().ok_or(#{SmithyHttpServer}::rejection::MissingQueryString)?;
-            let pairs = #{SerdeUrlEncoded}::from_str::<Vec<(&str, &str)>>(query_string)?;
-            """.trimIndent(),
-            *codegenScope
-        )
-
-        if (queryParamsBinding != null) {
-            writer.rustTemplate("let mut query_params: #{HashMap}<String, " +
-                    "${queryParamsBinding.queryParamsBindingTargetMapValueType().asRustType().render()}> = #{HashMap}::new();",
-                "HashMap" to RustType.HashMap.RuntimeType,
-            )
-        }
         with(writer) {
-            queryBindings.forEach {
-                rust("##[allow(non_snake_case)] let mut seen_${it.memberName} = false;")
+            rustTemplate("""
+                let query_string = request.uri().query().ok_or(#{SmithyHttpServer}::rejection::MissingQueryString)?;
+                let pairs = #{SerdeUrlEncoded}::from_str::<Vec<(&str, &str)>>(query_string)?;
+                """.trimIndent(),
+                *codegenScope
+            )
+
+            if (queryParamsBinding != null) {
+                rustTemplate("let mut query_params: #{HashMap}<String, " +
+                        "${queryParamsBinding.queryParamsBindingTargetMapValueType().asRustType().render()}> = #{HashMap}::new();",
+                    "HashMap" to RustType.HashMap.RuntimeType,
+                )
             }
+            val (queryBindingsTargettingCollection, queryBindingsTargettingSimple) =
+                queryBindings.partition { model.expectShape(it.member.target) is CollectionShape }
+            queryBindingsTargettingSimple.forEach {
+                rust("let mut seen_${it.memberName.toSnakeCase()} = false;")
+            }
+            queryBindingsTargettingCollection.forEach {
+                it.
+                rust("let mut seen_${it.memberName.toSnakeCase()} = false;")
+            }
+
             rustBlock("for (k, v) in pairs") {
-                queryBindings.forEach {
+                val (queryBindingsTargettingCollection, queryBindingsTargettingSimple) =
+                    queryBindings.partition { model.expectShape(it.member.target) is CollectionShape }
+                queryBindingsTargettingSimple.forEach {
                     val deserializer = generateParsePercentEncodedStrFn(it)
                     rustTemplate("""
-                        if !seen_${it.memberName} && k == "${it.memberName}" {
+                        if !seen_${it.memberName.toSnakeCase()} && k == "${it.memberName}" {
                             input = input.${it.member.setterName()}(
                                 #{deserializer}(v)?
                             );
-                            seen_${it.memberName} = true;
+                            seen_${it.memberName.toSnakeCase()} = true;
                         }
                     """.trimIndent(),
                     "deserializer" to deserializer)
+                }
+                queryBindingsTargettingCollection.forEach {
+
                 }
 
                 if (queryParamsBinding != null) {
                     when (queryParamsBinding.queryParamsBindingTargetMapValueType()) {
                         QueryParamsTargetMapValueType.STRING -> {
                             rust("query_params.entry(String::from(k)).or_insert(String::from(v));")
-                        }
-                        QueryParamsTargetMapValueType.LIST -> {
+                        } else -> {
                             rustTemplate("""
                                 let entry = query_params.entry(String::from(k)).or_default();
                                 entry.push(String::from(v));
-                            """.trimIndent())
-                        }
-                        QueryParamsTargetMapValueType.SET -> {
-                            rustTemplate("""
-                                let entry = query_params.entry(String::from(k)).or_default();
-                                entry.insert(String::from(v));
                             """.trimIndent())
                         }
                     }
