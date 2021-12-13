@@ -50,12 +50,35 @@ pub struct ExtensionOperationName(pub Cow<'static, str>);
 /// Extension type used to store the type of framework error caught during execution.
 /// These are unmodeled error, or rejection, defined in the runtime crates.
 #[derive(Debug, Clone)]
-pub struct ExtensionRejection(pub String);
+pub struct ExtensionRejection(pub Cow<'static, str>);
 
 /// Extension type used to store the type of user defined error returned by an operation.
 /// These are modeled errors, defined in the Smithy model.
 #[derive(Debug, Clone)]
 pub struct ExtensionModeledError(pub Cow<'static, str>);
+
+/// Implement new for all Extension holding a Cow<'static, str>.
+macro_rules! impl_extension_new_static {
+    ($name:ident, $sname:expr) => {
+        impl $name {
+            #[doc = "Returns a new `"]
+            #[doc = $sname]
+            #[doc = "`."]
+            pub fn new<S: Into<String>>(value: S) -> $name {
+                $name(std::borrow::Cow::from(value.into()))
+            }
+        }
+    };
+
+    ($name:tt) => {
+        impl_extension_new_static!($name, stringify!($name));
+    };
+}
+
+impl_extension_new_static!(ExtensionNamespace);
+impl_extension_new_static!(ExtensionOperationName);
+impl_extension_new_static!(ExtensionRejection);
+impl_extension_new_static!(ExtensionModeledError);
 
 /// Extractor that gets a value from [request extensions].
 ///

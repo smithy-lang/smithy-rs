@@ -189,7 +189,7 @@ private class ServerHttpProtocolImplGenerator(
                             Ok(response) => response,
                             Err(e) => {
                                 let mut response = #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from output");
-                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection(e.to_string()));
+                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection::new(&e.to_string()));
                                 response
                             }
                         }
@@ -197,12 +197,12 @@ private class ServerHttpProtocolImplGenerator(
                     Self::Error(err) => {
                         match #{serialize_error}(&err) {
                             Ok(mut response) => {
-                                response.extensions_mut().insert(aws_smithy_http_server::ExtensionModeledError(std::borrow::Cow::from(err.name())));
+                                response.extensions_mut().insert(aws_smithy_http_server::ExtensionModeledError::new(err.name()));
                                 response
                             },
                             Err(e) => {
                                 let mut response = #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from error");
-                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection(e.to_string()));
+                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection::new(&e.to_string()));
                                 response
                             }
                         }
@@ -310,8 +310,8 @@ private class ServerHttpProtocolImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         return """
             let extensions = req.extensions_mut().ok_or(#{SmithyHttpServer}::rejection::ExtensionsAlreadyExtracted)?;
-            extensions.insert(#{SmithyHttpServer}::ExtensionNamespace(std::borrow::Cow::from(${namespace.dq()})));
-            extensions.insert(#{SmithyHttpServer}::ExtensionOperationName(std::borrow::Cow::from(${operationName.dq()})));
+            extensions.insert(#{SmithyHttpServer}::ExtensionNamespace::new(${namespace.dq()}));
+            extensions.insert(#{SmithyHttpServer}::ExtensionOperationName::new(${operationName.dq()}));
         """.trimIndent()
     }
 
