@@ -20,7 +20,7 @@ fun Project.docsLandingPage(awsServices: List<AwsService>, outputDir: File) {
         write("# AWS SDK for Rust")
         write(
             "The AWS SDK for Rust contains one crate for each AWS service, as well as ${cratesIo("aws-config")} " +
-                "${docsRs("aws-config")},a crate implementing configuration loading such as credential providers. " +
+                "${docsRs("aws-config")}, a crate implementing configuration loading such as credential providers. " +
                 "For usage documentation see the [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html)."
         )
 
