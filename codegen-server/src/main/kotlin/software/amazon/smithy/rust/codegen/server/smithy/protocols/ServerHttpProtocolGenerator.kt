@@ -138,7 +138,7 @@ private class ServerHttpProtocolImplGenerator(
             // It will first offer the streaming input to the parser and potentially read the body into memory
             // if an error occurred or if the streaming parser indicates that it needs the full data to proceed.
             """
-            async fn from_request(_req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
+            async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
                 $httpExtensions
                 todo!("Streaming support for input shapes is not yet supported in `smithy-rs`")
             }
@@ -189,7 +189,7 @@ private class ServerHttpProtocolImplGenerator(
                             Ok(response) => response,
                             Err(e) => {
                                 let mut response = #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from output");
-                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionUnmodeledError(e.to_string()));
+                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection(e.to_string()));
                                 response
                             }
                         }
@@ -202,7 +202,7 @@ private class ServerHttpProtocolImplGenerator(
                             },
                             Err(e) => {
                                 let mut response = #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from error");
-                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionUnmodeledError(e.to_string()));
+                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection(e.to_string()));
                                 response
                             }
                         }
@@ -308,10 +308,8 @@ private class ServerHttpProtocolImplGenerator(
     private fun setHttpExtensions(operationShape: OperationShape): String {
         val namespace = operationShape.id.getNamespace()
         val operationName = symbolProvider.toSymbol(operationShape).name
-        // TODO: remove when we support streaming types
-        val requestPrefix = if (operationShape.inputShape(model).hasStreamingMember(model)) { "_" } else { "" }
         return """
-            let extensions = ${requestPrefix}req.extensions_mut().ok_or(#{SmithyHttpServer}::rejection::ExtensionsAlreadyExtracted)?;
+            let extensions = req.extensions_mut().ok_or(#{SmithyHttpServer}::rejection::ExtensionsAlreadyExtracted)?;
             extensions.insert(#{SmithyHttpServer}::ExtensionNamespace(std::borrow::Cow::from(${namespace.dq()})));
             extensions.insert(#{SmithyHttpServer}::ExtensionOperationName(std::borrow::Cow::from(${operationName.dq()})));
         """.trimIndent()

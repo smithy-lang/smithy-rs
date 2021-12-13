@@ -25,7 +25,7 @@ pub use self::body::{boxed, to_boxed, Body, BoxBody, HttpBody};
 pub use self::error::Error;
 #[doc(inline)]
 pub use self::extension::{
-    Extension, ExtensionModeledError, ExtensionNamespace, ExtensionOperationName, ExtensionUnmodeledError,
+    Extension, ExtensionModeledError, ExtensionNamespace, ExtensionOperationName, ExtensionRejection,
 };
 #[doc(inline)]
 pub use self::routing::Router;

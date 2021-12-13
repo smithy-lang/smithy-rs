@@ -34,7 +34,7 @@
 
 //! Extension extraction to share state across handlers.
 
-use super::rejection::{ExtensionRejection, ExtensionsAlreadyExtracted, MissingExtension};
+use super::rejection::{ExtensionHandlingRejection, ExtensionsAlreadyExtracted, MissingExtension};
 use async_trait::async_trait;
 use axum_core::extract::{FromRequest, RequestParts};
 use std::{borrow::Cow, ops::Deref};
@@ -48,9 +48,9 @@ pub struct ExtensionNamespace(pub Cow<'static, str>);
 pub struct ExtensionOperationName(pub Cow<'static, str>);
 
 /// Extension type used to store the type of framework error caught during execution.
-/// These are unmodeled error, defined in the runtime crates.
+/// These are unmodeled error, or rejection, defined in the runtime crates.
 #[derive(Debug, Clone)]
-pub struct ExtensionUnmodeledError(pub String);
+pub struct ExtensionRejection(pub String);
 
 /// Extension type used to store the type of user defined error returned by an operation.
 /// These are modeled errors, defined in the Smithy model.
@@ -74,7 +74,7 @@ where
     T: Clone + Send + Sync + 'static,
     B: Send,
 {
-    type Rejection = ExtensionRejection;
+    type Rejection = ExtensionHandlingRejection;
 
     async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
         let value = req
