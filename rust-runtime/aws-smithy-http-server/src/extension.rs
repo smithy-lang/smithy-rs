@@ -40,15 +40,19 @@ use axum_core::extract::{FromRequest, RequestParts};
 use std::ops::Deref;
 
 /// Extension type used to store the Smithy model namespace.
-pub struct ExtensionNamespace(pub String);
+#[derive(Debug, Clone)]
+pub struct ExtensionNamespace(pub &'static str);
 
 /// Extension type used to store the Smithy operation name.
-pub struct ExtensionOperationName(pub String);
+#[derive(Debug, Clone)]
+pub struct ExtensionOperationName(pub &'static str);
 
 /// Extension type used to store the type of framework error caught during exection.
+#[derive(Debug, Clone)]
 pub struct ExtensionFrameworkError(pub String);
 
 /// Extension type used to store the type of user defined error returned by an operation.
+#[derive(Debug, Clone)]
 pub struct ExtensionUserError(pub String);
 
 /// Extractor that gets a value from [request extensions].

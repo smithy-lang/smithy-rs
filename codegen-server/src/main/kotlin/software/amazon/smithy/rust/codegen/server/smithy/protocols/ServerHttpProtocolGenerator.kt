@@ -312,8 +312,8 @@ private class ServerHttpProtocolImplGenerator(
         val requestPrefix = if (operationShape.inputShape(model).hasStreamingMember(model)) { "_" } else { "" }
         return """
             let extensions = ${requestPrefix}req.extensions_mut().ok_or(#{SmithyHttpServer}::rejection::ExtensionsAlreadyExtracted)?;
-            extensions.insert(#{SmithyHttpServer}::ExtensionNamespace(String::from("$namespace")));
-            extensions.insert(#{SmithyHttpServer}::ExtensionOperationName(String::from("$operationName")));
+            extensions.insert(#{SmithyHttpServer}::ExtensionNamespace(${namespace.dq()}));
+            extensions.insert(#{SmithyHttpServer}::ExtensionOperationName(${operationName.dq()}));
         """.trimIndent()
     }
 
