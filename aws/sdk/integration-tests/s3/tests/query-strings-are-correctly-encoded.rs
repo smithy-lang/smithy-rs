@@ -15,6 +15,7 @@ pub type Client<C> = CoreClient<C, AwsMiddleware>;
 
 #[tokio::test]
 async fn test_s3_signer_query_string_with_all_valid_chars() -> Result<(), aws_sdk_s3::Error> {
+    tracing_subscriber::fmt::init();
     let creds = Credentials::new(
         "ANOTREAL",
         "notrealrnrELgWzOk3IfjzDKtFBhDby",
@@ -42,7 +43,9 @@ async fn test_s3_signer_query_string_with_all_valid_chars() -> Result<(), aws_sd
         .insert(UNIX_EPOCH + Duration::from_secs(1624036048));
     op.properties_mut().insert(AwsUserAgent::for_tests());
 
-    client.call(op).await.unwrap();
+    // The response from the fake connection won't return the expected XML but we don't care about
+    // that error in this test
+    let _ = client.call(op).await;
 
     let expected_req = rcvr.expect_request();
     let auth_header = expected_req
@@ -53,7 +56,7 @@ async fn test_s3_signer_query_string_with_all_valid_chars() -> Result<(), aws_sd
 
     // This is a snapshot test taken from a known working test result
     let snapshot_signature =
-        "Signature=8dfa41f2db599a9fba53393b0ae5da646e5e452fa3685f7a1487d6eade5ec5c8";
+        "Signature=d19648adacd60f7a6ea80bf32d54f7268b7f8bdda0303a19bab6e1fec7ce2728";
     assert!(
         auth_header
             .to_str()
@@ -67,87 +70,97 @@ async fn test_s3_signer_query_string_with_all_valid_chars() -> Result<(), aws_sd
     Ok(())
 }
 
-// // This test can help identify individual characters that break the signing of query strings
-// // This test must be run against an actual bucket
-// #[tokio::test]
-// async fn test_query_strings_are_correctly_encoded() -> Result<(), aws_sdk_s3::Error> {
-//     tracing_subscriber::fmt::init();
-//     let config = aws_config::load_from_env().await;
-//     let client = aws_sdk_s3::Client::new(&config);
-//
-//     let mut chars_that_break_signing = Vec::new();
-//     let mut chars_that_break_uri_parsing = Vec::new();
-//     let mut chars_that_are_invalid_arguments = Vec::new();
-//
-//     // We test all possible bytes to check for issues with URL construction or signing
-//     for byte in u8::MIN..u8::MAX {
-//         let char = char::from(byte);
-//         let res = client
-//             .list_objects_v2()
-//             .bucket("telephone-game")
-//             .prefix(char)
-//             .send()
-//             .await;
-//         if let Err(SdkError::ServiceError {
-//             err: ListObjectsV2Error { kind, .. },
-//             ..
-//         }) = res
-//         {
-//             match kind {
-//                 ListObjectsV2ErrorKind::Unhandled(e)
-//                     if e.to_string().contains("SignatureDoesNotMatch") =>
-//                 {
-//                     chars_that_break_signing.push(byte);
-//                 }
-//                 ListObjectsV2ErrorKind::Unhandled(e) if e.to_string().contains("InvalidUri") => {
-//                     chars_that_break_uri_parsing.push(byte);
-//                 }
-//                 ListObjectsV2ErrorKind::Unhandled(e)
-//                     if e.to_string().contains("InvalidArgument") =>
-//                 {
-//                     chars_that_are_invalid_arguments.push(byte);
-//                 }
-//                 ListObjectsV2ErrorKind::Unhandled(e) if e.to_string().contains("InvalidToken") => {
-//                     panic!("refresh your credentials and run this test again");
-//                 }
-//                 e => todo!("unexpected error: {:?}", e),
-//             }
-//         }
-//     }
-//
-//     if chars_that_break_signing.is_empty()
-//         && chars_that_break_uri_parsing.is_empty()
-//         && chars_that_are_invalid_arguments.is_empty()
-//     {
-//         Ok(())
-//     } else {
-//         fn char_transform(c: u8) -> String {
-//             format!("{}\n", char::from(c))
-//         }
-//         error!(
-//             "The following characters caused a signature mismatch:\n{}\n(end)",
-//             chars_that_break_signing
-//                 .clone()
-//                 .into_iter()
-//                 .map(char_transform)
-//                 .collect::<String>()
-//         );
-//         error!(
-//             "The following characters caused a URI parse failure:\n{}\n(end)",
-//             chars_that_break_uri_parsing
-//                 .clone()
-//                 .into_iter()
-//                 .map(char_transform)
-//                 .collect::<String>()
-//         );
-//         error!(
-//             "The following characters caused an \"Invalid Argument\" failure:\n{}\n(end)",
-//             chars_that_are_invalid_arguments
-//                 .clone()
-//                 .into_iter()
-//                 .map(char_transform)
-//                 .collect::<String>()
-//         );
-//         panic!("test failed, see logs for the problem chars")
-//     }
-//
+// This test can help identify individual characters that break the signing of query strings. This
+// test must be run against an actual bucket so we `ignore` it unless the runner specifically requests it
+#[tokio::test]
+#[ignore]
+async fn test_query_strings_are_correctly_encoded() -> Result<(), aws_sdk_s3::Error> {
+    use aws_sdk_s3::error::{ListObjectsV2Error, ListObjectsV2ErrorKind};
+    use aws_smithy_http::result::SdkError;
+
+    tracing_subscriber::fmt::init();
+    let config = aws_config::load_from_env().await;
+    let client = aws_sdk_s3::Client::new(&config);
+
+    let mut chars_that_break_signing = Vec::new();
+    let mut chars_that_break_uri_parsing = Vec::new();
+    let mut chars_that_are_invalid_arguments = Vec::new();
+
+    // We test all possible bytes to check for issues with URL construction or signing
+    for byte in u8::MIN..u8::MAX {
+        let char = char::from(byte);
+        let res = client
+            .list_objects_v2()
+            .bucket("telephone-game")
+            .prefix(char)
+            .send()
+            .await;
+        if let Err(SdkError::ServiceError {
+            err: ListObjectsV2Error { kind, .. },
+            ..
+        }) = res
+        {
+            match kind {
+                ListObjectsV2ErrorKind::Unhandled(e)
+                    if e.to_string().contains("SignatureDoesNotMatch") =>
+                {
+                    chars_that_break_signing.push(byte);
+                }
+                ListObjectsV2ErrorKind::Unhandled(e) if e.to_string().contains("InvalidUri") => {
+                    chars_that_break_uri_parsing.push(byte);
+                }
+                ListObjectsV2ErrorKind::Unhandled(e)
+                    if e.to_string().contains("InvalidArgument") =>
+                {
+                    chars_that_are_invalid_arguments.push(byte);
+                }
+                ListObjectsV2ErrorKind::Unhandled(e) if e.to_string().contains("InvalidToken") => {
+                    panic!("refresh your credentials and run this test again");
+                }
+                e => todo!("unexpected error: {:?}", e),
+            }
+        }
+    }
+
+    if chars_that_break_signing.is_empty()
+        && chars_that_break_uri_parsing.is_empty()
+        && chars_that_are_invalid_arguments.is_empty()
+    {
+        Ok(())
+    } else {
+        fn char_transform(c: u8) -> String {
+            format!("byte {}: {}\n", c, char::from(c))
+        }
+        if !chars_that_break_signing.is_empty() {
+            tracing::error!(
+                "The following characters caused a signature mismatch:\n{}(end)",
+                chars_that_break_signing
+                    .clone()
+                    .into_iter()
+                    .map(char_transform)
+                    .collect::<String>()
+            );
+        }
+        if !chars_that_break_uri_parsing.is_empty() {
+            tracing::error!(
+                "The following characters caused a URI parse failure:\n{}(end)",
+                chars_that_break_uri_parsing
+                    .clone()
+                    .into_iter()
+                    .map(char_transform)
+                    .collect::<String>()
+            );
+        }
+        if !chars_that_are_invalid_arguments.is_empty() {
+            tracing::error!(
+                "The following characters caused an \"Invalid Argument\" failure:\n{}(end)",
+                chars_that_are_invalid_arguments
+                    .clone()
+                    .into_iter()
+                    .map(char_transform)
+                    .collect::<String>()
+            );
+        }
+        panic!("test failed, see logs for the problem chars")
+    }
+}
