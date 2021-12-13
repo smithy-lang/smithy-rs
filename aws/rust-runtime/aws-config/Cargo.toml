@@ -14,9 +14,9 @@ profile = ["sts", "web-identity-token", "meta", "environment", "imds", "http-pro
 meta = ["tokio/sync"]
 imds = ["profile", "aws-smithy-http/rt-tokio", "aws-smithy-http-tower", "aws-smithy-json", "tower", "aws-http", "meta"]
 environment = ["meta"]
-sts = ["aws-sdk-sts", "aws-hyper"]
+sts = ["aws-sdk-sts"]
 web-identity-token = ["sts", "profile"]
-http-provider = ["aws-hyper", "aws-smithy-json", "aws-smithy-http/rt-tokio", "tower", "tokio/sync"]
+http-provider = ["aws-smithy-json", "aws-smithy-http/rt-tokio", "tower", "tokio/sync"]
 tcp-connector = ["tokio/net", "tower"]
 
 # SSO is not supported
@@ -39,9 +39,6 @@ aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["sync"], optional = true }
 tracing = { version = "0.1" }
-
-# TODO: remove when middleware stacks are moved inside of clients directly
-aws-hyper = { path = "../../sdk/build/aws-sdk/sdk/aws-hyper", optional = true }
 
 # imds
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http", optional = true }
