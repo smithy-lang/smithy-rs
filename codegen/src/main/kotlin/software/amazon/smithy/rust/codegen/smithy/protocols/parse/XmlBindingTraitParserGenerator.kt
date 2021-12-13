@@ -49,6 +49,7 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlNameIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -240,7 +241,7 @@ class XmlBindingTraitParserGenerator(
     }
 
     override fun documentParser(operationShape: OperationShape): RuntimeType {
-        TODO("Document shapes are not supported by rest XML")
+        PANIC("Document shapes are not supported by rest XML")
     }
 
     override fun serverInputParser(operationShape: OperationShape): RuntimeType? {
@@ -347,7 +348,7 @@ class XmlBindingTraitParserGenerator(
                         parseStructure(target, ctx)
                     }
                     is UnionShape -> parseUnion(target, ctx)
-                    else -> TODO("Unhandled: $target")
+                    else -> PANIC("Unhandled: $target")
                 }
                 // each internal `parseT` function writes an `Result<T, E>` expression, unwrap those:
                 rust("?")
@@ -623,7 +624,7 @@ class XmlBindingTraitParserGenerator(
                     *codegenScope
                 )
             }
-            else -> TODO(shape.toString())
+            else -> PANIC("unexpected shape: $shape")
         }
     }
 
