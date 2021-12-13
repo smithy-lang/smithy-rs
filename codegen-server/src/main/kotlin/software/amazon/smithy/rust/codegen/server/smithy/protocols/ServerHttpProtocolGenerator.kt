@@ -633,16 +633,10 @@ private class ServerHttpProtocolImplGenerator(
 
     private fun queryParamsTargetMapValueType(targetMapValue: Shape): QueryParamsTargetMapValueType =
         if (targetMapValue.isStringShape) {
-            println(targetMapValue)
-            println("isStringShape")
             QueryParamsTargetMapValueType.STRING
         } else if (targetMapValue.isListShape) {
-            println(targetMapValue)
-            println("isListShape")
             QueryParamsTargetMapValueType.LIST
         } else if (targetMapValue.isSetShape) {
-            println(targetMapValue)
-            println("isSetShape")
             QueryParamsTargetMapValueType.SET
         } else {
             throw ExpectationNotMetException("""
@@ -667,6 +661,7 @@ private class ServerHttpProtocolImplGenerator(
         }
 
         fun HttpBindingDescriptor.queryParamsBindingTargetMapValueType(): QueryParamsTargetMapValueType  {
+            check(this.location == HttpLocation.QUERY_PARAMS)
             val queryParamsTarget = model.expectShape(this.member.target)
             val mapTarget = queryParamsTarget.asMapShape().get()
             return queryParamsTargetMapValueType(model.expectShape(mapTarget.value.target))
@@ -687,31 +682,39 @@ private class ServerHttpProtocolImplGenerator(
         }
         with(writer) {
             queryBindings.forEach {
-                rust("##[allow(non_snake_case)] let mut seen_${it.locationName} = false;")
+                rust("##[allow(non_snake_case)] let mut seen_${it.memberName} = false;")
             }
             rustBlock("for (k, v) in pairs") {
                 queryBindings.forEach {
                     val deserializer = generateParsePercentEncodedStrFn(it)
                     rustTemplate("""
-                        if !seen_${it.locationName} && k == "${it.locationName}" {
+                        if !seen_${it.memberName} && k == "${it.memberName}" {
                             input = input.${it.member.setterName()}(
                                 #{deserializer}(v)?
                             );
-                            seen_${it.locationName} = true;
+                            seen_${it.memberName} = true;
                         }
                     """.trimIndent(),
                     "deserializer" to deserializer)
                 }
 
                 if (queryParamsBinding != null) {
-                    if (queryParamsBinding.queryParamsBindingTargetMapValueType() == QueryParamsTargetMapValueType.STRING) {
-                        rust("query_params.entry(String::from(k)).or_insert(String::from(v));")
-                    } else {
-                        // TODO, left off here.
-                        rustTemplate("""
-                            let entry = query_params.entry(String::from(k)).or_default();
-                            entry.push(String::from(v));
-                        """.trimIndent())
+                    when (queryParamsBinding.queryParamsBindingTargetMapValueType()) {
+                        QueryParamsTargetMapValueType.STRING -> {
+                            rust("query_params.entry(String::from(k)).or_insert(String::from(v));")
+                        }
+                        QueryParamsTargetMapValueType.LIST -> {
+                            rustTemplate("""
+                                let entry = query_params.entry(String::from(k)).or_default();
+                                entry.push(String::from(v));
+                            """.trimIndent())
+                        }
+                        QueryParamsTargetMapValueType.SET -> {
+                            rustTemplate("""
+                                let entry = query_params.entry(String::from(k)).or_default();
+                                entry.insert(String::from(v));
+                            """.trimIndent())
+                        }
                     }
                 }
             }
