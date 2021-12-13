@@ -29,9 +29,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::Instant;
 
-use aws_hyper::AwsMiddleware;
+use aws_sdk_dynamodb::middleware::DefaultMiddleware;
 use aws_smithy_client::Client as CoreClient;
-pub type Client<C> = CoreClient<C, AwsMiddleware>;
+pub type Client<C> = CoreClient<C, DefaultMiddleware>;
 
 fn create_table(table_name: &str) -> CreateTableInput {
     CreateTable::builder()

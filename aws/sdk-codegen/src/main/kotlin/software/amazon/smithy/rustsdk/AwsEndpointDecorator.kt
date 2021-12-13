@@ -71,7 +71,7 @@ class AwsEndpointDecorator : RustCodegenDecorator {
 class EndpointConfigCustomization(private val codegenContext: CodegenContext, private val endpointData: ObjectNode) :
     ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val resolveAwsEndpoint = runtimeConfig.awsEndpointDependency().asType().copy(name = "ResolveAwsEndpoint")
+    private val resolveAwsEndpoint = runtimeConfig.awsEndpoint().asType().copy(name = "ResolveAwsEndpoint")
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rust(
@@ -109,7 +109,6 @@ class EndpointConfigCustomization(private val codegenContext: CodegenContext, pr
 }
 
 // This is an experiment in a slightly different way to create runtime types. All code MAY be refactored to use this pattern
-fun RuntimeConfig.awsEndpointDependency() = awsRuntimeDependency("aws-endpoint")
 
 class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private val operationShape: OperationShape) :
     OperationCustomization() {
@@ -120,7 +119,7 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
                     """
                     #T::set_endpoint_resolver(&mut ${section.request}.properties_mut(), ${section.config}.endpoint_resolver.clone());
                     """,
-                    runtimeConfig.awsEndpointDependency().asType()
+                    runtimeConfig.awsEndpoint().asType()
                 )
             }
             else -> emptySection
@@ -145,7 +144,7 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
 class EndpointResolverGenerator(codegenContext: CodegenContext, private val endpointData: ObjectNode) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val endpointPrefix = codegenContext.serviceShape.expectTrait<ServiceTrait>().endpointPrefix
-    private val awsEndpoint = runtimeConfig.awsEndpointDependency().asType()
+    private val awsEndpoint = runtimeConfig.awsEndpoint().asType()
     private val codegenScope =
         arrayOf(
             "Partition" to awsEndpoint.member("Partition"),

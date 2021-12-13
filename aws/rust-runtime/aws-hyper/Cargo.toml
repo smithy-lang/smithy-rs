@@ -2,31 +2,10 @@
 name = "aws-hyper"
 version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
-description = "AWS SDK Tower middleware stack."
+description = "This crate has been removed and is deprecated."
 edition = "2018"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
-
-[dependencies]
-aws-endpoint = { path = "../aws-endpoint" }
-aws-http = { path = "../aws-http" }
-aws-sig-auth = { path = "../aws-sig-auth" }
-aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
-aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
-aws-smithy-http-tower = { path = "../../../rust-runtime/aws-smithy-http-tower" }
-tower = { version = "0.4.6" }
-
-[dev-dependencies]
-tokio = { version = "1", features = ["full", "test-util"] }
-tower-test = "0.4.0"
-aws-types = { path = "../aws-types" }
-aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
-http = "0.2.5"
-bytes = "1.1.0"
-aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-
-[[test]]
-name = "e2e_test"
 
 [package.metadata.docs.rs]
 all-features = true
