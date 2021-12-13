@@ -189,7 +189,7 @@ private class ServerHttpProtocolImplGenerator(
                             Ok(response) => response,
                             Err(e) => {
                                 let mut response = #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from output");
-                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection::new(&e.to_string()));
+                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection::new(e.to_string()));
                                 response
                             }
                         }
@@ -202,7 +202,7 @@ private class ServerHttpProtocolImplGenerator(
                             },
                             Err(e) => {
                                 let mut response = #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from error");
-                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection::new(&e.to_string()));
+                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection::new(e.to_string()));
                                 response
                             }
                         }

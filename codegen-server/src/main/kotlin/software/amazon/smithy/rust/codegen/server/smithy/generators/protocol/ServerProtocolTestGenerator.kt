@@ -328,9 +328,9 @@ class ServerProtocolTestGenerator(
             """
             let extensions = http_request.extensions().expect("unable to extract http request extensions");
             let namespace = extensions.get::<aws_smithy_http_server::ExtensionNamespace>().expect("extension ExtensionNamespace not found");
-            assert_eq!(namespace.0, ${operationShape.id.getNamespace().dq()});
+            assert_eq!(**namespace, ${operationShape.id.getNamespace().dq()});
             let operation_name = extensions.get::<aws_smithy_http_server::ExtensionOperationName>().expect("extension ExtensionOperationName not found");
-            assert_eq!(operation_name.0, ${operationSymbol.name.dq()});
+            assert_eq!(**operation_name, ${operationSymbol.name.dq()});
             """.trimIndent()
         )
     }

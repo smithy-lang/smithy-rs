@@ -37,48 +37,43 @@
 use super::rejection::{ExtensionHandlingRejection, ExtensionsAlreadyExtracted, MissingExtension};
 use async_trait::async_trait;
 use axum_core::extract::{FromRequest, RequestParts};
-use std::{borrow::Cow, ops::Deref};
+use std::ops::Deref;
 
 /// Extension type used to store the Smithy model namespace.
 #[derive(Debug, Clone)]
-pub struct ExtensionNamespace(pub Cow<'static, str>);
+pub struct ExtensionNamespace(&'static str);
+impl_extension_new_and_deref!(ExtensionNamespace);
 
 /// Extension type used to store the Smithy operation name.
 #[derive(Debug, Clone)]
-pub struct ExtensionOperationName(pub Cow<'static, str>);
-
-/// Extension type used to store the type of framework error caught during execution.
-/// These are unmodeled error, or rejection, defined in the runtime crates.
-#[derive(Debug, Clone)]
-pub struct ExtensionRejection(pub Cow<'static, str>);
+pub struct ExtensionOperationName(&'static str);
+impl_extension_new_and_deref!(ExtensionOperationName);
 
 /// Extension type used to store the type of user defined error returned by an operation.
 /// These are modeled errors, defined in the Smithy model.
 #[derive(Debug, Clone)]
-pub struct ExtensionModeledError(pub Cow<'static, str>);
+pub struct ExtensionModeledError(&'static str);
+impl_extension_new_and_deref!(ExtensionModeledError);
 
-/// Implement `new` for all `Extension`s holding a `Cow<'static, str>`.
-macro_rules! impl_extension_new_static {
-    ($name:ident, $sname:expr) => {
-        impl $name {
-            #[doc = "Returns a new `"]
-            #[doc = $sname]
-            #[doc = "`."]
-            pub fn new<S: Into<String>>(value: S) -> $name {
-                $name(std::borrow::Cow::from(value.into()))
-            }
-        }
-    };
+/// Extension type used to store the type of framework error caught during execution.
+/// These are unmodeled error, or rejection, defined in the runtime crates.
+#[derive(Debug, Clone)]
+pub struct ExtensionRejection(String);
 
-    ($name:tt) => {
-        impl_extension_new_static!($name, stringify!($name));
-    };
+impl ExtensionRejection {
+    /// Returns a new `ExtensionRejection`.
+    pub fn new(value: String) -> ExtensionRejection {
+        ExtensionRejection(value)
+    }
 }
 
-impl_extension_new_static!(ExtensionNamespace);
-impl_extension_new_static!(ExtensionOperationName);
-impl_extension_new_static!(ExtensionRejection);
-impl_extension_new_static!(ExtensionModeledError);
+impl Deref for ExtensionRejection {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Extractor that gets a value from [request extensions].
 ///
