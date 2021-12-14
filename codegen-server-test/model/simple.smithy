@@ -24,7 +24,9 @@ structure PutThingInput {
     thingId: String,
 
     @httpQueryParams
-    tags: MapOfSetOfStrings
+    tags: MapOfSetOfStrings,
+
+    setOfDoubles: SetOfDoubles
 }
 
 map MapOfStrings {
@@ -48,4 +50,8 @@ map MapOfSetOfStrings {
 
 set SetOfStrings {
     member: String
+}
+
+set SetOfDoubles {
+    member: Double
 }

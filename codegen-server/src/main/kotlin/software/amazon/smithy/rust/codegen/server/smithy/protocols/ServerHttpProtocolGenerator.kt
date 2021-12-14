@@ -688,8 +688,8 @@ private class ServerHttpProtocolImplGenerator(
                 rust("let mut seen_${it.memberName.toSnakeCase()} = false;")
             }
             queryBindingsTargettingCollection.forEach {
-                it.
-                rust("let mut seen_${it.memberName.toSnakeCase()} = false;")
+                val foo = model.expectShape(it.member.target)
+                rust("let mut ${it.memberName.toSnakeCase()}: Vec<String> = Vec::new();")
             }
 
             rustBlock("for (k, v) in pairs") {
@@ -809,6 +809,7 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
+    // TODO These can be replaced with https://docs.rs/aws-smithy-types/latest/aws_smithy_types/primitive/trait.Parse.html
     private fun generateParseStrAsPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
