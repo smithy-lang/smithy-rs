@@ -748,7 +748,7 @@ private class ServerHttpProtocolImplGenerator(
                 if (queryParamsBinding != null) {
                     when (queryParamsBinding.queryParamsBindingTargetMapValueType()) {
                         QueryParamsTargetMapValueType.STRING -> {
-                            rust("query_params.entry(String::from(k)).or_insert(String::from(v));")
+                            rust("query_params.entry(String::from(k)).or_insert_with(|| String::from(v));")
                         } else -> {
                             rustTemplate("""
                                 let entry = query_params.entry(String::from(k)).or_default();
