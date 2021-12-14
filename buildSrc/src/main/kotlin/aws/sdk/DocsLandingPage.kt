@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+package aws.sdk
+
 import org.gradle.api.Project
 import software.amazon.smithy.utils.CodeWriter
 import java.io.File
@@ -13,7 +15,7 @@ import java.io.File
  * The generated docs will include links to crates.io, docs.rs and GitHub examples for all generated services. The generated docs will
  * be written to `docs.md` in the provided [outputDir].
  */
-fun Project.docsLandingPage(awsServices: List<AwsService>, outputDir: File) {
+fun Project.docsLandingPage(awsServices: AwsServices, outputDir: File) {
     val project = this
     val writer = CodeWriter()
     with(writer) {
@@ -29,7 +31,7 @@ fun Project.docsLandingPage(awsServices: List<AwsService>, outputDir: File) {
         /* generate a basic markdown table */
         writer.write("| Service | Package |")
         writer.write("| ------- | ------- |")
-        awsServices.sortedBy { it.humanName }.forEach {
+        awsServices.services.sortedBy { it.humanName }.forEach {
             val items = listOfNotNull(cratesIo(it), docsRs(it), examplesLink(it, project)).joinToString(" ")
             writer.write(
                 "| ${it.humanName} | $items |"
