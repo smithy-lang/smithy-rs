@@ -12,6 +12,12 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "A bug that occurred when signing certain query strings has been fixed"
+references = ["aws-sdk-rust#330"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
+[[aws-sdk-rust]]
 message = "Fix incorrect argument order in the builder for `LazyCachingCredentialsProvider`"
 references = ["smithy-rs#949"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
@@ -25,7 +31,7 @@ that ensures `rustls` is not in the dependency tree
 """
 references = ["aws-sdk-rust#304"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "zhessler"
+author = "Velfi"
 
 [[aws-sdk-rust]]
 message = """
@@ -61,7 +67,7 @@ the formerly default features from those crates must now be explicitly set in yo
 '''
 references = ["smithy-rs#930"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "zhessler"
+author = "Velfi"
 
 [[smithy-rs]]
 message = '''
@@ -77,7 +83,7 @@ Runtime crates no longer have default features. You must now specify the feature
 '''
 references = ["smithy-rs#930"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "zhessler"
+author = "Velfi"
 
 [[aws-sdk-rust]]
 message = "Use provided `sleep_impl` for retries instead of using Tokio directly."
