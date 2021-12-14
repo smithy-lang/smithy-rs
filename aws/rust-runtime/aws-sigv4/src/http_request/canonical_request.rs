@@ -507,7 +507,7 @@ mod tests {
     use http::HeaderValue;
     use http::Uri;
     use pretty_assertions::assert_eq;
-    use proptest::{proptest, strategy::Strategy};
+    use proptest::proptest;
     use std::time::Duration;
 
     fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
