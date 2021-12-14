@@ -9,13 +9,14 @@ mod assume_role;
 
 pub use assume_role::{AssumeRoleProvider, AssumeRoleProviderBuilder};
 
-use aws_sdk_sts::middleware::DefaultMiddleware;
 #[cfg(feature = "profile")]
-use aws_smithy_client::erase::DynConnector;
+use aws_sdk_sts::middleware::DefaultMiddleware;
 
 #[cfg(feature = "profile")]
 impl crate::provider_config::ProviderConfig {
-    pub(crate) fn sdk_client(&self) -> aws_smithy_client::Client<DynConnector, DefaultMiddleware> {
+    pub(crate) fn sdk_client(
+        &self,
+    ) -> aws_smithy_client::Client<aws_smithy_client::erase::DynConnector, DefaultMiddleware> {
         use crate::connector::expect_connector;
         use crate::provider_config::HttpSettings;
 
