@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -31,17 +31,16 @@ import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.util.expectTrait
+import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
 private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig)
-    private val awsHyperDep = runtimeConfig.awsRuntimeDependency("aws-hyper")
 
     val awsTypes = awsTypes(runtimeConfig).asType()
-    val awsHyper = awsHyperDep.asType()
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
     val awsSmithyClient = smithyClientDep.asType()
 
-    val awsMiddleware = RuntimeType("AwsMiddleware", awsHyperDep, "aws_hyper")
+    val defaultMiddleware = runtimeConfig.defaultMiddleware()
     val dynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
 }
 
@@ -63,16 +62,11 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
         ) { writer ->
             FluentClientGenerator(
                 codegenContext,
-                includeSmithyGenericClientDocs = false,
                 generics = ClientGenerics(
-                    connectorDefault = "#{AwsFluentClient_DynConnector}",
-                    middlewareDefault = "#{AwsFluentClient_AwsMiddleware}",
-                    retryDefault = "#{AwsFluentClient_retry}::Standard",
-                    codegenScope = listOf(
-                        "AwsFluentClient_AwsMiddleware" to types.awsMiddleware,
-                        "AwsFluentClient_DynConnector" to types.dynConnector,
-                        "AwsFluentClient_retry" to types.smithyClientRetry,
-                    )
+                    connectorDefault = types.dynConnector,
+                    middlewareDefault = types.defaultMiddleware,
+                    retryDefault = types.smithyClientRetry.member("Standard"),
+                    client = types.awsSmithyClient
                 ),
                 customizations = listOf(
                     AwsPresignedFluentBuilderMethod(codegenContext.runtimeConfig),
@@ -102,8 +96,22 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
 }
 
 private class AwsFluentClientExtensions(private val types: Types) {
+    val clientGenerics = ClientGenerics(
+        connectorDefault = types.dynConnector,
+        middlewareDefault = types.defaultMiddleware,
+        retryDefault = types.smithyClientRetry.member("Standard"),
+        client = types.awsSmithyClient
+    )
+
+    private val codegenScope = arrayOf(
+        "Middleware" to types.defaultMiddleware,
+        "retry" to types.smithyClientRetry,
+        "DynConnector" to types.dynConnector,
+        "aws_smithy_client" to types.awsSmithyClient
+    )
+
     fun render(writer: RustWriter) {
-        writer.rustBlock("impl<C> Client<C, aws_hyper::AwsMiddleware, aws_smithy_client::retry::Standard>") {
+        writer.rustBlockTemplate("impl<C> Client<C, #{Middleware}, #{retry}::Standard>", *codegenScope) {
             rustTemplate(
                 """
                 /// Creates a client with the given service config and connector override.
@@ -113,7 +121,7 @@ private class AwsFluentClientExtensions(private val types: Types) {
                     let sleep_impl = conf.sleep_impl.clone();
                     let mut builder = #{aws_smithy_client}::Builder::new()
                         .connector(conn)
-                        .middleware(#{aws_hyper}::AwsMiddleware::new());
+                        .middleware(#{Middleware}::new());
                     builder.set_retry_config(retry_config.into());
                     builder.set_timeout_config(timeout_config);
                     if let Some(sleep_impl) = sleep_impl {
@@ -123,11 +131,10 @@ private class AwsFluentClientExtensions(private val types: Types) {
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,
-                "aws_hyper" to types.awsHyper,
-                "aws_smithy_client" to types.awsSmithyClient
+                *codegenScope
             )
         }
-        writer.rustBlock("impl Client<aws_smithy_client::erase::DynConnector, aws_hyper::AwsMiddleware, aws_smithy_client::retry::Standard>") {
+        writer.rustBlockTemplate("impl Client<#{DynConnector}, #{Middleware}, #{retry}::Standard>", *codegenScope) {
             rustTemplate(
                 """
                 /// Creates a new client from a shared config.
@@ -143,7 +150,7 @@ private class AwsFluentClientExtensions(private val types: Types) {
                     let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
                     let sleep_impl = conf.sleep_impl.clone();
                     let mut builder = #{aws_smithy_client}::Builder::dyn_https()
-                        .middleware(#{aws_hyper}::AwsMiddleware::default());
+                        .middleware(#{Middleware}::new());
                     builder.set_retry_config(retry_config.into());
                     builder.set_timeout_config(timeout_config);
                     // the builder maintains a try-state. To avoid suppressing the warning when sleep is unset,
@@ -156,9 +163,9 @@ private class AwsFluentClientExtensions(private val types: Types) {
                     Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,
-                "aws_hyper" to types.awsHyper,
                 "aws_smithy_client" to types.awsSmithyClient,
-                "aws_types" to types.awsTypes
+                "aws_types" to types.awsTypes,
+                "Middleware" to types.defaultMiddleware
             )
         }
     }

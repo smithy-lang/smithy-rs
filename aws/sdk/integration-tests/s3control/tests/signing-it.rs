@@ -10,9 +10,9 @@ use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
 use std::time::{Duration, UNIX_EPOCH};
 
-use aws_hyper::AwsMiddleware;
+use aws_sdk_s3control::middleware::DefaultMiddleware;
 use aws_smithy_client::Client as CoreClient;
-pub type Client<C> = CoreClient<C, AwsMiddleware>;
+pub type Client<C> = CoreClient<C, DefaultMiddleware>;
 
 #[tokio::test]
 async fn test_signer() -> Result<(), aws_sdk_s3control::Error> {

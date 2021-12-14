@@ -164,7 +164,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     override fun structureShape(shape: StructureShape) {
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
-            StructureGenerator(model, symbolProvider, writer, shape).render()
+            StructureGenerator(model, symbolProvider, writer, shape).renderServer()
             val builderGenerator =
                 BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
             builderGenerator.render(writer)

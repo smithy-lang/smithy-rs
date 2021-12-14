@@ -15,7 +15,7 @@ use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
-use aws_hyper::AwsMiddleware;
+use aws_sdk_sts::middleware::DefaultMiddleware;
 use aws_smithy_client::erase::DynConnector;
 use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::Fs;
@@ -30,7 +30,7 @@ pub struct AssumeRoleProvider {
 
 #[derive(Debug)]
 pub struct ClientConfiguration {
-    pub(crate) core_client: aws_smithy_client::Client<DynConnector, AwsMiddleware>,
+    pub(crate) core_client: aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
     pub(crate) region: Option<Region>,
 }
 

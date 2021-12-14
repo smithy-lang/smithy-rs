@@ -12,9 +12,9 @@ repository = "https://github.com/awslabs/smithy-rs"
 default-provider = ["profile", "imds", "sts", "http-provider"]
 profile = ["sts", "web-identity-token", "imds", "http-provider"]
 imds = ["profile", "aws-smithy-http/rt-tokio", "aws-smithy-http-tower", "aws-smithy-json", "tower", "aws-http"]
-sts = ["aws-sdk-sts", "aws-hyper", "aws-smithy-http"]
+sts = ["aws-sdk-sts", "aws-smithy-http"]
 web-identity-token = ["sts", "profile"]
-http-provider = ["aws-hyper", "aws-smithy-json", "aws-smithy-http/rt-tokio", "tower", "tokio/sync"]
+http-provider = ["aws-smithy-json", "aws-smithy-http/rt-tokio", "tower", "tokio/sync"]
 tcp-connector = ["tokio/net", "tower"]
 
 rustls = ["aws-smithy-client/rustls"]
@@ -31,9 +31,6 @@ aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["sync"] }
 tracing = { version = "0.1" }
-
-# TODO: remove when middleware stacks are moved inside of clients directly
-aws-hyper = { path = "../../sdk/build/aws-sdk/sdk/aws-hyper", optional = true }
 
 # imds
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http", optional = true }

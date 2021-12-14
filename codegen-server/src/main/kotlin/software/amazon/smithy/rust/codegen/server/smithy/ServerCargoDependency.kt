@@ -19,6 +19,7 @@ object ServerCargoDependency {
     val AxumCore: CargoDependency = CargoDependency("axum-core", CratesIo("0.1"))
     val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
+    val SerdeUrlEncoded: CargoDependency = CargoDependency("serde_urlencoded", CratesIo("0.7"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
 }
 

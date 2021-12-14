@@ -13,7 +13,11 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
+aws-http = { path = "../aws-http" }
+aws-endpoint = { path = "../aws-endpoint" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+aws-smithy-http-tower= { path = "../../../rust-runtime/aws-smithy-http-tower" }
 aws-types = { path = "../../rust-runtime/aws-types" }
 aws-sig-auth = { path = "../../rust-runtime/aws-sig-auth" }
 http = "0.2.4"
@@ -29,6 +33,8 @@ hex = "0.4.3"
 
 [dev-dependencies]
 temp-file = "0.1.6"
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
+aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
 
 [package.metadata.docs.rs]
 all-features = true
