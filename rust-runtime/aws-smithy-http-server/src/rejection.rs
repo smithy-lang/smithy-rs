@@ -66,6 +66,13 @@ define_rejection! {
 
 define_rejection! {
     #[status = BAD_REQUEST]
+    #[body = "Expected query string in URI but none found"]
+    /// Rejection type used if the URI has no query string and we need to deserialize data from it.
+    pub struct MissingQueryString;
+}
+
+define_rejection! {
+    #[status = BAD_REQUEST]
     #[body = "Failed to parse request MIME type"]
     /// Rejection type used if the MIME type parsing failed.
     pub struct MimeParsingFailed;
@@ -125,6 +132,7 @@ composite_rejection! {
         BodyAlreadyExtracted,
         HeadersAlreadyExtracted,
         ExtensionsAlreadyExtracted,
+        MissingQueryString,
     }
 }
 
@@ -164,6 +172,12 @@ impl From<aws_smithy_types::date_time::DateTimeParseError> for SmithyRejection {
     }
 }
 
+impl From<aws_smithy_types::primitive::PrimitiveParseError> for SmithyRejection {
+    fn from(err: aws_smithy_types::primitive::PrimitiveParseError) -> Self {
+        SmithyRejection::Deserialize(Deserialize::from_err(err))
+    }
+}
+
 impl From<aws_smithy_http::operation::SerializationError> for SmithyRejection {
     fn from(err: aws_smithy_http::operation::SerializationError) -> Self {
         SmithyRejection::Serialize(Serialize::from_err(err))
@@ -191,5 +205,11 @@ impl From<hyper::Error> for SmithyRejection {
 impl From<aws_smithy_http::header::ParseError> for SmithyRejection {
     fn from(err: aws_smithy_http::header::ParseError) -> Self {
         SmithyRejection::HeadersParse(HeadersParse::from_err(err))
+    }
+}
+
+impl From<serde_urlencoded::de::Error> for SmithyRejection {
+    fn from(err: serde_urlencoded::de::Error) -> Self {
+        SmithyRejection::Deserialize(Deserialize::from_err(err))
     }
 }
