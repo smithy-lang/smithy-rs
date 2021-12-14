@@ -64,16 +64,58 @@ just an SDK artifact previously. Now, it will have two build targets that get ex
 to generate these artifacts:
 
 - `rust-runtime:assemble` - Generates a publish-ready bundle of Smithy runtime crates.
-- `aws:sdk:assemble` - Generates a publish-ready bundle of AWS runtime crates and SDK crates
-  _without_ the Smithy runtime crates. This build artifact will now also include a file that has
-  the commit hash of `smithy-rs` that it was generated from.
+- `aws:sdk:assemble` - Generates a publish-ready bundle of AWS runtime crates, SDK crates,
+  and just the Smithy runtime crates that are used by the SDK.
 
 The `aws-sdk-rust` repository will have a new `next` branch that has its own set of CI workflows
 and branch protection rules. The releaser will take the `aws:sdk:assemble` artifact and apply it
 directly to this `next` branch as would have previously been done against the `main` branch.
-The `next` branch's CI will behave similar to the previous CI, except that it runs an additional
-step beforehand to ensure the correct Smithy runtime crates are in place. The process as a whole
-looks as follows:
+
+The `main` branch will have a small tweak to its CI so that it uses crates.io for the Smithy
+runtime crates. Its CI will look as follows:
+
+1. Shallow clone `aws-sdk-rust` with the revision being tested
+2. Run a script to remove the `path` argument for the Smithy runtime crate dependencies for every crate
+   in `aws-sdk-rust`. For example,
+```toml
+aws-smithy-types = { version = "0.33.0", path = "../aws-smithy-types" }
+```
+Would become:
+```toml
+aws-smithy-types = { version = "0.33.0" }
+```
+3. Run the tests as usual
+
+When it's time to cut a release, the releaser will do the following:
+
+1. Tag `smithy-rs` with the desired version number
+2. Wait for CI to build artifacts for the tagged release
+3. Pull-request the SDK artifacts over to `aws-sdk-rust/next`
+4. Wait for successful CI in `aws-sdk-rust/next`
+5. Download the Smithy runtime crates build artifact and publish it to crates.io
+6. Pull-request merge `aws-sdk-rust/next` into `aws-sdk-rust/main`
+7. Wait for successful CI in `main` (this time actually running against the crates.io Smithy runtime crates)
+8. Tag release for `main`
+9. Publish SDK with publisher tool
+
+### Avoiding mistakes by disallowing creation of publish-ready bundles outside of CI
+
+It should be difficult to accidentally publish a locally built set of crates. To add friction to this,
+the `smithy-rs` build process will look for the existence of the `GITHUB_ACTIONS=true` environment variable.
+If this environment variable is not set, then it will pass a flag to the Rust codegen plugin that tells it to
+emit a `publish = false` under `[package]` in the generated `Cargo.toml`.
+
+This could be easily circumvented, but the goal is to reduce the chances of accidentally publishing
+crates rather than making it impossible.
+
+Alternatives Considered
+-----------------------
+
+### Keep Smithy runtime crates in `smithy-rs`
+
+This approach is similar to the proposed solution, except that the `aws-sdk-rust` repository
+won't have a snapshot of the Smithy runtime crates, and an additional step needs to be performed
+during CI for the `next` branch so that it looks as follows:
 
 1. Make a shallow clone of `aws-sdk-rust/next`
 2. Retrieve the `smithy-rs` commit hash that was used to generate the SDK from a file
@@ -95,49 +137,20 @@ aws-smithy-types = { version = "<unreleased>", path = "path/to/local/smithy-rs/r
 ```
 5. Run CI as normal.
 
-When it's time to cut a release, the releaser will do the following:
-
-1. Tag `smithy-rs` with the desired version number
-2. Wait for CI to build artifacts for the tagged release
-3. Pull-request the SDK artifacts over to `aws-sdk-rust/next`
-4. Wait for successful CI in `aws-sdk-rust/next`
-5. Download the Smithy runtime crates build artifact and publish it to crates.io
-6. Pull-request merge `aws-sdk-rust/next` into `aws-sdk-rust/main`
-7. Wait for successful CI in `main` (this time actually running against the crates.io Smithy runtime crates)
-8. Tag release for `main`
-9. Publish SDK with publisher tool
-
-**Note:** `smithy-rs` will need to do the same patching in CI as `aws-sdk-rust/next` since the generated
-SDK will not have path dependencies for the Smithy runtime crates (since they are a publish-ready bundle
-intended for landing in `aws-sdk-rust`). The script that does this patching can live in `smithy-rs` and be
+**Note:** `smithy-rs` would need to do the same patching in CI as `aws-sdk-rust/next` since the generated
+SDK would not have path dependencies for the Smithy runtime crates (since they are a publish-ready bundle
+intended for landing in `aws-sdk-rust`). The script that does this patching could live in `smithy-rs` and be
 reused by `aws-sdk-rust`.
 
-Alternatives Considered
------------------------
-
-### Snapshotting the Smithy runtime crates in `aws-sdk-rust`
-
-We could keep a copy of the Smithy runtime crates used by the SDK in `aws-sdk-rust`.
-This would look mostly the same as the proposed solution, except that rather than cloning
-`smithy-rs` in CI, we would use the local snapshot. The CI for the `main` branch CI would
-need to modify the crate manifests so that the Smithy runtime crates published to
-crates.io are used instead of the local copies.
-
-This has the advantage that a customer having an issue with the current release could get
-a fix sooner by patching their own project's crate manifest to use the `aws-sdk-rust/next`
-branch before a release is cut. However, it also has the disadvantage that the changes
-CI has to make while verifying the `main` branch are more intrusive.
+The disadvantage of this approach is that a customer having an issue with the current release wouldn't be able
+to get a fix sooner by patching their own project's crate manifest to use the `aws-sdk-rust/next` branch before
+a release is cut since their project wouldn't be able to find the unreleased Smithy runtime crates.
 
 Changes Checklist
 -----------------
 
-- [ ] Write a configurable script to add the `[patch]` sections to manifests
-      for both `smithy-rs` and `aws-sdk-rust/next` CI
-- [ ] Update `aws:sdk:assemble` to:
-  - [ ] No longer copy Smithy runtime crates into the artifacts
-  - [ ] No longer include paths to Smithy runtime crate dependencies
-  - [ ] Include a file that has the smithy-rs commit hash that's being used to build the artifacts
 - [ ] Add `rust-runtime:assemble` target that generates publish-ready Smithy runtime crates
-- [ ] Revise `smithy-rs` CI to patch local paths into Smithy runtime dependencies
+- [ ] Write a configurable script in `aws-sdk-rust` to remove the `path` argument from dependencies in a `Cargo.toml` file
 - [ ] Implement CI for the `aws-sdk-rust/next` branch
+- [ ] Implement CI for the `aws-sdk-rust/main` branch
 - [ ] Update release process documentation
