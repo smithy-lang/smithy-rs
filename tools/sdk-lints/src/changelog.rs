@@ -5,7 +5,6 @@
 
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
-use std::collections::HashSet;
 use std::fmt::Write;
 use std::path::Path;
 use std::process::Command;
@@ -66,17 +65,29 @@ impl ChangelogEntry {
         if !maintainers().contains(&self.author.to_ascii_lowercase().as_str()) {
             references.push(format!("@{}", self.author.to_ascii_lowercase()));
         };
+        if !references.is_empty() {
+            write!(meta, "({}) ", references.join(", ")).unwrap();
+        }
         write!(
             &mut out,
             "- {meta}{message}",
             meta = meta,
-            message = self.message,
+            message = indented_message(&self.message),
         )
         .unwrap();
-        if !references.is_empty() {
-            write!(out, " ({})", references.join(", ")).unwrap();
-        }
     }
+}
+
+fn indented_message(message: &str) -> String {
+    let mut out = String::new();
+    for (idx, line) in message.lines().enumerate() {
+        if idx > 0 {
+            out.push('\n');
+            out.push_str("    ");
+        }
+        out.push_str(line);
+    }
+    out
 }
 
 #[derive(Deserialize)]
@@ -159,7 +170,8 @@ pub(crate) fn update_changelogs(
 }
 
 /// Convert a list of changelog entries into markdown
-fn render(entries: Vec<ChangelogEntry>, version: &str, date: &str) -> String {
+fn render(mut entries: Vec<ChangelogEntry>, version: &str, date: &str) -> String {
+    entries.sort_by_key(|ent| !ent.meta.tada);
     let mut out = String::new();
     let header = format!("{version} ({date})", version = version, date = date);
     out.push_str(&header);
@@ -190,16 +202,18 @@ fn render(entries: Vec<ChangelogEntry>, version: &str, date: &str) -> String {
         out.push('\n');
     }
 
-    let external_contribs = entries
+    let mut external_contribs = entries
         .iter()
         .map(|entry| entry.author.to_ascii_lowercase())
         .filter(|author| !maintainers().contains(&author.as_str()))
-        .collect::<HashSet<_>>();
+        .collect::<Vec<_>>();
+    external_contribs.sort();
+    external_contribs.dedup();
     if !external_contribs.is_empty() {
-        out.push_str("**Contributors**\nThank you for your contributions! ❤️\n");
+        out.push_str("**Contributors**\nThank you for your contributions! ❤\n");
         for contributor_handle in external_contribs {
             // retrieve all contributions this author made
-            let contribution_references = entries
+            let mut contribution_references = entries
                 .iter()
                 .filter(|entry| {
                     entry
@@ -208,6 +222,8 @@ fn render(entries: Vec<ChangelogEntry>, version: &str, date: &str) -> String {
                 })
                 .flat_map(|entry| entry.references.iter().map(|it| it.as_str()))
                 .collect::<Vec<_>>();
+            contribution_references.sort();
+            contribution_references.dedup();
             let contribution_references = contribution_references.as_slice().join(", ");
             out.push_str("- @");
             out.push_str(&contributor_handle);
@@ -280,34 +296,45 @@ mod test {
     #[test]
     fn end_to_end_changelog() {
         let changelog_toml = r#"
-        [[smithy-rs]]
-        author = "rcoh"
-        message = "I made a major change to update the code generator"
-        meta = { breaking = true, tada = false, bug = false }
-        references = ["smithy-rs#445"]
+[[smithy-rs]]
+author = "rcoh"
+message = "I made a major change to update the code generator"
+meta = { breaking = true, tada = false, bug = false }
+references = ["smithy-rs#445"]
 
-        [[smithy-rs]]
-        author = "external-contrib"
-        message = "I made a change to update the code generator"
-        meta = { breaking = false, tada = true, bug = false }
-        references = ["smithy-rs#446"]
+[[smithy-rs]]
+author = "external-contrib"
+message = "I made a change to update the code generator"
+meta = { breaking = false, tada = true, bug = false }
+references = ["smithy-rs#446"]
 
-        [[smithy-rs]]
-        author = "another-contrib"
-        message = "I made a minor change"
-        meta = { breaking = false, tada = false, bug = false }
+[[smithy-rs]]
+author = "another-contrib"
+message = "I made a minor change"
+meta = { breaking = false, tada = false, bug = false }
 
-        [[aws-sdk-rust]]
-        author = "rcoh"
-        message = "I made a major change to update the AWS SDK"
-        meta = { breaking = true, tada = false, bug = false }
-        references = ["smithy-rs#445"]
+[[aws-sdk-rust]]
+author = "rcoh"
+message = "I made a major change to update the AWS SDK"
+meta = { breaking = true, tada = false, bug = false }
+references = ["smithy-rs#445"]
 
-        [[aws-sdk-rust]]
-        author = "external-contrib"
-        message = "I made a change to update the code generator"
-        meta = { breaking = false, tada = true, bug = false }
-        references = ["smithy-rs#446"]
+[[aws-sdk-rust]]
+author = "external-contrib"
+message = "I made a change to update the code generator"
+meta = { breaking = false, tada = true, bug = false }
+references = ["smithy-rs#446"]
+
+[[smithy-rs]]
+author = "external-contrib"
+message = """
+I made a change to update the code generator
+
+**Update guide:**
+blah blah
+"""
+meta = { breaking = false, tada = true, bug = false }
+references = ["smithy-rs#446"]
         "#;
         let changelog: Changelog = toml::from_str(changelog_toml).expect("valid changelog");
         let rendered = render(changelog.smithy_rs, "v0.3.0", "January 4th, 2022");
@@ -316,16 +343,20 @@ mod test {
 v0.3.0 (January 4th, 2022)
 ==========================
 **Breaking Changes:**
-- ⚠ I made a major change to update the code generator (smithy-rs#445)
+- ⚠ (smithy-rs#445) I made a major change to update the code generator
 
 **New this release:**
-- 🎉 I made a change to update the code generator (smithy-rs#446, @external-contrib)
-- I made a minor change (@another-contrib)
+- 🎉 (smithy-rs#446, @external-contrib) I made a change to update the code generator
+- 🎉 (smithy-rs#446, @external-contrib) I made a change to update the code generator
+
+    **Update guide:**
+    blah blah
+- (@another-contrib) I made a minor change
 
 **Contributors**
-Thank you for your contributions! ❤️
-- @external-contrib (smithy-rs#446)
+Thank you for your contributions! ❤
 - @another-contrib
+- @external-contrib (smithy-rs#446)
 "#
         .trim_start();
         assert_eq!(expected, rendered);

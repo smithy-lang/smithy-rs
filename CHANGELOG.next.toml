@@ -56,7 +56,6 @@ message = '''
 If you directly depend on AWS or Smithy runtime crates _(e.g., AWS crates not named `aws-config` or prefixed with `aws-sdk-`)_,
 the formerly default features from those crates must now be explicitly set in your `Cargo.toml`.
 
-
 **Upgrade guide**
 
 | before                          | after |
@@ -166,6 +165,6 @@ author = "rcoh"
 
 [[aws-sdk-rust]]
 message = "`aws-hyper::AwsMiddleware` is now generated into generated service clients directly. If you used `aws_hyper::Middleware`, use <service>::middleware::DefaultMiddleware` instead."
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 references = ["smithy-rs#959", "smithy-rs#934"]
 author = "rcoh"
