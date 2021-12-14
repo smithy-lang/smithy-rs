@@ -8,17 +8,19 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
+aws-sdk-sts = { path = "../../build/aws-sdk/sdk/sts" }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
-aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test" }
+aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 bytes = "1"
 http = "0.2.3"
 serde_json = "1"
 tokio = { version = "1", features = ["full", "test-util"] }
-tracing-subscriber = "0.2.18"
-aws-config = "0.2.0"
+tracing-subscriber = "0.3"
+tracing = "0.1"
 tracing-test = "0.2.1"
