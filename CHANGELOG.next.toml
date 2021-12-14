@@ -129,10 +129,7 @@ author = "rcoh"
 [[aws-sdk-rust]]
 message = """
 `aws_hyper::Client` which was just a re-export of `aws_smithy_types::Client` with generics set has been removed. If you used
-`aws_hyper::Client` or `aws_hyper::Client::https()` you can update your code to use `aws_smithy_client::Builder::https()`. Other
-usage examples can be found on the [aws_hyper docs](https://docs.rs/aws-hyper).
-
-**Note**: `aws-hyper` will be removed in a coming release and `AwsMiddleware` will be migrated elsewhere.
+`aws_hyper::Client` or `aws_hyper::Client::https()` you can update your code to use `aws_smithy_client::Builder::https()`.
 """
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "rcoh"
