@@ -149,8 +149,15 @@ a release is cut since their project wouldn't be able to find the unreleased Smi
 Changes Checklist
 -----------------
 
-- [ ] Add `rust-runtime:assemble` target that generates publish-ready Smithy runtime crates
-- [ ] Write a configurable script in `aws-sdk-rust` to remove the `path` argument from dependencies in a `Cargo.toml` file
-- [ ] Implement CI for the `aws-sdk-rust/next` branch
-- [ ] Implement CI for the `aws-sdk-rust/main` branch
+- In `smithy-rs`:
+  - [ ] Move publisher tool from `aws-sdk-rust` into `smithy-rs`
+  - [ ] Modify `aws:sdk:assemble` target to run the publisher `fix-manifests` subcommand
+  - [ ] Add `rust-runtime:assemble` target that generates publish-ready Smithy runtime crates
+  - [ ] Add CI step to create Smithy runtime bundle artifact
+  - [ ] Add `GITHUB_ACTIONS=true` env var check for setting the `publish` flag in generated AND runtime manifests
+  - [ ] Revise publisher tool to publish in two halves
+- In `aws-sdk-rust`:
+  - [ ] Write a configurable script in `aws-sdk-rust` to remove the `path` argument from dependencies in a `Cargo.toml` file
+  - [ ] Implement CI for the `aws-sdk-rust/next` branch
+  - [ ] Implement CI for the `aws-sdk-rust/main` branch
 - [ ] Update release process documentation
