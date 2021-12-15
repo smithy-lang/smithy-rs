@@ -22,3 +22,15 @@ message = "Include non-service-specific examples in the generated root Cargo wor
 references = ["smithy-rs#957"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Make `aws-smithy-client` a required dependency in generated services."
+references = ["smithy-rs#979"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Make `aws-smithy-client` a required dependency in generated services."
+references = ["smithy-rs#979"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
