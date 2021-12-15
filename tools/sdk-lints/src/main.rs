@@ -16,6 +16,7 @@ use structopt::StructOpt;
 mod anchor;
 mod changelog;
 mod copyright;
+mod lint;
 mod lint_cargo_toml;
 
 fn load_repo_root() -> Result<PathBuf> {
