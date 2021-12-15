@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
             true => Mode::Check,
             false => Mode::Execute,
         };
-        subcommand_fix_manifests(mode).await?;
+        subcommand_fix_manifests(mode, fix_manifests.value_of("location").unwrap()).await?;
     } else if let Some(matches) = matches.subcommand_matches("yank-category") {
         let category = matches.value_of("category").unwrap();
         let version = matches.value_of("version").unwrap();
@@ -57,6 +57,12 @@ fn clap_app() -> clap::App<'static, 'static> {
         .subcommand(
             clap::SubCommand::with_name("fix-manifests")
                 .about("fixes path dependencies in manifests to also have version numbers")
+                .arg(
+                    clap::Arg::with_name("location")
+                        .required(true)
+                        .takes_value(true)
+                        .long("location"),
+                )
                 .arg(
                     clap::Arg::with_name("check")
                         .required(false)

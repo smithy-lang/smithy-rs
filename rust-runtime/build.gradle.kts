@@ -25,12 +25,13 @@ val runtimeOutputDir = outputDir.resolve("rust-runtime")
 
 tasks["assemble"].apply {
     dependsOn("copyRuntimeCrates")
-    dependsOn("fixRuntimeManifests")
+    dependsOn("fixRuntimeCrateVersions")
+    dependsOn("fixManifests")
 }
 
 tasks.register<Copy>("copyRuntimeCrates") {
     from("$rootDir/rust-runtime") {
-        Crates.SMITHY_RUNTIME.forEach { include("$it/**") }
+        Crates.ENTIRE_SMITHY_RUNTIME.forEach { include("$it/**") }
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
@@ -38,13 +39,20 @@ tasks.register<Copy>("copyRuntimeCrates") {
     into(runtimeOutputDir)
 }
 
-task("fixRuntimeManifests") {
+task("fixRuntimeCrateVersions") {
     dependsOn("copyRuntimeCrates")
     doLast {
-        Crates.SMITHY_RUNTIME.forEach { moduleName ->
+        Crates.ENTIRE_SMITHY_RUNTIME.forEach { moduleName ->
             patchFile(runtimeOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
                 rewriteSmithyRsCrateVersion(properties, line)
             }
         }
     }
+}
+
+tasks.register<Exec>("fixManifests") {
+    description = "Run the publisher tool's `fix-manifests` sub-command on the runtime crates"
+    workingDir(rootProject.projectDir.resolve("tools/publisher"))
+    commandLine("cargo", "run", "--", "fix-manifests", "--location", runtimeOutputDir.absolutePath)
+    dependsOn("fixRuntimeCrateVersions")
 }

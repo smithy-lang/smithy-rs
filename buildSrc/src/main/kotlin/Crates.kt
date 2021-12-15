@@ -4,7 +4,7 @@
  */
 
 object Crates {
-    val AWS_RUNTIME = listOf(
+    val AWS_SDK_RUNTIME = listOf(
         "aws-config",
         "aws-endpoint",
         "aws-http",
@@ -14,7 +14,7 @@ object Crates {
         "aws-types"
     )
 
-    val SMITHY_RUNTIME = listOf(
+    private val SMITHY_RUNTIME_COMMON = listOf(
         "aws-smithy-async",
         "aws-smithy-client",
         "aws-smithy-eventstream",
@@ -27,4 +27,12 @@ object Crates {
         "aws-smithy-types-convert",
         "aws-smithy-xml"
     )
+
+    val AWS_SDK_SMITHY_RUNTIME = SMITHY_RUNTIME_COMMON
+
+    val SERVER_SMITHY_RUNTIME = SMITHY_RUNTIME_COMMON + listOf(
+        "aws-smithy-http-server"
+    )
+
+    val ENTIRE_SMITHY_RUNTIME = (AWS_SDK_SMITHY_RUNTIME + SERVER_SMITHY_RUNTIME).toSortedSet()
 }

@@ -162,7 +162,9 @@ task("relocateExamples") {
     doLast {
         copy {
             from(projectDir)
-            include("examples/**")
+            awsServices.examples.forEach { example ->
+                include("$example/**")
+            }
             into(outputDir)
             exclude("**/target")
             filter { line -> line.replace("build/aws-sdk/sdk/", "sdk/") }
@@ -185,10 +187,10 @@ fun rewritePathDependency(line: String): String {
 
 tasks.register<Copy>("copyAllRuntimes") {
     from("$rootDir/aws/rust-runtime") {
-        Crates.AWS_RUNTIME.forEach { include("$it/**") }
+        Crates.AWS_SDK_RUNTIME.forEach { include("$it/**") }
     }
     from("$rootDir/rust-runtime") {
-        Crates.SMITHY_RUNTIME.forEach { include("$it/**") }
+        Crates.AWS_SDK_SMITHY_RUNTIME.forEach { include("$it/**") }
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
@@ -200,7 +202,7 @@ tasks.register("relocateAwsRuntime") {
     dependsOn("copyAllRuntimes")
     doLast {
         // Patch the Cargo.toml files
-        Crates.AWS_RUNTIME.forEach { moduleName ->
+        Crates.AWS_SDK_RUNTIME.forEach { moduleName ->
             patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
                 rewriteAwsSdkCrateVersion(properties, line.let(::rewritePathDependency))
             }
@@ -211,7 +213,7 @@ tasks.register("relocateRuntime") {
     dependsOn("copyAllRuntimes")
     doLast {
         // Patch the Cargo.toml files
-        Crates.SMITHY_RUNTIME.forEach { moduleName ->
+        Crates.AWS_SDK_SMITHY_RUNTIME.forEach { moduleName ->
             patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
                 rewriteSmithyRsCrateVersion(properties, line)
             }
@@ -239,6 +241,17 @@ task("generateCargoWorkspace") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<Exec>("fixManifests") {
+    description = "Run the publisher tool's `fix-manifests` sub-command on the generated services"
+    workingDir(rootProject.projectDir.resolve("tools/publisher"))
+    commandLine("cargo", "run", "--", "fix-manifests", "--location", outputDir.absolutePath)
+    dependsOn("assemble")
+    dependsOn("relocateServices")
+    dependsOn("relocateRuntime")
+    dependsOn("relocateAwsRuntime")
+    dependsOn("relocateExamples")
+}
+
 task("finalizeSdk") {
     dependsOn("assemble")
     outputs.upToDateWhen { false }
@@ -247,17 +260,22 @@ task("finalizeSdk") {
         "relocateRuntime",
         "relocateAwsRuntime",
         "relocateExamples",
-        "generateDocs"
+        "generateDocs",
+        "fixManifests"
     )
 }
 
-tasks["smithyBuildJar"].inputs.file(projectDir.resolve("smithy-build.json"))
-tasks["smithyBuildJar"].inputs.dir(projectDir.resolve("aws-models"))
-tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
-tasks["smithyBuildJar"].dependsOn("generateCargoWorkspace")
-tasks["smithyBuildJar"].outputs.upToDateWhen { false }
-tasks["assemble"].dependsOn("smithyBuildJar")
-tasks["assemble"].finalizedBy("finalizeSdk")
+tasks["smithyBuildJar"].apply {
+    inputs.file(projectDir.resolve("smithy-build.json"))
+    inputs.dir(projectDir.resolve("aws-models"))
+    dependsOn("generateSmithyBuild")
+    dependsOn("generateCargoWorkspace")
+    outputs.upToDateWhen { false }
+}
+tasks["assemble"].apply {
+    dependsOn("smithyBuildJar")
+    finalizedBy("finalizeSdk")
+}
 
 tasks.register<Exec>("cargoCheck") {
     workingDir(outputDir)

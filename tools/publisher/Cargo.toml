@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 anyhow = "1.0"
+async-recursion = "0.3.2"
 async-trait = "0.1.51"
 cargo_toml = "0.10.1"
 clap = "2.33"

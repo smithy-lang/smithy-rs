@@ -11,8 +11,6 @@
 
 use crate::fs::Fs;
 use crate::package::{discover_package_manifests, parse_version};
-use crate::repo::discover_repository;
-use crate::{REPO_CRATE_PATH, REPO_NAME};
 use anyhow::{bail, Context, Result};
 use semver::Version;
 use std::collections::BTreeMap;
@@ -26,9 +24,8 @@ pub enum Mode {
     Execute,
 }
 
-pub async fn subcommand_fix_manifests(mode: Mode) -> Result<()> {
-    let repo = discover_repository(REPO_NAME, REPO_CRATE_PATH)?;
-    let manifest_paths = discover_package_manifests(&repo.crates_root).await?;
+pub async fn subcommand_fix_manifests(mode: Mode, location: &str) -> Result<()> {
+    let manifest_paths = discover_package_manifests(location.into()).await?;
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;
     fix_manifests(Fs::Real, &versions, &mut manifests, mode).await?;

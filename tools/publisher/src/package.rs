@@ -136,7 +136,7 @@ pub async fn discover_package_batches(
     fs: Fs,
     path: impl AsRef<Path>,
 ) -> Result<(Vec<PackageBatch>, PackageStats)> {
-    let manifest_paths = discover_package_manifests(path).await?;
+    let manifest_paths = discover_package_manifests(path.as_ref().into()).await?;
     let packages = read_packages(fs, manifest_paths).await?;
     validate_packages(&packages)?;
 
@@ -194,15 +194,18 @@ pub enum Error {
 }
 
 /// Discovers all Cargo.toml files under the given path with a depth limit of 1.
-pub async fn discover_package_manifests(path: impl AsRef<Path>) -> Result<Vec<PathBuf>> {
+#[async_recursion::async_recursion]
+pub async fn discover_package_manifests(path: PathBuf) -> Result<Vec<PathBuf>> {
     let mut manifests = Vec::new();
-    let mut read_dir = fs::read_dir(path).await?;
+    let mut read_dir = fs::read_dir(&path).await?;
     while let Some(entry) = read_dir.next_entry().await? {
         let package_path = entry.path();
         if package_path.is_dir() {
             let manifest_path = package_path.join("Cargo.toml");
             if manifest_path.exists() {
                 manifests.push(manifest_path);
+            } else {
+                manifests.extend(discover_package_manifests(package_path).await?.into_iter());
             }
         }
     }
