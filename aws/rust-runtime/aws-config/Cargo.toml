@@ -15,13 +15,12 @@ imds = ["profile", "aws-smithy-http/rt-tokio", "aws-smithy-http-tower", "aws-smi
 sts = ["aws-sdk-sts", "aws-smithy-http"]
 web-identity-token = ["sts", "profile"]
 http-provider = ["aws-smithy-json", "aws-smithy-http/rt-tokio", "tower", "tokio/sync"]
-tcp-connector = ["tokio/net", "tower"]
 
 rustls = ["aws-smithy-client/rustls"]
 native-tls = ["aws-smithy-client/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio"]
 
-default = ["default-provider", "rustls", "rt-tokio", "tcp-connector"]
+default = ["default-provider", "rustls", "rt-tokio"]
 
 [dependencies]
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false, optional = true }
@@ -31,6 +30,7 @@ aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["sync"] }
 tracing = { version = "0.1" }
+hyper = { version = "0.14.16", default-features = false }
 
 # imds
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http", optional = true }

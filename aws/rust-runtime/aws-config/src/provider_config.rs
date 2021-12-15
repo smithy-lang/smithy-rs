@@ -15,8 +15,10 @@ use aws_types::region::Region;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
-#[cfg(feature = "tcp-connector")]
-use aws_smithy_client::erase::boxclone::BoxCloneService;
+use http::Uri;
+use hyper::client::connect::Connection;
+use tokio::io::{AsyncRead, AsyncWrite};
+use tower::BoxError;
 
 /// Configuration options for Credential Providers
 ///
@@ -43,8 +45,6 @@ pub(crate) type MakeConnectorFn =
 pub(crate) enum HttpConnector {
     Prebuilt(Option<DynConnector>),
     ConnectorFn(Arc<MakeConnectorFn>),
-    #[cfg(feature = "tcp-connector")]
-    TcpConnector(BoxCloneService<http::Uri, tokio::net::TcpStream, tower::BoxError>),
 }
 
 impl Default for HttpConnector {
@@ -267,7 +267,7 @@ impl ProviderConfig {
     /// Override the HTTPS connector for this configuration
     ///
     /// **Warning**: Use of this method will prevent you from taking advantage of the timeout machinery.
-    /// Consider `with_tcp_connector`.
+    /// Consider [`ProviderConfig::with_tcp_connector`].
     ///
     /// # Stability
     /// This method is expected to change to support HTTP configuration
@@ -282,13 +282,24 @@ impl ProviderConfig {
     ///
     /// # Stability
     /// This method is may to change to support HTTP configuration.
-    #[cfg(feature = "tcp-connector")]
-    pub fn with_tcp_connector(
-        self,
-        connector: BoxCloneService<http::Uri, tokio::net::TcpStream, tower::BoxError>,
-    ) -> Self {
+    pub fn with_tcp_connector<C>(self, connector: C) -> Self
+    where
+        C: Clone + Send + Sync + 'static,
+        C: tower::Service<Uri>,
+        C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
+        C::Future: Unpin + Send + 'static,
+        C::Error: Into<BoxError>,
+    {
+        let connector_fn = move |settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>| {
+            let mut builder = aws_smithy_client::hyper_ext::Adapter::builder()
+                .timeout(&settings.timeout_settings);
+            if let Some(sleep) = sleep {
+                builder = builder.sleep_impl(sleep);
+            };
+            Some(DynConnector::new(builder.build(connector.clone())))
+        };
         ProviderConfig {
-            connector: HttpConnector::TcpConnector(connector),
+            connector: HttpConnector::ConnectorFn(Arc::new(connector_fn)),
             ..self
         }
     }
