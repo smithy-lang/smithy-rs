@@ -284,7 +284,19 @@ fun generateCargoWorkspace(services: List<AwsService>): String {
     val generatedModules = services.map { it.module }.toSet()
     val examples = projectDir.resolve("examples")
         .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
-        .filter { generatedModules.contains(it.name) }
+        .filter { file ->
+            val cargoToml = File(file, "Cargo.toml")
+            if (cargoToml.exists()) {
+                val usedModules = cargoToml.readLines()
+                    .map { line -> line.substringBefore('=').trim() }
+                    .filter { line -> line.startsWith("aws-sdk-") }
+                    .map { line -> line.substringAfter("aws-sdk-") }
+                    .toSet()
+                generatedModules.containsAll(usedModules)
+            } else {
+                false
+            }
+        }
         .map { "examples/${it.name}" }
 
     val modules = (

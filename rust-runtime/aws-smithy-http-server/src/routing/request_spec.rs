@@ -96,7 +96,11 @@ impl From<&PathSpec> for Regex {
 impl RequestSpec {
     pub fn new(method: http::Method, uri_spec: UriSpec) -> Self {
         let uri_path_regex = (&uri_spec.path_and_query.path_segments).into();
-        RequestSpec { method, uri_spec, uri_path_regex }
+        RequestSpec {
+            method,
+            uri_spec,
+            uri_path_regex,
+        }
     }
 
     pub(super) fn matches<B>(&self, req: &Request<B>) -> Match {
@@ -233,25 +237,38 @@ mod tests {
 
     #[test]
     fn repeated_query_keys_same_values_match() {
-        assert_eq!(Match::Yes, key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=bar")));
+        assert_eq!(
+            Match::Yes,
+            key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=bar"))
+        );
     }
 
     #[test]
     fn repeated_query_keys_distinct_values_does_not_match() {
-        assert_eq!(Match::No, key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=baz")));
+        assert_eq!(
+            Match::No,
+            key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=baz"))
+        );
     }
 
     fn ab_spec() -> RequestSpec {
         RequestSpec::from_parts(
             Method::GET,
-            vec![PathSegment::Literal(String::from("a")), PathSegment::Literal(String::from("b"))],
+            vec![
+                PathSegment::Literal(String::from("a")),
+                PathSegment::Literal(String::from("b")),
+            ],
             vec![],
         )
     }
 
     #[test]
     fn empty_segments_in_the_middle_dont_matter() {
-        let hits = vec![(Method::GET, "/a/b"), (Method::GET, "/a//b"), (Method::GET, "//////a//b")];
+        let hits = vec![
+            (Method::GET, "/a/b"),
+            (Method::GET, "/a//b"),
+            (Method::GET, "//////a//b"),
+        ];
         for (method, uri) in &hits {
             assert_eq!(Match::Yes, ab_spec().matches(&req(method, uri)));
         }
@@ -262,7 +279,11 @@ mod tests {
     // end of URIs _do_ matter.
     #[test]
     fn empty_segments_at_the_end_do_matter() {
-        let misses = vec![(Method::GET, "/a/b/"), (Method::GET, "/a/b//"), (Method::GET, "//a//b////")];
+        let misses = vec![
+            (Method::GET, "/a/b/"),
+            (Method::GET, "/a/b//"),
+            (Method::GET, "//a//b////"),
+        ];
         for (method, uri) in &misses {
             assert_eq!(Match::No, ab_spec().matches(&req(method, uri)));
         }
