@@ -63,7 +63,6 @@ class BuilderGenerator(
 
     fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
-        // TODO: figure out exactly what docs we want on a the builder module
         writer.docs("See #D", symbol)
         val segments = shape.builderSymbol(symbolProvider).namespace.split("::")
         writer.withModule(segments.last()) {
