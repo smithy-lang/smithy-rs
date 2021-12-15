@@ -70,9 +70,40 @@ to generate these artifacts:
 The `aws-sdk-rust` repository will have a new `next` branch that has its own set of CI workflows
 and branch protection rules. The releaser will take the `aws:sdk:assemble` artifact and apply it
 directly to this `next` branch as would have previously been done against the `main` branch.
+The `main` branch will continue to have the same CI as `next`.
 
-The `main` branch will have a small tweak to its CI so that it uses crates.io for the Smithy
-runtime crates. Its CI will look as follows:
+When it's time to cut a release, the releaser will do the following:
+
+1. Tag `smithy-rs` with the desired version number
+2. Wait for CI to build artifacts for the tagged release
+3. Pull-request the SDK artifacts over to `aws-sdk-rust/next` (this will be automated in the future)
+6. Pull-request merge `aws-sdk-rust/next` into `aws-sdk-rust/main`
+7. Wait for successful CI in `main`
+8. Tag release for `main`
+9. Publish SDK with publisher tool
+
+The server team can then download the `rust-runtime:assemble` build artifact for the tagged release
+in `smithy-rs`, and publish the `aws-smithy-http-server` crate from there.
+
+### Avoiding mistakes by disallowing creation of publish-ready bundles outside of CI
+
+It should be difficult to accidentally publish a locally built set of crates. To add friction to this,
+the `smithy-rs` build process will look for the existence of the `GITHUB_ACTIONS=true` environment variable.
+If this environment variable is not set, then it will pass a flag to the Rust codegen plugin that tells it to
+emit a `publish = false` under `[package]` in the generated `Cargo.toml`.
+
+This could be easily circumvented, but the goal is to reduce the chances of accidentally publishing
+crates rather than making it impossible.
+
+Alternatives Considered
+-----------------------
+
+### Publish Smithy runtime crates from `smithy-rs` build artifacts
+
+This approach is similar to the proposed solution, except that the SDK would not publish
+the Smithy runtime crates. The `aws-sdk-rust/main` branch would have a small tweak to its CI
+so that the SDK is tested against the Smithy runtime crates that are published to crates.io
+This CI process would look as follows:
 
 1. Shallow clone `aws-sdk-rust` with the revision being tested
 2. Run a script to remove the `path` argument for the Smithy runtime crate dependencies for every crate
@@ -98,22 +129,9 @@ When it's time to cut a release, the releaser will do the following:
 8. Tag release for `main`
 9. Publish SDK with publisher tool
 
-### Avoiding mistakes by disallowing creation of publish-ready bundles outside of CI
-
-It should be difficult to accidentally publish a locally built set of crates. To add friction to this,
-the `smithy-rs` build process will look for the existence of the `GITHUB_ACTIONS=true` environment variable.
-If this environment variable is not set, then it will pass a flag to the Rust codegen plugin that tells it to
-emit a `publish = false` under `[package]` in the generated `Cargo.toml`.
-
-This could be easily circumvented, but the goal is to reduce the chances of accidentally publishing
-crates rather than making it impossible.
-
-Alternatives Considered
------------------------
-
 ### Keep Smithy runtime crates in `smithy-rs`
 
-This approach is similar to the proposed solution, except that the `aws-sdk-rust` repository
+This approach is similar to the previous alternative, except that the `aws-sdk-rust` repository
 won't have a snapshot of the Smithy runtime crates, and an additional step needs to be performed
 during CI for the `next` branch so that it looks as follows:
 
@@ -155,9 +173,8 @@ Changes Checklist
   - [ ] Add `rust-runtime:assemble` target that generates publish-ready Smithy runtime crates
   - [ ] Add CI step to create Smithy runtime bundle artifact
   - [ ] Add `GITHUB_ACTIONS=true` env var check for setting the `publish` flag in generated AND runtime manifests
-  - [ ] Revise publisher tool to publish in two halves
+  - [ ] Revise publisher tool to publish from an arbitrary directory
 - In `aws-sdk-rust`:
-  - [ ] Write a configurable script in `aws-sdk-rust` to remove the `path` argument from dependencies in a `Cargo.toml` file
   - [ ] Implement CI for the `aws-sdk-rust/next` branch
-  - [ ] Implement CI for the `aws-sdk-rust/main` branch
+  - [ ] Remove the publisher tool
 - [ ] Update release process documentation
