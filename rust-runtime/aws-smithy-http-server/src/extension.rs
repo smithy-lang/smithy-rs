@@ -56,6 +56,11 @@ impl RequestExtensions {
             operation_name,
         }
     }
+
+    /// Returns the current operation formatted as <namespace>#<operation_name>.
+    pub fn operation(&self) -> String {
+        format!("{}#{}", self.namespace, self.operation_name)
+    }
 }
 
 /// Extension type used to store the type of user defined error returned by an operation.
