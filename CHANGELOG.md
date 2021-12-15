@@ -1,4 +1,11 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+v0.33.1 (December 15th, 2021)
+=============================
+**New this release:**
+- 🐛 (smithy-rs#979) Make `aws-smithy-client` a required dependency in generated services.
+
+
+
 v0.33.0 (December 15th, 2021)
 =============================
 **Breaking Changes:**
@@ -15,6 +22,7 @@ v0.33.0 (December 15th, 2021)
     This is to clearly distinguish it from `rustls` and `native_tls` which do not use a boxed connector.
 
 **New this release:**
+- 🐛 (smithy-rs#957) Include non-service-specific examples in the generated root Cargo workspace
 - 🎉 (smithy-rs#922, smithy-rs#914) Add changelog automation to sdk-lints
 - 🐛 (aws-sdk-rust#317, smithy-rs#907) Removed spamming log message when a client was used without a sleep implementation, and
     improved context and call to action in logged messages around missing sleep implementations.
