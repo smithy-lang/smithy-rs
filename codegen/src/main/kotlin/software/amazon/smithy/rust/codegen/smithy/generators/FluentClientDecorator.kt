@@ -64,7 +64,6 @@ class FluentClientDecorator : RustCodegenDecorator {
         ) { writer ->
             FluentClientGenerator(
                 codegenContext,
-                includeSmithyGenericClientDocs = true,
                 customizations = listOf(GenericFluentClient(codegenContext))
             ).render(writer)
         }
@@ -105,31 +104,38 @@ sealed class FluentClientSection(name: String) : Section(name) {
 abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSection>()
 
 data class ClientGenerics(
-    val connectorDefault: String? = null,
-    val middlewareDefault: String? = null,
-    val retryDefault: String? = "#{client}::retry::Standard",
-    val codegenScope: List<Pair<String, Any>> = emptyList(),
+    val connectorDefault: RuntimeType?,
+    val middlewareDefault: RuntimeType?,
+    val retryDefault: RuntimeType?,
+    val client: RuntimeType
 ) {
     /** Declaration with defaults set */
-    val decl: String by lazy {
-        "<C${fmtDefault(connectorDefault)}, M${fmtDefault(middlewareDefault)}, R${fmtDefault(retryDefault)}>"
+    val decl = writable {
+        rustTemplate(
+            "<C #{c:W}, M#{m:W}, R#{r:W}>",
+            "c" to defaultType(connectorDefault),
+            "m" to defaultType(middlewareDefault),
+            "r" to defaultType(retryDefault)
+        )
     }
 
     /** Instantiation */
     val inst: String = "<C, M, R>"
 
     /** Trait bounds */
-    val bounds: String = """
-        C: #{client}::bounds::SmithyConnector,
-        M: #{client}::bounds::SmithyMiddleware<C>,
-        R: #{client}::retry::NewRequestPolicy,
-    """.trimIndent()
+    val bounds = writable {
+        rustTemplate(
+            """
+            C: #{client}::bounds::SmithyConnector,
+            M: #{client}::bounds::SmithyMiddleware<C>,
+            R: #{client}::retry::NewRequestPolicy,
+            """,
+            "client" to client
+        )
+    }
 
-    private fun fmtDefault(default: String?): String {
-        return when (default) {
-            null -> ""
-            else -> "= $default"
-        }
+    private fun defaultType(default: RuntimeType?) = writable {
+        default?.also { rust("= #T", default) }
     }
 }
 
@@ -266,10 +272,12 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
 
 class FluentClientGenerator(
     codegenContext: CodegenContext,
-    // Whether to include Client construction details that are relevant to generic Smithy generated clients,
-    // but not necessarily relevant to customized clients, such as the ones with the AWS SDK.
-    private val includeSmithyGenericClientDocs: Boolean,
-    private val generics: ClientGenerics = ClientGenerics(),
+    private val generics: ClientGenerics = ClientGenerics(
+        connectorDefault = null,
+        middlewareDefault = null,
+        retryDefault = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType().member("retry::Standard"),
+        client = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType()
+    ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
     companion object {
@@ -284,22 +292,20 @@ class FluentClientGenerator(
     private val model = codegenContext.model
     private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig).copy(optional = true)
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val moduleUseName = codegenContext.moduleUseName()
-    private val humanName = serviceShape.id.name
     private val core = FluentClientCore(model)
 
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
             ##[derive(Debug)]
-            pub(crate) struct Handle${generics.decl} {
+            pub(crate) struct Handle#{generics_decl:W} {
                 client: #{client}::Client${generics.inst},
                 conf: crate::Config,
             }
 
             #{client_docs:W}
             ##[derive(std::fmt::Debug)]
-            pub struct Client${generics.decl} {
+            pub struct Client#{generics_decl:W} {
                 handle: std::sync::Arc<Handle${generics.inst}>
             }
 
@@ -335,6 +341,7 @@ class FluentClientGenerator(
                 }
             }
             """,
+            "generics_decl" to generics.decl,
             "client" to clientDep.asType(),
             "client_docs" to writable {
                 customizations.forEach {
@@ -345,11 +352,11 @@ class FluentClientGenerator(
                     )(this)
                 }
             },
-            *generics.codegenScope.toTypedArray()
         )
         writer.rustBlockTemplate(
-            "impl${generics.inst} Client${generics.inst} where ${generics.bounds}",
+            "impl${generics.inst} Client${generics.inst} where #{bounds:W}",
             "client" to clientDep.asType(),
+            "bounds" to generics.bounds
         ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
@@ -397,20 +404,21 @@ class FluentClientGenerator(
                 rustTemplate(
                     """
                     ##[derive(std::fmt::Debug)]
-                    pub struct ${operationSymbol.name}${generics.decl} {
+                    pub struct ${operationSymbol.name}#{generics:W} {
                         handle: std::sync::Arc<super::Handle${generics.inst}>,
                         inner: #{Inner}
                     }
                     """,
                     "Inner" to input.builderSymbol(symbolProvider),
-                    *generics.codegenScope.toTypedArray(),
                     "client" to clientDep.asType(),
+                    "generics" to generics.decl,
                     "operation" to operationSymbol
                 )
 
                 rustBlockTemplate(
-                    "impl${generics.inst} ${operationSymbol.name}${generics.inst} where ${generics.bounds}",
+                    "impl${generics.inst} ${operationSymbol.name}${generics.inst} where #{bounds:W}",
                     "client" to clientDep.asType(),
+                    "bounds" to generics.bounds
                 ) {
                     rustTemplate(
                         """

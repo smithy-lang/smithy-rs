@@ -1,7 +1,7 @@
 RFC: Service-specific middleware
 ================================
 
-> Status: RFC
+> Status: [Implemented](https://github.com/awslabs/smithy-rs/pull/959)
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
@@ -50,7 +50,7 @@ can easily configure `AwsFluentClientGenerator` to insert different types based 
 
 # Changes Checklist
 
-- [ ] Move aws-hyper into aws-inlineable. Update comments as needed including with a usage example about how customers can augment it.
-- [ ] Refactor `ClientGenerics` to contain a RuntimeType instead of a string and configure. Update `AwsFluentClientDecorator`.
-- [ ] Update all code and examples that use `aws-hyper` to use service-specific middleware.
-- [ ] Push an updated README to aws-hyper deprecating the package, explaining what happened. Do _not_ yank previous versions since those will be relied on by older SDK versions.
+- [x] Move aws-hyper into aws-inlineable. Update comments as needed including with a usage example about how customers can augment it.
+- [x] Refactor `ClientGenerics` to contain a RuntimeType instead of a string and configure. Update `AwsFluentClientDecorator`.
+- [x] Update all code and examples that use `aws-hyper` to use service-specific middleware.
+- [x] Push an updated README to aws-hyper deprecating the package, explaining what happened. Do _not_ yank previous versions since those will be relied on by older SDK versions.

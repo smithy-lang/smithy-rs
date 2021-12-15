@@ -1,4 +1,30 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+v0.33.0 (December 15th, 2021)
+=============================
+**Breaking Changes:**
+- ⚠ (smithy-rs#930) Runtime crates no longer have default features. You must now specify the features that you want when you add a dependency to your `Cargo.toml`.
+
+    **Upgrade guide**
+
+    | before                          | after |
+    |---------------------------------|-------|
+    | `aws-smithy-async = "VERSION"`  | `aws-smithy-async = { version = "VERSION", features = ["rt-tokio"] }` |
+    | `aws-smithy-client = "VERSION"` | `aws-smithy-client = { version = "VERSION", features = ["client-hyper", "rustls", "rt-tokio"] }` |
+    | `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["rt-tokio"] }` |
+- ⚠ (smithy-rs#940) `aws_smithy_client::Client::https()` has been renamed to `dyn_https()`.
+    This is to clearly distinguish it from `rustls` and `native_tls` which do not use a boxed connector.
+
+**New this release:**
+- 🎉 (smithy-rs#922, smithy-rs#914) Add changelog automation to sdk-lints
+- 🐛 (aws-sdk-rust#317, smithy-rs#907) Removed spamming log message when a client was used without a sleep implementation, and
+    improved context and call to action in logged messages around missing sleep implementations.
+- (smithy-rs#923) Use provided `sleep_impl` for retries instead of using Tokio directly.
+- (smithy-rs#920) Fix typos in module documentation for generated crates
+- 🐛 (aws-sdk-rust#301, smithy-rs#892) Avoid serializing repetitive `xmlns` attributes in generated XML serializers.
+- 🐛 (smithy-rs#953, aws-sdk-rust#331) Fixed a bug where certain characters caused a panic during URI encoding.
+
+
+
 v0.32.0 (December 2nd, 2021)
 =======================
 

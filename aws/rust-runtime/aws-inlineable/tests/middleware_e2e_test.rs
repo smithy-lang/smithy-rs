@@ -18,8 +18,8 @@ use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
 use aws_endpoint::set_endpoint_resolver;
 use aws_http::user_agent::AwsUserAgent;
 use aws_http::AwsErrorRetryPolicy;
-use aws_hyper::AwsMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
+use inlineable_aws::middleware::DefaultMiddleware;
 
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
@@ -33,7 +33,7 @@ use aws_types::region::Region;
 use aws_types::Credentials;
 use aws_types::SigningService;
 
-type Client<C> = aws_smithy_client::Client<C, AwsMiddleware>;
+type Client<C> = aws_smithy_client::Client<C, DefaultMiddleware>;
 
 #[derive(Clone)]
 struct TestOperationParser;
