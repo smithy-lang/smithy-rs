@@ -57,13 +57,17 @@ impl<B> Route<B> {
         T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
         T::Future: Send + 'static,
     {
-        Self { service: BoxCloneService::new(svc) }
+        Self {
+            service: BoxCloneService::new(svc),
+        }
     }
 }
 
 impl<ReqBody> Clone for Route<ReqBody> {
     fn clone(&self) -> Self {
-        Self { service: self.service.clone() }
+        Self {
+            service: self.service.clone(),
+        }
     }
 }
 

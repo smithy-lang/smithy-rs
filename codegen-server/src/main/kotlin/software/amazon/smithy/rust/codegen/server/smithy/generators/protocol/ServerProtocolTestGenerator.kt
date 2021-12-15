@@ -327,10 +327,9 @@ class ServerProtocolTestGenerator(
         rustWriter.rust(
             """
             let extensions = http_request.extensions().expect("unable to extract http request extensions");
-            let namespace = extensions.get::<aws_smithy_http_server::ExtensionNamespace>().expect("extension ExtensionNamespace not found");
-            assert_eq!(**namespace, ${operationShape.id.getNamespace().dq()});
-            let operation_name = extensions.get::<aws_smithy_http_server::ExtensionOperationName>().expect("extension ExtensionOperationName not found");
-            assert_eq!(**operation_name, ${operationSymbol.name.dq()});
+            let request_extensions = extensions.get::<aws_smithy_http_server::RequestExtensions>().expect("extension RequestExtensions not found");
+            assert_eq!(request_extensions.namespace, ${operationShape.id.getNamespace().dq()});
+            assert_eq!(request_extensions.operation_name, ${operationSymbol.name.dq()});
             """.trimIndent()
         )
     }
