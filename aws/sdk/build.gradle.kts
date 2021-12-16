@@ -5,9 +5,9 @@
 
 import aws.sdk.AwsServices
 import aws.sdk.Membership
-import aws.sdk.parseMembership
 import aws.sdk.discoverServices
 import aws.sdk.docsLandingPage
+import aws.sdk.parseMembership
 
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
 extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
@@ -187,10 +187,10 @@ fun rewritePathDependency(line: String): String {
 
 tasks.register<Copy>("copyAllRuntimes") {
     from("$rootDir/aws/rust-runtime") {
-        Crates.AWS_SDK_RUNTIME.forEach { include("$it/**") }
+        CrateSet.AWS_SDK_RUNTIME.forEach { include("$it/**") }
     }
     from("$rootDir/rust-runtime") {
-        Crates.AWS_SDK_SMITHY_RUNTIME.forEach { include("$it/**") }
+        CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { include("$it/**") }
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
@@ -202,7 +202,7 @@ tasks.register("relocateAwsRuntime") {
     dependsOn("copyAllRuntimes")
     doLast {
         // Patch the Cargo.toml files
-        Crates.AWS_SDK_RUNTIME.forEach { moduleName ->
+        CrateSet.AWS_SDK_RUNTIME.forEach { moduleName ->
             patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
                 rewriteAwsSdkCrateVersion(properties, line.let(::rewritePathDependency))
             }
@@ -213,7 +213,7 @@ tasks.register("relocateRuntime") {
     dependsOn("copyAllRuntimes")
     doLast {
         // Patch the Cargo.toml files
-        Crates.AWS_SDK_SMITHY_RUNTIME.forEach { moduleName ->
+        CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { moduleName ->
             patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
                 rewriteSmithyRsCrateVersion(properties, line)
             }
@@ -243,8 +243,14 @@ task("generateCargoWorkspace") {
 
 tasks.register<Exec>("fixManifests") {
     description = "Run the publisher tool's `fix-manifests` sub-command on the generated services"
-    workingDir(rootProject.projectDir.resolve("tools/publisher"))
+
+    val publisherPath = rootProject.projectDir.resolve("tools/publisher")
+    inputs.dir(publisherPath)
+    outputs.dir(outputDir)
+
+    workingDir(publisherPath)
     commandLine("cargo", "run", "--", "fix-manifests", "--location", outputDir.absolutePath)
+
     dependsOn("assemble")
     dependsOn("relocateServices")
     dependsOn("relocateRuntime")

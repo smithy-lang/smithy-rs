@@ -20,8 +20,8 @@ class AwsServices(private val project: Project, services: List<AwsService>) {
     val allModules: Set<String> by lazy {
         (
             services.map(AwsService::module).map { "sdk/$it" } +
-                Crates.AWS_SDK_SMITHY_RUNTIME.map { "sdk/$it" } +
-                Crates.AWS_SDK_RUNTIME.map { "sdk/$it" } +
+                CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/$it" } +
+                CrateSet.AWS_SDK_RUNTIME.map { "sdk/$it" } +
                 examples
             ).toSortedSet()
     }

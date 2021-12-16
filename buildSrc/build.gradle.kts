@@ -7,6 +7,7 @@ import java.util.Properties
 
 plugins {
     `kotlin-dsl`
+    jacoco
 }
 repositories {
     maven("https://plugins.gradle.org/m2")
@@ -33,4 +34,25 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-iam-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-cloudformation-traits:$smithyVersion")
     implementation(gradleApi())
+    testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
 }
+
+tasks.test {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = true
+    }
+}
+
+// Configure jacoco (code coverage) to generate an HTML report
+tasks.jacocoTestReport {
+    reports {
+        xml.isEnabled = false
+        csv.isEnabled = false
+        html.destination = file("$buildDir/reports/jacoco")
+    }
+}
+
+// Always run the jacoco test report after testing.
+tasks["test"].finalizedBy(tasks["jacocoTestReport"])

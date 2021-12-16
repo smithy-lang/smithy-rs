@@ -193,7 +193,7 @@ pub enum Error {
     MultipleVersions(String, Version, Version),
 }
 
-/// Discovers all Cargo.toml files under the given path with a depth limit of 1.
+/// Discovers all Cargo.toml files under the given path recursively
 #[async_recursion::async_recursion]
 pub async fn discover_package_manifests(path: PathBuf) -> Result<Vec<PathBuf>> {
     let mut manifests = Vec::new();

@@ -126,7 +126,7 @@ fn fix_dep_sets(versions: &BTreeMap<String, Version>, metadata: &mut toml::Value
     Ok(changed)
 }
 
-fn fix_publish_flag(manifest_path: &Path, metadata: &mut toml::Value) -> Result<bool> {
+fn block_local_publish(manifest_path: &Path, metadata: &mut toml::Value) -> Result<bool> {
     // Safe-guard to prevent accidental publish to crates.io. Add some friction
     // to publishing from a local development machine by detecting that the tool
     // is not being run from CI, and disallow publish in that case.
@@ -153,7 +153,7 @@ async fn fix_manifests(
     mode: Mode,
 ) -> Result<()> {
     for manifest in manifests {
-        let package_changed = fix_publish_flag(&manifest.path, &mut manifest.metadata)?;
+        let package_changed = block_local_publish(&manifest.path, &mut manifest.metadata)?;
         let dependencies_changed = fix_dep_sets(versions, &mut manifest.metadata)?;
         if package_changed || dependencies_changed > 0 {
             let contents =
