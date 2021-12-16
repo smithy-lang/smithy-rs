@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.ServiceIndex
@@ -39,6 +40,7 @@ class ServerProtocolLoader(private val supportedProtocols: ProtocolMap) {
         val DefaultProtocols = mapOf(
             // TODO: support other protocols.
             RestJson1Trait.ID to ServerRestJsonFactory(),
+            RestXmlTrait.ID to ServerRestXmlFactory(),
         )
     }
 }

@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
+import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
@@ -40,6 +42,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperat
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -514,12 +517,13 @@ private class ServerHttpProtocolImplGenerator(
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
         val parser = structuredDataParser.serverInputParser(operationShape)
         if (parser != null) {
+            val contentTypeCheck = getContentTypeCheck()
             rustTemplate(
                 """
                 let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
                 let bytes = #{Hyper}::body::to_bytes(body).await?;
                 if !bytes.is_empty() {
-                    #{SmithyHttpServer}::protocols::check_json_content_type(request)?;
+                    #{SmithyHttpServer}::protocols::$contentTypeCheck(request)?;
                     input = #{parser}(bytes.as_ref(), input)?;
                 }
                 """,
@@ -869,7 +873,7 @@ private class ServerHttpProtocolImplGenerator(
 
     // TODO These functions can be replaced with the ones in https://docs.rs/aws-smithy-types/latest/aws_smithy_types/primitive/trait.Parse.html
     private fun generateParseStrAsPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
-        val output = symbolProvider.toSymbol(binding.member)
+        val output = symbolProvider.toSymbol(binding.member).makeOptional()
         val fnName = generateParseStrFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
@@ -892,5 +896,19 @@ private class ServerHttpProtocolImplGenerator(
         val containerName = binding.member.container.name.toSnakeCase()
         val memberName = binding.memberName.toSnakeCase()
         return "parse_str_${containerName}_$memberName"
+    }
+
+    private fun getContentTypeCheck(): String {
+        when (codegenContext.protocol) {
+            RestJson1Trait.ID -> {
+                return "check_json_content_type"
+            }
+            RestXmlTrait.ID -> {
+                return "check_xml_content_type"
+            }
+            else -> {
+                TODO("Protocol ${codegenContext.protocol} not supported yet")
+            }
+        }
     }
 }

@@ -54,6 +54,7 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.outputShape
 
 class XmlBindingTraitSerializerGenerator(
     codegenContext: CodegenContext,
@@ -191,11 +192,67 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
-        TODO("Not yet implemented")
+        val fnName = symbolProvider.serializeFunctionName(operationShape)
+        val outputShape = operationShape.outputShape(model)
+        val xmlMembers = operationShape.operationXmlMembers()
+        val operationXmlName = xmlIndex.operationOutputShapeName(operationShape)
+            ?: throw CodegenException("operation must have a name if it has members")
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+            it.rustBlockTemplate(
+                "pub fn $fnName(output: &#{target}) -> Result<String, #{Error}>",
+                *codegenScope, "target" to symbolProvider.toSymbol(outputShape)
+            ) {
+                rust("let mut out = String::new();")
+                // create a scope for writer. This ensure that writer has been dropped before returning the
+                // string and ensures that all closing tags get written
+                rustBlock("") {
+                    rustTemplate(
+                        """
+                        let mut writer = #{XmlWriter}::new(&mut out);
+                        ##[allow(unused_mut)]
+                        let mut root = writer.start_el(${operationXmlName.dq()})${outputShape.xmlNamespace(root = true).apply()};
+                        """,
+                        *codegenScope
+                    )
+                    serializeStructure(outputShape, xmlMembers, Ctx.Element("root", "output"))
+                }
+                rustTemplate("Ok(out)", *codegenScope)
+            }
+        }
     }
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
-        TODO("Not yet implemented")
+        val errorShape = model.expectShape(shape, StructureShape::class.java)
+        val xmlMembers = httpBindingResolver.errorResponseBindings(shape)
+            .filter { it.location == HttpLocation.DOCUMENT }
+            .map { it.member }
+        val fnName = symbolProvider.serializeFunctionName(errorShape)
+        return RuntimeType.forInlineFun(fnName, operationSerModule) {
+            it.rustBlockTemplate(
+                "pub fn $fnName(error: &#{target}) -> Result<String, #{Error}>",
+                *codegenScope, "target" to symbolProvider.toSymbol(errorShape)
+            ) {
+                rust("let mut out = String::new();")
+                // create a scope for writer. This ensure that writer has been dropped before returning the
+                // string and ensures that all closing tags get written
+                rustBlock("") {
+                    rustTemplate(
+                        """
+                        let mut writer = #{XmlWriter}::new(&mut out);
+                        ##[allow(unused_mut)]
+                        let mut root = writer.start_el("Error")${errorShape.xmlNamespace(root = true).apply()};
+                        """,
+                        *codegenScope
+                    )
+                    serializeStructure(
+                        errorShape,
+                        XmlMemberIndex.fromMembers(xmlMembers),
+                        Ctx.Element("root", "error")
+                    )
+                }
+                rustTemplate("Ok(out)", *codegenScope)
+            }
+        }
     }
 
     private fun XmlNamespaceTrait?.apply(): String {
