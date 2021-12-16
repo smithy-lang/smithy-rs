@@ -232,6 +232,19 @@ macro_rules! opaque_future {
 
 pub use opaque_future;
 
+/// Implements `Deref` for all `Extension` holding a `&'static, str`.
+macro_rules! impl_deref {
+    ($name:ident) => {
+        impl Deref for $name {
+            type Target = &'static str;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    };
+}
+
 /// Implements `new` for all `Extension` holding a `&'static, str`.
 macro_rules! impl_extension_new_and_deref {
     ($name:ident) => {
@@ -242,12 +255,6 @@ macro_rules! impl_extension_new_and_deref {
             }
         }
 
-        impl Deref for $name {
-            type Target = &'static str;
-
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
+        impl_deref!($name);
     };
 }

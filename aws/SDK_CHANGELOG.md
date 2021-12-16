@@ -29,6 +29,8 @@ v0.3.0 (December 15th, 2021)
 - (smithy-rs#920) Fix typos in module documentation for generated crates
 - 🐛 (aws-sdk-rust#301, smithy-rs#892) Avoid serializing repetitive `xmlns` attributes when serializing XML. This reduces the length of serialized requests and should improve compatibility with localstack.
 - 🐛 (smithy-rs#953, aws-sdk-rust#331) Fixed a bug where certain characters caused a panic during URI encoding.
+- 🐛 (smithy-rs#957) Include non-service-specific examples in the root Cargo workspace so that they can build
+- 🐛 (smithy-rs#979) Make `aws-smithy-client` a required dependency in generated services.
 
 **Contributors**
 Thank you for your contributions! ❤

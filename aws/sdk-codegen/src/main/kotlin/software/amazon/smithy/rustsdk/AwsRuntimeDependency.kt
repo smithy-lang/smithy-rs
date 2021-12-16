@@ -51,6 +51,7 @@ object AwsRuntimeType {
             "middleware", public = true,
             CargoDependency.SmithyHttp(this),
             CargoDependency.SmithyHttpTower(this),
+            CargoDependency.SmithyClient(this),
             CargoDependency.Tower,
             awsHttp(),
             awsEndpoint(),

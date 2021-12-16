@@ -8,6 +8,6 @@ edition = "2018"
 
 [dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
-sqs = { package = "aws-sdk-sqs", path = "../../build/aws-sdk/sdk/sqs" }
+aws-sdk-sqs = { path = "../../build/aws-sdk/sdk/sqs" }
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.2.18"

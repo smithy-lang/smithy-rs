@@ -316,8 +316,7 @@ private class ServerHttpProtocolImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         return """
             let extensions = req.extensions_mut().ok_or(#{SmithyHttpServer}::rejection::ExtensionsAlreadyExtracted)?;
-            extensions.insert(#{SmithyHttpServer}::ExtensionNamespace::new(${namespace.dq()}));
-            extensions.insert(#{SmithyHttpServer}::ExtensionOperationName::new(${operationName.dq()}));
+            extensions.insert(#{SmithyHttpServer}::RequestExtensions::new(${namespace.dq()}, ${operationName.dq()}));
         """.trimIndent()
     }
 
@@ -640,11 +639,13 @@ private class ServerHttpProtocolImplGenerator(
         } else if (targetMapValue.isSetShape) {
             QueryParamsTargetMapValueType.SET
         } else {
-            throw ExpectationNotMetException("""
+            throw ExpectationNotMetException(
+                """
                 @httpQueryParams trait applied to non-supported target
                 $targetMapValue of type ${targetMapValue.type}
                 """.trimIndent(),
-                targetMapValue.sourceLocation)
+                targetMapValue.sourceLocation
+            )
         }
 
     private fun serverRenderQueryStringParser(writer: RustWriter, operationShape: OperationShape) {
@@ -661,7 +662,7 @@ private class ServerHttpProtocolImplGenerator(
             return
         }
 
-        fun HttpBindingDescriptor.queryParamsBindingTargetMapValueType(): QueryParamsTargetMapValueType  {
+        fun HttpBindingDescriptor.queryParamsBindingTargetMapValueType(): QueryParamsTargetMapValueType {
             check(this.location == HttpLocation.QUERY_PARAMS)
             val queryParamsTarget = model.expectShape(this.member.target)
             val mapTarget = queryParamsTarget.asMapShape().get()
@@ -669,7 +670,8 @@ private class ServerHttpProtocolImplGenerator(
         }
 
         with(writer) {
-            rustTemplate("""
+            rustTemplate(
+                """
                 let query_string = request.uri().query().ok_or(#{SmithyHttpServer}::rejection::MissingQueryString)?;
                 let pairs = #{SerdeUrlEncoded}::from_str::<Vec<(&str, &str)>>(query_string)?;
                 """.trimIndent(),
@@ -677,7 +679,8 @@ private class ServerHttpProtocolImplGenerator(
             )
 
             if (queryParamsBinding != null) {
-                rustTemplate("let mut query_params: #{HashMap}<String, " +
+                rustTemplate(
+                    "let mut query_params: #{HashMap}<String, " +
                         "${queryParamsBinding.queryParamsBindingTargetMapValueType().asRustType().render()}> = #{HashMap}::new();",
                     "HashMap" to RustType.HashMap.RuntimeType,
                 )
@@ -694,15 +697,17 @@ private class ServerHttpProtocolImplGenerator(
             rustBlock("for (k, v) in pairs") {
                 queryBindingsTargettingSimple.forEach {
                     val deserializer = generateParsePercentEncodedStrFn(it)
-                    rustTemplate("""
+                    rustTemplate(
+                        """
                         if !seen_${it.memberName.toSnakeCase()} && k == "${it.locationName}" {
                             input = input.${it.member.setterName()}(
                                 #{deserializer}(v)?
                             );
                             seen_${it.memberName.toSnakeCase()} = true;
                         }
-                    """.trimIndent(),
-                    "deserializer" to deserializer)
+                        """.trimIndent(),
+                        "deserializer" to deserializer
+                    )
                 }
                 queryBindingsTargettingCollection.forEach {
                     rustBlock("if k == ${it.locationName.dq()}") {
@@ -714,9 +719,12 @@ private class ServerHttpProtocolImplGenerator(
                                 // `<_>::from()` is necessary to convert the `&str` into:
                                 //     * the Rust enum in case the `string` shape has the `enum` trait; or
                                 //     * `String` in case it doesn't.
-                                rustTemplate("""
+                                rustTemplate(
+                                    """
                                     let v = <_>::from(#{PercentEncoding}::percent_decode_str(v).decode_utf8()?.as_ref());
-                                """.trimIndent(), *codegenScope)
+                                    """.trimIndent(),
+                                    *codegenScope
+                                )
                             }
                             memberShape.isTimestampShape -> {
                                 val index = HttpBindingIndex.of(model)
@@ -727,18 +735,22 @@ private class ServerHttpProtocolImplGenerator(
                                         protocol.defaultTimestampFormat,
                                     )
                                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                                rustTemplate("""
+                                rustTemplate(
+                                    """
                                     let v = #{PercentEncoding}::percent_decode_str(v).decode_utf8()?;
                                     let v = #{DateTime}::from_str(&v, #{format})?;
-                                """.trimIndent(),
+                                    """.trimIndent(),
                                     *codegenScope,
                                     "format" to timestampFormatType,
                                 )
                             }
                             else -> { // Number or boolean.
-                                rust("""
+                                rust(
+                                    """
                                     let v = <_ as #T>::parse_smithy_primitive(v)?;
-                                """.trimIndent(), CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse"))
+                                    """.trimIndent(),
+                                    CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse")
+                                )
                             }
                         }
                         rust("${it.memberName.toSnakeCase()}.push(v);")
@@ -750,10 +762,12 @@ private class ServerHttpProtocolImplGenerator(
                         QueryParamsTargetMapValueType.STRING -> {
                             rust("query_params.entry(String::from(k)).or_insert_with(|| String::from(v));")
                         } else -> {
-                            rustTemplate("""
+                            rustTemplate(
+                                """
                                 let entry = query_params.entry(String::from(k)).or_default();
                                 entry.push(String::from(v));
-                            """.trimIndent())
+                                """.trimIndent()
+                            )
                         }
                     }
                 }
@@ -762,9 +776,11 @@ private class ServerHttpProtocolImplGenerator(
                 rust("input = input.${queryParamsBinding.member.setterName()}(Some(query_params));")
             }
             queryBindingsTargettingCollection.forEach {
-                rustTemplate("""
+                rustTemplate(
+                    """
                     input = input.${it.member.setterName()}(Some(${it.memberName.toSnakeCase()}));
-                """.trimIndent())
+                    """.trimIndent()
+                )
             }
         }
     }
@@ -810,10 +826,11 @@ private class ServerHttpProtocolImplGenerator(
                 // `<_>::from()` is necessary to convert the `&str` into:
                 //     * the Rust enum in case the `string` shape has the `enum` trait; or
                 //     * `String` in case it doesn't.
-                rustTemplate("""
+                rustTemplate(
+                    """
                     let value = <_>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
                     Ok(Some(value))
-                """.trimIndent(),
+                    """.trimIndent(),
                     *codegenScope,
                 )
             }
