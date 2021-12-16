@@ -141,7 +141,7 @@ data class ClientGenerics(
 
 class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
     private val moduleUseName = codegenContext.moduleUseName()
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig).copy(optional = true)
+    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
     private val codegenScope = arrayOf("client" to clientDep.asType())
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
@@ -290,7 +290,7 @@ class FluentClientGenerator(
         TopDownIndex.of(codegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig).copy(optional = true)
+    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 

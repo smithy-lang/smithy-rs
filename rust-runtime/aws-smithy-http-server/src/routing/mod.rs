@@ -43,7 +43,9 @@ pub struct Router<B = Body> {
 
 impl<B> Clone for Router<B> {
     fn clone(&self) -> Self {
-        Self { routes: self.routes.clone() }
+        Self {
+            routes: self.routes.clone(),
+        }
     }
 }
 
@@ -66,7 +68,9 @@ where
     /// all requests.
     #[doc(hidden)]
     pub fn new() -> Self {
-        Self { routes: Default::default() }
+        Self {
+            routes: Default::default(),
+        }
     }
 
     /// Add a route to the router.
@@ -107,9 +111,15 @@ where
         NewResBody: HttpBody<Data = bytes::Bytes> + Send + 'static,
         NewResBody::Error: Into<BoxError>,
     {
-        let layer = ServiceBuilder::new().layer_fn(Route::new).layer(MapResponseBodyLayer::new(boxed)).layer(layer);
-        let routes =
-            self.routes.into_iter().map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec)).collect();
+        let layer = ServiceBuilder::new()
+            .layer_fn(Route::new)
+            .layer(MapResponseBodyLayer::new(boxed))
+            .layer(layer);
+        let routes = self
+            .routes
+            .into_iter()
+            .map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec))
+            .collect();
         Router { routes }
     }
 }
@@ -142,8 +152,17 @@ where
             }
         }
 
-        let status_code = if method_not_allowed { StatusCode::METHOD_NOT_ALLOWED } else { StatusCode::NOT_FOUND };
-        RouterFuture::from_response(Response::builder().status(status_code).body(crate::body::empty()).unwrap())
+        let status_code = if method_not_allowed {
+            StatusCode::METHOD_NOT_ALLOWED
+        } else {
+            StatusCode::NOT_FOUND
+        };
+        RouterFuture::from_response(
+            Response::builder()
+                .status(status_code)
+                .body(crate::body::empty())
+                .unwrap(),
+        )
     }
 }
 
@@ -201,7 +220,11 @@ mod tests {
             (
                 RequestSpec::from_parts(
                     Method::GET,
-                    vec![PathSegment::Literal(String::from("a")), PathSegment::Label, PathSegment::Label],
+                    vec![
+                        PathSegment::Literal(String::from("a")),
+                        PathSegment::Label,
+                        PathSegment::Label,
+                    ],
                     vec![],
                 ),
                 "A",
