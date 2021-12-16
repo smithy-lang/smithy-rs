@@ -10,7 +10,8 @@ use rustls::RootCertStore;
 
 #[tokio::main]
 async fn main() {
-    let root_store: RootCertStore = todo!();
+    // insert your root CAs
+    let root_store = RootCertStore::empty();
     let config = rustls::ClientConfig::builder()
         .with_safe_defaults()
         .with_root_certificates(root_store)

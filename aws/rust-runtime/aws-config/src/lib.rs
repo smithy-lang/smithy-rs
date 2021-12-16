@@ -243,7 +243,25 @@ mod loader {
             self
         }
 
-        pub fn provider_config(mut self, provider_config: ProviderConfig) -> Self {
+        /// Set configuration for all sub-loaders (credentials, region etc.)
+        ///
+        /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
+        /// the HTTPs` connector used or to stub in an in memory `Env` or `Fs` for testing.
+        ///
+        /// # Examples
+        /// ```no_run
+        /// # async fn docs() {
+        /// use aws_config::provider_config::ProviderConfig;
+        /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new().
+        ///     with_webpki_roots()
+        ///     .https_only()
+        ///     .enable_http1()
+        ///     .build();
+        /// let provider_config = ProviderConfig::default().with_tcp_connector(custom_https_connector);
+        /// let shared_config = aws_config::from_env().configure(provider_config).load().await;
+        /// # }
+        /// ```
+        pub fn configure(mut self, provider_config: ProviderConfig) -> Self {
             self.provider_config = Some(provider_config);
             self
         }
@@ -349,7 +367,7 @@ mod loader {
                 ("AWS_SECRET_ACCESS_KEY", "secret"),
             ]);
             let loader = from_env()
-                .provider_config(
+                .configure(
                     ProviderConfig::empty()
                         .with_env(env)
                         .with_http_connector(DynConnector::new(NeverConnector::new())),

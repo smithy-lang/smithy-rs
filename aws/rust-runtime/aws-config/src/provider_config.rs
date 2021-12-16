@@ -266,11 +266,11 @@ impl ProviderConfig {
 
     /// Override the HTTPS connector for this configuration
     ///
-    /// **Warning**: Use of this method will prevent you from taking advantage of the timeout machinery.
+    /// **Warning**: Use of this method will prevent you from taking advantage of the HTTP connect timeouts.
     /// Consider [`ProviderConfig::with_tcp_connector`].
     ///
     /// # Stability
-    /// This method is expected to change to support HTTP configuration
+    /// This method is expected to change to support HTTP configuration.
     pub fn with_http_connector(self, connector: DynConnector) -> Self {
         ProviderConfig {
             connector: HttpConnector::Prebuilt(Some(connector)),
@@ -280,8 +280,10 @@ impl ProviderConfig {
 
     /// Override the TCP connector for this configuration
     ///
+    /// This connector MUST provide an HTTPS encrypted connection.
+    ///
     /// # Stability
-    /// This method is may to change to support HTTP configuration.
+    /// This method may change to support HTTP configuration.
     pub fn with_tcp_connector<C>(self, connector: C) -> Self
     where
         C: Clone + Send + Sync + 'static,
