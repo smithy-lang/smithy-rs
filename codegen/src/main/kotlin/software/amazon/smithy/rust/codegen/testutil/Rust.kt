@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.util.CommandFailed
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.io.File
@@ -92,15 +93,15 @@ object TestWorkspace {
         val subprojectDir = subproject()
         val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
             override fun config(): SymbolVisitorConfig {
-                TODO("Not yet implemented")
+                PANIC("")
             }
 
             override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-                TODO("Not yet implemented")
+                PANIC("")
             }
 
             override fun toSymbol(shape: Shape?): Symbol {
-                TODO("Not yet implemented")
+                PANIC("")
             }
         }
         return TestWriterDelegator(

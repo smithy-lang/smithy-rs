@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -171,7 +172,7 @@ class RequestBindingGenerator(
         val target = when (memberType) {
             is CollectionShape -> model.expectShape(memberType.member.target)
             is MapShape -> model.expectShape(memberType.value.target)
-            else -> TODO("unexpected member for prefix headers: $memberType")
+            else -> UNREACHABLE("unexpected member for prefix headers: $memberType")
         }
         ifSet(memberType, memberSymbol, "&_input.$memberName") { field ->
             rustTemplate(

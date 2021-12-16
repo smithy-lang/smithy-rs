@@ -15,13 +15,14 @@ import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 internal class RustReservedWordSymbolProviderTest {
     class Stub : RustSymbolProvider {
         override fun config(): SymbolVisitorConfig {
-            TODO("Not yet implemented")
+            PANIC("")
         }
 
         override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {

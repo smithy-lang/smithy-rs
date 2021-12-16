@@ -36,7 +36,7 @@ fun Project.discoverServices(serviceMembership: Membership): List<AwsService> {
                 val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId
                     .toLowerCase()
                     .replace(" ", "")
-                    // TODO: the smithy models should not include the suffix "service"
+                    // The smithy models should not include the suffix "service" but currently they do
                     .removeSuffix("service")
                     .removeSuffix("api")
                 val testFile = file.parentFile.resolve("$sdkId-tests.smithy")
