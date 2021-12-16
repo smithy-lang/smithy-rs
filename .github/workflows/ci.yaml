@@ -41,6 +41,8 @@ jobs:
         test:
         - name: Kotlin Style
           run: ./gradlew ktlint
+        - name: BuildSrc Tests
+          run: ./gradlew -p buildSrc test
         - name: Client Unit Tests
           run: ./gradlew :codegen:test
         - name: SDK Unit Tests
@@ -80,13 +82,22 @@ jobs:
     - name: ${{ matrix.test.name }}
       run: ${{ matrix.test.run }}
 
-  runtime-tests:
-    name: Rust Runtime Tests
+  rust-tests:
+    name: Rust Tests
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        runtime: [., ./aws]
-    runs-on: ${{ matrix.os }}
+        runtime: [rust-runtime, aws/rust-runtime, tools/publisher]
+        exclude:
+        # Don't need to test the publisher tool on Windows
+        - os: windows-latest
+          runtime: tools/publisher
+    env:
+      # Disable incremental compilation to reduce disk space use
+      CARGO_INCREMENTAL: 0
+      RUSTDOCFLAGS: -D warnings
+      RUSTFLAGS: -D warnings
     steps:
     - uses: actions/checkout@v2
     # Pinned to the commit hash of v1.3.0
@@ -105,14 +116,51 @@ jobs:
       if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: clippy check
       run: cargo clippy -- -D warnings
-      working-directory: ${{ matrix.runtime }}/rust-runtime/
+      working-directory: ${{ matrix.runtime }}
       # don't bother running Clippy twice, it will have the same results on Windows
       if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: run tests
       run: cargo test --all-features
-      working-directory: ${{ matrix.runtime }}/rust-runtime/
+      working-directory: ${{ matrix.runtime }}
     - name: generate docs
       run: cargo doc --no-deps --document-private-items --all-features
-      working-directory: ${{ matrix.runtime }}/rust-runtime/
-      env:
-        RUSTDOCFLAGS: -D warnings
+      working-directory: ${{ matrix.runtime }}
+
+  # Psuedo-job that depends on the rust-tests job so that we don't have to enter
+  # the myriad of test matrix combinations into GitHub's protected branch rules
+  require-rust-tests:
+    needs: rust-tests
+    runs-on: ubuntu-latest
+    name: Rust Tests Matrix Success
+    steps:
+    - name: Run
+      run: echo "We should only get this far if the rust-tests matrix succeeded."
+
+  runtime-bundle:
+    name: Produce smithy-rs runtime bundle
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+      # Pinned to the commit hash of v1.3.0
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: Produce bundle
+      run: |
+        ./gradlew rust-runtime:assemble
+        tar cfvz smithy-rs-runtime.tar.gz -C rust-runtime/build smithy-rs
+    - uses: actions/upload-artifact@v2
+      name: Upload bundle
+      with:
+        name: smithy-rs-runtime-${{ github.sha }}
+        path: smithy-rs-runtime.tar.gz
