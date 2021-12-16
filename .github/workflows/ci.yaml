@@ -115,3 +115,32 @@ jobs:
         RUSTDOCFLAGS: -D warnings
     - name: Additional per-crate checks
       run: ./tools/additional-per-crate-checks.sh ${{ matrix.runtime }}/rust-runtime/
+
+  runtime-bundle:
+    name: Produce smithy-rs runtime bundle
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+      # Pinned to the commit hash of v1.3.0
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: Produce bundle
+      run: |
+        ./gradlew rust-runtime:assemble
+        tar cfvz smithy-rs-runtime.tar.gz -C rust-runtime/build smithy-rs
+    - uses: actions/upload-artifact@v2
+      name: Upload bundle
+      with:
+        name: smithy-rs-runtime-${{ github.sha }}
+        path: smithy-rs-runtime.tar.gz
