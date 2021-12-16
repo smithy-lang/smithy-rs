@@ -64,3 +64,7 @@ all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+[[example]]
+name = "imds"
+required-features = ["imds"]

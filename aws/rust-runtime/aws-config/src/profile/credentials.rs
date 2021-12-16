@@ -335,21 +335,18 @@ pub struct Builder {
 impl Builder {
     /// Override the configuration for the [`ProfileFileCredentialsProvider`]
     ///
-    #[cfg_attr(
-        feature = "default-provider",
-        doc = r##"
-# Examples
-```no_run
-# async fn test() {
-use aws_config::profile::ProfileFileCredentialsProvider;
-use aws_config::provider_config::ProviderConfig;
-let provider = ProfileFileCredentialsProvider::builder()
-    .configure(&ProviderConfig::with_default_region().await)
-    .build();
-# }
-```
-        "##
-    )]
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "default-provider")]
+    /// # async fn test() {
+    /// use aws_config::profile::ProfileFileCredentialsProvider;
+    /// use aws_config::provider_config::ProviderConfig;
+    /// let provider = ProfileFileCredentialsProvider::builder()
+    ///     .configure(&ProviderConfig::with_default_region().await)
+    ///     .build();
+    /// # }
+    /// ```
     pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
         self.provider_config = Some(provider_config.clone());
         self

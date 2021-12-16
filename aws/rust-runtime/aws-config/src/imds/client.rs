@@ -455,21 +455,18 @@ impl Builder {
 
     /// Configure generic options of the [`Client`]
     ///
-    #[cfg_attr(
-        feature = "default-provider",
-        doc = r##"
-# Examples
-```no_run
-use aws_config::imds::Client;
-# async fn test() {
-use aws_config::provider_config::ProviderConfig;
-let provider = Client::builder()
-    .configure(&ProviderConfig::with_default_region().await)
-    .build();
-# }
-```
-        "##
-    )]
+    /// # Examples
+    /// ```no_run
+    /// # #[cfg(feature = "default-provider")]
+    /// # async fn test() {
+    /// use aws_config::imds::Client;
+    /// use aws_config::provider_config::ProviderConfig;
+    ///
+    /// let provider = Client::builder()
+    ///     .configure(&ProviderConfig::with_default_region().await)
+    ///     .build();
+    /// # }
+    /// ```
     pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
         self.config = Some(provider_config.clone());
         self

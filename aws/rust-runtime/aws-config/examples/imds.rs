@@ -9,7 +9,6 @@
 /// use the client directly. This example demonstrates loading the instance-id from IMDS. More
 /// fetures of IMDS can be found [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html)
 #[tokio::main]
-#[cfg(feature = "imds")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use aws_config::imds::Client;
 
@@ -17,9 +16,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let instance_id = imds.get("/latest/meta-data/instance-id").await?;
     println!("current instance id: {}", instance_id);
     Ok(())
-}
-
-#[cfg(not(feature = "imds"))]
-fn main() {
-    println!("IMDS feature is not enabled.");
 }

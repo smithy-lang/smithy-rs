@@ -55,6 +55,8 @@ jobs:
     name: Smoke Test
     needs: generate-smoke-test
     runs-on: ubuntu-latest
+    # To avoid repeating setup boilerplate, we have the actual test commands
+    # in a matrix strategy. These commands get run in the steps after all of the setup.
     strategy:
       fail-fast: false
       matrix:
@@ -115,6 +117,7 @@ jobs:
       with:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         target-dir: ../target
+    # This runs the commands from the matrix strategy
     - name: ${{ matrix.test.name }}
       run: ${{ matrix.test.run }}
       working-directory: aws-sdk

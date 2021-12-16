@@ -33,6 +33,8 @@ jobs:
   codegen-tests:
     name: Codegen Tests
     runs-on: ubuntu-latest
+    # To avoid repeating setup boilerplate, we have the actual test commands
+    # in a matrix strategy. These commands get run in the steps after all of the setup.
     strategy:
       fail-fast: false
       matrix:
@@ -74,6 +76,7 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
+    # This runs the commands from the matrix strategy
     - name: ${{ matrix.test.name }}
       run: ${{ matrix.test.run }}
 
