@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
     let matches = clap_app().get_matches();
     if let Some(matches) = matches.subcommand_matches("publish") {
         let continue_from = matches.value_of("continue-from");
-        subcommand_publish(continue_from).await?;
+        subcommand_publish(matches.value_of("location").unwrap(), continue_from).await?;
     } else if let Some(fix_manifests) = matches.subcommand_matches("fix-manifests") {
         let mode = match fix_manifests.is_present("check") {
             true => Mode::Check,
@@ -61,7 +61,8 @@ fn clap_app() -> clap::App<'static, 'static> {
                     clap::Arg::with_name("location")
                         .required(true)
                         .takes_value(true)
-                        .long("location"),
+                        .long("location")
+                        .help("Path containing the manifests to fix. Manifests will be discovered recursively"),
                 )
                 .arg(
                     clap::Arg::with_name("check")
@@ -72,7 +73,14 @@ fn clap_app() -> clap::App<'static, 'static> {
         )
         .subcommand(
             clap::SubCommand::with_name("publish")
-                .about("publishes the AWS SDK to crates.io")
+                .about("publishes crates to crates.io")
+                .arg(
+                    clap::Arg::with_name("location")
+                        .required(true)
+                        .takes_value(true)
+                        .long("location")
+                        .help("Path containing the crates to publish. Crates will be discovered recursively"),
+                )
                 .arg(
                     clap::Arg::with_name("continue-from")
                         .long("continue-from")

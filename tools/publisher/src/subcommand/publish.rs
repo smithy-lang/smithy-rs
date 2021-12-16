@@ -9,8 +9,7 @@ use crate::package::{
     continue_batches_from, discover_package_batches, Package, PackageBatch, PackageHandle,
     PackageStats,
 };
-use crate::repo::discover_repository;
-use crate::{CRATE_OWNER, REPO_CRATE_PATH, REPO_NAME};
+use crate::CRATE_OWNER;
 use anyhow::Result;
 use crates_io_api::{AsyncClient, Error};
 use dialoguer::Confirm;
@@ -28,13 +27,12 @@ lazy_static! {
     .expect("valid client");
 }
 
-pub async fn subcommand_publish(continue_from: Option<&str>) -> Result<()> {
+pub async fn subcommand_publish(location: &str, continue_from: Option<&str>) -> Result<()> {
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
     info!("Discovering crates to publish...");
-    let repo = discover_repository(REPO_NAME, REPO_CRATE_PATH)?;
-    let (mut batches, mut stats) = discover_package_batches(Fs::Real, &repo.crates_root).await?;
+    let (mut batches, mut stats) = discover_package_batches(Fs::Real, &location).await?;
     if let Some(continue_from) = continue_from {
         info!(
             "Filtering batches so that publishing starts from {}.",
