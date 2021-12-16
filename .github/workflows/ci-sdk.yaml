@@ -55,19 +55,22 @@ jobs:
     name: Smoke Test
     needs: generate-smoke-test
     runs-on: ubuntu-latest
+    # To avoid repeating setup boilerplate, we have the actual test commands
+    # in a matrix strategy. These commands get run in the steps after all of the setup.
     strategy:
       fail-fast: false
       matrix:
         test:
         - name: Unit Tests
           run: cargo test $(cat service-with-tests)
-          working-directory: aws-sdk
         - name: Docs
           run: cargo doc --no-deps --document-private-items
-          working-directory: aws-sdk
         - name: Clippy
           run: cargo clippy
-          working-directory: aws-sdk
+        - name: Unused Dependencies
+          run: cargo +nightly udeps
+        - name: Additional per-crate checks
+          run: ../tools/additional-per-crate-checks.sh ./sdk/
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0
@@ -76,11 +79,29 @@ jobs:
       # so we have to manually restore the target directory override
       CARGO_TARGET_DIR: ../target
     steps:
+    - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
         default: true
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        default: false
+    - name: Cache cargo bin
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/bin
+        key: ${{ github.job }}-${{ runner.os }}-${{ env.rust_version }}
+    - name: Install additional cargo binaries
+      run: |
+        if [[ ! -f ~/.cargo/bin/cargo-udeps ]]; then
+          cargo +nightly install cargo-udeps
+        fi
+        if [[ ! -f ~/.cargo/bin/cargo-hack ]]; then
+          cargo install cargo-hack
+        fi
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -96,47 +117,20 @@ jobs:
       with:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         target-dir: ../target
+    # This runs the commands from the matrix strategy
     - name: ${{ matrix.test.name }}
       run: ${{ matrix.test.run }}
-      working-directory: ${{ matrix.test.working-directory }}
+      working-directory: aws-sdk
 
-  unused-sdk-dependencies:
-    name: Smoke Test - Unused dependencies
-    needs: generate-smoke-test
+  # Psuedo-job that depends on the smoke-test job so that we don't have to enter
+  # the myriad of test matrix combinations into GitHub's protected branch rules
+  require-smoke-tests:
+    needs: smoke-test
     runs-on: ubuntu-latest
+    name: Smoke Test Matrix Success
     steps:
-      # Pinned to the commit hash of v1.3.0
-    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
-      with:
-        sharedKey: ${{ runner.os }}-${{ github.job }}
-        target-dir: ../target
-    - uses: actions-rs/toolchain@v1
-      with:
-          # Cargo udeps requires nightly
-        toolchain: nightly
-        default: true
-    - name: Generate a name for the SDK
-      id: gen-name
-      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
-    - uses: actions/download-artifact@v2
-      name: Download SDK Artifact
-      with:
-        name: aws-sdk-${{ env.name }}-smoketest-${{ github.sha }}
-        path: artifact
-    - name: untar
-      run: mkdir aws-sdk && cd aws-sdk && tar -xvf ../artifact/sdk.tar
-    - name: Install `cargo udeps`
-      run: cargo install cargo-udeps
-    - name: Check for unused dependencies with default features
-      run: cargo udeps
-      working-directory: aws-sdk
-    - name: Check for unused dependencies with `--all-features`
-      run: cargo udeps --all-features
-      working-directory: aws-sdk
-    env:
-      # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
-      # so we have to manually restore the target directory override
-      CARGO_TARGET_DIR: ../target
+    - name: Run
+      run: echo "We should only get this far if the smoke-test matrix succeeded."
 
   standalone-integration-tests-check:
     name: Standalone Integration Tests - cargo check

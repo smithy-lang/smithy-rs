@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
 private class Types(runtimeConfig: RuntimeConfig) {
-    private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig).copy(optional = true)
+    private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig)
 
     val awsTypes = awsTypes(runtimeConfig).asType()
     val smithyClientRetry = RuntimeType("retry", smithyClientDep, "aws_smithy_client")
