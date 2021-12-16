@@ -46,7 +46,6 @@ class LibRsGenerator(
 
             val libraryDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value ?: settings.moduleName
             containerDocs(escape(libraryDocs))
-            // TODO: replace "service" below with the title trait
             val crateLayout = customizations.map { it.section(LibRsSection.ModuleDocumentation(LibRsSection.CrateOrganization)) }.filter { !it.isEmpty() }
             if (crateLayout.isNotEmpty()) {
                 containerDocs("\n## Crate Organization")
@@ -59,13 +58,13 @@ class LibRsGenerator(
                 containerDocs("\n## Examples")
                 examples.forEach { it(this) }
 
-                // TODO: Render a basic example for all crates (eg. select first operation and render an example of usage)
+                // TODO(https://github.com/awslabs/smithy-rs/issues/69): Generate a basic example for all crates (eg. select first operation and render an example of usage)
                 settings.examplesUri?.also { uri ->
                     containerDocs("Examples can be found [here]($uri).")
                 }
             }
 
-            // TODO: Automated feature documentation
+            // TODO(docs): Automated feature documentation
         }
         modules.forEach { it.render(writer) }
         customizations.forEach { it.section(LibRsSection.Body)(writer) }
