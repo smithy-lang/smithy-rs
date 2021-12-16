@@ -53,6 +53,7 @@ import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
 // The string argument is the name of the XML ScopedDecoder to continue parsing from
@@ -245,7 +246,38 @@ class XmlBindingTraitParserGenerator(
     }
 
     override fun serverInputParser(operationShape: OperationShape): RuntimeType? {
-        TODO("Not yet implemented")
+        val inputShape = operationShape.inputShape(model)
+        val fnName = symbolProvider.deserializeFunctionName(operationShape)
+        val shapeName = xmlIndex.operationInputShapeName(operationShape)
+        val members = operationShape.serverInputXmlMembers()
+        if (shapeName == null || !members.isNotEmpty()) {
+            return null
+        }
+        return RuntimeType.forInlineFun(fnName, xmlDeserModule) {
+            Attribute.AllowUnusedMut.render(it)
+            it.rustBlock(
+                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
+                inputShape.builderSymbol(symbolProvider),
+                xmlError
+            ) {
+                rustTemplate(
+                    """
+                    use std::convert::TryFrom;
+                    let mut doc = #{Document}::try_from(inp)?;
+
+                    ##[allow(unused_mut)]
+                    let mut decoder = doc.root_element()?;
+                    let start_el = decoder.start_el();
+                    """,
+                    *codegenScope
+                )
+                val context = OperationWrapperContext(operationShape, shapeName, xmlError)
+                writeOperationWrapper(context) { tagName ->
+                    parseStructureInner(members, builder = "builder", Ctx(tag = tagName, accum = null))
+                }
+                rust("Ok(builder)")
+            }
+        }
     }
 
     private fun RustWriter.unwrappedResponseParser(
@@ -663,6 +695,23 @@ class XmlBindingTraitParserGenerator(
                 val documentMembers =
                     responseBindings.filter { it.value.location == HttpBinding.Location.DOCUMENT }
                         .keys.map { outputShape.expectMember(it) }
+                return XmlMemberIndex.fromMembers(documentMembers)
+            }
+        }
+    }
+
+    private fun OperationShape.serverInputXmlMembers(): XmlMemberIndex {
+        val inputShape = this.inputShape(model)
+
+        // HTTP trait bound protocols, such as RestXml, need to restrict the members to DOCUMENT members,
+        // while protocols like AwsQuery do not support HTTP traits, and thus, all members are used.
+        val requestBindings = index.getRequestBindings(this)
+        return when (requestBindings.isEmpty()) {
+            true -> XmlMemberIndex.fromMembers(inputShape.members().toList())
+            else -> {
+                val documentMembers =
+                    requestBindings.filter { it.value.location == HttpBinding.Location.DOCUMENT }
+                        .keys.map { inputShape.expectMember(it) }
                 return XmlMemberIndex.fromMembers(documentMembers)
             }
         }

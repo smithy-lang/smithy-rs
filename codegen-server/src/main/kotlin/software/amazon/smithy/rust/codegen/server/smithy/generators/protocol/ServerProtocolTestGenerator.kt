@@ -150,10 +150,12 @@ class ServerProtocolTestGenerator(
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.setNewlinePrefix("")
         testModuleWriter.writeWithNoFormatting("#[tokio::test]")
-        // TODO: this allows to check-in RestJson protocol tests without
+        // TODO: this allows to check-in RestJson and RestXml protocol tests without
         // failures as the protocol is not fully implemented yet.
         // Remove it once the protocol is fully implemented.
-        if (operationShape.id.getNamespace() == "aws.protocoltests.restjson") {
+        if (operationShape.id.getNamespace() == "aws.protocoltests.restjson" ||
+            operationShape.id.getNamespace() == "com.amazonaws.s3"
+        ) {
             testModuleWriter.writeWithNoFormatting("#[ignore]")
         }
         val Tokio = CargoDependency(

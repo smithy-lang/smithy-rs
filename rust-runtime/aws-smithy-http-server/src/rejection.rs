@@ -66,6 +66,13 @@ define_rejection! {
 
 define_rejection! {
     #[status = BAD_REQUEST]
+    #[body = "Expected `Content-Type: application/xml`"]
+    /// Rejection type used if the XML `Content-Type` header is missing.
+    pub struct MissingXmlContentType;
+}
+
+define_rejection! {
+    #[status = BAD_REQUEST]
     #[body = "Expected query string in URI but none found"]
     /// Rejection type used if the URI has no query string and we need to deserialize data from it.
     pub struct MissingQueryString;
@@ -99,6 +106,7 @@ composite_rejection! {
     /// header, MIME parse issues, etc.
     pub enum ContentTypeRejection {
         MissingJsonContentType,
+        MissingXmlContentType,
         MimeParsingFailed,
     }
 }
@@ -138,6 +146,12 @@ composite_rejection! {
 
 impl From<aws_smithy_json::deserialize::Error> for SmithyRejection {
     fn from(err: aws_smithy_json::deserialize::Error) -> Self {
+        SmithyRejection::Deserialize(Deserialize::from_err(err))
+    }
+}
+
+impl From<aws_smithy_xml::decode::XmlError> for SmithyRejection {
+    fn from(err: aws_smithy_xml::decode::XmlError) -> Self {
         SmithyRejection::Deserialize(Deserialize::from_err(err))
     }
 }
