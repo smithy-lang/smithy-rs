@@ -82,8 +82,7 @@ impl From<&PathSpec> for Regex {
             .iter()
             .map(|segment_spec| match segment_spec {
                 PathSegment::Literal(literal) => literal,
-                // TODO URL spec says it should be ASCII but this regex accepts UTF-8:
-                // https://github.com/awslabs/smithy/issues/975
+                // TODO(https://github.com/awslabs/smithy/issues/975) URL spec says it should be ASCII but this regex accepts UTF-8:
                 PathSegment::Label => "[^/]+",
                 PathSegment::Greedy => ".*",
             })

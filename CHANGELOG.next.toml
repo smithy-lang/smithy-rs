@@ -20,3 +20,9 @@ the `meta` and `environment` flags is always enabled now.
 references = ["smithy-rs#961"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Debug implementation of Credentials will print `expiry` in a human readable way"
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+references = ["smithy-rs#973"]
+author = "rcoh"

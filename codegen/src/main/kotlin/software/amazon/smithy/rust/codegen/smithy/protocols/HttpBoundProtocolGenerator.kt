@@ -48,6 +48,8 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredData
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.EventStreamMarshallerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
+import software.amazon.smithy.rust.codegen.util.PANIC
+import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
@@ -400,7 +402,7 @@ class HttpBoundProtocolTraitImplGenerator(
                 }
             }
             else -> {
-                TODO("Unexpected binding location: ${binding.location}")
+                UNREACHABLE("Unexpected binding location: ${binding.location}")
             }
         }
     }
@@ -442,10 +444,10 @@ class HttpBoundProtocolBodyGenerator(
             BodyMetadata(takesOwnership = true)
         } else {
             val member = inputShape.expectMember(payloadMemberName)
-            when (model.expectShape(member.target)) {
+            when (val type = model.expectShape(member.target)) {
                 is StringShape, is DocumentShape, is StructureShape, is UnionShape -> BodyMetadata(takesOwnership = false)
                 is BlobShape -> BodyMetadata(takesOwnership = true)
-                else -> TODO("Unexpected payload target type")
+                else -> UNREACHABLE("Unexpected payload target type: $type")
             }
         }
     }
@@ -597,7 +599,7 @@ class HttpBoundProtocolBodyGenerator(
                     serializer.documentSerializer(),
                 )
             }
-            else -> TODO("Unexpected payload target type")
+            else -> PANIC("Unexpected payload target type: $targetShape")
         }
     }
 }

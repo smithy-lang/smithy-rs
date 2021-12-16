@@ -19,6 +19,7 @@ publish = false
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-json = { path = "../aws-smithy-json" }
+aws-smithy-xml = { path = "../aws-smithy-xml" }
 async-trait = "0.1"
 axum-core = "0.1"
 bytes = "1.1"
