@@ -9,19 +9,18 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-default-provider = ["profile", "imds", "sts", "http-provider"]
+default-provider = ["profile", "imds", "sts", "http-provider", "web-identity-token"]
 profile = ["sts", "web-identity-token", "imds", "http-provider"]
-imds = ["profile", "aws-smithy-http/rt-tokio", "aws-smithy-http-tower", "aws-smithy-json", "tower", "aws-http"]
+imds = ["profile", "aws-smithy-http-tower", "aws-smithy-http", "aws-smithy-json", "aws-http"]
 sts = ["aws-sdk-sts", "aws-smithy-http"]
 web-identity-token = ["sts", "profile"]
-http-provider = ["aws-smithy-json", "aws-smithy-http/rt-tokio", "tower", "tokio/sync"]
-tcp-connector = ["tokio/net", "tower"]
+http-provider = ["aws-smithy-json", "aws-smithy-http"]
 
 rustls = ["aws-smithy-client/rustls"]
 native-tls = ["aws-smithy-client/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio"]
 
-default = ["default-provider", "rustls", "rt-tokio", "tcp-connector"]
+default = ["default-provider", "rustls", "rt-tokio"]
 
 [dependencies]
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false, optional = true }
@@ -31,6 +30,7 @@ aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["sync"] }
 tracing = { version = "0.1" }
+hyper = { version = "0.14.16", default-features = false }
 
 # imds
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http", optional = true }
@@ -39,7 +39,7 @@ aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-to
 aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json", optional = true }
 bytes = "1.1.0"
 http = "0.2.4"
-tower = { version = "0.4.8", optional = true }
+tower = { version = "0.4.8" }
 
 [dev-dependencies]
 futures-util = "0.3.16"
@@ -58,6 +58,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
+
+# used for a usage example
+hyper-rustls = { version = "0.23.0", features = ["webpki-tokio", "http2", "http1"] }
 
 [package.metadata.docs.rs]
 all-features = true
