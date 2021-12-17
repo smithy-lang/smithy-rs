@@ -4,7 +4,6 @@
  */
 
 use aws_config::provider_config::ProviderConfig;
-use aws_smithy_client::erase::boxclone::BoxCloneService;
 use aws_smithy_client::hyper_ext;
 use rustls::RootCertStore;
 
@@ -27,7 +26,7 @@ async fn main() {
     // This enables different providers to construct clients with different timeouts.
     let provider_config = ProviderConfig::default().with_tcp_connector(rustls_connector.clone());
     let shared_conf = aws_config::from_env()
-        .provider_config(provider_config)
+        .configure(provider_config)
         .load()
         .await;
     let s3_config = aws_sdk_s3::Config::from(&shared_conf);

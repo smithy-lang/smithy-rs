@@ -6,6 +6,7 @@
 //! Configuration Options for Credential Providers
 
 use crate::connector::default_connector;
+use std::error::Error;
 
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_client::erase::DynConnector;
@@ -18,7 +19,6 @@ use std::sync::Arc;
 use http::Uri;
 use hyper::client::connect::Connection;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tower::BoxError;
 
 /// Configuration options for Credential Providers
 ///
@@ -290,7 +290,7 @@ impl ProviderConfig {
         C: tower::Service<Uri>,
         C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
         C::Future: Unpin + Send + 'static,
-        C::Error: Into<BoxError>,
+        C::Error: Into<Box<dyn Error + Send + Sync + 'static>>,
     {
         let connector_fn = move |settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>| {
             let mut builder = aws_smithy_client::hyper_ext::Adapter::builder()

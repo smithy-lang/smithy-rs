@@ -9,12 +9,12 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-default-provider = ["profile", "imds", "sts", "http-provider"]
+default-provider = ["profile", "imds", "sts", "http-provider", "web-identity-token"]
 profile = ["sts", "web-identity-token", "imds", "http-provider"]
-imds = ["profile", "aws-smithy-http/rt-tokio", "aws-smithy-http-tower", "aws-smithy-json", "tower", "aws-http"]
+imds = ["profile", "aws-smithy-http-tower", "aws-smithy-http", "aws-smithy-json", "aws-http"]
 sts = ["aws-sdk-sts", "aws-smithy-http"]
 web-identity-token = ["sts", "profile"]
-http-provider = ["aws-smithy-json", "aws-smithy-http/rt-tokio", "tower", "tokio/sync"]
+http-provider = ["aws-smithy-json", "aws-smithy-http"]
 
 rustls = ["aws-smithy-client/rustls"]
 native-tls = ["aws-smithy-client/native-tls"]
@@ -39,7 +39,7 @@ aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-to
 aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json", optional = true }
 bytes = "1.1.0"
 http = "0.2.4"
-tower = { version = "0.4.8", optional = true }
+tower = { version = "0.4.8" }
 
 [dev-dependencies]
 futures-util = "0.3.16"
