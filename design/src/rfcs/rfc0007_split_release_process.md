@@ -1,7 +1,7 @@
 RFC: Split Release Process
 ==========================
 
-> Status: RFC
+> Status: Implemented in [smithy-rs#986](https://github.com/awslabs/smithy-rs/pull/986) and [aws-sdk-rust#351](https://github.com/awslabs/aws-sdk-rust/pull/351)
 
 At the time of writing, the `aws-sdk-rust` repository is used exclusively
 for the entire release process of both the Rust runtime crates from `smithy-rs` as
@@ -168,13 +168,13 @@ Changes Checklist
 -----------------
 
 - In `smithy-rs`:
-  - [ ] Move publisher tool from `aws-sdk-rust` into `smithy-rs`
-  - [ ] Modify `aws:sdk:assemble` target to run the publisher `fix-manifests` subcommand
-  - [ ] Add `rust-runtime:assemble` target that generates publish-ready Smithy runtime crates
-  - [ ] Add CI step to create Smithy runtime bundle artifact
-  - [ ] Add `GITHUB_ACTIONS=true` env var check for setting the `publish` flag in generated AND runtime manifests
-  - [ ] Revise publisher tool to publish from an arbitrary directory
+  - [x] Move publisher tool from `aws-sdk-rust` into `smithy-rs`
+  - [x] Modify `aws:sdk:assemble` target to run the publisher `fix-manifests` subcommand
+  - [x] Add `rust-runtime:assemble` target that generates publish-ready Smithy runtime crates
+  - [x] Add CI step to create Smithy runtime bundle artifact
+  - [x] Add `GITHUB_ACTIONS=true` env var check for setting the `publish` flag in generated AND runtime manifests
+  - [x] Revise publisher tool to publish from an arbitrary directory
 - In `aws-sdk-rust`:
-  - [ ] Implement CI for the `aws-sdk-rust/next` branch
-  - [ ] Remove the publisher tool
-- [ ] Update release process documentation
+  - [x] Implement CI for the `aws-sdk-rust/next` branch
+  - [x] Remove the publisher tool
+- [x] Update release process documentation
