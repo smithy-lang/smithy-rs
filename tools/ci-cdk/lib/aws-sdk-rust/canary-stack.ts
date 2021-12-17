@@ -90,6 +90,15 @@ export class CanaryStack extends Stack {
             assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
         });
 
+        // Allow canaries to write logs to CloudWatch
+        this.lambdaExecutionRole.addToPolicy(
+            new PolicyStatement({
+                actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                effect: Effect.ALLOW,
+                resources: ["arn:aws:logs:*:*:/aws/lambda/canary-lambda-*:*"],
+            }),
+        );
+
         // Allow canaries to talk to their test bucket
         this.canaryTestBucket.grantReadWrite(this.lambdaExecutionRole);
 

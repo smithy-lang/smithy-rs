@@ -19,6 +19,10 @@ version = "0.1.0"
 edition = "2018"
 license = "Apache-2.0"
 
+# Emit an empty workspace so that the canary can successfully build when
+# built from the aws-sdk-rust repo, which has a workspace in it.
+[workspace]
+
 [[bin]]
 name = "bootstrap"
 path = "src/main.rs"
@@ -43,9 +47,12 @@ def main():
 
     with open("Cargo.toml", "w") as file:
         print(BASE_MANIFEST, file=file)
-        print(format_dependency("aws-config", args.path, args.sdk_version), file=file)
-        print(format_dependency("aws-sdk-s3", args.path, args.sdk_version), file=file)
-        print(format_dependency("aws-sdk-transcribestreaming", args.path, args.sdk_version), file=file)
+        print(format_dependency("aws-config",
+              args.path, args.sdk_version), file=file)
+        print(format_dependency("aws-sdk-s3",
+              args.path, args.sdk_version), file=file)
+        print(format_dependency("aws-sdk-transcribestreaming",
+              args.path, args.sdk_version), file=file)
 
 
 def format_dependency(crate, path, version):
@@ -58,8 +65,10 @@ def format_dependency(crate, path, version):
 class Args:
     def __init__(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument("--path", dest="path", type=str, help="Path to the generated AWS Rust SDK")
-        parser.add_argument("--sdk-version", dest="sdk_version", type=str, help="AWS Rust SDK version", required=True)
+        parser.add_argument("--path", dest="path", type=str,
+                            help="Path to the generated AWS Rust SDK")
+        parser.add_argument("--sdk-version", dest="sdk_version",
+                            type=str, help="AWS Rust SDK version", required=True)
 
         args = parser.parse_args()
         self.path = args.path

@@ -67,11 +67,13 @@ async fn lambda_main(clients: canary::Clients) -> Result<Value, Error> {
         }
     }
 
-    if failures.is_empty() {
-        Ok(json!({ "result": "success" }))
+    let result = if failures.is_empty() {
+        json!({ "result": "success" })
     } else {
-        Ok(json!({ "result": "failure", "failures": failures }))
-    }
+        json!({ "result": "failure", "failures": failures })
+    };
+    info!("Result: {}", result);
+    Ok(result)
 }
 
 async fn canary_result(handle: JoinHandle<anyhow::Result<()>>) -> Result<(), String> {
