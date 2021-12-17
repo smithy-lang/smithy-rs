@@ -62,7 +62,7 @@ jobs:
       matrix:
         test:
         - name: Unit Tests
-          run: cargo test $(cat service-with-tests)
+          run: cargo test --all-features
         - name: Docs
           run: cargo doc --no-deps --document-private-items
         - name: Clippy
