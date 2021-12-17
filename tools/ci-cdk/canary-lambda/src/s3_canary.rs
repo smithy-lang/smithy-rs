@@ -63,8 +63,14 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
     let mut result = Ok(());
     match output.metadata() {
         Some(map) => {
-            if map.get("something") != Some(&"テスト テスト!".to_string()) {
-                result = Err(CanaryError("S3 metadata was incorrect".into()).into());
+            // Option::as_deref doesn't work here since the deref of &String is String
+            let value = map.get("something").map(|s| s.as_str()).unwrap_or("");
+            if value != "テスト テスト!" {
+                result = Err(CanaryError(format!(
+                    "S3 metadata was incorrect. Expected `テスト テスト!` but got `{}`.",
+                    value
+                ))
+                .into());
             }
         }
         None => {
