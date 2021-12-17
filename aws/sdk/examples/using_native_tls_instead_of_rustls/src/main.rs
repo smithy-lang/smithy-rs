@@ -59,6 +59,7 @@ mod tests {
         println!("{}", stdout)
     }
 
+    // NOTE: not currently run in CI, separate PR will set up a with-creds CI runner
     #[tokio::test]
     #[ignore]
     async fn needs_creds_native_tls_works() {
