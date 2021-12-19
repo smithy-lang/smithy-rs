@@ -5,17 +5,14 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.CODEGEN_SETTINGS
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import java.util.Optional
-import java.util.logging.Logger
 
 /**
  * Configuration of codegen settings
@@ -68,23 +65,7 @@ class ServerRustSettings(
     val examplesUri: String? = null,
     private val model: Model
 ) {
-
-    /**
-     * Get the corresponding [ServiceShape] from a model.
-     * @return Returns the found `Service`
-     * @throws CodegenException if the service is invalid or not found
-     */
-    fun getService(model: Model): ServiceShape {
-        return model
-            .getShape(service)
-            .orElseThrow { CodegenException("Service shape not found: $service") }
-            .asServiceShape()
-            .orElseThrow { CodegenException("Shape is not a service: $service") }
-    }
-
     companion object {
-        private val LOGGER: Logger = Logger.getLogger(ServerRustSettings::class.java.name)
-
         /**
          * Create settings from a configuration object node.
          *
