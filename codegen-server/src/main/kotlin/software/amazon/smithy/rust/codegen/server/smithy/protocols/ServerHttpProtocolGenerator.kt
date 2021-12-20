@@ -146,7 +146,7 @@ private class ServerHttpProtocolImplGenerator(
             // It will first offer the streaming input to the parser and potentially read the body into memory
             // if an error occurred or if the streaming parser indicates that it needs the full data to proceed.
             """
-            async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
+            async fn from_request(_req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
                 todo!("Streaming support for input shapes is not yet supported in `smithy-rs`")
             }
             """.trimIndent()
