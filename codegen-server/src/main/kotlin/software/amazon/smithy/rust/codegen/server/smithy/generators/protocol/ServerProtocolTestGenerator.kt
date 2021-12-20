@@ -328,7 +328,7 @@ class ServerProtocolTestGenerator(
     private fun checkHttpExtensions(rustWriter: RustWriter) {
         rustWriter.rust(
             """
-            let request_extensions = http_response.extensions().get::<aws_smithy_http_server::RequestExtensions>().expect("extension RequestExtensions not found");
+            let request_extensions = http_response.extensions().get::<aws_smithy_http_server::RequestExtensions>().expect("extension `RequestExtensions` not found");
             assert_eq!(request_extensions.namespace, ${operationShape.id.getNamespace().dq()});
             assert_eq!(request_extensions.operation_name, ${operationSymbol.name.dq()});
             """.trimIndent()
