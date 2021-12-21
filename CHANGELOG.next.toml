@@ -32,3 +32,9 @@ message = "Fix bug where ECS credential provider could not perform retries."
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 references = ["smithy-rs#998", "aws-sdk-rust#359"]
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "aws_types::Config is now `Clone`"
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+references = ["smithy-rs#1002", "aws-sdk-rust#352"]
+author = "rcoh"
