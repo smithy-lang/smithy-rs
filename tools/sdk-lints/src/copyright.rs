@@ -5,9 +5,11 @@
 
 use std::ffi::OsStr;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Result};
+use crate::lint::LintError;
+use crate::{Check, Lint, VCS_FILES};
+use anyhow::Result;
 
 const EXPECTED_CONTENTS: &[&str] = &[
     "Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.",
@@ -16,22 +18,44 @@ const EXPECTED_CONTENTS: &[&str] = &[
 
 const NEEDS_HEADER: [&str; 5] = ["sh", "py", "rs", "kt", "ts"];
 
-pub(crate) fn check_copyright_header(path: impl AsRef<Path>) -> Result<()> {
+/// Check that all files have the correct copyright header
+pub(crate) struct CopyrightHeader;
+
+impl Lint for CopyrightHeader {
+    fn name(&self) -> &str {
+        "Copyright header"
+    }
+
+    fn files_to_check(&self) -> Result<Vec<PathBuf>> {
+        Ok(VCS_FILES.clone())
+    }
+}
+
+impl Check for CopyrightHeader {
+    fn check(&self, path: impl AsRef<Path>) -> Result<Vec<LintError>> {
+        Ok(check_copyright_header(path))
+    }
+}
+
+fn check_copyright_header(path: impl AsRef<Path>) -> Vec<LintError> {
     if !needs_copyright_header(path.as_ref()) {
-        return Ok(());
+        return vec![];
     }
     let contents = match fs::read_to_string(path.as_ref()) {
         Ok(contents) => contents,
         Err(err) if format!("{}", err).contains("No such file or directory") => {
             eprintln!("Note: {} does not exist", path.as_ref().display());
-            return Ok(());
+            return vec![];
         }
-        Err(e) => return Err(e)?,
+        Err(e) => return vec![LintError::via_display(e)],
     };
     if !has_copyright_header(&contents) {
-        bail!("{:?} is missing copyright header", path.as_ref())
+        return vec![LintError::new(format!(
+            "{} is missing copyright header",
+            path.as_ref().display()
+        ))];
     }
-    Ok(())
+    return vec![];
 }
 
 fn needs_copyright_header(path: &Path) -> bool {

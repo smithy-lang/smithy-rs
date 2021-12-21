@@ -145,7 +145,6 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         return "$namespace$postFix"
     }
 
-    // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.
     /**
      * The companion object contains commonly used RuntimeTypes
      */

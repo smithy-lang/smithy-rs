@@ -24,7 +24,7 @@ fun autoDeref(input: String) = if (input.startsWith("&")) {
  */
 sealed class RustType {
 
-    // TODO: when Kotlin supports, sealed interfaces, seal Container
+    // TODO(kotlin): when Kotlin supports, sealed interfaces, seal Container
     /**
      * A Rust type that contains [member], another RustType. Used to generically operate over
      * shapes that contain other shapes, e.g. [stripOuter] and [contains].
@@ -64,7 +64,8 @@ sealed class RustType {
     }
 
     data class HashMap(val key: RustType, override val member: RustType) : RustType(), Container {
-        // TODO: assert that underneath, the member is a String
+        // validating that `key` is a string occurs in the constructor in SymbolVisitor
+
         override val name: kotlin.String = "HashMap"
         override val namespace = "std::collections"
 
@@ -74,11 +75,15 @@ sealed class RustType {
     }
 
     data class HashSet(override val member: RustType) : RustType(), Container {
-        // TODO: assert that underneath, the member is a String
-        override val name: kotlin.String = Type
+        override val name = Type
         override val namespace = Namespace
 
         companion object {
+            // This is Vec intentionally. Note the following passage from the Smithy spec:
+            //    Sets MUST be insertion ordered. Not all programming languages that support sets
+            //    support ordered sets, requiring them may be overly burdensome for users, or conflict with language
+            //    idioms. Such languages SHOULD store the values of sets in a list and rely on validation to ensure uniqueness.
+            // It's possible that we could provide our own wrapper type in the future.
             const val Type = "Vec"
             const val Namespace = "std::vec"
             val RuntimeType = RuntimeType(name = Type, namespace = Namespace, dependency = null)

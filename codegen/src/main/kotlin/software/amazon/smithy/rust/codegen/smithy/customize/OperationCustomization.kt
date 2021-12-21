@@ -53,6 +53,9 @@ sealed class OperationSection(name: String) : Section(name) {
 abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {
     open fun retryType(): RuntimeType? = null
 
+    // NOTE: mutSelf and consumes self must be set together due to a the fact that the fluent builder does not have any information
+    // about consumes / mut
+
     /**
      * Does `make_operation` consume the self parameter?
      *
