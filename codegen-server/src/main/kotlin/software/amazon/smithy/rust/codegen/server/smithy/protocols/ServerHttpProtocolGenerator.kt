@@ -197,9 +197,7 @@ private class ServerHttpProtocolImplGenerator(
                         match #{serialize_response}(&o) {
                             Ok(response) => response,
                             Err(e) => {
-                                let mut response = #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from output");
-                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection::new(e.to_string()));
-                                response
+                                e.into_response()
                             }
                         }
                     },
@@ -210,9 +208,7 @@ private class ServerHttpProtocolImplGenerator(
                                 response
                             },
                             Err(e) => {
-                                let mut response = #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from error");
-                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection::new(e.to_string()));
-                                response
+                                e.into_response()
                             }
                         }
                     }
@@ -247,7 +243,7 @@ private class ServerHttpProtocolImplGenerator(
                 """
                 match #{serialize_response}(&self.0) {
                     Ok(response) => response,
-                    Err(e) => #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from output")
+                    Err(e) => e.into_response()
                 }
                 """.trimIndent()
             }
