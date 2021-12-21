@@ -132,7 +132,8 @@ impl ParseStrictResponse for CredentialsResponseParser {
     fn parse(&self, response: &Response<Bytes>) -> Self::Output {
         if !response.status().is_success() {
             return Err(CredentialsError::provider_error(format!(
-                "Non-success status from HTTP credential provider"
+                "Non-success status from HTTP credential provider: {:?}",
+                response.status()
             )));
         }
         let str_resp =
