@@ -25,9 +25,9 @@ import java.util.Optional
  * [formatTimeoutSeconds]: Timeout for running cargo fmt at the end of code generation
  */
 data class ServerCodegenConfig(
-    val renameExceptions: Boolean = true,
+    val renameExceptions: Boolean = false,
     val includeFluentClient: Boolean = false,
-    val addMessageToErrors: Boolean = true,
+    val addMessageToErrors: Boolean = false,
     val formatTimeoutSeconds: Int = 20,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
     val eventStreamAllowList: Set<String> = emptySet(),
@@ -38,9 +38,9 @@ data class ServerCodegenConfig(
                 CodegenConfig.fromNode(node)
             } else {
                 CodegenConfig(
-                    true,
                     false,
-                    true,
+                    false,
+                    false,
                     20,
                     emptySet()
                 )
