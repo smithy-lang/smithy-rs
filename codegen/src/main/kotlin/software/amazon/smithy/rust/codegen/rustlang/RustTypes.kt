@@ -64,13 +64,10 @@ sealed class RustType {
     }
 
     data class HashMap(val key: RustType, override val member: RustType) : RustType(), Container {
+        // validating that `key` is a string occurs in the constructor in SymbolVisitor
 
         override val name: kotlin.String = "HashMap"
         override val namespace = "std::collections"
-
-        init {
-            check(key is String) { "HashMap key must be a String" }
-        }
 
         companion object {
             val RuntimeType = RuntimeType("HashMap", dependency = null, namespace = "std::collections")
@@ -78,12 +75,8 @@ sealed class RustType {
     }
 
     data class HashSet(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = Type
+        override val name = Type
         override val namespace = Namespace
-
-        init {
-            check(member is String) { "Hashset key must be a String" }
-        }
 
         companion object {
             // This is Vec intentionally. Note the following passage from the Smithy spec:
