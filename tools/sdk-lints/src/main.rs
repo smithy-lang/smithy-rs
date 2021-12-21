@@ -8,6 +8,7 @@ use crate::copyright::CopyrightHeader;
 use crate::lint::{Check, Fix, Lint, LintError, Mode};
 use crate::lint_cargo_toml::{CrateAuthor, CrateLicense, DocsRs};
 use crate::readmes::{ReadmesExist, ReadmesHaveFooters};
+use crate::todos::TodosHaveContext;
 use anyhow::{bail, Context, Result};
 use lazy_static::lazy_static;
 use std::env::set_current_dir;
@@ -22,6 +23,7 @@ mod copyright;
 mod lint;
 mod lint_cargo_toml;
 mod readmes;
+mod todos;
 
 fn load_repo_root() -> Result<PathBuf> {
     let output = Command::new("git")
@@ -47,6 +49,8 @@ enum Args {
         changelog: bool,
         #[structopt(long)]
         license: bool,
+        #[structopt(long)]
+        todos: bool,
     },
     Fix {
         #[structopt(long)]
@@ -117,6 +121,7 @@ fn main() -> Result<()> {
             docsrs_metadata,
             changelog,
             license,
+            todos,
         } => {
             if readme || all {
                 ok(ReadmesExist.check_all()?)?;
@@ -136,6 +141,9 @@ fn main() -> Result<()> {
             }
             if changelog || all {
                 ok(ChangelogNext.check_all()?)?;
+            }
+            if todos || all {
+                ok(TodosHaveContext.check_all()?)?;
             }
         }
         Args::Fix {

@@ -68,7 +68,7 @@ pub(crate) trait Lint {
             errors.extend(new_errors);
         }
         if errors.len() == 0 {
-            eprintln!("{} OK!", self.name())
+            eprintln!("{}...OK!", self.name())
         } else {
             eprintln!("Errors for {}:", self.name());
             for error in &errors {
@@ -106,7 +106,7 @@ pub(crate) trait Lint {
             }
         }
         if fixes.len() == 0 {
-            eprintln!("{} OK!", self.name())
+            eprintln!("{}...OK!", self.name())
         } else {
             eprintln!("Fixed {} files for {}:", fixes.len(), self.name());
             for file in &fixes {
