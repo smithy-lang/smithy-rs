@@ -314,29 +314,6 @@ tasks.register<Exec>("cargoClippy") {
     dependsOn("assemble")
 }
 
-tasks.register<RunExampleTask>("runExample") {
-    dependsOn("assemble")
-    outputDir = outputDir
-}
-
-// TODO: validate that the example exists. Otherwise this fails with a hidden error.
-open class RunExampleTask @javax.inject.Inject constructor() : Exec() {
-    @Option(option = "example", description = "Example to run")
-    var example: String? = null
-        set(value) {
-            workingDir = workingDir.resolve(value!!)
-            field = value
-        }
-
-    @org.gradle.api.tasks.InputDirectory
-    var outputDir: File? = null
-        set(value) {
-            workingDir = value!!.resolve("examples")
-            commandLine = listOf("cargo", "run")
-            field = value
-        }
-}
-
 tasks["test"].finalizedBy("cargoClippy", "cargoTest", "cargoDocs")
 
 tasks["clean"].doFirst {

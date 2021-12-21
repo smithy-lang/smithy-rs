@@ -236,10 +236,9 @@ open class ProtocolGenerator(
         customizations: List<OperationCustomization>,
         inputShape: StructureShape
     ) {
-        // TODO: One day, it should be possible for callers to invoke
-        // buildOperationType* directly to get the type rather than depending
-        // on these aliases.
-        // These are used in fluent clients
+        // TODO(https://github.com/awslabs/smithy-rs/issues/976): Callers should be able to invoke
+        // buildOperationType* directly to get the type rather than depending on these aliases.
+        // These are used in fluent clients.
         val operationTypeOutput = buildOperationTypeOutput(inputWriter, operationShape)
         val operationTypeRetry = buildOperationTypeRetry(inputWriter, customizations)
         val inputPrefix = symbolProvider.toSymbol(inputShape).name
