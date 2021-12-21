@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 /// Strip the /hostedzone/ prefix from zone-id
 pub(crate) fn trim_hosted_zone(zone: &mut Option<String>) {
     if let Some(core_zone) = zone
