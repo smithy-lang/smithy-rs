@@ -4,13 +4,14 @@
  */
 
 /// Strip the /hostedzone/ prefix from zone-id
-pub(crate) fn trim_hosted_zone(zone: &mut Option<String>) {
-    if let Some(core_zone) = zone
-        .as_deref()
-        .unwrap_or_default()
-        .strip_prefix("/hostedzone/")
-    {
-        *zone = Some(core_zone.to_string())
+pub fn trim_hosted_zone(zone: &mut Option<String>) {
+    const PREFIXES: &[&str; 2] = &["/hostedzone/", "hostedzone/"];
+
+    for prefix in PREFIXES {
+        if let Some(core_zone) = zone.as_deref().unwrap_or_default().strip_prefix(prefix) {
+            *zone = Some(core_zone.to_string());
+            return;
+        }
     }
 }
 
@@ -38,6 +39,18 @@ mod test {
     fn sanitizes_prefixed_zone() {
         let mut operation = OperationInput {
             hosted_zone: Some("/hostedzone/Z0441723226OZ66S5ZCNZ".to_string()),
+        };
+        trim_hosted_zone(&mut operation.hosted_zone);
+        assert_eq!(
+            &operation.hosted_zone.unwrap_or_default(),
+            "Z0441723226OZ66S5ZCNZ"
+        );
+    }
+
+    #[test]
+    fn allow_no_leading_slash() {
+        let mut operation = OperationInput {
+            hosted_zone: Some("hostedzone/Z0441723226OZ66S5ZCNZ".to_string()),
         };
         trim_hosted_zone(&mut operation.hosted_zone);
         assert_eq!(
