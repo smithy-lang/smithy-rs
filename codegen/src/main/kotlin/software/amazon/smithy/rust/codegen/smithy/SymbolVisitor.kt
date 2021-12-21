@@ -48,8 +48,6 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import kotlin.reflect.KClass
 
-// TODO: currently, respecting integer types.
-// Should we not? [Go does not]
 val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     BooleanShape::class to RustType.Bool,
     FloatShape::class to RustType.Float(32),
@@ -68,7 +66,6 @@ data class SymbolVisitorConfig(
     val handleRustBoxing: Boolean = true
 )
 
-// TODO: consider if this is better handled as a wrapper
 val DefaultConfig =
     SymbolVisitorConfig(
         runtimeConfig = RuntimeConfig(),

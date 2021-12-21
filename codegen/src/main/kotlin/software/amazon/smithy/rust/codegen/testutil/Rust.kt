@@ -202,7 +202,6 @@ fun TestWriterDelegator.rustSettings(stubModel: Model) =
         model = stubModel
     )
 
-// TODO: unify these test helpers a bit
 fun String.shouldParseAsRust() {
     // quick hack via rustfmt
     val tempFile = File.createTempFile("rust_test", ".rs")
@@ -219,7 +218,6 @@ fun RustWriter.compileAndTest(
     clippy: Boolean = false,
     expectFailure: Boolean = false
 ): String {
-    // TODO: if there are no dependencies, we can be a bit quicker
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
     val module = if (this.namespace.contains("::")) {
         this.namespace.split("::")[1]
@@ -257,7 +255,6 @@ private fun String.intoCrate(
 ): File {
     this.shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
-    // TODO: unify this with CargoTomlGenerator
     val cargoToml = """
         [package]
         name = ${tempDir.nameWithoutExtension.dq()}

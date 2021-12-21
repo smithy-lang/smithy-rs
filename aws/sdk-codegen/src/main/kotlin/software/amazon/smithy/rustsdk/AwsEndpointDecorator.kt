@@ -257,7 +257,7 @@ class EndpointResolverGenerator(codegenContext: CodegenContext, private val endp
 
         private fun signatureVersion(): String {
             val signatureVersions = endpoint.expectArrayMember("signatureVersions").map { it.expectStringNode().value }
-            // TODO: we can use this to change the signing options instead of customizing S3 specifically
+            // TODO(https://github.com/awslabs/smithy-rs/issues/977): we can use this to change the signing options instead of customizing S3 specifically
             if (!(signatureVersions.contains("v4") || signatureVersions.contains("s3v4"))) {
                 throw CodegenException("endpoint does not support sigv4, unsupported: $signatureVersions")
             }

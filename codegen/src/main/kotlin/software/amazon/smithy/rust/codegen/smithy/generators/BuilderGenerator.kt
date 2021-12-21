@@ -63,7 +63,6 @@ class BuilderGenerator(
 
     fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
-        // TODO: figure out exactly what docs we want on a the builder module
         writer.docs("See #D", symbol)
         val segments = shape.builderSymbol(symbolProvider).namespace.split("::")
         writer.withModule(segments.last()) {
@@ -108,9 +107,10 @@ class BuilderGenerator(
     }
 
     // TODO(EventStream): [DX] Consider updating builders to take EventInputStream as Into<EventInputStream>
-    private fun renderBuilderMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+    private fun renderBuilderMember(writer: RustWriter, memberName: String, memberSymbol: Symbol) {
         // builder members are crate-public to enable using them
-        // directly in serializers/deserializers
+        // directly in serializers/deserializers. During XML deserialization, `builder.<field>.take` is used to append to
+        // lists and maps
         writer.write("pub(crate) $memberName: #T,", memberSymbol)
     }
 
@@ -118,8 +118,7 @@ class BuilderGenerator(
         writer: RustWriter,
         coreType: RustType,
         member: MemberShape,
-        memberName: String,
-        memberSymbol: Symbol
+        memberName: String
     ) {
         fun builderConverter(coreType: RustType) = when (coreType) {
             is RustType.String,
@@ -143,8 +142,7 @@ class BuilderGenerator(
         writer: RustWriter,
         outerType: RustType,
         member: MemberShape,
-        memberName: String,
-        memberSymbol: Symbol
+        memberName: String
     ) {
         // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
         // is the same as the resulting member type, and is always optional.
@@ -170,7 +168,7 @@ class BuilderGenerator(
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
-                renderBuilderMember(this, member, memberName, memberSymbol)
+                renderBuilderMember(this, memberName, memberSymbol)
             }
         }
 
@@ -186,10 +184,10 @@ class BuilderGenerator(
                 when (coreType) {
                     is RustType.Vec -> renderVecHelper(member, memberName, coreType)
                     is RustType.HashMap -> renderMapHelper(member, memberName, coreType)
-                    else -> renderBuilderMemberFn(this, coreType, member, memberName, memberSymbol)
+                    else -> renderBuilderMemberFn(this, coreType, member, memberName)
                 }
 
-                renderBuilderMemberSetterFn(this, outerType, member, memberName, memberSymbol)
+                renderBuilderMemberSetterFn(this, outerType, member, memberName)
             }
             buildFn(this)
         }
