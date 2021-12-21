@@ -303,7 +303,7 @@ class ResponseBindingGenerator(
                 rust("let $parsedValue = $parsedValue?;")
             }
         }
-        // TODO: this doesn't support non-optional vectors (which may be eventually added)
+        // TODO(https://github.com/awslabs/smithy-rs/issues/837): this doesn't support non-optional vectors
         when (rustType) {
             is RustType.Vec ->
                 rust(

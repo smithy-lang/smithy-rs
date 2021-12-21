@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use crate::lint::LintError;
+use crate::{repo_root, Check, Lint};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use std::fmt::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const EXAMPLE_ENTRY: &str = r#"
@@ -83,7 +85,9 @@ fn indented_message(message: &str) -> String {
     for (idx, line) in message.lines().enumerate() {
         if idx > 0 {
             out.push('\n');
-            out.push_str("    ");
+            if !line.is_empty() {
+                out.push_str("    ");
+            }
         }
         out.push_str(line);
     }
@@ -105,12 +109,6 @@ pub(crate) struct Changelog {
     #[serde(rename = "aws-sdk-rust")]
     #[serde(default)]
     aws_sdk_rust: Vec<ChangelogEntry>,
-}
-
-impl Changelog {
-    pub(crate) fn num_entries(&self) -> usize {
-        self.smithy_rs.len() + self.aws_sdk_rust.len()
-    }
 }
 
 /// Ensure that there are no uncommited changes to the changelog
@@ -145,7 +143,12 @@ pub(crate) fn update_changelogs(
     no_uncommited_changes(changelog_next.as_ref()).context(
         "CHANGELOG.next.toml had unstaged changes. Refusing to perform changelog update.",
     )?;
-    let changelog = check_changelog_next(changelog_next.as_ref())?;
+    let changelog = check_changelog_next(changelog_next.as_ref()).map_err(|errs| {
+        anyhow::Error::msg(format!(
+            "cannot update changelogs with changelog errors: {:#?}",
+            errs
+        ))
+    })?;
     for (entries, path, version) in [
         (changelog.smithy_rs, smithy_rs.as_ref(), smithy_rs_version),
         (
@@ -270,22 +273,44 @@ fn validate(entry: &ChangelogEntry) -> Result<()> {
     Ok(())
 }
 
-/// Validate that `CHANGELOG.next.toml` follows best practices
-pub(crate) fn check_changelog_next(path: impl AsRef<Path>) -> Result<Changelog> {
-    let contents = std::fs::read_to_string(path).context("failed to read CHANGELOG.next")?;
-    let parsed: Changelog = toml::from_str(&contents).context("Invalid changelog format")?;
-    let mut errors = 0;
-    for entry in parsed.aws_sdk_rust.iter().chain(parsed.smithy_rs.iter()) {
-        if let Err(e) = validate(entry) {
-            eprintln!("{:?}", e);
-            errors += 1;
+pub(crate) struct ChangelogNext;
+impl Lint for ChangelogNext {
+    fn name(&self) -> &str {
+        "Changelog.next"
+    }
+
+    fn files_to_check(&self) -> Result<Vec<PathBuf>> {
+        Ok(vec![repo_root().join("CHANGELOG.next.toml")])
+    }
+}
+
+impl Check for ChangelogNext {
+    fn check(&self, path: impl AsRef<Path>) -> Result<Vec<LintError>> {
+        match check_changelog_next(path) {
+            Ok(_) => Ok(vec![]),
+            Err(errs) => Ok(errs),
         }
     }
-    if errors == 0 {
-        eprintln!("Validated {} changelog entries", parsed.num_entries());
+}
+
+/// Validate that `CHANGELOG.next.toml` follows best practices
+fn check_changelog_next(path: impl AsRef<Path>) -> std::result::Result<Changelog, Vec<LintError>> {
+    let contents = std::fs::read_to_string(path)
+        .context("failed to read CHANGELOG.next")
+        .map_err(|e| vec![LintError::via_display(e)])?;
+    let parsed: Changelog = toml::from_str(&contents)
+        .context("Invalid changelog format")
+        .map_err(|e| vec![LintError::via_display(e)])?;
+    let mut errors = vec![];
+    for entry in parsed.aws_sdk_rust.iter().chain(parsed.smithy_rs.iter()) {
+        if let Err(e) = validate(entry) {
+            errors.push(LintError::via_display(e))
+        }
+    }
+    if errors.is_empty() {
         Ok(parsed)
     } else {
-        bail!("Invalid changelog entries")
+        Err(errors)
     }
 }
 

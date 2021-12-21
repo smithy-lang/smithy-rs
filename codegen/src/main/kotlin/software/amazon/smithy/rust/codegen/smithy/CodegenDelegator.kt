@@ -147,7 +147,6 @@ open class RustCrate(
     }
 }
 
-// TODO: this should _probably_ be configurable via RustSettings; 2h
 /**
  * Allowlist of modules that will be exposed publicly in generated crates
  */
