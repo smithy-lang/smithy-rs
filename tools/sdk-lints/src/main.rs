@@ -123,28 +123,30 @@ fn main() -> Result<()> {
             license,
             todos,
         } => {
+            let mut errs = vec![];
             if readme || all {
-                ok(ReadmesExist.check_all()?)?;
-                ok(ReadmesHaveFooters.check_all()?)?;
+                errs.extend(ReadmesExist.check_all()?);
+                errs.extend(ReadmesHaveFooters.check_all()?);
             }
             if cargo_toml || all {
-                ok(CrateAuthor.check_all()?)?;
-                ok(CrateLicense.check_all()?)?;
+                errs.extend(CrateAuthor.check_all()?);
+                errs.extend(CrateLicense.check_all()?);
             }
 
             if docsrs_metadata || all {
-                ok(DocsRs.check_all()?)?;
+                errs.extend(DocsRs.check_all()?);
             }
 
             if license || all {
-                ok(CopyrightHeader.check_all()?)?;
+                errs.extend(CopyrightHeader.check_all()?);
             }
             if changelog || all {
-                ok(ChangelogNext.check_all()?)?;
+                errs.extend(ChangelogNext.check_all()?);
             }
             if todos || all {
-                ok(TodosHaveContext.check_all()?)?;
+                errs.extend(TodosHaveContext.check_all()?);
             }
+            ok(errs)?
         }
         Args::Fix {
             readme,
