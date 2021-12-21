@@ -22,7 +22,7 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
-message = "Debug implementation of Credentials will print `expiry` in a human readable way"
+message = "Debug implementation of Credentials will print `expiry` in a human readable way."
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 references = ["smithy-rs#973"]
 author = "rcoh"
@@ -31,4 +31,10 @@ author = "rcoh"
 message = "Add Route53 customization to trim `/hostedzone/` prefix prior to serialization. This fixes a bug where round-tripping a hosted zone id resulted in an error."
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 references = ["smithy-rs#999", "smithy-rs#143", "aws-sdk-rust#344" ]
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Fix bug where ECS credential provider could not perform retries."
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+references = ["smithy-rs#998", "aws-sdk-rust#359"]
 author = "rcoh"
