@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use anyhow::{anyhow, bail, Context, Result};
 use git2::{Commit, IndexAddOption, ObjectType, Oid, Repository, ResetType, Signature};
 use std::fs::OpenOptions;
@@ -335,7 +340,6 @@ fn create_mirror_commit(aws_sdk_repo: &Repository, based_on_commit: &Commit) -> 
         .commit(
             Some("HEAD"),
             &based_on_commit.author(),
-            // TODO maybe we should set this to the name of the bot
             &based_on_commit.committer(),
             based_on_commit.message().unwrap_or_default(),
             &tree,
