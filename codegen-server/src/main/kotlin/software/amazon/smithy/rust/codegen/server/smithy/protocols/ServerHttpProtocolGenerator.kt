@@ -241,10 +241,10 @@ private class ServerHttpProtocolImplGenerator(
                 intoResponseStreaming
             } else {
                 """
-                let mut response = match #{serialize_response}(&self.0) {
+                match #{serialize_response}(&self.0) {
                     Ok(response) => response,
                     Err(e) => e.into_response()
-                };
+                }
                 """.trimIndent()
             }
             // The output of non-fallible operations is a model type which we convert into a "wrapper" unit `struct` type
