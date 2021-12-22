@@ -16,8 +16,8 @@ use http::{self, Uri};
 
 use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
 use aws_endpoint::set_endpoint_resolver;
+use aws_http::retry::AwsErrorRetryPolicy;
 use aws_http::user_agent::AwsUserAgent;
-use aws_http::AwsErrorRetryPolicy;
 use aws_sig_auth::signer::OperationSigningConfig;
 use inlineable_aws::middleware::DefaultMiddleware;
 
