@@ -64,7 +64,7 @@ fn augument_request<B>(req: &mut http::Request<B>, env: &Env) {
 ///
 /// ASCII control characters are percent encoded which ensures that all byte sequences are valid headers
 fn encode_header(value: &[u8]) -> HeaderValue {
-    let value: Cow<'_, str> = percent_encode(value, &CONTROLS).into();
+    let value: Cow<'_, str> = percent_encode(value, CONTROLS).into();
     HeaderValue::from_bytes(value.as_bytes()).expect("header is encoded, header must be valid")
 }
 
