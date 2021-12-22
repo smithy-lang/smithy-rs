@@ -42,9 +42,6 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
             "${it.module}": {
                 "plugins": {
                     "rust-server-codegen": {
-                      "codegen": {
-                        "includeFluentClient": false
-                      },
                       "runtimeConfig": {
                         "relativePath": "${rootProject.projectDir.absolutePath}/rust-runtime"
                       },
