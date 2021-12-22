@@ -48,5 +48,6 @@ async fn tokio_write_file(path: &Path, contents: &[u8]) -> Result<()> {
     file.write_all(contents)
         .await
         .with_context(|| format!("failed to write {:?}", path))?;
+    file.flush().await?;
     Ok(())
 }

@@ -78,7 +78,6 @@ sealed class ServiceConfig(name: String) : Section(name) {
     object BuilderBuild : ServiceConfig("BuilderBuild")
 }
 
-// TODO: if this becomes hot, it may need to be cached in a knowledge index
 fun ServiceShape.needsIdempotencyToken(model: Model): Boolean {
     val operationIndex = OperationIndex.of(model)
     val topDownIndex = TopDownIndex.of(model)
