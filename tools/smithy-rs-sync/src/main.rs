@@ -131,7 +131,7 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
             last_synced_commit, COMMIT_HASH_FILENAME,
         )
     })?;
-    // Commit the file containg the commit hash
+    // Commit the file containing the commit hash
     commit_last_synced_commit_file(&aws_sdk_repo)
         .context("couldn't commit the last synced commit hash file to aws-sdk-rust")?;
 
