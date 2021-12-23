@@ -32,3 +32,6 @@ pub mod glacier_checksums;
 
 /// Default middleware stack for AWS services
 pub mod middleware;
+
+/// Strip `hostedzone/` from hosted zone ids
+pub mod hosted_zone_preprocessor;

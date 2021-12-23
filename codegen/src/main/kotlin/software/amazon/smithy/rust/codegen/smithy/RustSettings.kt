@@ -24,9 +24,9 @@ private const val MODULE_VERSION = "moduleVersion"
 private const val MODULE_AUTHORS = "moduleAuthors"
 private const val MODULE_REPOSITORY = "moduleRepository"
 private const val RUNTIME_CONFIG = "runtimeConfig"
-private const val CODEGEN_SETTINGS = "codegen"
 private const val LICENSE = "license"
 private const val EXAMPLES = "examples"
+const val CODEGEN_SETTINGS = "codegen"
 
 /**
  * Configuration of codegen settings
@@ -107,6 +107,21 @@ class RustSettings(
          * @return Returns the extracted settings
          */
         fun from(model: Model, config: ObjectNode): RustSettings {
+            val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
+            val codegenConfig = CodegenConfig.fromNode(codegenSettings)
+            return fromCodegenConfig(model, config, codegenConfig)
+        }
+
+        /**
+         * Create settings from a configuration object node and CodegenConfig.
+         *
+         * @param model Model to infer the service from (if not explicitly set in config)
+         * @param config Config object to load
+         * @param codegenConfig CodegenConfig object to use
+         * @throws software.amazon.smithy.model.node.ExpectationNotMetException
+         * @return Returns the extracted settings
+         */
+        fun fromCodegenConfig(model: Model, config: ObjectNode, codegenConfig: CodegenConfig): RustSettings {
             config.warnIfAdditionalProperties(
                 arrayListOf(
                     SERVICE,
@@ -127,7 +142,6 @@ class RustSettings(
                 .orElseGet { inferService(model) }
 
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
-            val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
             return RustSettings(
                 service = service,
                 moduleName = config.expectStringMember(MODULE_NAME).value,
@@ -136,7 +150,7 @@ class RustSettings(
                 moduleDescription = config.getStringMember(MODULE_DESCRIPTION).orNull()?.value,
                 moduleRepository = config.getStringMember(MODULE_REPOSITORY).orNull()?.value,
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
-                codegenConfig = CodegenConfig.fromNode(codegenSettings),
+                codegenConfig,
                 license = config.getStringMember(LICENSE).orNull()?.value,
                 examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
                 model = model
