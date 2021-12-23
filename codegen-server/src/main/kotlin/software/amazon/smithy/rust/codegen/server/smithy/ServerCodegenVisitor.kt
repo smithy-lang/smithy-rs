@@ -53,7 +53,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
-    private val settings = RustSettings.from(context.model, context.settings)
+    private val settings = ServerRustSettings.from(context.model, context.settings)
 
     private val symbolProvider: RustSymbolProvider
     private val rustCrate: RustCrate

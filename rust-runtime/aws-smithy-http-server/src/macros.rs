@@ -46,12 +46,13 @@ macro_rules! define_rejection {
         #[derive(Debug)]
         pub struct $name;
 
-        #[allow(deprecated)]
         impl axum_core::response::IntoResponse for $name {
-
             fn into_response(self) -> axum_core::response::Response {
                 let mut res = http::Response::new(axum_core::body::boxed(http_body::Full::from($body)));
                 *res.status_mut() = http::StatusCode::$status;
+                res.extensions_mut().insert(
+                    crate::ExtensionRejection::new(self.to_string())
+                );
                 res
             }
         }
