@@ -68,7 +68,6 @@
 //!     while let Some(bytes) = stream.next().await {
 //!         let bytes: Bytes = bytes?;
 //!         file.write_all(&bytes).await?;
-//!         file.flush().await?;
 //!     }
 //!     file.flush().await?;
 //!     Ok(())
