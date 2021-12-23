@@ -38,11 +38,11 @@ import java.nio.file.Path
 /**
  * Waiting for Kotlin to stabilize their temp directory stuff
  */
-private fun tempDir(directory: File? = null): File {
+private fun tempDir(directory: File? = null): Path {
     return if (directory != null) {
-        createTempDirectory(directory.toPath(), "smithy-test").toFile()
+        createTempDirectory(directory.toPath(), "smithy-test")
     } else {
-        createTempDirectory("smithy-test").toFile()
+        createTempDirectory("smithy-test")
     }
 }
 
@@ -52,8 +52,10 @@ private fun tempDir(directory: File? = null): File {
  * This workspace significantly improves test performance by sharing dependencies between different tests.
  */
 object TestWorkspace {
-    private val baseDir =
-        System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
+    private val basePath: Path =
+        System.getenv("SMITHY_TEST_WORKSPACE")?.let { Path.of(it) }
+            ?: (System.getProperty("user.home")?.let { Path.of(it, ".smithy-test-workspace") }) ?: tempDir()
+    private val baseDir = basePath.toFile()
     private val subprojects = mutableListOf<String>()
 
     init {
@@ -74,7 +76,7 @@ object TestWorkspace {
 
     fun subproject(): File {
         synchronized(subprojects) {
-            val newProject = tempDir(directory = baseDir)
+            val newProject = tempDir(directory = baseDir).toFile()
             newProject.resolve("Cargo.toml").writeText(
                 """
                 [package]
@@ -293,7 +295,7 @@ private fun String.intoCrate(
 fun String.shouldCompile(): File {
     this.shouldParseAsRust()
     val tempFile = File.createTempFile("rust_test", ".rs")
-    val tempDir = tempDir()
+    val tempDir = tempDir().toFile()
     tempFile.writeText(this)
     if (!this.contains("fn main")) {
         tempFile.appendText("\nfn main() {}\n")
