@@ -5,8 +5,9 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use git2::{Commit, IndexAddOption, ObjectType, Oid, Repository, ResetType, Signature};
+use std::ffi::OsStr;
 use std::fs::OpenOptions;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
@@ -77,7 +78,7 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
         .context("couldn't build list of commits that need to be synced")?;
 
     if commit_revs.is_empty() {
-        println!("There are no new commits to be applied, have a nice day.");
+        eprintln!("There are no new commits to be applied, have a nice day.");
         return Ok(());
     }
 
@@ -101,7 +102,7 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
             .find_commit(*rev)
             .with_context(|| format!("couldn't find commit {} in smithy-rs", rev))?;
 
-        println!("[{}/{}]\tsyncing {}...", i + 1, number_of_commits, rev);
+        eprintln!("[{}/{}]\tsyncing {}...", i + 1, number_of_commits, rev);
         checkout_commit_to_sync_from(&smithy_rs_repo, &commit).with_context(|| {
             format!(
                 "couldn't checkout commit {} from smithy-rs that we needed for syncing",
@@ -116,13 +117,13 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
         create_mirror_commit(&aws_sdk_repo, &commit)
             .context("couldn't commit SDK changes to aws-sdk-rust")?;
     }
-    println!("Successfully synced {} commit(s)", commit_revs.len());
+    eprintln!("Successfully synced {} commit(s)", commit_revs.len());
 
     // Get the last commit we synced so that we can set that for the next time this tool gets run
     let last_synced_commit = commit_revs
         .last()
         .expect("can't be empty because we'd have early returned");
-    println!("Updating 'commit at last sync' to {}", last_synced_commit);
+    eprintln!("Updating 'commit at last sync' to {}", last_synced_commit);
 
     // Update the file containing the commit hash
     set_last_synced_commit(&aws_sdk_repo, last_synced_commit).with_context(|| {
@@ -135,9 +136,9 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
     commit_last_synced_commit_file(&aws_sdk_repo)
         .context("couldn't commit the last synced commit hash file to aws-sdk-rust")?;
 
-    println!(
-        "Successfully synced all mirror commits to aws-sdk-rust/{}. Don't forget to push them",
-        branch
+    eprintln!(
+        "Successfully synced {} mirror commit(s) to aws-sdk-rust/{}. Don't forget to push them",
+        number_of_commits, branch
     );
 
     Ok(())
@@ -149,16 +150,15 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
 /// this tool was run.
 fn commits_to_be_applied(smithy_rs_repo: &Repository, since_commit: &Oid) -> Result<Vec<Oid>> {
     let rev_range = format!("{}..HEAD", since_commit);
-    println!("Checking for smithy-rs commits in range {}", rev_range);
+    eprintln!("Checking for smithy-rs commits in range {}", rev_range);
 
     let mut rev_walk = smithy_rs_repo.revwalk().context(here!())?;
     rev_walk.push_range(&rev_range).context(here!())?;
 
-    let mut commit_revs = Vec::new();
-    for rev in rev_walk {
-        let rev = rev.context(here!())?;
-        commit_revs.push(rev);
-    }
+    let mut commit_revs = rev_walk
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .context(here!())?;
 
     // Order the revs from earliest to latest
     commit_revs.reverse();
@@ -171,14 +171,8 @@ fn commits_to_be_applied(smithy_rs_repo: &Repository, since_commit: &Oid) -> Res
 fn get_last_synced_commit(repo_path: &Path) -> Result<Oid> {
     let path = repo_path.join(COMMIT_HASH_FILENAME);
 
-    let mut file = OpenOptions::new()
-        .read(true)
-        .open(&path)
-        .with_context(|| format!("couldn't open file at '{}'", path.to_string_lossy()))?;
-    // Commit hashes are 40 chars long
-    let mut commit_hash = String::with_capacity(40);
-    file.read_to_string(&mut commit_hash)
-        .with_context(|| format!("couldn't read file at '{}'", path.to_string_lossy()))?;
+    let commit_hash = std::fs::read_to_string(&path)
+        .with_context(|| format!("couldn't get commit hash from file at '{}'", path.display()))?;
 
     // We trim here in case some really helpful IDE added a newline to the file
     let oid = Oid::from_str(commit_hash.trim()).context(here!())?;
@@ -193,7 +187,7 @@ fn set_last_synced_commit(repo: &Repository, oid: &Oid) -> Result<()> {
     let mut file = OpenOptions::new().write(true).truncate(true).open(&path)?;
 
     file.write(oid.to_string().as_bytes())
-        .with_context(|| format!("Couldn't write commit hash to '{}'", path.to_string_lossy()))?;
+        .with_context(|| format!("Couldn't write commit hash to '{}'", path.display()))?;
 
     Ok(())
 }
@@ -201,111 +195,71 @@ fn set_last_synced_commit(repo: &Repository, oid: &Oid) -> Result<()> {
 /// Run the necessary commands to build the SDK. On success, returns the path to the folder containing
 /// the build artifacts.
 fn build_sdk(smithy_rs_path: &Path) -> Result<PathBuf> {
-    println!("\tbuilding the SDK...");
+    eprintln!("\tbuilding the SDK...");
     let start = Instant::now();
     let gradlew = smithy_rs_path.join("gradlew");
+    let gradlew = gradlew
+        .to_str()
+        .expect("for our use case, this will always be UTF-8");
 
-    // The output of running this command isn't logged anywhere unless it fails
-    let clean_command_output = Command::new(&gradlew)
-        .arg("-Paws.fullsdk=true")
-        .arg(":aws:sdk:clean")
-        .current_dir(smithy_rs_path)
-        .output()
-        .with_context(|| {
-            format!(
-                "failed to execute '{} -Paws.fullsdk=true :aws:sdk:clean'",
-                gradlew.to_string_lossy()
-            )
-        })?;
-
-    if !clean_command_output.status.success() {
-        let stderr = String::from_utf8_lossy(&clean_command_output.stderr);
-        let stdout = String::from_utf8_lossy(&clean_command_output.stdout);
-
-        println!("stdout:\n{}\n", stdout);
-        println!("stderr:\n{}\n", stderr);
-
-        bail!("command to clean previous build artifacts from smithy-rs before assembling the SDK returned an error")
-    }
-
-    let assemble_command_output = Command::new(&gradlew)
-        .arg("-Paws.fullsdk=true")
-        .arg(":aws:sdk:assemble")
-        .current_dir(smithy_rs_path)
-        .output()
-        .with_context(|| {
-            format!(
-                "failed to execute '{} -Paws.fullsdk=true :aws:sdk:assemble'",
-                gradlew.to_string_lossy()
-            )
-        })?;
-
-    if !assemble_command_output.status.success() {
-        let stderr = String::from_utf8_lossy(&clean_command_output.stderr);
-        let stdout = String::from_utf8_lossy(&clean_command_output.stdout);
-
-        println!("stdout:\n{}\n", stdout);
-        println!("stderr:\n{}\n", stderr);
-
-        bail!("command to assemble the SDK returned an error")
-    }
+    // The output of running these commands isn't logged anywhere unless they fail
+    let _ = run(
+        &[gradlew, "-Paws.fullsdk=true", ":aws:sdk:clean"],
+        smithy_rs_path,
+    )
+    .context(here!())?;
+    let _ = run(
+        &[gradlew, "-Paws.fullsdk=true", ":aws:sdk:assemble"],
+        smithy_rs_path,
+    )
+    .context(here!())?;
 
     let build_artifact_path = smithy_rs_path.join("aws/sdk/build/aws-sdk");
-
-    println!("\tsuccessfully built the SDK in {:?}", start.elapsed());
+    eprintln!("\tsuccessfully built the SDK in {:?}", start.elapsed());
     Ok(build_artifact_path)
 }
 
 /// Delete any current SDK files in aws-sdk-rust. Run this before copying over new files.
 fn clean_out_existing_sdk(aws_sdk_path: &Path) -> Result<()> {
-    println!("\tcleaning out previously built SDK...");
+    eprintln!("\tcleaning out previously built SDK...");
 
     let sdk_path = format!("{}/sdk/*", aws_sdk_path.to_string_lossy());
-    let remove_sdk_command_output = Command::new("rm")
-        .arg("-rf")
-        .arg(&sdk_path)
-        .current_dir(aws_sdk_path)
-        .output()?;
-    if !remove_sdk_command_output.status.success() {
-        bail!("failed to clean out the SDK folder at {}", sdk_path);
-    }
+    let _ = run(&["rm", "-rf", &sdk_path], aws_sdk_path).context(here!())?;
 
     let examples_path = format!("{}/example/*", aws_sdk_path.to_string_lossy());
-    let remove_examples_command_output = Command::new("rm")
-        .arg("-rf")
-        .arg(&examples_path)
-        .current_dir(aws_sdk_path)
-        .output()?;
-    if !remove_examples_command_output.status.success() {
-        bail!(
-            "failed to clean out the examples folder at {}",
-            examples_path
-        );
-    }
+    let _ = run(&["rm", "-rf", &examples_path], aws_sdk_path).context(here!())?;
 
-    println!("\tsuccessfully cleaned out previously built SDK");
+    eprintln!("\tsuccessfully cleaned out previously built SDK");
     Ok(())
 }
 
 /// Use `cp -r` to recursively copy all files and folders from the smithy-rs build artifacts folder
-/// to the aws-sdk-rust repo folder
+/// to the aws-sdk-rust repo folder. Paths passed in must be absolute.
 fn copy_sdk(from_path: &Path, to_path: &Path) -> Result<()> {
-    println!("\tcopying built SDK...");
+    eprintln!("\tcopying built SDK...");
 
-    let copy_sdk_command_output = Command::new("cp")
-        .arg("-r")
-        .arg(&from_path)
-        .arg(&to_path)
-        .output()?;
-    if !copy_sdk_command_output.status.success() {
+    if !from_path.is_absolute() {
         bail!(
-            "failed to copy the built SDK from {} to {}",
-            from_path.to_string_lossy(),
-            to_path.to_string_lossy()
+            "expected absolute from_path but got: {}",
+            from_path.display()
         );
+    } else if !to_path.is_absolute() {
+        bail!("expected absolute to_path but got: {}", from_path.display());
     }
 
-    println!("\tsuccessfully copied built SDK");
+    let from_path = from_path
+        .to_str()
+        .expect("for our use case, this will always be UTF-8");
+    let to_path = to_path
+        .to_str()
+        .expect("for our use case, this will always be UTF-8");
+
+    // This command uses absolute paths so working dir doesn't matter. Even so, we set
+    // working dir to the dir this binary was run from because `run` expects one.
+    let working_dir = std::env::current_dir().expect("can't access current working dir");
+    let _ = run(&["cp", "-r", from_path, to_path], &working_dir).context(here!())?;
+
+    eprintln!("\tsuccessfully copied built SDK");
     Ok(())
 }
 
@@ -325,7 +279,7 @@ fn find_last_commit(repo: &Repository) -> Result<Commit> {
 /// Create a "mirror" commit. Works by reading a smithy-rs commit and then using the info
 /// attached to it to create a commit in aws-sdk-rust.
 fn create_mirror_commit(aws_sdk_repo: &Repository, based_on_commit: &Commit) -> Result<()> {
-    println!("\tcreating mirror commit...");
+    eprintln!("\tcreating mirror commit...");
 
     let mut index = aws_sdk_repo.index().context(here!())?;
     // The equivalent of `git add .`
@@ -333,7 +287,7 @@ fn create_mirror_commit(aws_sdk_repo: &Repository, based_on_commit: &Commit) -> 
         .add_all(["."].iter(), IndexAddOption::DEFAULT, None)
         .context(here!())?;
     let oid = index.write_tree().context(here!())?;
-    let parent_commit = find_last_commit(&aws_sdk_repo).context(here!())?;
+    let parent_commit = find_last_commit(aws_sdk_repo).context(here!())?;
     let tree = aws_sdk_repo.find_tree(oid).context(here!())?;
 
     let _ = aws_sdk_repo
@@ -347,7 +301,7 @@ fn create_mirror_commit(aws_sdk_repo: &Repository, based_on_commit: &Commit) -> 
         )
         .context(here!())?;
 
-    println!("\tsuccessfully created mirror commit");
+    eprintln!("\tsuccessfully created mirror commit");
 
     Ok(())
 }
@@ -360,7 +314,7 @@ fn commit_last_synced_commit_file(aws_sdk_repo: &Repository) -> Result<()> {
         .context(here!())?;
     let signature = Signature::now(BOT_NAME, BOT_EMAIL)?;
     let oid = index.write_tree().context(here!())?;
-    let parent_commit = find_last_commit(&aws_sdk_repo).context(here!())?;
+    let parent_commit = find_last_commit(aws_sdk_repo).context(here!())?;
     let tree = aws_sdk_repo.find_tree(oid).context(here!())?;
 
     let _ = aws_sdk_repo
@@ -406,4 +360,63 @@ fn checkout_commit_to_sync_from(smithy_rs_repo: &Repository, commit: &Commit) ->
         .context(here!())?;
 
     Ok(())
+}
+
+fn run<S>(args: &[S], working_dir: &Path) -> Result<()>
+where
+    S: AsRef<OsStr>,
+{
+    if args.is_empty() {
+        bail!("args slice passed to run must have length >= 1");
+    }
+
+    let command_output = Command::new(&args[0])
+        .args(&args[1..])
+        .current_dir(working_dir)
+        .output()
+        .with_context(|| {
+            format!(
+                "failed to execute '{}' in dir '{}'",
+                stringify_args(args),
+                working_dir.display()
+            )
+        })?;
+
+    if !command_output.status.success() {
+        let stderr = String::from_utf8_lossy(&command_output.stderr);
+        let stdout = String::from_utf8_lossy(&command_output.stdout);
+
+        eprintln!("stdout:\n{}\n", stdout);
+        eprintln!("stderr:\n{}\n", stderr);
+
+        bail!(
+            "command '{}' exited with a non-zero status",
+            stringify_args(args)
+        )
+    }
+
+    Ok(())
+}
+
+/// For a slice containing S where S: AsRef<OsStr>, join all S into a space-separated String
+fn stringify_args<S>(args: &[S]) -> String
+where
+    S: AsRef<OsStr>,
+{
+    let args: Vec<_> = args.iter().map(|s| s.as_ref().to_string_lossy()).collect();
+    args.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::stringify_args;
+
+    #[test]
+    fn test_stringify_args() {
+        let args = &["this", "is", "a", "test"];
+        let expected = "this is a test";
+        let actual = stringify_args(args);
+
+        assert_eq!(expected, actual);
+    }
 }
