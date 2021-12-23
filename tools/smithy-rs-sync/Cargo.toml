@@ -14,3 +14,8 @@ authors = ["Zelda Hessler <zhessler@amazon.com>"]
 structopt = { version = "0.3", default-features = false }
 git2 = "0.13"
 anyhow = "1"
+once_cell = "1.9"
+
+[dev-dependencies]
+tempdir = "0.3"
+pretty_assertions = "1"

@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+mod fs;
+
+use crate::fs::delete_all_generated_files_and_folders;
 use anyhow::{anyhow, bail, Context, Result};
 use git2::{Commit, IndexAddOption, ObjectType, Oid, Repository, ResetType, Signature};
 use std::ffi::OsStr;
@@ -39,6 +42,9 @@ macro_rules! here {
         concat!("error at ", file!(), ":", line!(), ":", column!())
     };
 }
+
+// export this macro for use in other modules in this crate
+pub(crate) use here;
 
 /// Run this app in order to keep aws-sdk-rust in sync with smithy-rs.
 ///
@@ -223,11 +229,7 @@ fn build_sdk(smithy_rs_path: &Path) -> Result<PathBuf> {
 fn clean_out_existing_sdk(aws_sdk_path: &Path) -> Result<()> {
     eprintln!("\tcleaning out previously built SDK...");
 
-    let sdk_path = format!("{}/sdk/*", aws_sdk_path.to_string_lossy());
-    let _ = run(&["rm", "-rf", &sdk_path], aws_sdk_path).context(here!())?;
-
-    let examples_path = format!("{}/example/*", aws_sdk_path.to_string_lossy());
-    let _ = run(&["rm", "-rf", &examples_path], aws_sdk_path).context(here!())?;
+    delete_all_generated_files_and_folders(&aws_sdk_path).context(here!())?;
 
     eprintln!("\tsuccessfully cleaned out previously built SDK");
     Ok(())
