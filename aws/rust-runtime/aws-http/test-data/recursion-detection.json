@@ -56,11 +56,11 @@
   {
     "env": {
       "AWS_LAMBDA_FUNCTION_NAME": "some-function",
-      "_X_AMZ_TRACE_ID": "first\nsecond"
+      "_X_AMZ_TRACE_ID": "first\nsecond¼\t"
     },
     "requestHeadersBefore": [],
     "requestHeadersAfter": [
-      "X-Amzn-Trace-Id: first%0Asecond"
+      "X-Amzn-Trace-Id: first%0Asecond%C2%BC%09"
     ],
     "description": [
       "AWS_LAMBDA_FUNCTION_NAME is set, and",
