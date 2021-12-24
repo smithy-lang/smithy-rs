@@ -11,12 +11,8 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
 
-[[aws-sdk-rust]]
-message = """
-The `meta`, `environment`, and `dns` Cargo feature flags were removed from `aws-config`.
-The code behind the `dns` flag is now enabled when `rt-tokio` is enabled. The code behind
-the `meta` and `environment` flags is always enabled now.
-"""
-references = ["smithy-rs#961"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "jdisanti"
+[[smithy-rs]]
+message = "Examples for Config builder added"
+references = ["smithy-rs#670"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Jacco"
