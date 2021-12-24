@@ -15,3 +15,9 @@ message = "Made fluent operation structs cloneable"
 references = ["aws-sdk-rust#254"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "Jacco"
+
+[[aws-sdk-rust]]
+message = "Made fluent operation structs cloneable"
+references = ["aws-sdk-rust#254"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Jacco"
