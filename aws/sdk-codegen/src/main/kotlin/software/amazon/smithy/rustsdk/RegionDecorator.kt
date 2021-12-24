@@ -77,7 +77,7 @@ class RegionDecorator : RustCodegenDecorator {
         codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + RegionProviderConfig(codegenContext.runtimeConfig)
+        return baseCustomizations + RegionProviderConfig(codegenContext)
     }
 
     override fun operationCustomizations(
@@ -96,8 +96,9 @@ class RegionDecorator : RustCodegenDecorator {
     }
 }
 
-class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val region = region(runtimeConfig)
+class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
+    private val region = region(codegenContext.runtimeConfig)
+    private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf("Region" to region.member("Region"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
@@ -109,6 +110,15 @@ class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization()
                 rustTemplate(
                     """
                     /// Sets the AWS region to use when making requests.
+                    ///
+                    /// ## Examples
+                    /// ```no_run
+                    /// use $moduleUseName::config::{Builder, Config};
+                    ///
+                    /// let config = $moduleUseName::Config::builder()
+                    ///     .region(Region::new("us-east-1"))
+                    ///     .build();
+                    /// ```
                     pub fn region(mut self, region: impl Into<Option<#{Region}>>) -> Self {
                         self.region = region.into();
                         self
