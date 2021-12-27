@@ -14,14 +14,19 @@ aws-types = { path = "../aws-types" }
 http = "0.2.3"
 lazy_static = "1"
 tracing = "0.1"
+percent-encoding = "2.1.0"
 
 [dev-dependencies]
 async-trait = "0.1.50"
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
+aws-smithy-protocol-test = { path = "../../../rust-runtime/aws-smithy-protocol-test" }
 env_logger = "0.9"
 http = "0.2.3"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util"] }
 tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
+proptest = "1"
+serde = { version = "1", features = ["derive"]}
+serde_json = "1"
 
 [package.metadata.docs.rs]
 all-features = true

@@ -340,7 +340,7 @@ class ServerProtocolTestGenerator(
             return
         }
         val variableName = "expected_headers"
-        rustWriter.withBlock("let $variableName = &[", "];") {
+        rustWriter.withBlock("let $variableName = [", "];") {
             write(
                 headers.entries.joinToString(",") {
                     "(${it.key.dq()}, ${it.value.dq()})"
