@@ -5,7 +5,7 @@
 
 mod fs;
 
-use crate::fs::delete_all_generated_files_and_folders;
+use crate::fs::{delete_all_generated_files_and_folders, find_handwritten_files_and_folders};
 use anyhow::{anyhow, bail, Context, Result};
 use git2::{Commit, IndexAddOption, ObjectType, Oid, Repository, ResetType, Signature};
 use std::ffi::OsStr;
@@ -119,6 +119,17 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
         let build_artifacts = build_sdk(smithy_rs).context("couldn't build SDK")?;
         clean_out_existing_sdk(aws_sdk)
             .context("couldn't clean out existing SDK from aws-sdk-rust")?;
+
+        // Check that we aren't generating any files that we've marked as "handwritten"
+        let handwritten_files_in_generated_sdk_folder =
+            find_handwritten_files_and_folders(aws_sdk, &build_artifacts)?;
+        if !handwritten_files_in_generated_sdk_folder.is_empty() {
+            bail!(
+                "found one or more 'handwritten' files/folders in generated code: {:#?}",
+                handwritten_files_in_generated_sdk_folder
+            );
+        }
+
         copy_sdk(&build_artifacts, aws_sdk)?;
         create_mirror_commit(&aws_sdk_repo, &commit)
             .context("couldn't commit SDK changes to aws-sdk-rust")?;
@@ -228,10 +239,14 @@ fn build_sdk(smithy_rs_path: &Path) -> Result<PathBuf> {
 /// Delete any current SDK files in aws-sdk-rust. Run this before copying over new files.
 fn clean_out_existing_sdk(aws_sdk_path: &Path) -> Result<()> {
     eprintln!("\tcleaning out previously built SDK...");
+    let start = Instant::now();
 
-    delete_all_generated_files_and_folders(&aws_sdk_path).context(here!())?;
+    delete_all_generated_files_and_folders(aws_sdk_path).context(here!())?;
 
-    eprintln!("\tsuccessfully cleaned out previously built SDK");
+    eprintln!(
+        "\tsuccessfully cleaned out previously built SDK in {:?}",
+        start.elapsed()
+    );
     Ok(())
 }
 

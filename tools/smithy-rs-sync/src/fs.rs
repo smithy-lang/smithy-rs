@@ -5,14 +5,11 @@
 
 use super::here;
 use anyhow::Context;
-use once_cell::sync::Lazy;
-use std::collections::HashSet;
 use std::error::Error;
-use std::ffi::OsStr;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
-static HANDWRITTEN_FILES_DOTFILE: Lazy<&OsStr> = Lazy::new(|| OsStr::new(".handwritten_files"));
+pub static HANDWRITTEN_DOTFILE: &str = ".handwritten";
 
 pub fn delete_all_generated_files_and_folders(directory: &Path) -> anyhow::Result<()> {
     fn callback(path: &Path) -> Result<(), std::io::Error> {
@@ -25,13 +22,31 @@ pub fn delete_all_generated_files_and_folders(directory: &Path) -> anyhow::Resul
         Ok(())
     }
 
-    let handwritten_files =
-        HandwrittenFiles::from_dotfile(&directory.join(*HANDWRITTEN_FILES_DOTFILE))
-            .context(here!())?;
+    let dotfile_path = directory.join(HANDWRITTEN_DOTFILE);
+    let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path).context(here!())?;
 
     handwritten_files
         .run_callback_on_generated_files(&directory, callback)
         .context(here!())
+}
+
+pub fn find_handwritten_files_and_folders(
+    aws_sdk_path: &Path,
+    build_artifacts_path: &Path,
+) -> anyhow::Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
+    let callback = |path: &Path| -> Result<(), std::io::Error> {
+        paths.push(path.to_owned());
+        Ok(())
+    };
+    let dotfile_path = aws_sdk_path.join(HANDWRITTEN_DOTFILE);
+    let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path).context(here!())?;
+
+    handwritten_files
+        .run_callback_on_handwritten_files(&build_artifacts_path, callback)
+        .context(here!())?;
+
+    Ok(paths)
 }
 
 /// A struct with methods that help when checking to see if a file is handwritten or
@@ -51,7 +66,6 @@ pub fn delete_all_generated_files_and_folders(directory: &Path) -> anyhow::Resul
 /// ```
 ///
 /// ```rust
-/// fn main() {
 ///   let handwritten_files = HandwrittenFiles::from_dotfile(
 ///       Path::new("/Users/zelda/project/.handwritten_files")
 ///     ).unwrap();
@@ -61,57 +75,52 @@ pub fn delete_all_generated_files_and_folders(directory: &Path) -> anyhow::Resul
 /// }
 /// ```
 #[derive(Debug)]
-struct HandwrittenFiles {
-    files_and_folders: HashSet<PathBuf>,
+pub struct HandwrittenFiles<'file> {
+    files_and_folders: gitignore::File<'file>,
 }
 
-impl HandwrittenFiles {
-    pub fn from_dotfile(dotfile_path: &Path) -> Result<Self, HandwrittenFilesError> {
-        let file_contents = std::fs::read_to_string(dotfile_path)?;
-        let dotfile_parent_folder = dotfile_path
-            .parent()
-            .expect("dotfile will always have a parent folder");
-        let files_and_folders = file_contents
-            .split("\n")
-            .filter_map(|line| {
-                if line.is_empty() || line.starts_with("#") {
-                    // skip empty lines and comments
-                    None
-                } else {
-                    Some(dotfile_parent_folder.join(line))
-                }
-            })
-            .collect();
+impl<'file> HandwrittenFiles<'file> {
+    pub fn from_dotfile(dotfile_path: &'file Path) -> Result<Self, HandwrittenFilesError> {
+        let files_and_folders = gitignore::File::new(dotfile_path)?;
 
         Ok(Self { files_and_folders })
     }
 
-    pub fn is_handwritten(&self, path: &Path) -> Result<bool, HandwrittenFilesError> {
-        if path.is_file() || path.is_dir() {
-            Ok(self.files_and_folders.contains(path))
-        } else {
-            Err(HandwrittenFilesError::NotAFileOrFolder(path.to_owned()))
-        }
+    pub fn is_handwritten(&self, path: &'file Path) -> Result<bool, HandwrittenFilesError> {
+        self.files_and_folders.is_excluded(path).map_err(Into::into)
     }
 
     pub fn run_callback_on_generated_files(
         &self,
         directory: &Path,
-        callback: impl Fn(&Path) -> Result<(), std::io::Error>,
+        mut callback: impl FnMut(&Path) -> Result<(), std::io::Error>,
     ) -> Result<(), HandwrittenFilesError> {
         let read_dir = std::fs::read_dir(directory)?;
 
         for entry in read_dir {
             let path = &entry.map(|e| e.path())?;
 
-            // Skip the dotfile defining what is and isn't handwritten
-            if path.file_name() == Some(&HANDWRITTEN_FILES_DOTFILE) {
-                continue;
-            }
-
             let is_generated = !self.is_handwritten(path)?;
             if is_generated {
-                callback(path).map_err(|io| HandwrittenFilesError::Io(Box::new(io)))?;
+                callback(path)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn run_callback_on_handwritten_files(
+        &self,
+        directory: &Path,
+        mut callback: impl FnMut(&Path) -> Result<(), std::io::Error>,
+    ) -> Result<(), HandwrittenFilesError> {
+        let read_dir = std::fs::read_dir(directory)?;
+
+        for entry in read_dir {
+            let path = &entry.map(|e| e.path())?;
+
+            if self.is_handwritten(path)? {
+                callback(path)?;
             }
         }
 
@@ -121,8 +130,8 @@ impl HandwrittenFiles {
 
 #[derive(Debug)]
 pub enum HandwrittenFilesError {
-    NotAFileOrFolder(PathBuf),
-    Io(Box<dyn Error + Send + Sync + 'static>),
+    Io(std::io::Error),
+    GitIgnore(gitignore::Error),
 }
 
 impl Display for HandwrittenFilesError {
@@ -131,8 +140,8 @@ impl Display for HandwrittenFilesError {
             Self::Io(err) => {
                 write!(f, "IO error: {}", err)
             }
-            Self::NotAFileOrFolder(path) => {
-                write!(f, "path '{}' is not a file", path.display())
+            Self::GitIgnore(err) => {
+                write!(f, "gitignore error: {}", err)
             }
         }
     }
@@ -141,21 +150,30 @@ impl Display for HandwrittenFilesError {
 impl std::error::Error for HandwrittenFilesError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Io(err) => Some(err.as_ref() as _),
-            Self::NotAFileOrFolder(_) => None,
+            Self::Io(err) => Some(err),
+            Self::GitIgnore(err) => Some(err),
         }
     }
 }
 
 impl From<std::io::Error> for HandwrittenFilesError {
-    fn from(err: std::io::Error) -> Self {
-        Self::Io(Box::new(err))
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+impl From<gitignore::Error> for HandwrittenFilesError {
+    fn from(error: gitignore::Error) -> Self {
+        Self::GitIgnore(error)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{delete_all_generated_files_and_folders, HANDWRITTEN_FILES_DOTFILE};
+    use super::{
+        delete_all_generated_files_and_folders, find_handwritten_files_and_folders,
+        HANDWRITTEN_DOTFILE,
+    };
     use pretty_assertions::assert_eq;
     use std::fs::File;
     use std::io::Write;
@@ -163,7 +181,7 @@ mod tests {
 
     fn create_test_dir_and_handwritten_files_dotfile(handwritten_files: &[&str]) -> TempDir {
         let dir = TempDir::new("smithy-rs-sync_test-fs").unwrap();
-        let file_path = dir.path().join(*HANDWRITTEN_FILES_DOTFILE);
+        let file_path = dir.path().join(HANDWRITTEN_DOTFILE);
         let handwritten_files = handwritten_files.join("\n");
         let mut f = File::create(file_path).unwrap();
 
@@ -175,7 +193,7 @@ mod tests {
 
     fn create_test_file(temp_dir: &TempDir, name: &str) {
         let file_path = temp_dir.path().join(name);
-        let mut f = File::create(file_path).unwrap();
+        let f = File::create(file_path).unwrap();
 
         f.sync_all().unwrap();
     }
@@ -187,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_delete_all_generated_files_and_folders_doesnt_delete_handwritten_files_and_folders() {
-        let handwritten_files = &["foo.txt", "bar/"];
+        let handwritten_files = &[HANDWRITTEN_DOTFILE, "foo.txt", "bar/"];
         let dir = create_test_dir_and_handwritten_files_dotfile(handwritten_files);
         create_test_file(&dir, "foo.txt");
         create_test_dir(&dir, "bar");
@@ -211,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_delete_all_generated_files_and_folders_deletes_generated_files_and_folders() {
-        let handwritten_files = &["foo.txt", "bar/"];
+        let handwritten_files = &[HANDWRITTEN_DOTFILE, "foo.txt", "bar/"];
         let dir = create_test_dir_and_handwritten_files_dotfile(handwritten_files);
         // We add the "handwritten" ones
         create_test_file(&dir, "foo.txt");
@@ -240,7 +258,7 @@ mod tests {
 
     #[test]
     fn test_delete_all_generated_files_and_folders_ignores_comment_and_empty_lines() {
-        let handwritten_files = &["# a fake comment", "", "# another comment", ""];
+        let handwritten_files = &[HANDWRITTEN_DOTFILE, "# a fake comment", ""];
         let dir = create_test_dir_and_handwritten_files_dotfile(handwritten_files);
 
         // The files and folders in the temp dir should be the same
@@ -260,5 +278,31 @@ mod tests {
         assert_eq!(expected_files_and_folders, actual_files_and_folders);
         // the only file present will be the dotfile
         assert_eq!(actual_files_and_folders.len(), 1)
+    }
+
+    #[test]
+    fn test_find_handwritten_files_works() {
+        let handwritten_files = &[HANDWRITTEN_DOTFILE, "foo.txt", "bar/"];
+        let dir = create_test_dir_and_handwritten_files_dotfile(handwritten_files);
+        // Add the "handwritten" ones to be found
+        create_test_file(&dir, "foo.txt");
+        create_test_dir(&dir, "bar");
+
+        // The files and folders in the temp dir should be the same
+        // before and after running delete_all_generated_files_and_folders
+        let expected_files_and_folders: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+
+        // Add the "generated" ones that won't be found
+        create_test_file(&dir, "bar.txt");
+        create_test_dir(&dir, "qux");
+
+        // In practice, these would be two different folders but using the same folder is fine for the test
+        let actual_files_and_folders =
+            find_handwritten_files_and_folders(dir.path(), dir.path()).unwrap();
+
+        assert_eq!(expected_files_and_folders, actual_files_and_folders);
     }
 }
