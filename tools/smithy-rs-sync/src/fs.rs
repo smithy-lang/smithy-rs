@@ -12,41 +12,36 @@ use std::path::{Path, PathBuf};
 pub static HANDWRITTEN_DOTFILE: &str = ".handwritten";
 
 pub fn delete_all_generated_files_and_folders(directory: &Path) -> anyhow::Result<()> {
-    fn callback(path: &Path) -> Result<(), std::io::Error> {
+    let dotfile_path = directory.join(HANDWRITTEN_DOTFILE);
+    let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path).context(here!())?;
+
+    for path in handwritten_files
+        .generated_files_and_folders_iter(directory)
+        .context(here!())?
+    {
         if path.is_file() {
             std::fs::remove_file(path)?
         } else if path.is_dir() {
             std::fs::remove_dir_all(path)?
         };
-
-        Ok(())
     }
 
-    let dotfile_path = directory.join(HANDWRITTEN_DOTFILE);
-    let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path).context(here!())?;
-
-    handwritten_files
-        .run_callback_on_generated_files(&directory, callback)
-        .context(here!())
+    Ok(())
 }
 
 pub fn find_handwritten_files_and_folders(
     aws_sdk_path: &Path,
     build_artifacts_path: &Path,
 ) -> anyhow::Result<Vec<PathBuf>> {
-    let mut paths = Vec::new();
-    let callback = |path: &Path| -> Result<(), std::io::Error> {
-        paths.push(path.to_owned());
-        Ok(())
-    };
     let dotfile_path = aws_sdk_path.join(HANDWRITTEN_DOTFILE);
     let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path).context(here!())?;
 
-    handwritten_files
-        .run_callback_on_handwritten_files(&build_artifacts_path, callback)
-        .context(here!())?;
+    let files = handwritten_files
+        .handwritten_files_and_folders_iter(build_artifacts_path)
+        .context(here!())?
+        .collect();
 
-    Ok(paths)
+    Ok(files)
 }
 
 /// A struct with methods that help when checking to see if a file is handwritten or
@@ -79,6 +74,12 @@ pub struct HandwrittenFiles<'file> {
     files_and_folders: gitignore::File<'file>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum FileKind {
+    Generated,
+    Handwritten,
+}
+
 impl<'file> HandwrittenFiles<'file> {
     pub fn from_dotfile(dotfile_path: &'file Path) -> Result<Self, HandwrittenFilesError> {
         let files_and_folders = gitignore::File::new(dotfile_path)?;
@@ -87,44 +88,64 @@ impl<'file> HandwrittenFiles<'file> {
     }
 
     pub fn is_handwritten(&self, path: &'file Path) -> Result<bool, HandwrittenFilesError> {
-        self.files_and_folders.is_excluded(path).map_err(Into::into)
+        self.files_and_folders
+            .is_excluded(path)
+            // Flip the boolean because we're inclusive
+            .map(|is_excluded| !is_excluded)
+            .map_err(Into::into)
     }
 
-    pub fn run_callback_on_generated_files(
-        &self,
-        directory: &Path,
-        mut callback: impl FnMut(&Path) -> Result<(), std::io::Error>,
-    ) -> Result<(), HandwrittenFilesError> {
-        let read_dir = std::fs::read_dir(directory)?;
-
-        for entry in read_dir {
-            let path = &entry.map(|e| e.path())?;
-
-            let is_generated = !self.is_handwritten(path)?;
-            if is_generated {
-                callback(path)?;
-            }
-        }
-
-        Ok(())
+    pub fn generated_files_and_folders_iter(
+        &'file self,
+        directory: &'file Path,
+    ) -> Result<impl Iterator<Item = PathBuf>, HandwrittenFilesError> {
+        self.files_and_folders_iter(directory, FileKind::Generated)
     }
 
-    pub fn run_callback_on_handwritten_files(
+    pub fn handwritten_files_and_folders_iter(
         &self,
         directory: &Path,
-        mut callback: impl FnMut(&Path) -> Result<(), std::io::Error>,
-    ) -> Result<(), HandwrittenFilesError> {
-        let read_dir = std::fs::read_dir(directory)?;
+    ) -> Result<impl Iterator<Item = PathBuf>, HandwrittenFilesError> {
+        self.files_and_folders_iter(directory, FileKind::Handwritten)
+    }
 
-        for entry in read_dir {
-            let path = &entry.map(|e| e.path())?;
+    fn files_and_folders_iter(
+        &self,
+        directory: &Path,
+        kind: FileKind,
+    ) -> Result<impl Iterator<Item = PathBuf>, HandwrittenFilesError> {
+        let mut err = Ok(());
+        // All for the lack of try_filter
+        let scan_results: Vec<_> = std::fs::read_dir(directory)?
+            .scan(
+                &mut err,
+                |err: &mut &mut Result<(), HandwrittenFilesError>,
+                 res: std::io::Result<std::fs::DirEntry>| {
+                    let res = res
+                        .map(|entry| entry.path())
+                        .map(|path| (self.is_handwritten(&path), path))
+                        .map_err(HandwrittenFilesError::from);
 
-            if self.is_handwritten(path)? {
-                callback(path)?;
-            }
-        }
+                    match res {
+                        Ok((Ok(is_handwritten), path)) => match kind {
+                            FileKind::Generated => Some((!is_handwritten, path)),
+                            FileKind::Handwritten => Some((is_handwritten, path)),
+                        },
+                        // entry was bad, stop iteration and surface the error
+                        Ok((Err(e), _)) | Err(e) => {
+                            **err = Err(e.into());
+                            None
+                        }
+                    }
+                },
+            )
+            .filter_map(|(is_handwritten, path)| (!is_handwritten).then(move || path))
+            .collect();
+        // If the scan failed, bubble up the error
+        err?;
 
-        Ok(())
+        // return an iter of paths for the requested kind of files and folders
+        Ok(scan_results.into_iter())
     }
 }
 
