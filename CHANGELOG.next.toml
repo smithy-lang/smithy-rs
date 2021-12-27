@@ -55,6 +55,7 @@ author = "rcoh"
 message = "Add recursion detection middleware to the default stack"
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 references = ["smithy-rs#1003"]
+author = "rcoh"
 
 [[aws-sdk-rust]]
 message = "aws_types::Config is now `Clone`"
