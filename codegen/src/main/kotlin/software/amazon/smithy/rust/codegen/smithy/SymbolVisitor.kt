@@ -41,14 +41,13 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import kotlin.reflect.KClass
 
-// TODO: currently, respecting integer types.
-// Should we not? [Go does not]
 val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     BooleanShape::class to RustType.Bool,
     FloatShape::class to RustType.Float(32),
@@ -67,7 +66,6 @@ data class SymbolVisitorConfig(
     val handleRustBoxing: Boolean = true
 )
 
-// TODO: consider if this is better handled as a wrapper
 val DefaultConfig =
     SymbolVisitorConfig(
         runtimeConfig = RuntimeConfig(),
@@ -230,11 +228,11 @@ class SymbolVisitor(
     }
 
     override fun bigIntegerShape(shape: BigIntegerShape?): Symbol {
-        TODO("Not yet implemented")
+        TODO("Not yet implemented: https://github.com/awslabs/smithy-rs/issues/312")
     }
 
     override fun bigDecimalShape(shape: BigDecimalShape?): Symbol {
-        TODO("Not yet implemented")
+        TODO("Not yet implemented: https://github.com/awslabs/smithy-rs/issues/312")
     }
 
     override fun operationShape(shape: OperationShape): Symbol {
@@ -242,11 +240,11 @@ class SymbolVisitor(
     }
 
     override fun resourceShape(shape: ResourceShape?): Symbol {
-        TODO("Not yet implemented")
+        TODO("Not yet implemented: resources are not supported")
     }
 
     override fun serviceShape(shape: ServiceShape?): Symbol {
-        TODO("Not yet implemented")
+        PANIC("symbol visitor should not be invoked in service shapes")
     }
 
     override fun structureShape(shape: StructureShape): Symbol {
@@ -254,8 +252,6 @@ class SymbolVisitor(
         val isInput = shape.hasTrait<SyntheticInputTrait>()
         val isOutput = shape.hasTrait<SyntheticOutputTrait>()
         val name = shape.contextName().toPascalCase().letIf(isError && config.codegenConfig.renameExceptions) {
-            // TODO: Do we want to do this?
-            // https://github.com/awslabs/smithy-rs/issues/77
             it.replace("Exception", "Error")
         }
         val builder = symbolBuilder(shape, RustType.Opaque(name))

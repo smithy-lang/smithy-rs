@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
+import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
@@ -40,6 +42,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperat
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -137,22 +140,19 @@ private class ServerHttpProtocolImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         // Implement Axum `FromRequest` trait for input types.
         val inputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
-        val httpExtensions = setHttpExtensions(operationShape)
 
         val fromRequest = if (operationShape.inputShape(model).hasStreamingMember(model)) {
             // For streaming request bodies, we need to generate a different implementation of the `FromRequest` trait.
             // It will first offer the streaming input to the parser and potentially read the body into memory
             // if an error occurred or if the streaming parser indicates that it needs the full data to proceed.
             """
-            async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
-                $httpExtensions
+            async fn from_request(_req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
                 todo!("Streaming support for input shapes is not yet supported in `smithy-rs`")
             }
             """.trimIndent()
         } else {
             """
             async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
-                $httpExtensions
                 Ok($inputName(#{parse_request}(req).await?))
             }
             """.trimIndent()
@@ -181,6 +181,7 @@ private class ServerHttpProtocolImplGenerator(
         val outputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
 
+        val httpExtensions = setHttpExtensions(operationShape)
         // For streaming response bodies, we need to generate a different implementation of the `IntoResponse` trait.
         // The body type will have to be a `StreamBody`. The service implementer will return a `Stream` from their handler.
         val intoResponseStreaming = "todo!(\"Streaming support for output shapes is not yet supported in `smithy-rs`\")"
@@ -189,14 +190,12 @@ private class ServerHttpProtocolImplGenerator(
                 intoResponseStreaming
             } else {
                 """
-                match self {
+                let mut response = match self {
                     Self::Output(o) => {
                         match #{serialize_response}(&o) {
                             Ok(response) => response,
                             Err(e) => {
-                                let mut response = #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from output");
-                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection::new(e.to_string()));
-                                response
+                                e.into_response()
                             }
                         }
                     },
@@ -207,13 +206,13 @@ private class ServerHttpProtocolImplGenerator(
                                 response
                             },
                             Err(e) => {
-                                let mut response = #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from error");
-                                response.extensions_mut().insert(#{SmithyHttpServer}::ExtensionRejection::new(e.to_string()));
-                                response
+                                e.into_response()
                             }
                         }
                     }
-                }
+                };
+                $httpExtensions
+                response
                 """.trimIndent()
             }
             // The output of fallible operations is a `Result` which we convert into an isomorphic `enum` type we control
@@ -244,7 +243,7 @@ private class ServerHttpProtocolImplGenerator(
                 """
                 match #{serialize_response}(&self.0) {
                     Ok(response) => response,
-                    Err(e) => #{http}::Response::builder().body(#{SmithyHttpServer}::body::to_boxed(e.to_string())).expect("unable to build response from output")
+                    Err(e) => e.into_response()
                 }
                 """.trimIndent()
             }
@@ -315,8 +314,7 @@ private class ServerHttpProtocolImplGenerator(
         val namespace = operationShape.id.getNamespace()
         val operationName = symbolProvider.toSymbol(operationShape).name
         return """
-            let extensions = req.extensions_mut().ok_or(#{SmithyHttpServer}::rejection::ExtensionsAlreadyExtracted)?;
-            extensions.insert(#{SmithyHttpServer}::RequestExtensions::new(${namespace.dq()}, ${operationName.dq()}));
+            response.extensions_mut().insert(#{SmithyHttpServer}::RequestExtensions::new(${namespace.dq()}, ${operationName.dq()}));
         """.trimIndent()
     }
 
@@ -514,12 +512,13 @@ private class ServerHttpProtocolImplGenerator(
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
         val parser = structuredDataParser.serverInputParser(operationShape)
         if (parser != null) {
+            val contentTypeCheck = getContentTypeCheck()
             rustTemplate(
                 """
                 let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
                 let bytes = #{Hyper}::body::to_bytes(body).await?;
                 if !bytes.is_empty() {
-                    #{SmithyHttpServer}::protocols::check_json_content_type(request)?;
+                    #{SmithyHttpServer}::protocols::$contentTypeCheck(request)?;
                     input = #{parser}(bytes.as_ref(), input)?;
                 }
                 """,
@@ -869,7 +868,7 @@ private class ServerHttpProtocolImplGenerator(
 
     // TODO These functions can be replaced with the ones in https://docs.rs/aws-smithy-types/latest/aws_smithy_types/primitive/trait.Parse.html
     private fun generateParseStrAsPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
-        val output = symbolProvider.toSymbol(binding.member)
+        val output = symbolProvider.toSymbol(binding.member).makeOptional()
         val fnName = generateParseStrFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
@@ -892,5 +891,19 @@ private class ServerHttpProtocolImplGenerator(
         val containerName = binding.member.container.name.toSnakeCase()
         val memberName = binding.memberName.toSnakeCase()
         return "parse_str_${containerName}_$memberName"
+    }
+
+    private fun getContentTypeCheck(): String {
+        when (codegenContext.protocol) {
+            RestJson1Trait.ID -> {
+                return "check_json_content_type"
+            }
+            RestXmlTrait.ID -> {
+                return "check_xml_content_type"
+            }
+            else -> {
+                TODO("Protocol ${codegenContext.protocol} not supported yet")
+            }
+        }
     }
 }

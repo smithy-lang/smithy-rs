@@ -16,9 +16,6 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 
 class AccountIdAutofill() : OperationCustomization() {
     override fun mutSelf(): Boolean = true
-
-    // this is a bit of a hack, but there currently isn't a good way to pass the information up the chain into the
-    // fluent builder. I think we what we actually want is to write this information into the symbol metadata, but TODO.
     override fun consumesSelf(): Boolean = true
     override fun section(section: OperationSection): Writable {
         return when (section) {

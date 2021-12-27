@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.isPrimitive
@@ -241,7 +242,7 @@ class ResponseBindingGenerator(
                     RuntimeType.Blob(runtimeConfig)
                 )
                 is DocumentShape -> this.docShapeHandler("body")
-                else -> TODO("unexpected shape: $targetShape")
+                else -> UNREACHABLE("unexpected shape: $targetShape")
             }
         }
     }
@@ -302,7 +303,7 @@ class ResponseBindingGenerator(
                 rust("let $parsedValue = $parsedValue?;")
             }
         }
-        // TODO: this doesn't support non-optional vectors (which may be eventually added)
+        // TODO(https://github.com/awslabs/smithy-rs/issues/837): this doesn't support non-optional vectors
         when (rustType) {
             is RustType.Vec ->
                 rust(

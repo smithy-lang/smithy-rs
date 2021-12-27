@@ -7,6 +7,7 @@ use crate::{s3_canary, transcribe_canary};
 use aws_sdk_s3 as s3;
 use aws_sdk_transcribestreaming as transcribe;
 use std::env;
+use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use tracing::{info_span, Instrument};
@@ -49,10 +50,21 @@ impl Clients {
     }
 }
 
-#[derive(Debug)]
 pub struct CanaryEnv {
     s3_bucket_name: String,
     expected_transcribe_result: String,
+}
+
+impl fmt::Debug for CanaryEnv {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CanaryEnv")
+            .field("s3_bucket_name", &"*** redacted ***")
+            .field(
+                "expected_transcribe_result",
+                &self.expected_transcribe_result,
+            )
+            .finish()
+    }
 }
 
 impl CanaryEnv {

@@ -8,6 +8,8 @@ use anyhow::Context;
 use aws_sdk_s3 as s3;
 use uuid::Uuid;
 
+const METADATA_TEST_VALUE: &str = "some   value";
+
 pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Result<()> {
     use s3::{error::GetObjectError, error::GetObjectErrorKind, SdkError};
     let test_key = Uuid::new_v4().as_u128().to_string();
@@ -46,7 +48,7 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
         .bucket(&s3_bucket_name)
         .key(&test_key)
         .body(s3::ByteStream::from_static(b"test"))
-        .metadata("something", "テスト テスト!")
+        .metadata("something", METADATA_TEST_VALUE)
         .send()
         .await
         .context("s3::PutObject")?;
@@ -63,8 +65,14 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
     let mut result = Ok(());
     match output.metadata() {
         Some(map) => {
-            if map.get("something") != Some(&"テスト テスト!".to_string()) {
-                result = Err(CanaryError("S3 metadata was incorrect".into()).into());
+            // Option::as_deref doesn't work here since the deref of &String is String
+            let value = map.get("something").map(|s| s.as_str()).unwrap_or("");
+            if value != METADATA_TEST_VALUE {
+                result = Err(CanaryError(format!(
+                    "S3 metadata was incorrect. Expected `{}` but got `{}`.",
+                    METADATA_TEST_VALUE, value
+                ))
+                .into());
             }
         }
         None => {
@@ -92,4 +100,21 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
         .context("s3::DeleteObject")?;
 
     result
+}
+
+// This test runs against an actual AWS account. Comment out the `ignore` to run it.
+// Be sure to set the `TEST_S3_BUCKET` environment variable to the S3 bucket to use,
+// and also make sure the credential profile sets the region (or set `AWS_DEFAULT_PROFILE`).
+#[ignore]
+#[cfg(test)]
+#[tokio::test]
+async fn test_s3_canary() {
+    let config = aws_config::load_from_env().await;
+    let client = s3::Client::new(&config);
+    s3_canary(
+        client,
+        std::env::var("TEST_S3_BUCKET").expect("TEST_S3_BUCKET must be set"),
+    )
+    .await
+    .expect("success");
 }

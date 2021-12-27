@@ -39,7 +39,7 @@ class SharedConfigDecorator : RustCodegenDecorator {
             "Config" to awsTypes(runtimeConfig = codegenContext.runtimeConfig).asType().member("config::Config")
         )
         rustCrate.withModule(RustModule.Config) {
-            // TODO(sharedconfig): As more items are added to aws_types::config::Config, use them here to configure the config builder
+            // !!NOTE!! As more items are added to aws_types::config::Config, use them here to configure the config builder
             it.rustTemplate(
                 """
                 impl From<&#{Config}> for Builder {

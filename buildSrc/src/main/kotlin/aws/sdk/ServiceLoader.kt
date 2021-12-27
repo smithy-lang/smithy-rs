@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+package aws.sdk
+
 import org.gradle.api.Project
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.Model
@@ -11,13 +13,50 @@ import software.amazon.smithy.model.traits.TitleTrait
 import java.io.File
 import kotlin.streams.toList
 
+class AwsServices(private val project: Project, services: List<AwsService>) {
+    val services: List<AwsService>
+    val moduleNames: Set<String> by lazy { services.map { it.module }.toSortedSet() }
+
+    val allModules: Set<String> by lazy {
+        (
+            services.map(AwsService::module).map { "sdk/$it" } +
+                CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/$it" } +
+                CrateSet.AWS_SDK_RUNTIME.map { "sdk/$it" } +
+                examples
+            ).toSortedSet()
+    }
+
+    val examples: List<String> by lazy {
+        project.projectDir.resolve("examples")
+            .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
+            .filter { file ->
+                val cargoToml = File(file, "Cargo.toml")
+                if (cargoToml.exists()) {
+                    val usedModules = cargoToml.readLines()
+                        .map { line -> line.substringBefore('=').trim() }
+                        .filter { line -> line.startsWith("aws-sdk-") }
+                        .map { line -> line.substringAfter("aws-sdk-") }
+                        .toSet()
+                    moduleNames.containsAll(usedModules)
+                } else {
+                    false
+                }
+            }
+            .map { "examples/${it.name}" }
+    }
+
+    init {
+        this.services = services.sortedBy { it.module }
+    }
+}
+
 /**
  * Discovers services from the `aws-models` directory within the project.
  *
  * Since this function parses all models, it is relatively expensive to call. The result should be cached in a property
  * during build.
  */
-fun Project.discoverServices(serviceMembership: Membership): List<AwsService> {
+fun Project.discoverServices(serviceMembership: Membership): AwsServices {
     val models = project.file("aws-models")
     val baseServices = fileTree(models)
         .sortedBy { file -> file.name }
@@ -36,7 +75,7 @@ fun Project.discoverServices(serviceMembership: Membership): List<AwsService> {
                 val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId
                     .toLowerCase()
                     .replace(" ", "")
-                    // TODO: the smithy models should not include the suffix "service"
+                    // The smithy models should not include the suffix "service" but currently they do
                     .removeSuffix("service")
                     .removeSuffix("api")
                 val testFile = file.parentFile.resolve("$sdkId-tests.smithy")
@@ -72,9 +111,12 @@ fun Project.discoverServices(serviceMembership: Membership): List<AwsService> {
     serviceMembership.inclusions.forEach { service ->
         check(baseModules.contains(service)) { "Service $service was in explicit inclusion list but not generated!" }
     }
-    return baseServices.filter {
-        serviceMembership.isMember(it.module)
-    }
+    return AwsServices(
+        this,
+        baseServices.filter {
+            serviceMembership.isMember(it.module)
+        }
+    )
 }
 
 data class Membership(val inclusions: Set<String> = emptySet(), val exclusions: Set<String> = emptySet())
@@ -102,7 +144,7 @@ data class AwsService(
 
 fun AwsService.crate(): String = "aws-sdk-$module"
 
-fun Membership.isMember(member: String): Boolean = when {
+private fun Membership.isMember(member: String): Boolean = when {
     exclusions.contains(member) -> false
     inclusions.contains(member) -> true
     inclusions.isEmpty() -> true

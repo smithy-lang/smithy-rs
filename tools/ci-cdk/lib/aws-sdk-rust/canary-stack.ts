@@ -44,6 +44,7 @@ export class CanaryStack extends Stack {
                     "lambda:CreateFunction",
                     "lambda:DeleteFunction",
                     "lambda:InvokeFunction",
+                    "lambda:GetFunctionConfiguration",
                 ],
                 effect: Effect.ALLOW,
                 // Only allow this for functions starting with prefix `canary-`
@@ -66,7 +67,8 @@ export class CanaryStack extends Stack {
             removalPolicy: RemovalPolicy.DESTROY,
         });
 
-        // Allow the OIDC role to PutObject to the code bucket
+        // Allow the OIDC role to GetObject and PutObject to the code bucket
+        this.canaryCodeBucket.grantRead(this.awsSdkRustOidcRole.oidcRole);
         this.canaryCodeBucket.grantWrite(this.awsSdkRustOidcRole.oidcRole);
 
         // Create S3 bucket for the canaries to talk to
@@ -90,6 +92,15 @@ export class CanaryStack extends Stack {
             assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
         });
 
+        // Allow canaries to write logs to CloudWatch
+        this.lambdaExecutionRole.addToPolicy(
+            new PolicyStatement({
+                actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                effect: Effect.ALLOW,
+                resources: ["arn:aws:logs:*:*:/aws/lambda/canary-lambda-*:*"],
+            }),
+        );
+
         // Allow canaries to talk to their test bucket
         this.canaryTestBucket.grantReadWrite(this.lambdaExecutionRole);
 
@@ -99,6 +110,22 @@ export class CanaryStack extends Stack {
                 actions: ["transcribe:StartStreamTranscription"],
                 effect: Effect.ALLOW,
                 resources: ["*"],
+            }),
+        );
+
+        // Allow the OIDC role to pass the Lambda execution role to Lambda
+        this.awsSdkRustOidcRole.oidcRole.addToPolicy(
+            new PolicyStatement({
+                actions: ["iam:PassRole"],
+                effect: Effect.ALLOW,
+                // Security: only allow the Lambda execution role to be passed
+                resources: [this.lambdaExecutionRole.roleArn],
+                // Security: only allow the role to be passed to Lambda
+                conditions: {
+                    StringEquals: {
+                        "iam:PassedToService": "lambda.amazonaws.com",
+                    },
+                },
             }),
         );
     }

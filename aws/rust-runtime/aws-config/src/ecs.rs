@@ -49,11 +49,9 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io;
-use std::io::ErrorKind;
-use std::net::{IpAddr, ToSocketAddrs};
-use std::task::{Context, Poll};
+use std::net::IpAddr;
 
-use aws_smithy_client::erase::boxclone::{BoxCloneService, BoxFuture};
+use aws_smithy_client::erase::boxclone::BoxCloneService;
 use aws_smithy_http::endpoint::Endpoint;
 use aws_types::credentials;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
@@ -391,7 +389,7 @@ async fn validate_full_uri(uri: &str, dns: &mut DnsService) -> Result<Uri, Inval
     }
 }
 
-#[cfg(not(feature = "dns"))]
+#[cfg(not(feature = "rt-tokio"))]
 fn tokio_dns() -> Option<DnsService> {
     None
 }
@@ -399,8 +397,13 @@ fn tokio_dns() -> Option<DnsService> {
 /// DNS resolver that uses tokio::spawn_blocking
 ///
 /// DNS resolution is required to validate that provided URIs point to the loopback interface
-#[cfg(feature = "dns")]
+#[cfg(feature = "rt-tokio")]
 fn tokio_dns() -> Option<DnsService> {
+    use aws_smithy_client::erase::boxclone::BoxFuture;
+    use std::io::ErrorKind;
+    use std::net::ToSocketAddrs;
+    use std::task::{Context, Poll};
+
     #[derive(Clone)]
     struct TokioDns;
     impl Service<String> for TokioDns {
@@ -428,7 +431,7 @@ fn tokio_dns() -> Option<DnsService> {
     Some(BoxCloneService::new(TokioDns))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "default-provider"))]
 mod test {
     use aws_smithy_client::erase::boxclone::BoxCloneService;
     use aws_smithy_client::never::NeverService;
@@ -448,6 +451,7 @@ mod test {
     use aws_types::os_shim_internal::Env;
     use aws_types::Credentials;
 
+    use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::TestConnection;
     use aws_smithy_http::body::SdkBody;
@@ -464,7 +468,8 @@ mod test {
     fn provider(env: Env, connector: DynConnector) -> EcsCredentialsProvider {
         let provider_config = ProviderConfig::empty()
             .with_env(env)
-            .with_http_connector(connector);
+            .with_http_connector(connector)
+            .with_sleep(TokioSleep::new());
         Builder::default().configure(&provider_config).build()
     }
 
@@ -620,6 +625,31 @@ mod test {
             .expect("valid credentials");
         assert_correct(creds);
         connector.assert_requests_match(&[]);
+    }
+
+    #[tokio::test]
+    async fn retry_5xx() {
+        let env = Env::from_slice(&[("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials")]);
+        let connector = TestConnection::new(vec![
+            (
+                creds_request("http://169.254.170.2/credentials", None),
+                http::Response::builder()
+                    .status(500)
+                    .body(SdkBody::empty())
+                    .unwrap(),
+            ),
+            (
+                creds_request("http://169.254.170.2/credentials", None),
+                ok_creds_response(),
+            ),
+        ]);
+        tokio::time::pause();
+        let provider = provider(env, DynConnector::new(connector.clone()));
+        let creds = provider
+            .provide_credentials()
+            .await
+            .expect("valid credentials");
+        assert_correct(creds);
     }
 
     #[tokio::test]

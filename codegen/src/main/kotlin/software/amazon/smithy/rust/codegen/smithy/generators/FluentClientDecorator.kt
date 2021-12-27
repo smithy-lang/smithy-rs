@@ -178,7 +178,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
                     /// - A retry policy (`R`) that dictates the behavior for requests that
                     ///   fail and should (potentially) be retried. The default type is
                     ///   generally what you want, as it implements a well-vetted retry
-                    ///   policy described in TODO.
+                    ///   policy implemented in [`retry::Standard`](crate::retry::Standard).
                     ///
                     /// To construct a client, you will generally want to call
                     /// [`Client::with_config`], which takes a [`#{client}::Client`] (a

@@ -46,6 +46,7 @@ import software.amazon.smithy.rust.codegen.smithy.isBoxed
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -242,7 +243,7 @@ class JsonParserGenerator(
             is StructureShape -> deserializeStruct(target)
             is UnionShape -> deserializeUnion(target)
             is DocumentShape -> rustTemplate("Some(#{expect_document}(tokens)?)", *codegenScope)
-            else -> TODO(target.toString())
+            else -> PANIC("unexpected shape: $target")
         }
         val symbol = symbolProvider.toSymbol(memberShape)
         if (symbol.isBoxed()) {
