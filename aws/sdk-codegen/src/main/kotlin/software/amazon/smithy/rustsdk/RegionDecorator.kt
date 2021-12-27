@@ -113,6 +113,7 @@ class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization
                     ///
                     /// ## Examples
                     /// ```no_run
+                    /// use aws_types::region::Region;
                     /// use $moduleUseName::config::{Builder, Config};
                     ///
                     /// let config = $moduleUseName::Config::builder()
