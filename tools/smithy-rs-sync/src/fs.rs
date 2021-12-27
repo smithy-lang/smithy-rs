@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use super::here;
 use anyhow::Context;
 use once_cell::sync::Lazy;
@@ -172,8 +177,6 @@ mod tests {
         let file_path = temp_dir.path().join(name);
         let mut f = File::create(file_path).unwrap();
 
-        // TODO do I have to write anything?
-        f.write_all(b"").unwrap();
         f.sync_all().unwrap();
     }
 
