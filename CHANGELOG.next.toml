@@ -1,3 +1,16 @@
+# Example changelog entries
+# [[aws-sdk-rust]]
+# message = "Fix typos in module documentation for generated crates"
+# references = ["smithy-rs#920"]
+# meta = { "breaking" = false, "tada" = false, "bug" = false }
+# author = "rcoh"
+#
+# [[smithy-rs]]
+# message = "Fix typos in module documentation for generated crates"
+# references = ["smithy-rs#920"]
+# meta = { "breaking" = false, "tada" = false, "bug" = false }
+# author = "rcoh"
+
 [[aws-sdk-rust]]
 message = "Example for Config builder region function added"
 references = ["smithy-rs#670"]
