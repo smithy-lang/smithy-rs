@@ -18,7 +18,7 @@ use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "smithy-rs-sync")]
-/// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk
+/// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
 struct Opt {
     /// The path to the smithy-rs repo folder
     #[structopt(long, parse(from_os_str))]
@@ -35,7 +35,7 @@ const BOT_NAME: &str = "AWS SDK Rust Bot";
 const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
 const COMMIT_HASH_FILENAME: &str = ".smithyrs-githash";
 
-/// A macro for attaching info to error messages pointing to the line of code responsible for the error
+/// A macro for attaching info to error messages pointing to the line of code responsible for the error.
 /// [Thanks to dtolnay for this macro](https://github.com/dtolnay/anyhow/issues/22#issuecomment-542309452)
 macro_rules! here {
     () => {
@@ -71,7 +71,7 @@ fn main() {
     };
 }
 
-/// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`
+/// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
 fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -> Result<()> {
     // Open the repositories we'll be working with
     let smithy_rs_repo = Repository::open(smithy_rs).context("couldn't open smithy-rs repo")?;
@@ -149,9 +149,6 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
             last_synced_commit, COMMIT_HASH_FILENAME,
         )
     })?;
-    // Commit the file containing the commit hash
-    commit_last_synced_commit_file(&aws_sdk_repo)
-        .context("couldn't commit the last synced commit hash file to aws-sdk-rust")?;
 
     eprintln!(
         "Successfully synced {} mirror commit(s) to aws-sdk-rust/{}. Don't forget to push them",
@@ -280,7 +277,7 @@ fn copy_sdk(from_path: &Path, to_path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Find the last commit made to a repo
+/// Find the last commit made to a repo.
 fn find_last_commit(repo: &Repository) -> Result<Commit> {
     let obj = repo
         .head()
@@ -294,9 +291,13 @@ fn find_last_commit(repo: &Repository) -> Result<Commit> {
 }
 
 /// Create a "mirror" commit. Works by reading a smithy-rs commit and then using the info
-/// attached to it to create a commit in aws-sdk-rust.
+/// attached to it to create a commit in aws-sdk-rust. This also updates the `.smithyrs-githash`
+/// file with the hash of `based_on_commit`.
 fn create_mirror_commit(aws_sdk_repo: &Repository, based_on_commit: &Commit) -> Result<()> {
     eprintln!("\tcreating mirror commit...");
+
+    // Update the file that tracks what smithy-rs commit the SDK was generated from
+    set_last_synced_commit(aws_sdk_repo, &based_on_commit.id())?;
 
     let mut index = aws_sdk_repo.index().context(here!())?;
     // The equivalent of `git add .`
@@ -306,12 +307,13 @@ fn create_mirror_commit(aws_sdk_repo: &Repository, based_on_commit: &Commit) -> 
     let oid = index.write_tree().context(here!())?;
     let parent_commit = find_last_commit(aws_sdk_repo).context(here!())?;
     let tree = aws_sdk_repo.find_tree(oid).context(here!())?;
+    let bot_signature = Signature::now(BOT_NAME, BOT_EMAIL).context(here!())?;
 
     let _ = aws_sdk_repo
         .commit(
             Some("HEAD"),
             &based_on_commit.author(),
-            &based_on_commit.committer(),
+            &bot_signature,
             based_on_commit.message().unwrap_or_default(),
             &tree,
             &[&parent_commit],
@@ -323,32 +325,7 @@ fn create_mirror_commit(aws_sdk_repo: &Repository, based_on_commit: &Commit) -> 
     Ok(())
 }
 
-/// Commit the file in aws-sdk-rust that tracks what smithy-rs commit the SDK was last built from
-fn commit_last_synced_commit_file(aws_sdk_repo: &Repository) -> Result<()> {
-    let mut index = aws_sdk_repo.index().context(here!())?;
-    index
-        .add_path(Path::new(COMMIT_HASH_FILENAME))
-        .context(here!())?;
-    let signature = Signature::now(BOT_NAME, BOT_EMAIL)?;
-    let oid = index.write_tree().context(here!())?;
-    let parent_commit = find_last_commit(aws_sdk_repo).context(here!())?;
-    let tree = aws_sdk_repo.find_tree(oid).context(here!())?;
-
-    let _ = aws_sdk_repo
-        .commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            &format!("update: {} with last synced commit", COMMIT_HASH_FILENAME),
-            &tree,
-            &[&parent_commit],
-        )
-        .context(here!())?;
-
-    Ok(())
-}
-
-/// `git checkout` the branch of aws-sdk-rust that we want to mirror commits to (defaults to `next`)
+/// `git checkout` the branch of aws-sdk-rust that we want to mirror commits to (defaults to `next`).
 fn checkout_branch_to_sync_to(aws_sdk_repo: &Repository, aws_sdk_branch: &str) -> Result<()> {
     aws_sdk_repo
         .find_remote("origin")?
@@ -360,7 +337,7 @@ fn checkout_branch_to_sync_to(aws_sdk_repo: &Repository, aws_sdk_branch: &str) -
     Ok(())
 }
 
-/// `git checkout` a commit from smithy-rs that we're going to mirror to aws-sdk-rust
+/// `git checkout` a commit from smithy-rs that we're going to mirror to aws-sdk-rust.
 fn checkout_commit_to_sync_from(smithy_rs_repo: &Repository, commit: &Commit) -> Result<()> {
     let head = smithy_rs_repo
         .head()
@@ -379,6 +356,7 @@ fn checkout_commit_to_sync_from(smithy_rs_repo: &Repository, commit: &Commit) ->
     Ok(())
 }
 
+/// Run a shell command from a given working directory.
 fn run<S>(args: &[S], working_dir: &Path) -> Result<()>
 where
     S: AsRef<OsStr>,
@@ -415,7 +393,7 @@ where
     Ok(())
 }
 
-/// For a slice containing S where S: AsRef<OsStr>, join all S into a space-separated String
+/// For a slice containing `S` where `S: AsRef<OsStr>`, join all `S` into a space-separated String.
 fn stringify_args<S>(args: &[S]) -> String
 where
     S: AsRef<OsStr>,
