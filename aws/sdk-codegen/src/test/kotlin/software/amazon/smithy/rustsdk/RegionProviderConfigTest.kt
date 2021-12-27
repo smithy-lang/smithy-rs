@@ -11,6 +11,6 @@ import software.amazon.smithy.rust.codegen.testutil.validateConfigCustomizations
 internal class RegionProviderConfigTest {
     @Test
     fun `generates a valid config`() {
-        validateConfigCustomizations(RegionProviderConfig(AwsTestRuntimeConfig))
+        validateConfigCustomizations(RegionProviderConfig(awsTestCodegenContext()))
     }
 }
