@@ -209,7 +209,7 @@ class BuilderGenerator(
             rust(
                 """
                 let mut v = self.$memberName.unwrap_or_default();
-                v.push(input.into());
+                v.push(input);
                 self.$memberName = Some(v);
                 self
                 """
@@ -240,7 +240,7 @@ class BuilderGenerator(
             rust(
                 """
                 let mut hash_map = self.$memberName.unwrap_or_default();
-                hash_map.insert(k.into(), v.into());
+                hash_map.insert(k, v);
                 self.$memberName = Some(hash_map);
                 self
                 """
