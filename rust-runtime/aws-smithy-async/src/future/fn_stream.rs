@@ -136,8 +136,9 @@ mod test {
     use std::time::Duration;
     use tokio_stream::StreamExt;
 
+    /// basic test of FnStream functionality
     #[tokio::test]
-    async fn does_it_work() {
+    async fn fn_stream_returns_results() {
         tokio::time::pause();
         let mut stream = FnStream::new(|tx| {
             Box::pin(async move {
@@ -156,6 +157,7 @@ mod test {
         assert_eq!(out, vec!["1", "2", "3"]);
     }
 
+    /// Tests that the generator will not advance until demand exists
     #[tokio::test]
     async fn waits_for_reader() {
         let progress = Arc::new(Mutex::new(0));

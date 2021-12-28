@@ -8,5 +8,5 @@
 pub mod fn_stream;
 pub mod never;
 pub mod now_or_later;
-mod rendezvous;
+pub mod rendezvous;
 pub mod timeout;
