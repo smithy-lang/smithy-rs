@@ -199,7 +199,13 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
-        rustBlock("pub fn $memberName(mut self, input: impl Into<${coreType.member.render(true)}>) -> Self") {
+        val input = when (coreType.member) {
+            is RustType.String,
+            is RustType.Box -> "impl Into<${coreType.member.render(true)}>"
+            else -> "${coreType.member.render(true)}"
+        }
+
+        rustBlock("pub fn $memberName(mut self, input: $input) -> Self") {
             rust(
                 """
                 let mut v = self.$memberName.unwrap_or_default();
@@ -217,12 +223,19 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
+        val k = when (coreType.key) {
+            is RustType.String,
+            is RustType.Box -> "impl Into<${coreType.key.render(true)}>"
+            else -> "${coreType.key.render(true)}"
+        }
+        val v = when (coreType.member) {
+            is RustType.String,
+            is RustType.Box -> "impl Into<${coreType.member.render(true)}>"
+            else -> "${coreType.member.render(true)}"
+        }
+
         rustBlock(
-            "pub fn $memberName(mut self, k: impl Into<${coreType.key.render(true)}>, v: impl Into<${
-            coreType.member.render(
-                true
-            )
-            }>) -> Self"
+            "pub fn $memberName(mut self, k: $k, v: $v) -> Self"
         ) {
             rust(
                 """

@@ -22,10 +22,16 @@ class FluentClientCore(private val model: Model) {
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model)
-        rustBlock("pub fn $memberName(mut self, inp: impl Into<${coreType.member.render(true)}>) -> Self") {
+        val input = when (coreType.member) {
+            is RustType.String,
+            is RustType.Box -> "impl Into<${coreType.member.render(true)}>"
+            else -> "${coreType.member.render(true)}"
+        }
+
+        rustBlock("pub fn $memberName(mut self, input: $input) -> Self") {
             rust(
                 """
-                self.inner = self.inner.$memberName(inp);
+                self.inner = self.inner.$memberName(input);
                 self
                 """
             )
@@ -38,10 +44,18 @@ class FluentClientCore(private val model: Model) {
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model)
-        val k = coreType.key
-        val v = coreType.member
+        val k = when (coreType.key) {
+            is RustType.String,
+            is RustType.Box -> "impl Into<${coreType.key.render()}>"
+            else -> "${coreType.key.render()}"
+        }
+        val v = when (coreType.member) {
+            is RustType.String,
+            is RustType.Box -> "impl Into<${coreType.member.render()}>"
+            else -> "${coreType.member.render()}"
+        }
 
-        rustBlock("pub fn $memberName(mut self, k: impl Into<${k.render()}>, v: impl Into<${v.render()}>) -> Self") {
+        rustBlock("pub fn $memberName(mut self, k: $k, v: $v) -> Self") {
             rust(
                 """
                 self.inner = self.inner.$memberName(k, v);
