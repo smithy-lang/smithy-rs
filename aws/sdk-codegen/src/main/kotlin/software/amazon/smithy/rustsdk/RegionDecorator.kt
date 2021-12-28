@@ -77,7 +77,7 @@ class RegionDecorator : RustCodegenDecorator {
         codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + RegionProviderConfig(codegenContext)
+        return baseCustomizations + RegionProviderConfig(codegenContext.runtimeConfig)
     }
 
     override fun operationCustomizations(
@@ -96,8 +96,8 @@ class RegionDecorator : RustCodegenDecorator {
     }
 }
 
-class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val region = region(codegenContext.runtimeConfig)
+class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
+    private val region = region(runtimeConfig)
     private val codegenScope = arrayOf("Region" to region.member("Region"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
