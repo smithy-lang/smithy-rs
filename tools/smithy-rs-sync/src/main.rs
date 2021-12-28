@@ -125,7 +125,7 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
             find_handwritten_files_and_folders(aws_sdk, &build_artifacts)?;
         if !handwritten_files_in_generated_sdk_folder.is_empty() {
             bail!(
-                "found one or more 'handwritten' files/folders in generated code: {:#?}",
+                "found one or more 'handwritten' files/folders in generated code: {:#?}\nhint: if this file is newly generated, remove it from .handwritten",
                 handwritten_files_in_generated_sdk_folder
             );
         }
