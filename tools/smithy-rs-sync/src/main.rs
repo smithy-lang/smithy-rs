@@ -59,20 +59,15 @@ pub(crate) use here;
 /// --smithy-rs /Users/zhessler/Documents/smithy-rs-test/ \
 /// --aws-sdk /Users/zhessler/Documents/aws-sdk-rust-test/
 /// ```
-fn main() {
+fn main() -> Result<()> {
     let Opt {
         smithy_rs,
         aws_sdk,
         branch,
     } = Opt::from_args();
 
-    match sync_aws_sdk_with_smithy_rs(&smithy_rs, &aws_sdk, &branch) {
-        Ok(_) => std::process::exit(0),
-        Err(e) => {
-            eprintln!("Sync failed with error: {:?}", e);
-            std::process::exit(1);
-        }
-    }
+    sync_aws_sdk_with_smithy_rs(&smithy_rs, &aws_sdk, &branch)
+        .map_err(|e| e.context("The sync failed"))
 }
 
 /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
