@@ -128,6 +128,24 @@ fun RustType.qualifiedName(): String {
     return "$namespace$name"
 }
 
+fun RustType.implInto(fullyQualified: Boolean = true): String {
+    return "impl Into<${this.render(fullyQualified)}>"
+}
+
+fun RustType.asArgument(name: String): Argument {
+    return when (this) {
+        is RustType.String,
+        is RustType.Box -> Argument(
+            "$name: ${this.implInto()}",
+            "$name.into()",
+        )
+        else -> Argument(
+            "$name: ${this.render()}",
+            name,
+        )
+    }
+}
+
 /**
  * Render this type, including references and generic parameters.
  * - To generate something like `std::collections::HashMap<String, String>`, use this function
@@ -340,3 +358,5 @@ sealed class Attribute {
         }
     }
 }
+
+data class Argument(val argument: String, val value: String)
