@@ -50,17 +50,6 @@ pub fn find_handwritten_files_and_folders(
     eprintln!("\tloading dotfile at {}", dotfile_path.display());
     let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path).context(here!())?;
 
-    let dotfile_is_marked_as_handwritten = handwritten_files
-        .is_handwritten(&dotfile_path)
-        .expect("file must exist because we just checked it");
-
-    if !dotfile_is_marked_as_handwritten {
-        eprintln!(
-            "warning: your handwritten dotfile at {} isn't marked as handwritten, is this intentional?",
-            dotfile_path.display()
-        );
-    }
-
     let files: Vec<_> = handwritten_files
         .handwritten_files_and_folders_iter(build_artifacts_path)
         .context(here!())?
@@ -113,8 +102,20 @@ enum FileKind {
 impl<'file> HandwrittenFiles<'file> {
     pub fn from_dotfile(dotfile_path: &'file Path) -> Result<Self, HandwrittenFilesError> {
         let files_and_folders = gitignore::File::new(dotfile_path)?;
+        let handwritten_files = Self { files_and_folders };
 
-        Ok(Self { files_and_folders })
+        let dotfile_is_marked_as_handwritten = handwritten_files
+            .is_handwritten(Path::new(HANDWRITTEN_DOTFILE))
+            .expect("file must exist because we just checked it");
+
+        if !dotfile_is_marked_as_handwritten {
+            eprintln!(
+                "warning: your handwritten dotfile at {} isn't marked as handwritten, is this intentional?",
+                dotfile_path.display()
+            );
+        }
+
+        Ok(handwritten_files)
     }
 
     pub fn is_handwritten(&self, path: &'file Path) -> Result<bool, HandwrittenFilesError> {
