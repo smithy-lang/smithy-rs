@@ -9,6 +9,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.PaginatedIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.traits.IdempotencyTokenTrait
+import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -20,23 +22,52 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.PANIC
+import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-class PaginatorGenerator(
+// TODO(https://github.com/awslabs/smithy-rs/issues/1013) Support pagination when the idempotency trait is present
+fun OperationShape.isPaginated(model: Model) =
+    hasTrait<PaginatedTrait>() && inputShape(model)
+        .findMemberWithTrait<IdempotencyTokenTrait>(model) == null
+
+class PaginatorGenerator private constructor(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     service: ServiceShape,
     operation: OperationShape,
     private val generics: ClientGenerics
 ) {
+
+    companion object {
+        fun paginatorType(
+            codegenContext: CodegenContext,
+            generics: ClientGenerics,
+            operationShape: OperationShape
+        ): RuntimeType? {
+            return if (operationShape.isPaginated(codegenContext.model)) {
+                PaginatorGenerator(
+                    codegenContext.model,
+                    codegenContext.symbolProvider,
+                    codegenContext.serviceShape,
+                    operationShape,
+                    generics
+                ).paginatorType()
+            } else {
+                null
+            }
+        }
+    }
+
     private val paginatorName = "${operation.id.name.toPascalCase()}Paginator"
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val idx = PaginatedIndex.of(model)
@@ -50,7 +81,7 @@ class PaginatorGenerator(
 
     private val outputType = operation.outputShape(model)
 
-    fun paginatorType(): RuntimeType = RuntimeType.forInlineFun(
+    private fun paginatorType(): RuntimeType = RuntimeType.forInlineFun(
         paginatorName,
         module,
         generate()
@@ -181,7 +212,8 @@ class PaginatorGenerator(
     /** Generate a `.items()` function to expose flattened pagination when modeled */
     private fun itemsFn(): Writable = writable {
         itemsPaginator()?.also { itemPaginatorType ->
-            val documentedPath = paginationInfo.itemsMemberPath.joinToString(".") { symbolProvider.toMemberName(it) }
+            val documentedPath =
+                paginationInfo.itemsMemberPath.joinToString(".") { symbolProvider.toMemberName(it) }
             rustTemplate(
                 """
                 /// Create a flattened paginator

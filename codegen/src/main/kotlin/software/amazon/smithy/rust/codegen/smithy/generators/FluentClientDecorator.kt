@@ -9,7 +9,6 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -39,7 +38,6 @@ import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -264,7 +262,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
 }
 
 class FluentClientGenerator(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val generics: ClientGenerics = ClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
@@ -369,7 +367,7 @@ class FluentClientGenerator(
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
                 val fullPath = "crate::client::fluent_builders::$name"
-                val maybePaginated = if (operation.hasTrait<PaginatedTrait>()) {
+                val maybePaginated = if (operation.isPaginated(model)) {
                     "\n/// This operation supports pagination. See [`paginate()`]($fullPath::paginate)."
                 } else ""
                 rust(
@@ -468,8 +466,7 @@ class FluentClientGenerator(
                             .copy(name = "result::SdkError"),
                         "client" to clientDep.asType(),
                     )
-                    if (operation.hasTrait<PaginatedTrait>()) {
-                        val paginatorType = PaginatorGenerator(model, symbolProvider, serviceShape, operation, generics).paginatorType()
+                    PaginatorGenerator.paginatorType(codegenContext, generics, operation)?.also { paginatorType ->
                         rustTemplate(
                             """
                             /// Create a paginator for this request
