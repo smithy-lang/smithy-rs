@@ -112,7 +112,7 @@ class PaginatorGenerator private constructor(
 
     /** Generate the paginator struct & impl **/
     private fun generate() = writable {
-        val outputTokenLens = LensGenerator(model, symbolProvider).generateReferentialLens(
+        val outputTokenLens = NestedAccessorGenerator(symbolProvider).generateBorrowingAccessor(
             outputType,
             paginationInfo.outputTokenMemberPath
         )
@@ -141,8 +141,8 @@ class PaginatorGenerator private constructor(
 
                 /// Create the pagination stream
                 ///
-                /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next()`](tokio_stream::StreamExt::next)).
-                pub async fn send(self) -> impl #{Stream}<Item = std::result::Result<#{Output}, #{SdkError}<#{Error}>>> + Unpin
+                /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next)).
+                pub fn send(self) -> impl #{Stream}<Item = std::result::Result<#{Output}, #{SdkError}<#{Error}>>> + Unpin
                 where
                     R::Policy: #{client}::bounds::SmithyRetryPolicy<
                         #{Input}OperationOutputAlias,
@@ -246,10 +246,10 @@ class PaginatorGenerator private constructor(
                 impl ${generics.inst} ${paginatorName}Items${generics.inst} where #{bounds:W} {
                     /// Create the pagination stream
                     ///
-                    /// _Note: No requests will be dispatched until the stream is used (eg. with [`.next()`](tokio_stream::StreamExt::next))._
+                    /// _Note: No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next))._
                     ///
                     /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](tokio_stream::StreamExt::collect).
-                    pub async fn send(self) -> impl #{Stream}<Item = std::result::Result<${itemType()}, #{SdkError}<#{Error}>>> + Unpin
+                    pub fn send(self) -> impl #{Stream}<Item = std::result::Result<${itemType()}, #{SdkError}<#{Error}>>> + Unpin
                     where
                         R::Policy: #{client}::bounds::SmithyRetryPolicy<
                             #{Input}OperationOutputAlias,
@@ -257,12 +257,12 @@ class PaginatorGenerator private constructor(
                             #{Error},
                             #{Input}OperationRetryAlias
                         >, {
-                        #{fn_stream}::TryFlatMap::new(self.0.send().await).flat_map(|page|#{extract_items}(page).unwrap_or_default().into_iter())
+                        #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page|#{extract_items}(page).unwrap_or_default().into_iter())
                     }
                 }
 
                 """,
-                "extract_items" to LensGenerator(model, symbolProvider).generateOwningLens(
+                "extract_items" to NestedAccessorGenerator(symbolProvider).generateOwnedAccessor(
                     outputType,
                     paginationInfo.itemsMemberPath
                 ),

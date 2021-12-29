@@ -268,8 +268,8 @@ task("finalizeSdk") {
         "relocateRuntime",
         "relocateAwsRuntime",
         "relocateExamples",
-        "generateDocs" // ,
-        // "fixManifests"
+        "generateDocs",
+        "fixManifests"
     )
 }
 

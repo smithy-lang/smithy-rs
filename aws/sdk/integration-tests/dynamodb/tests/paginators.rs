@@ -31,8 +31,7 @@ async fn paginators_pass_args() {
         .table_name("test-table")
         .paginate()
         .page_size(32)
-        .send()
-        .await;
+        .send();
     let _ = paginator.next().await;
     let request = request.expect_request();
     let body = request.body().bytes().expect("data is loaded");
@@ -95,8 +94,7 @@ async fn paginators_loop_until_completion() {
         .table_name("test-table")
         .paginate()
         .page_size(32)
-        .send()
-        .await;
+        .send();
     assert_eq!(conn.requests().len(), 0);
     let first_page = paginator
         .try_next()
@@ -159,8 +157,7 @@ async fn paginators_handle_errors() {
         .paginate()
         .page_size(32)
         .items()
-        .send()
-        .await;
+        .send();
     assert_eq!(
         rows.try_next()
             .await

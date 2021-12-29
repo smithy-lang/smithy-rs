@@ -2,7 +2,10 @@
 
 Smithy [models paginated responses](https://awslabs.github.io/smithy/1.0/spec/core/behavior-traits.html#paginated-trait)
 . Customers of Smithy generated code & the Rust SDK will have an improved user experience if code is generated to
-support this.
+support this. Fundamentally, paginators are a way to automatically make a series of requests with the SDK, where subsequent
+requests automatically forward output from the previous responses. There is nothing a paginator does that a user could not do manually,
+they merely simplify the common task of interacting with paginated APIs. **Specifically, a paginator will resend the orginal request
+but with `inputToken` updated to the value of the previous `outputToken`.
 
 In this RFC, we propose modeling paginated data as
 a  [`Stream`](https://docs.rs/tokio-stream/0.1.5/tokio_stream/#traits) of output shapes.
@@ -63,9 +66,12 @@ while let Some(next_page) = pages.try_next().await? {
 }
 ```
 
-Paginators define a single public method `send()`. This method
+Paginators define a public method `send()`. This method
 returns `impl Stream<Item=Result<OperationOutput, OperationError>`. This uses `FnStream` defined in the `aws-smithy-async` crate which
 enables demand driven execution of a closure. A rendezvous channel is used which well block on `send` until demand exists.
+
+When modeled by Smithy, `page_size` which automatically sets the appropriate page_size parameter and `items()` which returns an
+automatically flattened paginator are also generated.
 ```rust
 // Generated paginator for ListTables
 impl<C, M, R> ListTablesPaginator<C, M, R>
@@ -86,7 +92,7 @@ impl<C, M, R> ListTablesPaginator<C, M, R>
 
   /// Create the pagination stream
   ///
-  /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next()`](tokio_stream::StreamExt::next)).
+  /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next)).
   pub async fn send(
     self,
   ) -> impl tokio_stream::Stream<

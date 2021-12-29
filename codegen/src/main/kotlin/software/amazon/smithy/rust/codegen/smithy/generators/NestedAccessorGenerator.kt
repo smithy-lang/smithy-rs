@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -22,10 +21,13 @@ import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.protocols.lensName
 
-// Generate recursive field accessors
-class LensGenerator(private val model: Model, private val symbolProvider: RustSymbolProvider) {
+/** Generator for accessing nested fields through optional values **/
+class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
     private val module = RustModule("lens", RustMetadata(public = false), "Generated accessors for nested fields")
-    fun generateOwningLens(root: StructureShape, path: List<MemberShape>): RuntimeType {
+    /**
+     * Generate an accessor on [root] that consumes [root] and returns an `Option<T>` for the nested item
+     */
+    fun generateOwnedAccessor(root: StructureShape, path: List<MemberShape>): RuntimeType {
         check(path.isNotEmpty()) { "must not be called on an empty path" }
         val baseType = symbolProvider.toSymbol(path.last())
         val fnName = symbolProvider.lensName("", root, path)
@@ -41,9 +43,12 @@ class LensGenerator(private val model: Model, private val symbolProvider: RustSy
         }
     }
 
-    fun generateReferentialLens(root: StructureShape, path: List<MemberShape>): RuntimeType {
+    /**
+     * Generate an accessor on [root] that takes a reference and returns an `Option<&T>` for the nested item
+     */
+    fun generateBorrowingAccessor(root: StructureShape, path: List<MemberShape>): RuntimeType {
         check(path.isNotEmpty()) { "must not be called on an empty path" }
-        val baseType = symbolProvider.toSymbol(path.last())
+        val baseType = symbolProvider.toSymbol(path.last()).makeOptional()
         val fnName = symbolProvider.lensName("ref", root, path)
         val referencedType = baseType.mapRustType { (it as RustType.Option).referenced(lifetime = null) }
         return RuntimeType.forInlineFun(fnName, module) {
@@ -76,6 +81,7 @@ class LensGenerator(private val model: Model, private val symbolProvider: RustSy
             } else {
                 rust("let input = input.${symbolProvider.toMemberName(head)};")
             }
+            // Note: although _this_ function is recursive, it generates a series of `if let` statements with early returns.
             generateBody(path.drop(1), reference)(this)
         }
     }
