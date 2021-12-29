@@ -31,7 +31,7 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
             chan: tx,
         },
         Receiver {
-            semaphore: semaphore.clone(),
+            semaphore,
             chan: rx,
             needs_permit: false,
         },
