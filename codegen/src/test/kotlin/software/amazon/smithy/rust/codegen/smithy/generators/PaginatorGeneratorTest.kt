@@ -18,13 +18,21 @@ internal class PaginatorGeneratorTest {
 
         @awsJson1_1
         service TestService {
-            operations: [GetFoos]
+            operations: [PaginatedList, PaginatedMap]
         }
 
         @readonly
         @paginated(inputToken: "nextToken", outputToken: "inner.token",
                    pageSize: "maxResults", items: "inner.items")
-        operation GetFoos {
+        operation PaginatedList {
+            input: GetFoosInput,
+            output: GetFoosOutput
+        }
+
+        @readonly
+        @paginated(inputToken: "nextToken", outputToken: "inner.token",
+                   pageSize: "maxResults", items: "inner.mapItems")
+        operation PaginatedMap {
             input: GetFoosInput,
             output: GetFoosOutput
         }
@@ -38,7 +46,10 @@ internal class PaginatorGeneratorTest {
             token: String,
 
             @required
-            items: StringList
+            items: StringList,
+
+            @required
+            mapItems: StringMap
         }
 
         structure GetFoosOutput {
@@ -47,6 +58,11 @@ internal class PaginatorGeneratorTest {
 
         list StringList {
             member: String
+        }
+
+        map StringMap {
+            key: String,
+            value: Integer
         }
     """.asSmithyModel()
 

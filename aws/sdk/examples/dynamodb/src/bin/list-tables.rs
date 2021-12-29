@@ -51,8 +51,8 @@ async fn main() -> Result<(), Error> {
 
     let client = Client::new(&shared_config);
 
-    let pages = client.list_tables().paginate().items().send();
-    let table_names = pages.collect::<Result<Vec<_>, _>>().await?;
+    let paginator = client.list_tables().paginate().items().send().await;
+    let table_names = paginator.collect::<Result<Vec<_>, _>>().await?;
 
     println!("Tables:");
 
