@@ -69,6 +69,30 @@ sealed class RustType {
         override val name: kotlin.String = "HashMap"
         override val namespace = "std::collections"
 
+        fun formattedKey() = when (key) {
+            is RustType.String,
+            is RustType.Box -> Pair(
+                "k: ${key.implInto()}",
+                "k.into()",
+            )
+            else -> Pair(
+                "k: ${key.render()}",
+                "k",
+            )
+        }
+
+        fun formattedMember() = when (member) {
+            is RustType.String,
+            is RustType.Box -> Pair(
+                "v: ${member.implInto()}",
+                "v.into()",
+            )
+            else -> Pair(
+                "v: ${member.render()}",
+                "v",
+            )
+        }
+
         companion object {
             val RuntimeType = RuntimeType("HashMap", dependency = null, namespace = "std::collections")
         }
@@ -112,6 +136,18 @@ sealed class RustType {
     data class Vec(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = "Vec"
         override val namespace = "std::vec"
+
+        fun formattedMember() = when (member) {
+            is RustType.String,
+            is RustType.Box -> Pair(
+                "input: ${member.implInto()}",
+                "input.into()",
+            )
+            else -> Pair(
+                "input: ${member.render()}",
+                "input",
+            )
+        }
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
@@ -126,6 +162,10 @@ sealed class RustType {
 fun RustType.qualifiedName(): String {
     val namespace = this.namespace?.let { "$it::" } ?: ""
     return "$namespace$name"
+}
+
+fun RustType.implInto(fullyQualified: Boolean = true): String {
+    return "impl Into<${this.render(fullyQualified)}>"
 }
 
 /**

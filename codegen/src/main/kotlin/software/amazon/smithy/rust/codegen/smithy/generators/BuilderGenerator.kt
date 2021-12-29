@@ -199,17 +199,13 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
-        val input = when (coreType.member) {
-            is RustType.String,
-            is RustType.Box -> "impl Into<${coreType.member.render(true)}>"
-            else -> "${coreType.member.render(true)}"
-        }
+        val (input_param, input_usage) = coreType.formattedMember()
 
-        rustBlock("pub fn $memberName(mut self, input: $input) -> Self") {
+        rustBlock("pub fn $memberName(mut self, $input_param) -> Self") {
             rust(
                 """
                 let mut v = self.$memberName.unwrap_or_default();
-                v.push(input);
+                v.push($input_usage);
                 self.$memberName = Some(v);
                 self
                 """
@@ -223,24 +219,16 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
-        val k = when (coreType.key) {
-            is RustType.String,
-            is RustType.Box -> "impl Into<${coreType.key.render(true)}>"
-            else -> "${coreType.key.render(true)}"
-        }
-        val v = when (coreType.member) {
-            is RustType.String,
-            is RustType.Box -> "impl Into<${coreType.member.render(true)}>"
-            else -> "${coreType.member.render(true)}"
-        }
+        val (k_param, k_usage) = coreType.formattedKey()
+        val (v_param, v_usage) = coreType.formattedMember()
 
         rustBlock(
-            "pub fn $memberName(mut self, k: $k, v: $v) -> Self"
+            "pub fn $memberName(mut self, $k_param, $v_param) -> Self"
         ) {
             rust(
                 """
                 let mut hash_map = self.$memberName.unwrap_or_default();
-                hash_map.insert(k, v);
+                hash_map.insert($k_usage, $v_usage);
                 self.$memberName = Some(hash_map);
                 self
                 """

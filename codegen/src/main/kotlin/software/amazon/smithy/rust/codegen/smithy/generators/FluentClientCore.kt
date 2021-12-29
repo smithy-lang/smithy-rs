@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 
@@ -22,16 +21,12 @@ class FluentClientCore(private val model: Model) {
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model)
-        val input = when (coreType.member) {
-            is RustType.String,
-            is RustType.Box -> "impl Into<${coreType.member.render(true)}>"
-            else -> "${coreType.member.render(true)}"
-        }
+        val (input_param, input_usage) = coreType.formattedMember()
 
-        rustBlock("pub fn $memberName(mut self, input: $input) -> Self") {
+        rustBlock("pub fn $memberName(mut self, $input_param) -> Self") {
             rust(
                 """
-                self.inner = self.inner.$memberName(input);
+                self.inner = self.inner.$memberName($input_usage);
                 self
                 """
             )
@@ -44,21 +39,13 @@ class FluentClientCore(private val model: Model) {
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model)
-        val k = when (coreType.key) {
-            is RustType.String,
-            is RustType.Box -> "impl Into<${coreType.key.render()}>"
-            else -> "${coreType.key.render()}"
-        }
-        val v = when (coreType.member) {
-            is RustType.String,
-            is RustType.Box -> "impl Into<${coreType.member.render()}>"
-            else -> "${coreType.member.render()}"
-        }
+        val (k_param, k_usage) = coreType.formattedKey()
+        val (v_param, v_usage) = coreType.formattedMember()
 
-        rustBlock("pub fn $memberName(mut self, k: $k, v: $v) -> Self") {
+        rustBlock("pub fn $memberName(mut self, $k_param, $v_param) -> Self") {
             rust(
                 """
-                self.inner = self.inner.$memberName(k, v);
+                self.inner = self.inner.$memberName($k_usage, $v_usage);
                 self
                 """
             )
