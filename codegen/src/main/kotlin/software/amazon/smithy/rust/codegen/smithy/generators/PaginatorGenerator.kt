@@ -205,11 +205,11 @@ class PaginatorGenerator private constructor(
         return when (type) {
             is RustType.Vec -> type.member.render(true)
             is RustType.HashMap -> "(${type.key.render(true)}, ${type.member.render(true)})"
-            else -> PANIC("only HashMaps or Vecs may be used item pagination.")
+            else -> PANIC("only HashMaps or Vecs may be used for item pagination.")
         }
     }
 
-    /** Generate a `.items()` function to expose flattened pagination when modeled */
+    /** Generate an `.items()` function to expose flattened pagination when modeled */
     private fun itemsFn(): Writable = writable {
         itemsPaginator()?.also { itemPaginatorType ->
             val documentedPath =

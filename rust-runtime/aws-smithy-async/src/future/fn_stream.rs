@@ -11,10 +11,10 @@ use std::task::{Context, Poll};
 use tokio_stream::{Iter, Once, Stream};
 
 pin_project! {
-    /// Utility to drive a string with an async function and a channel.
+    /// Utility to drive a stream with an async function and a channel.
     ///
     /// The closure is passed a reference to a `Sender` which acts as a rendezvous channel. Messages
-    /// sent the sender will be emitted to the stream. Because the stream is 1-bounded, the function
+    /// sent to the sender will be emitted to the stream. Because the stream is 1-bounded, the function
     /// will not proceed until the stream is read.
     ///
     /// This utility is used by generated paginators to generate a stream of paginated results.
