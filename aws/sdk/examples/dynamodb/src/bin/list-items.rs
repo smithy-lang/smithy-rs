@@ -65,6 +65,7 @@ async fn main() -> Result<(), Error> {
         .paginate()
         .items()
         .send()
+        .await
         .collect()
         .await;
 
