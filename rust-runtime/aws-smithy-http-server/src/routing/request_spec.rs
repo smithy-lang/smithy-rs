@@ -107,14 +107,13 @@ impl From<&PathSpec> for Regex {
                 .map(|segment_spec| match segment_spec {
                     PathSegment::Literal(literal) => literal,
                     // TODO(https://github.com/awslabs/smithy/issues/975) URL spec says it should be ASCII but this regex accepts UTF-8:
-                    // `*` instead of `+` because the empty string `""` can be bound to a label.
-                    PathSegment::Label => "[^/]*",
+                    PathSegment::Label => "[^/]+",
                     PathSegment::Greedy => ".*",
                 })
                 .fold(String::new(), |a, b| a + sep + b)
         };
 
-        Regex::new(&format!("{}$", re)).unwrap()
+        Regex::new(&format!("^{}$", re)).unwrap()
     }
 }
 
@@ -158,7 +157,8 @@ impl RequestSpec {
     ///
     /// [the TypeScript sSDK is implementing]: https://github.com/awslabs/smithy-typescript/blob/d263078b81485a6a2013d243639c0c680343ff47/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.ts#L59.
     pub(super) fn rank(&self) -> usize {
-        self.uri_spec.path_and_query.path_segments.0.len() + self.uri_spec.path_and_query.query_segments.0.len()
+        (1000 * self.uri_spec.path_and_query.path_segments.0.len())
+            + self.uri_spec.path_and_query.query_segments.0.len()
     }
 
     pub(super) fn matches<B>(&self, req: &Request<B>) -> Match {
