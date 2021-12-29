@@ -66,13 +66,26 @@ fn main() {
         branch,
     } = Opt::from_args();
 
-    if let Err(e) = sync_aws_sdk_with_smithy_rs(&smithy_rs, &aws_sdk, &branch) {
-        eprintln!("Sync failed with error: {:?}", e);
-    };
+    match sync_aws_sdk_with_smithy_rs(&smithy_rs, &aws_sdk, &branch) {
+        Ok(_) => std::process::exit(0),
+        Err(e) => {
+            eprintln!("Sync failed with error: {:?}", e);
+            std::process::exit(1);
+        }
+    }
 }
 
 /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
 fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -> Result<()> {
+    eprintln!(
+        "aws-sdk-rust path:\t{}",
+        aws_sdk.canonicalize().context(here!())?.display()
+    );
+    eprintln!(
+        "smithy-rs path:\t{}",
+        smithy_rs.canonicalize().context(here!())?.display()
+    );
+
     // Open the repositories we'll be working with
     let smithy_rs_repo = Repository::open(smithy_rs).context("couldn't open smithy-rs repo")?;
     let aws_sdk_repo = Repository::open(aws_sdk).context("couldn't open aws-sdk-rust repo")?;
