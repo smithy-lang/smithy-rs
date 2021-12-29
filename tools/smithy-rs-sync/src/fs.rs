@@ -12,19 +12,31 @@ use std::path::{Path, PathBuf};
 pub static HANDWRITTEN_DOTFILE: &str = ".handwritten";
 
 pub fn delete_all_generated_files_and_folders(directory: &Path) -> anyhow::Result<()> {
+    eprintln!("\tchecking for 'generated' files and folders in the current SDK...");
     let dotfile_path = directory.join(HANDWRITTEN_DOTFILE);
+    eprintln!("\tloading dotfile at {}", dotfile_path.display());
     let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path).context(here!())?;
-
-    for path in handwritten_files
+    let generated_files = handwritten_files
         .generated_files_and_folders_iter(directory)
-        .context(here!())?
-    {
+        .context(here!())?;
+
+    let mut file_count = 0;
+    let mut folder_count = 0;
+
+    for path in generated_files {
         if path.is_file() {
-            std::fs::remove_file(path)?
+            std::fs::remove_file(path)?;
+            file_count += 1;
         } else if path.is_dir() {
-            std::fs::remove_dir_all(path)?
+            std::fs::remove_dir_all(path)?;
+            folder_count += 1;
         };
     }
+
+    eprintln!(
+        "\tdeleted {} 'generated' files and {} folders in the current SDK folder",
+        file_count, folder_count
+    );
 
     Ok(())
 }
@@ -33,13 +45,31 @@ pub fn find_handwritten_files_and_folders(
     aws_sdk_path: &Path,
     build_artifacts_path: &Path,
 ) -> anyhow::Result<Vec<PathBuf>> {
+    eprintln!("\tchecking for 'handwritten' files and folders in the generated SDK folder...");
     let dotfile_path = aws_sdk_path.join(HANDWRITTEN_DOTFILE);
+    eprintln!("\tloading dotfile at {}", dotfile_path.display());
     let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path).context(here!())?;
 
-    let files = handwritten_files
+    let dotfile_is_marked_as_handwritten = handwritten_files
+        .is_handwritten(&dotfile_path)
+        .expect("file must exist because we just checked it");
+
+    if !dotfile_is_marked_as_handwritten {
+        eprintln!(
+            "warning: your handwritten dotfile at {} isn't marked as handwritten, is this intentional?",
+            dotfile_path.display()
+        );
+    }
+
+    let files: Vec<_> = handwritten_files
         .handwritten_files_and_folders_iter(build_artifacts_path)
         .context(here!())?
         .collect();
+
+    eprintln!(
+        "\tfound {} 'handwritten' files and folders in the generated SDK folder",
+        files.len()
+    );
 
     Ok(files)
 }
