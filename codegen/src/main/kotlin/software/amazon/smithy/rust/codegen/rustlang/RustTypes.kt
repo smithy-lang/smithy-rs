@@ -69,30 +69,6 @@ sealed class RustType {
         override val name: kotlin.String = "HashMap"
         override val namespace = "std::collections"
 
-        fun formattedKey() = when (key) {
-            is RustType.String,
-            is RustType.Box -> Pair(
-                "k: ${key.implInto()}",
-                "k.into()",
-            )
-            else -> Pair(
-                "k: ${key.render()}",
-                "k",
-            )
-        }
-
-        fun formattedMember() = when (member) {
-            is RustType.String,
-            is RustType.Box -> Pair(
-                "v: ${member.implInto()}",
-                "v.into()",
-            )
-            else -> Pair(
-                "v: ${member.render()}",
-                "v",
-            )
-        }
-
         companion object {
             val RuntimeType = RuntimeType("HashMap", dependency = null, namespace = "std::collections")
         }
@@ -136,18 +112,6 @@ sealed class RustType {
     data class Vec(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = "Vec"
         override val namespace = "std::vec"
-
-        fun formattedMember() = when (member) {
-            is RustType.String,
-            is RustType.Box -> Pair(
-                "input: ${member.implInto()}",
-                "input.into()",
-            )
-            else -> Pair(
-                "input: ${member.render()}",
-                "input",
-            )
-        }
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
@@ -166,6 +130,20 @@ fun RustType.qualifiedName(): String {
 
 fun RustType.implInto(fullyQualified: Boolean = true): String {
     return "impl Into<${this.render(fullyQualified)}>"
+}
+
+fun RustType.asArgument(name: String): Argument {
+    return when (this) {
+        is RustType.String,
+        is RustType.Box -> Argument(
+            "$name: ${this.implInto()}",
+            "$name.into()",
+        )
+        else -> Argument(
+            "$name: ${this.render()}",
+            name,
+        )
+    }
 }
 
 /**
@@ -380,3 +358,5 @@ sealed class Attribute {
         }
     }
 }
+
+data class Argument(val argument: String, val value: String)
