@@ -67,5 +67,6 @@ fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDel
             """
         )
     }
+    project.lib { it.rust("pub use config::Config;") }
     return project
 }

@@ -41,11 +41,6 @@ data class CodegenContext(
      */
     val protocol: ShapeId,
     /**
-     * The name of the cargo crate to generate e.g. `aws-sdk-s3`
-     * This is loaded from the smithy-build.json during codegen.
-     */
-    val moduleName: String,
-    /**
      * Settings loaded from smithy-build.json
      */
     val settings: RustSettings,
@@ -63,7 +58,13 @@ data class CodegenContext(
         protocol: ShapeId,
         settings: RustSettings,
         mode: CodegenMode,
-    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings.moduleName, settings, mode)
+    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings, mode)
+
+    /**
+     * The name of the cargo crate to generate e.g. `aws-sdk-s3`
+     * This is loaded from the smithy-build.json during codegen.
+     */
+    val moduleName: String by lazy { settings.moduleName }
 
     /**
      * A moduleName for a crate uses kebab-case. When you want to `use` a crate in Rust code,
