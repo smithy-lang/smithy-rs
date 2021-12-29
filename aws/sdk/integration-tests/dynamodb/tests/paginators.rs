@@ -42,7 +42,7 @@ async fn paginators_pass_args() {
     ));
 }
 
-fn mk_reqest(body: &'static str) -> http::Request<SdkBody> {
+fn mk_request(body: &'static str) -> http::Request<SdkBody> {
     http::Request::builder()
         .uri("https://dynamodb.us-east-1.amazonaws.com/")
         .body(SdkBody::from(body))
@@ -57,7 +57,7 @@ fn mk_response(body: &'static str) -> http::Response<SdkBody> {
 async fn paginators_loop_until_completion() {
     let conn = TestConnection::new(vec![
         (
-            mk_reqest(r#"{"TableName":"test-table","Limit":32}"#),
+            mk_request(r#"{"TableName":"test-table","Limit":32}"#),
             mk_response(
                 r#"{
                             "Count": 1,
@@ -73,7 +73,7 @@ async fn paginators_loop_until_completion() {
             ),
         ),
         (
-            mk_reqest(
+            mk_request(
                 r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
             ),
             mk_response(
@@ -135,7 +135,7 @@ async fn paginators_loop_until_completion() {
 async fn paginators_handle_errors() {
     // LastEvaluatedKey is set but there is only one response in the test connection
     let conn = TestConnection::new(vec![(
-        mk_reqest(r#"{"TableName":"test-table","Limit":32}"#),
+        mk_request(r#"{"TableName":"test-table","Limit":32}"#),
         mk_response(
             r#"{
                             "Count": 1,
