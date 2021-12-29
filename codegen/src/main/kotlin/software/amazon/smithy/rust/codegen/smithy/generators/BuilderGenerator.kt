@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.docs
@@ -120,20 +121,11 @@ class BuilderGenerator(
         member: MemberShape,
         memberName: String
     ) {
-        fun builderConverter(coreType: RustType) = when (coreType) {
-            is RustType.String,
-            is RustType.Box -> "input.into()"
-            else -> "input"
-        }
+        val input = coreType.asArgument("input")
 
-        val signature = when (coreType) {
-            is RustType.String,
-            is RustType.Box -> "(mut self, input: impl Into<${coreType.render(true)}>) -> Self"
-            else -> "(mut self, input: ${coreType.render(true)}) -> Self"
-        }
         writer.documentShape(member, model)
-        writer.rustBlock("pub fn $memberName$signature") {
-            write("self.$memberName = Some(${builderConverter(coreType)});")
+        writer.rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
+            write("self.$memberName = Some(${input.value});")
             write("self")
         }
     }
@@ -199,11 +191,13 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
-        rustBlock("pub fn $memberName(mut self, input: impl Into<${coreType.member.render(true)}>) -> Self") {
+        val input = coreType.member.asArgument("input")
+
+        rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
             rust(
                 """
                 let mut v = self.$memberName.unwrap_or_default();
-                v.push(input.into());
+                v.push(${input.value});
                 self.$memberName = Some(v);
                 self
                 """
@@ -217,17 +211,16 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
+        val k = coreType.key.asArgument("k")
+        val v = coreType.member.asArgument("v")
+
         rustBlock(
-            "pub fn $memberName(mut self, k: impl Into<${coreType.key.render(true)}>, v: impl Into<${
-            coreType.member.render(
-                true
-            )
-            }>) -> Self"
+            "pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self"
         ) {
             rust(
                 """
                 let mut hash_map = self.$memberName.unwrap_or_default();
-                hash_map.insert(k.into(), v.into());
+                hash_map.insert(${k.value}, ${v.value});
                 self.$memberName = Some(hash_map);
                 self
                 """

@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
@@ -495,14 +496,11 @@ class FluentClientGenerator(
                             is RustType.Vec -> with(core) { renderVecHelper(member, memberName, coreType) }
                             is RustType.HashMap -> with(core) { renderMapHelper(member, memberName, coreType) }
                             else -> {
-                                val signature = when (coreType) {
-                                    is RustType.String,
-                                    is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
-                                    else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
-                                }
+                                val signature = coreType.asArgument("signature")
+
                                 documentShape(member, model)
-                                rustBlock("pub fn $memberName$signature") {
-                                    write("self.inner = self.inner.$memberName(inp);")
+                                rustBlock("pub fn $memberName(mut self, ${signature.argument}) -> Self") {
+                                    write("self.inner = self.inner.$memberName(${signature.value});")
                                     write("self")
                                 }
                             }
