@@ -53,6 +53,10 @@ async fn read_manifests(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Mani
 fn package_versions(manifests: &[Manifest]) -> Result<BTreeMap<String, Version>> {
     let mut versions = BTreeMap::new();
     for manifest in manifests {
+        // ignore workspace manifests
+        if manifest.metadata.get("package").is_none() {
+            continue;
+        }
         let name = manifest.metadata["package"]["name"]
             .as_str()
             .ok_or_else(|| {
