@@ -10,7 +10,7 @@
 //! and coordinate with the receiver.
 //!
 //! Rendezvous channels should be used with care—it's inherently easy to deadlock unless they're being
-//! used from separate tasks or an a coroutine setup (e.g. [`crate::future::FnStream`])
+//! used from separate tasks or an a coroutine setup (e.g. [`crate::future::fn_stream::FnStream`])
 
 use std::sync::Arc;
 use std::task::{Context, Poll};
