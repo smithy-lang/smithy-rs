@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerato
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.inputShape
@@ -394,7 +395,8 @@ class FluentClientGenerator(
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val members: List<MemberShape> = input.allMembers.values.toList()
-
+                val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
+                val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
                 rust(
                     """
                     /// Fluent builder constructing a request to `${operationSymbol.name}`.
@@ -402,9 +404,9 @@ class FluentClientGenerator(
                     """
                 )
                 documentShape(operation, model, autoSuppressMissingDocs = false)
+                baseDerives.copy(derives = derives).render(this)
                 rustTemplate(
                     """
-                    ##[derive(std::fmt::Debug)]
                     pub struct ${operationSymbol.name}#{generics:W} {
                         handle: std::sync::Arc<super::Handle${generics.inst}>,
                         inner: #{Inner}
