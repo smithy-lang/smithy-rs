@@ -59,27 +59,33 @@ pub(crate) use here;
 /// --smithy-rs /Users/zhessler/Documents/smithy-rs-test/ \
 /// --aws-sdk /Users/zhessler/Documents/aws-sdk-rust-test/
 /// ```
-fn main() {
+fn main() -> Result<()> {
     let Opt {
         smithy_rs,
         aws_sdk,
         branch,
     } = Opt::from_args();
 
-    if let Err(e) = sync_aws_sdk_with_smithy_rs(&smithy_rs, &aws_sdk, &branch) {
-        eprintln!("Sync failed with error: {:?}", e);
-    };
+    sync_aws_sdk_with_smithy_rs(&smithy_rs, &aws_sdk, &branch)
+        .map_err(|e| e.context("The sync failed"))
 }
 
 /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
 fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -> Result<()> {
+    // In case these are relative paths, canonicalize them into absolute paths
+    let aws_sdk = aws_sdk.canonicalize().context(here!())?;
+    let smithy_rs = smithy_rs.canonicalize().context(here!())?;
+
+    eprintln!("aws-sdk-rust path:\t{}", aws_sdk.display());
+    eprintln!("smithy-rs path:\t\t{}", smithy_rs.display());
+
     // Open the repositories we'll be working with
-    let smithy_rs_repo = Repository::open(smithy_rs).context("couldn't open smithy-rs repo")?;
-    let aws_sdk_repo = Repository::open(aws_sdk).context("couldn't open aws-sdk-rust repo")?;
+    let smithy_rs_repo = Repository::open(&smithy_rs).context("couldn't open smithy-rs repo")?;
+    let aws_sdk_repo = Repository::open(&aws_sdk).context("couldn't open aws-sdk-rust repo")?;
 
     // Check repo that we're going to be moving the code into to see what commit it was last synced with
     let last_synced_commit =
-        get_last_synced_commit(aws_sdk).context("couldn't get last synced commit")?;
+        get_last_synced_commit(&aws_sdk).context("couldn't get last synced commit")?;
     let commit_revs = commits_to_be_applied(&smithy_rs_repo, &last_synced_commit)
         .context("couldn't build list of commits that need to be synced")?;
 
@@ -116,13 +122,13 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
             )
         })?;
 
-        let build_artifacts = build_sdk(smithy_rs).context("couldn't build SDK")?;
-        clean_out_existing_sdk(aws_sdk)
+        let build_artifacts = build_sdk(&smithy_rs).context("couldn't build SDK")?;
+        clean_out_existing_sdk(&aws_sdk)
             .context("couldn't clean out existing SDK from aws-sdk-rust")?;
 
         // Check that we aren't generating any files that we've marked as "handwritten"
         let handwritten_files_in_generated_sdk_folder =
-            find_handwritten_files_and_folders(aws_sdk, &build_artifacts)?;
+            find_handwritten_files_and_folders(&aws_sdk, &build_artifacts)?;
         if !handwritten_files_in_generated_sdk_folder.is_empty() {
             bail!(
                 "found one or more 'handwritten' files/folders in generated code: {:#?}\nhint: if this file is newly generated, remove it from .handwritten",
@@ -130,7 +136,7 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
             );
         }
 
-        copy_sdk(&build_artifacts, aws_sdk)?;
+        copy_sdk(&build_artifacts, &aws_sdk)?;
         create_mirror_commit(&aws_sdk_repo, &commit)
             .context("couldn't commit SDK changes to aws-sdk-rust")?;
     }
