@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.isEmpty
+import software.amazon.smithy.rust.codegen.rustlang.replaceBareAnchorTagsWithPreTags
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
@@ -45,7 +46,7 @@ class LibRsGenerator(
             }
 
             val libraryDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value ?: settings.moduleName
-            containerDocs(escape(libraryDocs))
+            containerDocs(replaceBareAnchorTagsWithPreTags(escape(libraryDocs)))
             val crateLayout = customizations.map { it.section(LibRsSection.ModuleDocumentation(LibRsSection.CrateOrganization)) }.filter { !it.isEmpty() }
             if (crateLayout.isNotEmpty()) {
                 containerDocs("\n## Crate Organization")

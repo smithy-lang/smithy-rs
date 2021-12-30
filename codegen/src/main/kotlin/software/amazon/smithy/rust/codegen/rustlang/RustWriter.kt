@@ -260,6 +260,9 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: Strin
 /** Escape the [expressionStart] character to avoid problems during formatting */
 fun CodeWriter.escape(text: String): String = text.replace("$expressionStart", "$expressionStart$expressionStart")
 
+/** Convert anchor tags with no `href` attribute into `pre` tags */
+fun CodeWriter.replaceBareAnchorTagsWithPreTags(text: String): String = text.replace(Regex("<a>(.*)</a>"), "<pre>$1</pre>")
+
 /**
  * Write _exactly_ the text as written into the code writer without newlines or formatting
  */
