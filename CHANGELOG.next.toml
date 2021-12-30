@@ -17,6 +17,18 @@ references = ["aws-sdk-rust#348"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
 
+[[aws-sdk-rust]]
+message = "Generated docs should no longer contain links that don't go anywhere"
+references = ["aws-sdk-rust#357"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Generated docs will convert `<a>` tags with no `href` attribute to `<pre>` tags"
+references = ["aws-sdk-rust#357"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
 [[smithy-rs]]
 message = "Made fluent operation structs cloneable"
 references = ["aws-sdk-rust#254"]
