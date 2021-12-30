@@ -134,7 +134,7 @@ impl ProfileSet {
 
     /// Returns the names of the profiles in this profile set
     pub fn profiles(&self) -> impl Iterator<Item=&str> {
-        self.profiles.keys().into_iter().map(|k| k.as_ref())
+        self.profiles.keys().map(String::as_ref)
     }
 
     fn parse(source: Source) -> Result<Self, ProfileParseError> {
@@ -258,7 +258,7 @@ mod test {
 
         let profile_set = ProfileSet::parse(source).expect("profiles loaded");
 
-        let mut profile_names: Vec<&str> = profile_set.profiles().collect();
+        let mut profile_names: Vec<_> = profile_set.profiles().collect();
         profile_names.sort();
         assert_eq!(profile_names, vec!["bar", "foo"]);
     }
