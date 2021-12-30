@@ -397,9 +397,16 @@ class FluentClientGenerator(
                 val members: List<MemberShape> = input.allMembers.values.toList()
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
                 val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
-                rust(
+                val operationInput = symbolProvider.toSymbol(input)
+                val okResponse = symbolProvider.toSymbol(operation.outputShape(model))
+                val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
+                rustTemplate(
                     """
                     /// Fluent builder constructing a request to `${operationSymbol.name}`.
+                    ///
+                    /// - Takes [`${operationInput.name}`]($operationInput)
+                    /// - On success, responds with [`${okResponse.name}`]($okResponse)
+                    /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
                     ///
                     """
                 )
