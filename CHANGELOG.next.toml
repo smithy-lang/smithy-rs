@@ -11,6 +11,12 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "The docs for fluent builders now have easy links to their corresponding Input, Output, and Error structs"
+references = ["aws-sdk-rust#348"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
 [[smithy-rs]]
 message = "Made fluent operation structs cloneable"
 references = ["aws-sdk-rust#254"]
