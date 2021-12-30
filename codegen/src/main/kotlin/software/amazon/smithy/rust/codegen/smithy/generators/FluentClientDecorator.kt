@@ -475,11 +475,11 @@ class FluentClientGenerator(
                             is RustType.Vec -> with(core) { renderVecHelper(member, memberName, coreType) }
                             is RustType.HashMap -> with(core) { renderMapHelper(member, memberName, coreType) }
                             else -> {
-                                val signature = coreType.asArgument("signature")
+                                val functionInput = coreType.asArgument("input")
 
                                 documentShape(member, model)
-                                rustBlock("pub fn $memberName(mut self, ${signature.argument}) -> Self") {
-                                    write("self.inner = self.inner.$memberName(${signature.value});")
+                                rustBlock("pub fn $memberName(mut self, ${functionInput.argument}) -> Self") {
+                                    write("self.inner = self.inner.$memberName(${functionInput.value});")
                                     write("self")
                                 }
                             }
