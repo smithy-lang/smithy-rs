@@ -62,3 +62,15 @@ message = "aws_types::Config is now `Clone`"
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 references = ["smithy-rs#1002", "aws-sdk-rust#352"]
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Add support for paginators! Paginated APIs now include `.paginate()` and (when supported) `.paginate().items()` to enable paginating responses automatically. The paginator API should be considered in preview and is subject to change pending customer feedback."
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+references = ["aws-sdk-rust#47", "smithy-rs#1006"]
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add support for paginators! Paginated APIs now include `.paginate()` and (when supported) `.paginate().items()` to enable paginating responses automatically. The paginator API should be considered in preview and is subject to change pending customer feedback."
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+references = ["aws-sdk-rust#47", "smithy-rs#1006"]
+author = "rcoh"
