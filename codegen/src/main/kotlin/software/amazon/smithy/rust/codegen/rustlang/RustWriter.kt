@@ -276,7 +276,7 @@ private fun Element.normalizeAnchors() {
     getElementsByTag("a").forEach {
         val link = it.attr("href")
         if (link.isBlank()) {
-            it.changeInto("pre")
+            it.changeInto("code")
         }
     }
 }
