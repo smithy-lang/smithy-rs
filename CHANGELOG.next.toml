@@ -86,3 +86,9 @@ message = "aws_types::Config is now `Clone`"
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 references = ["smithy-rs#1002", "aws-sdk-rust#352"]
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Example for Config builder region function added"
+references = ["smithy-rs#670"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Jacco"
