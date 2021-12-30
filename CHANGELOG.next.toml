@@ -12,6 +12,18 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Codegen will no longer produce builders and clients with methods that take `impl Into<T>` except for strings and boxed types."
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+references = ["smithy-rs#990"]
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Codegen will no longer produce builders and clients with methods that take `impl Into<T>` except for strings and boxed types."
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+references = ["smithy-rs#990"]
+author = "Velfi"
+
+[[aws-sdk-rust]]
 message = """
 The `meta`, `environment`, and `dns` Cargo feature flags were removed from `aws-config`.
 The code behind the `dns` flag is now enabled when `rt-tokio` is enabled. The code behind
@@ -30,7 +42,7 @@ author = "rcoh"
 [[aws-sdk-rust]]
 message = "Add Route53 customization to trim `/hostedzone/` prefix prior to serialization. This fixes a bug where round-tripping a hosted zone id resulted in an error."
 meta = { "breaking" = false, "tada" = false, "bug" = true }
-references = ["smithy-rs#999", "smithy-rs#143", "aws-sdk-rust#344" ]
+references = ["smithy-rs#999", "smithy-rs#143", "aws-sdk-rust#344"]
 author = "rcoh"
 
 [[aws-sdk-rust]]
