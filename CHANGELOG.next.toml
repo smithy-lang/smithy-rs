@@ -110,3 +110,9 @@ message = "Simplify features in aws-config. All features have been removed from 
 references = ["smithy-rs#1017", "smithy-rs#930"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add function to `aws_config::profile::ProfileSet`` that allows listing of loaded profiles by name."
+references = ["smithy-rs#1021"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "kiiadi"
