@@ -133,7 +133,7 @@ impl ProfileSet {
     }
 
     /// Returns the names of the profiles in this profile set
-    pub fn profiles(&self) -> impl Iterator<Item=&str> {
+    pub fn profiles(&self) -> impl Iterator<Item = &str> {
         self.profiles.keys().map(String::as_ref)
     }
 
@@ -242,7 +242,7 @@ mod test {
     fn empty_source_empty_profile() {
         let source = make_source(ParserInput {
             config_file: Some("".to_string()),
-            credentials_file: Some("".to_string())
+            credentials_file: Some("".to_string()),
         });
 
         let profile_set = ProfileSet::parse(source).expect("empty profiles are valid");
@@ -253,7 +253,7 @@ mod test {
     fn profile_names_are_exposed() {
         let source = make_source(ParserInput {
             config_file: Some("[profile foo]\n[profile bar]".to_string()),
-            credentials_file: Some("".to_string())
+            credentials_file: Some("".to_string()),
         });
 
         let profile_set = ProfileSet::parse(source).expect("profiles loaded");
