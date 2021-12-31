@@ -5,6 +5,7 @@
 
 use super::here;
 use anyhow::Context;
+use gitignore::Pattern;
 use std::error::Error;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -15,9 +16,10 @@ pub fn delete_all_generated_files_and_folders(directory: &Path) -> anyhow::Resul
     eprintln!("\tchecking for 'generated' files and folders in the current SDK...");
     let dotfile_path = directory.join(HANDWRITTEN_DOTFILE);
     eprintln!("\tloading dotfile at {}", dotfile_path.display());
-    let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path).context(here!())?;
+    let handwritten_files =
+        HandwrittenFiles::from_dotfile(&dotfile_path, directory).context(here!())?;
     let generated_files = handwritten_files
-        .generated_files_and_folders_iter(directory)
+        .generated_files_and_folders_iter()
         .context(here!())?;
 
     let mut file_count = 0;
@@ -48,10 +50,11 @@ pub fn find_handwritten_files_and_folders(
     eprintln!("\tchecking for 'handwritten' files and folders in the generated SDK folder...");
     let dotfile_path = aws_sdk_path.join(HANDWRITTEN_DOTFILE);
     eprintln!("\tloading dotfile at {}", dotfile_path.display());
-    let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path).context(here!())?;
+    let handwritten_files =
+        HandwrittenFiles::from_dotfile(&dotfile_path, build_artifacts_path).context(here!())?;
 
     let files: Vec<_> = handwritten_files
-        .handwritten_files_and_folders_iter(build_artifacts_path)
+        .handwritten_files_and_folders_iter()
         .context(here!())?
         .collect();
 
@@ -89,26 +92,27 @@ pub fn find_handwritten_files_and_folders(
 /// }
 /// ```
 #[derive(Debug)]
-pub struct HandwrittenFiles<'file> {
-    files_and_folders: gitignore::File<'file>,
+pub struct HandwrittenFiles {
+    patterns: String,
+    root: PathBuf,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum FileKind {
+pub enum FileKind {
     Generated,
     Handwritten,
 }
 
-impl<'file> HandwrittenFiles<'file> {
-    pub fn from_dotfile(dotfile_path: &'file Path) -> Result<Self, HandwrittenFilesError> {
-        let files_and_folders = gitignore::File::new(dotfile_path)?;
-        let handwritten_files = Self { files_and_folders };
+impl HandwrittenFiles {
+    pub fn from_dotfile(dotfile_path: &Path, root: &Path) -> Result<Self, HandwrittenFilesError> {
+        let handwritten_files = Self {
+            patterns: std::fs::read_to_string(dotfile_path)?,
+            root: root.canonicalize()?.into(),
+        };
 
-        let dotfile_is_marked_as_handwritten = handwritten_files
-            .is_handwritten(Path::new(HANDWRITTEN_DOTFILE))
-            .expect("file must exist because we just checked it");
+        let dotfile_kind = handwritten_files.file_kind(&root.join(HANDWRITTEN_DOTFILE));
 
-        if !dotfile_is_marked_as_handwritten {
+        if dotfile_kind == FileKind::Generated {
             eprintln!(
                 "warning: your handwritten dotfile at {} isn't marked as handwritten, is this intentional?",
                 dotfile_path.display()
@@ -118,65 +122,43 @@ impl<'file> HandwrittenFiles<'file> {
         Ok(handwritten_files)
     }
 
-    pub fn is_handwritten(&self, path: &'file Path) -> Result<bool, HandwrittenFilesError> {
-        self.files_and_folders
-            .is_excluded(path)
-            // Flip the boolean because we're inclusive
-            .map(|is_excluded| !is_excluded)
-            .map_err(Into::into)
+    fn patterns<'a>(&'a self) -> impl Iterator<Item = Pattern<'a>> + 'a {
+        self.patterns
+            .lines()
+            .flat_map(move |line| Pattern::new(line, &self.root))
     }
 
-    pub fn generated_files_and_folders_iter(
-        &'file self,
-        directory: &'file Path,
-    ) -> Result<impl Iterator<Item = PathBuf>, HandwrittenFilesError> {
-        self.files_and_folders_iter(directory, FileKind::Generated)
+    pub fn file_kind(&self, path: &Path) -> FileKind {
+        for pattern in self.patterns() {
+            // if the gitignore=handwritten files matches this path, this is hand written
+            if pattern.is_excluded(path, path.is_dir()) {
+                return FileKind::Handwritten;
+            }
+        }
+        return FileKind::Generated;
     }
 
-    pub fn handwritten_files_and_folders_iter(
-        &self,
-        directory: &Path,
-    ) -> Result<impl Iterator<Item = PathBuf>, HandwrittenFilesError> {
-        self.files_and_folders_iter(directory, FileKind::Handwritten)
+    pub fn generated_files_and_folders_iter<'a>(
+        &'a self,
+    ) -> Result<impl Iterator<Item = PathBuf> + 'a, HandwrittenFilesError> {
+        self.files_and_folders_iter(FileKind::Generated)
     }
 
-    fn files_and_folders_iter(
-        &self,
-        directory: &Path,
+    pub fn handwritten_files_and_folders_iter<'a>(
+        &'a self,
+    ) -> Result<impl Iterator<Item = PathBuf> + 'a, HandwrittenFilesError> {
+        self.files_and_folders_iter(FileKind::Handwritten)
+    }
+
+    fn files_and_folders_iter<'a>(
+        &'a self,
         kind: FileKind,
-    ) -> Result<impl Iterator<Item = PathBuf>, HandwrittenFilesError> {
-        let mut err = Ok(());
-        // All for the lack of try_filter
-        let scan_results: Vec<_> = std::fs::read_dir(directory)?
-            .scan(
-                &mut err,
-                |err: &mut &mut Result<(), HandwrittenFilesError>,
-                 res: std::io::Result<std::fs::DirEntry>| {
-                    let res = res
-                        .map(|entry| entry.path())
-                        .map(|path| (self.is_handwritten(&path), path))
-                        .map_err(HandwrittenFilesError::from);
-
-                    match res {
-                        Ok((Ok(is_handwritten), path)) => match kind {
-                            FileKind::Generated => Some((!is_handwritten, path)),
-                            FileKind::Handwritten => Some((is_handwritten, path)),
-                        },
-                        // entry was bad, stop iteration and surface the error
-                        Ok((Err(e), _)) | Err(e) => {
-                            **err = Err(e.into());
-                            None
-                        }
-                    }
-                },
-            )
-            .filter_map(|(is_handwritten, path)| (!is_handwritten).then(move || path))
-            .collect();
-        // If the scan failed, bubble up the error
-        err?;
-
-        // return an iter of paths for the requested kind of files and folders
-        Ok(scan_results.into_iter())
+    ) -> Result<impl Iterator<Item = PathBuf> + 'a, HandwrittenFilesError> {
+        let files = std::fs::read_dir(&self.root)?.collect::<Result<Vec<_>, _>>()?;
+        Ok(files
+            .into_iter()
+            .map(|entry| entry.path())
+            .filter(move |path| self.file_kind(&path) == kind))
     }
 }
 
@@ -228,18 +210,13 @@ mod tests {
     };
     use pretty_assertions::assert_eq;
     use std::fs::File;
-    use std::io::Write;
     use tempdir::TempDir;
 
     fn create_test_dir_and_handwritten_files_dotfile(handwritten_files: &[&str]) -> TempDir {
         let dir = TempDir::new("smithy-rs-sync_test-fs").unwrap();
         let file_path = dir.path().join(HANDWRITTEN_DOTFILE);
         let handwritten_files = handwritten_files.join("\n");
-        let mut f = File::create(file_path).unwrap();
-
-        f.write_all(handwritten_files.as_bytes()).unwrap();
-        f.sync_all().unwrap();
-
+        std::fs::write(file_path, handwritten_files).expect("failed to write");
         dir
     }
 
@@ -334,26 +311,29 @@ mod tests {
 
     #[test]
     fn test_find_handwritten_files_works() {
+        // The SDK dir _only_ contains the dotfile. The build artifacts dir contains the files
         let handwritten_files = &[HANDWRITTEN_DOTFILE, "foo.txt", "bar/"];
-        let dir = create_test_dir_and_handwritten_files_dotfile(handwritten_files);
+        let sdk_dir = create_test_dir_and_handwritten_files_dotfile(handwritten_files);
+
+        let build_artifacts_dir = create_test_dir_and_handwritten_files_dotfile(handwritten_files);
         // Add the "handwritten" ones to be found
-        create_test_file(&dir, "foo.txt");
-        create_test_dir(&dir, "bar");
+        create_test_file(&build_artifacts_dir, "foo.txt");
+        create_test_dir(&build_artifacts_dir, "bar");
 
         // The files and folders in the temp dir should be the same
         // before and after running delete_all_generated_files_and_folders
-        let expected_files_and_folders: Vec<_> = std::fs::read_dir(dir.path())
+        let expected_files_and_folders: Vec<_> = std::fs::read_dir(build_artifacts_dir.path())
             .unwrap()
-            .map(|entry| entry.unwrap().path())
+            .map(|entry| entry.unwrap().path().canonicalize().unwrap())
             .collect();
 
         // Add the "generated" ones that won't be found
-        create_test_file(&dir, "bar.txt");
-        create_test_dir(&dir, "qux");
+        create_test_file(&build_artifacts_dir, "bar.txt");
+        create_test_dir(&build_artifacts_dir, "qux");
 
         // In practice, these would be two different folders but using the same folder is fine for the test
         let actual_files_and_folders =
-            find_handwritten_files_and_folders(dir.path(), dir.path()).unwrap();
+            find_handwritten_files_and_folders(sdk_dir.path(), build_artifacts_dir.path()).unwrap();
 
         assert_eq!(expected_files_and_folders, actual_files_and_folders);
     }
