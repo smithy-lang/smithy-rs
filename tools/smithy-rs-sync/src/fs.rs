@@ -311,7 +311,6 @@ mod tests {
 
     #[test]
     fn test_find_handwritten_files_works() {
-        // The SDK dir _only_ contains the dotfile. The build artifacts dir contains the files
         let handwritten_files = &[HANDWRITTEN_DOTFILE, "foo.txt", "bar/"];
         let sdk_dir = create_test_dir_and_handwritten_files_dotfile(handwritten_files);
 
