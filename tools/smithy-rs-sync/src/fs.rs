@@ -330,7 +330,6 @@ mod tests {
         create_test_file(&build_artifacts_dir, "bar.txt");
         create_test_dir(&build_artifacts_dir, "qux");
 
-        // In practice, these would be two different folders but using the same folder is fine for the test
         let actual_files_and_folders =
             find_handwritten_files_and_folders(sdk_dir.path(), build_artifacts_dir.path()).unwrap();
 
