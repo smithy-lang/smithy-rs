@@ -56,11 +56,10 @@ async fn main() -> Result<(), Error> {
 
     println!("Tables:");
 
-    let len = table_names.len();
     for name in table_names {
         println!("  {}", name);
     }
 
-    println!("Found {} tables", len);
+    println!("Found {} tables", table_names.len());
     Ok(())
 }

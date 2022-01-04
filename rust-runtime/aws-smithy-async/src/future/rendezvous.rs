@@ -6,7 +6,7 @@
 //! Rendezvous channel implementation
 //!
 //! Rendezvous channels are equivalent to a channel with a 0-sized buffer: A sender cannot send
-//! until this is an active receiver waiting. This implementation uses a Semaphore to record demand
+//! until there is an active receiver waiting. This implementation uses a Semaphore to record demand
 //! and coordinate with the receiver.
 //!
 //! Rendezvous channels should be used with care—it's inherently easy to deadlock unless they're being

@@ -125,7 +125,7 @@ class PaginatorGenerator private constructor(
                 builder: #{Builder}
             }
 
-            impl ${generics.inst}${paginatorName}${generics.inst} where #{bounds:W} {
+            impl${generics.inst} ${paginatorName}${generics.inst} where #{bounds:W} {
                 /// Create a new paginator-wrapper
                 pub(crate) fn new(handle: std::sync::Arc<crate::client::Handle${generics.inst}>, builder: #{Builder}) -> Self {
                     Self {
@@ -155,14 +155,14 @@ class PaginatorGenerator private constructor(
                     let handle = self.handle;
                     #{fn_stream}::FnStream::new(move |tx| Box::pin(async move {
                         // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
-                        let mut input = match builder.build().map_err(|err|#{SdkError}::ConstructionFailure(err.into())) {
+                        let mut input = match builder.build().map_err(|err| #{SdkError}::ConstructionFailure(err.into())) {
                             Ok(input) => input,
-                            Err(e) =>  { let _ = tx.send(Err(e)).await; return; }
+                            Err(e) => { let _ = tx.send(Err(e)).await; return; }
                         };
                         loop {
                             let op = match input.make_operation(&handle.conf)
                                 .await
-                                .map_err(|err|#{SdkError}::ConstructionFailure(err.into())) {
+                                .map_err(|err| #{SdkError}::ConstructionFailure(err.into())) {
                                 Ok(op) => op,
                                 Err(e) => {
                                     let _ = tx.send(Err(e)).await;
@@ -220,11 +220,9 @@ class PaginatorGenerator private constructor(
                 ///
                 /// This paginator automatically flattens results using `$documentedPath`. Queries to the underlying service
                 /// are dispatched lazily.
-                pub fn items(
-                        self
-                    ) -> #{ItemPaginator}${generics.inst} {
-                        #{ItemPaginator}(self)
-                    }
+                pub fn items(self) -> #{ItemPaginator}${generics.inst} {
+                    #{ItemPaginator}(self)
+                }
                 """,
                 "ItemPaginator" to itemPaginatorType
             )
@@ -238,7 +236,7 @@ class PaginatorGenerator private constructor(
         RuntimeType.forInlineFun("${paginatorName}Items", module) {
             it.rustTemplate(
                 """
-                /// Flattened paginator for for $paginatorName
+                /// Flattened paginator for `$paginatorName`
                 ///
                 /// This is created with [`.items()`]($paginatorName::items)
                 pub struct ${paginatorName}Items#{generics:W}($paginatorName${generics.inst});
@@ -257,7 +255,7 @@ class PaginatorGenerator private constructor(
                             #{Error},
                             #{Input}OperationRetryAlias
                         >, {
-                        #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page|#{extract_items}(page).unwrap_or_default().into_iter())
+                        #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
                     }
                 }
 
