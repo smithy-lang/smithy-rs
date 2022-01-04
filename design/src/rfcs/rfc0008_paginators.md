@@ -71,7 +71,8 @@ returns `impl Stream<Item=Result<OperationOutput, OperationError>`. This uses `F
 enables demand driven execution of a closure. A rendezvous channel is used which will block on `send` until demand exists.
 
 When modeled by Smithy, `page_size` which automatically sets the appropriate page_size parameter and `items()` which returns an
-automatically flattened paginator are also generated.
+automatically flattened paginator are also generated. **Note**: `page_size` directly sets the modeled parameter on the internal builder.
+This means that a value set for page size will override any previously set value for that field.
 ```rust
 // Generated paginator for ListTables
 impl<C, M, R> ListTablesPaginator<C, M, R>

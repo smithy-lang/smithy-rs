@@ -276,6 +276,8 @@ class PaginatorGenerator private constructor(
             rust(
                 """
                 /// Set the page size
+                ///
+                /// _Note: this method will override any previously set value for `$memberName`_
                 pub fn page_size(mut self, limit: $pageSizeT) -> Self {
                     self.builder.$memberName = Some(limit);
                     self

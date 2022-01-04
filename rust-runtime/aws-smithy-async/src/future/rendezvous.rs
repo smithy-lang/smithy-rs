@@ -45,9 +45,10 @@ pub struct Sender<T> {
 }
 
 impl<T> Sender<T> {
-    /// Send `item` into the channel.
+    /// Send `item` into the channel waiting until there is matching demand
     ///
-    /// `send` will block until there is matching demand.
+    /// Unlike something like `tokio::sync::mpsc::Channel` where sending a value will be buffered until
+    /// demand exists, a rendezvous sender will wait until matching demand exists before this function will return.
     pub async fn send(&self, item: T) -> Result<(), SendError<T>> {
         let result = self.chan.send(item).await;
         // If this is an error, the rx half has been dropped. We will never get demand.
