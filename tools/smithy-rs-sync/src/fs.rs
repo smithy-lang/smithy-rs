@@ -107,7 +107,7 @@ impl HandwrittenFiles {
     pub fn from_dotfile(dotfile_path: &Path, root: &Path) -> Result<Self, HandwrittenFilesError> {
         let handwritten_files = Self {
             patterns: std::fs::read_to_string(dotfile_path)?,
-            root: root.canonicalize()?.into(),
+            root: root.canonicalize()?,
         };
 
         let dotfile_kind = handwritten_files.file_kind(&root.join(HANDWRITTEN_DOTFILE));
@@ -122,7 +122,7 @@ impl HandwrittenFiles {
         Ok(handwritten_files)
     }
 
-    fn patterns<'a>(&'a self) -> impl Iterator<Item = Pattern<'a>> + 'a {
+    fn patterns(&self) -> impl Iterator<Item = Pattern> {
         self.patterns
             .lines()
             .filter(|line| !line.is_empty())
@@ -136,30 +136,31 @@ impl HandwrittenFiles {
                 return FileKind::Handwritten;
             }
         }
-        return FileKind::Generated;
+
+        FileKind::Generated
     }
 
-    pub fn generated_files_and_folders_iter<'a>(
-        &'a self,
-    ) -> Result<impl Iterator<Item = PathBuf> + 'a, HandwrittenFilesError> {
+    pub fn generated_files_and_folders_iter(
+        &'_ self,
+    ) -> Result<impl Iterator<Item = PathBuf> + '_, HandwrittenFilesError> {
         self.files_and_folders_iter(FileKind::Generated)
     }
 
-    pub fn handwritten_files_and_folders_iter<'a>(
-        &'a self,
-    ) -> Result<impl Iterator<Item = PathBuf> + 'a, HandwrittenFilesError> {
+    pub fn handwritten_files_and_folders_iter(
+        &'_ self,
+    ) -> Result<impl Iterator<Item = PathBuf> + '_, HandwrittenFilesError> {
         self.files_and_folders_iter(FileKind::Handwritten)
     }
 
-    fn files_and_folders_iter<'a>(
-        &'a self,
+    fn files_and_folders_iter(
+        &'_ self,
         kind: FileKind,
-    ) -> Result<impl Iterator<Item = PathBuf> + 'a, HandwrittenFilesError> {
+    ) -> Result<impl Iterator<Item = PathBuf> + '_, HandwrittenFilesError> {
         let files = std::fs::read_dir(&self.root)?.collect::<Result<Vec<_>, _>>()?;
         Ok(files
             .into_iter()
             .map(|entry| entry.path())
-            .filter(move |path| self.file_kind(&path) == kind))
+            .filter(move |path| self.file_kind(path) == kind))
     }
 }
 
