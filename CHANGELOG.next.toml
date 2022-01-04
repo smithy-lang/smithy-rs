@@ -12,6 +12,30 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Generated docs should no longer contain links that don't go anywhere"
+references = ["aws-sdk-rust#357"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Generated docs will convert `<a>` tags with no `href` attribute to `<pre>` tags"
+references = ["aws-sdk-rust#357"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Made fluent operation structs cloneable"
+references = ["aws-sdk-rust#254"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Jacco"
+
+[[aws-sdk-rust]]
+message = "Made fluent operation structs cloneable"
+references = ["aws-sdk-rust#254"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Jacco"
+
+[[aws-sdk-rust]]
 message = "Codegen will no longer produce builders and clients with methods that take `impl Into<T>` except for strings and boxed types."
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 references = ["smithy-rs#990"]
@@ -86,3 +110,21 @@ message = "Add support for paginators! Paginated APIs now include `.paginate()` 
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 references = ["aws-sdk-rust#47", "smithy-rs#1006"]
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Example for Config builder region function added"
+references = ["smithy-rs#670"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Jacco"
+
+[[aws-sdk-rust]]
+message = "Simplify features in aws-config. All features have been removed from `aws-config` with the exception of: `rt-tokio`, `rustls` and `native-tls`. All other features are now included by default. If you depended on those features specifically, remove them from your features listing."
+references = ["smithy-rs#1017", "smithy-rs#930"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add function to `aws_config::profile::ProfileSet`` that allows listing of loaded profiles by name."
+references = ["smithy-rs#1021"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "kiiadi"

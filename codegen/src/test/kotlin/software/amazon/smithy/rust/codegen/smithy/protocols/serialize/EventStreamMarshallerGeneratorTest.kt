@@ -32,7 +32,6 @@ class EventStreamMarshallerGeneratorTest {
             TestRuntimeConfig,
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
-            "test",
             testRustSettings(test.model),
             mode = testCase.mode
         )

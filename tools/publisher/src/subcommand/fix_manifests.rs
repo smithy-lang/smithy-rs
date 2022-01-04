@@ -54,16 +54,19 @@ fn package_versions(manifests: &[Manifest]) -> Result<BTreeMap<String, Version>>
     let mut versions = BTreeMap::new();
     for manifest in manifests {
         // ignore workspace manifests
-        if manifest.metadata.get("package").is_none() {
-            continue;
-        }
-        let name = manifest.metadata["package"]["name"]
-            .as_str()
+        let package = match manifest.metadata.get("package") {
+            Some(package) => package,
+            None => continue,
+        };
+        let name = package
+            .get("name")
+            .and_then(|name| name.as_str())
             .ok_or_else(|| {
                 anyhow::Error::msg(format!("{:?} is missing a package name", manifest.path))
             })?;
-        let version = manifest.metadata["package"]["version"]
-            .as_str()
+        let version = package
+            .get("version")
+            .and_then(|name| name.as_str())
             .ok_or_else(|| {
                 anyhow::Error::msg(format!("{:?} is missing a package version", manifest.path))
             })?;

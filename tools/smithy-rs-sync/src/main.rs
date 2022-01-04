@@ -9,8 +9,6 @@ use crate::fs::{delete_all_generated_files_and_folders, find_handwritten_files_a
 use anyhow::{anyhow, bail, Context, Result};
 use git2::{Commit, IndexAddOption, ObjectType, Oid, Repository, ResetType, Signature};
 use std::ffi::OsStr;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
@@ -20,15 +18,18 @@ use structopt::StructOpt;
 #[structopt(name = "smithy-rs-sync")]
 /// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
 struct Opt {
-    /// The path to the smithy-rs repo folder
+    /// The path to the smithy-rs repo folder.
     #[structopt(long, parse(from_os_str))]
     smithy_rs: PathBuf,
-    /// The path to the aws-sdk-rust folder
+    /// The path to the aws-sdk-rust folder.
     #[structopt(long, parse(from_os_str))]
     aws_sdk: PathBuf,
-    /// The branch in aws-sdk-rust that commits will be mirrored to
+    /// The branch in aws-sdk-rust that commits will be mirrored to.
     #[structopt(long, default_value = "next")]
     branch: String,
+    /// The maximum amount of commits to sync in one run.
+    #[structopt(long, default_value = "5")]
+    max_commits_to_sync: usize,
 }
 
 const BOT_NAME: &str = "AWS SDK Rust Bot";
@@ -64,20 +65,33 @@ fn main() -> Result<()> {
         smithy_rs,
         aws_sdk,
         branch,
+        max_commits_to_sync,
     } = Opt::from_args();
 
-    sync_aws_sdk_with_smithy_rs(&smithy_rs, &aws_sdk, &branch)
+    sync_aws_sdk_with_smithy_rs(&smithy_rs, &aws_sdk, &branch, max_commits_to_sync)
         .map_err(|e| e.context("The sync failed"))
 }
 
 /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
-fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -> Result<()> {
+fn sync_aws_sdk_with_smithy_rs(
+    smithy_rs: &Path,
+    aws_sdk: &Path,
+    branch: &str,
+    max_commits_to_sync: usize,
+) -> Result<()> {
     // In case these are relative paths, canonicalize them into absolute paths
     let aws_sdk = aws_sdk.canonicalize().context(here!())?;
     let smithy_rs = smithy_rs.canonicalize().context(here!())?;
 
     eprintln!("aws-sdk-rust path:\t{}", aws_sdk.display());
+    if !is_a_git_repository(&aws_sdk) {
+        eprintln!("warning: aws-sdk-rust is not a git repository");
+    }
+
     eprintln!("smithy-rs path:\t\t{}", smithy_rs.display());
+    if !is_a_git_repository(&aws_sdk) {
+        eprintln!("warning: smithy-rs is not a git repository");
+    }
 
     // Open the repositories we'll be working with
     let smithy_rs_repo = Repository::open(&smithy_rs).context("couldn't open smithy-rs repo")?;
@@ -93,7 +107,6 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
         eprintln!("There are no new commits to be applied, have a nice day.");
         return Ok(());
     }
-
     // `git checkout` the branch of `aws-sdk-rust` that we want to replay commits onto.
     // By default, this is the `next` branch.
     checkout_branch_to_sync_to(&aws_sdk_repo, branch).with_context(|| {
@@ -103,18 +116,25 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
         )
     })?;
 
-    let number_of_commits = commit_revs.len();
-    println!(
-        "Found {} unsynced commit(s), syncing now...",
-        number_of_commits
+    let total_number_of_commits = commit_revs.len();
+    let number_of_commits_to_sync = max_commits_to_sync.min(total_number_of_commits);
+    eprintln!(
+        "Syncing {} of {} un-synced commit(s)...",
+        number_of_commits_to_sync, total_number_of_commits
     );
+
     // Run through all the new commits, syncing them one by one
-    for (i, rev) in commit_revs.iter().enumerate() {
+    for (i, rev) in commit_revs.iter().enumerate().take(max_commits_to_sync) {
         let commit = smithy_rs_repo
             .find_commit(*rev)
             .with_context(|| format!("couldn't find commit {} in smithy-rs", rev))?;
 
-        eprintln!("[{}/{}]\tsyncing {}...", i + 1, number_of_commits, rev);
+        eprintln!(
+            "[{}/{}]\tsyncing {}...",
+            i + 1,
+            number_of_commits_to_sync,
+            rev
+        );
         checkout_commit_to_sync_from(&smithy_rs_repo, &commit).with_context(|| {
             format!(
                 "couldn't checkout commit {} from smithy-rs that we needed for syncing",
@@ -158,8 +178,17 @@ fn sync_aws_sdk_with_smithy_rs(smithy_rs: &Path, aws_sdk: &Path, branch: &str) -
 
     eprintln!(
         "Successfully synced {} mirror commit(s) to aws-sdk-rust/{}. Don't forget to push them",
-        number_of_commits, branch
+        number_of_commits_to_sync, branch
     );
+
+    let number_of_un_synced_commits =
+        total_number_of_commits.saturating_sub(number_of_commits_to_sync);
+    if number_of_un_synced_commits != 0 {
+        eprintln!(
+            "At least {} commits still need to be synced, please run the tool again",
+            number_of_un_synced_commits
+        );
+    }
 
     Ok(())
 }
@@ -203,13 +232,12 @@ fn get_last_synced_commit(repo_path: &Path) -> Result<Oid> {
 /// Write the last synced commit to the file in aws-sdk-rust that tracks the last smithy-rs commit it was synced with.
 fn set_last_synced_commit(repo: &Repository, oid: &Oid) -> Result<()> {
     let repo_path = repo.workdir().expect("this will always exist");
+    let oid_string = oid.to_string();
+    let oid_bytes = oid_string.as_bytes();
     let path = repo_path.join(COMMIT_HASH_FILENAME);
-    let mut file = OpenOptions::new().write(true).truncate(true).open(&path)?;
 
-    file.write(oid.to_string().as_bytes())
-        .with_context(|| format!("Couldn't write commit hash to '{}'", path.display()))?;
-
-    Ok(())
+    std::fs::write(&path, oid_bytes)
+        .with_context(|| format!("Couldn't write commit hash to '{}'", path.display()))
 }
 
 /// Run the necessary commands to build the SDK. On success, returns the path to the folder containing
@@ -276,8 +304,11 @@ fn copy_sdk(from_path: &Path, to_path: &Path) -> Result<()> {
 
     // This command uses absolute paths so working dir doesn't matter. Even so, we set
     // working dir to the dir this binary was run from because `run` expects one.
-    let working_dir = std::env::current_dir().expect("can't access current working dir");
-    let _ = run(&["cp", "-r", from_path, to_path], &working_dir).context(here!())?;
+    // GitHub actions don't support current_dir so we use current_exe
+    let exe_dir = std::env::current_exe().expect("can't access path of this exe");
+    let working_dir = exe_dir.parent().expect("exe is not in a folder?");
+
+    let _ = run(&["cp", "-r", from_path, to_path], working_dir).context(here!())?;
 
     eprintln!("\tsuccessfully copied built SDK");
     Ok(())
@@ -303,7 +334,7 @@ fn create_mirror_commit(aws_sdk_repo: &Repository, based_on_commit: &Commit) -> 
     eprintln!("\tcreating mirror commit...");
 
     // Update the file that tracks what smithy-rs commit the SDK was generated from
-    set_last_synced_commit(aws_sdk_repo, &based_on_commit.id())?;
+    set_last_synced_commit(aws_sdk_repo, &based_on_commit.id()).context(here!())?;
 
     let mut index = aws_sdk_repo.index().context(here!())?;
     // The equivalent of `git add .`
@@ -406,6 +437,14 @@ where
 {
     let args: Vec<_> = args.iter().map(|s| s.as_ref().to_string_lossy()).collect();
     args.join(" ")
+}
+
+fn _is_running_in_github_action() -> bool {
+    std::env::var("GITHUB_ACTIONS").unwrap_or_default() == "true"
+}
+
+fn is_a_git_repository(dir: &Path) -> bool {
+    dir.join(".git").is_dir()
 }
 
 #[cfg(test)]

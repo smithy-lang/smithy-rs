@@ -188,7 +188,7 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     }
 }
 
-fun TestWriterDelegator.rustSettings(stubModel: Model) =
+fun TestWriterDelegator.rustSettings(stubModel: Model = "namespace test".asSmithyModel()) =
     RustSettings(
         ShapeId.from("fake#Fake"),
         "test_${baseDir.toFile().nameWithoutExtension}",

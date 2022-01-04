@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.rustlang
 
 import org.intellij.lang.annotations.Language
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.writer.CodegenWriter
@@ -212,7 +214,7 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMis
     when (docTrait?.value?.isNotBlank()) {
         // If docs are modeled, then place them on the code generated shape
         true -> {
-            this.docs(escape(docTrait.value))
+            this.docs(normalizeHtml(escape(docTrait.value)))
             note?.also {
                 // Add a blank line between the docs and the note to visually differentiate
                 write("///")
@@ -259,6 +261,29 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: Strin
 
 /** Escape the [expressionStart] character to avoid problems during formatting */
 fun CodeWriter.escape(text: String): String = text.replace("$expressionStart", "$expressionStart$expressionStart")
+
+/** Parse input as HTML and normalize it */
+fun normalizeHtml(input: String): String {
+    val doc = Jsoup.parse(input)
+    doc.body().apply {
+        normalizeAnchors() // Convert anchor tags missing href attribute into pre tags
+    }
+
+    return doc.body().html()
+}
+
+private fun Element.normalizeAnchors() {
+    getElementsByTag("a").forEach {
+        val link = it.attr("href")
+        if (link.isBlank()) {
+            it.changeInto("code")
+        }
+    }
+}
+
+private fun Element.changeInto(tagName: String) {
+    replaceWith(Element(tagName).also { elem -> elem.appendChildren(childNodesCopy()) })
+}
 
 /**
  * Write _exactly_ the text as written into the code writer without newlines or formatting
