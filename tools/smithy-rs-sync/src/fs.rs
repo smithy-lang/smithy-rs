@@ -125,6 +125,7 @@ impl HandwrittenFiles {
     fn patterns<'a>(&'a self) -> impl Iterator<Item = Pattern<'a>> + 'a {
         self.patterns
             .lines()
+            .filter(|line| !line.is_empty())
             .flat_map(move |line| Pattern::new(line, &self.root))
     }
 
@@ -215,7 +216,8 @@ mod tests {
     fn create_test_dir_and_handwritten_files_dotfile(handwritten_files: &[&str]) -> TempDir {
         let dir = TempDir::new("smithy-rs-sync_test-fs").unwrap();
         let file_path = dir.path().join(HANDWRITTEN_DOTFILE);
-        let handwritten_files = handwritten_files.join("\n");
+        // two newlines to test
+        let mut handwritten_files = handwritten_files.join("\n\n");
         std::fs::write(file_path, handwritten_files).expect("failed to write");
         dir
     }
