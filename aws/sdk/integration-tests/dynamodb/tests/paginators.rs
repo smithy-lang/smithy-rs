@@ -29,7 +29,7 @@ async fn paginators_pass_args() {
     let mut paginator = client
         .scan()
         .table_name("test-table")
-        .paginate()
+        .into_paginator()
         .page_size(32)
         .send();
     let _ = paginator.next().await;
@@ -92,7 +92,7 @@ async fn paginators_loop_until_completion() {
     let mut paginator = client
         .scan()
         .table_name("test-table")
-        .paginate()
+        .into_paginator()
         .page_size(32)
         .send();
     assert_eq!(conn.requests().len(), 0);
@@ -154,7 +154,7 @@ async fn paginators_handle_errors() {
     let mut rows = client
         .scan()
         .table_name("test-table")
-        .paginate()
+        .into_paginator()
         .page_size(32)
         .items()
         .send();

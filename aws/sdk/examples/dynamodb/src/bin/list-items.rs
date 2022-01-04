@@ -62,7 +62,7 @@ async fn main() -> Result<(), Error> {
     let items: Result<Vec<_>, _> = client
         .scan()
         .table_name(table)
-        .paginate()
+        .into_paginator()
         .items()
         .send()
         .collect()

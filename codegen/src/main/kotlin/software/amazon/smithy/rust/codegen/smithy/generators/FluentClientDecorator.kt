@@ -368,7 +368,7 @@ class FluentClientGenerator(
                 val name = symbolProvider.toSymbol(operation).name
                 val fullPath = "crate::client::fluent_builders::$name"
                 val maybePaginated = if (operation.isPaginated(model)) {
-                    "\n/// This operation supports pagination. See [`paginate()`]($fullPath::paginate)."
+                    "\n/// This operation supports pagination. See [`into_paginator()`]($fullPath::into_paginator)."
                 } else ""
                 rust(
                     """
@@ -473,7 +473,7 @@ class FluentClientGenerator(
                             /// Create a paginator for this request
                             ///
                             /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`Stream`](tokio_stream::Stream).
-                            pub fn paginate(self) -> #{Paginator}${generics.inst} {
+                            pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
                                 #{Paginator}::new(self.handle, self.inner)
                             }
                             """,

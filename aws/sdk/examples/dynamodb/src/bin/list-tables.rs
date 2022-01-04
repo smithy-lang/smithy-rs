@@ -51,12 +51,12 @@ async fn main() -> Result<(), Error> {
 
     let client = Client::new(&shared_config);
 
-    let paginator = client.list_tables().paginate().items().send();
+    let paginator = client.list_tables().into_paginator().items().send();
     let table_names = paginator.collect::<Result<Vec<_>, _>>().await?;
 
     println!("Tables:");
 
-    for name in table_names {
+    for name in &table_names {
         println!("  {}", name);
     }
 
