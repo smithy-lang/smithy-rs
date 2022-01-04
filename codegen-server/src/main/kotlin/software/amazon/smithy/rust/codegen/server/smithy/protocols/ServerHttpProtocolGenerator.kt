@@ -107,6 +107,7 @@ private class ServerHttpProtocolImplGenerator(
         "HttpBody" to CargoDependency.HttpBody.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
         "LazyStatic" to CargoDependency.LazyStatic.asType(),
+        "Nom" to ServerCargoDependency.Nom.asType(),
         "PercentEncoding" to CargoDependency.PercentEncoding.asType(),
         "Regex" to CargoDependency.Regex.asType(),
         "SerdeUrlEncoded" to ServerCargoDependency.SerdeUrlEncoded.asType(),
@@ -572,46 +573,80 @@ private class ServerHttpProtocolImplGenerator(
         if (pathBindings.isEmpty()) {
             return
         }
-        val pattern = StringBuilder()
         val httpTrait = httpBindingResolver.httpTrait(operationShape)
-        httpTrait.uri.segments.forEach {
-            pattern.append("/")
-            if (it.isLabel) {
-                pattern.append("(?P<${it.content}>")
-                if (it.isGreedyLabel) {
-                    pattern.append(".+")
-                } else {
-                    pattern.append("[^/]+")
-                }
-                pattern.append(")")
-            } else {
-                pattern.append(it.content)
+        val greedyLabelIndex = httpTrait.uri.segments.indexOfFirst { it.isGreedyLabel }
+        val segments =
+            if (greedyLabelIndex >= 0)
+                httpTrait.uri.segments.slice(0 until (greedyLabelIndex + 1))
+            else
+                httpTrait.uri.segments
+        val restAfterGreedyLabel =
+            if (greedyLabelIndex >= 0)
+                httpTrait.uri.segments.slice((greedyLabelIndex + 1) until httpTrait.uri.segments.size).joinToString(prefix = "/", separator = "/")
+            else
+                ""
+        val labeledNames = segments
+            .mapIndexed { index, segment ->
+                if (segment.isLabel) { "m$index" } else { "_" }
             }
-        }
+            .joinToString(prefix = (if (segments.size > 1) "(" else ""), separator = ",", postfix = (if (segments.size > 1) ")" else ""))
+        val nomParser = segments
+            .map { segment ->
+                if (segment.isGreedyLabel) {
+                    "#{Nom}::combinator::rest::<_, #{Nom}::error::Error<&str>>"
+                } else if (segment.isLabel) {
+                    """#{Nom}::branch::alt::<_, _, #{Nom}::error::Error<&str>, _>((#{Nom}::bytes::complete::take_until("/"), #{Nom}::combinator::rest))"""
+                } else {
+                    """#{Nom}::bytes::complete::tag::<_, _, #{Nom}::error::Error<&str>>("${segment.content}")"""
+                }
+            }
+            .joinToString(
+                // TODO: tuple() is currently limited to 21 items
+                prefix = if (segments.size > 1) "#{Nom}::sequence::tuple::<_, _, #{Nom}::error::Error<&str>, _>((" else "",
+                postfix = if (segments.size > 1) "))" else "",
+                transform = { parser ->
+                    """
+                    #{Nom}::sequence::preceded(#{Nom}::bytes::complete::tag("/"),  $parser)
+                    """.trimIndent()
+                }
+            )
         with(writer) {
+            rustTemplate("let input_string = request.uri().path();")
+            if (greedyLabelIndex >= 0 && greedyLabelIndex + 1 < httpTrait.uri.segments.size) {
+                rustTemplate(
+                    """
+                    if !input_string.ends_with(${restAfterGreedyLabel.dq()}) {
+                        return std::result::Result::Err(#{SmithyRejection}::Deserialize(
+                            aws_smithy_http_server::rejection::Deserialize::from_err(format!("Postfix not found: {}", ${restAfterGreedyLabel.dq()}))));
+                    }
+                    let input_string = &input_string[..(input_string.len() - ${restAfterGreedyLabel.dq()}.len())];
+                    """.trimIndent(),
+                    *codegenScope
+                )
+            }
             rustTemplate(
                 """
-                #{LazyStatic}::lazy_static! {
-                    static ref RE: #{Regex}::Regex = #{Regex}::Regex::new("$pattern").unwrap();
-                }
+                let (input_string, $labeledNames) = $nomParser(input_string)?;
+                debug_assert_eq!("", input_string);
                 """.trimIndent(),
-                *codegenScope,
+                *codegenScope
             )
-            rustBlock("if let Some(captures) = RE.captures(request.uri().path())") {
-                pathBindings.forEach {
-                    val deserializer = generateParsePercentEncodedStrFn(it)
-                    rustTemplate(
-                        """
-                        if let Some(m) = captures.name("${it.locationName}") {
-                            input = input.${it.member.setterName()}(
-                                #{deserializer}(m.as_str())?
+            segments
+                .forEachIndexed { index, segment ->
+                    val binding = pathBindings.find { it.memberName == segment.content }
+                    if (binding != null && segment.isLabel) {
+                        val deserializer = generateParsePercentEncodedStrFn(binding)
+                        rustTemplate(
+                            """
+                            input = input.${binding.member.setterName()}(
+                                #{deserializer}(m$index)?
                             );
-                        }
-                        """.trimIndent(),
-                        "deserializer" to deserializer,
-                    )
+                            """.trimIndent(),
+                            *codegenScope,
+                            "deserializer" to deserializer,
+                        )
+                    }
                 }
-            }
         }
     }
 
