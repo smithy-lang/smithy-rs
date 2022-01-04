@@ -14,6 +14,12 @@ plugins {
 
 val smithyVersion: String by project
 
+buildscript {
+    val smithyVersion: String by project
+    dependencies {
+        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
+    }
+}
 
 dependencies {
     implementation(project(":codegen"))
@@ -62,13 +68,15 @@ val CodegenTests = listOf(
     ),
     CodegenTest(
         "crate#Config",
-        "naming_test_ops", """
+        "naming_test_ops",
+        """
             , "codegen": { "renameErrors": false }
         """.trimIndent()
     ),
     CodegenTest(
         "naming_obs_structs#NamingObstacleCourseStructs",
-        "naming_test_structs", """
+        "naming_test_structs",
+        """
             , "codegen": { "renameErrors": false }
         """.trimIndent()
     )
@@ -126,7 +134,6 @@ task("generateCargoWorkspace") {
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
-
 
 tasks.register<Exec>("cargoCheck") {
     workingDir("build/smithyprojections/codegen-test/")
