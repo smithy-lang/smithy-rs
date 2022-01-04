@@ -9,8 +9,6 @@ use crate::fs::{delete_all_generated_files_and_folders, find_handwritten_files_a
 use anyhow::{anyhow, bail, Context, Result};
 use git2::{Commit, IndexAddOption, ObjectType, Oid, Repository, ResetType, Signature};
 use std::ffi::OsStr;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
@@ -238,15 +236,8 @@ fn set_last_synced_commit(repo: &Repository, oid: &Oid) -> Result<()> {
     let oid_bytes = oid_string.as_bytes();
     let path = repo_path.join(COMMIT_HASH_FILENAME);
 
-    OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&path)
-        .and_then(|mut file| file.write(oid_bytes))
-        .with_context(|| format!("Couldn't write commit hash to '{}'", path.display()))?;
-
-    Ok(())
+    std::fs::write(&path, oid_bytes)
+        .with_context(|| format!("Couldn't write commit hash to '{}'", path.display()))
 }
 
 /// Run the necessary commands to build the SDK. On success, returns the path to the folder containing

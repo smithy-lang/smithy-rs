@@ -141,19 +141,19 @@ impl HandwrittenFiles {
     }
 
     pub fn generated_files_and_folders_iter(
-        &'_ self,
+        &self,
     ) -> Result<impl Iterator<Item = PathBuf> + '_, HandwrittenFilesError> {
         self.files_and_folders_iter(FileKind::Generated)
     }
 
     pub fn handwritten_files_and_folders_iter(
-        &'_ self,
+        &self,
     ) -> Result<impl Iterator<Item = PathBuf> + '_, HandwrittenFilesError> {
         self.files_and_folders_iter(FileKind::Handwritten)
     }
 
     fn files_and_folders_iter(
-        &'_ self,
+        &self,
         kind: FileKind,
     ) -> Result<impl Iterator<Item = PathBuf> + '_, HandwrittenFilesError> {
         let files = std::fs::read_dir(&self.root)?.collect::<Result<Vec<_>, _>>()?;
