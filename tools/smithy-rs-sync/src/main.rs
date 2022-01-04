@@ -160,21 +160,6 @@ fn sync_aws_sdk_with_smithy_rs(
         create_mirror_commit(&aws_sdk_repo, &commit)
             .context("couldn't commit SDK changes to aws-sdk-rust")?;
     }
-    eprintln!("Successfully synced {} commit(s)", commit_revs.len());
-
-    // Get the last commit we synced so that we can set that for the next time this tool gets run
-    let last_synced_commit = commit_revs
-        .last()
-        .expect("can't be empty because we'd have early returned");
-    eprintln!("Updating 'commit at last sync' to {}", last_synced_commit);
-
-    // Update the file containing the commit hash
-    set_last_synced_commit(&aws_sdk_repo, last_synced_commit).with_context(|| {
-        format!(
-            "couldn't write last synced commit hash ({}) to aws-sdk-rust/{}",
-            last_synced_commit, COMMIT_HASH_FILENAME,
-        )
-    })?;
 
     eprintln!(
         "Successfully synced {} mirror commit(s) to aws-sdk-rust/{}. Don't forget to push them",
@@ -295,9 +280,12 @@ fn copy_sdk(from_path: &Path, to_path: &Path) -> Result<()> {
         bail!("expected absolute to_path but got: {}", from_path.display());
     }
 
+    // Copy the contents of the folder, not the folder itself
+    let from_path = from_path.join(".");
     let from_path = from_path
         .to_str()
         .expect("for our use case, this will always be UTF-8");
+
     let to_path = to_path
         .to_str()
         .expect("for our use case, this will always be UTF-8");
