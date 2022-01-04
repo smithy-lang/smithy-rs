@@ -22,13 +22,13 @@ original input, but with the field marked `inputToken` to the value of `outputTo
 Usage example:
 
 ```rust
-let mut tables = vec![];
 let paginator = client
-.list_tables()
-.paginate()
-.items()
-.page_size(10)
-.send().await;
+    .list_tables()
+    .paginate()
+    .items()
+    .page_size(10)
+    .send()
+    .await;
 let tables: Result<Vec<_ >, _ > = paginator.collect().await;
 ```
 
@@ -184,7 +184,7 @@ Currently, the core trait we use is `tokio_stream::Stream`. This is a re-export 
 
 ### On Generics
 Currently, the paginators forward the generics from the client (`C, M, R`) along with their fairly annoying bounds.
-However, if we wanted to _could_ simplify this and erase all the generics when the paginator was created. Since everything
+However, if we wanted to we _could_ simplify this and erase all the generics when the paginator was created. Since everything
 is code generated, there isn't actually much duplicated code in the generator, just in the generated code.
 
 ## Changes Checklist

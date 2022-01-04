@@ -294,9 +294,7 @@ class FluentClientGenerator(
     private val core = FluentClientCore(model)
 
     fun render(crate: RustCrate) {
-        crate.withModule(
-            clientModule
-        ) { writer ->
+        crate.withModule(clientModule) { writer ->
             renderFluentClient(writer)
         }
     }
