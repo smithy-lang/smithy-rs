@@ -18,6 +18,12 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
+fun RustSymbolProvider.lensName(prefix: String, root: Shape, path: List<MemberShape>): String {
+    val base = shapeFunctionName("${prefix}lens", root)
+    val rest = path.joinToString("_") { toMemberName(it) }
+    return "${base}_$rest"
+}
+
 /**
  * Creates a unique name for a serialization function.
  *
