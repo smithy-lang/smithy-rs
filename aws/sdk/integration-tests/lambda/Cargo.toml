@@ -17,4 +17,4 @@ aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", featur
 aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream" }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 tokio = { version = "1", features = ["full", "test-util"] }
-tracing-subscriber = "0.2.18"
+tracing-subscriber = "0.3.5"
