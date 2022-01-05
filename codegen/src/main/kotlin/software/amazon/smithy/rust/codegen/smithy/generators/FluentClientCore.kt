@@ -9,9 +9,9 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 
@@ -22,10 +22,12 @@ class FluentClientCore(private val model: Model) {
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model)
-        rustBlock("pub fn $memberName(mut self, inp: impl Into<${coreType.member.render(true)}>) -> Self") {
+        val input = coreType.member.asArgument("input")
+
+        rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
             rust(
                 """
-                self.inner = self.inner.$memberName(inp);
+                self.inner = self.inner.$memberName(${input.value});
                 self
                 """
             )
@@ -38,13 +40,13 @@ class FluentClientCore(private val model: Model) {
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model)
-        val k = coreType.key
-        val v = coreType.member
+        val k = coreType.key.asArgument("k")
+        val v = coreType.member.asArgument("v")
 
-        rustBlock("pub fn $memberName(mut self, k: impl Into<${k.render()}>, v: impl Into<${v.render()}>) -> Self") {
+        rustBlock("pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self") {
             rust(
                 """
-                self.inner = self.inner.$memberName(k, v);
+                self.inner = self.inner.$memberName(${k.value}, ${v.value});
                 self
                 """
             )

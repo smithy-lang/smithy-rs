@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
@@ -36,6 +37,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerato
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.inputShape
@@ -393,7 +395,8 @@ class FluentClientGenerator(
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
                 val members: List<MemberShape> = input.allMembers.values.toList()
-
+                val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
+                val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
                 rust(
                     """
                     /// Fluent builder constructing a request to `${operationSymbol.name}`.
@@ -401,9 +404,9 @@ class FluentClientGenerator(
                     """
                 )
                 documentShape(operation, model, autoSuppressMissingDocs = false)
+                baseDerives.copy(derives = derives).render(this)
                 rustTemplate(
                     """
-                    ##[derive(std::fmt::Debug)]
                     pub struct ${operationSymbol.name}#{generics:W} {
                         handle: std::sync::Arc<super::Handle${generics.inst}>,
                         inner: #{Inner}
@@ -472,14 +475,11 @@ class FluentClientGenerator(
                             is RustType.Vec -> with(core) { renderVecHelper(member, memberName, coreType) }
                             is RustType.HashMap -> with(core) { renderMapHelper(member, memberName, coreType) }
                             else -> {
-                                val signature = when (coreType) {
-                                    is RustType.String,
-                                    is RustType.Box -> "(mut self, inp: impl Into<${coreType.render(true)}>) -> Self"
-                                    else -> "(mut self, inp: ${coreType.render(true)}) -> Self"
-                                }
+                                val functionInput = coreType.asArgument("input")
+
                                 documentShape(member, model)
-                                rustBlock("pub fn $memberName$signature") {
-                                    write("self.inner = self.inner.$memberName(inp);")
+                                rustBlock("pub fn $memberName(mut self, ${functionInput.argument}) -> Self") {
+                                    write("self.inner = self.inner.$memberName(${functionInput.value});")
                                     write("self")
                                 }
                             }
