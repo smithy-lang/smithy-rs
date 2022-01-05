@@ -40,7 +40,8 @@ The canary Lambda runs a list of canaries in parallel asynchronously. To add a n
 do the following:
 
 1. If new permissions are required, grant them to the OIDC role that is used to
-   run the canary Lambda using the CDK in the `tools/ci-cdk/` directory.
+   run the canary Lambda using the CDK in the `tools/ci-cdk/` directory. Be sure
+   to deploy these changes to the canary AWS account.
 2. Add a new module to this `canary-lambda/` project to hold the canary code. This
    should be implemented as an async function that returns an empty result.
 3. Wire up the new canary in the `get_canaries_to_run` function in the `canary` module.
