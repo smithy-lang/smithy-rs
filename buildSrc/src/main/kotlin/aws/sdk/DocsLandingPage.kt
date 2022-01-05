@@ -15,7 +15,7 @@ import java.io.File
  * The generated docs will include links to crates.io, docs.rs and GitHub examples for all generated services. The generated docs will
  * be written to `docs.md` in the provided [outputDir].
  */
-fun Project.docsLandingPage(awsServices: AwsServices, outputDir: File) {
+fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
     val project = this
     val writer = CodeWriter()
     with(writer) {
@@ -38,7 +38,7 @@ fun Project.docsLandingPage(awsServices: AwsServices, outputDir: File) {
             )
         }
     }
-    outputDir.resolve("index.md").writeText(writer.toString())
+    outputPath.writeText(writer.toString())
 }
 
 /**
