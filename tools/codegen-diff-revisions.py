@@ -87,6 +87,10 @@ def main():
 
 
 def generate_and_commit_generated_code(revision_sha):
+    # Clean the build artifacts before continuing
+    run("rm -rf aws/sdk/build")
+
+    # Generate code
     run("./gradlew --rerun-tasks :aws:sdk:assemble")
     run("./gradlew --rerun-tasks :codegen-server-test:assemble")
 

@@ -13,6 +13,13 @@ plugins { id("software.amazon.smithy").version("0.5.3") }
 
 val smithyVersion: String by project
 
+buildscript {
+    val smithyVersion: String by project
+    dependencies {
+        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
+    }
+}
+
 dependencies {
     implementation(project(":codegen-server"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")

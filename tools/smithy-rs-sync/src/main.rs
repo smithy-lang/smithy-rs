@@ -35,6 +35,7 @@ struct Opt {
 const BOT_NAME: &str = "AWS SDK Rust Bot";
 const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
 const COMMIT_HASH_FILENAME: &str = ".smithyrs-githash";
+const BOT_COMMIT_PREFIX: &str = "[autosync]";
 
 /// A macro for attaching info to error messages pointing to the line of code responsible for the error.
 /// [Thanks to dtolnay for this macro](https://github.com/dtolnay/anyhow/issues/22#issuecomment-542309452)
@@ -160,21 +161,6 @@ fn sync_aws_sdk_with_smithy_rs(
         create_mirror_commit(&aws_sdk_repo, &commit)
             .context("couldn't commit SDK changes to aws-sdk-rust")?;
     }
-    eprintln!("Successfully synced {} commit(s)", commit_revs.len());
-
-    // Get the last commit we synced so that we can set that for the next time this tool gets run
-    let last_synced_commit = commit_revs
-        .last()
-        .expect("can't be empty because we'd have early returned");
-    eprintln!("Updating 'commit at last sync' to {}", last_synced_commit);
-
-    // Update the file containing the commit hash
-    set_last_synced_commit(&aws_sdk_repo, last_synced_commit).with_context(|| {
-        format!(
-            "couldn't write last synced commit hash ({}) to aws-sdk-rust/{}",
-            last_synced_commit, COMMIT_HASH_FILENAME,
-        )
-    })?;
 
     eprintln!(
         "Successfully synced {} mirror commit(s) to aws-sdk-rust/{}. Don't forget to push them",
@@ -295,6 +281,8 @@ fn copy_sdk(from_path: &Path, to_path: &Path) -> Result<()> {
         bail!("expected absolute to_path but got: {}", from_path.display());
     }
 
+    // The '.' tells cp to copy the folder contents, not the folder
+    let from_path = from_path.join(".");
     let from_path = from_path
         .to_str()
         .expect("for our use case, this will always be UTF-8");
@@ -351,7 +339,11 @@ fn create_mirror_commit(aws_sdk_repo: &Repository, based_on_commit: &Commit) -> 
             Some("HEAD"),
             &based_on_commit.author(),
             &bot_signature,
-            based_on_commit.message().unwrap_or_default(),
+            &format!(
+                "{} {}",
+                BOT_COMMIT_PREFIX,
+                based_on_commit.message().unwrap_or_default()
+            ),
             &tree,
             &[&parent_commit],
         )
