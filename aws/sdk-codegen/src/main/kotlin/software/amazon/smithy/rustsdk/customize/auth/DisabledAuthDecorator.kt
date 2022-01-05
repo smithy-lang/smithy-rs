@@ -38,7 +38,7 @@ class DisabledAuthDecorator : RustCodegenDecorator {
         val optionalOperations = optionalAuth[service.id]!!
         return ModelTransformer.create().mapShapes(model) {
             if (optionalOperations.contains(it.id) && it is OperationShape) {
-                it.toBuilder().addTrait(AuthTrait(listOf())).build()
+                it.toBuilder().addTrait(AuthTrait(setOf())).build()
             } else {
                 it
             }

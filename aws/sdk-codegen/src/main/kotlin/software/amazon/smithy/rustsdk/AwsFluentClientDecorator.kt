@@ -10,8 +10,6 @@ import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
-import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -52,27 +50,20 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
 
     override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
         val types = Types(codegenContext.runtimeConfig)
-        val module = RustMetadata(public = true)
-        rustCrate.withModule(
-            RustModule(
-                "client",
-                module,
-                documentation = "Client and fluent builders for calling the service."
+        FluentClientGenerator(
+            codegenContext,
+            generics = ClientGenerics(
+                connectorDefault = types.dynConnector,
+                middlewareDefault = types.defaultMiddleware,
+                retryDefault = types.smithyClientRetry.member("Standard"),
+                client = types.awsSmithyClient
+            ),
+            customizations = listOf(
+                AwsPresignedFluentBuilderMethod(codegenContext.runtimeConfig),
+                AwsFluentClientDocs(codegenContext)
             )
-        ) { writer ->
-            FluentClientGenerator(
-                codegenContext,
-                generics = ClientGenerics(
-                    connectorDefault = types.dynConnector,
-                    middlewareDefault = types.defaultMiddleware,
-                    retryDefault = types.smithyClientRetry.member("Standard"),
-                    client = types.awsSmithyClient
-                ),
-                customizations = listOf(
-                    AwsPresignedFluentBuilderMethod(codegenContext.runtimeConfig),
-                    AwsFluentClientDocs(codegenContext)
-                )
-            ).render(writer)
+        ).render(rustCrate)
+        rustCrate.withModule(FluentClientGenerator.clientModule) { writer ->
             AwsFluentClientExtensions(types).render(writer)
         }
         val awsSmithyClient = "aws-smithy-client"
