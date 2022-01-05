@@ -300,6 +300,13 @@ fn copy_sdk(from_path: &Path, to_path: &Path) -> Result<()> {
 /// Create a "mirror" commit. Works by reading a smithy-rs commit and then using the info
 /// attached to it to create a commit in aws-sdk-rust. This also updates the `.smithyrs-githash`
 /// file with the hash of `based_on_commit`.
+///
+/// *NOTE: If you're wondering why `git2` is used elsewhere in this tool but not in this function,
+/// it's due to strange, undesired behavior that occurs. For every commit, something
+/// happened that created leftover staged and unstaged changes. When the unstaged changes
+/// were staged, they cancelled out the first set of staged changes. I don't know why this
+/// happened and if you think you can fix it, you can check out the previous version of the*
+/// tool in [this PR](https://github.com/awslabs/smithy-rs/pull/1042)
 fn create_mirror_commit(aws_sdk_path: &Path, based_on_commit: &Commit) -> Result<()> {
     eprintln!("\tcreating mirror commit...");
 
