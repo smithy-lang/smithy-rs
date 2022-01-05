@@ -6,3 +6,5 @@
 - [RFC-0004: Retry Behavior](./rfc0004_retry_behavior.md)
 - [RFC-0005: Service Generation](./rfc0005_service_generation.md)
 - [RFC-0006: Service-specific middleware](./rfc0006_service_specific_middleware.md)
+- [RFC-0007: Split Release Process](./rfc0007_split_release_process.md)
+- [RFC-0008: Example Consolidation](./rfc0008_example_consolidation.md)
