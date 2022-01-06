@@ -22,7 +22,7 @@
 - (smithy-rs#1003) Add recursion detection middleware to the default stack
 - (smithy-rs#1002, aws-sdk-rust#352) aws_types::Config is now `Clone`
 - (smithy-rs#670, @jacco) Example for Config builder region function added
-- (smithy-rs#1021, @kiiadi) Add function to `aws_config::profile::ProfileSet`` that allows listing of loaded profiles by name.
+- (smithy-rs#1021, @kiiadi) Add function to `aws_config::profile::ProfileSet` that allows listing of loaded profiles by name.
 - 🐛 (smithy-rs#1046, aws-sdk-rust#384) Fix IMDS credentials provider bug where the instance profile name was incorrectly cached.
 
 **Contributors**
