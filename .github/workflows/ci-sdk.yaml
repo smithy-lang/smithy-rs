@@ -190,9 +190,6 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
-    # The telephone-game example depends on ALSA, so we need this library to compile it
-    - name: Install libasound2-dev
-      run: sudo apt-get install -y libasound2-dev
     - name: Generate and check all services
       run: ./gradlew -Paws.fullsdk=true :aws:sdk:cargoCheck
     - name: Generate a name for the SDK

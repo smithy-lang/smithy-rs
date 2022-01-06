@@ -12,6 +12,16 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = """
+We removed an example 'telephone-game' that was problematic for our CI.
+The APIs that that example demonstrated are also demonstrated by our Polly
+and TranscribeStreaming examples so please check those out if you miss it.
+"""
+references = ["smithy-rs#712"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
 message = "Generated docs should no longer contain links that don't go anywhere"
 references = ["aws-sdk-rust#357"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
