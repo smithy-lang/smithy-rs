@@ -9,5 +9,5 @@ aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 aws-sdk-ecr = { path = "../../build/aws-sdk/sdk/ecr" }
 tokio = { version = "1", features = ["full"]}
 structopt = { version = "0.3", default-features = false }
-tracing-subscriber = { version = "0.2.16", features = ["fmt"] }
+tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
