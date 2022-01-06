@@ -16,6 +16,7 @@ aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
+# TODO(https://github.com/awslabs/smithy-rs/issues/1044) v3.5 has an unmaintained dependency, upgrade this when possible
 criterion = { version = "0.3.5" }
 futures-util = "0.3"
 http = "0.2.4"
