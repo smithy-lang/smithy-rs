@@ -96,7 +96,6 @@ fn sync_aws_sdk_with_smithy_rs(
 
     // Open the repositories we'll be working with
     let smithy_rs_repo = Repository::open(&smithy_rs).context("couldn't open smithy-rs repo")?;
-    let aws_sdk_repo = Repository::open(&aws_sdk).context("couldn't open aws-sdk-rust repo")?;
 
     // Check repo that we're going to be moving the code into to see what commit it was last synced with
     let last_synced_commit =
