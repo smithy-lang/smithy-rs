@@ -128,3 +128,9 @@ message = "Add function to `aws_config::profile::ProfileSet`` that allows listin
 references = ["smithy-rs#1021"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "kiiadi"
+
+[[aws-sdk-rust]]
+message = "Fix IMDS credentials provider bug where the instance profile name was incorrectly cached."
+references = ["smithy-rs#1046", "aws-sdk-rust#384"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
