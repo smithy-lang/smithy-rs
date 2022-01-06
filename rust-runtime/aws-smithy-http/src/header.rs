@@ -164,30 +164,89 @@ where
     }
 }
 
+/// Functions for parsing multiple comma-delimited header values out of a
+/// single header. This parsing adheres to
+/// [RFC-7230's specification of header values](https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.6).
+mod parse_multi_header {
+    use super::ParseError;
+    use std::borrow::Cow;
+
+    /// Reads a single value out of the given input, and returns a tuple containing
+    /// the parsed value and the remainder of the slice that can be used to parse
+    /// more values.
+    pub(crate) fn read_value<'a>(input: &'a [u8]) -> Result<(Cow<'a, str>, &'a [u8]), ParseError> {
+        for (index, &byte) in input.iter().enumerate() {
+            let current_slice = &input[index..];
+            match byte {
+                b' ' | b'\t' => { /* skip whitespace */ }
+                b'"' => return read_quoted_value(&current_slice[1..]),
+                _ => return read_unquoted_value(current_slice),
+            }
+        }
+
+        // We only end up here if the entire header value was whitespace or empty
+        Ok((Cow::Borrowed(""), &[]))
+    }
+
+    fn read_unquoted_value<'a>(input: &'a [u8]) -> Result<(Cow<'a, str>, &'a [u8]), ParseError> {
+        let next_delim = input.iter().position(|&b| b == b',').unwrap_or(input.len());
+        let (first, next) = input.split_at(next_delim);
+        let first = std::str::from_utf8(first)
+            .map_err(|_| ParseError::new_with_message("header was not valid utf8"))?;
+        Ok((Cow::Borrowed(first), then_delim(next).unwrap()))
+    }
+
+    /// Reads a header value that is surrounded by quotation marks and may have escaped
+    /// quotes inside of it.
+    fn read_quoted_value<'a>(input: &'a [u8]) -> Result<(Cow<'a, str>, &'a [u8]), ParseError> {
+        for index in 0..input.len() {
+            match input[index] {
+                b'"' if index == 0 || input[index - 1] != b'\\' => {
+                    let mut inner =
+                        Cow::Borrowed(std::str::from_utf8(&input[0..index]).map_err(|_| {
+                            ParseError::new_with_message("header was not valid utf8")
+                        })?);
+                    if inner.contains("\\\"") {
+                        inner = Cow::Owned(inner.replace("\\\"", "\""));
+                    }
+                    let rest = then_delim(&input[(index + 1)..])?;
+                    return Ok((inner, rest));
+                }
+                _ => {}
+            }
+        }
+        Err(ParseError::new_with_message(
+            "header value had quoted value without end quote",
+        ))
+    }
+
+    fn then_delim(s: &[u8]) -> Result<&[u8], ParseError> {
+        if s.is_empty() {
+            Ok(s)
+        } else if s.starts_with(b",") {
+            Ok(&s[1..])
+        } else {
+            Err(ParseError::new_with_message("expected delimiter `,`"))
+        }
+    }
+}
+
 /// Read one comma delimited value for `FromStr` types
 fn read_one<'a, T>(
     s: &'a [u8],
     f: &impl Fn(&str) -> Result<T, ParseError>,
 ) -> Result<(T, &'a [u8]), ParseError> {
-    let (head, rest) = split_at_delim(s);
-    let head = std::str::from_utf8(head)
-        .map_err(|_| ParseError::new_with_message("header was not valid utf8"))?;
-    Ok((f(head.trim())?, rest))
+    let (value, rest) = parse_multi_header::read_value(s)?;
+    Ok((f(value.trim())?, rest))
 }
 
-fn split_at_delim(s: &[u8]) -> (&[u8], &[u8]) {
-    let next_delim = s.iter().position(|b| b == &b',').unwrap_or(s.len());
-    let (first, next) = s.split_at(next_delim);
-    (first, then_delim(next).unwrap())
-}
-
-fn then_delim(s: &[u8]) -> Result<&[u8], ParseError> {
-    if s.is_empty() {
-        Ok(s)
-    } else if s.starts_with(b",") {
-        Ok(&s[1..])
+/// Conditionally quotes and escapes a header value if the header value contains a comma or quote.
+pub fn quote_header_value<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
+    let value = value.into();
+    if value.contains('"') || value.contains(',') {
+        Cow::Owned(format!("\"{}\"", value.replace('"', "\\\"")))
     } else {
-        Err(ParseError::new_with_message("expected delimiter `,`"))
+        value
     }
 }
 
@@ -195,11 +254,15 @@ fn then_delim(s: &[u8]) -> Result<&[u8], ParseError> {
 mod test {
     use std::collections::HashMap;
 
+    use aws_smithy_types::{date_time::Format, DateTime};
     use http::header::HeaderName;
 
     use crate::header::{
-        headers_for_prefix, read_many_primitive, set_header_if_absent, ParseError,
+        headers_for_prefix, many_dates, read_many_from_str, read_many_primitive,
+        set_header_if_absent, ParseError,
     };
+
+    use super::quote_header_value;
 
     #[test]
     fn put_if_absent() {
@@ -239,6 +302,112 @@ mod test {
     }
 
     #[test]
+    fn test_many_dates() {
+        let test_request = http::Request::builder()
+            .header("Empty", "")
+            .header("SingleHttpDate", "Wed, 21 Oct 2015 07:28:00 GMT")
+            .header(
+                "MultipleHttpDates",
+                "Wed, 21 Oct 2015 07:28:00 GMT,Thu, 22 Oct 2015 07:28:00 GMT",
+            )
+            .header("SingleEpochSeconds", "1234.5678")
+            .header("MultipleEpochSeconds", "1234.5678,9012.3456")
+            .body(())
+            .unwrap();
+        assert_eq!(
+            many_dates(
+                test_request.headers().get_all("Empty").iter(),
+                Format::DateTime
+            )
+            .expect("valid"),
+            Vec::<DateTime>::new()
+        );
+        assert_eq!(
+            many_dates(
+                test_request.headers().get_all("SingleHttpDate").iter(),
+                Format::HttpDate
+            )
+            .expect("valid"),
+            vec![DateTime::from_secs_and_nanos(1445412480, 0)]
+        );
+        assert_eq!(
+            many_dates(
+                test_request.headers().get_all("MultipleHttpDates").iter(),
+                Format::HttpDate
+            )
+            .expect("valid"),
+            vec![
+                DateTime::from_secs_and_nanos(1445412480, 0),
+                DateTime::from_secs_and_nanos(1445498880, 0)
+            ]
+        );
+        assert_eq!(
+            many_dates(
+                test_request.headers().get_all("SingleEpochSeconds").iter(),
+                Format::EpochSeconds
+            )
+            .expect("valid"),
+            vec![DateTime::from_secs_and_nanos(1234, 567_800_000)]
+        );
+        assert_eq!(
+            many_dates(
+                test_request
+                    .headers()
+                    .get_all("MultipleEpochSeconds")
+                    .iter(),
+                Format::EpochSeconds
+            )
+            .expect("valid"),
+            vec![
+                DateTime::from_secs_and_nanos(1234, 567_800_000),
+                DateTime::from_secs_and_nanos(9012, 345_600_000)
+            ]
+        );
+    }
+
+    #[test]
+    fn read_many_strings() {
+        let test_request = http::Request::builder()
+            .header("Empty", "")
+            .header("Foo", "foo")
+            .header("CommaInQuotes", "\"foo,bar\",baz")
+            .header("QuoteInQuotes", "\"foo\\\",bar\",\"\\\"asdf\\\"\",baz")
+            .header("JunkFollowingQuotes", "\"\\\"asdf\\\"\"baz")
+            .header("EmptyQuotes", "\"\",baz")
+            .body(())
+            .unwrap();
+        assert_eq!(
+            read_many_from_str::<String>(test_request.headers().get_all("Empty").iter())
+                .expect("valid"),
+            Vec::<String>::new(),
+        );
+        assert_eq!(
+            read_many_from_str::<String>(test_request.headers().get_all("Foo").iter())
+                .expect("valid"),
+            vec!["foo"]
+        );
+        assert_eq!(
+            read_many_from_str::<String>(test_request.headers().get_all("CommaInQuotes").iter())
+                .expect("valid"),
+            vec!["foo,bar", "baz"]
+        );
+        assert_eq!(
+            read_many_from_str::<String>(test_request.headers().get_all("QuoteInQuotes").iter())
+                .expect("valid"),
+            vec!["foo\",bar", "\"asdf\"", "baz"]
+        );
+        assert!(read_many_from_str::<String>(
+            test_request.headers().get_all("JunkFollowingQuotes").iter()
+        )
+        .is_err());
+        assert_eq!(
+            read_many_from_str::<String>(test_request.headers().get_all("EmptyQuotes").iter())
+                .expect("valid"),
+            vec!["", "baz"]
+        );
+    }
+
+    #[test]
     fn read_many_bools() {
         let test_request = http::Request::builder()
             .header("X-Bool-Multi", "true,false")
@@ -246,6 +415,7 @@ mod test {
             .header("X-Bool", "true")
             .header("X-Bool-Invalid", "truth,falsy")
             .header("X-Bool-Single", "true,false,true,true")
+            .header("X-Bool-Quoted", "true,\"false\",true,true")
             .body(())
             .unwrap();
         assert_eq!(
@@ -263,6 +433,11 @@ mod test {
                 .unwrap(),
             vec![true, false, true, true]
         );
+        assert_eq!(
+            read_many_primitive::<bool>(test_request.headers().get_all("X-Bool-Quoted").iter())
+                .unwrap(),
+            vec![true, false, true, true]
+        );
         read_many_primitive::<bool>(test_request.headers().get_all("X-Bool-Invalid").iter())
             .expect_err("invalid");
     }
@@ -275,6 +450,7 @@ mod test {
             .header("X-Num", "777")
             .header("X-Num-Invalid", "12ef3")
             .header("X-Num-Single", "1,2,3,-4,5")
+            .header("X-Num-Quoted", "1, \"2\",3,\"-4\",5")
             .body(())
             .unwrap();
         assert_eq!(
@@ -289,6 +465,11 @@ mod test {
         );
         assert_eq!(
             read_many_primitive::<i16>(test_request.headers().get_all("X-Num-Single").iter())
+                .unwrap(),
+            vec![1, 2, 3, -4, 5]
+        );
+        assert_eq!(
+            read_many_primitive::<i16>(test_request.headers().get_all("X-Num-Quoted").iter())
                 .unwrap(),
             vec![1, 2, 3, -4, 5]
         );
@@ -314,5 +495,15 @@ mod test {
                 .collect();
         let resp = resp.expect("valid");
         assert_eq!(resp.get("a"), Some(&vec![123_i16, 456_i16]));
+    }
+
+    #[test]
+    fn test_quote_header_value() {
+        assert_eq!("", &quote_header_value(""));
+        assert_eq!("foo", &quote_header_value("foo"));
+        assert_eq!("foo bar", &quote_header_value("foo bar"));
+        assert_eq!("\"foo,bar\"", &quote_header_value("foo,bar"));
+        assert_eq!("\",\"", &quote_header_value(","));
+        assert_eq!("\"\\\"foo\\\"\"", &quote_header_value("\"foo\""));
     }
 }

@@ -18,7 +18,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -57,6 +56,8 @@ import software.amazon.smithy.utils.StringUtils
 class JsonParserGenerator(
     codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
+    /** Function that maps a MemberShape into a JSON field name */
+    private val jsonName: (MemberShape) -> String,
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -220,7 +221,7 @@ class JsonParserGenerator(
         objectKeyLoop(hasMembers = members.isNotEmpty()) {
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
-                    rustBlock("${member.wireName().dq()} =>") {
+                    rustBlock("${jsonName(member).dq()} =>") {
                         withBlock("builder = builder.${member.setterName()}(", ");") {
                             deserializeMember(member)
                         }
@@ -430,7 +431,7 @@ class JsonParserGenerator(
                             withBlock("variant = match key.to_unescaped()?.as_ref() {", "};") {
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
-                                    rustBlock("${member.wireName().dq()} =>") {
+                                    rustBlock("${jsonName(member).dq()} =>") {
                                         withBlock("Some(#T::$variantName(", "))", symbol) {
                                             deserializeMember(member)
                                             unwrapOrDefaultOrError(member)
@@ -524,6 +525,4 @@ class JsonParserGenerator(
             }
         }
     }
-
-    private fun MemberShape.wireName(): String = getTrait<JsonNameTrait>()?.value ?: memberName
 }

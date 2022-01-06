@@ -7,6 +7,30 @@ use aws.api#service
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
 
+// TODO(https://github.com/awslabs/smithy/pull/1042): Remove this once the test case in Smithy is fixed
+apply PostPlayerAction @httpRequestTests([
+    {
+        id: "FIXED_RestJsonInputUnionWithUnitMember",
+        documentation: "Unit types in unions are serialized like normal structures in requests.",
+        protocol: restJson1,
+        method: "POST",
+        "uri": "/PostPlayerInput",
+        body: """
+            {
+                "action": {
+                    "quit": {}
+                }
+            }""",
+        bodyMediaType: "application/json",
+        headers: {"Content-Type": "application/json"},
+        params: {
+            action: {
+                quit: {}
+            }
+        }
+    }
+])
+
 apply QueryPrecedence @httpRequestTests([
     {
         id: "UrlParamsKeyEncoding",
@@ -64,6 +88,8 @@ service RestJsonExtras {
         NullInNonSparse,
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
+        // TODO(https://github.com/awslabs/smithy/pull/1042): Remove this once the test case in Smithy is fixed
+        PostPlayerAction
     ],
     errors: [ExtraError]
 }
