@@ -770,7 +770,7 @@ pub(crate) mod test {
         http::Response::builder().status(200).body(body).unwrap()
     }
 
-    async fn make_client<T>(conn: &TestConnection<T>) -> super::Client
+    pub(crate) async fn make_client<T>(conn: &TestConnection<T>) -> super::Client
     where
         SdkBody: From<T>,
         T: Send + 'static,
