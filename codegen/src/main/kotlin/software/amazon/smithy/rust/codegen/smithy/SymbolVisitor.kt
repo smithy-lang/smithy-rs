@@ -98,6 +98,14 @@ fun Symbol.makeOptional(): Symbol {
     }
 }
 
+fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
+    val newType = f(this.rustType())
+    return Symbol.builder().rustType(newType)
+        .addReference(this)
+        .name(newType.name)
+        .build()
+}
+
 fun Symbol.makeRustBoxed(): Symbol {
     val symbol = this
     val rustType = RustType.Box(symbol.rustType())

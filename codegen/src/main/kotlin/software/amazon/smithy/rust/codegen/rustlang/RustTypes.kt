@@ -97,6 +97,11 @@ sealed class RustType {
     data class Option(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = "Option"
         override val namespace = "std::option"
+
+        /** Convert `Option<T>` to `Option<&T>` **/
+        fun referenced(lifetime: kotlin.String?): Option {
+            return Option(Reference(lifetime, this.member))
+        }
     }
 
     data class Box(override val member: RustType) : RustType(), Container {

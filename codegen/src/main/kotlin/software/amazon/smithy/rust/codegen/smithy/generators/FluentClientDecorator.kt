@@ -56,19 +56,10 @@ class FluentClientDecorator : RustCodegenDecorator {
             return
         }
 
-        val module = RustMetadata(public = true)
-        rustCrate.withModule(
-            RustModule(
-                "client",
-                module,
-                documentation = "Client and fluent builders for calling the service."
-            )
-        ) { writer ->
-            FluentClientGenerator(
-                codegenContext,
-                customizations = listOf(GenericFluentClient(codegenContext))
-            ).render(writer)
-        }
+        FluentClientGenerator(
+            codegenContext,
+            customizations = listOf(GenericFluentClient(codegenContext))
+        ).render(rustCrate)
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-client/rustls")))
         rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("aws-smithy-client/native-tls")))
     }
@@ -273,7 +264,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
 }
 
 class FluentClientGenerator(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val generics: ClientGenerics = ClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
@@ -285,6 +276,12 @@ class FluentClientGenerator(
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
             RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
+
+        val clientModule = RustModule(
+            "client",
+            RustMetadata(public = true),
+            documentation = "Client and fluent builders for calling the service."
+        )
     }
 
     private val serviceShape = codegenContext.serviceShape
@@ -296,13 +293,19 @@ class FluentClientGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
-    fun render(writer: RustWriter) {
+    fun render(crate: RustCrate) {
+        crate.withModule(clientModule) { writer ->
+            renderFluentClient(writer)
+        }
+    }
+
+    private fun renderFluentClient(writer: RustWriter) {
         writer.rustTemplate(
             """
             ##[derive(Debug)]
             pub(crate) struct Handle#{generics_decl:W} {
-                client: #{client}::Client${generics.inst},
-                conf: crate::Config,
+                pub(crate) client: #{client}::Client${generics.inst},
+                pub(crate) conf: crate::Config,
             }
 
             #{client_docs:W}
@@ -345,7 +348,8 @@ class FluentClientGenerator(
             """,
             "generics_decl" to generics.decl,
             "client" to clientDep.asType(),
-            "client_docs" to writable {
+            "client_docs" to writable
+            {
                 customizations.forEach {
                     it.section(
                         FluentClientSection.FluentClientDocs(
@@ -362,12 +366,16 @@ class FluentClientGenerator(
         ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
+                val fullPath = "crate::client::fluent_builders::$name"
+                val maybePaginated = if (operation.isPaginated(model)) {
+                    "\n/// This operation supports pagination. See [`into_paginator()`]($fullPath::into_paginator)."
+                } else ""
                 rust(
                     """
                     /// Constructs a fluent builder for the `$name` operation.
                     ///
-                    /// See [`$name`](crate::client::fluent_builders::$name) for more information about the
-                    /// operation and its arguments.
+                    /// See [`$name`]($fullPath) for more information about the
+                    /// operation and its arguments.$maybePaginated
                     pub fn ${
                     clientOperationFnName(
                         operation,
@@ -452,8 +460,8 @@ class FluentClientGenerator(
                             #{operation_err},
                             #{input}OperationRetryAlias>,
                         {
-                            let input = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
-                            let op = input.make_operation(&self.handle.conf)
+                            let op = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?
+                                .make_operation(&self.handle.conf)
                                 .await
                                 .map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                             self.handle.client.call(op).await
@@ -466,6 +474,19 @@ class FluentClientGenerator(
                             .copy(name = "result::SdkError"),
                         "client" to clientDep.asType(),
                     )
+                    PaginatorGenerator.paginatorType(codegenContext, generics, operation)?.also { paginatorType ->
+                        rustTemplate(
+                            """
+                            /// Create a paginator for this request
+                            ///
+                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`Stream`](tokio_stream::Stream).
+                            pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
+                                #{Paginator}::new(self.handle, self.inner)
+                            }
+                            """,
+                            "Paginator" to paginatorType
+                        )
+                    }
                     writeCustomizations(
                         customizations,
                         FluentClientSection.FluentBuilderImpl(
