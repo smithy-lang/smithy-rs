@@ -96,7 +96,6 @@ fn sync_aws_sdk_with_smithy_rs(
 
     // Open the repositories we'll be working with
     let smithy_rs_repo = Repository::open(&smithy_rs).context("couldn't open smithy-rs repo")?;
-    let aws_sdk_repo = Repository::open(&aws_sdk).context("couldn't open aws-sdk-rust repo")?;
 
     // Check repo that we're going to be moving the code into to see what commit it was last synced with
     let last_synced_commit =
@@ -108,14 +107,6 @@ fn sync_aws_sdk_with_smithy_rs(
         eprintln!("There are no new commits to be applied, have a nice day.");
         return Ok(());
     }
-    // `git checkout` the branch of `aws-sdk-rust` that we want to replay commits onto.
-    // By default, this is the `next` branch.
-    checkout_branch_to_sync_to(&aws_sdk_repo, branch).with_context(|| {
-        format!(
-            "couldn't checkout {} branch of aws-sdk-rust for syncing",
-            branch,
-        )
-    })?;
 
     let total_number_of_commits = commit_revs.len();
     let number_of_commits_to_sync = max_commits_to_sync.min(total_number_of_commits);
@@ -342,18 +333,6 @@ fn create_mirror_commit(aws_sdk_path: &Path, based_on_commit: &Commit) -> Result
     let commit_hash = find_last_commit(aws_sdk_path).context(here!())?;
 
     eprintln!("\tsuccessfully created mirror commit {}", commit_hash);
-
-    Ok(())
-}
-
-/// `git checkout` the branch of aws-sdk-rust that we want to mirror commits to (defaults to `next`).
-fn checkout_branch_to_sync_to(aws_sdk_repo: &Repository, aws_sdk_branch: &str) -> Result<()> {
-    aws_sdk_repo
-        .find_remote("origin")?
-        .fetch(&["main"], None, None)?;
-    let (object, _) = aws_sdk_repo.revparse_ext(aws_sdk_branch).context(here!())?;
-
-    aws_sdk_repo.checkout_tree(&object, None).context(here!())?;
 
     Ok(())
 }
