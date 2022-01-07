@@ -55,21 +55,19 @@ fn dependency_order_visit(
     visited: &mut BTreeSet<PackageHandle>,
     result: &mut Vec<PackageHandle>,
 ) -> Result<(), Error> {
-    visited.insert(package_handle.clone());
+    if visited.contains(package_handle) {
+        return Ok(());
+    }
+    if stack.contains(package_handle) {
+        return Err(Error::DependencyCycle);
+    }
     stack.insert(package_handle.clone());
-
     let local_dependencies = &packages[package_handle].local_dependencies;
     for dependency in local_dependencies {
-        if visited.contains(dependency) && stack.contains(dependency) {
-            return Err(Error::DependencyCycle);
-        }
-        if package_handle != dependency
-            && packages.contains_key(dependency)
-            && !visited.contains(dependency)
-        {
-            dependency_order_visit(dependency, packages, stack, visited, result)?;
-        }
+        dependency_order_visit(dependency, packages, stack, visited, result)?;
     }
+    stack.remove(&package_handle);
+    visited.insert(package_handle.clone());
     result.push(package_handle.clone());
     Ok(())
 }
@@ -121,5 +119,32 @@ mod tests {
 
         let error = dependency_order(packages).err().expect("cycle");
         assert_eq!("dependency cycle detected", format!("{}", error));
+    }
+
+    #[test]
+    pub fn complex_tree() {
+        let packages = vec![
+            package("codeexamples", &["aws-config", "aws-apigateway"]),
+            package(
+                "aws-apigateway",
+                &["aws-config", "aws-types", "aws-endpoint"],
+            ),
+            package("aws-config", &["aws-endpoint", "aws-types", "aws-sdk-sts"]),
+            package("aws-types", &[]),
+            package("aws-endpoint", &[]),
+            package("aws-sdk-sts", &[]),
+        ];
+        let result = dependency_order(packages).expect("ok");
+        assert_eq!(
+            result.iter().map(|p| &p.handle.name).collect::<Vec<_>>(),
+            vec![
+                "aws-endpoint",
+                "aws-sdk-sts",
+                "aws-types",
+                "aws-config",
+                "aws-apigateway",
+                "codeexamples"
+            ]
+        );
     }
 }
