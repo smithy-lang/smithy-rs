@@ -66,7 +66,7 @@ fn dependency_order_visit(
     for dependency in local_dependencies {
         dependency_order_visit(dependency, packages, stack, visited, result)?;
     }
-    stack.remove(&package_handle);
+    stack.remove(package_handle);
     visited.insert(package_handle.clone());
     result.push(package_handle.clone());
     Ok(())
