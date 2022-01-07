@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.rustlang.generateShapeMemberList
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -402,22 +403,37 @@ class FluentClientGenerator(
             operations.forEach { operation ->
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
+                val output = operation.outputShape(model)
                 val members: List<MemberShape> = input.allMembers.values.toList()
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
                 val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
                 val operationInput = symbolProvider.toSymbol(input)
-                val okResponse = symbolProvider.toSymbol(operation.outputShape(model))
+                val operationOk = symbolProvider.toSymbol(output)
                 val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
+
+                val inputFields = generateShapeMemberList(symbolProvider, input, model).map {
+                    "///   - $it"
+                }.joinToString("\n")
+
+                // TODO this isn't correctly converting 'reserved words' like build to build_value so links will
+                //   sometimes be broken
+                val outputFields = generateShapeMemberList(symbolProvider, output, model).map {
+                    "///   - $it"
+                }.joinToString("\n")
+
                 rustTemplate(
                     """
                     /// Fluent builder constructing a request to `${operationSymbol.name}`.
                     ///
-                    /// - Takes [`${operationInput.name}`]($operationInput)
-                    /// - On success, responds with [`${okResponse.name}`]($okResponse)
+                    /// - Takes [`${operationInput.name}`]($operationInput) with fields:
+                    $inputFields
+                    /// - On success, responds with [`${operationOk.name}`]($operationOk) with fields:
+                    $outputFields
                     /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
                     ///
                     """
                 )
+
                 documentShape(operation, model, autoSuppressMissingDocs = false)
                 baseDerives.copy(derives = derives).render(this)
                 rustTemplate(
