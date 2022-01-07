@@ -246,9 +246,10 @@ async fn load_sso_credentials(
     ))
 }
 
+/// Load the token for `start_url` from `~/.aws/sso/cache/<hashofstarturl>.json`
 async fn load_token(start_url: &str, env: &Env, fs: &Fs) -> Result<SsoToken, LoadTokenError> {
     let home = home_dir(&env, Os::real()).ok_or(LoadTokenError::NoHomeDirectory)?;
-    let path = cache_filename(start_url, &home);
+    let path = sso_token_path(start_url, &home);
     let data = fs
         .read_to_end(path)
         .await
@@ -301,7 +302,8 @@ fn parse_token_json(input: &[u8]) -> Result<SsoToken, InvalidJsonCredentials> {
     })
 }
 
-fn cache_filename(start_url: &str, home: &str) -> PathBuf {
+/// Determine the SSO token path for a given start_url
+fn sso_token_path(start_url: &str, home: &str) -> PathBuf {
     // hex::encode returns a lowercase string
     let mut out = PathBuf::with_capacity(home.len() + "/.aws/sso/cache".len() + ".json".len() + 40);
     out.push(home);
@@ -317,8 +319,9 @@ fn cache_filename(start_url: &str, home: &str) -> PathBuf {
 #[cfg(test)]
 mod test {
     use crate::json_credentials::InvalidJsonCredentials;
-    use crate::sso::{cache_filename, parse_token_json, SsoToken};
+    use crate::sso::{load_token, parse_token_json, sso_token_path, LoadTokenError, SsoToken};
     use aws_smithy_types::DateTime;
+    use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::region::Region;
 
     #[test]
@@ -402,12 +405,28 @@ mod test {
     #[test]
     fn determine_correct_cache_filenames() {
         assert_eq!(
-            cache_filename("https://d-92671207e4.awsapps.com/start", "/home/me").as_os_str(),
+            sso_token_path("https://d-92671207e4.awsapps.com/start", "/home/me").as_os_str(),
             "/home/me/.aws/sso/cache/13f9d35043871d073ab260e020f0ffde092cb14b.json"
         );
         assert_eq!(
-            cache_filename("https://d-92671207e4.awsapps.com/start", "/home/me/").as_os_str(),
+            sso_token_path("https://d-92671207e4.awsapps.com/start", "/home/me/").as_os_str(),
             "/home/me/.aws/sso/cache/13f9d35043871d073ab260e020f0ffde092cb14b.json"
+        );
+    }
+
+    #[tokio::test]
+    async fn gracefully_handle_missing_files() {
+        let err = load_token(
+            "asdf",
+            &Env::from_slice(&[("HOME", "/home")]),
+            &Fs::from_slice(&[]),
+        )
+        .await
+        .expect_err("should fail, file is missing");
+        assert!(
+            matches!(err, LoadTokenError::IoError(_)),
+            "should be io error, got {}",
+            err
         );
     }
 }

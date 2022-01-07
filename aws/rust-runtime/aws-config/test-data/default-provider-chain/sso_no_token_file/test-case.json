@@ -1,0 +1,7 @@
+{
+  "name": "sso-role",
+  "docs": "load creds from SSO role",
+  "result": {
+    "ErrorContains": "failed to read the token file: No such file or directory"
+  }
+}

@@ -677,6 +677,7 @@ pub mod credentials {
         make_test!(ecs_credentials);
 
         make_test!(sso_assume_role);
+        make_test!(sso_no_token_file);
 
         #[tokio::test]
         async fn profile_name_override() {

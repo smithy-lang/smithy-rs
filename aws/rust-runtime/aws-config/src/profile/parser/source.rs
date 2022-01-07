@@ -132,7 +132,7 @@ async fn load_config_file(
     }
 }
 
-pub(crate) fn expand_home(
+fn expand_home(
     path: impl AsRef<Path>,
     home_dir: &Option<String>,
     environment: &os_shim_internal::Env,

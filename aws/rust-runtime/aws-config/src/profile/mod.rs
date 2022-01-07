@@ -8,7 +8,7 @@
 //! AWS profiles are typically stored in `~/.aws/config` and `~/.aws/credentials`. For more details
 //! see the [`load`](parser::load) function.
 
-pub(crate) mod parser;
+mod parser;
 #[doc(inline)]
 pub use parser::{load, Profile, ProfileParseError, ProfileSet, Property};
 
