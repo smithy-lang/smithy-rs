@@ -11,6 +11,12 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
 
+[[smithy-rs]]
+message = "Upgraded Smithy to 1.16.1"
+references = ["smithy-rs#1053"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
 [[aws-sdk-rust]]
 message = "Generated docs should no longer contain links that don't go anywhere"
 references = ["aws-sdk-rust#357"]
