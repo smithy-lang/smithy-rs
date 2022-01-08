@@ -174,7 +174,7 @@ mod parse_multi_header {
     /// Reads a single value out of the given input, and returns a tuple containing
     /// the parsed value and the remainder of the slice that can be used to parse
     /// more values.
-    pub(crate) fn read_value<'a>(input: &'a [u8]) -> Result<(Cow<'a, str>, &'a [u8]), ParseError> {
+    pub(crate) fn read_value(input: &[u8]) -> Result<(Cow<'_, str>, &[u8]), ParseError> {
         for (index, &byte) in input.iter().enumerate() {
             let current_slice = &input[index..];
             match byte {
@@ -188,7 +188,7 @@ mod parse_multi_header {
         Ok((Cow::Borrowed(""), &[]))
     }
 
-    fn read_unquoted_value<'a>(input: &'a [u8]) -> Result<(Cow<'a, str>, &'a [u8]), ParseError> {
+    fn read_unquoted_value(input: &[u8]) -> Result<(Cow<'_, str>, &[u8]), ParseError> {
         let next_delim = input.iter().position(|&b| b == b',').unwrap_or(input.len());
         let (first, next) = input.split_at(next_delim);
         let first = std::str::from_utf8(first)
@@ -198,7 +198,7 @@ mod parse_multi_header {
 
     /// Reads a header value that is surrounded by quotation marks and may have escaped
     /// quotes inside of it.
-    fn read_quoted_value<'a>(input: &'a [u8]) -> Result<(Cow<'a, str>, &'a [u8]), ParseError> {
+    fn read_quoted_value(input: &[u8]) -> Result<(Cow<'_, str>, &[u8]), ParseError> {
         for index in 0..input.len() {
             match input[index] {
                 b'"' if index == 0 || input[index - 1] != b'\\' => {
