@@ -104,11 +104,11 @@ jobs:
         toolchain: ${{ env.rust_version }}
         default: true
     - name: Generate doc preview
-      # Only generate two of the smallest services since these get huge. One of these must be
-      # STS since aws-config depends on it. STS and Transcribe Streaming were chosen below to stay
-      # small while still representing most features. Combined, they are about 11 MB at time of writing.
+      # Only generate three of the smallest services since the doc build can be very large. One of these must be
+      # STS since aws-config depends on it. STS and Transcribe Streaming and DynamoDB (paginators/waiters) were chosen
+      # below to stay small while still representing most features. Combined, they are about ~20MB at time of writing.
       run: |
-        ./gradlew -Paws.services=+sts,+transcribestreaming :aws:sdk:assemble
+        ./gradlew -Paws.services=+sts,+transcribestreaming,+dynamodb :aws:sdk:assemble
 
         # Copy the Server runtime crate(s) in
         cp -r rust-runtime/aws-smithy-http-server aws/sdk/build/aws-sdk/sdk

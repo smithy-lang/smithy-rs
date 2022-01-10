@@ -227,3 +227,9 @@ impl From<serde_urlencoded::de::Error> for SmithyRejection {
         SmithyRejection::Deserialize(Deserialize::from_err(err))
     }
 }
+
+impl From<nom::Err<nom::error::Error<&str>>> for SmithyRejection {
+    fn from(err: nom::Err<nom::error::Error<&str>>) -> Self {
+        SmithyRejection::Deserialize(Deserialize::from_err(err.to_owned()))
+    }
+}

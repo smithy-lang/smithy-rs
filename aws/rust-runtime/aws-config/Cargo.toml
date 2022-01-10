@@ -23,7 +23,7 @@ aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["sync"] }
 tracing = { version = "0.1" }
-hyper = { version = "0.14.16", default-features = false }
+hyper = { version = "0.14", default-features = false }
 
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
@@ -35,7 +35,7 @@ tower = { version = "0.4.8" }
 
 [dev-dependencies]
 futures-util = "0.3.16"
-tracing-test = "0.1.0"
+tracing-test = "0.2.1"
 
 tokio = { version = "1", features = ["full", "test-util"] }
 # used to test compatibility
