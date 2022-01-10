@@ -60,6 +60,7 @@ class IntegrationTestDependencies(
                 val smithyClient = CargoDependency.SmithyClient(runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 addDependency(smithyClient)
+                addDependency(CargoDependency.SmithyProtocolTestHelpers(runtimeConfig))
                 addDependency(SerdeJson)
                 addDependency(Tokio)
                 addDependency(FuturesUtil)

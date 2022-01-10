@@ -23,7 +23,7 @@ tracing = "0.1"
 
 [dev-dependencies]
 aws-endpoint = { path = "../aws-endpoint" }
-tracing-test = "0.1"
+tracing-test = "0.2.1"
 
 [package.metadata.docs.rs]
 all-features = true

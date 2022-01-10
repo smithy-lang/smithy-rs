@@ -124,11 +124,12 @@ task("generateSmithyBuild") {
     }
 }
 
-task("generateDocs") {
+task("generateIndexMd") {
     inputs.property("servicelist", awsServices.services.toString())
-    outputs.file(outputDir.resolve("docs.md"))
+    val indexMd = outputDir.resolve("index.md")
+    outputs.file(indexMd)
     doLast {
-        project.docsLandingPage(awsServices, outputDir)
+        project.docsLandingPage(awsServices, indexMd)
     }
 }
 
@@ -160,14 +161,16 @@ task("relocateServices") {
 task("relocateExamples") {
     description = "relocate the examples folder & rewrite path dependencies"
     doLast {
-        copy {
-            from(projectDir)
-            awsServices.examples.forEach { example ->
-                include("$example/**")
+        if (awsServices.examples.isNotEmpty()) {
+            copy {
+                from(projectDir)
+                awsServices.examples.forEach { example ->
+                    include("$example/**")
+                }
+                into(outputDir)
+                exclude("**/target")
+                filter { line -> line.replace("build/aws-sdk/sdk/", "sdk/") }
             }
-            into(outputDir)
-            exclude("**/target")
-            filter { line -> line.replace("build/aws-sdk/sdk/", "sdk/") }
         }
     }
     inputs.dir(projectDir.resolve("examples"))
@@ -266,7 +269,7 @@ task("finalizeSdk") {
         "relocateRuntime",
         "relocateAwsRuntime",
         "relocateExamples",
-        "generateDocs",
+        "generateIndexMd",
         "fixManifests"
     )
 }

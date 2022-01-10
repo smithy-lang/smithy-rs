@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 
 class AccountIdAutofill() : OperationCustomization() {
     override fun mutSelf(): Boolean = true
-    override fun consumesSelf(): Boolean = true
+    override fun consumesSelf(): Boolean = false
     override fun section(section: OperationSection): Writable {
         return when (section) {
             is OperationSection.MutateInput -> writable {

@@ -2827,6 +2827,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>Specifies whether IoT validates the token signature in an authorization request.</p>"
                     }
+                },
+                "enableCachingForHttp": {
+                    "target": "com.amazonaws.iot#EnableCachingForHttp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>When <code>true</code>, the result from the authorizer’s Lambda function is\n\t  cached for the time specified in <code>refreshAfterInSeconds</code>. The cached\n\t  result is used while the device reuses the same HTTP connection.</p>"
+                    }
                 }
             },
             "traits": {
@@ -2839,7 +2845,8 @@
                 "smithy.api#length": {
                     "min": 0,
                     "max": 2048
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#AuthorizerName": {
@@ -4222,15 +4229,18 @@
                 "smithy.api#length": {
                     "min": 1,
                     "max": 65536
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#CertificateSigningRequest": {
             "type": "string",
             "traits": {
                 "smithy.api#length": {
-                    "min": 1
-                }
+                    "min": 1,
+                    "max": 4096
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#CertificateStateException": {
@@ -4968,6 +4978,12 @@
                     "target": "com.amazonaws.iot#BooleanKey",
                     "traits": {
                         "smithy.api#documentation": "<p>Specifies whether IoT validates the token signature in an authorization request.</p>"
+                    }
+                },
+                "enableCachingForHttp": {
+                    "target": "com.amazonaws.iot#EnableCachingForHttp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>When <code>true</code>, the result from the authorizer’s Lambda function is\n\t  cached for clients that use persistent HTTP connections. The results are cached for the time\n\t  specified by the Lambda function in <code>refreshAfterInSeconds</code>. This value\n     does not affect authorization of clients that use MQTT connections.</p>\n         <p>The default value is <code>false</code>.</p>"
                     }
                 }
             }
@@ -5801,7 +5817,7 @@
                 "abortConfig": {
                     "target": "com.amazonaws.iot#AbortConfig",
                     "traits": {
-                        "smithy.api#documentation": "<p>Allows you to create criteria to abort a job.</p>"
+                        "smithy.api#documentation": "<p>Allows you to create the criteria to abort a job.</p>"
                     }
                 },
                 "timeoutConfig": {
@@ -5826,6 +5842,12 @@
                     "target": "com.amazonaws.iot#JobTemplateArn",
                     "traits": {
                         "smithy.api#documentation": "<p>The ARN of the job template used to create the job.</p>"
+                    }
+                },
+                "jobExecutionsRetryConfig": {
+                    "target": "com.amazonaws.iot#JobExecutionsRetryConfig",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Allows you to create the criteria to retry a job.</p>"
                     }
                 },
                 "documentParameters": {
@@ -5948,6 +5970,12 @@
                     "target": "com.amazonaws.iot#TagList",
                     "traits": {
                         "smithy.api#documentation": "<p>Metadata that can be used to manage the job template.</p>"
+                    }
+                },
+                "jobExecutionsRetryConfig": {
+                    "target": "com.amazonaws.iot#JobExecutionsRetryConfig",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Allows you to create the criteria to retry a job.</p>"
                     }
                 }
             }
@@ -11130,6 +11158,12 @@
                 },
                 "timeoutConfig": {
                     "target": "com.amazonaws.iot#TimeoutConfig"
+                },
+                "jobExecutionsRetryConfig": {
+                    "target": "com.amazonaws.iot#JobExecutionsRetryConfig",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The configuration that determines how many retries are allowed for each failure type\n            for a job.</p>"
+                    }
                 }
             }
         },
@@ -13077,7 +13111,8 @@
                 "smithy.api#length": {
                     "min": 1,
                     "max": 253
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#DomainType": {
@@ -13326,6 +13361,12 @@
         "com.amazonaws.iot#ElasticsearchType": {
             "type": "string"
         },
+        "com.amazonaws.iot#EnableCachingForHttp": {
+            "type": "boolean",
+            "traits": {
+                "smithy.api#box": {}
+            }
+        },
         "com.amazonaws.iot#EnableIoTLoggingParams": {
             "type": "structure",
             "members": {
@@ -13407,7 +13448,8 @@
                 "smithy.api#length": {
                     "min": 0,
                     "max": 128
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#Environment": {
@@ -15327,7 +15369,8 @@
                 "smithy.api#length": {
                     "min": 1,
                     "max": 8192
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#HttpHeaderValue": {
@@ -15336,7 +15379,8 @@
                 "smithy.api#length": {
                     "min": 1,
                     "max": 8192
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#HttpHeaders": {
@@ -15354,7 +15398,8 @@
                 "smithy.api#length": {
                     "min": 1,
                     "max": 4096
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#HttpUrlDestinationConfiguration": {
@@ -15855,6 +15900,12 @@
                         "smithy.api#documentation": "<p>The ARN of the job template used to create the job.</p>"
                     }
                 },
+                "jobExecutionsRetryConfig": {
+                    "target": "com.amazonaws.iot#JobExecutionsRetryConfig",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The configuration for the criteria to retry the job.</p>"
+                    }
+                },
                 "documentParameters": {
                     "target": "com.amazonaws.iot#ParameterMap",
                     "traits": {
@@ -16079,6 +16130,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>A string (consisting of the digits \"0\" through \"9\") which identifies this particular job execution on\n            this particular device. It can be used later in commands which return or update job execution\n            information.</p>"
                     }
+                },
+                "retryAttempt": {
+                    "target": "com.amazonaws.iot#RetryAttempt",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The number that indicates how many retry attempts have been completed for this \n        job on this device.</p>"
+                    }
                 }
             },
             "traits": {
@@ -16135,6 +16192,21 @@
             "type": "list",
             "member": {
                 "target": "com.amazonaws.iot#JobExecutionSummaryForThing"
+            }
+        },
+        "com.amazonaws.iot#JobExecutionsRetryConfig": {
+            "type": "structure",
+            "members": {
+                "criteriaList": {
+                    "target": "com.amazonaws.iot#RetryCriteriaList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The list of criteria that determines how many retries are allowed for each failure\n            type for a job.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The configuration that determines how many retries are allowed for each failure \n            type for a job.</p>"
             }
         },
         "com.amazonaws.iot#JobExecutionsRolloutConfig": {
@@ -16466,7 +16538,8 @@
                 "smithy.api#length": {
                     "min": 0,
                     "max": 5120
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#KinesisAction": {
@@ -18406,6 +18479,13 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The token to retrieve the next set of results.</p>",
                         "smithy.api#httpQuery": "nextToken"
+                    }
+                },
+                "jobId": {
+                    "target": "com.amazonaws.iot#JobId",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The unique identifier you assigned to this job when it was created.</p>",
+                        "smithy.api#httpQuery": "jobId"
                     }
                 }
             }
@@ -21638,7 +21718,8 @@
                 "smithy.api#length": {
                     "min": 0,
                     "max": 128
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#MessageFormat": {
@@ -21996,7 +22077,8 @@
                 "smithy.api#length": {
                     "min": 1,
                     "max": 65535
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#MqttContext": {
@@ -22040,7 +22122,8 @@
                 "smithy.api#length": {
                     "min": 1,
                     "max": 65535
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#NamedShadowIndexingMode": {
@@ -22141,6 +22224,16 @@
             "type": "list",
             "member": {
                 "target": "com.amazonaws.iot#Number"
+            }
+        },
+        "com.amazonaws.iot#NumberOfRetries": {
+            "type": "integer",
+            "traits": {
+                "smithy.api#box": {},
+                "smithy.api#range": {
+                    "min": 0,
+                    "max": 10
+                }
             }
         },
         "com.amazonaws.iot#NumberOfThings": {
@@ -22512,7 +22605,14 @@
             }
         },
         "com.amazonaws.iot#Parameter": {
-            "type": "string"
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 0,
+                    "max": 2048
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
+            }
         },
         "com.amazonaws.iot#ParameterKey": {
             "type": "string",
@@ -22654,7 +22754,14 @@
             "type": "string"
         },
         "com.amazonaws.iot#PolicyDocument": {
-            "type": "string"
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 0,
+                    "max": 404600
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
+            }
         },
         "com.amazonaws.iot#PolicyDocuments": {
             "type": "list",
@@ -24051,7 +24158,8 @@
                 "smithy.api#length": {
                     "min": 0,
                     "max": 2048
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#ResourceAlreadyExistsException": {
@@ -24228,6 +24336,65 @@
             "type": "list",
             "member": {
                 "target": "com.amazonaws.iot#Resource"
+            }
+        },
+        "com.amazonaws.iot#RetryAttempt": {
+            "type": "integer",
+            "traits": {
+                "smithy.api#box": {}
+            }
+        },
+        "com.amazonaws.iot#RetryCriteria": {
+            "type": "structure",
+            "members": {
+                "failureType": {
+                    "target": "com.amazonaws.iot#RetryableFailureType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The type of job execution failures that can initiate a job retry.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "numberOfRetries": {
+                    "target": "com.amazonaws.iot#NumberOfRetries",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The number of retries allowed for a failure type for the job.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The criteria that determines how many retries are allowed for each failure\n            type for a job.</p>"
+            }
+        },
+        "com.amazonaws.iot#RetryCriteriaList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.iot#RetryCriteria"
+            },
+            "traits": {
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 2
+                }
+            }
+        },
+        "com.amazonaws.iot#RetryableFailureType": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "FAILED",
+                        "name": "FAILED"
+                    },
+                    {
+                        "value": "TIMED_OUT",
+                        "name": "TIMED_OUT"
+                    },
+                    {
+                        "value": "ALL",
+                        "name": "ALL"
+                    }
+                ]
             }
         },
         "com.amazonaws.iot#RoleAlias": {
@@ -24844,7 +25011,8 @@
                 "smithy.api#length": {
                     "min": 1,
                     "max": 253
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#ServiceName": {
@@ -26391,7 +26559,14 @@
             "type": "string"
         },
         "com.amazonaws.iot#TemplateBody": {
-            "type": "string"
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 0,
+                    "max": 10240
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
+            }
         },
         "com.amazonaws.iot#TemplateDescription": {
             "type": "string",
@@ -27368,7 +27543,8 @@
                 "smithy.api#length": {
                     "min": 1,
                     "max": 6144
-                }
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
             }
         },
         "com.amazonaws.iot#TokenKeyName": {
@@ -28171,6 +28347,12 @@
                     "target": "com.amazonaws.iot#AuthorizerStatus",
                     "traits": {
                         "smithy.api#documentation": "<p>The status of the update authorizer request.</p>"
+                    }
+                },
+                "enableCachingForHttp": {
+                    "target": "com.amazonaws.iot#EnableCachingForHttp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>When <code>true</code>, the result from the authorizer’s Lambda function is\n\t  cached for the time specified in <code>refreshAfterInSeconds</code>. The cached\n\t  result is used while the device reuses the same HTTP connection.</p>"
                     }
                 }
             }
@@ -29080,6 +29262,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The namespace used to indicate that a job is a customer-managed job.</p>\n        <p>When you specify a value for this parameter, Amazon Web Services IoT Core sends jobs notifications to MQTT topics that \n            contain the value in the following format.</p>\n        <p>\n            <code>$aws/things/<i>THING_NAME</i>/jobs/<i>JOB_ID</i>/notify-namespace-<i>NAMESPACE_ID</i>/</code>\n         </p>\n        <note>\n            <p>The <code>namespaceId</code> feature is in public preview.</p>\n         </note>",
                         "smithy.api#httpQuery": "namespaceId"
+                    }
+                },
+                "jobExecutionsRetryConfig": {
+                    "target": "com.amazonaws.iot#JobExecutionsRetryConfig",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Allows you to create the criteria to retry a job.</p>"
                     }
                 }
             }
@@ -30047,7 +30235,14 @@
             }
         },
         "com.amazonaws.iot#Value": {
-            "type": "string"
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 0,
+                    "max": 4096
+                },
+                "smithy.api#pattern": "^[\\s\\S]*$"
+            }
         },
         "com.amazonaws.iot#Variance": {
             "type": "double"
