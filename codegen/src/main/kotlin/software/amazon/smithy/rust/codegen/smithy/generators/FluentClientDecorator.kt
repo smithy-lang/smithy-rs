@@ -5,10 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
+import software.amazon.smithy.codegen.core.SymbolProvider
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.TopDownIndex
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -22,7 +25,8 @@ import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.rustlang.generateShapeMemberList
+import software.amazon.smithy.rust.codegen.rustlang.escape
+import software.amazon.smithy.rust.codegen.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -42,6 +46,7 @@ import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -371,12 +376,46 @@ class FluentClientGenerator(
                 val maybePaginated = if (operation.isPaginated(model)) {
                     "\n/// This operation supports pagination. See [`into_paginator()`]($fullPath::into_paginator)."
                 } else ""
+
+                val input = operation.inputShape(model)
+                val output = operation.outputShape(model)
+                val operationInput = symbolProvider.toSymbol(input)
+                val operationOk = symbolProvider.toSymbol(output)
+                val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
+
+                val inputFieldsBody = generateShapeMemberDocs(writer, symbolProvider, input, model).joinToString("\n") {
+                    "///   - $it"
+                }
+
+                var inputFieldsHead = "/// - Takes [`${operationInput.name}`]($operationInput)"
+                if (inputFieldsBody.isNotEmpty()) {
+                    inputFieldsHead += " with field(s):"
+                }
+
+                val outputFieldsBody = generateShapeMemberDocs(writer, symbolProvider, output, model).joinToString("\n") {
+                    "///   - $it"
+                }
+
+                var outputFieldsHead = "/// - On success, responds with [`${operationOk.name}`]($operationOk)"
+                if (outputFieldsBody.isNotEmpty()) {
+                    outputFieldsHead += " with field(s):"
+                }
+
+                rustTemplate(
+                    """
+                    /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
+                    ///
+                    $inputFieldsHead
+                    $inputFieldsBody
+                    $outputFieldsHead
+                    $outputFieldsBody
+                    /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
+                    ///
+                    """
+                )
+
                 rust(
                     """
-                    /// Constructs a fluent builder for the `$name` operation.
-                    ///
-                    /// See [`$name`]($fullPath) for more information about the
-                    /// operation and its arguments.$maybePaginated
                     pub fn ${
                     clientOperationFnName(
                         operation,
@@ -403,36 +442,8 @@ class FluentClientGenerator(
             operations.forEach { operation ->
                 val operationSymbol = symbolProvider.toSymbol(operation)
                 val input = operation.inputShape(model)
-                val output = operation.outputShape(model)
-                val members: List<MemberShape> = input.allMembers.values.toList()
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
                 val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
-                val operationInput = symbolProvider.toSymbol(input)
-                val operationOk = symbolProvider.toSymbol(output)
-                val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
-
-                val inputFields = generateShapeMemberList(symbolProvider, input, model).map {
-                    "///   - $it"
-                }.joinToString("\n")
-
-                // TODO this isn't correctly converting 'reserved words' like build to build_value so links will
-                //   sometimes be broken
-                val outputFields = generateShapeMemberList(symbolProvider, output, model).map {
-                    "///   - $it"
-                }.joinToString("\n")
-
-                rustTemplate(
-                    """
-                    /// Fluent builder constructing a request to `${operationSymbol.name}`.
-                    ///
-                    /// - Takes [`${operationInput.name}`]($operationInput) with fields:
-                    $inputFields
-                    /// - On success, responds with [`${operationOk.name}`]($operationOk) with fields:
-                    $outputFields
-                    /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
-                    ///
-                    """
-                )
 
                 documentShape(operation, model, autoSuppressMissingDocs = false)
                 baseDerives.copy(derives = derives).render(this)
@@ -510,7 +521,7 @@ class FluentClientGenerator(
                             operation.errorSymbol(symbolProvider)
                         )
                     )
-                    members.forEach { member ->
+                    input.allMembers.values.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)
                         // All fields in the builder are optional
                         val memberSymbol = symbolProvider.toSymbol(member)
@@ -543,5 +554,23 @@ class FluentClientGenerator(
                 }
             }
         }
+    }
+}
+
+fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, shape: StructureShape, model: Model): List<String> {
+    val structName = symbolProvider.toSymbol(shape).fullName
+    return shape.members().map { memberShape ->
+        val name = symbolProvider.toMemberName(memberShape)
+        val snakeCaseName = name.toSnakeCase()
+
+        val member = symbolProvider.toSymbol(memberShape).rustType().render(fullyQualified = false)
+
+        val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
+        val docs = when (docTrait?.value?.isNotBlank()) {
+            true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
+            else -> "(undocumented)"
+        }
+
+        "[`$snakeCaseName($member)`]($structName::$snakeCaseName): $docs"
     }
 }

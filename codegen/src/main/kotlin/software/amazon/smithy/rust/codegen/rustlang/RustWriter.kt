@@ -10,7 +10,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.codegen.core.writer.CodegenWriter
 import software.amazon.smithy.codegen.core.writer.CodegenWriterFactory
 import software.amazon.smithy.model.Model
@@ -19,13 +18,11 @@ import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.orNull
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import software.amazon.smithy.utils.CodeWriter
 import java.util.function.BiFunction
 
@@ -234,25 +231,7 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMis
     return this
 }
 
-fun <T : CodeWriter> T.generateShapeMemberList(symbolProvider: SymbolProvider, shape: StructureShape, model: Model): List<String> {
-    val structName = symbolProvider.toSymbol(shape).fullName
-    return shape.allMembers.map {
-        val (name, memberShape) = it
-        val snakeCaseName = name.toSnakeCase()
-
-        val member = symbolProvider.toSymbol(memberShape).rustType().render(fullyQualified = false)
-
-        val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
-        val docs = when (docTrait?.value?.isNotBlank()) {
-            true -> normalizeHtml(escape(docTrait.value)).replace("\n", " ")
-            else -> "(undocumented)"
-        }
-
-        "[`$snakeCaseName($member)`]($structName::$snakeCaseName): $docs"
-    }
-}
-
-/** Document the containing entity (eg. module, crate, etc.)
+/** Document the containing entity (e.g. module, crate, etc.)
  * Instead of prefixing lines with `///` lines are prefixed with `//!`
  */
 fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
@@ -378,8 +357,8 @@ class RustWriter private constructor(
         return "${prefix}_$n"
     }
 
-    fun first(prewriter: RustWriter.() -> Unit) {
-        preamble.add(prewriter)
+    fun first(preWriter: RustWriter.() -> Unit) {
+        preamble.add(preWriter)
     }
 
     /**
