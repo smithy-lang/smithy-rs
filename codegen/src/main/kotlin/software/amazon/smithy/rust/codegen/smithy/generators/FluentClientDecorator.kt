@@ -567,16 +567,13 @@ fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, 
     val structName = symbolProvider.toSymbol(shape).rustType().qualifiedName()
     return shape.members().map { memberShape ->
         val name = symbolProvider.toMemberName(memberShape)
-        val snakeCaseName = name.toSnakeCase()
-
         val member = symbolProvider.toSymbol(memberShape).rustType().render(fullyQualified = false)
-
         val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs = when (docTrait?.value?.isNotBlank()) {
             true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
             else -> "(undocumented)"
         }
 
-        "[`$snakeCaseName($member)`]($structName::$snakeCaseName): $docs"
+        "[`$name($member)`]($structName::$name): $docs"
     }
 }
