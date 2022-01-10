@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.normalizeHtml
+import software.amazon.smithy.rust.codegen.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -410,7 +411,6 @@ class FluentClientGenerator(
                     $outputFieldsHead
                     $outputFieldsBody
                     /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
-                    ///
                     """
                 )
 
@@ -444,6 +444,12 @@ class FluentClientGenerator(
                 val input = operation.inputShape(model)
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
                 val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
+                rust(
+                    """
+                    /// Fluent builder constructing a request to `${operationSymbol.name}`.
+                    ///
+                    """
+                )
 
                 documentShape(operation, model, autoSuppressMissingDocs = false)
                 baseDerives.copy(derives = derives).render(this)
@@ -558,7 +564,7 @@ class FluentClientGenerator(
 }
 
 fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, shape: StructureShape, model: Model): List<String> {
-    val structName = symbolProvider.toSymbol(shape).fullName
+    val structName = symbolProvider.toSymbol(shape).rustType().qualifiedName()
     return shape.members().map { memberShape ->
         val name = symbolProvider.toMemberName(memberShape)
         val snakeCaseName = name.toSnakeCase()
