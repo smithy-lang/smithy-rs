@@ -34,9 +34,8 @@ class ServiceGenerator(
     private val index = TopDownIndex.of(config.model)
 
     /**
-     * Render Service Specific code. Code will end up in different files via `useShapeWriter`. See `SymbolVisitor.kt`
+     * Render Service-specific code. Code will end up in different files via `useShapeWriter`. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
-     *
      */
     fun render() {
         val operations = index.getContainedOperations(config.serviceShape).sortedBy { it.id }
