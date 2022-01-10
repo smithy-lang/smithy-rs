@@ -67,7 +67,7 @@ internal class PaginatorGeneratorTest {
     """.asSmithyModel()
 
     @Test
-    fun `generate correct paginators`() {
+    fun `generate paginators that compile`() {
         val (ctx, testDir) = generatePluginContext(model)
         RustCodegenPlugin().execute(ctx)
         "cargo test".runCommand(testDir)

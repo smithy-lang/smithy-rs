@@ -15,3 +15,15 @@ message = "Fix typos for X-Ray trace ID environment variable in aws_http::recurs
 references = ["smithy-rs#1050"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "nmoutschen"
+
+[[aws-sdk-rust]]
+message = "Fix critical paginator bug where an empty outputToken lead to a never ending stream."
+references = ["smithy-rs#1054", "aws-sdk-rust#391"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Fix critical paginator bug where an empty outputToken lead to a never ending stream."
+references = ["smithy-rs#1054", "aws-sdk-rust#391"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"

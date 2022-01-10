@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.PaginatedIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -173,8 +174,13 @@ class PaginatorGenerator private constructor(
                             // If the input member is None or it was an error
                             let done = match resp {
                                 Ok(ref resp) => {
-                                    input.$inputTokenMember = #{output_token}(resp).cloned();
-                                    input.$inputTokenMember.is_none()
+                                    let new_token = #{output_token}(resp);
+                                    if new_token == input.$inputTokenMember.as_ref() {
+                                        let _ = tx.send(Err(#{SdkError}::ConstructionFailure("next token did not change, aborting paginator. This indicates an SDK or AWS service bug.".into()))).await;
+                                        return;
+                                    }
+                                    input.$inputTokenMember = new_token.cloned();
+                                    ${nextTokenEmpty("input.$inputTokenMember")}
                                 },
                                 Err(_) => true,
                             };
@@ -266,6 +272,15 @@ class PaginatorGenerator private constructor(
                 ),
                 *codegenScope
             )
+        }
+    }
+
+    private fun nextTokenEmpty(token: String): String {
+        val tokenType = model.expectShape(paginationInfo.outputTokenMemberPath.last().target)
+        if (tokenType is StringShape) {
+            return "$token.as_deref().unwrap_or_default().is_empty()"
+        } else {
+            return "$token.is_none()"
         }
     }
 
