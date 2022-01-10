@@ -16,9 +16,3 @@ message = "The docs for fluent builders now have easy links to their correspondi
 references = ["aws-sdk-rust#348"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
-
-[[aws-sdk-rust]]
-message = "Fix typos for X-Ray trace ID environment variable in aws_http::recursion_detection"
-references = ["smithy-rs#1050"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "nmoutschen"

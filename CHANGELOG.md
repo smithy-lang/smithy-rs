@@ -1,4 +1,11 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+v0.34.1 (January 10, 2022)
+==========================
+**New this release:**
+- 🐛 (smithy-rs#1054, aws-sdk-rust#391) Fix critical paginator bug where an empty outputToken lead to a never ending stream.
+
+
+
 0.34.0 (January 6th, 2022)
 ==========================
 **Breaking Changes:**
