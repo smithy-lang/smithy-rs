@@ -29,6 +29,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::PathBuf;
+use zeroize::Zeroizing;
 
 impl crate::provider_config::ProviderConfig {
     pub(crate) fn sso_client(
@@ -160,16 +161,18 @@ impl Builder {
 pub(crate) enum LoadTokenError {
     InvalidCredentials(InvalidJsonCredentials),
     NoHomeDirectory,
-    IoError(io::Error),
+    IoError { err: io::Error, path: PathBuf },
 }
 
 impl Display for LoadTokenError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LoadTokenError::InvalidCredentials(err) => write!(f, "Token was invalid: {}", err),
+            LoadTokenError::InvalidCredentials(err) => {
+                write!(f, "SSO Token was invalid (expected JSON): {}", err)
+            }
             LoadTokenError::NoHomeDirectory => write!(f, "Could not resolve a home directory"),
-            LoadTokenError::IoError(io_failure) => {
-                write!(f, "failed to read the token file: {}", io_failure)
+            LoadTokenError::IoError { err, path } => {
+                write!(f, "failed to read `{}`: {}", path.display(), err)
             }
         }
     }
@@ -180,7 +183,7 @@ impl Error for LoadTokenError {
         match self {
             LoadTokenError::InvalidCredentials(err) => Some(err as _),
             LoadTokenError::NoHomeDirectory => None,
-            LoadTokenError::IoError(err) => Some(err as _),
+            LoadTokenError::IoError { err, .. } => Some(err as _),
         }
     }
 }
@@ -207,7 +210,7 @@ async fn load_sso_credentials(
         .build();
     let operation = aws_sdk_sso::operation::GetRoleCredentials::builder()
         .role_name(&sso_config.role_name)
-        .access_token(token.access_token)
+        .access_token(&*token.access_token)
         .account_id(&sso_config.account_id)
         .build()
         .map_err(|err| {
@@ -248,19 +251,24 @@ async fn load_sso_credentials(
 
 /// Load the token for `start_url` from `~/.aws/sso/cache/<hashofstarturl>.json`
 async fn load_token(start_url: &str, env: &Env, fs: &Fs) -> Result<SsoToken, LoadTokenError> {
-    let home = home_dir(&env, Os::real()).ok_or(LoadTokenError::NoHomeDirectory)?;
+    let home = home_dir(env, Os::real()).ok_or(LoadTokenError::NoHomeDirectory)?;
     let path = sso_token_path(start_url, &home);
-    let data = fs
-        .read_to_end(path)
-        .await
-        .map_err(LoadTokenError::IoError)?;
+    let data =
+        Zeroizing::new(
+            fs.read_to_end(&path)
+                .await
+                .map_err(|err| LoadTokenError::IoError {
+                    err,
+                    path: path.to_path_buf(),
+                })?,
+        );
     let token = parse_token_json(&data).map_err(LoadTokenError::InvalidCredentials)?;
     Ok(token)
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct SsoToken {
-    access_token: String,
+    access_token: Zeroizing<String>,
     expires_at: DateTime,
     region: Option<Region>,
 }
@@ -286,7 +294,8 @@ fn parse_token_json(input: &[u8]) -> Result<SsoToken, InvalidJsonCredentials> {
         key if key.eq_ignore_ascii_case("startUrl") => start_url = Some(value.to_string()),
         _other => {} // ignored
     })?;
-    let access_token = acccess_token.ok_or(InvalidJsonCredentials::MissingField("accessToken"))?;
+    let access_token =
+        Zeroizing::new(acccess_token.ok_or(InvalidJsonCredentials::MissingField("accessToken"))?);
     let expires_at = expires_at.ok_or(InvalidJsonCredentials::MissingField("expiresAt"))?;
     let expires_at = DateTime::from_str(expires_at.as_ref(), Format::DateTime).map_err(|e| {
         InvalidJsonCredentials::InvalidField {
@@ -323,6 +332,7 @@ mod test {
     use aws_smithy_types::DateTime;
     use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::region::Region;
+    use zeroize::Zeroizing;
 
     #[test]
     fn deserialize_valid_tokens() {
@@ -336,7 +346,7 @@ mod test {
         assert_eq!(
             parse_token_json(token).expect("valid"),
             SsoToken {
-                access_token: "base64string".into(),
+                access_token: Zeroizing::new("base64string".into()),
                 expires_at: DateTime::from_secs(1234567890),
                 region: Some(Region::from_static("us-west-2"))
             }
@@ -349,7 +359,7 @@ mod test {
         assert_eq!(
             parse_token_json(no_region).expect("valid"),
             SsoToken {
-                access_token: "base64string".into(),
+                access_token: Zeroizing::new("base64string".into()),
                 expires_at: DateTime::from_secs(1234567890),
                 region: None
             }
@@ -424,7 +434,7 @@ mod test {
         .await
         .expect_err("should fail, file is missing");
         assert!(
-            matches!(err, LoadTokenError::IoError(_)),
+            matches!(err, LoadTokenError::IoError { .. }),
             "should be io error, got {}",
             err
         );

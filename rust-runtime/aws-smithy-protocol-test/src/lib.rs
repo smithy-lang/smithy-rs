@@ -119,6 +119,7 @@ fn extract_params(uri: &Uri) -> HashSet<&str> {
     uri.query().unwrap_or_default().split('&').collect()
 }
 
+#[track_caller]
 pub fn assert_uris_match(left: &Uri, right: &Uri) {
     if left == right {
         return;

@@ -34,6 +34,7 @@ aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json" }
 # implementation detail of SSO credential caching
 ring = "0.16"
 hex = "0.4.3"
+zeroize = "1"
 
 bytes = "1.1.0"
 http = "0.2.4"
