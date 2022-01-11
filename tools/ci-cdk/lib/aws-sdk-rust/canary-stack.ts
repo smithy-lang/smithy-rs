@@ -52,6 +52,15 @@ export class CanaryStack extends Stack {
             }),
         );
 
+        // Grant permission to put metric data to CloudWatch
+        this.awsSdkRustOidcRole.oidcRole.addToPolicy(
+            new PolicyStatement({
+                actions: ["cloudwatch:PutMetricData"],
+                effect: Effect.ALLOW,
+                resources: ["*"],
+            }),
+        );
+
         // Create S3 bucket to upload canary Lambda code into
         this.canaryCodeBucket = new Bucket(this, "canary-code-bucket", {
             blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
