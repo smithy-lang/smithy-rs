@@ -212,13 +212,13 @@ class RequestBindingGenerator(
         val memberSymbol = symbolProvider.toSymbol(memberShape)
         val memberName = symbolProvider.toMemberName(memberShape)
         ifSet(memberType, memberSymbol, "&_input.$memberName") { field ->
-            val listHeader = memberType is CollectionShape
+            val isListHeader = memberType is CollectionShape
             listForEach(memberType, field) { innerField, targetId ->
                 val innerMemberType = model.expectShape(targetId)
                 if (innerMemberType.isPrimitive()) {
                     rust("let mut encoder = #T::from(${autoDeref(innerField)});", Encoder)
                 }
-                val formatted = headerFmtFun(this, innerMemberType, memberShape, innerField, listHeader)
+                val formatted = headerFmtFun(this, innerMemberType, memberShape, innerField, isListHeader)
                 val safeName = safeName("formatted")
                 write("let $safeName = $formatted;")
                 rustBlock("if !$safeName.is_empty()") {
@@ -247,10 +247,10 @@ class RequestBindingGenerator(
     /**
      * Format [member] in the when used as an HTTP header
      */
-    private fun headerFmtFun(writer: RustWriter, target: Shape, member: MemberShape, targetName: String, listHeader: Boolean): String {
+    private fun headerFmtFun(writer: RustWriter, target: Shape, member: MemberShape, targetName: String, isListHeader: Boolean): String {
         fun quoteValue(value: String): String {
             // Timestamp shapes are not quoted in header lists
-            return if (listHeader && !target.isTimestampShape) {
+            return if (isListHeader && !target.isTimestampShape) {
                 val quoteFn = writer.format(headerUtil.member("quote_header_value"))
                 "$quoteFn($value)"
             } else {

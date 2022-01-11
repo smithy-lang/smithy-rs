@@ -171,6 +171,13 @@ mod parse_multi_header {
     use super::ParseError;
     use std::borrow::Cow;
 
+    fn trim(s: Cow<'_, str>) -> Cow<'_, str> {
+        match s {
+            Cow::Owned(s) => Cow::Owned(s.trim().into()),
+            Cow::Borrowed(s) => Cow::Borrowed(s.trim()),
+        }
+    }
+
     /// Reads a single value out of the given input, and returns a tuple containing
     /// the parsed value and the remainder of the slice that can be used to parse
     /// more values.
@@ -180,7 +187,10 @@ mod parse_multi_header {
             match byte {
                 b' ' | b'\t' => { /* skip whitespace */ }
                 b'"' => return read_quoted_value(&current_slice[1..]),
-                _ => return read_unquoted_value(current_slice),
+                _ => {
+                    let (value, rest) = read_unquoted_value(current_slice)?;
+                    return Ok((trim(value), rest));
+                }
             }
         }
 
@@ -193,7 +203,7 @@ mod parse_multi_header {
         let (first, next) = input.split_at(next_delim);
         let first = std::str::from_utf8(first)
             .map_err(|_| ParseError::new_with_message("header was not valid utf8"))?;
-        Ok((Cow::Borrowed(first), then_delim(next).unwrap()))
+        Ok((Cow::Borrowed(first), then_comma(next).unwrap()))
     }
 
     /// Reads a header value that is surrounded by quotation marks and may have escaped
@@ -209,7 +219,10 @@ mod parse_multi_header {
                     if inner.contains("\\\"") {
                         inner = Cow::Owned(inner.replace("\\\"", "\""));
                     }
-                    let rest = then_delim(&input[(index + 1)..])?;
+                    if inner.contains("\\\\") {
+                        inner = Cow::Owned(inner.replace("\\\\", "\\"));
+                    }
+                    let rest = then_comma(&input[(index + 1)..])?;
                     return Ok((inner, rest));
                 }
                 _ => {}
@@ -220,7 +233,7 @@ mod parse_multi_header {
         ))
     }
 
-    fn then_delim(s: &[u8]) -> Result<&[u8], ParseError> {
+    fn then_comma(s: &[u8]) -> Result<&[u8], ParseError> {
         if s.is_empty() {
             Ok(s)
         } else if s.starts_with(b",") {
@@ -237,14 +250,22 @@ fn read_one<'a, T>(
     f: &impl Fn(&str) -> Result<T, ParseError>,
 ) -> Result<(T, &'a [u8]), ParseError> {
     let (value, rest) = parse_multi_header::read_value(s)?;
-    Ok((f(value.trim())?, rest))
+    Ok((f(&value)?, rest))
 }
 
 /// Conditionally quotes and escapes a header value if the header value contains a comma or quote.
 pub fn quote_header_value<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
     let value = value.into();
-    if value.contains('"') || value.contains(',') {
-        Cow::Owned(format!("\"{}\"", value.replace('"', "\\\"")))
+    if value.trim().len() != value.len()
+        || value.contains('"')
+        || value.contains(',')
+        || value.contains('(')
+        || value.contains(')')
+    {
+        Cow::Owned(format!(
+            "\"{}\"",
+            value.replace('\\', "\\\\").replace('"', "\\\"")
+        ))
     } else {
         value
     }
@@ -314,50 +335,31 @@ mod test {
             .header("MultipleEpochSeconds", "1234.5678,9012.3456")
             .body(())
             .unwrap();
+        let read = |name: &str, format: Format| {
+            many_dates(test_request.headers().get_all(name).iter(), format)
+        };
+        let read_valid = |name: &str, format: Format| read(name, format).expect("valid");
         assert_eq!(
-            many_dates(
-                test_request.headers().get_all("Empty").iter(),
-                Format::DateTime
-            )
-            .expect("valid"),
+            read_valid("Empty", Format::DateTime),
             Vec::<DateTime>::new()
         );
         assert_eq!(
-            many_dates(
-                test_request.headers().get_all("SingleHttpDate").iter(),
-                Format::HttpDate
-            )
-            .expect("valid"),
+            read_valid("SingleHttpDate", Format::HttpDate),
             vec![DateTime::from_secs_and_nanos(1445412480, 0)]
         );
         assert_eq!(
-            many_dates(
-                test_request.headers().get_all("MultipleHttpDates").iter(),
-                Format::HttpDate
-            )
-            .expect("valid"),
+            read_valid("MultipleHttpDates", Format::HttpDate),
             vec![
                 DateTime::from_secs_and_nanos(1445412480, 0),
                 DateTime::from_secs_and_nanos(1445498880, 0)
             ]
         );
         assert_eq!(
-            many_dates(
-                test_request.headers().get_all("SingleEpochSeconds").iter(),
-                Format::EpochSeconds
-            )
-            .expect("valid"),
+            read_valid("SingleEpochSeconds", Format::EpochSeconds),
             vec![DateTime::from_secs_and_nanos(1234, 567_800_000)]
         );
         assert_eq!(
-            many_dates(
-                test_request
-                    .headers()
-                    .get_all("MultipleEpochSeconds")
-                    .iter(),
-                Format::EpochSeconds
-            )
-            .expect("valid"),
+            read_valid("MultipleEpochSeconds", Format::EpochSeconds),
             vec![
                 DateTime::from_secs_and_nanos(1234, 567_800_000),
                 DateTime::from_secs_and_nanos(9012, 345_600_000)
@@ -369,41 +371,39 @@ mod test {
     fn read_many_strings() {
         let test_request = http::Request::builder()
             .header("Empty", "")
-            .header("Foo", "foo")
+            .header("Foo", "  foo")
+            .header("FooInQuotes", "\"  foo\"")
             .header("CommaInQuotes", "\"foo,bar\",baz")
             .header("QuoteInQuotes", "\"foo\\\",bar\",\"\\\"asdf\\\"\",baz")
+            .header(
+                "QuoteInQuotesWithSpaces",
+                "\"foo\\\",bar\", \"\\\"asdf\\\"\", baz",
+            )
             .header("JunkFollowingQuotes", "\"\\\"asdf\\\"\"baz")
             .header("EmptyQuotes", "\"\",baz")
+            .header("EscapedSlashesInQuotes", "foo, \"(foo\\\\bar)\"")
             .body(())
             .unwrap();
+        let read =
+            |name: &str| read_many_from_str::<String>(test_request.headers().get_all(name).iter());
+        let read_valid = |name: &str| read(name).expect("valid");
+        assert_eq!(read_valid("Empty"), Vec::<String>::new());
+        assert_eq!(read_valid("Foo"), vec!["foo"]);
+        assert_eq!(read_valid("FooInQuotes"), vec!["  foo"]);
+        assert_eq!(read_valid("CommaInQuotes"), vec!["foo,bar", "baz"]);
         assert_eq!(
-            read_many_from_str::<String>(test_request.headers().get_all("Empty").iter())
-                .expect("valid"),
-            Vec::<String>::new(),
-        );
-        assert_eq!(
-            read_many_from_str::<String>(test_request.headers().get_all("Foo").iter())
-                .expect("valid"),
-            vec!["foo"]
-        );
-        assert_eq!(
-            read_many_from_str::<String>(test_request.headers().get_all("CommaInQuotes").iter())
-                .expect("valid"),
-            vec!["foo,bar", "baz"]
-        );
-        assert_eq!(
-            read_many_from_str::<String>(test_request.headers().get_all("QuoteInQuotes").iter())
-                .expect("valid"),
+            read_valid("QuoteInQuotes"),
             vec!["foo\",bar", "\"asdf\"", "baz"]
         );
-        assert!(read_many_from_str::<String>(
-            test_request.headers().get_all("JunkFollowingQuotes").iter()
-        )
-        .is_err());
         assert_eq!(
-            read_many_from_str::<String>(test_request.headers().get_all("EmptyQuotes").iter())
-                .expect("valid"),
-            vec!["", "baz"]
+            read_valid("QuoteInQuotesWithSpaces"),
+            vec!["foo\",bar", "\"asdf\"", "baz"]
+        );
+        assert!(read("JunkFollowingQuotes").is_err());
+        assert_eq!(read_valid("EmptyQuotes"), vec!["", "baz"]);
+        assert_eq!(
+            read_valid("EscapedSlashesInQuotes"),
+            vec!["foo", "(foo\\bar)"]
         );
     }
 
@@ -501,9 +501,13 @@ mod test {
     fn test_quote_header_value() {
         assert_eq!("", &quote_header_value(""));
         assert_eq!("foo", &quote_header_value("foo"));
+        assert_eq!("\"  foo\"", &quote_header_value("  foo"));
         assert_eq!("foo bar", &quote_header_value("foo bar"));
         assert_eq!("\"foo,bar\"", &quote_header_value("foo,bar"));
         assert_eq!("\",\"", &quote_header_value(","));
         assert_eq!("\"\\\"foo\\\"\"", &quote_header_value("\"foo\""));
+        assert_eq!("\"\\\"f\\\\oo\\\"\"", &quote_header_value("\"f\\oo\""));
+        assert_eq!("\"(\"", &quote_header_value("("));
+        assert_eq!("\")\"", &quote_header_value(")"));
     }
 }
