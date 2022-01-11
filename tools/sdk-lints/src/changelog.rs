@@ -6,10 +6,11 @@
 use crate::lint::LintError;
 use crate::{repo_root, Check, Lint};
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
+use serde::{de, Deserialize, Deserializer};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::str::FromStr;
 
 const EXAMPLE_ENTRY: &str = r#"
 # Example changelog entries
@@ -41,7 +42,55 @@ struct ChangelogEntry {
     meta: Meta,
     author: String,
     #[serde(default)]
-    references: Vec<String>,
+    references: Vec<Reference>,
+}
+
+struct Reference {
+    repo: String,
+    number: usize,
+}
+
+impl Reference {
+    fn to_md_link(&self) -> String {
+        format!(
+            "[{repo}#{number}](https://github.com/awslabs/{repo}/issues/{number})",
+            repo = self.repo,
+            number = self.number
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for Reference {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(de::Error::custom)
+    }
+}
+
+impl FromStr for Reference {
+    type Err = anyhow::Error;
+
+    fn from_str(reference: &str) -> std::result::Result<Self, Self::Err> {
+        match reference.split_once('#') {
+            None => bail!(
+                "Reference must of the form `repo#number` but found {}",
+                reference
+            ),
+            Some((repo, number)) => {
+                let number = number.parse::<usize>()?;
+                if !matches!(repo, "smithy-rs" | "aws-sdk-rust") {
+                    bail!("unexpected repo: {}", repo);
+                }
+                Ok(Reference {
+                    number,
+                    repo: repo.to_string(),
+                })
+            }
+        }
+    }
 }
 
 impl ChangelogEntry {
@@ -63,7 +112,11 @@ impl ChangelogEntry {
         if !meta.is_empty() {
             meta.push(' ');
         }
-        let mut references = self.references.clone();
+        let mut references = self
+            .references
+            .iter()
+            .map(Reference::to_md_link)
+            .collect::<Vec<_>>();
         if !maintainers().contains(&self.author.to_ascii_lowercase().as_str()) {
             references.push(format!("@{}", self.author.to_ascii_lowercase()));
         };
@@ -223,7 +276,7 @@ fn render(mut entries: Vec<ChangelogEntry>, version: &str, date: &str) -> String
                         .author
                         .eq_ignore_ascii_case(contributor_handle.as_str())
                 })
-                .flat_map(|entry| entry.references.iter().map(|it| it.as_str()))
+                .flat_map(|entry| entry.references.iter().map(|it| it.to_md_link()))
                 .collect::<Vec<_>>();
             contribution_references.sort();
             contribution_references.dedup();
@@ -254,20 +307,6 @@ fn validate(entry: &ChangelogEntry) -> Result<()> {
     }
     if entry.references.is_empty() {
         bail!("Changelog entry must refer to at least one pull request or issue");
-    }
-
-    for reference in &entry.references {
-        match reference.split_once('#') {
-            None => bail!(
-                "Reference must of the form `repo#number` but found {}",
-                reference
-            ),
-            Some(("aws-sdk-rust" | "smithy-rs", number)) if number.parse::<u32>().is_ok() => {}
-            _other => bail!(
-                "unexpected reference format: {} (expected aws-sdk-rust/smithy-rs#number)",
-                reference
-            ),
-        }
     }
 
     Ok(())
@@ -368,11 +407,11 @@ references = ["smithy-rs#446"]
 v0.3.0 (January 4th, 2022)
 ==========================
 **Breaking Changes:**
-- ⚠ (smithy-rs#445) I made a major change to update the code generator
+- ⚠ ([smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) I made a major change to update the code generator
 
 **New this release:**
-- 🎉 (smithy-rs#446, @external-contrib) I made a change to update the code generator
-- 🎉 (smithy-rs#446, @external-contrib) I made a change to update the code generator
+- 🎉 ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- 🎉 ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
 
     **Update guide:**
     blah blah
@@ -381,7 +420,7 @@ v0.3.0 (January 4th, 2022)
 **Contributors**
 Thank you for your contributions! ❤
 - @another-contrib
-- @external-contrib (smithy-rs#446)
+- @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446))
 "#
         .trim_start();
         assert_eq!(expected, rendered);
