@@ -722,22 +722,23 @@ private class ServerHttpProtocolImplGenerator(
             val (queryBindingsTargettingCollection, queryBindingsTargettingSimple) =
                 queryBindings.partition { model.expectShape(it.member.target) is CollectionShape }
             queryBindingsTargettingSimple.forEach {
-                rust("let mut seen_${it.memberName.toSnakeCase()} = false;")
+                rust("let mut seen_${symbolProvider.toMemberName(it.member)} = false;")
             }
             queryBindingsTargettingCollection.forEach {
-                rust("let mut ${it.memberName.toSnakeCase()} = Vec::new();")
+                rust("let mut ${symbolProvider.toMemberName(it.member)} = Vec::new();")
             }
 
             rustBlock("for (k, v) in pairs") {
                 queryBindingsTargettingSimple.forEach {
                     val deserializer = generateParsePercentEncodedStrFn(it)
+                    val memberName = symbolProvider.toMemberName(it.member)
                     rustTemplate(
                         """
-                        if !seen_${it.memberName.toSnakeCase()} && k == "${it.locationName}" {
+                        if !seen_${memberName} && k == "${it.locationName}" {
                             input = input.${it.member.setterName()}(
                                 #{deserializer}(v)?
                             );
-                            seen_${it.memberName.toSnakeCase()} = true;
+                            seen_${memberName} = true;
                         }
                         """.trimIndent(),
                         "deserializer" to deserializer
@@ -787,7 +788,7 @@ private class ServerHttpProtocolImplGenerator(
                                 )
                             }
                         }
-                        rust("${it.memberName.toSnakeCase()}.push(v);")
+                        rust("${symbolProvider.toMemberName(it.member)}.push(v);")
                     }
                 }
 
@@ -810,9 +811,16 @@ private class ServerHttpProtocolImplGenerator(
                 rust("input = input.${queryParamsBinding.member.setterName()}(Some(query_params));")
             }
             queryBindingsTargettingCollection.forEach {
+                val memberName = symbolProvider.toMemberName(it.member)
                 rustTemplate(
                     """
-                    input = input.${it.member.setterName()}(Some(${it.memberName.toSnakeCase()}));
+                    input = input.${it.member.setterName()}(
+                        if ${memberName}.is_empty() {
+                            None
+                        } else {
+                            Some(${memberName})
+                        }
+                    );
                     """.trimIndent()
                 )
             }
