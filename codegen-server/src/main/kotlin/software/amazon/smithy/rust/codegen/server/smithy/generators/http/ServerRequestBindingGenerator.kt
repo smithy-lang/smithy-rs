@@ -3,16 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators.http
+package software.amazon.smithy.rust.codegen.server.smithy.generators.http
+
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpBindingGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 
-class ResponseBindingGenerator(
+class ServerRequestBindingGenerator(
     protocol: Protocol,
     codegenContext: CodegenContext,
     operationShape: OperationShape
@@ -21,9 +24,6 @@ class ResponseBindingGenerator(
 
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType =
         httpBindingGenerator.generateDeserializeHeaderFn(binding)
-
-    fun generateDeserializePrefixHeaderFn(binding: HttpBindingDescriptor): RuntimeType =
-        httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
 
     fun generateDeserializePayloadFn(
         operationShape: OperationShape,
@@ -36,6 +36,7 @@ class ResponseBindingGenerator(
         binding,
         errorT,
         structuredHandler,
-        docHandler
+        docHandler,
+        HttpMessageType.REQUEST
     )
 }
