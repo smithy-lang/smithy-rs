@@ -198,7 +198,7 @@ pub(crate) fn json_parse_loop<'a>(
             }
             other => {
                 return Err(InvalidJsonCredentials::Other(
-                    format!("expected object key, found: {:?}", other,).into(),
+                    format!("expected object key, found: {:?}", other).into(),
                 ));
             }
         }
