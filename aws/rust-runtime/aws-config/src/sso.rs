@@ -125,7 +125,7 @@ impl Builder {
         self
     }
 
-    /// Set the start url used for SSO
+    /// Set the start URL used for SSO
     pub fn start_url(mut self, start_url: impl Into<String>) -> Self {
         self.start_url = Some(start_url.into());
         self
