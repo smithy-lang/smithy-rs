@@ -15,20 +15,16 @@ use std::env;
 use crate::CanaryEnv;
 use tokio_stream::StreamExt;
 
-mk_canary!("ec2_paginator", |clients: &Clients, _env: &CanaryEnv| {
-    paginator_canary(clients.ec2.clone())
+mk_canary!("ec2_paginator", |clients: &Clients, env: &CanaryEnv| {
+    paginator_canary(clients.ec2.clone(), env.page_size)
 });
 
-pub async fn paginator_canary(client: ec2::Client) -> anyhow::Result<()> {
-    let page_size = env::var("PAGE_SIZE")
-        .map(|ps| ps.parse::<i32>())
-        .unwrap_or_else(|_| Ok(16))
-        .context("invalid page size")?;
+pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::Result<()> {
     let mut history = client
         .describe_spot_price_history()
         .instance_types(InstanceType::M1Medium)
         .into_paginator()
-        .page_size(page_size)
+        .page_size(page_size as i32)
         .send();
 
     let mut num_pages = 0;

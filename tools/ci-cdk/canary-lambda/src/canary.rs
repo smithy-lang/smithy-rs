@@ -66,6 +66,8 @@ impl Clients {
 pub struct CanaryEnv {
     pub(crate) s3_bucket_name: String,
     pub(crate) expected_transcribe_result: String,
+    #[allow(dead_code)]
+    pub(crate) page_size: usize,
 }
 
 impl fmt::Debug for CanaryEnv {
@@ -95,9 +97,15 @@ impl CanaryEnv {
                     .to_string()
             });
 
+        let page_size = env::var("PAGE_SIZE")
+            .map(|ps| ps.parse::<usize>())
+            .unwrap_or_else(|_| Ok(16))
+            .expect("invalid page size");
+
         Self {
             s3_bucket_name,
             expected_transcribe_result,
+            page_size,
         }
     }
 }

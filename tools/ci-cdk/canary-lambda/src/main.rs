@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use anyhow::bail;
 use canary::{get_canaries_to_run, CanaryEnv};
 use lambda_runtime::{Context as LambdaContext, Error};
 use serde_json::{json, Value};
