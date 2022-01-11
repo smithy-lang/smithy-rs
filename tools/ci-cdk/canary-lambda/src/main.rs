@@ -3,26 +3,74 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use anyhow::bail;
 use canary::{get_canaries_to_run, CanaryEnv};
 use lambda_runtime::{Context as LambdaContext, Error};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
+use std::env;
 use std::future::Future;
 use std::pin::Pin;
+use std::time::Duration;
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use tracing::info;
 
+/// Conditionally include the module based on the $version feature gate
+///
+/// When the module is not included, an `mk_canary` function will be generated that returns `None`.
+macro_rules! canary_module {
+    ($name: ident, since: $version: expr) => {
+        #[cfg(feature = $version)]
+        mod $name;
+
+        #[cfg(not(feature = $version))]
+        mod $name {
+            pub(crate) fn mk_canary(
+                _clients: &crate::canary::Clients,
+                _env: &crate::canary::CanaryEnv,
+            ) -> Option<(&'static str, crate::canary::CanaryFuture)> {
+                tracing::warn!(concat!(
+                    stringify!($name),
+                    " is disabled because it is not supported by this version of the SDK."
+                ));
+                None
+            }
+        }
+    };
+}
+
 mod canary;
+
 mod s3_canary;
+canary_module!(paginator_canary, since: "v0.4.1");
 mod transcribe_canary;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
-
+    let local = env::args().any(|arg| arg == "--local");
     let main_handler = LambdaMain::new().await;
-    lambda_runtime::run(main_handler).await?;
-    Ok(())
+    if local {
+        let result = lambda_main(main_handler.clients).await?;
+        if result
+            .as_object()
+            .expect("is object")
+            .get_key_value("result")
+            .expect("exists")
+            .1
+            .as_str()
+            .expect("is str")
+            == "success"
+        {
+            Ok(())
+        } else {
+            Err(format!("canary failed: {:?}", result).into())
+        }
+    } else {
+        lambda_runtime::run(main_handler).await?;
+        Ok(())
+    }
 }
 
 // Enables us to keep the clients alive between successive Lambda executions.
@@ -77,11 +125,12 @@ async fn lambda_main(clients: canary::Clients) -> Result<Value, Error> {
 }
 
 async fn canary_result(handle: JoinHandle<anyhow::Result<()>>) -> Result<(), String> {
-    match handle.await {
-        Ok(result) => match result {
+    match timeout(Duration::from_secs(20), handle).await {
+        Err(_timeout) => Err(format!("canary timed out")),
+        Ok(Ok(result)) => match result {
             Ok(_) => Ok(()),
-            Err(err) => Err(err.to_string()),
+            Err(err) => Err(format!("{:?}", err)),
         },
-        Err(err) => Err(err.to_string()),
+        Ok(Err(err)) => Err(err.to_string()),
     }
 }

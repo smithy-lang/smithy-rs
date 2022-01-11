@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use crate::paginator_canary;
 use crate::{s3_canary, transcribe_canary};
+use aws_sdk_ec2 as ec2;
 use aws_sdk_s3 as s3;
 use aws_sdk_transcribestreaming as transcribe;
 use std::env;
@@ -12,31 +14,41 @@ use std::future::Future;
 use std::pin::Pin;
 use tracing::{info_span, Instrument};
 
+#[macro_export]
+macro_rules! mk_canary {
+    ($name: expr, $run_canary: expr) => {
+        pub(crate) fn mk_canary(
+            clients: &Clients,
+            env: &CanaryEnv,
+        ) -> Option<(&'static str, crate::canary::CanaryFuture)> {
+            Some(($name, Box::pin($run_canary(clients, env))))
+        }
+    };
+}
+
 pub fn get_canaries_to_run(clients: Clients, env: CanaryEnv) -> Vec<(&'static str, CanaryFuture)> {
-    vec![
-        (
-            "s3_canary",
-            Box::pin(
-                s3_canary::s3_canary(clients.s3, env.s3_bucket_name)
-                    .instrument(info_span!("s3_canary")),
-            ),
-        ),
-        (
-            "transcribe_canary",
-            Box::pin(
-                transcribe_canary::transcribe_canary(
-                    clients.transcribe,
-                    env.expected_transcribe_result,
-                )
-                .instrument(info_span!("transcribe_canary")),
-            ),
-        ),
-    ]
+    let canaries = vec![
+        paginator_canary::mk_canary(&clients, &env),
+        s3_canary::mk_canary(&clients, &env),
+        transcribe_canary::mk_canary(&clients, &env),
+    ];
+
+    canaries
+        .into_iter()
+        .flatten()
+        .map(|(name, fut)| {
+            (
+                name,
+                Box::pin(fut.instrument(info_span!("run_canary", name = name))) as _,
+            )
+        })
+        .collect()
 }
 
 #[derive(Clone)]
 pub struct Clients {
     pub s3: s3::Client,
+    pub ec2: ec2::Client,
     pub transcribe: transcribe::Client,
 }
 
@@ -44,6 +56,7 @@ impl Clients {
     pub async fn initialize() -> Self {
         let config = aws_config::load_from_env().await;
         Self {
+            ec2: ec2::Client::new(&config),
             s3: s3::Client::new(&config),
             transcribe: transcribe::Client::new(&config),
         }
@@ -51,8 +64,8 @@ impl Clients {
 }
 
 pub struct CanaryEnv {
-    s3_bucket_name: String,
-    expected_transcribe_result: String,
+    pub(crate) s3_bucket_name: String,
+    pub(crate) expected_transcribe_result: String,
 }
 
 impl fmt::Debug for CanaryEnv {
@@ -77,7 +90,10 @@ impl CanaryEnv {
         // This is an environment variable so that the code doesn't need to be changed if
         // Amazon Transcribe starts returning different output for the same audio.
         let expected_transcribe_result = env::var("CANARY_EXPECTED_TRANSCRIBE_RESULT")
-            .expect("CANARY_EXPECTED_TRANSCRIBE_RESULT must be set");
+            .unwrap_or_else(|_| {
+                "Good day to you transcribe. This is Polly talking to you from the Rust ST K."
+                    .to_string()
+            });
 
         Self {
             s3_bucket_name,

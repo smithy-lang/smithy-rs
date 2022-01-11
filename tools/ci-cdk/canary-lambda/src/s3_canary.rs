@@ -3,12 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::canary::CanaryError;
+use crate::canary::{CanaryError, Clients};
+use crate::{mk_canary, CanaryEnv};
 use anyhow::Context;
 use aws_sdk_s3 as s3;
 use uuid::Uuid;
 
 const METADATA_TEST_VALUE: &str = "some   value";
+
+mk_canary!("s3", |clients: &Clients, env: &CanaryEnv| s3_canary(
+    clients.s3.clone(),
+    env.s3_bucket_name.clone()
+));
 
 pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Result<()> {
     use s3::{error::GetObjectError, error::GetObjectErrorKind, SdkError};
