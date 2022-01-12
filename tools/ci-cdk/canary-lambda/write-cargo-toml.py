@@ -32,6 +32,7 @@ anyhow = "1"
 async-stream = "0.3"
 bytes = "1"
 hound = "3.4"
+async-trait = "0.1"
 lambda_runtime = "0.4"
 serde_json = "1"
 thiserror = "1"
@@ -39,8 +40,13 @@ tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 uuid = { version = "0.8", features = ["v4"] }
+tokio-stream = "0"
 """
 
+notable_versions = [
+    # first version to add support for paginators
+    "0.4.1"
+]
 
 def main():
     args = Args()
@@ -51,9 +57,18 @@ def main():
               args.path, args.sdk_version), file=file)
         print(format_dependency("aws-sdk-s3",
               args.path, args.sdk_version), file=file)
+        print(format_dependency("aws-sdk-ec2",
+                                args.path, args.sdk_version), file=file)
         print(format_dependency("aws-sdk-transcribestreaming",
               args.path, args.sdk_version), file=file)
+        print("[features]", file=file)
+        for version in notable_versions:
+            print(f'"v{version}" = []', file=file)
+        enabled = ', '.join(enabled_versions(args.sdk_version))
+        print(f'default = [{enabled}]', file=file)
 
+def enabled_versions(sdk_version):
+    return [f'"v{version}"' for version in notable_versions if version.split('.') <= sdk_version.split('.')]
 
 def format_dependency(crate, path, version):
     if path is None:
