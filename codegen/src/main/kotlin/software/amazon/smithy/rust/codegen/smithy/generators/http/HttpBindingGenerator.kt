@@ -259,7 +259,7 @@ class HttpBindingGenerator(
                             )
                         }
                         HttpMessageType.REQUEST -> {
-                            rust( "let body_str = std::str::from_utf8(body)?;")
+                            rust("let body_str = std::str::from_utf8(body)?;")
                         }
                     }
                     if (targetShape.hasTrait<EnumTrait>()) {
