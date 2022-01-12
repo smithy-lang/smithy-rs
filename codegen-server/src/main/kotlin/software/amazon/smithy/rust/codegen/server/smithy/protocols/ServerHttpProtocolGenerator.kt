@@ -580,7 +580,7 @@ private class ServerHttpProtocolImplGenerator(
                     structuredHandler = structureShapeHandler
                 )
                 return if (binding.member.isStreaming(model)) {
-                    writable { rust("""unimplemented!("streaming request bodies");""") }
+                    writable { rust("""todo!("streaming request bodies");""") }
                 } else {
                     writable {
                         rustTemplate("""

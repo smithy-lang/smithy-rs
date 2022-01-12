@@ -86,9 +86,9 @@ class HttpBindingGenerator(
     private val httpSerdeModule = RustModule.private("http_serde")
 
     /**
-     * Generate a function to deserialize [binding] from HTTP headers
+     * Generate a function to deserialize [binding] from HTTP headers.
      *
-     * The name of the resulting function is returned as a String
+     * The name of the resulting function is returned as a String.
      *
      * Generates a function like:
      * ```rust
@@ -154,7 +154,7 @@ class HttpBindingGenerator(
     }
 
     /**
-     * Generate a function to deserialize `[binding]` from the response payload
+     * Generate a function to deserialize `[binding]` from the response payload.
      */
     fun generateDeserializePayloadFn(
         operationShape: OperationShape,
@@ -375,7 +375,7 @@ class HttpBindingGenerator(
     }
 
     /**
-     * Generate a unique name for the deserializer function for a given operationShape -> member pair
+     * Generate a unique name for the deserializer function for a given operationShape -> member pair.
      */
     // rename here technically not required, operations and members cannot be renamed
     private fun fnName(operationShape: OperationShape, binding: HttpBindingDescriptor) =
