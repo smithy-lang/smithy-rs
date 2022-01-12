@@ -248,7 +248,6 @@ class HttpBindingGenerator(
         // of an empty instance of the response type.
         withBlock("(!body.is_empty()).then(||{", "}).transpose()") {
             when (targetShape) {
-                // TODO What if targetShape is set/map/list ?
                 is StructureShape, is UnionShape -> this.structuredHandler("body")
                 is StringShape -> {
                     when (httpMessageType) {
@@ -276,6 +275,10 @@ class HttpBindingGenerator(
                     RuntimeType.Blob(runtimeConfig)
                 )
                 is DocumentShape -> this.docShapeHandler("body")
+                // `httpPayload` can be applied to set/map/list shapes.
+                // However, none of the AWS protocols support it.
+                // Smithy CLI will refuse to build the model if you apply the trait to these shapes, so this branch
+                // remains unreachable.
                 else -> UNREACHABLE("unexpected shape: $targetShape")
             }
         }
