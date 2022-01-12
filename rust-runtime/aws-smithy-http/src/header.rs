@@ -178,6 +178,14 @@ mod parse_multi_header {
         }
     }
 
+    fn replace<'a>(value: Cow<'a, str>, pattern: &str, replacement: &str) -> Cow<'a, str> {
+        if value.contains(pattern) {
+            Cow::Owned(value.replace(pattern, replacement))
+        } else {
+            value
+        }
+    }
+
     /// Reads a single value out of the given input, and returns a tuple containing
     /// the parsed value and the remainder of the slice that can be used to parse
     /// more values.
@@ -216,12 +224,8 @@ mod parse_multi_header {
                         Cow::Borrowed(std::str::from_utf8(&input[0..index]).map_err(|_| {
                             ParseError::new_with_message("header was not valid utf8")
                         })?);
-                    if inner.contains("\\\"") {
-                        inner = Cow::Owned(inner.replace("\\\"", "\""));
-                    }
-                    if inner.contains("\\\\") {
-                        inner = Cow::Owned(inner.replace("\\\\", "\\"));
-                    }
+                    inner = replace(inner, "\\\"", "\"");
+                    inner = replace(inner, "\\\\", "\\");
                     let rest = then_comma(&input[(index + 1)..])?;
                     return Ok((inner, rest));
                 }
@@ -372,8 +376,10 @@ mod test {
         let test_request = http::Request::builder()
             .header("Empty", "")
             .header("Foo", "  foo")
-            .header("FooInQuotes", "\"  foo\"")
+            .header("FooTrailing", "foo   ")
+            .header("FooInQuotes", "\"  foo  \"")
             .header("CommaInQuotes", "\"foo,bar\",baz")
+            .header("CommaInQuotesTrailing", "\"foo,bar\",baz  ")
             .header("QuoteInQuotes", "\"foo\\\",bar\",\"\\\"asdf\\\"\",baz")
             .header(
                 "QuoteInQuotesWithSpaces",
@@ -389,8 +395,10 @@ mod test {
         let read_valid = |name: &str| read(name).expect("valid");
         assert_eq!(read_valid("Empty"), Vec::<String>::new());
         assert_eq!(read_valid("Foo"), vec!["foo"]);
-        assert_eq!(read_valid("FooInQuotes"), vec!["  foo"]);
+        assert_eq!(read_valid("FooTrailing"), vec!["foo"]);
+        assert_eq!(read_valid("FooInQuotes"), vec!["  foo  "]);
         assert_eq!(read_valid("CommaInQuotes"), vec!["foo,bar", "baz"]);
+        assert_eq!(read_valid("CommaInQuotesTrailing"), vec!["foo,bar", "baz"]);
         assert_eq!(
             read_valid("QuoteInQuotes"),
             vec!["foo\",bar", "\"asdf\"", "baz"]
