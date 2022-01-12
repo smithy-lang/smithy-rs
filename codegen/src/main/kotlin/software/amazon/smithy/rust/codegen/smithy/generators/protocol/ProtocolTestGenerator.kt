@@ -308,9 +308,9 @@ class ProtocolTestGenerator(
                     rust(
                         """
                         assert_eq!(
-                                        parsed.$memberName.collect().await.unwrap().into_bytes(),
-                                        expected_output.$memberName.collect().await.unwrap().into_bytes()
-                                    );
+                            parsed.$memberName.collect().await.unwrap().into_bytes(),
+                            expected_output.$memberName.collect().await.unwrap().into_bytes()
+                        );
                         """
                     )
                 } else {
@@ -367,7 +367,7 @@ class ProtocolTestGenerator(
         }
         val variableName = "expected_headers"
         rustWriter.withBlock("let $variableName = [", "];") {
-            write(
+            writeWithNoFormatting(
                 headers.entries.joinToString(",") {
                     "(${it.key.dq()}, ${it.value.dq()})"
                 }
@@ -451,6 +451,8 @@ class ProtocolTestGenerator(
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
         private val ExpectFail = setOf<FailingTest>(
+            // TODO(https://github.com/awslabs/smithy/pull/1049): Remove this once the test case in Smithy is fixed
+            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
             // TODO(https://github.com/awslabs/smithy/pull/1042): Remove this once the test case in Smithy is fixed
             FailingTest(RestJson, "RestJsonInputUnionWithUnitMember", Action.Request),
             FailingTest("${RestJson}Extras", "RestJsonInputUnionWithUnitMember", Action.Request),
