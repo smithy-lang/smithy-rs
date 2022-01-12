@@ -22,3 +22,11 @@ pub mod timeout_config;
 pub use credentials::ProfileFileCredentialsProvider;
 #[doc(inline)]
 pub use region::ProfileFileRegionProvider;
+
+/// Returns true or false based on whether or not this code is likely running inside an AWS Lambda.
+/// [Lambdas set many environment variables](https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html#configuration-envvars-runtime)
+/// that we can check.
+fn check_is_likely_running_on_a_lambda(environment: &os_shim_internal::Env) -> bool {
+    // LAMBDA_TASK_ROOT – The path to your Lambda function code.
+    environment.get("LAMBDA_TASK_ROOT").is_ok()
+}

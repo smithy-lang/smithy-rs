@@ -10,6 +10,7 @@ use std::str::FromStr;
 use aws_smithy_types::retry::{RetryConfigBuilder, RetryConfigErr, RetryMode};
 use aws_types::os_shim_internal::{Env, Fs};
 
+use crate::profile::check_is_likely_running_on_a_lambda;
 use crate::provider_config::ProviderConfig;
 
 /// Load retry configuration properties from a profile file
@@ -106,7 +107,13 @@ impl ProfileFileRetryConfigProvider {
         let selected_profile = match profile.get_profile(selected_profile) {
             Some(profile) => profile,
             None => {
-                tracing::warn!("failed to get selected '{}' profile", selected_profile);
+                // Lambdas don't have home directories and emitting this warning is not helpful
+                // to users running the SDK from within a Lambda. This warning will be silenced
+                // if we determine that that is the case.
+                let is_likely_running_on_a_lambda = check_is_likely_running_on_a_lambda(self);
+                if !is_likely_running_on_a_lambda {
+                    tracing::warn!("failed to get selected '{}' profile", selected_profile);
+                }
                 // return an empty builder
                 return Ok(RetryConfigBuilder::new());
             }
