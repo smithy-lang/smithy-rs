@@ -17,25 +17,32 @@ default = ["rustls", "rt-tokio"]
 
 [dependencies]
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
+aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client" }
 aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1", features = ["sync"] }
 tracing = { version = "0.1" }
-hyper = { version = "0.14.16", default-features = false }
+hyper = { version = "0.14", default-features = false }
 
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-tower" }
 aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json" }
+
+# implementation detail of SSO credential caching
+ring = "0.16"
+hex = "0.4.3"
+zeroize = "1"
+
 bytes = "1.1.0"
 http = "0.2.4"
 tower = { version = "0.4.8" }
 
 [dev-dependencies]
 futures-util = "0.3.16"
-tracing-test = "0.1.0"
+tracing-test = "0.2.1"
 
 tokio = { version = "1", features = ["full", "test-util"] }
 # used to test compatibility

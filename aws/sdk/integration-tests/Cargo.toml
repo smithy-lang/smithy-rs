@@ -3,6 +3,7 @@
 [workspace]
 members = [
     "dynamodb",
+    "ec2",
     "iam",
     "kms",
     "polly",

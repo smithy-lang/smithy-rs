@@ -15,4 +15,4 @@ tokio = { version = "1", features = ["full"] }
 env_logger = "0.8.2"
 chrono = "0.4.19"
 structopt = { version = "0.3", default-features = false }
-tracing-subscriber = "0.2.18"
+tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }

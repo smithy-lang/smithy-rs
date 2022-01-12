@@ -1,4 +1,27 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+v0.34.1 (January 10, 2022)
+==========================
+**New this release:**
+- 🐛 (smithy-rs#1054, aws-sdk-rust#391) Fix critical paginator bug where an empty outputToken lead to a never ending stream.
+
+
+
+0.34.0 (January 6th, 2022)
+==========================
+**Breaking Changes:**
+- ⚠ (smithy-rs#990) Codegen will no longer produce builders and clients with methods that take `impl Into<T>` except for strings and boxed types.
+- ⚠ (smithy-rs#1003) The signature of `aws_smithy_protocol_test::validate_headers` was made more flexible but may require adjusting invocations slightly.
+
+**New this release:**
+- 🎉 (aws-sdk-rust#47, smithy-rs#1006) Add support for paginators! Paginated APIs now include `.into_paginator()` and (when supported) `.into_paginator().items()` to enable paginating responses automatically. The paginator API should be considered in preview and is subject to change pending customer feedback.
+- 🐛 (aws-sdk-rust#357) Generated docs will convert `<a>` tags with no `href` attribute to `<pre>` tags
+- (aws-sdk-rust#254, @jacco) Made fluent operation structs cloneable
+
+**Contributors**
+Thank you for your contributions! ❤
+- @jacco (aws-sdk-rust#254)
+
+
 v0.33.1 (December 15th, 2021)
 =============================
 **New this release:**

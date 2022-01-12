@@ -124,11 +124,12 @@ task("generateSmithyBuild") {
     }
 }
 
-task("generateDocs") {
+task("generateIndexMd") {
     inputs.property("servicelist", awsServices.services.toString())
-    outputs.file(outputDir.resolve("docs.md"))
+    val indexMd = outputDir.resolve("index.md")
+    outputs.file(indexMd)
     doLast {
-        project.docsLandingPage(awsServices, outputDir)
+        project.docsLandingPage(awsServices, indexMd)
     }
 }
 
@@ -268,7 +269,7 @@ task("finalizeSdk") {
         "relocateRuntime",
         "relocateAwsRuntime",
         "relocateExamples",
-        "generateDocs",
+        "generateIndexMd",
         "fixManifests"
     )
 }

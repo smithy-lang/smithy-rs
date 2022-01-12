@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.OperationIndex
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -95,7 +96,7 @@ class ServerProtocolTestGenerator(
             val testCases = error.getTrait<HttpResponseTestsTrait>()?.testCases.orEmpty()
             testCases.map { TestCase.ResponseTest(it, error) }
         }
-        val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching()
+        val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching().fixBroken()
 
         if (allTests.isNotEmpty()) {
             val operationName = operationSymbol.name
@@ -135,6 +136,26 @@ class ServerProtocolTestGenerator(
             }
         } else {
             this.filter { RunOnly.contains(it.testCase.id) }
+        }
+    }
+
+    // This function applies a "fix function" to each broken test before we synthesize it.
+    // Broken tests are those whose definitions in the `awslabs/smithy` repository are wrong, usually because they have
+    // not been written with a server-side perspective in mind.
+    private fun List<TestCase>.fixBroken(): List<TestCase> = this.map {
+        when (it) {
+            is TestCase.RequestTest -> {
+                val howToFixIt = BrokenRequestTests[Pair(codegenContext.serviceShape.id.toString(), it.testCase.id)]
+                if (howToFixIt == null) {
+                    it
+                } else {
+                    val fixed = howToFixIt(it.testCase)
+                    TestCase.RequestTest(fixed, it.targetShape)
+                }
+            }
+            is TestCase.ResponseTest -> {
+                it
+            }
         }
     }
 
@@ -412,12 +433,14 @@ class ServerProtocolTestGenerator(
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
         private val ExpectFail = setOf<FailingTest>(
+            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Request),
+            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
+            FailingTest(RestJson, "RestJsonOutputUnionWithUnitMember", Action.Response),
+            FailingTest(RestJson, "RestJsonUnitInputAllowsAccept", Action.Request),
+            FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonAllQueryStringTypes", Action.Request),
-            FailingTest(RestJson, "RestJsonQueryStringMap", Action.Request),
             FailingTest(RestJson, "RestJsonQueryStringEscaping", Action.Request),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", Action.Request),
-            FailingTest(RestJson, "RestJsonSupportsInfinityFloatQueryValues", Action.Request),
-            FailingTest(RestJson, "RestJsonSupportsNegativeInfinityFloatQueryValues", Action.Request),
             FailingTest(RestJson, "DocumentOutput", Action.Response),
             FailingTest(RestJson, "DocumentOutputString", Action.Response),
             FailingTest(RestJson, "DocumentOutputNumber", Action.Response),
@@ -549,5 +572,67 @@ class ServerProtocolTestGenerator(
         // These tests are not even attempted to be generated, either because they will not compile
         // or because they are flaky
         private val DisableTests = setOf<String>()
+
+        private fun fixRestJsonSupportsNaNFloatQueryValues(testCase: HttpRequestTestCase): HttpRequestTestCase {
+            // TODO This test does not pass, even after fixing it with this function, because, in IEEE 754 floating
+            // point numbers, `NaN` is not equal to any other floating point number, even itself! So we can't compare it
+            // to any "expected" value.
+            // Reference: https://doc.rust-lang.org/std/primitive.f32.html
+            // Request for guidance about this test to Smithy team: https://github.com/awslabs/smithy/pull/1040#discussion_r780418707
+            val params = Node.parse(
+                """
+                {
+                    "queryFloat": "NaN",
+                    "queryDouble": "NaN",
+                    "queryParamsMapOfStringList": {
+                        "Float": ["NaN"],
+                        "Double": ["NaN"]
+                    }
+                }
+                """.trimIndent()
+            ).asObjectNode().get()
+
+            return testCase.toBuilder().params(params).build()
+        }
+        private fun fixRestJsonSupportsInfinityFloatQueryValues(testCase: HttpRequestTestCase): HttpRequestTestCase =
+            testCase.toBuilder().params(
+                Node.parse(
+                    """
+                    {
+                        "queryFloat": "Infinity",
+                        "queryDouble": "Infinity",
+                        "queryParamsMapOfStringList": {
+                            "Float": ["Infinity"],
+                            "Double": ["Infinity"]
+                        }
+                    }
+                    """.trimMargin()
+                ).asObjectNode().get()
+            ).build()
+        private fun fixRestJsonSupportsNegativeInfinityFloatQueryValues(testCase: HttpRequestTestCase): HttpRequestTestCase =
+            testCase.toBuilder().params(
+                Node.parse(
+                    """
+                    {
+                        "queryFloat": "-Infinity",
+                        "queryDouble": "-Infinity",
+                        "queryParamsMapOfStringList": {
+                            "Float": ["-Infinity"],
+                            "Double": ["-Infinity"]
+                        }
+                    }
+                    """.trimMargin()
+                ).asObjectNode().get()
+            ).build()
+
+        // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
+        // This is because they have not been written from a server perspective, and as such the expected `params` field is incomplete.
+        // TODO Contribute a PR to fix them upstream and remove them from this list once the fixes get published in the next Smithy release.
+        private val BrokenRequestTests = mapOf(
+            // https://github.com/awslabs/smithy/pull/1040
+            Pair(RestJson, "RestJsonSupportsNaNFloatQueryValues") to ::fixRestJsonSupportsNaNFloatQueryValues,
+            Pair(RestJson, "RestJsonSupportsInfinityFloatQueryValues") to ::fixRestJsonSupportsInfinityFloatQueryValues,
+            Pair(RestJson, "RestJsonSupportsNegativeInfinityFloatQueryValues") to ::fixRestJsonSupportsNegativeInfinityFloatQueryValues
+        )
     }
 }
