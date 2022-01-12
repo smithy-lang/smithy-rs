@@ -375,29 +375,28 @@ class FluentClientGenerator(
                 val name = symbolProvider.toSymbol(operation).name
                 val fullPath = "crate::client::fluent_builders::$name"
                 val maybePaginated = if (operation.isPaginated(model)) {
-                    "\n/// This operation supports pagination. See [`into_paginator()`]($fullPath::into_paginator)."
+                    "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
                 } else ""
 
-                val input = operation.inputShape(model)
                 val output = operation.outputShape(model)
-                val operationInput = symbolProvider.toSymbol(input)
                 val operationOk = symbolProvider.toSymbol(output)
                 val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
 
-                val inputFieldsBody = generateShapeMemberDocs(writer, symbolProvider, input, model).joinToString("\n") {
+                val inputFieldsBody = generateOperationShapeDocs(writer, symbolProvider, operation, model).joinToString("\n") {
                     "///   - $it"
                 }
 
-                var inputFieldsHead = "/// - Takes [`${operationInput.name}`]($operationInput)"
-                if (inputFieldsBody.isNotEmpty()) {
-                    inputFieldsHead += " with field(s):"
+                val inputFieldsHead = if (inputFieldsBody.isNotEmpty()) {
+                    "The fluent builder is configurable:"
+                } else {
+                    "The fluent builder takes no input, just [`send`]($fullPath::send) it."
                 }
 
                 val outputFieldsBody = generateShapeMemberDocs(writer, symbolProvider, output, model).joinToString("\n") {
                     "///   - $it"
                 }
 
-                var outputFieldsHead = "/// - On success, responds with [`${operationOk.name}`]($operationOk)"
+                var outputFieldsHead = "On success, responds with [`${operationOk.name}`]($operationOk)"
                 if (outputFieldsBody.isNotEmpty()) {
                     outputFieldsHead += " with field(s):"
                 }
@@ -406,9 +405,9 @@ class FluentClientGenerator(
                     """
                     /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
                     ///
-                    $inputFieldsHead
+                    /// - $inputFieldsHead
                     $inputFieldsBody
-                    $outputFieldsHead
+                    /// - $outputFieldsHead
                     $outputFieldsBody
                     /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
                     """
@@ -560,6 +559,30 @@ class FluentClientGenerator(
                 }
             }
         }
+    }
+}
+
+fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvider, operation: OperationShape, model: Model): List<String> {
+    val input = operation.inputShape(model)
+    val operationName = symbolProvider.toSymbol(operation).name
+    val fluentBuilderFullyQualifiedName = "crate::client::fluent_builders::$operationName"
+    return input.members().map { member ->
+        val memberName = symbolProvider.toMemberName(member)
+        val memberSymbol = symbolProvider.toSymbol(member)
+        val outerType = memberSymbol.rustType()
+
+        val builderInput = "$memberName(${outerType.stripOuter<RustType.Option>().render(fullyQualified = false)})"
+        val builderInputLink = "$fluentBuilderFullyQualifiedName::$memberName"
+        val builderSetter = "${member.setterName()}(${outerType.render(fullyQualified = false)})"
+        val builderSetterLink = "$fluentBuilderFullyQualifiedName::${member.setterName()}"
+
+        val docTrait = member.getMemberTrait(model, DocumentationTrait::class.java).orNull()
+        val docs = when (docTrait?.value?.isNotBlank()) {
+            true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
+            else -> "(undocumented)"
+        }
+
+        "[`$builderInput`]($builderInputLink) / [`$builderSetter`]($builderSetterLink): $docs"
     }
 }
 
