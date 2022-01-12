@@ -91,7 +91,7 @@ class UnionGeneratorTest {
             let union = MyUnion::Unknown;
             assert!(union.is_unknown());
 
-        """
+            """
         )
     }
 
