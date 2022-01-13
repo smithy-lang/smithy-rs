@@ -120,7 +120,7 @@ impl ProfileFileTimeoutConfigProvider {
                 // Lambdas don't have home directories and emitting this warning is not helpful
                 // to users running the SDK from within a Lambda. This warning will be silenced
                 // if we determine that that is the case.
-                let is_likely_running_on_a_lambda = check_is_likely_running_on_a_lambda(self.env);
+                let is_likely_running_on_a_lambda = check_is_likely_running_on_a_lambda(&self.env);
                 if !is_likely_running_on_a_lambda {
                     tracing::warn!(
                         "failed to get selected '{}' profile, skipping it",

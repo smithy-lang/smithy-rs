@@ -10,7 +10,6 @@ use std::str::FromStr;
 use aws_smithy_types::retry::{RetryConfigBuilder, RetryConfigErr, RetryMode};
 use aws_types::os_shim_internal::{Env, Fs};
 
-use crate::profile::check_is_likely_running_on_a_lambda;
 use crate::provider_config::ProviderConfig;
 
 /// Load retry configuration properties from a profile file
