@@ -250,10 +250,12 @@ private class ServerHttpProtocolImplGenerator(
                 intoResponseStreaming
             } else {
                 """
-                match #{serialize_response}(&self.0) {
+                let mut response = match #{serialize_response}(&self.0) {
                     Ok(response) => response,
                     Err(e) => e.into_response()
-                }
+                };
+                $httpExtensions
+                response
                 """.trimIndent()
             }
             // The output of non-fallible operations is a model type which we convert into a "wrapper" unit `struct` type
@@ -323,7 +325,7 @@ private class ServerHttpProtocolImplGenerator(
         val namespace = operationShape.id.getNamespace()
         val operationName = symbolProvider.toSymbol(operationShape).name
         return """
-            response.extensions_mut().insert(#{SmithyHttpServer}::RequestExtensions::new(${namespace.dq()}, ${operationName.dq()}));
+            response.extensions_mut().insert(#{SmithyHttpServer}::ResponseExtensions::new(${namespace.dq()}, ${operationName.dq()}));
         """.trimIndent()
     }
 
