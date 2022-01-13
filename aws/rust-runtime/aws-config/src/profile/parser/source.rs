@@ -57,10 +57,10 @@ impl FileKind {
 pub async fn load(proc_env: &os_shim_internal::Env, fs: &os_shim_internal::Fs) -> Source {
     let home = home_dir(proc_env, Os::real());
     let config = load_config_file(FileKind::Config, &home, fs, proc_env)
-        .instrument(tracing::info_span!("load_config_file"))
+        .instrument(tracing::debug_span!("load_config_file"))
         .await;
     let credentials = load_config_file(FileKind::Credentials, &home, fs, proc_env)
-        .instrument(tracing::info_span!("load_credentials_file"))
+        .instrument(tracing::debug_span!("load_credentials_file"))
         .await;
 
     Source {
@@ -105,7 +105,7 @@ async fn load_config_file(
         Err(e) => {
             match e.kind() {
                 ErrorKind::NotFound if path == kind.default_path() => {
-                    tracing::info!(path = %path, "config file not found")
+                    tracing::debug!(path = %path, "config file not found")
                 }
                 ErrorKind::NotFound if path != kind.default_path() => {
                     // in the case where the user overrode the path with an environment variable,
@@ -125,7 +125,7 @@ async fn load_config_file(
             Default::default()
         }
     };
-    tracing::info!(path = %path, size = ?data.len(), "config file loaded");
+    tracing::debug!(path = %path, size = ?data.len(), "config file loaded");
     File {
         // lossy is OK here, the name of this file is just for debugging purposes
         path: expanded.to_string_lossy().into(),
