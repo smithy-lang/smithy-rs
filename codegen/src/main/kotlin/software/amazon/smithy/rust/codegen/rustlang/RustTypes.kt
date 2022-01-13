@@ -147,6 +147,15 @@ fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
     }
 }
 
+/** Format this Rust type so that it may be used as an argument type in a function definition */
+fun RustType.asArgumentValue(name: String): String {
+    return when (this) {
+        is RustType.String,
+        is RustType.Box -> "$name.into()"
+        else -> name
+    }
+}
+
 /**
  * For a given name, generate an `Argument` data class containing pre-formatted strings for using this type when
  * writing a Rust function
@@ -154,7 +163,7 @@ fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
 fun RustType.asArgument(name: String): Argument {
     return Argument(
         "$name: ${this.asArgumentType()}",
-        name,
+        this.asArgumentValue(name),
         this.render(),
     )
 }

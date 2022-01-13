@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asArgumentType
+import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
@@ -537,7 +538,8 @@ class FluentClientGenerator(
                         }
                         // pure setter
                         val setterName = member.setterName()
-                        with(core) { renderInputHelper(member, setterName, outerType) }
+                        val optionalInputType = outerType.asOptional()
+                        with(core) { renderInputHelper(member, setterName, optionalInputType) }
                     }
                 }
             }
