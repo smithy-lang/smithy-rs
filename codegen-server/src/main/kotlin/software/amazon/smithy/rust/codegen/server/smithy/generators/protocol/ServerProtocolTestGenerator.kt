@@ -142,20 +142,22 @@ class ServerProtocolTestGenerator(
     // This function applies a "fix function" to each broken test before we synthesize it.
     // Broken tests are those whose definitions in the `awslabs/smithy` repository are wrong, usually because they have
     // not been written with a server-side perspective in mind.
-    private fun List<TestCase>.fixBroken(): List<TestCase> = this.map { when (it) {
-        is TestCase.RequestTest -> {
-            val howToFixIt = BrokenRequestTests[Pair(codegenContext.serviceShape.id.toString(), it.testCase.id)]
-            if (howToFixIt == null) {
+    private fun List<TestCase>.fixBroken(): List<TestCase> = this.map {
+        when (it) {
+            is TestCase.RequestTest -> {
+                val howToFixIt = BrokenRequestTests[Pair(codegenContext.serviceShape.id.toString(), it.testCase.id)]
+                if (howToFixIt == null) {
+                    it
+                } else {
+                    val fixed = howToFixIt(it.testCase)
+                    TestCase.RequestTest(fixed, it.targetShape)
+                }
+            }
+            is TestCase.ResponseTest -> {
                 it
-            } else {
-                val fixed = howToFixIt(it.testCase)
-                TestCase.RequestTest(fixed, it.targetShape)
             }
         }
-        is TestCase.ResponseTest -> {
-            it
-        }
-    } }
+    }
 
     private fun renderTestCaseBlock(
         testCase: HttpMessageTestCase,
@@ -431,6 +433,11 @@ class ServerProtocolTestGenerator(
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
         private val ExpectFail = setOf<FailingTest>(
+            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Request),
+            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
+            FailingTest(RestJson, "RestJsonOutputUnionWithUnitMember", Action.Response),
+            FailingTest(RestJson, "RestJsonUnitInputAllowsAccept", Action.Request),
+            FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonAllQueryStringTypes", Action.Request),
             FailingTest(RestJson, "RestJsonQueryStringEscaping", Action.Request),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", Action.Request),
@@ -572,38 +579,50 @@ class ServerProtocolTestGenerator(
             // to any "expected" value.
             // Reference: https://doc.rust-lang.org/std/primitive.f32.html
             // Request for guidance about this test to Smithy team: https://github.com/awslabs/smithy/pull/1040#discussion_r780418707
-            val params = Node.parse("""{
-                "queryFloat": "NaN",
-                "queryDouble": "NaN",
-                "queryParamsMapOfStringList": {
-                    "Float": ["NaN"],
-                    "Double": ["NaN"]
+            val params = Node.parse(
+                """
+                {
+                    "queryFloat": "NaN",
+                    "queryDouble": "NaN",
+                    "queryParamsMapOfStringList": {
+                        "Float": ["NaN"],
+                        "Double": ["NaN"]
+                    }
                 }
-            }""".trimIndent()).asObjectNode().get()
+                """.trimIndent()
+            ).asObjectNode().get()
 
             return testCase.toBuilder().params(params).build()
         }
         private fun fixRestJsonSupportsInfinityFloatQueryValues(testCase: HttpRequestTestCase): HttpRequestTestCase =
             testCase.toBuilder().params(
-               Node.parse("""{
-                   "queryFloat": "Infinity",
-                   "queryDouble": "Infinity",
-                   "queryParamsMapOfStringList": {
-                       "Float": ["Infinity"],
-                       "Double": ["Infinity"]
-                   }
-               }""".trimMargin()).asObjectNode().get()
+                Node.parse(
+                    """
+                    {
+                        "queryFloat": "Infinity",
+                        "queryDouble": "Infinity",
+                        "queryParamsMapOfStringList": {
+                            "Float": ["Infinity"],
+                            "Double": ["Infinity"]
+                        }
+                    }
+                    """.trimMargin()
+                ).asObjectNode().get()
             ).build()
         private fun fixRestJsonSupportsNegativeInfinityFloatQueryValues(testCase: HttpRequestTestCase): HttpRequestTestCase =
             testCase.toBuilder().params(
-                Node.parse("""{
-                   "queryFloat": "-Infinity",
-                   "queryDouble": "-Infinity",
-                   "queryParamsMapOfStringList": {
-                       "Float": ["-Infinity"],
-                       "Double": ["-Infinity"]
-                   }
-               }""".trimMargin()).asObjectNode().get()
+                Node.parse(
+                    """
+                    {
+                        "queryFloat": "-Infinity",
+                        "queryDouble": "-Infinity",
+                        "queryParamsMapOfStringList": {
+                            "Float": ["-Infinity"],
+                            "Double": ["-Infinity"]
+                        }
+                    }
+                    """.trimMargin()
+                ).asObjectNode().get()
             ).build()
 
         // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
