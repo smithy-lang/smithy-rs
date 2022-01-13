@@ -14,7 +14,6 @@ plugins {
 
 val smithyVersion: String by project
 
-
 dependencies {
     implementation(project(":aws:sdk-codegen"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
@@ -55,14 +54,12 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
     """
 }
 
-
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
         projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodegenTests))
     }
 }
-
 
 fun generateCargoWorkspace(tests: List<CodegenTest>): String {
     return """
@@ -81,7 +78,6 @@ task("generateCargoWorkspace") {
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
-
 
 tasks.register<Exec>("cargoCheck") {
     workingDir("build/smithyprojections/sdk-codegen-test/")

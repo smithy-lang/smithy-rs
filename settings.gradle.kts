@@ -12,7 +12,6 @@ pluginManagement {
     }
 }
 
-
 rootProject.name = "software.amazon.smithy.rust.codegen.smithy-rs"
 enableFeaturePreview("GRADLE_METADATA")
 
