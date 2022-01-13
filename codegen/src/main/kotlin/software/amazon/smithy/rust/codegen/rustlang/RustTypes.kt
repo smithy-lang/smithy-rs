@@ -137,18 +137,20 @@ fun RustType.implInto(fullyQualified: Boolean = true): String {
     return "impl Into<${this.render(fullyQualified)}>"
 }
 
-fun RustType.asArgument(name: String): Argument {
+fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
     return when (this) {
         is RustType.String,
-        is RustType.Box -> Argument(
-            "$name: ${this.implInto()}",
-            "$name.into()",
-        )
-        else -> Argument(
-            "$name: ${this.render()}",
-            name,
-        )
+        is RustType.Box -> this.implInto(fullyQualified)
+        else -> this.render(fullyQualified)
     }
+}
+
+fun RustType.asArgument(name: String): Argument {
+    return Argument(
+        "$name: ${this.asArgumentType()}",
+        name,
+        this.render(),
+    )
 }
 
 /**
@@ -364,4 +366,4 @@ sealed class Attribute {
     }
 }
 
-data class Argument(val argument: String, val value: String)
+data class Argument(val argument: String, val value: String, val type: String)
