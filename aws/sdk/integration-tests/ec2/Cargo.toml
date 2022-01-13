@@ -1,0 +1,11 @@
+[package]
+name = "ec2-tests"
+version = "0.1.0"
+edition = "2018"
+
+[dev-dependencies]
+aws-sdk-ec2 = { path = "../../build/aws-sdk/sdk/ec2" }
+aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"]}
+tokio = { version = "1", features = ["full"]}
+http = "0.2.6"
+tokio-stream = "0.1.8"

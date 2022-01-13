@@ -97,17 +97,22 @@ pub(super) enum Match {
 
 impl From<&PathSpec> for Regex {
     fn from(uri_path_spec: &PathSpec) -> Self {
-        let sep = "/+";
-        let re = uri_path_spec
-            .0
-            .iter()
-            .map(|segment_spec| match segment_spec {
-                PathSegment::Literal(literal) => literal,
-                // TODO(https://github.com/awslabs/smithy/issues/975) URL spec says it should be ASCII but this regex accepts UTF-8:
-                PathSegment::Label => "[^/]+",
-                PathSegment::Greedy => ".*",
-            })
-            .fold(String::new(), |a, b| a + sep + b);
+        let sep = "/";
+        let re = if uri_path_spec.0.is_empty() {
+            String::from("/")
+        } else {
+            uri_path_spec
+                .0
+                .iter()
+                .map(|segment_spec| match segment_spec {
+                    PathSegment::Literal(literal) => literal,
+                    // TODO(https://github.com/awslabs/smithy/issues/975) URL spec says it should be ASCII but this regex accepts UTF-8:
+                    // `*` instead of `+` because the empty string `""` can be bound to a label.
+                    PathSegment::Label => "[^/]*",
+                    PathSegment::Greedy => ".*",
+                })
+                .fold(String::new(), |a, b| a + sep + b)
+        };
 
         Regex::new(&format!("{}$", re)).unwrap()
     }
@@ -244,6 +249,35 @@ mod tests {
     use http::Method;
 
     #[test]
+    fn path_spec_into_regex() {
+        let cases = vec![
+            (PathSpec(vec![]), "/$"),
+            (PathSpec(vec![PathSegment::Literal(String::from("a"))]), "/a$"),
+            (
+                PathSpec(vec![PathSegment::Literal(String::from("a")), PathSegment::Label]),
+                "/a/[^/]*$",
+            ),
+            (
+                PathSpec(vec![PathSegment::Literal(String::from("a")), PathSegment::Greedy]),
+                "/a/.*$",
+            ),
+            (
+                PathSpec(vec![
+                    PathSegment::Literal(String::from("a")),
+                    PathSegment::Greedy,
+                    PathSegment::Literal(String::from("suffix")),
+                ]),
+                "/a/.*/suffix$",
+            ),
+        ];
+
+        for case in cases {
+            let re: Regex = (&case.0).into();
+            assert_eq!(case.1, re.as_str());
+        }
+    }
+
+    #[test]
     fn greedy_labels_match_greedily() {
         let spec = RequestSpec::from_parts(
             Method::GET,
@@ -252,7 +286,7 @@ mod tests {
                 PathSegment::Greedy,
                 PathSegment::Literal(String::from("z")),
             ],
-            vec![],
+            Vec::new(),
         );
 
         let hits = vec![
@@ -268,7 +302,7 @@ mod tests {
 
     #[test]
     fn repeated_query_keys() {
-        let spec = RequestSpec::from_parts(Method::DELETE, vec![], vec![QuerySegment::Key(String::from("foo"))]);
+        let spec = RequestSpec::from_parts(Method::DELETE, Vec::new(), vec![QuerySegment::Key(String::from("foo"))]);
 
         let hits = vec![
             (Method::DELETE, "/?foo=bar&foo=bar"),
@@ -283,7 +317,7 @@ mod tests {
     fn key_value_spec() -> RequestSpec {
         RequestSpec::from_parts(
             Method::DELETE,
-            vec![],
+            Vec::new(),
             vec![QuerySegment::KeyValue(String::from("foo"), String::from("bar"))],
         )
     }
@@ -311,19 +345,66 @@ mod tests {
                 PathSegment::Literal(String::from("a")),
                 PathSegment::Literal(String::from("b")),
             ],
-            vec![],
+            Vec::new(),
         )
     }
 
+    // Empty segments _have meaning_ and should not be stripped away when doing routing or label
+    // extraction.
+    // See https://github.com/awslabs/smithy/issues/1024 for discussion.
+
     #[test]
-    fn empty_segments_in_the_middle_dont_matter() {
+    fn empty_segments_in_the_middle_do_matter() {
+        assert_eq!(Match::Yes, ab_spec().matches(&req(&Method::GET, "/a/b")));
+
+        let misses = vec![(Method::GET, "/a//b"), (Method::GET, "//////a//b")];
+        for (method, uri) in &misses {
+            assert_eq!(Match::No, ab_spec().matches(&req(method, uri)));
+        }
+    }
+
+    #[test]
+    fn empty_segments_in_the_middle_do_matter_label_spec() {
+        let label_spec = RequestSpec::from_parts(
+            Method::GET,
+            vec![
+                PathSegment::Literal(String::from("a")),
+                PathSegment::Label,
+                PathSegment::Literal(String::from("b")),
+            ],
+            Vec::new(),
+        );
+
         let hits = vec![
-            (Method::GET, "/a/b"),
-            (Method::GET, "/a//b"),
-            (Method::GET, "//////a//b"),
+            (Method::GET, "/a/label/b"),
+            (Method::GET, "/a//b"), // Label is bound to `""`.
         ];
         for (method, uri) in &hits {
-            assert_eq!(Match::Yes, ab_spec().matches(&req(method, uri)));
+            assert_eq!(Match::Yes, label_spec.matches(&req(method, uri)));
+        }
+
+        assert_eq!(Match::No, label_spec.matches(&req(&Method::GET, "/a///b")));
+    }
+
+    #[test]
+    fn empty_segments_in_the_middle_do_matter_greedy_label_spec() {
+        let greedy_label_spec = RequestSpec::from_parts(
+            Method::GET,
+            vec![
+                PathSegment::Literal(String::from("a")),
+                PathSegment::Greedy,
+                PathSegment::Literal(String::from("suffix")),
+            ],
+            Vec::new(),
+        );
+
+        let hits = vec![
+            (Method::GET, "/a//suffix"),
+            (Method::GET, "/a///suffix"),
+            (Method::GET, "/a///a//b///suffix"),
+        ];
+        for (method, uri) in &hits {
+            assert_eq!(Match::Yes, greedy_label_spec.matches(&req(method, uri)));
         }
     }
 
@@ -339,6 +420,26 @@ mod tests {
         ];
         for (method, uri) in &misses {
             assert_eq!(Match::No, ab_spec().matches(&req(method, uri)));
+        }
+    }
+
+    #[test]
+    fn empty_segments_at_the_end_do_matter_label_spec() {
+        let label_spec = RequestSpec::from_parts(
+            Method::GET,
+            vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
+            Vec::new(),
+        );
+
+        let misses = vec![(Method::GET, "/a"), (Method::GET, "/a//"), (Method::GET, "/a///")];
+        for (method, uri) in &misses {
+            assert_eq!(Match::No, label_spec.matches(&req(method, uri)));
+        }
+
+        // In the second example, the label is bound to `""`.
+        let hits = vec![(Method::GET, "/a/label"), (Method::GET, "/a/")];
+        for (method, uri) in &hits {
+            assert_eq!(Match::Yes, label_spec.matches(&req(method, uri)));
         }
     }
 }

@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
@@ -75,11 +76,11 @@ class ServerRestJson(private val codegenContext: CodegenContext) : Protocol {
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return JsonParserGenerator(codegenContext, httpBindingResolver)
+        return JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
     }
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
-        return JsonSerializerGenerator(codegenContext, httpBindingResolver)
+        return JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
     }
 
     // NOTE: this method is only needed for the little part of client-codegen we use in tests.

@@ -231,7 +231,7 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMis
     return this
 }
 
-/** Document the containing entity (eg. module, crate, etc.)
+/** Document the containing entity (e.g. module, crate, etc.)
  * Instead of prefixing lines with `///` lines are prefixed with `//!`
  */
 fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
@@ -357,8 +357,8 @@ class RustWriter private constructor(
         return "${prefix}_$n"
     }
 
-    fun first(prewriter: RustWriter.() -> Unit) {
-        preamble.add(prewriter)
+    fun first(preWriter: RustWriter.() -> Unit) {
+        preamble.add(preWriter)
     }
 
     /**

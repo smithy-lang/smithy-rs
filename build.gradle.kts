@@ -36,7 +36,7 @@ dependencies {
 }
 
 val lintPaths = listOf(
-        "codegen/src/**/*.kt"
+    "codegen/src/**/*.kt"
 )
 
 tasks.register<JavaExec>("ktlint") {

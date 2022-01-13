@@ -4,6 +4,7 @@
  */
 
 use crate::canary::CanaryError;
+use crate::mk_canary;
 use async_stream::stream;
 use aws_sdk_transcribestreaming as transcribe;
 use bytes::BufMut;
@@ -13,6 +14,14 @@ use transcribe::model::{
 use transcribe::Blob;
 
 const CHUNK_SIZE: usize = 8192;
+use crate::canary::{CanaryEnv, Clients};
+
+mk_canary!("transcribe_canary", |client: &Clients, env: &CanaryEnv| {
+    transcribe_canary(
+        client.transcribe.clone(),
+        env.expected_transcribe_result.clone(),
+    )
+});
 
 pub async fn transcribe_canary(
     client: transcribe::Client,
