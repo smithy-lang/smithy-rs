@@ -28,3 +28,21 @@ message = "Upgraded Smithy to 1.16.1"
 references = ["smithy-rs#1053"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix broken link to `RetryMode` in client docs"
+references = ["smithy-rs#1069"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix several doc links to raw identifiers (identifiers excaped with `r#`)"
+references = ["smithy-rs#1069"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Reduce dependency recompilation in local dev"
+references = ["smithy-rs#1069"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
