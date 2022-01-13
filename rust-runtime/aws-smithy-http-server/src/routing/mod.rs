@@ -362,14 +362,6 @@ mod tests {
                 ),
                 "B2",
             ),
-            (
-                RequestSpec::from_parts(Method::GET, Vec::new(), Vec::new()),
-                "ListBuckets",
-            ),
-            (
-                RequestSpec::from_parts(Method::GET, vec![PathSegment::Label], Vec::new()),
-                "ListObjects",
-            ),
         ];
 
         let mut router = Router::from_box_clone_service_iter(request_specs.into_iter().map(|(spec, svc_name)| {
@@ -384,8 +376,6 @@ mod tests {
             ("A2", Method::GET, "/a/foo/a"),
             ("B1", Method::GET, "/b/foo/bar/baz"),
             ("B2", Method::GET, "/b/foo?q=baz"),
-            ("ListBuckets", Method::GET, "/"),
-            ("ListObjects", Method::GET, "/bucket"),
         ];
         for (svc_name, method, uri) in &hits {
             let mut res = router.call(req(method, uri)).await.unwrap();
