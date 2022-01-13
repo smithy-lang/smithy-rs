@@ -133,10 +133,12 @@ fun RustType.qualifiedName(): String {
     return "$namespace$name"
 }
 
+/** Format this Rust type as an `impl Into<T>` */
 fun RustType.implInto(fullyQualified: Boolean = true): String {
     return "impl Into<${this.render(fullyQualified)}>"
 }
 
+/** Format this Rust type so that it may be used as an argument type in a function definition */
 fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
     return when (this) {
         is RustType.String,
@@ -145,6 +147,10 @@ fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
     }
 }
 
+/**
+ * For a given name, generate an `Argument` data class containing pre-formatted strings for using this type when
+ * writing a Rust function
+ */
 fun RustType.asArgument(name: String): Argument {
     return Argument(
         "$name: ${this.asArgumentType()}",
