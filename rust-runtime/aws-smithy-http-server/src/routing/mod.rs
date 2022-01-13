@@ -20,9 +20,12 @@ use tower::util::ServiceExt;
 use tower::{Service, ServiceBuilder};
 use tower_http::map_response_body::MapResponseBodyLayer;
 
-pub mod future;
+mod future;
 mod into_make_service;
+
+#[doc(hidden)]
 pub mod request_spec;
+
 mod route;
 
 pub use self::{into_make_service::IntoMakeService, route::Route};
@@ -54,7 +57,9 @@ where
     B: Send + 'static,
 {
     fn default() -> Self {
-        Self::new()
+        Self {
+            routes: Default::default(),
+        }
     }
 }
 
@@ -62,26 +67,30 @@ impl<B> Router<B>
 where
     B: Send + 'static,
 {
-    /// Create a new `Router`.
+    /// Create a new `Router` from a vector of pairs of request specs and services.
     ///
-    /// Unless you add additional routes this will respond to `404 Not Found` to
-    /// all requests.
+    /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
-    pub fn new() -> Self {
-        Self {
-            routes: Default::default(),
-        }
-    }
-
-    /// Add a route to the router.
-    #[doc(hidden)]
-    pub fn route<T>(mut self, request_spec: RequestSpec, svc: T) -> Self
+    pub fn from_box_clone_service_iter<T>(routes: T) -> Self
     where
-        T: Service<Request<B>, Response = Response<BoxBody>, Error = Infallible> + Clone + Send + 'static,
-        T::Future: Send + 'static,
+        T: IntoIterator<
+            Item = (
+                tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
+                RequestSpec,
+            ),
+        >,
     {
-        self.routes.push((Route::new(svc), request_spec));
-        self
+        let mut routes: Vec<(Route<B>, RequestSpec)> = routes
+            .into_iter()
+            .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
+            .collect();
+
+        // Sort them once by specifity, with the more specific routes sorted before the less
+        // specific ones, so that when routing a request we can simply iterate through the routes
+        // and pick the first one that matches.
+        routes.sort_by_key(|(_route, request_spec)| std::cmp::Reverse(request_spec.rank()));
+
+        Self { routes }
     }
 
     /// Convert this router into a [`MakeService`], that is a [`Service`] whose
@@ -225,7 +234,7 @@ mod tests {
                         PathSegment::Label,
                         PathSegment::Label,
                     ],
-                    vec![],
+                    Vec::new(),
                 ),
                 "A",
             ),
@@ -237,14 +246,14 @@ mod tests {
                         PathSegment::Greedy,
                         PathSegment::Literal(String::from("z")),
                     ],
-                    vec![],
+                    Vec::new(),
                 ),
                 "MiddleGreedy",
             ),
             (
                 RequestSpec::from_parts(
                     Method::DELETE,
-                    vec![],
+                    Vec::new(),
                     vec![
                         QuerySegment::KeyValue(String::from("foo"), String::from("bar")),
                         QuerySegment::Key(String::from("baz")),
@@ -262,11 +271,12 @@ mod tests {
             ),
         ];
 
-        let mut router = Router::new();
-        for (spec, svc_name) in request_specs {
-            let svc = NamedEchoUriService(String::from(svc_name));
-            router = router.route(spec, svc.clone());
-        }
+        let mut router = Router::from_box_clone_service_iter(request_specs.into_iter().map(|(spec, svc_name)| {
+            (
+                tower::util::BoxCloneService::new(NamedEchoUriService(String::from(svc_name))),
+                spec,
+            )
+        }));
 
         let hits = vec![
             ("A", Method::GET, "/a/b/c"),
@@ -310,6 +320,78 @@ mod tests {
         for (method, miss) in misses {
             let res = router.call(req(&method, miss)).await.unwrap();
             assert_eq!(StatusCode::NOT_FOUND, res.status());
+        }
+    }
+
+    #[tokio::test]
+    async fn basic_pattern_conflict_avoidance() {
+        let request_specs: Vec<(RequestSpec, &str)> = vec![
+            (
+                RequestSpec::from_parts(
+                    Method::GET,
+                    vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
+                    Vec::new(),
+                ),
+                "A1",
+            ),
+            (
+                RequestSpec::from_parts(
+                    Method::GET,
+                    vec![
+                        PathSegment::Literal(String::from("a")),
+                        PathSegment::Label,
+                        PathSegment::Literal(String::from("a")),
+                    ],
+                    Vec::new(),
+                ),
+                "A2",
+            ),
+            (
+                RequestSpec::from_parts(
+                    Method::GET,
+                    vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
+                    Vec::new(),
+                ),
+                "B1",
+            ),
+            (
+                RequestSpec::from_parts(
+                    Method::GET,
+                    vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
+                    vec![QuerySegment::Key(String::from("q"))],
+                ),
+                "B2",
+            ),
+            (
+                RequestSpec::from_parts(Method::GET, Vec::new(), Vec::new()),
+                "ListBuckets",
+            ),
+            (
+                RequestSpec::from_parts(Method::GET, vec![PathSegment::Label], Vec::new()),
+                "ListObjects",
+            ),
+        ];
+
+        let mut router = Router::from_box_clone_service_iter(request_specs.into_iter().map(|(spec, svc_name)| {
+            (
+                tower::util::BoxCloneService::new(NamedEchoUriService(String::from(svc_name))),
+                spec,
+            )
+        }));
+
+        let hits = vec![
+            ("A1", Method::GET, "/a/foo"),
+            ("A2", Method::GET, "/a/foo/a"),
+            ("B1", Method::GET, "/b/foo/bar/baz"),
+            ("B2", Method::GET, "/b/foo?q=baz"),
+            ("ListBuckets", Method::GET, "/"),
+            ("ListObjects", Method::GET, "/bucket"),
+        ];
+        for (svc_name, method, uri) in &hits {
+            let mut res = router.call(req(method, uri)).await.unwrap();
+            let actual_body = get_body_as_str(&mut res).await;
+
+            assert_eq!(format!("{} :: {}", svc_name, uri), actual_body);
         }
     }
 }
