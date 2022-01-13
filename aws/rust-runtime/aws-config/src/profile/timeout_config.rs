@@ -5,7 +5,7 @@
 
 //! Load timeout configuration properties from an AWS profile
 
-use crate::profile::{check_is_likely_running_on_a_lambda, Profile};
+use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
 use aws_smithy_types::timeout::{parse_str_as_timeout, TimeoutConfig, TimeoutConfigError};
 use aws_types::os_shim_internal::{Env, Fs};
@@ -117,11 +117,8 @@ impl ProfileFileTimeoutConfigProvider {
         let selected_profile = match profile.get_profile(selected_profile) {
             Some(profile) => profile,
             None => {
-                // Lambdas don't have home directories and emitting this warning is not helpful
-                // to users running the SDK from within a Lambda. This warning will be silenced
-                // if we determine that that is the case.
-                let is_likely_running_on_a_lambda = check_is_likely_running_on_a_lambda(&self.env);
-                if !is_likely_running_on_a_lambda {
+                // Only warn if the user specified a profile name to use.
+                if self.profile_override.is_some() {
                     tracing::warn!(
                         "failed to get selected '{}' profile, skipping it",
                         selected_profile
