@@ -104,7 +104,8 @@ async fn lambda_main(clients: canary::Clients) -> Result<Value, Error> {
     let canaries = get_canaries_to_run(clients, env);
     let join_handles = canaries
         .into_iter()
-        .map(|(name, future)| (name, tokio::spawn(future)));
+        .map(|(name, future)| (name, tokio::spawn(future)))
+        .collect::<Vec<_>>();
 
     // Wait for and aggregate results
     let mut failures = BTreeMap::new();
