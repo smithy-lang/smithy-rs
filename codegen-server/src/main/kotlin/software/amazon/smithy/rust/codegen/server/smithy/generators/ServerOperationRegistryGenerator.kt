@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -29,9 +30,6 @@ class ServerOperationRegistryGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     private val operations: List<OperationShape>,
 ) {
-    private val serverCrate = "aws_smithy_http_server"
-    private val service = codegenContext.serviceShape
-    private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -39,6 +37,7 @@ class ServerOperationRegistryGenerator(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
+        "Tower" to ServerCargoDependency.Tower.asType(),
         "Phantom" to ServerRuntimeType.Phantom,
         "StdError" to RuntimeType.StdError
     )
@@ -216,18 +215,17 @@ class ServerOperationRegistryGenerator(
         ) {
             rustBlock("fn from(registry: $operationRegistryNameWithArguments) -> Self") {
                 val requestSpecsVarNames = operationNames.map { "${it}_request_spec" }
-                val routes = requestSpecsVarNames.zip(operationNames) { requestSpecVarName, operationName ->
-                    ".route($requestSpecVarName, #{ServerOperationHandler}::operation(registry.$operationName))"
-                }.joinToString(separator = "\n")
-
                 val requestSpecs = requestSpecsVarNames.zip(operations) { requestSpecVarName, operation ->
                     "let $requestSpecVarName = ${operation.requestSpec()};"
                 }.joinToString(separator = "\n")
+                val towerServices = requestSpecsVarNames.zip(operationNames) { requestSpecVarName, operationName ->
+                    "(#{Tower}::util::BoxCloneService::new(#{ServerOperationHandler}::operation(registry.$operationName)), $requestSpecVarName)"
+                }.joinToString(prefix = "vec![", separator = ",\n", postfix = "]")
+
                 rustTemplate(
                     """
                     $requestSpecs
-                    #{Router}::new()
-                        $routes
+                    #{Router}::from_box_clone_service_iter($towerServices)
                     """.trimIndent(),
                     *codegenScope
                 )
@@ -267,13 +265,12 @@ class ServerOperationRegistryGenerator(
         return """
             $namespace::RequestSpec::new(
                 http::Method::${httpTrait.method},
-                $namespace::UriSpec {
-                    host_prefix: None,
-                    path_and_query: $namespace::PathAndQuerySpec {
-                        path_segments: $namespace::PathSpec::from_vector_unchecked(vec![${pathSegments.joinToString()}]),
-                        query_segments: $namespace::QuerySpec::from_vector_unchecked(vec![${querySegments.joinToString()}])
-                    }
-                }
+                $namespace::UriSpec::new(
+                    $namespace::PathAndQuerySpec::new(
+                        $namespace::PathSpec::from_vector_unchecked(vec![${pathSegments.joinToString()}]),
+                        $namespace::QuerySpec::from_vector_unchecked(vec![${querySegments.joinToString()}])
+                    )
+                )
             )
         """.trimIndent()
     }
