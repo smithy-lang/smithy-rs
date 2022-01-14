@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -20,7 +21,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asArgument
+import software.amazon.smithy.rust.codegen.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docLink
@@ -31,7 +32,6 @@ import software.amazon.smithy.rust.codegen.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
@@ -374,31 +374,30 @@ class FluentClientGenerator(
         ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
-                val fullPath = "crate::client::fluent_builders::$name"
+                val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
                 val maybePaginated = if (operation.isPaginated(model)) {
-                    "\n/// This operation supports pagination. See [`into_paginator()`]($fullPath::into_paginator)."
+                    "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
                 } else ""
 
-                val input = operation.inputShape(model)
                 val output = operation.outputShape(model)
-                val operationInput = symbolProvider.toSymbol(input)
                 val operationOk = symbolProvider.toSymbol(output)
                 val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
 
-                val inputFieldsBody = generateShapeMemberDocs(writer, symbolProvider, input, model).joinToString("\n") {
+                val inputFieldsBody = generateOperationShapeDocs(writer, symbolProvider, operation, model).joinToString("\n") {
                     "///   - $it"
                 }
 
-                var inputFieldsHead = "/// - Takes [`${operationInput.name}`]($operationInput)"
-                if (inputFieldsBody.isNotEmpty()) {
-                    inputFieldsHead += " with field(s):"
+                val inputFieldsHead = if (inputFieldsBody.isNotEmpty()) {
+                    "The fluent builder is configurable:"
+                } else {
+                    "The fluent builder takes no input, just [`send`]($fullPath::send) it."
                 }
 
                 val outputFieldsBody = generateShapeMemberDocs(writer, symbolProvider, output, model).joinToString("\n") {
                     "///   - $it"
                 }
 
-                var outputFieldsHead = "/// - On success, responds with [`${operationOk.name}`]($operationOk)"
+                var outputFieldsHead = "On success, responds with [`${operationOk.name}`]($operationOk)"
                 if (outputFieldsBody.isNotEmpty()) {
                     outputFieldsHead += " with field(s):"
                 }
@@ -407,9 +406,9 @@ class FluentClientGenerator(
                     """
                     /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
                     ///
-                    $inputFieldsHead
+                    /// - $inputFieldsHead
                     $inputFieldsBody
-                    $outputFieldsHead
+                    /// - $outputFieldsHead
                     $outputFieldsBody
                     /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
                     """
@@ -528,7 +527,7 @@ class FluentClientGenerator(
                             operation.errorSymbol(symbolProvider)
                         )
                     )
-                    input.allMembers.values.forEach { member ->
+                    input.members().forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)
                         // All fields in the builder are optional
                         val memberSymbol = symbolProvider.toSymbol(member)
@@ -536,27 +535,12 @@ class FluentClientGenerator(
                         when (val coreType = outerType.stripOuter<RustType.Option>()) {
                             is RustType.Vec -> with(core) { renderVecHelper(member, memberName, coreType) }
                             is RustType.HashMap -> with(core) { renderMapHelper(member, memberName, coreType) }
-                            else -> {
-                                val functionInput = coreType.asArgument("input")
-
-                                documentShape(member, model)
-                                rustBlock("pub fn $memberName(mut self, ${functionInput.argument}) -> Self") {
-                                    write("self.inner = self.inner.$memberName(${functionInput.value});")
-                                    write("self")
-                                }
-                            }
+                            else -> with(core) { renderInputHelper(member, memberName, coreType) }
                         }
                         // pure setter
-                        val inputType = outerType.asOptional()
-                        documentShape(member, model)
-                        rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
-                            rust(
-                                """
-                                self.inner = self.inner.${member.setterName()}(input);
-                                self
-                                """
-                            )
-                        }
+                        val setterName = member.setterName()
+                        val optionalInputType = outerType.asOptional()
+                        with(core) { renderInputHelper(member, setterName, optionalInputType) }
                     }
                 }
             }
@@ -564,6 +548,33 @@ class FluentClientGenerator(
     }
 }
 
+/**
+ * For a given `operation` shape, return a list of strings where each string describes the name and input type of one of
+ * the operation's corresponding fluent builder methods as well as that method's documentation from the smithy model
+ */
+fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvider, operation: OperationShape, model: Model): List<String> {
+    val input = operation.inputShape(model)
+    val fluentBuilderFullyQualifiedName = operation.fullyQualifiedFluentBuilder(symbolProvider)
+    return input.members().map { member ->
+        val builderInputDoc = member.asFluentBuilderInputDoc(symbolProvider)
+        val builderInputLink = "$fluentBuilderFullyQualifiedName::${symbolProvider.toMemberName(member)}"
+        val builderSetterDoc = member.asFluentBuilderSetterDoc(symbolProvider)
+        val builderSetterLink = "$fluentBuilderFullyQualifiedName::${member.setterName()}"
+
+        val docTrait = member.getMemberTrait(model, DocumentationTrait::class.java).orNull()
+        val docs = when (docTrait?.value?.isNotBlank()) {
+            true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
+            else -> "(undocumented)"
+        }
+
+        "[`$builderInputDoc`]($builderInputLink) / [`$builderSetterDoc`]($builderSetterLink): $docs"
+    }
+}
+
+/**
+ * For a give `struct` shape, return a list of strings where each string describes the name and type of a struct field
+ * as well as that field's documentation from the smithy model
+ */
 fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, shape: StructureShape, model: Model): List<String> {
     val structName = symbolProvider.toSymbol(shape).rustType().qualifiedName()
     return shape.members().map { memberShape ->
@@ -577,4 +588,36 @@ fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, 
 
         "[`$name($member)`](${docLink("$structName::$name")}): $docs"
     }
+}
+
+/**
+ * Generate a valid fully-qualified Type for a fluent builder e.g.
+ * `OperationShape(AssumeRole)` -> `"crate::client::fluent_builders::AssumeRole"`
+ */
+fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: SymbolProvider): String {
+    val operationName = symbolProvider.toSymbol(this).name
+
+    return "crate::client::fluent_builders::$operationName"
+}
+
+/**
+ * Generate a string that looks like a Rust function pointer for documenting a fluent builder method e.g.
+ * `<MemberShape representing a struct method>` -> `"method_name(MethodInputType)"`
+ */
+fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
+    val memberName = symbolProvider.toMemberName(this)
+    val outerType = symbolProvider.toSymbol(this).rustType()
+
+    return "$memberName(${outerType.stripOuter<RustType.Option>().asArgumentType(fullyQualified = false)})"
+}
+
+/**
+ * Generate a string that looks like a Rust function pointer for documenting a fluent builder setter method e.g.
+ * `<MemberShape representing a struct method>` -> `"set_method_name(Option<MethodInputType>)"`
+ */
+fun MemberShape.asFluentBuilderSetterDoc(symbolProvider: SymbolProvider): String {
+    val memberName = this.setterName()
+    val outerType = symbolProvider.toSymbol(this).rustType()
+
+    return "$memberName(${outerType.asArgumentType(fullyQualified = false)})"
 }
