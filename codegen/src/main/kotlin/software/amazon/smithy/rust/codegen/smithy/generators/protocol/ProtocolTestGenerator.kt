@@ -78,6 +78,12 @@ class ProtocolTestGenerator(
         Instantiator(symbolProvider, model, runtimeConfig)
     }
 
+    private val codegenScope = arrayOf(
+        "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
+        "Http" to CargoDependency.Http.asType(),
+        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!")
+    )
+
     sealed class TestCase {
         abstract val testCase: HttpMessageTestCase
 
@@ -189,23 +195,24 @@ class ProtocolTestGenerator(
         with(httpRequestTestCase) {
             host.orNull()?.also { host ->
                 val withScheme = "http://$host"
-                rust(
+                rustTemplate(
                     """
                     let mut http_request = http_request;
-                    let ep = #T::endpoint::Endpoint::mutable(#T::Uri::from_static(${withScheme.dq()}));
+                    let ep = #{SmithyHttp}::endpoint::Endpoint::mutable(#{Http}::Uri::from_static(${withScheme.dq()}));
                     ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
                     """,
-                    CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(), CargoDependency.Http.asType()
+                    *codegenScope
                 )
             }
-            rust(
+            rustTemplate(
                 """
-                assert_eq!(http_request.method(), ${method.dq()});
-                assert_eq!(http_request.uri().path(), ${uri.dq()});
-                """
+                #{AssertEq}(http_request.method(), ${method.dq()});
+                #{AssertEq}(http_request.uri().path(), ${uri.dq()});
+                """,
+                *codegenScope
             )
             resolvedHost.orNull()?.also { host ->
-                rust("""assert_eq!(http_request.uri().host().expect("host should be set"), ${host.dq()});""")
+                rustTemplate("""#{AssertEq}(http_request.uri().host().expect("host should be set"), ${host.dq()});""", *codegenScope)
             }
         }
         checkQueryParams(this, httpRequestTestCase.queryParams)
@@ -295,7 +302,7 @@ class ProtocolTestGenerator(
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
             rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {
-                rust("assert_eq!(expected_output, actual_error);")
+                rustTemplate("#{AssertEq}(expected_output, actual_error);", *codegenScope)
             }
             rustBlock("else") {
                 rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
@@ -305,13 +312,14 @@ class ProtocolTestGenerator(
             outputShape.members().forEach { member ->
                 val memberName = codegenContext.symbolProvider.toMemberName(member)
                 if (member.isStreaming(codegenContext.model)) {
-                    rust(
+                    rustTemplate(
                         """
-                        assert_eq!(
+                        #{AssertEq}(
                             parsed.$memberName.collect().await.unwrap().into_bytes(),
                             expected_output.$memberName.collect().await.unwrap().into_bytes()
                         );
-                        """
+                        """,
+                        *codegenScope
                     )
                 } else {
                     when (codegenContext.model.expectShape(member.target)) {
@@ -327,7 +335,7 @@ class ProtocolTestGenerator(
                             )
                         }
                         else ->
-                            rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
+                            rustTemplate("""#{AssertEq}(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""", *codegenScope)
                     }
                 }
             }
@@ -345,8 +353,13 @@ class ProtocolTestGenerator(
     private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
         rustWriter.write("""let body = http_request.body().bytes().expect("body should be strict");""")
         if (body == "") {
-            rustWriter.write("// No body")
-            rustWriter.write("assert_eq!(std::str::from_utf8(body).unwrap(), ${"".dq()});")
+            rustWriter.rustTemplate(
+                """
+                // No body
+                #{AssertEq}(std::str::from_utf8(body).unwrap(), "");
+                """,
+                *codegenScope
+            )
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {

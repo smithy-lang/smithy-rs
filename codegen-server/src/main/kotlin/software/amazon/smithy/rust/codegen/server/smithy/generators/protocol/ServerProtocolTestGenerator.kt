@@ -75,6 +75,7 @@ class ServerProtocolTestGenerator(
         "Hyper" to CargoDependency.Hyper.asType(),
         "AxumCore" to ServerCargoDependency.AxumCore.asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
+        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!")
     )
 
     sealed class TestCase {
@@ -287,20 +288,21 @@ class ServerProtocolTestGenerator(
             """,
             *codegenScope,
         )
-        rust(
+        rustTemplate(
             """
-            assert_eq!(
+            #{AssertEq}(
                 http::StatusCode::from_u16(${testCase.code}).expect("invalid expected HTTP status code"),
                 http_response.status()
             );
-            """
+            """,
+            *codegenScope
         )
         checkHttpExtensions(this)
         if (!testCase.body.isEmpty()) {
             rustTemplate(
                 """
                 let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
-                assert_eq!(${escape(testCase.body.get()).dq()}, body);
+                #{AssertEq}(${escape(testCase.body.get()).dq()}, body);
                 """,
                 *codegenScope
             )
@@ -329,17 +331,18 @@ class ServerProtocolTestGenerator(
         if (operationShape.outputShape(model).hasStreamingMember(model)) {
             rustWriter.rust("""todo!("streaming types aren't supported yet");""")
         } else {
-            rustWriter.rust("assert_eq!(input, expected);")
+            rustWriter.rustTemplate("#{AssertEq}(input, expected);", *codegenScope)
         }
     }
 
     private fun checkHttpExtensions(rustWriter: RustWriter) {
-        rustWriter.rust(
+        rustWriter.rustTemplate(
             """
             let request_extensions = http_response.extensions().get::<aws_smithy_http_server::RequestExtensions>().expect("extension `RequestExtensions` not found");
-            assert_eq!(request_extensions.namespace, ${operationShape.id.getNamespace().dq()});
-            assert_eq!(request_extensions.operation_name, ${operationSymbol.name.dq()});
-            """.trimIndent()
+            #{AssertEq}(request_extensions.namespace, ${operationShape.id.getNamespace().dq()});
+            #{AssertEq}(request_extensions.operation_name, ${operationSymbol.name.dq()});
+            """.trimIndent(),
+            *codegenScope
         )
     }
 
