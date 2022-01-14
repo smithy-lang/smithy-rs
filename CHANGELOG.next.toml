@@ -46,3 +46,9 @@ message = "Reduce dependency recompilation in local dev"
 references = ["smithy-rs#1069"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Silence profile credential warnings in Lambda environment"
+references = ["smithy-rs#1065", "aws-sdk-rust#398"]
+meta = { "breaking" = false, "tada" = true, "bug" = true }
+author = "nmoutschen"
