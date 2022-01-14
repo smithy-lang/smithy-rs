@@ -78,7 +78,6 @@ class ServerHttpProtocolGenerator(
     companion object {
         const val OPERATION_INPUT_WRAPPER_SUFFIX = "OperationInputWrapper"
         const val OPERATION_OUTPUT_WRAPPER_SUFFIX = "OperationOutputWrapper"
-        const val OPERATION_ERROR_WRAPPER_SUFFIX = "OperationErrorWrapper"
 
         fun smithyRejection(runtimeConfig: RuntimeConfig) = RuntimeType(
             "SmithyRejection",

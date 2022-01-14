@@ -42,7 +42,6 @@ class ServerServiceGenerator(
                 protocolGenerator.serverRenderOperation(
                     operationWriter,
                     operation,
-                    decorator.operationCustomizations(context, operation, listOf())
                 )
                 ServerProtocolTestGenerator(context, protocolSupport, operation, operationWriter)
                     .render()

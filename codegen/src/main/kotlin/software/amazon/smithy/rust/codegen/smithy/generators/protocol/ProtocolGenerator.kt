@@ -194,35 +194,14 @@ open class ProtocolGenerator(
     }
 
     /**
-     * Render all code required for serializing responses and deserializing requests for an operation.
-     *
-     * This primarily relies on the [traitGenerator] to generate implementations of the `ParseHttpRequest`,
-     * `SerializeHttpResponse` and `SerializeHttpError` traits for the operations.
+     * TODO: The server is hijacking this method to generate `FromRequest` for operation input shapes and `IntoResponse`
+     * for operation output shapes, it's not generating an operation struct like the client and implementing traits for
+     * that struct.
      */
     fun serverRenderOperation(
         operationWriter: RustWriter,
         operationShape: OperationShape,
-        customizations: List<OperationCustomization>
     ) {
-        val operationName = symbolProvider.toSymbol(operationShape).name
-        operationWriter.rust(
-            """
-            /// Operation shape for `$operationName`.
-            """
-        )
-        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
-        operationWriter.rustBlock("pub struct $operationName") {
-            write("_private: ()")
-        }
-        operationWriter.implBlock(operationShape, symbolProvider) {
-            rust("/// Creates a new `$operationName` operation.")
-            rustBlock("pub fn new() -> Self") {
-                rust("Self { _private: () }")
-            }
-
-            writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
-        }
-        // Render all operation traits
         traitGenerator.generateTraitImpls(operationWriter, operationShape)
     }
 
