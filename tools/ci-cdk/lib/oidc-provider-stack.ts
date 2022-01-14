@@ -6,14 +6,17 @@
 import { OpenIdConnectProvider } from "@aws-cdk/aws-iam";
 import { Construct, StackProps, Stack, Tags } from "@aws-cdk/core";
 
-/// This thumbprint is used to validate GitHub's identity to AWS.
+/// This thumbprint is used to validate GitHub's identity to AWS. This is
+/// just a SHA-1 hash of the top intermediate certificate authority's certificate.
+/// It may need to be updated when GitHub's certificate renews and this
+/// thumbprint changes.
 ///
 /// It was obtained by following instructions at:
 /// https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html
 ///
 /// This was done with the initial Idp URL of:
 /// https://token.actions.githubusercontent.com/.well-known/openid-configuration
-const GITHUB_CERTIFICATE_THUMBPRINT = "A031C46782E6E6C662C2C87C76DA9AA62CCABD8E";
+const GITHUB_CERTIFICATE_THUMBPRINT = "6938FD4D98BAB03FAADB97B34396831E3780AEA1";
 
 // There can only be one OIDC provider for a given URL per AWS account,
 // so put these in their own stack to be shared with other stacks.
