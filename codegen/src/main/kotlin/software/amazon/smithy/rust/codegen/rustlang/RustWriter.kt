@@ -305,6 +305,12 @@ fun Writable.isEmpty(): Boolean {
     return writer.toString() == RustWriter.root().toString()
 }
 
+/**
+ * Rustdoc doesn't support `r#` for raw identifiers.
+ * This function adjusts doc links to refer to raw identifiers directly.
+ */
+fun docLink(docLink: String): String = docLink.replace("::r##", "::").replace("::r#", "::")
+
 class RustWriter private constructor(
     private val filename: String,
     val namespace: String,
@@ -467,7 +473,7 @@ class RustWriter private constructor(
     inner class RustDocLinker : BiFunction<Any, String, String> {
         override fun apply(t: Any, u: String): String {
             return when (t) {
-                is Symbol -> "[`${t.name}`](${t.rustType().qualifiedName()})"
+                is Symbol -> "[`${t.name}`](${docLink(t.rustType().qualifiedName())})"
                 else -> throw CodegenException("Invalid type provided to RustDocLinker ($t) expected Symbol")
             }
         }

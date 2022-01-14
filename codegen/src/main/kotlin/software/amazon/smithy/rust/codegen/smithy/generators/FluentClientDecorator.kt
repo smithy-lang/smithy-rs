@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.docLink
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.escape
@@ -177,7 +178,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
                     /// - A retry policy (`R`) that dictates the behavior for requests that
                     ///   fail and should (potentially) be retried. The default type is
                     ///   generally what you want, as it implements a well-vetted retry
-                    ///   policy implemented in [`retry::Standard`](crate::retry::Standard).
+                    ///   policy implemented in [`RetryMode::Standard`](aws_smithy_types::retry::RetryMode::Standard).
                     ///
                     /// To construct a client, you will generally want to call
                     /// [`Client::with_config`], which takes a [`#{client}::Client`] (a
@@ -574,6 +575,6 @@ fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, 
             else -> "(undocumented)"
         }
 
-        "[`$name($member)`]($structName::$name): $docs"
+        "[`$name($member)`](${docLink("$structName::$name")}): $docs"
     }
 }

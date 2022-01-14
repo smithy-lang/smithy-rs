@@ -182,9 +182,10 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     } catch (e: Exception) {
         // cargo fmt errors are useless, ignore
     }
-    "cargo test".runCommand(baseDir, mapOf("RUSTFLAGS" to "-A dead_code"))
+    val env = mapOf("RUSTFLAGS" to "-A dead_code")
+    "cargo test".runCommand(baseDir, env)
     if (runClippy) {
-        "cargo clippy".runCommand(baseDir)
+        "cargo clippy".runCommand(baseDir, env)
     }
 }
 
