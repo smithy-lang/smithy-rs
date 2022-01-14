@@ -71,6 +71,8 @@ jobs:
           run: cargo +nightly udeps
         - name: Additional per-crate checks
           run: ../tools/additional-per-crate-checks.sh ./sdk/
+        - name: Failure test
+          run: exit 1
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0
