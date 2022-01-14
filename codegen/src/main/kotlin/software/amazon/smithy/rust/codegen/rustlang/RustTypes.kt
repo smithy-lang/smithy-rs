@@ -133,22 +133,39 @@ fun RustType.qualifiedName(): String {
     return "$namespace$name"
 }
 
+/** Format this Rust type as an `impl Into<T>` */
 fun RustType.implInto(fullyQualified: Boolean = true): String {
     return "impl Into<${this.render(fullyQualified)}>"
 }
 
-fun RustType.asArgument(name: String): Argument {
+/** Format this Rust type so that it may be used as an argument type in a function definition */
+fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
     return when (this) {
         is RustType.String,
-        is RustType.Box -> Argument(
-            "$name: ${this.implInto()}",
-            "$name.into()",
-        )
-        else -> Argument(
-            "$name: ${this.render()}",
-            name,
-        )
+        is RustType.Box -> this.implInto(fullyQualified)
+        else -> this.render(fullyQualified)
     }
+}
+
+/** Format this Rust type so that it may be used as an argument type in a function definition */
+fun RustType.asArgumentValue(name: String): String {
+    return when (this) {
+        is RustType.String,
+        is RustType.Box -> "$name.into()"
+        else -> name
+    }
+}
+
+/**
+ * For a given name, generate an `Argument` data class containing pre-formatted strings for using this type when
+ * writing a Rust function
+ */
+fun RustType.asArgument(name: String): Argument {
+    return Argument(
+        "$name: ${this.asArgumentType()}",
+        this.asArgumentValue(name),
+        this.render(),
+    )
 }
 
 /**
@@ -364,4 +381,4 @@ sealed class Attribute {
     }
 }
 
-data class Argument(val argument: String, val value: String)
+data class Argument(val argument: String, val value: String, val type: String)
