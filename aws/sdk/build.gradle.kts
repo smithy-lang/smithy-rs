@@ -19,6 +19,8 @@ plugins {
 }
 
 val smithyVersion: String by project
+val defaultRustFlags: String by project
+val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val outputDir = buildDir.resolve("aws-sdk")
@@ -288,32 +290,29 @@ tasks["assemble"].apply {
 
 tasks.register<Exec>("cargoCheck") {
     workingDir(outputDir)
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "check", "--lib", "--tests", "--benches")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoTest") {
     workingDir(outputDir)
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "test")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoDocs") {
     workingDir(outputDir)
-    // disallow warnings
-    environment("RUSTDOCFLAGS", "-D warnings")
+    environment("RUSTDOCFLAGS", defaultRustDocFlags)
     commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoClippy") {
     workingDir(outputDir)
-    // disallow warnings
-    commandLine("cargo", "clippy", "--", "-D", "warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
+    commandLine("cargo", "clippy")
     dependsOn("assemble")
 }
 

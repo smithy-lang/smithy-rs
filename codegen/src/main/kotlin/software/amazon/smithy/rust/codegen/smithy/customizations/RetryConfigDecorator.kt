@@ -150,7 +150,9 @@ class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomiz
 class PubUseRetryConfig(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.Body -> writable { rust("pub use #T::RetryConfig;", smithyTypesRetry(runtimeConfig)) }
+            is LibRsSection.Body -> writable {
+                rust("pub use #T::RetryConfig;", smithyTypesRetry(runtimeConfig))
+            }
             else -> emptySection
         }
     }
