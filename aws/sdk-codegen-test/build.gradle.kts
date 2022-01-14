@@ -13,6 +13,8 @@ plugins {
 }
 
 val smithyVersion: String by project
+val defaultRustFlags: String by project
+val defaultRustDocFlags: String by project
 
 dependencies {
     implementation(project(":aws:sdk-codegen"))
@@ -81,32 +83,29 @@ tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 tasks.register<Exec>("cargoCheck") {
     workingDir("build/smithyprojections/sdk-codegen-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "check")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoTest") {
     workingDir("build/smithyprojections/sdk-codegen-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "test")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoDocs") {
     workingDir("build/smithyprojections/sdk-codegen-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTDOCFLAGS", defaultRustDocFlags)
     commandLine("cargo", "doc", "--no-deps")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoClippy") {
     workingDir("build/smithyprojections/sdk-codegen-test/")
-    // disallow warnings
-    commandLine("cargo", "clippy", "--", "-D", "warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
+    commandLine("cargo", "clippy")
     dependsOn("assemble")
 }
 
