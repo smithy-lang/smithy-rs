@@ -353,10 +353,13 @@ class ProtocolTestGenerator(
     private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
         rustWriter.write("""let body = http_request.body().bytes().expect("body should be strict");""")
         if (body == "") {
-            rustWriter.rustTemplate("""
+            rustWriter.rustTemplate(
+                """
                 // No body
-                #{AssertEq}(std::str::from_utf8(body).unwrap(), ${"".dq()});
-            """.trimIndent(), *codegenScope)
+                #{AssertEq}(std::str::from_utf8(body).unwrap(), "");
+                """,
+                *codegenScope
+            )
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
