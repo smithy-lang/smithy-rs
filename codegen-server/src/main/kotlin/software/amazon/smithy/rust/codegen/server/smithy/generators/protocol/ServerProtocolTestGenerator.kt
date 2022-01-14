@@ -230,9 +230,9 @@ class ServerProtocolTestGenerator(
         checkQueryParams(this, httpRequestTestCase.queryParams)
         checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
         checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
-        checkHeaders(this, httpRequestTestCase.headers)
-        checkForbidHeaders(this, httpRequestTestCase.forbidHeaders)
-        checkRequiredHeaders(this, httpRequestTestCase.requireHeaders)
+        checkHeaders(this, "&http_request.headers()", httpRequestTestCase.headers)
+        checkForbidHeaders(this, "&http_request.headers()", httpRequestTestCase.forbidHeaders)
+        checkRequiredHeaders(this, "&http_request.headers()", httpRequestTestCase.requireHeaders)
         if (protocolSupport.requestBodyDeserialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
@@ -302,8 +302,11 @@ class ServerProtocolTestGenerator(
             """,
             *codegenScope
         )
+        checkHeaders(this, "&http_response.headers()", testCase.headers)
+        checkForbidHeaders(this, "&http_response.headers()", testCase.forbidHeaders)
+        checkRequiredHeaders(this, "&http_response.headers()", testCase.requireHeaders)
         checkHttpExtensions(this)
-        if (!testCase.body.isEmpty()) {
+        if (!testCase.body.isEmpty) {
             rustTemplate(
                 """
                 let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
@@ -312,14 +315,6 @@ class ServerProtocolTestGenerator(
                 *codegenScope
             )
         }
-    }
-
-    private fun checkRequiredHeaders(rustWriter: RustWriter, requireHeaders: List<String>) {
-        basicCheck(requireHeaders, rustWriter, "required_headers", "require_headers")
-    }
-
-    private fun checkForbidHeaders(rustWriter: RustWriter, forbidHeaders: List<String>) {
-        basicCheck(forbidHeaders, rustWriter, "forbidden_headers", "forbid_headers")
     }
 
     private fun checkBody(rustWriter: RustWriter, body: String, testCase: HttpRequestTestCase) {
@@ -351,13 +346,33 @@ class ServerProtocolTestGenerator(
         )
     }
 
-    private fun checkHeaders(rustWriter: RustWriter, headers: Map<String, String>) {
+    private fun checkRequiredHeaders(rustWriter: RustWriter, actualExpression: String, requireHeaders: List<String>) {
+        basicCheck(
+            requireHeaders,
+            rustWriter,
+           "required_headers",
+           actualExpression,
+           "require_headers"
+        )
+    }
+
+    private fun checkForbidHeaders(rustWriter: RustWriter, actualExpression: String, forbidHeaders: List<String>) {
+        basicCheck(
+            forbidHeaders,
+            rustWriter,
+           "forbidden_headers",
+            actualExpression,
+           "forbid_headers"
+        )
+    }
+
+    private fun checkHeaders(rustWriter: RustWriter, actualExpression: String, headers: Map<String, String>) {
         if (headers.isEmpty()) {
             return
         }
         val variableName = "expected_headers"
         rustWriter.withBlock("let $variableName = [", "];") {
-            write(
+            writeWithNoFormatting(
                 headers.entries.joinToString(",") {
                     "(${it.key.dq()}, ${it.value.dq()})"
                 }
@@ -365,7 +380,7 @@ class ServerProtocolTestGenerator(
         }
         assertOk(rustWriter) {
             write(
-                "#T(&http_request, $variableName)",
+                "#T($actualExpression, $variableName)",
                 RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers")
             )
         }
@@ -374,33 +389,52 @@ class ServerProtocolTestGenerator(
     private fun checkRequiredQueryParams(
         rustWriter: RustWriter,
         requiredParams: List<String>
-    ) = basicCheck(requiredParams, rustWriter, "required_params", "require_query_params")
+    ) = basicCheck(
+        requiredParams,
+        rustWriter,
+       "required_params",
+       "&http_request",
+       "require_query_params"
+    )
 
     private fun checkForbidQueryParams(
         rustWriter: RustWriter,
         forbidParams: List<String>
-    ) = basicCheck(forbidParams, rustWriter, "forbid_params", "forbid_query_params")
+    ) = basicCheck(
+        forbidParams,
+        rustWriter,
+       "forbid_params",
+       "&http_request",
+       "forbid_query_params"
+    )
 
     private fun checkQueryParams(
         rustWriter: RustWriter,
         queryParams: List<String>
-    ) = basicCheck(queryParams, rustWriter, "expected_query_params", "validate_query_string")
+    ) = basicCheck(
+        queryParams,
+        rustWriter,
+        "expected_query_params",
+        "&http_request",
+        "validate_query_string"
+    )
 
     private fun basicCheck(
         params: List<String>,
         rustWriter: RustWriter,
-        variableName: String,
+        expectedVariableName: String,
+        actualExpression: String,
         checkFunction: String
     ) {
         if (params.isEmpty()) {
             return
         }
-        rustWriter.withBlock("let $variableName = ", ";") {
+        rustWriter.withBlock("let $expectedVariableName = ", ";") {
             strSlice(this, params)
         }
         assertOk(rustWriter) {
             write(
-                "#T(&http_request, $variableName)",
+                "#T($actualExpression, $expectedVariableName)",
                 RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction)
             )
         }
