@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators.http
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
@@ -25,14 +26,18 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -42,8 +47,10 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isPrimitive
 import software.amazon.smithy.rust.codegen.util.isStreaming
+import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
@@ -71,7 +78,7 @@ enum class HttpMessageType {
  */
 class HttpBindingGenerator(
     private val protocol: Protocol,
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val operationShape: OperationShape
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -383,4 +390,118 @@ class HttpBindingGenerator(
     // rename here technically not required, operations and members cannot be renamed
     private fun fnName(operationShape: OperationShape, binding: HttpBindingDescriptor) =
         "${operationShape.id.getName(service).toSnakeCase()}_${binding.member.container.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
+
+    /**
+     * TODO
+     */
+    fun generateAddHeadersFn(
+        bindings: List<HttpBindingDescriptor>,
+        shape: StructureShape
+    ): RuntimeType {
+        check(bindings.all { it.location == HttpBinding.Location.HEADER })
+        // TODO inputShape could be outputShape really.
+        // TODO It oculd also be errorShape
+        // val inputShape = operationShape.inputShape(codegenContext.model)
+        //val outputShape = operationShape.outputShape(codegenContext.model)
+        val fnName = "add_headers_${shape.id.getName(service).toSnakeCase()}"
+        return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
+            val codegenScope = arrayOf(
+                "BuildError" to runtimeConfig.operationBuildError(),
+                "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
+                "HttpResponseBuilder" to RuntimeType.HttpResponseBuilder,
+                "Input" to symbolProvider.toSymbol(shape),
+            )
+            rustWriter.rustBlockTemplate(
+                // TODO Could be HttpRequestBuilder
+                // TODO Can we remove the underscore?
+                """
+                pub fn $fnName(
+                    _input: &#{Input},
+                    mut builder: #{HttpResponseBuilder}
+                ) -> std::result::Result<#{HttpResponseBuilder}, #{BuildError}>
+                """,
+                *codegenScope,
+            ) {
+                bindings.forEach { httpBinding -> renderHeaders(httpBinding) }
+                rust("Ok(builder)")
+            }
+        }
+    }
+
+    private fun RustWriter.renderHeaders(httpBinding: HttpBindingDescriptor) {
+        val memberShape = httpBinding.member
+        val memberType = model.expectShape(memberShape.target)
+        val memberSymbol = symbolProvider.toSymbol(memberShape)
+        val memberName = symbolProvider.toMemberName(memberShape)
+        ifSet(memberType, memberSymbol, "&_input.$memberName") { field ->
+            val isListHeader = memberType is CollectionShape
+            listForEach(memberType, field) { innerField, targetId ->
+                val innerMemberType = model.expectShape(targetId)
+                if (innerMemberType.isPrimitive()) {
+                    val encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
+                    rust("let mut encoder = #T::from(${autoDeref(innerField)});", encoder)
+                }
+                val formatted = headerFmtFun(this, innerMemberType, memberShape, innerField, isListHeader)
+                val safeName = safeName("formatted")
+                write("let $safeName = $formatted;")
+                rustBlock("if !$safeName.is_empty()") {
+                    rustTemplate(
+                        """
+                        use std::convert::TryFrom;
+                        let header_value = $safeName;
+                        let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                            #{build_error}::InvalidField { field: ${memberName.dq()}, details: format!("`{}` cannot be used as a header value: {}", &${
+                            redactIfNecessary(
+                                memberShape,
+                                model,
+                                "header_value"
+                            )
+                        }, err)}
+                        })?;
+                        builder = builder.header(${httpBinding.locationName.dq()}, header_value);
+                        """,
+                        "build_error" to runtimeConfig.operationBuildError()
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Format [member] in when used as an HTTP header.
+     */
+    private fun headerFmtFun(writer: RustWriter, target: Shape, member: MemberShape, targetName: String, isListHeader: Boolean): String {
+        fun quoteValue(value: String): String {
+            // Timestamp shapes are not quoted in header lists
+            return if (isListHeader && !target.isTimestampShape) {
+                val quoteFn = writer.format(headerUtil.member("quote_header_value"))
+                "$quoteFn($value)"
+            } else {
+                value
+            }
+        }
+        return when {
+            target.isStringShape -> {
+                if (target.hasTrait<MediaTypeTrait>()) {
+                    val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
+                    "$func(&$targetName)"
+                } else {
+                    quoteValue("AsRef::<str>::as_ref($targetName)")
+                }
+            }
+            target.isTimestampShape -> {
+                val timestampFormat =
+                    index.determineTimestampFormat(member, HttpBinding.Location.HEADER, defaultTimestampFormat)
+                val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+                quoteValue("$targetName.fmt(${writer.format(timestampFormatType)})?")
+            }
+            target.isListShape || target.isMemberShape -> {
+                throw IllegalArgumentException("lists should be handled at a higher level")
+            }
+            target.isPrimitive() -> {
+                "encoder.encode()"
+            }
+            else -> throw CodegenException("unexpected shape: $target")
+        }
+    }
 }
