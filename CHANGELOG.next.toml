@@ -22,3 +22,33 @@ message = "Add support for SSO credentials"
 references = ["smithy-rs#1051", "aws-sdk-rust#4"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Upgraded Smithy to 1.16.1"
+references = ["smithy-rs#1053"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix broken link to `RetryMode` in client docs"
+references = ["smithy-rs#1069"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix several doc links to raw identifiers (identifiers excaped with `r#`)"
+references = ["smithy-rs#1069"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Reduce dependency recompilation in local dev"
+references = ["smithy-rs#1069"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Silence profile credential warnings in Lambda environment"
+references = ["smithy-rs#1065", "aws-sdk-rust#398"]
+meta = { "breaking" = false, "tada" = true, "bug" = true }
+author = "nmoutschen"

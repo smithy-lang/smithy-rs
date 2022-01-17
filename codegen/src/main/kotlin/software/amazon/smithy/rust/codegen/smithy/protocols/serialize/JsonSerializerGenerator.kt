@@ -20,7 +20,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -44,7 +43,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -52,6 +50,8 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 class JsonSerializerGenerator(
     codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
+    /** Function that maps a MemberShape into a JSON field name */
+    private val jsonName: (MemberShape) -> String,
 ) : StructuredDataSerializerGenerator {
     private data class Context<T : Shape>(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
@@ -91,10 +91,11 @@ class JsonSerializerGenerator(
             fun structMember(
                 context: StructContext,
                 member: MemberShape,
-                symProvider: RustSymbolProvider
+                symProvider: RustSymbolProvider,
+                jsonName: (MemberShape) -> String,
             ): MemberContext =
                 MemberContext(
-                    objectValueWriterExpression(context.objectName, member),
+                    objectValueWriterExpression(context.objectName, jsonName(member)),
                     ValueExpression.Value("${context.localName}.${symProvider.toMemberName(member)}"),
                     member
                 )
@@ -102,19 +103,18 @@ class JsonSerializerGenerator(
             fun unionMember(
                 context: Context<UnionShape>,
                 variantReference: String,
-                member: MemberShape
+                member: MemberShape,
+                jsonName: (MemberShape) -> String,
             ): MemberContext =
                 MemberContext(
-                    objectValueWriterExpression(context.writerExpression, member),
+                    objectValueWriterExpression(context.writerExpression, jsonName(member)),
                     ValueExpression.Reference(variantReference),
                     member
                 )
 
             /** Returns an expression to get a JsonValueWriter from a JsonObjectWriter */
-            private fun objectValueWriterExpression(objectWriterName: String, member: MemberShape): String {
-                val wireName = (member.getTrait<JsonNameTrait>()?.value ?: member.memberName).dq()
-                return "$objectWriterName.key($wireName)"
-            }
+            private fun objectValueWriterExpression(objectWriterName: String, jsonName: String): String =
+                "$objectWriterName.key(${jsonName.dq()})"
         }
     }
 
@@ -276,7 +276,7 @@ class JsonSerializerGenerator(
                         rust("let (_, _) = (object, input);") // Suppress unused argument warnings
                     }
                     for (member in members) {
-                        serializeMember(MemberContext.structMember(inner, member, symbolProvider))
+                        serializeMember(MemberContext.structMember(inner, member, symbolProvider, jsonName))
                     }
                 }
                 rust("Ok(())")
@@ -405,7 +405,7 @@ class JsonSerializerGenerator(
                     for (member in context.shape.members()) {
                         val variantName = symbolProvider.toMemberName(member)
                         withBlock("#T::$variantName(inner) => {", "},", unionSymbol) {
-                            serializeMember(MemberContext.unionMember(context, "inner", member))
+                            serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
                         }
                     }
                     if (mode.renderUnknownVariant()) {

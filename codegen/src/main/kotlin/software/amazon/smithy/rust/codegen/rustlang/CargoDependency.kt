@@ -201,6 +201,7 @@ data class CargoDependency(
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4"))
         val Md5: CargoDependency = CargoDependency("md5", CratesIo("0.7"))
         val PercentEncoding: CargoDependency = CargoDependency("percent-encoding", CratesIo("2"))
+        val PrettyAssertions: CargoDependency = CargoDependency("pretty_assertions", CratesIo("1"), scope = DependencyScope.Dev)
         val Regex: CargoDependency = CargoDependency("regex", CratesIo("1"))
         val Ring: CargoDependency = CargoDependency("ring", CratesIo("0.16"))
         val TempFile: CargoDependency = CargoDependency("temp-file", CratesIo("0.1.6"), scope = DependencyScope.Dev)
