@@ -109,6 +109,7 @@ private class ServerHttpProtocolImplGenerator(
         "Cow" to ServerRuntimeType.Cow,
         "DateTime" to RuntimeType.DateTime(runtimeConfig),
         "HttpBody" to CargoDependency.HttpBody.asType(),
+        "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
         "Hyper" to CargoDependency.Hyper.asType(),
         "LazyStatic" to CargoDependency.LazyStatic.asType(),
         "Nom" to ServerCargoDependency.Nom.asType(),
@@ -480,7 +481,28 @@ private class ServerHttpProtocolImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val member = binding.member
         return when (binding.location) {
-            HttpLocation.HEADER, HttpLocation.PREFIX_HEADERS, HttpLocation.PAYLOAD -> {
+            HttpLocation.HEADER -> writable {
+                // TODO responseContentType
+                val contentType = httpBindingResolver.requestContentType(operationShape)
+                val additionalHeaders = listOfNotNull(contentType?.let { "Content-Type" to it }) +
+                        protocol.additionalHeaders(operationShape)
+                for (header in additionalHeaders) {
+                    rustTemplate(
+                """
+                        response = #{header_util}::set_response_header_if_absent(
+                            response,
+                            #{http}::header::HeaderName::from_static("${header.first}"),
+                            "${header.second}"
+                        );
+                        """,
+                        *codegenScope
+                    )
+                }
+
+                // TODO I left off here on Friday. I need to set headers on the response that are bound to the output operation shape.
+                // TODO Call addHeaders, which is generated in RequestBindingGenerator
+            }
+            HttpLocation.PREFIX_HEADERS, HttpLocation.PAYLOAD -> {
                 logger.warning("[rust-server-codegen] $operationName: response serialization does not currently support ${binding.location} bindings")
                 null
             }
@@ -493,9 +515,9 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let status = output.$memberName
-                        .ok_or_else(|| #{SmithyHttpServer}::rejection::Serialize::from(${(memberName + " missing or empty").dq()}))?;
+                        .ok_or_else(|| #{SmithyHttpServer}::rejection::Serialize::from("$memberName missing or empty"))?;
                     let http_status: u16 = std::convert::TryFrom::<i32>::try_from(status)
-                        .map_err(|_| #{SmithyHttpServer}::rejection::Serialize::from(${("invalid status code").dq()}))?;
+                        .map_err(|_| #{SmithyHttpServer}::rejection::Serialize::from("invalid status code"))?;
                     """.trimIndent(),
                     *codegenScope,
                 )

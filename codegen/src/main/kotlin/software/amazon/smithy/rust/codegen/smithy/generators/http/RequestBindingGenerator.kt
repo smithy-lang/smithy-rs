@@ -105,6 +105,7 @@ class RequestBindingGenerator(
      * Generates `update_http_builder` and all necessary dependency functions into the impl block provided by
      * [implBlockWriter]. The specific behavior is configured by [httpTrait].
      */
+    // HERE
     fun renderUpdateHttpBuilder(implBlockWriter: RustWriter) {
         uriBase(implBlockWriter)
         val hasHeaders = addHeaders(implBlockWriter)

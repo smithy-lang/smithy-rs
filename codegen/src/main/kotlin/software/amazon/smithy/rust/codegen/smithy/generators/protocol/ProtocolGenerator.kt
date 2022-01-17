@@ -137,6 +137,7 @@ open class ProtocolGenerator(
                 customizations,
                 OperationSection.InputImpl(customizations, operationShape, inputShape, protocol)
             )
+            // HERE
             makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
             rustBlockTemplate(
                 "fn assemble(builder: #{RequestBuilder}, body: #{SdkBody}) -> #{Request}<#{SdkBody}>",
