@@ -97,9 +97,9 @@ class ProtocolTestGenerator(
             ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
         val responseTests = operationShape.getTrait<HttpResponseTestsTrait>()
             ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
-
         val errorTests = operationIndex.getErrors(operationShape).flatMap { error ->
-            val testCases = error.getTrait<HttpResponseTestsTrait>()?.testCases.orEmpty()
+            val testCases = error.getTrait<HttpResponseTestsTrait>()
+                ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty()
             testCases.map { TestCase.ResponseTest(it, error) }
         }
         val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching()
