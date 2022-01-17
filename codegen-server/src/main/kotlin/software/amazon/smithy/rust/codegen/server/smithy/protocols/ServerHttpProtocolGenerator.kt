@@ -13,6 +13,7 @@ import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
@@ -37,7 +38,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
@@ -47,11 +48,13 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescripto
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
@@ -508,6 +511,7 @@ private class ServerHttpProtocolImplGenerator(
         inputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
+        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
@@ -529,7 +533,7 @@ private class ServerHttpProtocolImplGenerator(
         }
         for (binding in bindings) {
             val member = binding.member
-            val parsedValue = serverRenderBindingParser(binding, operationShape)
+            val parsedValue = serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
             if (parsedValue != null) {
                 withBlock("input = input.${member.setterName()}(", ");") {
                     parsedValue(this)
@@ -548,18 +552,56 @@ private class ServerHttpProtocolImplGenerator(
     private fun serverRenderBindingParser(
         binding: HttpBindingDescriptor,
         operationShape: OperationShape,
+        httpBindingGenerator: ServerRequestBindingGenerator,
+        structuredDataParser: StructuredDataParserGenerator,
     ): Writable? {
-        val operationName = symbolProvider.toSymbol(operationShape).name
-        return when (val location = binding.location) {
+        val errorSymbol = if (model.expectShape(binding.member.target) is StringShape) {
+            CargoDependency.SmithyHttpServer(runtimeConfig).asType().member("rejection").member("SmithyRejection")
+        } else {
+            CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize").member("Error")
+        }
+        return when (binding.location) {
             HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
-            HttpLocation.LABEL -> {
-                null
+            HttpLocation.PAYLOAD -> {
+                val docShapeHandler: RustWriter.(String) -> Unit = { body ->
+                    rust(
+                        "#T($body)",
+                        structuredDataParser.documentParser(operationShape),
+                    )
+                }
+                val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
+                    rust("#T($body)", structuredDataParser.payloadParser(binding.member))
+                }
+                val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
+                    operationShape,
+                    binding,
+                    errorSymbol,
+                    docHandler = docShapeHandler,
+                    structuredHandler = structureShapeHandler
+                )
+                return if (binding.member.isStreaming(model)) {
+                    writable { rust("""todo!("streaming request bodies");""") }
+                } else {
+                    writable {
+                        rustTemplate("""
+                            {
+                                let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
+                                let bytes = #{Hyper}::body::to_bytes(body).await?;
+                                #{Deserializer}(&bytes)?
+                            }
+                            """,
+                            "Deserializer" to deserializer,
+                            *codegenScope
+                        )
+                    }
+                }
             }
-            HttpLocation.DOCUMENT -> {
+            HttpLocation.DOCUMENT, HttpLocation.LABEL, HttpLocation.QUERY, HttpLocation.QUERY_PARAMS -> {
+                // All of these are handled separately.
                 null
             }
             else -> {
-                logger.warning("[rust-server-codegen] $operationName: request parsing does not currently support $location bindings")
+                logger.warning("[rust-server-codegen] ${operationShape.id}: request parsing does not currently support ${binding.location} bindings")
                 null
             }
         }
@@ -829,7 +871,7 @@ private class ServerHttpProtocolImplGenerator(
 
     private fun serverRenderHeaderParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
         val httpBindingGenerator =
-            ResponseBindingGenerator(
+            ServerRequestBindingGenerator(
                 ServerRestJson(codegenContext),
                 codegenContext,
                 operationShape,
