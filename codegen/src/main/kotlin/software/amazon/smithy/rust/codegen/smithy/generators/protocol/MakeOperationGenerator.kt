@@ -145,7 +145,6 @@ open class MakeOperationGenerator(
             operationShape,
             inputShape,
         )
-        // HERE
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(writer)
         writer.inRequestBuilderBaseFn(inputShape) {

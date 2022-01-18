@@ -392,33 +392,29 @@ class HttpBindingGenerator(
         "${operationShape.id.getName(service).toSnakeCase()}_${binding.member.container.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
 
     /**
-     * TODO
+     * Generates a function to set headers on an HTTP message for the given [shape].
      */
     fun generateAddHeadersFn(
         bindings: List<HttpBindingDescriptor>,
-        shape: StructureShape
+        shape: StructureShape,
+        httpMessageType: HttpMessageType = HttpMessageType.REQUEST
     ): RuntimeType {
         check(bindings.all { it.location == HttpBinding.Location.HEADER })
-        // TODO inputShape could be outputShape really.
-        // TODO It oculd also be errorShape
-        // val inputShape = operationShape.inputShape(codegenContext.model)
-        //val outputShape = operationShape.outputShape(codegenContext.model)
+
         val fnName = "add_headers_${shape.id.getName(service).toSnakeCase()}"
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
             val codegenScope = arrayOf(
                 "BuildError" to runtimeConfig.operationBuildError(),
-                "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
-                "HttpResponseBuilder" to RuntimeType.HttpResponseBuilder,
-                "Input" to symbolProvider.toSymbol(shape),
+                HttpMessageType.REQUEST.name to RuntimeType.HttpRequestBuilder,
+                HttpMessageType.RESPONSE.name to RuntimeType.HttpResponseBuilder,
+                "Shape" to symbolProvider.toSymbol(shape),
             )
             rustWriter.rustBlockTemplate(
-                // TODO Could be HttpRequestBuilder
-                // TODO Can we remove the underscore?
                 """
                 pub fn $fnName(
-                    _input: &#{Input},
-                    mut builder: #{HttpResponseBuilder}
-                ) -> std::result::Result<#{HttpResponseBuilder}, #{BuildError}>
+                    input: &#{Shape},
+                    mut builder: #{${httpMessageType.name}}
+                ) -> std::result::Result<#{${httpMessageType.name}}, #{BuildError}>
                 """,
                 *codegenScope,
             ) {
@@ -433,7 +429,7 @@ class HttpBindingGenerator(
         val memberType = model.expectShape(memberShape.target)
         val memberSymbol = symbolProvider.toSymbol(memberShape)
         val memberName = symbolProvider.toMemberName(memberShape)
-        ifSet(memberType, memberSymbol, "&_input.$memberName") { field ->
+        ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
             val isListHeader = memberType is CollectionShape
             listForEach(memberType, field) { innerField, targetId ->
                 val innerMemberType = model.expectShape(targetId)

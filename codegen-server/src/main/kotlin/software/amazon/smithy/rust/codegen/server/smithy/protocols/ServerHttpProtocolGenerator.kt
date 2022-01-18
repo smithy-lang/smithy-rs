@@ -482,20 +482,27 @@ private class ServerHttpProtocolImplGenerator(
         )
     }
 
-    // TODO Docs
+    /**
+     * Sets HTTP response headers for the operation's output shape or the operation's error shape.
+     * It will generate response headers for the operation's output shape, unless [errorShape] is non-null, in which
+     * case it will generate response headers for the given error shape.
+     *
+     * It only serializes as HTTP headers shape members that are bound with `httpHeader`.
+     * TODO Add support for `httpPrefixHeaders`.
+     *
+     * The `Content-Type` header is also set according the protocol and the contents of the shape to be serialized.
+     */
     private fun RustWriter.serverRenderResponseHeaders(bindings: List<HttpBindingDescriptor>, operationShape: OperationShape, errorShape: StructureShape?) {
-        // TODO Can error shapes set a different Content-Type than the output shape?
+        check(bindings.all { it.location == HttpLocation.HEADER })
+
         val contentType = httpBindingResolver.responseContentType(operationShape)
-        val additionalHeaders = listOfNotNull(contentType?.let { "Content-Type" to it }) +
-                // TODO This only has an effect for AWS JSON **input**, remove.
-                protocol.additionalHeaders(operationShape)
-        for (header in additionalHeaders) {
+        if (contentType != null) {
             rustTemplate(
-        """
+                """
                 builder = #{header_util}::set_response_header_if_absent(
                     builder,
-                    #{http}::header::HeaderName::from_static("${header.first}"),
-                    "${header.second}"
+                    #{http}::header::HeaderName::from_static("Content-Type"),
+                    "$contentType"
                 );
                 """,
                 *codegenScope
@@ -511,7 +518,6 @@ private class ServerHttpProtocolImplGenerator(
                 bindingGenerator.generateAddHeadersFn(bindings, errorShape?: operationShape.outputShape(codegenContext.model))
             )
         }
-        // TODO prefix headers
     }
 
     private fun serverRenderBindingSerializer(

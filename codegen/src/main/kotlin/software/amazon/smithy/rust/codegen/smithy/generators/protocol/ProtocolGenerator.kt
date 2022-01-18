@@ -137,7 +137,6 @@ open class ProtocolGenerator(
                 customizations,
                 OperationSection.InputImpl(customizations, operationShape, inputShape, protocol)
             )
-            // HERE
             makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
             rustBlockTemplate(
                 "fn assemble(builder: #{RequestBuilder}, body: #{SdkBody}) -> #{Request}<#{SdkBody}>",
@@ -195,9 +194,8 @@ open class ProtocolGenerator(
     }
 
     /**
-     * TODO: The server is hijacking this method to generate `FromRequest` for operation input shapes and `IntoResponse`
-     * for operation output shapes, it's not generating an operation struct like the client and implementing traits for
-     * that struct.
+     * The server implementation uses this method to generate implementations of the `FromRequest` and `IntoResponse`
+     * traits for operation input and output shapes, respectively.
      */
     fun serverRenderOperation(
         operationWriter: RustWriter,
