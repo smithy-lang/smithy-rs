@@ -77,6 +77,7 @@ class RequestBindingGenerator(
 ) {
     private val index = HttpBindingIndex.of(model)
     private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
+    private val headerUtil = CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
 
     private val codegenScope = arrayOf(
         "BuildError" to runtimeConfig.operationBuildError(),
@@ -175,6 +176,7 @@ class RequestBindingGenerator(
             else -> UNREACHABLE("unexpected member for prefix headers: $memberType")
         }
         ifSet(memberType, memberSymbol, "&_input.$memberName") { field ->
+            val listHeader = memberType is CollectionShape
             rustTemplate(
                 """
                 for (k, v) in $field {
@@ -183,8 +185,8 @@ class RequestBindingGenerator(
                         #{build_error}::InvalidField { field: ${memberName.dq()}, details: format!("`{}` cannot be used as a header name: {}", k, err)}
                     })?;
                     use std::convert::TryFrom;
-                    let header_value = ${headerFmtFun(this, target, memberShape, "v")};
-                    let header_value = http::header::HeaderValue::try_from(header_value).map_err(|err| {
+                    let header_value = ${headerFmtFun(this, target, memberShape, "v", listHeader)};
+                    let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
                         #{build_error}::InvalidField {
                             field: ${memberName.dq()},
                             details: format!("`{}` cannot be used as a header value: {}", ${
@@ -210,12 +212,13 @@ class RequestBindingGenerator(
         val memberSymbol = symbolProvider.toSymbol(memberShape)
         val memberName = symbolProvider.toMemberName(memberShape)
         ifSet(memberType, memberSymbol, "&_input.$memberName") { field ->
+            val isListHeader = memberType is CollectionShape
             listForEach(memberType, field) { innerField, targetId ->
                 val innerMemberType = model.expectShape(targetId)
                 if (innerMemberType.isPrimitive()) {
                     rust("let mut encoder = #T::from(${autoDeref(innerField)});", Encoder)
                 }
-                val formatted = headerFmtFun(this, innerMemberType, memberShape, innerField)
+                val formatted = headerFmtFun(this, innerMemberType, memberShape, innerField, isListHeader)
                 val safeName = safeName("formatted")
                 write("let $safeName = $formatted;")
                 rustBlock("if !$safeName.is_empty()") {
@@ -244,21 +247,30 @@ class RequestBindingGenerator(
     /**
      * Format [member] in the when used as an HTTP header
      */
-    private fun headerFmtFun(writer: RustWriter, target: Shape, member: MemberShape, targetName: String): String {
+    private fun headerFmtFun(writer: RustWriter, target: Shape, member: MemberShape, targetName: String, isListHeader: Boolean): String {
+        fun quoteValue(value: String): String {
+            // Timestamp shapes are not quoted in header lists
+            return if (isListHeader && !target.isTimestampShape) {
+                val quoteFn = writer.format(headerUtil.member("quote_header_value"))
+                "$quoteFn($value)"
+            } else {
+                value
+            }
+        }
         return when {
             target.isStringShape -> {
                 if (target.hasTrait<MediaTypeTrait>()) {
                     val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
                     "$func(&$targetName)"
                 } else {
-                    "AsRef::<str>::as_ref($targetName)"
+                    quoteValue("AsRef::<str>::as_ref($targetName)")
                 }
             }
             target.isTimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(member, HttpBinding.Location.HEADER, defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                "$targetName.fmt(${writer.format(timestampFormatType)})?"
+                quoteValue("$targetName.fmt(${writer.format(timestampFormatType)})?")
             }
             target.isListShape || target.isMemberShape -> {
                 throw IllegalArgumentException("lists should be handled at a higher level")

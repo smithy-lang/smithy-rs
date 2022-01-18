@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.docLink
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -170,7 +171,7 @@ open class ProtocolGenerator(
             /// Operation shape for `$operationName`.
             ///
             /// This is usually constructed for you using the the fluent builder returned by
-            /// [`$fluentBuilderName`](crate::client::Client::$fluentBuilderName).
+            /// [`$fluentBuilderName`](${docLink("crate::client::Client::$fluentBuilderName")}).
             ///
             /// See [`crate::client::fluent_builders::$operationName`] for more details about the operation.
             """

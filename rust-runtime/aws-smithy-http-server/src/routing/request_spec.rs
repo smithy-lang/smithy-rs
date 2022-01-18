@@ -45,14 +45,35 @@ impl QuerySpec {
 
 #[derive(Debug, Clone, Default)]
 pub struct PathAndQuerySpec {
-    pub path_segments: PathSpec,
-    pub query_segments: QuerySpec,
+    path_segments: PathSpec,
+    query_segments: QuerySpec,
+}
+
+impl PathAndQuerySpec {
+    pub fn new(path_segments: PathSpec, query_segments: QuerySpec) -> Self {
+        PathAndQuerySpec {
+            path_segments,
+            query_segments,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct UriSpec {
-    pub host_prefix: Option<Vec<HostPrefixSegment>>,
-    pub path_and_query: PathAndQuerySpec,
+    host_prefix: Option<Vec<HostPrefixSegment>>,
+    path_and_query: PathAndQuerySpec,
+}
+
+impl UriSpec {
+    // TODO When we add support for the endpoint trait, this constructor will take in
+    // a first argument `host_prefix`.
+    // https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
+    pub fn new(path_and_query: PathAndQuerySpec) -> Self {
+        UriSpec {
+            host_prefix: None,
+            path_and_query,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -63,7 +84,7 @@ pub struct RequestSpec {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Match {
+pub(super) enum Match {
     /// The request matches the URI pattern spec.
     Yes,
     /// The request matches the URI pattern spec, but the wrong HTTP method was used. `405 Method
@@ -105,6 +126,39 @@ impl RequestSpec {
             uri_spec,
             uri_path_regex,
         }
+    }
+
+    /// A measure of how "important" a `RequestSpec` is. The more specific a `RequestSpec` is, the
+    /// higher it ranks in importance. Specificity is measured by the number of segments plus the
+    /// number of query string literals in its URI pattern, so `/{Bucket}/{Key}?query` is more
+    /// specific than `/{Bucket}/{Key}`, which is more specific than `/{Bucket}`, which is more
+    /// specific than `/`.
+    ///
+    /// This rank effectively induces a total order, but we don't implement as `Ord` for
+    /// `RequestSpec` because it would appear in its public interface.
+    ///
+    /// # Why do we need this?
+    ///
+    /// Note that:
+    ///     1. the Smithy spec does not define how servers should route incoming requests in the
+    ///        case of pattern conflicts; and
+    ///     2. the Smithy spec even outright rejects conflicting patterns that can be easily
+    ///        disambiguated e.g. `/{a}` and `/{label}/b` cannot coexist.
+    ///
+    /// We can't to anything about (2) since the Smithy CLI will refuse to build a model with those
+    /// kind of conflicts. However, the Smithy CLI does allow _other_ conflicting patterns to
+    /// coexist, e.g. `/` and `/{label}`. We therefore have to take a stance on (1), since if we
+    /// route arbitrarily [we render basic usage
+    /// impossible](https://github.com/awslabs/smithy-rs/issues/1009).
+    /// So this ranking of routes implements some basic pattern conflict disambiguation with some
+    /// common sense. It's also the same behavior that [the TypeScript sSDK is implementing].
+    ///
+    /// TODO(https://github.com/awslabs/smithy/issues/1029#issuecomment-1002683552): Once Smithy
+    /// updates the spec to define the behavior, update our implementation.
+    ///
+    /// [the TypeScript sSDK is implementing]: https://github.com/awslabs/smithy-typescript/blob/d263078b81485a6a2013d243639c0c680343ff47/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.ts#L59.
+    pub(super) fn rank(&self) -> usize {
+        self.uri_spec.path_and_query.path_segments.0.len() + self.uri_spec.path_and_query.query_segments.0.len()
     }
 
     pub(super) fn matches<B>(&self, req: &Request<B>) -> Match {

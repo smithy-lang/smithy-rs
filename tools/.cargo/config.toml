@@ -1,0 +1,4 @@
+[build]
+# Tools shouldn't share `target` with the rest of the project to
+# avoid thrash from differing compiler flags
+target-dir = "target"

@@ -9,7 +9,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.PaginatedIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -175,12 +174,13 @@ class PaginatorGenerator private constructor(
                             let done = match resp {
                                 Ok(ref resp) => {
                                     let new_token = #{output_token}(resp);
-                                    if new_token == input.$inputTokenMember.as_ref() {
+                                    let is_empty = ${nextTokenEmpty("new_token")};
+                                    if !is_empty && new_token == input.$inputTokenMember.as_ref() {
                                         let _ = tx.send(Err(#{SdkError}::ConstructionFailure("next token did not change, aborting paginator. This indicates an SDK or AWS service bug.".into()))).await;
                                         return;
                                     }
                                     input.$inputTokenMember = new_token.cloned();
-                                    ${nextTokenEmpty("input.$inputTokenMember")}
+                                    is_empty
                                 },
                                 Err(_) => true,
                             };
@@ -192,7 +192,6 @@ class PaginatorGenerator private constructor(
                                 return
                             }
                         }
-
                     }))
                 }
             }
@@ -276,12 +275,7 @@ class PaginatorGenerator private constructor(
     }
 
     private fun nextTokenEmpty(token: String): String {
-        val tokenType = model.expectShape(paginationInfo.outputTokenMemberPath.last().target)
-        if (tokenType is StringShape) {
-            return "$token.as_deref().unwrap_or_default().is_empty()"
-        } else {
-            return "$token.is_none()"
-        }
+        return "$token.map(|token|token.is_empty()).unwrap_or(true)"
     }
 
     private fun pageSizeSetter() = writable {
