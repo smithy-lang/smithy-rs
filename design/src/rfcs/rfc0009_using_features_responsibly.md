@@ -135,6 +135,16 @@ While verbose, this code will compile without error no matter what features are 
 
 Because Cargo will use the union of all features enabled on a dependency when building it, we should be wary of marking features as default. Once we do mark features as default, users that want to exclude code and dependencies brought in by those features will have a difficult time doing so. One need look no further than [this issue][remove rustls from crate graph] submitted by a user that wanted to use Native TLS and struggled to make sure that Rustls was actually disabled *(This issue was resolved in [this PR][remove default features from runtime crates] which removed default features from our runtime crates.)* This is not to say that we should never use them, as having defaults for the most common use cases means less work for those users.
 
+#### When a default feature providing some functionality is disabled, active features must not automatically replace that functionality
+
+As the SDK is currently designed, the TLS implementation in use can change depending on what features are pulled in. Currently, if a user disables `default-features` (which include `rustls`) and activates the `native-tls` feature, then we automatically use `native-tls` when making requests. For an example of what this looks like from the user's perspective, [see this example][native-tls example].
+
+This RFC proposes that we should have a single default for any configurable functionality and that that functionality depends on a corresponding default feature being active. If `default-features` are disabled, then so is the corresponding default functionality. In its place would be functionality that fails fast with a message describing why it failed *(a default was deactivated but the user didn't set a replacement)*, and what the user should do to fix it *(with links to documentation and examples where necessary)*. We should use [compile-time errors] to communicate failures with users, or `panic`s for cases that can't be evaluated at compile-time.
+
+For an example: Say you have a crate with features `a`, `b`, `c` that all provide some version of functionality `foo`. Feature `a` is part of `default-features`. When `no-default-features = true` but features `b` and `c` are active, don't automatically fall back to `b` or `c`. Instead, emit an error with a message like this:
+
+> "When default features are disabled, you must manually set `foo`. Features `b` and `c` active; You can use one of those. See an example of setting a custom `foo` here: *link-to-docs.amazon.com/setting-foo*"
+
 ## Proposed changes to SDK and runtime crate features as they exist today
 
 TODO
@@ -162,3 +172,5 @@ TODO
 [nom#544]: https://github.com/Geal/nom/issues/544
 [profiling#32]: https://github.com/aclysma/profiling/issues/32
 [clang-sys#128]: https://github.com/KyleMayes/clang-sys/issues/128
+[compile-time errors]: https://doc.rust-lang.org/stable/std/macro.compile_error.html
+[native-tls example]: https://github.com/awslabs/smithy-rs/tree/bc316a0b81b75a00c389f6281a66eb0f5357172a/aws/sdk/examples/using_native_tls_instead_of_rustls
