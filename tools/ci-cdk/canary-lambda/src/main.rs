@@ -126,7 +126,7 @@ async fn lambda_main(clients: canary::Clients) -> Result<Value, Error> {
 
 async fn canary_result(handle: JoinHandle<anyhow::Result<()>>) -> Result<(), String> {
     match timeout(Duration::from_secs(20), handle).await {
-        Err(_timeout) => Err(format!("canary timed out")),
+        Err(_timeout) => Err("canary timed out".into()),
         Ok(Ok(result)) => match result {
             Ok(_) => Ok(()),
             Err(err) => Err(format!("{:?}", err)),
