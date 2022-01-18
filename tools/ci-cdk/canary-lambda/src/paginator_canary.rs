@@ -40,7 +40,10 @@ pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::
         num_pages += 1;
     }
     if dbg!(num_pages) < 2 {
-        bail!("expected 3+ pages containing ~60 results but got {} pages", num_pages)
+        bail!(
+            "expected 3+ pages containing ~60 results but got {} pages",
+            num_pages
+        )
     }
 
     // https://github.com/awslabs/aws-sdk-rust/issues/405
