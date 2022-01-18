@@ -189,6 +189,7 @@ class RequestBindingGenerator(
         }
     }
 
+    // TODO Refactor and use the one HttpBindingGenerator.kt
     private fun RustWriter.renderHeaders(httpBinding: HttpBinding) {
         val memberShape = httpBinding.member
         val memberType = model.expectShape(memberShape.target)

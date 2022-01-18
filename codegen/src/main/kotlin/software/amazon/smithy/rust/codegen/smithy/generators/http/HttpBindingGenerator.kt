@@ -47,38 +47,43 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
-import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isPrimitive
 import software.amazon.smithy.rust.codegen.util.isStreaming
-import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
- * The type of HTTP message from which we are deserializing the HTTP-bound data.
+ * The type of HTTP message from which we are (de)serializing the HTTP-bound data.
  * We are either:
- *     - deserializing data from an HTTP request (we are a server); or
- *     - deserializing data from an HTTP response (we are a client).
+ *     - deserializing data from an HTTP request (we are a server),
+ *     - deserializing data from an HTTP response (we are a client),
+ *     - serializing data to an HTTP request (we are a client),
+ *     - serializing data to an HTTP response (we are a server),
  */
 enum class HttpMessageType {
     REQUEST, RESPONSE
 }
 
 /**
- * This class generates Rust functions that deserialize data from an HTTP message.
+ * This class generates Rust functions that (de)serialize data from/to an HTTP message.
  * They are useful for *both*:
- *     - servers (that deserialize HTTP requests); and
- *     - clients (that deserialize HTTP responses)
- * because the deserialization logic is entirely similar. In the cases where they _slightly_ differ,
+ *     - servers (that deserialize HTTP requests and serialize HTTP responses); and
+ *     - clients (that deserialize HTTP responses and serialize HTTP requests)
+ * because the (de)serialization logic is entirely similar. In the cases where they _slightly_ differ,
  * the [HttpMessageType] enum is used to distinguish.
  *
  * For deserialization logic that is wholly different among clients and servers, use the classes:
  *     - [ServerRequestBindingGenerator] from the `codegen-server` project for servers; and
  *     - [ResponseBindingGenerator] from this project for clients
  * instead.
+ *
+ * For serialization logic that is wholly different among clients and servers, use the classes:
+ *     - [ServerResponseBindingGenerator] from the `codegen-server` project for servers; and
+ *     - [RequestBindingGenerator] from this project for clients
+ * instead.
  */
 class HttpBindingGenerator(
     private val protocol: Protocol,
-    private val codegenContext: CodegenContext,
+    codegenContext: CodegenContext,
     private val operationShape: OperationShape
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -446,7 +451,7 @@ class HttpBindingGenerator(
                         use std::convert::TryFrom;
                         let header_value = $safeName;
                         let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
-                            #{build_error}::InvalidField { field: ${memberName.dq()}, details: format!("`{}` cannot be used as a header value: {}", &${
+                            #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header value: {}", &${
                             redactIfNecessary(
                                 memberShape,
                                 model,
@@ -454,12 +459,53 @@ class HttpBindingGenerator(
                             )
                         }, err)}
                         })?;
-                        builder = builder.header(${httpBinding.locationName.dq()}, header_value);
+                        builder = builder.header("${httpBinding.locationName}", header_value);
                         """,
                         "build_error" to runtimeConfig.operationBuildError()
                     )
                 }
             }
+        }
+    }
+
+    private fun RustWriter.renderPrefixHeader(httpBinding: HttpBinding) {
+        val memberShape = httpBinding.member
+        val memberType = model.expectShape(memberShape.target)
+        val memberSymbol = symbolProvider.toSymbol(memberShape)
+        val memberName = symbolProvider.toMemberName(memberShape)
+        val target = when (memberType) {
+            is CollectionShape -> model.expectShape(memberType.member.target)
+            is MapShape -> model.expectShape(memberType.value.target)
+            else -> UNREACHABLE("unexpected member for prefix headers: $memberType")
+        }
+        ifSet(memberType, memberSymbol, "&_input.$memberName") { field ->
+            val listHeader = memberType is CollectionShape
+            rustTemplate(
+                """
+                for (k, v) in $field {
+                    use std::str::FromStr;
+                    let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
+                        #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
+                    })?;
+                    use std::convert::TryFrom;
+                    let header_value = ${headerFmtFun(this, target, memberShape, "v", listHeader)};
+                    let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+                        #{build_error}::InvalidField {
+                            field: "$memberName",
+                            details: format!("`{}` cannot be used as a header value: {}", ${
+                    redactIfNecessary(
+                        memberShape,
+                        model,
+                        "v"
+                    )
+                }, err)}
+                    })?;
+                    builder = builder.header(header_name, header_value);
+                }
+
+                """,
+                "build_error" to runtimeConfig.operationBuildError()
+            )
         }
     }
 
