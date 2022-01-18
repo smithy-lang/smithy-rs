@@ -147,7 +147,7 @@ open class ProtocolGenerator(
                         """
                         let mut builder = builder;
                         if let Some(content_length) = body.content_length() {
-                            builder = #{header_util}::set_header_if_absent(
+                            builder = #{header_util}::set_request_header_if_absent(
                                         builder,
                                         #{http}::header::CONTENT_LENGTH,
                                         content_length

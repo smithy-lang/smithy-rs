@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.smithy.generators.http
 
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.pattern.SmithyPattern
@@ -18,7 +17,6 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
-import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -29,18 +27,17 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isPrimitive
 
 fun HttpTrait.uriFormatString(): String {
@@ -67,14 +64,16 @@ fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {
  * headers & URL based on the HTTP trait implementation.
  */
 class RequestBindingGenerator(
-    val model: Model,
-    private val symbolProvider: RustSymbolProvider,
-    private val runtimeConfig: RuntimeConfig,
-    private val defaultTimestampFormat: TimestampFormatTrait.Format,
-    private val shape: OperationShape,
-    private val inputShape: StructureShape,
-    private val httpTrait: HttpTrait,
+    codegenContext: CodegenContext,
+    private val protocol: Protocol,
+    private val operationShape: OperationShape,
 ) {
+    private val model = codegenContext.model
+    private val inputShape = operationShape.inputShape(model)
+    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val httpTrait = protocol.httpBindingResolver.httpTrait(operationShape)
+    private val httpBindingGenerator = HttpBindingGenerator(protocol, codegenContext, operationShape)
     private val index = HttpBindingIndex.of(model)
     private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
     private val headerUtil = CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
@@ -83,22 +82,6 @@ class RequestBindingGenerator(
         "BuildError" to runtimeConfig.operationBuildError(),
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
         "Input" to symbolProvider.toSymbol(inputShape),
-    )
-
-    constructor(
-        codegenContext: CodegenContext,
-        defaultTimestampFormat: TimestampFormatTrait.Format,
-        httpBindingResolver: HttpBindingResolver,
-        shape: OperationShape,
-        inputShape: StructureShape,
-    ) : this(
-        codegenContext.model,
-        codegenContext.symbolProvider,
-        codegenContext.runtimeConfig,
-        defaultTimestampFormat,
-        shape,
-        inputShape,
-        httpBindingResolver.httpTrait(shape),
     )
 
     /**
@@ -138,9 +121,9 @@ class RequestBindingGenerator(
      * Returns `true` if headers were generated and false if are not required.
      */
     private fun addHeaders(writer: RustWriter): Boolean {
-        val headers = index.getRequestBindings(shape, HttpBinding.Location.HEADER)
+        val headers = index.getRequestBindings(operationShape, HttpBinding.Location.HEADER)
         val prefixHeaders = index.getRequestBindings(
-            shape,
+            operationShape,
             HttpBinding.Location.PREFIX_HEADERS
         )
 
@@ -268,7 +251,7 @@ class RequestBindingGenerator(
             }
             target.isTimestampShape -> {
                 val timestampFormat =
-                    index.determineTimestampFormat(member, HttpBinding.Location.HEADER, defaultTimestampFormat)
+                    index.determineTimestampFormat(member, HttpBinding.Location.HEADER, protocol.defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                 quoteValue("$targetName.fmt(${writer.format(timestampFormatType)})?")
             }
@@ -328,8 +311,8 @@ class RequestBindingGenerator(
      */
     private fun uriQuery(writer: RustWriter): Boolean {
         // Don't bother generating the function if we aren't going to make a query string
-        val dynamicParams = index.getRequestBindings(shape, HttpBinding.Location.QUERY)
-        val mapParams = index.getRequestBindings(shape, HttpBinding.Location.QUERY_PARAMS)
+        val dynamicParams = index.getRequestBindings(operationShape, HttpBinding.Location.QUERY)
+        val mapParams = index.getRequestBindings(operationShape, HttpBinding.Location.QUERY_PARAMS)
         val literalParams = httpTrait.uri.queryLiterals
         if (dynamicParams.isEmpty() && literalParams.isEmpty()) {
             return false
@@ -404,7 +387,7 @@ class RequestBindingGenerator(
             }
             target.isTimestampShape -> {
                 val timestampFormat =
-                    index.determineTimestampFormat(member, HttpBinding.Location.QUERY, defaultTimestampFormat)
+                    index.determineTimestampFormat(member, HttpBinding.Location.QUERY, protocol.defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                 val func = writer.format(RuntimeType.QueryFormat(runtimeConfig, "fmt_timestamp"))
                 "&$func($targetName, ${writer.format(timestampFormatType)})?"
@@ -440,7 +423,7 @@ class RequestBindingGenerator(
             }
             target.isTimestampShape -> {
                 val timestampFormat =
-                    index.determineTimestampFormat(member, HttpBinding.Location.LABEL, defaultTimestampFormat)
+                    index.determineTimestampFormat(member, HttpBinding.Location.LABEL, protocol.defaultTimestampFormat)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                 val func = format(RuntimeType.LabelFormat(runtimeConfig, "fmt_timestamp"))
                 rust("let $outputVar = $func($input, ${format(timestampFormatType)})?;")
