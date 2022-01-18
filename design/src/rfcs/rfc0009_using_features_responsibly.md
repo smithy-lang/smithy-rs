@@ -90,7 +90,7 @@ At the risk of seeming repetitive, the Cargo book says:
 
 Conditionally compiling code when a feature is **not** activated can make it hard for users and maintainers to reason about what will happen when they activate a feature. This is also a sign that a feature may not be "additive".
 
-***NOTE**: It's ok to use `#[cfg(not())]` to conditionally compile code based on a user's OS. It's also useful when controlling what code gets rendered when testing or when generating docs.*
+***NOTE***: It's ok to use `#[cfg(not())]` to conditionally compile code based on a user's OS. It's also useful when controlling what code gets rendered when testing or when generating docs.
 
 One case where using `not` is acceptable is when providing a fallback when no features are set:
 
