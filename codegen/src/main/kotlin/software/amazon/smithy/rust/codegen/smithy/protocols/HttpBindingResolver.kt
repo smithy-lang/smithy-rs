@@ -27,13 +27,9 @@ data class HttpBindingDescriptor(
     val location: HttpLocation,
     val locationName: String,
 ) {
-    constructor(httpBinding: HttpBinding) : this(httpBinding.member, httpBinding.location, httpBinding.locationName) {
-        this.inner = httpBinding
-    }
+    constructor(httpBinding: HttpBinding) : this(httpBinding.member, httpBinding.location, httpBinding.locationName)
 
     val memberName: String get() = member.memberName
-
-    lateinit var inner: HttpBinding
 }
 
 /**

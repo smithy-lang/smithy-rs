@@ -539,7 +539,7 @@ class HttpBindingGenerator(
     }
 
     /**
-     * Format [member] in when used as an HTTP header.
+     * Format [member] when used as an HTTP header.
      */
     private fun headerFmtFun(writer: RustWriter, target: Shape, member: MemberShape, targetName: String, isListHeader: Boolean): String {
         fun quoteValue(value: String): String {

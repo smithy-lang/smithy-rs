@@ -52,6 +52,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBod
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -373,9 +374,6 @@ private class ServerHttpProtocolImplGenerator(
                 *codegenScope,
                 "O" to outputSymbol,
             ) {
-                val left = httpBindingResolver.responseBindings(operationShape).map { it.inner }.filter { it.location == HttpBinding.Location.HEADER }.sortedBy { it.memberName }
-                val right = HttpBindingIndex.of(model).getResponseBindings(operationShape, HttpBinding.Location.HEADER).sortedBy { it.memberName }
-                check(left == right) { "left = $left\nright = $right" }
                 withBlock("Ok({", "})") {
                     serverRenderOutputShapeResponseSerializer(
                         operationShape,
@@ -511,13 +509,13 @@ private class ServerHttpProtocolImplGenerator(
         }
 
         val bindingGenerator = ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
-        val addHeaderFn = bindingGenerator.generateAddHeadersFn(errorShape?: operationShape)
-        if (addHeaderFn != null) {
+        val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape?: operationShape)
+        if (addHeadersFn != null) {
             rust(
                 """
                 builder = #{T}(&output, builder)?;
                 """.trimIndent(),
-                addHeaderFn
+                addHeadersFn
             )
         }
     }
@@ -529,14 +527,12 @@ private class ServerHttpProtocolImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val member = binding.member
         return when (binding.location) {
-            HttpLocation.HEADER -> writable {
-            }
-            HttpLocation.PREFIX_HEADERS, HttpLocation.PAYLOAD -> {
-                logger.warning("[rust-server-codegen] $operationName: response serialization does not currently support ${binding.location} bindings")
+            HttpLocation.HEADER, HttpLocation.PREFIX_HEADERS, HttpLocation.DOCUMENT -> {
+                // All of these are handled separately.
                 null
             }
-            HttpLocation.DOCUMENT -> {
-                // document is handled separately
+            HttpLocation.PAYLOAD -> {
+                logger.warning("[rust-server-codegen] $operationName: response serialization does not currently support ${binding.location} bindings")
                 null
             }
             HttpLocation.RESPONSE_CODE -> writable {
@@ -553,7 +549,7 @@ private class ServerHttpProtocolImplGenerator(
                 rust("builder = builder.status(http_status);")
             }
             else -> {
-                TODO("Unexpected binding location: ${binding.location}")
+                UNREACHABLE("Unexpected binding location: ${binding.location}")
             }
         }
     }
