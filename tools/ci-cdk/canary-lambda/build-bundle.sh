@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0.
 #
 
-set -e
+set -ex
 
 if [[ $# -ne 1 ]]; then
     echo "Usage: $0 <sdk version>"
@@ -16,7 +16,7 @@ cd `dirname $0`
 ./write-cargo-toml.py --sdk-version ${SDK_VERSION}
 cargo build --release --target=x86_64-unknown-linux-musl
 
-TARGET_PATH="$(git rev-parse --show-toplevel)/target/x86_64-unknown-linux-musl/release"
+TARGET_PATH="$(git rev-parse --show-toplevel)/tools/target/x86_64-unknown-linux-musl/release"
 pushd "${TARGET_PATH}" &>/dev/null
 
 BIN_NAME="bootstrap"
