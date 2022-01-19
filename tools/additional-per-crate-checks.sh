@@ -13,25 +13,21 @@ C_RESET='\033[0m'
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 [crate workspace path(s)...]"
-    echo "Visits all immediate sub-directories of the given workspace path,"
-    echo "looks for Cargo.toml files and additional-ci scripts. If both are"
-    echo "found, it executes the additional-ci script in that directory."
+    echo "Recursively visits 'additional-ci' scripts in the given directories and executes them."
     exit 1
 fi
 
-for workspace in "$@"; do
-    pushd "${workspace}" &>/dev/null
-    echo -e "${C_CYAN}Scanning ${workspace}...${C_RESET}"
+for area in "$@"; do
+    pushd "${area}" &>/dev/null
+    echo -e "${C_CYAN}Scanning '${area}'...${C_RESET}"
 
-    for path in *; do
-        if [[ -d "${path}" && -f "${path}/Cargo.toml" && -f "${path}/additional-ci" ]]; then
-            echo
-            echo -e "${C_YELLOW}Running additional checks for ${path}...${C_RESET}"
-            echo
-            pushd "${path}" &>/dev/null
-            ./additional-ci
-            popd &>/dev/null
-        fi
+    find . -name 'additional-ci' -print0 | while read -d $'\0' file; do
+        echo
+        echo -e "${C_YELLOW}Running additional checks script '${file}'...${C_RESET}"
+        echo
+        pushd "$(dirname ${file})" &>/dev/null
+        ./additional-ci
+        popd &>/dev/null
     done
 
     echo
