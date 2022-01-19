@@ -219,7 +219,6 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             protocolGeneratorFactory.support(),
             protocolGeneratorFactory.protocol(codegenContext).httpBindingResolver,
             codegenContext,
-            codegenDecorator
         )
             .render()
     }

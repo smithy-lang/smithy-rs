@@ -27,7 +27,6 @@ class ServerServiceGenerator(
     private val protocolSupport: ProtocolSupport,
     private val httpBindingResolver: HttpBindingResolver,
     private val context: CodegenContext,
-    private val decorator: RustCodegenDecorator,
 ) {
     private val index = TopDownIndex.of(context.model)
 

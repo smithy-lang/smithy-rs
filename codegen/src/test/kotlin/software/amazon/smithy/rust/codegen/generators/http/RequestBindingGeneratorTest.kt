@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
-import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -19,6 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.http.uriFormatString
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -112,19 +112,12 @@ class RequestBindingGeneratorTest {
     private val symbolProvider = testSymbolProvider(model)
     private fun renderOperation(writer: RustWriter) {
         inputShape.renderWithModelBuilder(model, symbolProvider, writer)
-        val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
         val codegenContext = testCodegenContext(model)
         val bindingGen = RequestBindingGenerator(
-            codegenContext
-            // TODO What protocol should I use?
+            codegenContext,
+            // Any protocol is fine for this test.
+            RestJson(codegenContext),
             operationShape
-            // model,
-            // symbolProvider,
-            // TestRuntimeConfig,
-            // TimestampFormatTrait.Format.EPOCH_SECONDS,
-            // operationShape,
-            // inputShape,
-            // httpTrait
         )
         writer.rustBlock("impl PutObjectInput") {
             // RequestBindingGenerator's functions expect to be rendered inside a function,
