@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -106,6 +107,7 @@ private class ServerHttpProtocolImplGenerator(
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
         "AxumCore" to ServerCargoDependency.AxumCore.asType(),
+        "Cow" to ServerRuntimeType.Cow,
         "DateTime" to RuntimeType.DateTime(runtimeConfig),
         "HttpBody" to CargoDependency.HttpBody.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
@@ -116,7 +118,7 @@ private class ServerHttpProtocolImplGenerator(
         "SerdeUrlEncoded" to ServerCargoDependency.SerdeUrlEncoded.asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
-        "http" to RuntimeType.http,
+        "http" to RuntimeType.http
     )
 
     override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
@@ -749,7 +751,7 @@ private class ServerHttpProtocolImplGenerator(
             rustTemplate(
                 """
                 let query_string = request.uri().query().ok_or(#{SmithyHttpServer}::rejection::MissingQueryString)?;
-                let pairs = #{SerdeUrlEncoded}::from_str::<Vec<(&str, &str)>>(query_string)?;
+                let pairs = #{SerdeUrlEncoded}::from_str::<Vec<(#{Cow}<'_, str>, #{Cow}<'_, str>)>>(query_string)?;
                 """.trimIndent(),
                 *codegenScope
             )
@@ -778,7 +780,7 @@ private class ServerHttpProtocolImplGenerator(
                         """
                         if !seen_${memberName} && k == "${it.locationName}" {
                             input = input.${it.member.setterName()}(
-                                #{deserializer}(v)?
+                                #{deserializer}(&v)?
                             );
                             seen_${memberName} = true;
                         }
@@ -798,7 +800,7 @@ private class ServerHttpProtocolImplGenerator(
                                 //     * `String` in case it doesn't.
                                 rustTemplate(
                                     """
-                                    let v = <_>::from(#{PercentEncoding}::percent_decode_str(v).decode_utf8()?.as_ref());
+                                    let v = <_>::from(#{PercentEncoding}::percent_decode_str(&v).decode_utf8()?.as_ref());
                                     """.trimIndent(),
                                     *codegenScope
                                 )
@@ -814,7 +816,7 @@ private class ServerHttpProtocolImplGenerator(
                                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                                 rustTemplate(
                                     """
-                                    let v = #{PercentEncoding}::percent_decode_str(v).decode_utf8()?;
+                                    let v = #{PercentEncoding}::percent_decode_str(&v).decode_utf8()?;
                                     let v = #{DateTime}::from_str(&v, #{format})?;
                                     """.trimIndent(),
                                     *codegenScope,
@@ -824,7 +826,7 @@ private class ServerHttpProtocolImplGenerator(
                             else -> { // Number or boolean.
                                 rust(
                                     """
-                                    let v = <_ as #T>::parse_smithy_primitive(v)?;
+                                    let v = <_ as #T>::parse_smithy_primitive(&v)?;
                                     """.trimIndent(),
                                     CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse")
                                 )
