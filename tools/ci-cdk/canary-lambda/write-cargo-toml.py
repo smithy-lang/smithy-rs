@@ -68,13 +68,22 @@ def main():
         print(f'default = [{enabled}]', file=file)
 
 def enabled_versions(sdk_version):
-    return [f'"v{version}"' for version in notable_versions if version.split('.') <= sdk_version.split('.')]
+    if sdk_version is None:
+        return [f'"v{version}"' for version in notable_versions]
+    else:
+        return [f'"v{version}"' for version in notable_versions if version.split('.') <= sdk_version.split('.')]
 
 def format_dependency(crate, path, version):
     if path is None:
         return f'{crate} = "{version}"'
     else:
-        return f'{crate} = {{ path = "{path}/{crate}", version = "{version}" }}'
+        crate_path = crate
+        if crate_path.startswith("aws-sdk-"):
+            crate_path = crate_path[(len("aws-sdk-")):]
+        if version is None:
+            return f'{crate} = {{ path = "{path}/{crate_path}" }}'
+        else:
+            return f'{crate} = {{ path = "{path}/{crate_path}", version = "{version}" }}'
 
 
 class Args:
@@ -83,11 +92,14 @@ class Args:
         parser.add_argument("--path", dest="path", type=str,
                             help="Path to the generated AWS Rust SDK")
         parser.add_argument("--sdk-version", dest="sdk_version",
-                            type=str, help="AWS Rust SDK version", required=True)
+                            type=str, help="AWS Rust SDK version")
 
         args = parser.parse_args()
         self.path = args.path
         self.sdk_version = args.sdk_version
+        if self.path == None and self.sdk_version == None:
+            print("Either of path or sdk-version are required")
+            sys.exit(1)
 
 
 if __name__ == "__main__":

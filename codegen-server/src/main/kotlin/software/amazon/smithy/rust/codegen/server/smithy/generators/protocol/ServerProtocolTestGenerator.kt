@@ -92,9 +92,9 @@ class ServerProtocolTestGenerator(
             ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.RequestTest(it, inputShape) }
         val responseTests = operationShape.getTrait<HttpResponseTestsTrait>()
             ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
-
         val errorTests = operationIndex.getErrors(operationShape).flatMap { error ->
-            val testCases = error.getTrait<HttpResponseTestsTrait>()?.testCases.orEmpty()
+            val testCases = error.getTrait<HttpResponseTestsTrait>()
+                ?.getTestCasesFor(AppliesTo.SERVER).orEmpty()
             testCases.map { TestCase.ResponseTest(it, error) }
         }
         val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching().fixBroken()
@@ -449,8 +449,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "DocumentOutputNumber", Action.Response),
             FailingTest(RestJson, "DocumentOutputBoolean", Action.Response),
             FailingTest(RestJson, "DocumentOutputArray", Action.Response),
-            FailingTest(RestJson, "DocumentTypeAsPayloadInput", Action.Request),
-            FailingTest(RestJson, "DocumentTypeAsPayloadInputString", Action.Request),
             FailingTest(RestJson, "DocumentTypeAsPayloadOutput", Action.Response),
             FailingTest(RestJson, "DocumentTypeAsPayloadOutputString", Action.Response),
             FailingTest(RestJson, "RestJsonEmptyInputAndEmptyOutput", Action.Response),
@@ -465,7 +463,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeAndNamespace", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeUriAndNamespace", Action.Response),
             FailingTest(RestJson, "RestJsonHttpChecksumRequired", Action.Request),
-            FailingTest(RestJson, "EnumPayloadRequest", Action.Request),
             FailingTest(RestJson, "EnumPayloadResponse", Action.Response),
             FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithBlob", Action.Request),
             FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithNoBlobBody", Action.Request),
@@ -483,7 +480,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "HttpPrefixHeadersResponse", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatLabels", Action.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCode", Action.Response),
-            FailingTest(RestJson, "StringPayloadRequest", Action.Request),
             FailingTest(RestJson, "StringPayloadResponse", Action.Response),
             FailingTest(RestJson, "RestJsonIgnoreQueryParamsInResponse", Action.Response),
             FailingTest(RestJson, "RestJsonInputAndOutputWithStringHeaders", Action.Request),

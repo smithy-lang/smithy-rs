@@ -6,11 +6,10 @@
 use crate::canary::Clients;
 
 use crate::mk_canary;
-use anyhow::{bail, Context};
+use anyhow::bail;
 
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ec2::model::InstanceType;
-use std::env;
 
 use crate::CanaryEnv;
 use tokio_stream::StreamExt;
@@ -40,8 +39,20 @@ pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::
         num_pages += 1;
     }
     if dbg!(num_pages) < 2 {
-        bail!("should be ~60 of pages of results")
+        bail!(
+            "expected 3+ pages containing ~60 results but got {} pages",
+            num_pages
+        )
     }
+
+    // https://github.com/awslabs/aws-sdk-rust/issues/405
+    let _ = client
+        .describe_vpcs()
+        .into_paginator()
+        .items()
+        .send()
+        .collect::<Result<Vec<_>, _>>()
+        .await?;
 
     Ok(())
 }
@@ -54,6 +65,6 @@ mod test {
     async fn test_paginator() {
         let conf = aws_config::load_from_env().await;
         let client = aws_sdk_ec2::Client::new(&conf);
-        paginator_canary(client).await.unwrap()
+        paginator_canary(client, 20).await.unwrap()
     }
 }
