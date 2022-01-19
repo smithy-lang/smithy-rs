@@ -13,7 +13,10 @@ use std::pin::Pin;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::{info, info_span, Instrument};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::EnvFilter;
+use tracing_texray::TeXRayLayer;
 
 /// Conditionally include the module based on the $version feature gate
 ///
@@ -47,11 +50,22 @@ mod transcribe_canary;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    tracing_subscriber::fmt::init();
+    let subscriber = tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().expect("invalid env filter"))
+        .with(tracing_subscriber::fmt::layer())
+        .with(
+            TeXRayLayer::new()
+                // by default, all metadata fields will be printed. If this is too noisy,
+                // fitler only the fields you care about
+                //.only_show_fields(&["name", "operation", "service"]),
+        );
+    tracing::subscriber::set_global_default(subscriber).unwrap();
     let local = env::args().any(|arg| arg == "--local");
     let main_handler = LambdaMain::new().await;
     if local {
-        let result = lambda_main(main_handler.clients).await?;
+        let result = lambda_main(main_handler.clients)
+            .instrument(tracing_texray::examine(info_span!("run_canaries")))
+            .await?;
         if result
             .as_object()
             .expect("is object")
