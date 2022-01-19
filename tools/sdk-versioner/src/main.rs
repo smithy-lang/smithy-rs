@@ -7,6 +7,7 @@ use anyhow::bail;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use structopt::StructOpt;
 use toml::value::{Table, Value};
 
@@ -30,7 +31,7 @@ const SMITHY_PREFIX: &str = "aws-smithy-";
 struct Opt {
     /// Path(s) to recursively update Cargo.toml files in
     #[structopt()]
-    crate_paths: Vec<String>,
+    crate_paths: Vec<PathBuf>,
 
     /// SDK version to point to
     #[structopt(long)]
@@ -62,6 +63,7 @@ impl Opt {
 fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args().validate()?;
 
+    let start_time = Instant::now();
     let mut manifest_paths = Vec::new();
     for crate_path in &opt.crate_paths {
         discover_manifests(&mut manifest_paths, crate_path)?;
@@ -71,6 +73,7 @@ fn main() -> anyhow::Result<()> {
         update_manifest(&manifest_path, &opt)?;
     }
 
+    println!("Finished in {:?}", start_time.elapsed());
     Ok(())
 }
 
@@ -102,11 +105,7 @@ fn update_manifest(manifest_path: &Path, opt: &Opt) -> anyhow::Result<()> {
 fn update_dependencies(dependencies: &mut Table, opt: &Opt) -> anyhow::Result<bool> {
     let mut changed = false;
     for (key, value) in dependencies.iter_mut() {
-        if key.starts_with(SDK_PREFIX)
-            || key.starts_with(SMITHY_PREFIX)
-            || key == AWS_CONFIG
-            || AWS_RUNTIME_CRATES.iter().any(|&k| k == key)
-        {
+        if is_sdk_or_runtime_crate(key) {
             if !value.is_table() {
                 *value = Value::Table(Table::new());
             }
@@ -117,8 +116,18 @@ fn update_dependencies(dependencies: &mut Table, opt: &Opt) -> anyhow::Result<bo
     Ok(changed)
 }
 
+fn is_sdk_crate(name: &str) -> bool {
+    name.starts_with(SDK_PREFIX) || name == AWS_CONFIG
+}
+
+fn is_sdk_or_runtime_crate(name: &str) -> bool {
+    is_sdk_crate(name)
+        || name.starts_with(SMITHY_PREFIX)
+        || AWS_RUNTIME_CRATES.iter().any(|&k| k == name)
+}
+
 fn update_dependency_value(crate_name: &str, value: &mut Table, opt: &Opt) {
-    let is_sdk_crate = crate_name.starts_with(SDK_PREFIX) || crate_name == AWS_CONFIG;
+    let is_sdk_crate = is_sdk_crate(crate_name);
 
     // Remove keys that will be replaced
     value.remove("version");
@@ -180,7 +189,7 @@ fn discover_manifests(manifests: &mut Vec<PathBuf>, path: impl AsRef<Path>) -> a
 
 #[cfg(test)]
 mod tests {
-    use crate::{update_dependencies, Opt};
+    use crate::{update_manifest, Opt};
     use pretty_assertions::assert_eq;
     use toml::Value;
 
@@ -199,19 +208,16 @@ mod tests {
 
     #[track_caller]
     fn test_with_opt(opt: Opt, expected: &[u8]) {
-        let mut metadata: Value = toml::from_slice(TEST_MANIFEST).unwrap();
-        assert!(update_dependencies(
-            metadata
-                .get_mut("dependencies")
-                .unwrap()
-                .as_table_mut()
-                .unwrap(),
-            &opt,
-        )
-        .unwrap());
+        let manifest_file = tempfile::NamedTempFile::new().unwrap();
+        let manifest_path = manifest_file.into_temp_path();
+        std::fs::write(&manifest_path, TEST_MANIFEST).unwrap();
 
+        update_manifest(&manifest_path, &opt).expect("success");
+
+        let actual = toml::from_slice(&std::fs::read(&manifest_path).expect("read tmp file"))
+            .expect("valid toml");
         let expected: Value = toml::from_slice(expected).unwrap();
-        assert_eq!(expected, metadata);
+        assert_eq!(expected, actual);
     }
 
     #[test]

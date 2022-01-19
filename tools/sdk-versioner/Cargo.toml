@@ -15,3 +15,4 @@ toml = { version = "0.5.8", features = ["preserve_order"] }
 
 [dev-dependencies]
 pretty_assertions = "1"
+tempfile = "3"
