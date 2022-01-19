@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
+import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -112,14 +113,18 @@ class RequestBindingGeneratorTest {
     private fun renderOperation(writer: RustWriter) {
         inputShape.renderWithModelBuilder(model, symbolProvider, writer)
         val inputShape = model.expectShape(operationShape.input.get(), StructureShape::class.java)
+        val codegenContext = testCodegenContext(model)
         val bindingGen = RequestBindingGenerator(
-            model,
-            symbolProvider,
-            TestRuntimeConfig,
-            TimestampFormatTrait.Format.EPOCH_SECONDS,
-            operationShape,
-            inputShape,
-            httpTrait
+            codegenContext
+            // TODO What protocol should I use?
+            operationShape
+            // model,
+            // symbolProvider,
+            // TestRuntimeConfig,
+            // TimestampFormatTrait.Format.EPOCH_SECONDS,
+            // operationShape,
+            // inputShape,
+            // httpTrait
         )
         writer.rustBlock("impl PutObjectInput") {
             // RequestBindingGenerator's functions expect to be rendered inside a function,
