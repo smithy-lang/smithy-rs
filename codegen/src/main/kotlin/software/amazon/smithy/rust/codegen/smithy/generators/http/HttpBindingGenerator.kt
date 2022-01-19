@@ -17,10 +17,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -49,6 +47,7 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isPrimitive
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -400,33 +399,41 @@ class HttpBindingGenerator(
         "${operationShape.id.getName(service).toSnakeCase()}_${binding.member.container.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
 
     /**
-     * Generates a function to set headers on an HTTP message for the given [shape].
+     * Returns a function to set headers on an HTTP message for the given [shape].
+     * Returns null if no headers need to be set.
+     *
+     * [shape] can either be:
+     *     - an [OperationShape], in which case the header-bound data is in its input or output shape; or
+     *     - an error shape (i.e. a [StructureShape] with the `error` trait), in which case the header-bound data is in the shape itself.
      */
-    // TODO Remove bindings from signature
     fun generateAddHeadersFn(
-        bindings: List<HttpBindingDescriptor>,
         shape: Shape,
         httpMessageType: HttpMessageType = HttpMessageType.REQUEST
-    ): RuntimeType {
-        // val shape = model.expectShape(shape.toShapeId())
-        if (!shape.hasTrait<ErrorTrait>()) {
-            val left = bindings.map { it.inner }.filter { it.location == HttpBinding.Location.HEADER }.sortedBy { it.memberName }
-            //model.expectShape(shape.id)
-            // `shape` here is a `StructureShape`, not an `OperationShape` !!!
-            val headerBindings = HttpBindingIndex.of(model).getResponseBindings(shape, HttpBinding.Location.HEADER).sortedBy { it.memberName }
-            check(left == headerBindings) { "left = $left\nright = $headerBindings" }
+    ): RuntimeType? {
+        val headerBindings = when (httpMessageType) {
+            HttpMessageType.REQUEST -> index.getRequestBindings(shape, HttpLocation.HEADER)
+            HttpMessageType.RESPONSE -> index.getResponseBindings(shape, HttpLocation.HEADER)
         }
-        val headerBindings = index.getResponseBindings(shape, HttpBinding.Location.HEADER)
-
-        // TODO Cleanup
-        val shapeSymbol = if (shape is OperationShape) {
-            symbolProvider.toSymbol(shape.outputShape(model))
-        } else {
-            symbolProvider.toSymbol(shape)
+        val prefixHeaderBinding = when (httpMessageType) {
+            HttpMessageType.REQUEST -> index.getRequestBindings(shape, HttpLocation.PREFIX_HEADERS)
+            HttpMessageType.RESPONSE -> index.getResponseBindings(shape, HttpLocation.PREFIX_HEADERS)
+        }.getOrNull(0) // Only a single structure member can be bound to `httpPrefixHeaders`.
+        if (headerBindings.isEmpty() && prefixHeaderBinding == null) {
+            return null
         }
 
         val fnName = "add_headers_${shape.id.getName(service).toSnakeCase()}"
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
+            // If the shape is an operation shape, the input symbol of the generated function is the input or output
+            // shape, which is the shape holding the header-bound data.
+            val shapeSymbol = symbolProvider.toSymbol(if (shape is OperationShape) {
+                when (httpMessageType) {
+                    HttpMessageType.REQUEST -> shape.inputShape(model)
+                    HttpMessageType.RESPONSE -> shape.outputShape(model)
+                }
+            } else {
+                shape
+            })
             val codegenScope = arrayOf(
                 "BuildError" to runtimeConfig.operationBuildError(),
                 HttpMessageType.REQUEST.name to RuntimeType.HttpRequestBuilder,
@@ -436,14 +443,16 @@ class HttpBindingGenerator(
             rustWriter.rustBlockTemplate(
                 """
                 pub fn $fnName(
-                    ##[allow(unused)] input: &#{Shape},
-                    ##[allow(unused_mut)] mut builder: #{${httpMessageType.name}}
+                    input: &#{Shape},
+                    mut builder: #{${httpMessageType.name}}
                 ) -> std::result::Result<#{${httpMessageType.name}}, #{BuildError}>
                 """,
                 *codegenScope,
             ) {
                 headerBindings.forEach { httpBinding -> renderHeaders(httpBinding) }
-                // TODO prefixHeaders
+                if (prefixHeaderBinding != null) {
+                    renderPrefixHeader(prefixHeaderBinding)
+                }
                 rust("Ok(builder)")
             }
         }
@@ -498,7 +507,7 @@ class HttpBindingGenerator(
             is MapShape -> model.expectShape(memberType.value.target)
             else -> UNREACHABLE("unexpected member for prefix headers: $memberType")
         }
-        ifSet(memberType, memberSymbol, "&_input.$memberName") { field ->
+        ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
             val listHeader = memberType is CollectionShape
             rustTemplate(
                 """

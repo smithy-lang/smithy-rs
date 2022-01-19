@@ -431,7 +431,7 @@ private class ServerHttpProtocolImplGenerator(
 
                     Attribute.AllowUnusedMut.render(this)
                     rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
-                    serverRenderResponseHeaders(bindings.filter { it.location ==  HttpLocation.HEADER }, operationShape, variantShape)
+                    serverRenderResponseHeaders(operationShape, variantShape)
 
                     bindings.forEach { binding ->
                         when (val location = binding.location) {
@@ -470,12 +470,7 @@ private class ServerHttpProtocolImplGenerator(
         // avoid non-usage warnings for response
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
-        // This assertion passes.
-        val arg = bindings.filter { it.location == HttpLocation.HEADER }
-        val left = arg.map { it.inner }.sortedBy { it.memberName }
-        val right = HttpBindingIndex.of(model).getResponseBindings(operationShape, HttpLocation.HEADER).sortedBy { it.memberName }
-        check(left == right) { "left = $left\nright = $right" }
-        serverRenderResponseHeaders(arg, operationShape, null)
+        serverRenderResponseHeaders(operationShape)
 
         for (binding in bindings) {
             val serializedValue = serverRenderBindingSerializer(binding, operationShape)
@@ -496,14 +491,11 @@ private class ServerHttpProtocolImplGenerator(
      * It will generate response headers for the operation's output shape, unless [errorShape] is non-null, in which
      * case it will generate response headers for the given error shape.
      *
-     * It only serializes as HTTP headers shape members that are bound with `httpHeader`.
-     * TODO Add support for `httpPrefixHeaders`.
+     * It serializes as HTTP headers shape members that are bound with `httpHeader` and `httpPrefixHeader`.
      *
-     * The `Content-Type` header is also set according the protocol and the contents of the shape to be serialized.
+     * The `Content-Type` header is also set according to the protocol and the contents of the shape to be serialized.
      */
-    private fun RustWriter.serverRenderResponseHeaders(bindings: List<HttpBindingDescriptor>, operationShape: OperationShape, errorShape: StructureShape?) {
-        // check(bindings.all { it.location == HttpLocation.HEADER })
-
+    private fun RustWriter.serverRenderResponseHeaders(operationShape: OperationShape, errorShape: StructureShape? = null) {
         val contentType = httpBindingResolver.responseContentType(operationShape)
         if (contentType != null) {
             rustTemplate(
@@ -518,20 +510,14 @@ private class ServerHttpProtocolImplGenerator(
             )
         }
 
-        if (bindings.isNotEmpty()) {
-            // Not a problem that we're passing operationShape instead of errorShape
-            val bindingGenerator = ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
-            // This assertion passes.
-            if (errorShape == null) {
-                val left = bindings.map { it.inner }.sortedBy { it.memberName }
-                val right = HttpBindingIndex.of(model).getResponseBindings(operationShape, HttpLocation.HEADER).sortedBy { it.memberName }
-                check(left == right) { "left = $left\nright = $right" }
-            }
+        val bindingGenerator = ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
+        val addHeaderFn = bindingGenerator.generateAddHeadersFn(errorShape?: operationShape)
+        if (addHeaderFn != null) {
             rust(
                 """
                 builder = #{T}(&output, builder)?;
                 """.trimIndent(),
-                bindingGenerator.generateAddHeadersFn(bindings, errorShape?: operationShape)
+                addHeaderFn
             )
         }
     }
