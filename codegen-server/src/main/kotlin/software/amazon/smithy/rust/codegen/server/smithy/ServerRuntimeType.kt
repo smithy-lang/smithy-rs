@@ -20,6 +20,7 @@ object ServerRuntimeType {
         RuntimeType(inlineDependency.name, inlineDependency, namespace = "crate")
 
     val Phantom = RuntimeType("PhantomData", dependency = null, namespace = "std::marker")
+    val Cow = RuntimeType("Cow", dependency = null, namespace = "std::borrow")
 
     fun Router(runtimeConfig: RuntimeConfig) =
         RuntimeType("Router", CargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")

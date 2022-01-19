@@ -441,7 +441,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonOutputUnionWithUnitMember", Action.Response),
             FailingTest(RestJson, "RestJsonUnitInputAllowsAccept", Action.Request),
             FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
-            FailingTest(RestJson, "RestJsonAllQueryStringTypes", Action.Request),
             FailingTest(RestJson, "RestJsonQueryStringEscaping", Action.Request),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", Action.Request),
             FailingTest(RestJson, "DocumentOutput", Action.Response),
@@ -623,6 +622,49 @@ class ServerProtocolTestGenerator(
                     """.trimMargin()
                 ).asObjectNode().get()
             ).build()
+        private fun fixRestJsonAllQueryStringTypes(testCase: HttpRequestTestCase): HttpRequestTestCase =
+             testCase.toBuilder().params(
+                 Node.parse("""{
+                    "queryString": "Hello there",
+                    "queryStringList": ["a", "b", "c"],
+                    "queryStringSet": ["a", "b", "c"],
+                    "queryByte": 1,
+                    "queryShort": 2,
+                    "queryInteger": 3,
+                    "queryIntegerList": [1, 2, 3],
+                    "queryIntegerSet": [1, 2, 3],
+                    "queryLong": 4,
+                    "queryFloat": 1.1,
+                    "queryDouble": 1.1,
+                    "queryDoubleList": [1.1, 2.1, 3.1],
+                    "queryBoolean": true,
+                    "queryBooleanList": [true, false, true],
+                    "queryTimestamp": 1,
+                    "queryTimestampList": [1, 2, 3],
+                    "queryEnum": "Foo",
+                    "queryEnumList": ["Foo", "Baz", "Bar"],
+                    "queryParamsMapOfStringList": {
+                        "String": ["Hello there"],
+                        "StringList": ["a", "b", "c"],
+                        "StringSet": ["a", "b", "c"],
+                        "Byte": ["1"],
+                        "Short": ["2"],
+                        "Integer": ["3"],
+                        "IntegerList": ["1", "2", "3"],
+                        "IntegerSet": ["1", "2", "3"],
+                        "Long": ["4"],
+                        "Float": ["1.1"],
+                        "Double": ["1.1"],
+                        "DoubleList": ["1.1", "2.1", "3.1"],
+                        "Boolean": ["true"],
+                        "BooleanList": ["true", "false", "true"],
+                        "Timestamp": ["1970-01-01T00:00:01Z"],
+                        "TimestampList": ["1970-01-01T00:00:01Z", "1970-01-01T00:00:02Z", "1970-01-01T00:00:03Z"],
+                        "Enum": ["Foo"],
+                        "EnumList": ["Foo", "Baz", "Bar"]
+                    }
+                }""".trimMargin()).asObjectNode().get()
+             ).build()
 
         // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
         // This is because they have not been written from a server perspective, and as such the expected `params` field is incomplete.
@@ -631,7 +673,8 @@ class ServerProtocolTestGenerator(
             // https://github.com/awslabs/smithy/pull/1040
             Pair(RestJson, "RestJsonSupportsNaNFloatQueryValues") to ::fixRestJsonSupportsNaNFloatQueryValues,
             Pair(RestJson, "RestJsonSupportsInfinityFloatQueryValues") to ::fixRestJsonSupportsInfinityFloatQueryValues,
-            Pair(RestJson, "RestJsonSupportsNegativeInfinityFloatQueryValues") to ::fixRestJsonSupportsNegativeInfinityFloatQueryValues
+            Pair(RestJson, "RestJsonSupportsNegativeInfinityFloatQueryValues") to ::fixRestJsonSupportsNegativeInfinityFloatQueryValues,
+            Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes
         )
     }
 }
