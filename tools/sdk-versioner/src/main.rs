@@ -180,7 +180,7 @@ fn discover_manifests(manifests: &mut Vec<PathBuf>, path: impl AsRef<Path>) -> a
         } else if entry.path().is_file()
             && entry.path().file_name() == Some(OsStr::new("Cargo.toml"))
         {
-            manifests.push(entry.path().into());
+            manifests.push(entry.path());
         }
     }
 
