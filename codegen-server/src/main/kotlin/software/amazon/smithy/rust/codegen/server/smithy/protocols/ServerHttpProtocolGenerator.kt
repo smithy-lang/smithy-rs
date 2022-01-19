@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -372,6 +373,9 @@ private class ServerHttpProtocolImplGenerator(
                 *codegenScope,
                 "O" to outputSymbol,
             ) {
+                val left = httpBindingResolver.responseBindings(operationShape).map { it.inner }.filter { it.location == HttpBinding.Location.HEADER }.sortedBy { it.memberName }
+                val right = HttpBindingIndex.of(model).getResponseBindings(operationShape, HttpBinding.Location.HEADER).sortedBy { it.memberName }
+                check(left == right) { "left = $left\nright = $right" }
                 withBlock("Ok({", "})") {
                     serverRenderOutputShapeResponseSerializer(
                         operationShape,
@@ -466,7 +470,12 @@ private class ServerHttpProtocolImplGenerator(
         // avoid non-usage warnings for response
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
-        serverRenderResponseHeaders(bindings.filter { it.location ==  HttpLocation.HEADER }, operationShape, null)
+        // This assertion passes.
+        val arg = bindings.filter { it.location == HttpLocation.HEADER }
+        val left = arg.map { it.inner }.sortedBy { it.memberName }
+        val right = HttpBindingIndex.of(model).getResponseBindings(operationShape, HttpLocation.HEADER).sortedBy { it.memberName }
+        check(left == right) { "left = $left\nright = $right" }
+        serverRenderResponseHeaders(arg, operationShape, null)
 
         for (binding in bindings) {
             val serializedValue = serverRenderBindingSerializer(binding, operationShape)
@@ -493,7 +502,7 @@ private class ServerHttpProtocolImplGenerator(
      * The `Content-Type` header is also set according the protocol and the contents of the shape to be serialized.
      */
     private fun RustWriter.serverRenderResponseHeaders(bindings: List<HttpBindingDescriptor>, operationShape: OperationShape, errorShape: StructureShape?) {
-        check(bindings.all { it.location == HttpLocation.HEADER })
+        // check(bindings.all { it.location == HttpLocation.HEADER })
 
         val contentType = httpBindingResolver.responseContentType(operationShape)
         if (contentType != null) {
@@ -510,12 +519,19 @@ private class ServerHttpProtocolImplGenerator(
         }
 
         if (bindings.isNotEmpty()) {
+            // Not a problem that we're passing operationShape instead of errorShape
             val bindingGenerator = ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
+            // This assertion passes.
+            if (errorShape == null) {
+                val left = bindings.map { it.inner }.sortedBy { it.memberName }
+                val right = HttpBindingIndex.of(model).getResponseBindings(operationShape, HttpLocation.HEADER).sortedBy { it.memberName }
+                check(left == right) { "left = $left\nright = $right" }
+            }
             rust(
                 """
                 builder = #{T}(&output, builder)?;
                 """.trimIndent(),
-                bindingGenerator.generateAddHeadersFn(bindings, errorShape?: operationShape.outputShape(codegenContext.model))
+                bindingGenerator.generateAddHeadersFn(bindings, errorShape?: operationShape)
             )
         }
     }

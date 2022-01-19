@@ -7,8 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpBindingGenerator
@@ -23,6 +22,6 @@ class ServerResponseBindingGenerator(
 ) {
     private val httpBindingGenerator = HttpBindingGenerator(protocol, codegenContext, operationShape)
 
-    fun generateAddHeadersFn(bindings: List<HttpBindingDescriptor>, shape: StructureShape): RuntimeType =
+    fun generateAddHeadersFn(bindings: List<HttpBindingDescriptor>, shape: Shape): RuntimeType =
         httpBindingGenerator.generateAddHeadersFn(bindings, shape, HttpMessageType.RESPONSE)
 }

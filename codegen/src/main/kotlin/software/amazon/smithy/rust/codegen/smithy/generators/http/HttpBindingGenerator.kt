@@ -17,8 +17,10 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -49,6 +51,7 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.isPrimitive
 import software.amazon.smithy.rust.codegen.util.isStreaming
+import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
@@ -399,12 +402,28 @@ class HttpBindingGenerator(
     /**
      * Generates a function to set headers on an HTTP message for the given [shape].
      */
+    // TODO Remove bindings from signature
     fun generateAddHeadersFn(
         bindings: List<HttpBindingDescriptor>,
-        shape: StructureShape,
+        shape: Shape,
         httpMessageType: HttpMessageType = HttpMessageType.REQUEST
     ): RuntimeType {
-        check(bindings.all { it.location == HttpBinding.Location.HEADER })
+        // val shape = model.expectShape(shape.toShapeId())
+        if (!shape.hasTrait<ErrorTrait>()) {
+            val left = bindings.map { it.inner }.filter { it.location == HttpBinding.Location.HEADER }.sortedBy { it.memberName }
+            //model.expectShape(shape.id)
+            // `shape` here is a `StructureShape`, not an `OperationShape` !!!
+            val headerBindings = HttpBindingIndex.of(model).getResponseBindings(shape, HttpBinding.Location.HEADER).sortedBy { it.memberName }
+            check(left == headerBindings) { "left = $left\nright = $headerBindings" }
+        }
+        val headerBindings = index.getResponseBindings(shape, HttpBinding.Location.HEADER)
+
+        // TODO Cleanup
+        val shapeSymbol = if (shape is OperationShape) {
+            symbolProvider.toSymbol(shape.outputShape(model))
+        } else {
+            symbolProvider.toSymbol(shape)
+        }
 
         val fnName = "add_headers_${shape.id.getName(service).toSnakeCase()}"
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
@@ -412,24 +431,25 @@ class HttpBindingGenerator(
                 "BuildError" to runtimeConfig.operationBuildError(),
                 HttpMessageType.REQUEST.name to RuntimeType.HttpRequestBuilder,
                 HttpMessageType.RESPONSE.name to RuntimeType.HttpResponseBuilder,
-                "Shape" to symbolProvider.toSymbol(shape),
+                "Shape" to shapeSymbol,
             )
             rustWriter.rustBlockTemplate(
                 """
                 pub fn $fnName(
-                    input: &#{Shape},
-                    mut builder: #{${httpMessageType.name}}
+                    ##[allow(unused)] input: &#{Shape},
+                    ##[allow(unused_mut)] mut builder: #{${httpMessageType.name}}
                 ) -> std::result::Result<#{${httpMessageType.name}}, #{BuildError}>
                 """,
                 *codegenScope,
             ) {
-                bindings.forEach { httpBinding -> renderHeaders(httpBinding) }
+                headerBindings.forEach { httpBinding -> renderHeaders(httpBinding) }
+                // TODO prefixHeaders
                 rust("Ok(builder)")
             }
         }
     }
 
-    private fun RustWriter.renderHeaders(httpBinding: HttpBindingDescriptor) {
+    private fun RustWriter.renderHeaders(httpBinding: HttpBinding) {
         val memberShape = httpBinding.member
         val memberType = model.expectShape(memberShape.target)
         val memberSymbol = symbolProvider.toSymbol(memberShape)
