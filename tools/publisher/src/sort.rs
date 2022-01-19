@@ -59,6 +59,7 @@ fn dependency_order_visit(
         return Ok(());
     }
     if stack.contains(package_handle) {
+        tracing::error!(stack = ?stack, handle = ?package_handle, "dependency cycle!");
         return Err(Error::DependencyCycle);
     }
     stack.insert(package_handle.clone());

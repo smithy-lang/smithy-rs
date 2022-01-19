@@ -172,7 +172,7 @@ private class AwsFluentClientDocs(codegenContext: CodegenContext) : FluentClient
     // Usage docs on STS must be suppressed—aws-config cannot be added as a dev-dependency because it would create
     // a circular dependency
     private fun suppressUsageDocs(): Boolean =
-        serviceShape.id == ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615")
+        setOf(ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"), ShapeId.from("com.amazonaws.sso#SWBPortalService")).contains(serviceShape.id)
 
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
