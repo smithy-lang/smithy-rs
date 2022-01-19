@@ -1,4 +1,15 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+0.35.0 (January 19, 2022)
+=========================
+**New this release:**
+- ([smithy-rs#1053](https://github.com/awslabs/smithy-rs/issues/1053)) Upgraded Smithy to 1.16.1
+- 🐛 ([smithy-rs#1069](https://github.com/awslabs/smithy-rs/issues/1069)) Fix broken link to `RetryMode` in client docs
+- 🐛 ([smithy-rs#1069](https://github.com/awslabs/smithy-rs/issues/1069)) Fix several doc links to raw identifiers (identifiers excaped with `r#`)
+- 🐛 ([smithy-rs#1069](https://github.com/awslabs/smithy-rs/issues/1069)) Reduce dependency recompilation in local dev
+- 🐛 ([aws-sdk-rust#405](https://github.com/awslabs/aws-sdk-rust/issues/405), [smithy-rs#1083](https://github.com/awslabs/smithy-rs/issues/1083)) Fixed paginator bug impacting EC2 describe VPCs (and others)
+
+
+
 v0.34.1 (January 10, 2022)
 ==========================
 **New this release:**
