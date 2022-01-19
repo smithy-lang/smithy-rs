@@ -1,12 +1,11 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
-0.5.1 (January 19, 2022)
-========================
+v0.5.1 (January 19th, 2022)
+===========================
+
 **New this release:**
 - 🐛 ([smithy-rs#1089](https://github.com/awslabs/smithy-rs/issues/1089)) Fix dev-dependency cycle between aws-sdk-sso and aws-config
 
-
-
-0.5.0 (January 19, 2022)
+0.5.0 (January 19th, 2022)
 ========================
 **New this release:**
 - 🎉 ([aws-sdk-rust#348](https://github.com/awslabs/aws-sdk-rust/issues/348)) The docs for fluent builders now have easy links to their corresponding Input, Output, and Error structs
@@ -19,7 +18,7 @@ Thank you for your contributions! ❤
 - @nmoutschen ([aws-sdk-rust#398](https://github.com/awslabs/aws-sdk-rust/issues/398), [smithy-rs#1065](https://github.com/awslabs/smithy-rs/issues/1065))
 
 
-v0.4.1 (January 10, 2022)
+v0.4.1 (January 10th, 2022)
 =========================
 **New this release:**
 - 🐛 (smithy-rs#1050, @nmoutschen) Fix typos for X-Ray trace ID environment variable in aws_http::recursion_detection

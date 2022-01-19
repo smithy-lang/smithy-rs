@@ -1,10 +1,10 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
-0.35.1 (January 19, 2022)
-=========================
+v0.35.1 (January 19th, 2022)
+============================
 
-(this was a tooling change and does not affect users of smithy-rs)
+_Changes only impact generated AWS SDK_
 
-0.35.0 (January 19, 2022)
+0.35.0 (January 19th, 2022)
 =========================
 **New this release:**
 - ([smithy-rs#1053](https://github.com/awslabs/smithy-rs/issues/1053)) Upgraded Smithy to 1.16.1
@@ -15,7 +15,7 @@
 
 
 
-v0.34.1 (January 10, 2022)
+v0.34.1 (January 10th, 2022)
 ==========================
 **New this release:**
 - 🐛 (smithy-rs#1054, aws-sdk-rust#391) Fix critical paginator bug where an empty outputToken lead to a never ending stream.
