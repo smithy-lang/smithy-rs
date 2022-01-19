@@ -2,6 +2,7 @@
 0.35.1 (January 19, 2022)
 =========================
 
+(this was a tooling change and does not affect users of smithy-rs)
 
 0.35.0 (January 19, 2022)
 =========================
