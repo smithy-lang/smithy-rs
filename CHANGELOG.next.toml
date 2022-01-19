@@ -10,3 +10,9 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Fix dev-dependency cycle between aws-sdk-sso and aws-config"
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+references = ["smithy-rs#1088"]
+author = "rcoh"
