@@ -64,3 +64,15 @@ message = "Fixed paginator bug impacting EC2 describe VPCs (and others)"
 references = ["aws-sdk-rust#405", "smithy-rs#1083"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Convert several `info` spans to `debug` in aws-config"
+references = ["smithy-rs#1087"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Improve docs on `Endpoint::{mutable, immutable}`"
+references = ["smithy-rs#1087"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"

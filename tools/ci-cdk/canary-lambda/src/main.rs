@@ -51,12 +51,12 @@ mod transcribe_canary;
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let subscriber = tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().expect("invalid env filter"))
+        .with(EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::layer())
         .with(
             TeXRayLayer::new()
                 // by default, all metadata fields will be printed. If this is too noisy,
-                // fitler only the fields you care about
+                // filter only the fields you care about
                 //.only_show_fields(&["name", "operation", "service"]),
         );
     tracing::subscriber::set_global_default(subscriber).unwrap();
