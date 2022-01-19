@@ -70,9 +70,7 @@ jobs:
         - name: Unused Dependencies
           run: cargo +nightly udeps
         - name: Additional per-crate checks
-          run: ../tools/additional-per-crate-checks.sh ./sdk/
-        - name: Canary check
-          run: ../tools/ci-cdk/canary-lambda/ci-check.sh
+          run: ../tools/additional-per-crate-checks.sh ./sdk/ ../tools/ci-cdk/
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0

@@ -13,5 +13,4 @@ if [[ "${GITHUB_ACTIONS}" == "true" ]]; then
 fi
 
 ./write-cargo-toml.py --path "${SDK_PATH}"
-cargo check
 cargo clippy
