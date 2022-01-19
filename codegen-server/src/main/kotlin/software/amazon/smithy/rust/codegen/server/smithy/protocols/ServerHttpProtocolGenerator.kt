@@ -410,7 +410,7 @@ private class ServerHttpProtocolImplGenerator(
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
         val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
-        withBlock("let response = match error {", "};") {
+        withBlock("match error {", "}") {
             operationShape.errors.forEach {
                 val variantShape = model.expectShape(it, StructureShape::class.java)
                 val errorTrait = variantShape.expectTrait<ErrorTrait>()
@@ -451,7 +451,6 @@ private class ServerHttpProtocolImplGenerator(
                 }
             }
         }
-        rust("response")
     }
 
     private fun RustWriter.serverRenderOutputShapeResponseSerializer(
@@ -500,7 +499,7 @@ private class ServerHttpProtocolImplGenerator(
                 """
                 builder = #{header_util}::set_response_header_if_absent(
                     builder,
-                    #{http}::header::HeaderName::from_static("Content-Type"),
+                    #{http}::header::CONTENT_TYPE,
                     "$contentType"
                 );
                 """,
@@ -513,7 +512,7 @@ private class ServerHttpProtocolImplGenerator(
         if (addHeadersFn != null) {
             rust(
                 """
-                builder = #{T}(&output, builder)?;
+                builder = #{T}(output, builder)?;
                 """.trimIndent(),
                 addHeadersFn
             )

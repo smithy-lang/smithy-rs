@@ -426,14 +426,16 @@ class HttpBindingGenerator(
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
             // If the shape is an operation shape, the input symbol of the generated function is the input or output
             // shape, which is the shape holding the header-bound data.
-            val shapeSymbol = symbolProvider.toSymbol(if (shape is OperationShape) {
-                when (httpMessageType) {
-                    HttpMessageType.REQUEST -> shape.inputShape(model)
-                    HttpMessageType.RESPONSE -> shape.outputShape(model)
+            val shapeSymbol = symbolProvider.toSymbol(
+                if (shape is OperationShape) {
+                    when (httpMessageType) {
+                        HttpMessageType.REQUEST -> shape.inputShape(model)
+                        HttpMessageType.RESPONSE -> shape.outputShape(model)
+                    }
+                } else {
+                    shape
                 }
-            } else {
-                shape
-            })
+            )
             val codegenScope = arrayOf(
                 "BuildError" to runtimeConfig.operationBuildError(),
                 HttpMessageType.REQUEST.name to RuntimeType.HttpRequestBuilder,
@@ -481,11 +483,11 @@ class HttpBindingGenerator(
                         let header_value = $safeName;
                         let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
                             #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header value: {}", &${
-                            redactIfNecessary(
-                                memberShape,
-                                model,
-                                "header_value"
-                            )
+                        redactIfNecessary(
+                            memberShape,
+                            model,
+                            "header_value"
+                        )
                         }, err)}
                         })?;
                         builder = builder.header("${httpBinding.locationName}", header_value);
@@ -522,11 +524,11 @@ class HttpBindingGenerator(
                         #{build_error}::InvalidField {
                             field: "$memberName",
                             details: format!("`{}` cannot be used as a header value: {}", ${
-                    redactIfNecessary(
-                        memberShape,
-                        model,
-                        "v"
-                    )
+                redactIfNecessary(
+                    memberShape,
+                    model,
+                    "v"
+                )
                 }, err)}
                     })?;
                     builder = builder.header(header_name, header_value);
