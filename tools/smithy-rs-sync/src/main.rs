@@ -228,6 +228,7 @@ fn build_sdk(smithy_rs_path: &Path) -> Result<PathBuf> {
 
     // The output of running these commands isn't logged anywhere unless they fail
     let _ = run(&["rm", "-rf", "aws/sdk/build"], smithy_rs_path).context(here!())?;
+    let _ = run(&[gradlew, ":aws:sdk:clean"], smithy_rs_path).context(here!())?;
     let _ = run(
         &[gradlew, "-Paws.fullsdk=true", ":aws:sdk:assemble"],
         smithy_rs_path,
