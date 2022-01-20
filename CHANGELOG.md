@@ -1,4 +1,8 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+0.35.2 (January 20th, 2022)
+===========================
+_Changes only impact generated AWS SDK_
+
 v0.35.1 (January 19th, 2022)
 ============================
 _Changes only impact generated AWS SDK_
