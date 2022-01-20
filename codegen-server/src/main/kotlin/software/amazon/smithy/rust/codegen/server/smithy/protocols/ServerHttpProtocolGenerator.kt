@@ -557,11 +557,7 @@ private class ServerHttpProtocolImplGenerator(
         httpBindingGenerator: ServerRequestBindingGenerator,
         structuredDataParser: StructuredDataParserGenerator,
     ): Writable? {
-        val errorSymbol = if (model.expectShape(binding.member.target) is StringShape) {
-            CargoDependency.SmithyHttpServer(runtimeConfig).asType().member("rejection").member("SmithyRejection")
-        } else {
-            CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize").member("Error")
-        }
+        val errorSymbol = getDeserializeErrorSymbol(binding)
         return when (binding.location) {
             HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
             HttpLocation.PAYLOAD -> {
@@ -993,4 +989,22 @@ private class ServerHttpProtocolImplGenerator(
             }
         }
     }
+
+    private fun getDeserializeErrorSymbol(binding: HttpBindingDescriptor): RuntimeType {
+        if (model.expectShape(binding.member.target) is StringShape) {
+            return CargoDependency.SmithyHttpServer(runtimeConfig).asType().member("rejection").member("SmithyRejection")
+        }
+        when (codegenContext.protocol) {
+            RestJson1Trait.ID -> {
+                return CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize").member("Error")
+            }
+            RestXmlTrait.ID -> {
+                return CargoDependency.smithyXml(runtimeConfig).asType().member("decode").member("XmlError")
+            }
+            else -> {
+                TODO("Protocol ${codegenContext.protocol} not supported yet")
+            }
+        }
+    }
+
 }
