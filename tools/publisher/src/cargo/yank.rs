@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::cargo::{capture_error, output_text, CargoOperation};
 use crate::package::PackageHandle;
+use crate::shell::{capture_error, output_text, ShellOperation};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::path::Path;
@@ -29,7 +29,7 @@ impl<'a> Yank<'a> {
 }
 
 #[async_trait]
-impl<'a> CargoOperation for Yank<'a> {
+impl<'a> ShellOperation for Yank<'a> {
     type Output = ();
 
     async fn spawn(&self) -> Result<()> {

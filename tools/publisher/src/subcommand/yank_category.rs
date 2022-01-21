@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::cargo::{self, CargoOperation};
+use crate::cargo;
 use crate::fs::Fs;
 use crate::package::{
-    discover_and_validate_package_batches, Package, PackageCategory, PackageHandle,
+    discover_and_validate_package_batches, Package, PackageCategory, PackageHandle, Publish,
 };
+use crate::repo::resolve_publish_location;
+use crate::shell::ShellOperation;
 use anyhow::{bail, Context, Result};
 use dialoguer::Confirm;
 use semver::Version;
@@ -34,12 +36,14 @@ pub async fn subcommand_yank_category(category: &str, version: &str, location: &
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
+    let location = resolve_publish_location(location).await;
+
     info!("Discovering crates to yank...");
-    let (batches, _) = discover_and_validate_package_batches(Fs::Real, location).await?;
+    let (batches, _) = discover_and_validate_package_batches(Fs::Real, &location).await?;
     let packages: Vec<Package> = batches
         .into_iter()
         .flatten()
-        .filter(|p| p.publish_enabled && p.category == category)
+        .filter(|p| p.publish == Publish::Allowed && p.category == category)
         .map(|p| {
             if p.handle.version != version {
                 bail!(
@@ -52,7 +56,7 @@ pub async fn subcommand_yank_category(category: &str, version: &str, location: &
                 PackageHandle::new(p.handle.name, version.clone()),
                 p.manifest_path,
                 p.local_dependencies,
-                true,
+                Publish::Allowed,
             ))
         })
         .collect::<Result<Vec<Package>>>()?;

@@ -32,9 +32,9 @@ pub async fn subcommand_fix_manifests(mode: Mode, location: &str) -> Result<()> 
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;
 
-    validate::pre_validate_manifests(&versions)?;
+    validate::validate_before_fixes(&versions)?;
     fix_manifests(Fs::Real, &versions, &mut manifests, mode).await?;
-    validate::post_validate_manifests(location).await?;
+    validate::validate_after_fixes(location).await?;
     info!("Successfully fixed manifests!");
     Ok(())
 }

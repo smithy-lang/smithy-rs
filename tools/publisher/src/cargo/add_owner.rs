@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::cargo::{handle_failure, CargoOperation};
+use crate::shell::{handle_failure, ShellOperation};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::process::Command;
@@ -25,7 +25,7 @@ impl<'a> AddOwner<'a> {
 }
 
 #[async_trait]
-impl<'a> CargoOperation for AddOwner<'a> {
+impl<'a> ShellOperation for AddOwner<'a> {
     type Output = ();
 
     async fn spawn(&self) -> Result<()> {

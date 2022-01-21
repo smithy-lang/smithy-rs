@@ -4,7 +4,7 @@
  */
 
 use crate::fs::Fs;
-use crate::package::discover_and_validate_package_batches;
+use crate::package::{discover_and_validate_package_batches, PackageCategory};
 use anyhow::{anyhow, bail, Result};
 use semver::Version;
 use std::collections::BTreeMap;
@@ -15,20 +15,23 @@ use tracing::info;
 /// For now, this validates:
 /// - `aws-config` version number matches all `aws-sdk-` prefixed versions
 /// - `aws-smithy-` prefixed versions match `aws-` (NOT `aws-sdk-`) prefixed versions
-pub(super) fn pre_validate_manifests(versions: &BTreeMap<String, Version>) -> Result<()> {
+pub(super) fn validate_before_fixes(versions: &BTreeMap<String, Version>) -> Result<()> {
     info!("Pre-validation manifests...");
-    let expected_sdk_version = versions
-        .get("aws-config")
-        .ok_or_else(|| anyhow!("`aws-config` crate missing"))?;
+    let maybe_sdk_version = versions.get("aws-config");
     let expected_smithy_version = versions
         .get("aws-smithy-types")
         .ok_or_else(|| anyhow!("`aws-smithy-types` crate missing"))?;
 
     for (name, version) in versions {
-        if name.starts_with("aws-smithy-") {
+        let category = PackageCategory::from_package_name(name);
+        if category == PackageCategory::SmithyRuntime {
             confirm_version(name, expected_smithy_version, version)?;
-        } else if name.starts_with("aws-") {
-            confirm_version(name, expected_sdk_version, version)?;
+        } else if let Some(expected_sdk_version) = maybe_sdk_version {
+            if category.is_sdk() {
+                confirm_version(name, expected_sdk_version, version)?;
+            }
+        } else if category.is_sdk() {
+            bail!("`aws-config` crate missing");
         }
     }
     Ok(())
@@ -49,7 +52,7 @@ fn confirm_version(name: &str, expected: &Version, actual: &Version) -> Result<(
 /// Validations that run after fixing the manifests.
 ///
 /// These should match the validations that the `publish` subcommand runs.
-pub(super) async fn post_validate_manifests(location: &str) -> Result<()> {
+pub(super) async fn validate_after_fixes(location: &str) -> Result<()> {
     info!("Post-validating manifests...");
     discover_and_validate_package_batches(Fs::Real, location).await?;
     Ok(())
@@ -70,12 +73,12 @@ mod test {
 
     #[track_caller]
     fn expect_success(version_tuples: &[(&'static str, &'static str)]) {
-        pre_validate_manifests(&versions(version_tuples)).expect("success");
+        validate_before_fixes(&versions(version_tuples)).expect("success");
     }
 
     #[track_caller]
     fn expect_failure(message: &str, version_tuples: &[(&'static str, &'static str)]) {
-        if let Err(err) = pre_validate_manifests(&versions(version_tuples)) {
+        if let Err(err) = validate_before_fixes(&versions(version_tuples)) {
             assert_eq!(message, format!("{}", err));
         } else {
             panic!("Expected validation failure");
@@ -90,6 +93,21 @@ mod test {
             ("aws-smithy-types", "0.35.1"),
             ("aws-types", "0.5.1"),
         ]);
+
+        expect_success(&[
+            ("aws-smithy-types", "0.35.1"),
+            ("aws-smithy-http", "0.35.1"),
+            ("aws-smithy-client", "0.35.1"),
+        ]);
+
+        expect_failure(
+            "Crate named `aws-smithy-http` should be at version `0.35.1` but is at `0.35.0`",
+            &[
+                ("aws-smithy-types", "0.35.1"),
+                ("aws-smithy-http", "0.35.0"),
+                ("aws-smithy-client", "0.35.1"),
+            ],
+        );
 
         expect_failure(
             "Crate named `aws-sdk-s3` should be at version `0.5.1` but is at `0.5.0`",
