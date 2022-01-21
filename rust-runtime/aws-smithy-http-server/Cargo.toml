@@ -35,7 +35,7 @@ serde_urlencoded = "0.7"
 thiserror = "1"
 tokio = { version = "1.0", features = ["full"] }
 tower = { version = "0.4.11", features = ["util", "make"], default-features = false }
-tower-http = { version = "0.1", features = ["add-extension", "map-response-body"] }
+tower-http = { version = "0.2.1", features = ["add-extension", "map-response-body"] }
 
 [dev-dependencies]
 pretty_assertions = "1"
