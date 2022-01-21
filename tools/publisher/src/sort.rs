@@ -76,6 +76,7 @@ fn dependency_order_visit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::package::Publish;
     use semver::Version;
 
     fn package(name: &str, dependencies: &[&str]) -> Package {
@@ -86,6 +87,7 @@ mod tests {
                 .iter()
                 .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").unwrap()))
                 .collect(),
+            Publish::Allowed,
         )
     }
 

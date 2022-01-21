@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::cargo::{handle_failure, output_text, CargoOperation};
+use crate::shell::{handle_failure, output_text, ShellOperation};
 use anyhow::Result;
 use async_trait::async_trait;
 use regex::Regex;
-use std::borrow::Cow;
 use std::process::Command;
 
 pub struct GetOwners<'a> {
@@ -25,7 +24,7 @@ impl<'a> GetOwners<'a> {
 }
 
 #[async_trait]
-impl<'a> CargoOperation for GetOwners<'a> {
+impl<'a> ShellOperation for GetOwners<'a> {
     type Output = Vec<String>;
 
     async fn spawn(&self) -> Result<Vec<String>> {
@@ -49,10 +48,6 @@ impl<'a> CargoOperation for GetOwners<'a> {
             }
         }
         Ok(result)
-    }
-
-    fn plan(&self) -> Option<Cow<'static, str>> {
-        None
     }
 }
 

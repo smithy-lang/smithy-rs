@@ -19,6 +19,8 @@ use std::path::{Path, PathBuf};
 use toml::value::Table;
 use tracing::info;
 
+mod validate;
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Mode {
     Check,
@@ -29,7 +31,11 @@ pub async fn subcommand_fix_manifests(mode: Mode, location: &str) -> Result<()> 
     let manifest_paths = discover_package_manifests(location.into()).await?;
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;
+
+    validate::validate_before_fixes(&versions)?;
     fix_manifests(Fs::Real, &versions, &mut manifests, mode).await?;
+    validate::validate_after_fixes(location).await?;
+    info!("Successfully fixed manifests!");
     Ok(())
 }
 
