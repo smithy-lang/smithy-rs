@@ -33,7 +33,7 @@ pub async fn subcommand_publish(location: &str, continue_from: Option<&str>) -> 
 
     info!("Discovering crates to publish...");
     let (mut batches, mut stats) =
-        discover_and_validate_package_batches(Fs::Real, &location).await?;
+        discover_and_validate_package_batches(Fs::Real, location).await?;
     if let Some(continue_from) = continue_from {
         info!(
             "Filtering batches so that publishing starts from {}.",

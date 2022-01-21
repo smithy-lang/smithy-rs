@@ -12,7 +12,6 @@ use clap::{crate_authors, crate_description, crate_name, crate_version};
 mod cargo;
 mod fs;
 mod package;
-mod repo;
 mod sort;
 mod subcommand;
 
@@ -41,7 +40,8 @@ async fn main() -> Result<()> {
     } else if let Some(matches) = matches.subcommand_matches("yank-category") {
         let category = matches.value_of("category").unwrap();
         let version = matches.value_of("version").unwrap();
-        subcommand_yank_category(category, version).await?;
+        let location = matches.value_of("location").unwrap();
+        subcommand_yank_category(category, version, location).await?;
     } else {
         clap_app().print_long_help().unwrap();
     }
@@ -108,6 +108,15 @@ fn clap_app() -> clap::App<'static, 'static> {
                         .required(true)
                         .takes_value(true)
                         .help("version number to yank"),
-                ),
+                )
+                .arg(
+                    clap::Arg::with_name("location")
+                        .required(true)
+                        .takes_value(true)
+                        .long("location")
+                        .help("Path to `aws-sdk-rust` repo. The repo should be checked out at the \
+                               version that is being yanked so that the correct list of crate names \
+                               is used. This will be validated.")
+                )
         )
 }
