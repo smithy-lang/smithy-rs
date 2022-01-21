@@ -87,15 +87,11 @@ pub async fn subcommand_publish(location: &str) -> Result<()> {
 }
 
 async fn confirm_correct_tag(batches: &[Vec<Package>], location: &Path) -> Result<()> {
-    let mut aws_config_version = None;
-    'outer: for batch in batches {
-        for package in batch {
-            if package.handle.name == "aws-config" {
-                aws_config_version = Some(&package.handle.version);
-                break 'outer;
-            }
-        }
-    }
+    let aws_config_version = batches
+        .iter()
+        .flat_map(|batch| batch.iter().find(|p| p.handle.name == "aws-config"))
+        .map(|package| &package.handle.version)
+        .next();
     if let Some(aws_config_version) = aws_config_version {
         let expected_tag = format!("v{}", aws_config_version);
         let repository = find_sdk_repository_root(REPO_NAME, REPO_CRATE_PATH, location).await?;
