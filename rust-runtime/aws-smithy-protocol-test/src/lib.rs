@@ -437,11 +437,11 @@ mod tests {
 
     #[test]
     fn test_validate_headers() {
-        let headers = HeaderMap::new();
-        headers.insert("X-Foo", "foo".parse().unwrap());
-        headers.insert("X-Foo-List", "foo".parse().unwrap());
-        headers.insert("X-Foo-List", "bar".parse().unwrap());
-        headers.insert("X-Inline", "inline, other".parse().unwrap());
+        let mut headers = HeaderMap::new();
+        headers.append("X-Foo", "foo".parse().unwrap());
+        headers.append("X-Foo-List", "foo".parse().unwrap());
+        headers.append("X-Foo-List", "bar".parse().unwrap());
+        headers.append("X-Inline", "inline, other".parse().unwrap());
 
         validate_headers(&headers, [("X-Foo", "foo")]).expect("header present");
         validate_headers(&headers, [("X-Foo", "Foo")]).expect_err("case sensitive");
@@ -466,13 +466,13 @@ mod tests {
             .body(())
             .unwrap();
         assert_eq!(
-            forbid_headers(&request, &["X-Foo"]).expect_err("should be error"),
+            forbid_headers(request.headers(), &["X-Foo"]).expect_err("should be error"),
             ProtocolTestFailure::ForbiddenHeader {
                 forbidden: "X-Foo".to_string(),
                 found: "X-Foo: foo".to_string()
             }
         );
-        forbid_headers(&request, &["X-Bar"]).expect("header not present");
+        forbid_headers(request.headers(), &["X-Bar"]).expect("header not present");
     }
 
     #[test]
@@ -482,8 +482,8 @@ mod tests {
             .header("X-Foo", "foo")
             .body(())
             .unwrap();
-        require_headers(&request, &["X-Foo"]).expect("header present");
-        require_headers(&request, &["X-Bar"]).expect_err("header not present");
+        require_headers(request.headers(), &["X-Foo"]).expect("header present");
+        require_headers(request.headers(), &["X-Bar"]).expect_err("header not present");
     }
 
     #[test]
