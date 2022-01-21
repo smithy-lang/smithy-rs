@@ -7,7 +7,6 @@ use crate::cargo::{capture_error, output_text, CargoOperation};
 use crate::package::PackageHandle;
 use anyhow::Result;
 use async_trait::async_trait;
-use std::borrow::Cow;
 use std::path::Path;
 use std::process::Command;
 use tracing::info;
@@ -57,13 +56,6 @@ impl<'a> CargoOperation for Publish<'a> {
             }
         }
         Ok(())
-    }
-
-    fn plan(&self) -> Option<Cow<'static, str>> {
-        Some(Cow::Owned(format!(
-            "[in {:?}]: cargo publish --jobs 1",
-            self.package_path
-        )))
     }
 }
 

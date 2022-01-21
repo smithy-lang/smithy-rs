@@ -86,10 +86,8 @@ fn confirm_plan(packages: &[Package]) -> Result<()> {
     info!("Yank plan:");
     for package in packages {
         println!(
-            "  {}",
-            cargo::Yank::new(&package.handle, &package.crate_path)
-                .plan()
-                .unwrap()
+            "Yank version `{}` of `{}`",
+            package.handle.version, package.handle.name
         );
     }
 

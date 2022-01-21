@@ -17,7 +17,6 @@ pub use yank::Yank;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use std::borrow::Cow;
 use std::process::{Command, Output};
 
 #[async_trait]
@@ -26,9 +25,6 @@ pub trait CargoOperation {
 
     /// Runs the command asynchronously.
     async fn spawn(&self) -> Result<Self::Output>;
-
-    /// Returns a plan string that can be output to the user to describe the command.
-    fn plan(&self) -> Option<Cow<'static, str>>;
 }
 
 /// Confirms that cargo exists on the path.

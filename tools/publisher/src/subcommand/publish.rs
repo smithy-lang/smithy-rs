@@ -134,13 +134,12 @@ fn confirm_plan(batches: &[PackageBatch], stats: PackageStats) -> Result<()> {
     let mut full_plan = Vec::new();
     for batch in batches {
         for package in batch {
-            full_plan.push(
-                cargo::Publish::new(&package.handle, &package.crate_path)
-                    .plan()
-                    .unwrap(),
-            );
+            full_plan.push(format!(
+                "Publish version `{}` of `{}`",
+                package.handle.version, package.handle.name
+            ));
         }
-        full_plan.push("wait".into());
+        full_plan.push("-- wait --".into());
     }
 
     info!("Publish plan:");

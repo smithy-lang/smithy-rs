@@ -7,7 +7,6 @@ use crate::cargo::{handle_failure, output_text, CargoOperation};
 use anyhow::Result;
 use async_trait::async_trait;
 use regex::Regex;
-use std::borrow::Cow;
 use std::process::Command;
 
 pub struct GetOwners<'a> {
@@ -49,10 +48,6 @@ impl<'a> CargoOperation for GetOwners<'a> {
             }
         }
         Ok(result)
-    }
-
-    fn plan(&self) -> Option<Cow<'static, str>> {
-        None
     }
 }
 
