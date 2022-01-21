@@ -8,7 +8,7 @@
 use crate::fs::Fs;
 use crate::sort::dependency_order;
 use anyhow::{Context, Result};
-use cargo_toml::{Dependency, DepsSet, Manifest};
+use cargo_toml::{Dependency, DepsSet, Manifest, Publish};
 use semver::Version;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error as StdError;
@@ -60,6 +60,8 @@ pub struct Package {
     pub manifest_path: PathBuf,
     /// Dependencies used by this package
     pub local_dependencies: BTreeSet<PackageHandle>,
+    /// Whether or not the package should be published
+    pub publish_enabled: bool,
 }
 
 impl Package {
@@ -67,6 +69,7 @@ impl Package {
         handle: PackageHandle,
         manifest_path: impl Into<PathBuf>,
         local_dependencies: BTreeSet<PackageHandle>,
+        publish_enabled: bool,
     ) -> Self {
         let manifest_path = manifest_path.into();
         let category = if handle.name.starts_with("aws-smithy-") {
@@ -84,6 +87,7 @@ impl Package {
             crate_path: manifest_path.parent().unwrap().into(),
             manifest_path,
             local_dependencies,
+            publish_enabled,
         }
     }
 
@@ -132,12 +136,16 @@ impl PackageStats {
 
 /// Discovers publishable packages in the given directory and returns them as
 /// batches that can be published in order.
-pub async fn discover_package_batches(
+pub async fn discover_and_validate_package_batches(
     fs: Fs,
     path: impl AsRef<Path>,
 ) -> Result<(Vec<PackageBatch>, PackageStats)> {
     let manifest_paths = discover_package_manifests(path.as_ref().into()).await?;
-    let packages = read_packages(fs, manifest_paths).await?;
+    let packages = read_packages(fs, manifest_paths)
+        .await?
+        .into_iter()
+        .filter(|package| package.publish_enabled)
+        .collect::<Vec<Package>>();
     validate_packages(&packages)?;
 
     let batches = batch_packages(packages)?;
@@ -248,12 +256,13 @@ fn read_package(path: &Path, manifest_bytes: &[u8]) -> Result<Package> {
     let name = package.name;
     let version = parse_version(path, &package.version)?;
     let handle = PackageHandle { name, version };
+    let publish = matches!(package.publish, Publish::Flag(true));
 
     let mut local_dependencies = BTreeSet::new();
     local_dependencies.extend(read_dependencies(path, &manifest.dependencies)?.into_iter());
     local_dependencies.extend(read_dependencies(path, &manifest.dev_dependencies)?.into_iter());
     local_dependencies.extend(read_dependencies(path, &manifest.build_dependencies)?.into_iter());
-    Ok(Package::new(handle, path, local_dependencies))
+    Ok(Package::new(handle, path, local_dependencies, publish))
 }
 
 /// Validates that all of the publishable crates use consistent version numbers
@@ -410,6 +419,7 @@ mod tests {
                 .iter()
                 .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").unwrap()))
                 .collect(),
+            true,
         )
     }
 
@@ -491,6 +501,7 @@ mod tests {
                 .iter()
                 .map(|p| PackageHandle::new(p.0, Version::parse(p.1).unwrap()))
                 .collect(),
+            true,
         )
     }
 

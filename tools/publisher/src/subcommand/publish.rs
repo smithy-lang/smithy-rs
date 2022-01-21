@@ -6,8 +6,8 @@
 use crate::cargo::{self, CargoOperation};
 use crate::fs::Fs;
 use crate::package::{
-    continue_batches_from, discover_package_batches, Package, PackageBatch, PackageHandle,
-    PackageStats,
+    continue_batches_from, discover_and_validate_package_batches, Package, PackageBatch,
+    PackageHandle, PackageStats,
 };
 use crate::CRATE_OWNER;
 use anyhow::Result;
@@ -32,7 +32,8 @@ pub async fn subcommand_publish(location: &str, continue_from: Option<&str>) -> 
     cargo::confirm_installed_on_path()?;
 
     info!("Discovering crates to publish...");
-    let (mut batches, mut stats) = discover_package_batches(Fs::Real, &location).await?;
+    let (mut batches, mut stats) =
+        discover_and_validate_package_batches(Fs::Real, &location).await?;
     if let Some(continue_from) = continue_from {
         info!(
             "Filtering batches so that publishing starts from {}.",

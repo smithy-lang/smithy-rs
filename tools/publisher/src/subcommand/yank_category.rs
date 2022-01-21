@@ -5,7 +5,9 @@
 
 use crate::cargo::{self, CargoOperation};
 use crate::fs::Fs;
-use crate::package::{discover_package_batches, Package, PackageCategory, PackageHandle};
+use crate::package::{
+    discover_and_validate_package_batches, Package, PackageCategory, PackageHandle,
+};
 use crate::repo::discover_repository;
 use crate::{REPO_CRATE_PATH, REPO_NAME};
 use anyhow::{Context, Result};
@@ -36,7 +38,7 @@ pub async fn subcommand_yank_category(category: &str, version: &str) -> Result<(
 
     info!("Discovering crates to yank...");
     let repo = discover_repository(REPO_NAME, REPO_CRATE_PATH)?;
-    let (batches, _) = discover_package_batches(Fs::Real, &repo.crates_root).await?;
+    let (batches, _) = discover_and_validate_package_batches(Fs::Real, &repo.crates_root).await?;
     let packages: Vec<Package> = batches
         .into_iter()
         .flatten()
@@ -47,6 +49,7 @@ pub async fn subcommand_yank_category(category: &str, version: &str) -> Result<(
                 PackageHandle::new(p.handle.name, version.clone()),
                 p.manifest_path,
                 p.local_dependencies,
+                true,
             )
         })
         .collect();

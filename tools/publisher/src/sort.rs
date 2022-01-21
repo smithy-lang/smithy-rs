@@ -86,6 +86,7 @@ mod tests {
                 .iter()
                 .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").unwrap()))
                 .collect(),
+            true,
         )
     }
 
