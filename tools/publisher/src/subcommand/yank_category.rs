@@ -13,13 +13,18 @@ use crate::shell::ShellOperation;
 use anyhow::{bail, Context, Result};
 use dialoguer::Confirm;
 use semver::Version;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tracing::info;
 
 const MAX_CONCURRENCY: usize = 5;
 
-pub async fn subcommand_yank_category(category: &str, version: &str, location: &str) -> Result<()> {
+pub async fn subcommand_yank_category(
+    category: &str,
+    version: &str,
+    location: &Path,
+) -> Result<()> {
     let category = match category {
         "aws-runtime" => PackageCategory::AwsRuntime,
         "aws-sdk" => PackageCategory::AwsSdk,

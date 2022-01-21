@@ -27,7 +27,7 @@ pub enum Mode {
     Execute,
 }
 
-pub async fn subcommand_fix_manifests(mode: Mode, location: &str) -> Result<()> {
+pub async fn subcommand_fix_manifests(mode: Mode, location: &Path) -> Result<()> {
     let manifest_paths = discover_package_manifests(location.into()).await?;
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;

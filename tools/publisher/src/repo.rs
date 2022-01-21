@@ -29,7 +29,7 @@ pub enum Error {
 
 /// Given a `location`, this function looks for the `aws-sdk-rust` git repository. If found,
 /// it resolves the `sdk/` directory. Otherwise, it returns the original `location`.
-pub async fn resolve_publish_location(location: &str) -> PathBuf {
+pub async fn resolve_publish_location(location: &Path) -> PathBuf {
     match find_sdk_repository_root(REPO_NAME, REPO_CRATE_PATH, location).await {
         // If the given path was the `aws-sdk-rust` repo root, then resolve the `sdk/` directory to publish from
         Ok(sdk_repo) => sdk_repo.sdk_crates_root,

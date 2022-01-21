@@ -8,6 +8,7 @@ use crate::package::{discover_and_validate_package_batches, PackageCategory};
 use anyhow::{anyhow, bail, Result};
 use semver::Version;
 use std::collections::BTreeMap;
+use std::path::Path;
 use tracing::info;
 
 /// Validations that run before the manifests are fixed.
@@ -52,7 +53,7 @@ fn confirm_version(name: &str, expected: &Version, actual: &Version) -> Result<(
 /// Validations that run after fixing the manifests.
 ///
 /// These should match the validations that the `publish` subcommand runs.
-pub(super) async fn validate_after_fixes(location: &str) -> Result<()> {
+pub(super) async fn validate_after_fixes(location: &Path) -> Result<()> {
     info!("Post-validating manifests...");
     discover_and_validate_package_batches(Fs::Real, location).await?;
     Ok(())

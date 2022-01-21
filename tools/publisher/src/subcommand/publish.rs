@@ -29,7 +29,7 @@ lazy_static! {
     .expect("valid client");
 }
 
-pub async fn subcommand_publish(location: &str) -> Result<()> {
+pub async fn subcommand_publish(location: &Path) -> Result<()> {
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
