@@ -19,7 +19,7 @@ tasks.jar {
     }
 }
 
-val properties = PropertyRetriever(rootProject, project)
+fun Task.props() = PropertyRetriever(rootProject, project, this)
 val outputDir = buildDir.resolve("smithy-rs")
 val runtimeOutputDir = outputDir.resolve("rust-runtime")
 
@@ -41,10 +41,12 @@ tasks.register<Copy>("copyRuntimeCrates") {
 
 task("fixRuntimeCrateVersions") {
     dependsOn("copyRuntimeCrates")
+    props().registerNeed("smithy.rs.runtime.crate.version")
+
     doLast {
         CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { moduleName ->
             patchFile(runtimeOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteSmithyRsCrateVersion(properties, line)
+                rewriteSmithyRsCrateVersion(props(), line)
             }
         }
     }
