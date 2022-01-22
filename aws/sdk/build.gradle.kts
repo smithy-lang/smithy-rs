@@ -230,6 +230,13 @@ tasks.register("relocateRuntime") {
     }
 }
 
+tasks.register<Copy>("relocateChangelog") {
+    from("$rootDir/aws")
+    include("SDK_CHANGELOG.md")
+    into(outputDir)
+    rename("SDK_CHANGELOG.md", "CHANGELOG.md")
+}
+
 fun generateCargoWorkspace(services: AwsServices): String {
     return """
     |[workspace]
@@ -291,7 +298,8 @@ task("finalizeSdk") {
         "relocateExamples",
         "generateIndexMd",
         "fixManifests",
-        "inflateReadme"
+        "inflateReadme",
+        "relocateChangelog"
     )
 }
 
