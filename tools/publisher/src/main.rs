@@ -8,7 +8,9 @@ use crate::subcommand::publish::subcommand_publish;
 use crate::subcommand::yank_category::subcommand_yank_category;
 use anyhow::Result;
 use clap::Parser;
+use semver::Version;
 use std::path::PathBuf;
+use subcommand::inflate_readme::subcommand_inflate_readme;
 
 mod cargo;
 mod fs;
@@ -19,8 +21,9 @@ mod shell;
 mod sort;
 mod subcommand;
 
-pub const REPO_NAME: &str = "aws-sdk-rust";
-pub const REPO_CRATE_PATH: &str = "sdk";
+pub const SDK_REPO_CRATE_PATH: &str = "sdk";
+pub const SDK_REPO_NAME: &str = "aws-sdk-rust";
+pub const SMITHYRS_REPO_NAME: &str = "smithy-rs";
 pub const CRATE_OWNER: &str = "github:awslabs:rust-sdk-owners";
 
 #[derive(Parser, Debug)]
@@ -48,12 +51,24 @@ enum Args {
         category: String,
         /// Version number to yank
         #[clap(long)]
-        version: String,
+        version: Version,
         /// Path to `aws-sdk-rust` repo. The repo should be checked out at the
         /// version that is being yanked so that the correct list of crate names
         /// is used. This will be validated.
         #[clap(long)]
         location: PathBuf,
+    },
+    /// Inflates the SDK README template file
+    InflateReadme {
+        /// AWS Rust SDK version to put in the README
+        #[clap(long)]
+        sdk_version: Version,
+        /// Rust MSRV to put in the README
+        #[clap(long)]
+        msrv: String,
+        /// Path to output the inflated readme into
+        #[clap(short, long)]
+        output: PathBuf,
     },
 }
 
@@ -81,7 +96,14 @@ async fn main() -> Result<()> {
             version,
             location,
         } => {
-            subcommand_yank_category(&category, &version, &location).await?;
+            subcommand_yank_category(&category, version, &location).await?;
+        }
+        Args::InflateReadme {
+            sdk_version,
+            msrv,
+            output,
+        } => {
+            subcommand_inflate_readme(sdk_version, msrv, &output).await?;
         }
     }
     Ok(())

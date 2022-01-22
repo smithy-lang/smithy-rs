@@ -23,6 +23,7 @@ val defaultRustFlags: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
+val publisherToolPath = rootProject.projectDir.resolve("tools/publisher")
 val outputDir = buildDir.resolve("aws-sdk")
 val sdkOutputDir = outputDir.resolve("sdk")
 val examplesOutputDir = outputDir.resolve("examples")
@@ -47,6 +48,9 @@ dependencies {
 
 val awsServices: AwsServices by lazy { discoverServices(loadServiceMembership()) }
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
+
+fun getSdkVersion(): String = properties.get("aws.sdk.version") ?: throw kotlin.Exception("SDK version missing")
+fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw kotlin.Exception("Rust MSRV missing")
 
 fun loadServiceMembership(): Membership {
     val membershipOverride = properties.get("aws.services")?.let { parseMembership(it) }
@@ -93,7 +97,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                         },
                         "service": "${service.service}",
                         "module": "aws-sdk-${service.module}",
-                        "moduleVersion": "${properties.get("aws.sdk.version")}",
+                        "moduleVersion": "${getSdkVersion()}",
                         "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                         "moduleDescription": "${service.moduleDescription}",
                         ${service.examplesUri(project)?.let { """"examples": "$it",""" } ?: ""}
@@ -249,11 +253,10 @@ task("generateCargoWorkspace") {
 tasks.register<Exec>("fixManifests") {
     description = "Run the publisher tool's `fix-manifests` sub-command on the generated services"
 
-    val publisherPath = rootProject.projectDir.resolve("tools/publisher")
-    inputs.dir(publisherPath)
+    inputs.dir(publisherToolPath)
     outputs.dir(outputDir)
 
-    workingDir(publisherPath)
+    workingDir(publisherToolPath)
     commandLine("cargo", "run", "--", "fix-manifests", "--location", outputDir.absolutePath)
 
     dependsOn("assemble")
@@ -261,6 +264,21 @@ tasks.register<Exec>("fixManifests") {
     dependsOn("relocateRuntime")
     dependsOn("relocateAwsRuntime")
     dependsOn("relocateExamples")
+}
+
+tasks.register<Exec>("inflateReadme") {
+    description = "Run the publisher tool's `inflate-readme` sub-command to create the final AWS Rust SDK README file"
+
+    inputs.dir(publisherToolPath)
+    outputs.dir(outputDir)
+
+    workingDir(publisherToolPath)
+    commandLine(
+        "cargo", "run", "--","inflate-readme",
+        "--sdk-version", getSdkVersion(),
+        "--msrv", getRustMSRV(),
+        "--output", outputDir.resolve("README.md").absolutePath
+    )
 }
 
 task("finalizeSdk") {
@@ -272,7 +290,8 @@ task("finalizeSdk") {
         "relocateAwsRuntime",
         "relocateExamples",
         "generateIndexMd",
-        "fixManifests"
+        "fixManifests",
+        "inflateReadme"
     )
 }
 

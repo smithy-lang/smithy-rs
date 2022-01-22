@@ -10,7 +10,7 @@ use crate::package::{
 };
 use crate::repo::resolve_publish_location;
 use crate::shell::ShellOperation;
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use dialoguer::Confirm;
 use semver::Version;
 use std::path::Path;
@@ -22,7 +22,7 @@ const MAX_CONCURRENCY: usize = 5;
 
 pub async fn subcommand_yank_category(
     category: &str,
-    version: &str,
+    version: Version,
     location: &Path,
 ) -> Result<()> {
     let category = match category {
@@ -36,7 +36,6 @@ pub async fn subcommand_yank_category(
             )));
         }
     };
-    let version = Version::parse(version).context("failed to parse inputted version number")?;
 
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;

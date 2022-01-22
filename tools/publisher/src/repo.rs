@@ -8,7 +8,7 @@
 
 use crate::git;
 use crate::shell::ShellOperation;
-use crate::{REPO_CRATE_PATH, REPO_NAME};
+use crate::{SDK_REPO_CRATE_PATH, SDK_REPO_NAME};
 use anyhow::Result;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -17,7 +17,6 @@ use std::path::{Path, PathBuf};
 #[derive(Debug)]
 pub struct Repository {
     pub root: PathBuf,
-    pub sdk_crates_root: PathBuf,
     pub current_tag: String,
 }
 
@@ -30,18 +29,17 @@ pub enum Error {
 /// Given a `location`, this function looks for the `aws-sdk-rust` git repository. If found,
 /// it resolves the `sdk/` directory. Otherwise, it returns the original `location`.
 pub async fn resolve_publish_location(location: &Path) -> PathBuf {
-    match find_sdk_repository_root(REPO_NAME, REPO_CRATE_PATH, location).await {
+    match find_git_repository_root(SDK_REPO_NAME, location).await {
         // If the given path was the `aws-sdk-rust` repo root, then resolve the `sdk/` directory to publish from
-        Ok(sdk_repo) => sdk_repo.sdk_crates_root,
+        Ok(sdk_repo) => sdk_repo.root.join(SDK_REPO_CRATE_PATH),
         // Otherwise, publish from the given path (likely the smithy-rs runtime bundle)
         Err(_) => location.into(),
     }
 }
 
 /// Attempts to find git repository root from the given location.
-pub async fn find_sdk_repository_root(
+pub async fn find_git_repository_root(
     repo_name: &str,
-    sdk_crate_path: &str,
     location: impl Into<PathBuf>,
 ) -> Result<Repository> {
     let mut current_dir = location.into();
@@ -52,7 +50,6 @@ pub async fn find_sdk_repository_root(
                 if os_name == file_name {
                     let current_tag = git::GetCurrentTag::new(&current_dir).spawn().await?;
                     return Ok(Repository {
-                        sdk_crates_root: current_dir.join(sdk_crate_path),
                         root: current_dir,
                         current_tag,
                     });
