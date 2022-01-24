@@ -40,11 +40,10 @@ The SDK provides one crate per AWS service. You must add [Tokio](https://crates.
 
 3. Provide your AWS credentials with the default credential provider chain, which currently looks in:
    - Environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION`
-   - Web Identity Token credentials from the environment or container (including EKS)
    - The default credentials files located in `~/.aws/config` and `~/.aws/credentials` (location can vary per platform)
+   - Web Identity Token credentials from the environment or container (including EKS)
    - ECS Container Credentials (IAM roles for tasks)
    - EC2 Instance Metadata Service (IAM Roles attached to instance)
-**Note:** SSO is not supported yet.
 
 4. Make a request using DynamoDB
 
