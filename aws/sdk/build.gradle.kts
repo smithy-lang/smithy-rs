@@ -273,15 +273,15 @@ tasks.register<Exec>("fixManifests") {
     dependsOn("relocateExamples")
 }
 
-tasks.register<Exec>("inflateReadme") {
-    description = "Run the publisher tool's `inflate-readme` sub-command to create the final AWS Rust SDK README file"
+tasks.register<Exec>("hydrateReadme") {
+    description = "Run the publisher tool's `hydrate-readme` sub-command to create the final AWS Rust SDK README file"
 
     inputs.dir(publisherToolPath)
     outputs.dir(outputDir)
 
     workingDir(publisherToolPath)
     commandLine(
-        "cargo", "run", "--","inflate-readme",
+        "cargo", "run", "--","hydrate-readme",
         "--sdk-version", getSdkVersion(),
         "--msrv", getRustMSRV(),
         "--output", outputDir.resolve("README.md").absolutePath
@@ -298,7 +298,7 @@ task("finalizeSdk") {
         "relocateExamples",
         "generateIndexMd",
         "fixManifests",
-        "inflateReadme",
+        "hydrateReadme",
         "relocateChangelog"
     )
 }

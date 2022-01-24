@@ -12,7 +12,7 @@ use serde_json::json;
 use std::fs;
 use std::path::Path;
 
-pub async fn subcommand_inflate_readme(
+pub async fn subcommand_hydrate_readme(
     sdk_version: Version,
     msrv: String,
     output: &Path,
@@ -25,13 +25,13 @@ pub async fn subcommand_inflate_readme(
     let template_string =
         String::from_utf8(template_contents).context("README template file was invalid UTF-8")?;
 
-    let inflated = inflate_template(&template_string, sdk_version, &msrv)?;
-    fs::write(output, inflated.as_bytes())
-        .with_context(|| format!("Failed to write inflated README to {:?}", output))?;
+    let hydrated = hydrate_template(&template_string, sdk_version, &msrv)?;
+    fs::write(output, hydrated.as_bytes())
+        .with_context(|| format!("Failed to write hydrated README to {:?}", output))?;
     Ok(())
 }
 
-fn inflate_template(template_string: &str, sdk_version: Version, msrv: &str) -> Result<String> {
+fn hydrate_template(template_string: &str, sdk_version: Version, msrv: &str) -> Result<String> {
     let reg = Handlebars::new();
     reg.render_template(
         template_string,
@@ -40,17 +40,17 @@ fn inflate_template(template_string: &str, sdk_version: Version, msrv: &str) -> 
             "msrv": msrv
         }),
     )
-    .context("Failed to inflate README template")
+    .context("Failed to hydrate README template")
 }
 
 #[cfg(test)]
 mod tests {
-    use super::inflate_template;
+    use super::hydrate_template;
     use semver::Version;
 
     #[test]
-    fn test_inflate() {
-        let inflated = inflate_template(
+    fn test_hydrate() {
+        let hydrated = hydrate_template(
             "\
             {{!-- Not included --}}\n\
             <!-- Included -->\n\
@@ -65,7 +65,7 @@ mod tests {
             <!-- Included -->\n\
             Some 0.5.1 and 1.54 here.\n\
             ",
-            inflated,
+            hydrated,
         )
     }
 }

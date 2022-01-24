@@ -10,7 +10,7 @@ use anyhow::Result;
 use clap::Parser;
 use semver::Version;
 use std::path::PathBuf;
-use subcommand::inflate_readme::subcommand_inflate_readme;
+use subcommand::hydrate_readme::subcommand_hydrate_readme;
 
 mod cargo;
 mod fs;
@@ -58,15 +58,15 @@ enum Args {
         #[clap(long)]
         location: PathBuf,
     },
-    /// Inflates the SDK README template file
-    InflateReadme {
+    /// Hydrates the SDK README template file
+    HydrateReadme {
         /// AWS Rust SDK version to put in the README
         #[clap(long)]
         sdk_version: Version,
         /// Rust MSRV to put in the README
         #[clap(long)]
         msrv: String,
-        /// Path to output the inflated readme into
+        /// Path to output the hydrated readme into
         #[clap(short, long)]
         output: PathBuf,
     },
@@ -98,12 +98,12 @@ async fn main() -> Result<()> {
         } => {
             subcommand_yank_category(&category, version, &location).await?;
         }
-        Args::InflateReadme {
+        Args::HydrateReadme {
             sdk_version,
             msrv,
             output,
         } => {
-            subcommand_inflate_readme(sdk_version, msrv, &output).await?;
+            subcommand_hydrate_readme(sdk_version, msrv, &output).await?;
         }
     }
     Ok(())
