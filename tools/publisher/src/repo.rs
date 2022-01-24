@@ -17,7 +17,13 @@ use std::path::{Path, PathBuf};
 #[derive(Debug)]
 pub struct Repository {
     pub root: PathBuf,
-    pub current_tag: String,
+}
+
+impl Repository {
+    /// Returns the current tag of this repository
+    pub async fn current_tag(&self) -> Result<String> {
+        git::GetCurrentTag::new(&self.root).spawn().await
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -48,11 +54,7 @@ pub async fn find_git_repository_root(
         if is_git_root(&current_dir) {
             if let Some(file_name) = current_dir.file_name() {
                 if os_name == file_name {
-                    let current_tag = git::GetCurrentTag::new(&current_dir).spawn().await?;
-                    return Ok(Repository {
-                        root: current_dir,
-                        current_tag,
-                    });
+                    return Ok(Repository { root: current_dir });
                 }
             }
             return Err(Error::RepositoryRootNotFound(repo_name.into()).into());

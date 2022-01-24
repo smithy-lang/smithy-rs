@@ -95,10 +95,11 @@ async fn confirm_correct_tag(batches: &[Vec<Package>], location: &Path) -> Resul
     if let Some(aws_config_version) = aws_config_version {
         let expected_tag = format!("v{}", aws_config_version);
         let repository = find_git_repository_root(SDK_REPO_NAME, location).await?;
-        if expected_tag != repository.current_tag {
+        let current_tag = repository.current_tag().await?;
+        if expected_tag != current_tag {
             bail!(
                 "Current tag `{}` in the local `aws-sdk-rust` repository didn't match expected release tag `{}`",
-                repository.current_tag,
+                current_tag,
                 expected_tag
             );
         }
