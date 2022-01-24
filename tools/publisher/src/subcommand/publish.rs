@@ -7,10 +7,10 @@ use crate::fs::Fs;
 use crate::package::{
     discover_and_validate_package_batches, Package, PackageBatch, PackageHandle, PackageStats,
 };
-use crate::repo::{find_sdk_repository_root, resolve_publish_location};
+use crate::repo::{find_git_repository_root, resolve_publish_location};
 use crate::shell::ShellOperation;
 use crate::CRATE_OWNER;
-use crate::{cargo, REPO_CRATE_PATH, REPO_NAME};
+use crate::{cargo, SDK_REPO_NAME};
 use anyhow::{bail, Result};
 use crates_io_api::{AsyncClient, Error};
 use dialoguer::Confirm;
@@ -29,7 +29,7 @@ lazy_static! {
     .expect("valid client");
 }
 
-pub async fn subcommand_publish(location: &str) -> Result<()> {
+pub async fn subcommand_publish(location: &Path) -> Result<()> {
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
@@ -94,11 +94,12 @@ async fn confirm_correct_tag(batches: &[Vec<Package>], location: &Path) -> Resul
         .next();
     if let Some(aws_config_version) = aws_config_version {
         let expected_tag = format!("v{}", aws_config_version);
-        let repository = find_sdk_repository_root(REPO_NAME, REPO_CRATE_PATH, location).await?;
-        if expected_tag != repository.current_tag {
+        let repository = find_git_repository_root(SDK_REPO_NAME, location).await?;
+        let current_tag = repository.current_tag().await?;
+        if expected_tag != current_tag {
             bail!(
                 "Current tag `{}` in the local `aws-sdk-rust` repository didn't match expected release tag `{}`",
-                repository.current_tag,
+                current_tag,
                 expected_tag
             );
         }
