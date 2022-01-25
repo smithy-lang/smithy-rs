@@ -24,6 +24,7 @@ val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val publisherToolPath = rootProject.projectDir.resolve("tools/publisher")
+val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/sdk-versioner")
 val outputDir = buildDir.resolve("aws-sdk")
 val sdkOutputDir = outputDir.resolve("sdk")
 val examplesOutputDir = outputDir.resolve("examples")
@@ -50,6 +51,7 @@ val awsServices: AwsServices by lazy { discoverServices(loadServiceMembership())
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 
 fun getSdkVersion(): String = properties.get("aws.sdk.version") ?: throw kotlin.Exception("SDK version missing")
+fun getSmithyRsVersion(): String = properties.get("smithy.rs.runtime.crate.version") ?: throw kotlin.Exception("smithy-rs version missing")
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw kotlin.Exception("Rust MSRV missing")
 
 fun loadServiceMembership(): Membership {
@@ -179,8 +181,30 @@ task("relocateExamples") {
             }
         }
     }
-    inputs.dir(projectDir.resolve("examples"))
+    if (awsServices.examples.isNotEmpty()) {
+        inputs.dir(projectDir.resolve("examples"))
+    }
     outputs.dir(outputDir)
+}
+
+task("fixExampleManifests") {
+    description = "Adds dependency path and corrects version number of examples after relocation"
+    doLast {
+        if (awsServices.examples.isNotEmpty()) {
+            exec {
+                workingDir(sdkVersionerToolPath)
+                commandLine(
+                    "cargo", "run", "--",
+                    outputDir.resolve("examples").absolutePath,
+                    "--sdk-path", "../../sdk",
+                    "--sdk-version", getSdkVersion(),
+                    "--smithy-version", getSmithyRsVersion()
+                )
+            }
+        }
+    }
+    outputs.dir(outputDir)
+    dependsOn("relocateExamples")
 }
 
 /**
@@ -252,7 +276,9 @@ task("generateCargoWorkspace") {
         outputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
     }
     inputs.property("servicelist", awsServices.moduleNames.toString())
-    inputs.dir(projectDir.resolve("examples"))
+    if (awsServices.examples.isNotEmpty()) {
+        inputs.dir(projectDir.resolve("examples"))
+    }
     outputs.file(outputDir.resolve("Cargo.toml"))
     outputs.upToDateWhen { false }
 }
@@ -271,6 +297,7 @@ tasks.register<Exec>("fixManifests") {
     dependsOn("relocateRuntime")
     dependsOn("relocateAwsRuntime")
     dependsOn("relocateExamples")
+    dependsOn("fixExampleManifests")
 }
 
 tasks.register<Exec>("hydrateReadme") {
