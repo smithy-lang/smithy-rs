@@ -117,13 +117,23 @@ fn update_dependencies(dependencies: &mut Table, opt: &Opt) -> anyhow::Result<bo
 }
 
 fn is_sdk_crate(name: &str) -> bool {
-    name.starts_with(SDK_PREFIX) || name == AWS_CONFIG
+    is_service_crate(name) || name == AWS_CONFIG || AWS_RUNTIME_CRATES.iter().any(|&k| k == name)
 }
 
 fn is_sdk_or_runtime_crate(name: &str) -> bool {
-    is_sdk_crate(name)
-        || name.starts_with(SMITHY_PREFIX)
-        || AWS_RUNTIME_CRATES.iter().any(|&k| k == name)
+    is_sdk_crate(name) || name.starts_with(SMITHY_PREFIX)
+}
+
+fn is_service_crate(name: &str) -> bool {
+    name.starts_with(SDK_PREFIX)
+}
+
+fn crate_path_name(name: &str) -> &str {
+    if is_service_crate(name) {
+        &name[SDK_PREFIX.len()..]
+    } else {
+        name
+    }
 }
 
 fn update_dependency_value(crate_name: &str, value: &mut Table, opt: &Opt) {
@@ -135,11 +145,7 @@ fn update_dependency_value(crate_name: &str, value: &mut Table, opt: &Opt) {
 
     // Set the `path` if one was given
     if let Some(path) = &opt.sdk_path {
-        let crate_path = if is_sdk_crate && crate_name != AWS_CONFIG {
-            path.join(&crate_name[SDK_PREFIX.len()..])
-        } else {
-            path.join(crate_name)
-        };
+        let crate_path = path.join(crate_path_name(crate_name));
         value.insert(
             "path".to_string(),
             Value::String(
