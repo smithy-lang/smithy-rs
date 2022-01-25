@@ -25,7 +25,7 @@ class Ec2QuerySerializerGenerator(codegenContext: CodegenContext) : QuerySeriali
 
     override fun MemberShape.isFlattened(): Boolean = true
 
-    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
+    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType? {
         TODO("Not yet implemented")
     }
 

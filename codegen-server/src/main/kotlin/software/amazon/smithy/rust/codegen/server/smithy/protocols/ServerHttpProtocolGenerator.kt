@@ -33,13 +33,13 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
@@ -451,12 +451,12 @@ private class ServerHttpProtocolImplGenerator(
         bindings: List<HttpBindingDescriptor>,
     ) {
         val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
-        structuredDataSerializer.serverOutputSerializer(operationShape).also { serializer ->
+        structuredDataSerializer.serverOutputSerializer(operationShape)?.let { serializer ->
             rust(
                 "let payload = #T(output)?;",
                 serializer
             )
-        }
+        } ?: rust("""let payload = "";""")
         // avoid non-usage warnings for response
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut response = #{http}::Response::builder();", *codegenScope)
@@ -557,11 +557,7 @@ private class ServerHttpProtocolImplGenerator(
         httpBindingGenerator: ServerRequestBindingGenerator,
         structuredDataParser: StructuredDataParserGenerator,
     ): Writable? {
-        val errorSymbol = if (model.expectShape(binding.member.target) is StringShape) {
-            CargoDependency.SmithyHttpServer(runtimeConfig).asType().member("rejection").member("SmithyRejection")
-        } else {
-            CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize").member("Error")
-        }
+        val errorSymbol = getDeserializeErrorSymbol(binding)
         return when (binding.location) {
             HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
             HttpLocation.PAYLOAD -> {
@@ -585,7 +581,8 @@ private class ServerHttpProtocolImplGenerator(
                     writable { rust("""todo!("streaming request bodies");""") }
                 } else {
                     writable {
-                        rustTemplate("""
+                        rustTemplate(
+                            """
                             {
                                 let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
                                 let bytes = #{Hyper}::body::to_bytes(body).await?;
@@ -750,7 +747,7 @@ private class ServerHttpProtocolImplGenerator(
         with(writer) {
             rustTemplate(
                 """
-                let query_string = request.uri().query().ok_or(#{SmithyHttpServer}::rejection::MissingQueryString)?;
+                let query_string = request.uri().query().unwrap_or("");
                 let pairs = #{SerdeUrlEncoded}::from_str::<Vec<(#{Cow}<'_, str>, #{Cow}<'_, str>)>>(query_string)?;
                 """.trimIndent(),
                 *codegenScope
@@ -778,11 +775,11 @@ private class ServerHttpProtocolImplGenerator(
                     val memberName = symbolProvider.toMemberName(it.member)
                     rustTemplate(
                         """
-                        if !seen_${memberName} && k == "${it.locationName}" {
+                        if !seen_$memberName && k == "${it.locationName}" {
                             input = input.${it.member.setterName()}(
                                 #{deserializer}(&v)?
                             );
-                            seen_${memberName} = true;
+                            seen_$memberName = true;
                         }
                         """.trimIndent(),
                         "deserializer" to deserializer
@@ -859,10 +856,10 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     input = input.${it.member.setterName()}(
-                        if ${memberName}.is_empty() {
+                        if $memberName.is_empty() {
                             None
                         } else {
-                            Some(${memberName})
+                            Some($memberName)
                         }
                     );
                     """.trimIndent()
@@ -987,6 +984,23 @@ private class ServerHttpProtocolImplGenerator(
             }
             RestXmlTrait.ID -> {
                 return "check_xml_content_type"
+            }
+            else -> {
+                TODO("Protocol ${codegenContext.protocol} not supported yet")
+            }
+        }
+    }
+
+    private fun getDeserializeErrorSymbol(binding: HttpBindingDescriptor): RuntimeType {
+        if (model.expectShape(binding.member.target) is StringShape) {
+            return CargoDependency.SmithyHttpServer(runtimeConfig).asType().member("rejection").member("SmithyRejection")
+        }
+        when (codegenContext.protocol) {
+            RestJson1Trait.ID -> {
+                return CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize").member("Error")
+            }
+            RestXmlTrait.ID -> {
+                return CargoDependency.smithyXml(runtimeConfig).asType().member("decode").member("XmlError")
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")

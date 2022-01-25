@@ -25,6 +25,26 @@ pub enum PackageCategory {
     Unknown,
 }
 
+impl PackageCategory {
+    /// Returns true if the category is `AwsRuntime` or `AwsSdk`
+    pub fn is_sdk(&self) -> bool {
+        matches!(self, PackageCategory::AwsRuntime | PackageCategory::AwsSdk)
+    }
+
+    /// Categorizes a package based on its name
+    pub fn from_package_name(name: &str) -> PackageCategory {
+        if name.starts_with("aws-smithy-") {
+            PackageCategory::SmithyRuntime
+        } else if name.starts_with("aws-sdk-") {
+            PackageCategory::AwsSdk
+        } else if name.starts_with("aws-") {
+            PackageCategory::AwsRuntime
+        } else {
+            PackageCategory::Unknown
+        }
+    }
+}
+
 /// Information required to identify a package (crate).
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct PackageHandle {
@@ -47,6 +67,12 @@ impl fmt::Display for PackageHandle {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum Publish {
+    Allowed,
+    NotAllowed,
+}
+
 /// Represents a crate (called Package since crate is a reserved word).
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Package {
@@ -60,6 +86,8 @@ pub struct Package {
     pub manifest_path: PathBuf,
     /// Dependencies used by this package
     pub local_dependencies: BTreeSet<PackageHandle>,
+    /// Whether or not the package should be published
+    pub publish: Publish,
 }
 
 impl Package {
@@ -67,23 +95,17 @@ impl Package {
         handle: PackageHandle,
         manifest_path: impl Into<PathBuf>,
         local_dependencies: BTreeSet<PackageHandle>,
+        publish: Publish,
     ) -> Self {
         let manifest_path = manifest_path.into();
-        let category = if handle.name.starts_with("aws-smithy-") {
-            PackageCategory::SmithyRuntime
-        } else if handle.name.starts_with("aws-sdk-") {
-            PackageCategory::AwsSdk
-        } else if handle.name.starts_with("aws-") {
-            PackageCategory::AwsRuntime
-        } else {
-            PackageCategory::Unknown
-        };
+        let category = PackageCategory::from_package_name(&handle.name);
         Self {
             handle,
             category,
             crate_path: manifest_path.parent().unwrap().into(),
             manifest_path,
             local_dependencies,
+            publish,
         }
     }
 
@@ -132,48 +154,21 @@ impl PackageStats {
 
 /// Discovers publishable packages in the given directory and returns them as
 /// batches that can be published in order.
-pub async fn discover_package_batches(
+pub async fn discover_and_validate_package_batches(
     fs: Fs,
     path: impl AsRef<Path>,
 ) -> Result<(Vec<PackageBatch>, PackageStats)> {
     let manifest_paths = discover_package_manifests(path.as_ref().into()).await?;
-    let packages = read_packages(fs, manifest_paths).await?;
+    let packages = read_packages(fs, manifest_paths)
+        .await?
+        .into_iter()
+        .filter(|package| package.publish == Publish::Allowed)
+        .collect::<Vec<Package>>();
     validate_packages(&packages)?;
 
     let batches = batch_packages(packages)?;
     let stats = PackageStats::calculate(&batches);
     Ok((batches, stats))
-}
-
-/// Modifies the given `batches` so that publishing will continue from the given
-/// `package_name`. The `stats` are modified to reflect how many crates will be published
-/// after the filtering.
-pub fn continue_batches_from(
-    package_name: &str,
-    batches: &mut Vec<PackageBatch>,
-    stats: &mut PackageStats,
-) -> Result<(), anyhow::Error> {
-    while !batches.is_empty() {
-        let found = {
-            let first_batch = batches.iter().next().unwrap();
-            first_batch.iter().any(|p| p.handle.name == package_name)
-        };
-        if !found {
-            batches.remove(0);
-        } else {
-            let first_batch = &mut batches[0];
-            while !first_batch.is_empty() && first_batch[0].handle.name != package_name {
-                first_batch.remove(0);
-            }
-            break;
-        }
-    }
-    *stats = PackageStats::calculate(batches);
-    if batches.is_empty() {
-        Err(anyhow::Error::msg("no more batches to publish"))
-    } else {
-        Ok(())
-    }
 }
 
 type BoxError = Box<dyn StdError + Send + Sync + 'static>;
@@ -248,12 +243,16 @@ fn read_package(path: &Path, manifest_bytes: &[u8]) -> Result<Package> {
     let name = package.name;
     let version = parse_version(path, &package.version)?;
     let handle = PackageHandle { name, version };
+    let publish = match package.publish {
+        cargo_toml::Publish::Flag(true) => Publish::Allowed,
+        _ => Publish::NotAllowed,
+    };
 
     let mut local_dependencies = BTreeSet::new();
     local_dependencies.extend(read_dependencies(path, &manifest.dependencies)?.into_iter());
     local_dependencies.extend(read_dependencies(path, &manifest.dev_dependencies)?.into_iter());
     local_dependencies.extend(read_dependencies(path, &manifest.build_dependencies)?.into_iter());
-    Ok(Package::new(handle, path, local_dependencies))
+    Ok(Package::new(handle, path, local_dependencies, publish))
 }
 
 /// Validates that all of the publishable crates use consistent version numbers
@@ -410,6 +409,7 @@ mod tests {
                 .iter()
                 .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").unwrap()))
                 .collect(),
+            Publish::Allowed,
         )
     }
 
@@ -491,6 +491,7 @@ mod tests {
                 .iter()
                 .map(|p| PackageHandle::new(p.0, Version::parse(p.1).unwrap()))
                 .collect(),
+            Publish::Allowed,
         )
     }
 
@@ -528,57 +529,5 @@ mod tests {
             "crate A has multiple versions: 1.1.0 and 1.0.0",
             format!("{}", error)
         );
-    }
-
-    #[test]
-    fn test_continue_batches_from() {
-        let mut batches = vec![
-            vec![
-                pkg_ver("aws-a", "1.0.0", &[]),
-                pkg_ver("aws-b", "1.1.0", &[]),
-            ],
-            vec![
-                pkg_ver("aws-smithy-c", "1.0.0", &[]),
-                pkg_ver("aws-smithy-d", "1.1.0", &[]),
-            ],
-            vec![
-                pkg_ver("aws-sdk-e", "1.0.0", &[]),
-                pkg_ver("aws-sdk-f", "1.1.0", &[]),
-            ],
-        ];
-        let mut stats = PackageStats::default();
-        continue_batches_from("aws-smithy-d", &mut batches, &mut stats).unwrap();
-
-        assert_eq!(
-            vec![
-                vec![pkg_ver("aws-smithy-d", "1.1.0", &[])],
-                vec![
-                    pkg_ver("aws-sdk-e", "1.0.0", &[]),
-                    pkg_ver("aws-sdk-f", "1.1.0", &[])
-                ],
-            ],
-            batches
-        );
-        assert_eq!(
-            PackageStats {
-                smithy_runtime_crates: 1,
-                aws_runtime_crates: 0,
-                aws_sdk_crates: 2,
-            },
-            stats
-        );
-    }
-
-    #[test]
-    fn test_continue_batches_from_package_not_found() {
-        let mut batches = vec![vec![
-            pkg_ver("aws-a", "1.0.0", &[]),
-            pkg_ver("aws-b", "1.1.0", &[]),
-        ]];
-        let mut stats = PackageStats::default();
-        assert!(continue_batches_from("does-not-exist", &mut batches, &mut stats).is_err());
-
-        let mut batches = vec![];
-        assert!(continue_batches_from("does-not-exist", &mut batches, &mut stats).is_err());
     }
 }
