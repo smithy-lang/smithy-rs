@@ -451,12 +451,12 @@ private class ServerHttpProtocolImplGenerator(
         bindings: List<HttpBindingDescriptor>,
     ) {
         val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
-        structuredDataSerializer.serverOutputSerializer(operationShape).also { serializer ->
+        structuredDataSerializer.serverOutputSerializer(operationShape)?.let { serializer ->
             rust(
                 "let payload = #T(output)?;",
                 serializer
             )
-        }
+        } ?: rust("""let payload = "";""")
         // avoid non-usage warnings for response
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut response = #{http}::Response::builder();", *codegenScope)
