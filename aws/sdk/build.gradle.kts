@@ -24,6 +24,7 @@ val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val publisherToolPath = rootProject.projectDir.resolve("tools/publisher")
+val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/sdk-versioner")
 val outputDir = buildDir.resolve("aws-sdk")
 val sdkOutputDir = outputDir.resolve("sdk")
 val examplesOutputDir = outputDir.resolve("examples")
@@ -50,6 +51,7 @@ val awsServices: AwsServices by lazy { discoverServices(loadServiceMembership())
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 
 fun getSdkVersion(): String = properties.get("aws.sdk.version") ?: throw kotlin.Exception("SDK version missing")
+fun getSmithyRsVersion(): String = properties.get("smithy.rs.runtime.crate.version") ?: throw kotlin.Exception("smithy-rs version missing")
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw kotlin.Exception("Rust MSRV missing")
 
 fun loadServiceMembership(): Membership {
@@ -185,6 +187,26 @@ task("relocateExamples") {
     outputs.dir(outputDir)
 }
 
+task("fixExampleManifests") {
+    description = "Adds dependency path and corrects version number of examples after relocation"
+    doLast {
+        if (awsServices.examples.isNotEmpty()) {
+            exec {
+                workingDir(sdkVersionerToolPath)
+                commandLine(
+                    "cargo", "run", "--",
+                    outputDir.resolve("examples").absolutePath,
+                    "--sdk-path", "../../sdk",
+                    "--sdk-version", getSdkVersion(),
+                    "--smithy-version", getSmithyRsVersion()
+                )
+            }
+        }
+    }
+    outputs.dir(outputDir)
+    dependsOn("relocateExamples")
+}
+
 /**
  * The aws/rust-runtime crates depend on local versions of the Smithy core runtime enabling local compilation. However,
  * those paths need to be replaced in the final build. We should probably fix this with some symlinking.
@@ -275,6 +297,7 @@ tasks.register<Exec>("fixManifests") {
     dependsOn("relocateRuntime")
     dependsOn("relocateAwsRuntime")
     dependsOn("relocateExamples")
+    dependsOn("fixExampleManifests")
 }
 
 tasks.register<Exec>("hydrateReadme") {
