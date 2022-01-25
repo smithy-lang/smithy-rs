@@ -93,11 +93,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
     println!("From operation input: {:?}\n", presigned_request.uri());
 
-    print_as_curl_request(&presigned_request, Some("some test content"));
+    // Presigned requests can be used in several ways. Here are a few examples:
+    print_as_curl_request(&presigned_request, None);
+    send_presigned_request_with_reqwest(&presigned_request, "").await;
+    send_presigned_request_with_hyper(presigned_request, hyper::Body::empty()).await;
 
     Ok(())
 }
 
+/// This function demonstrates how you can convert a presigned request into a cURL command
+/// that you can run from your terminal of choice.
+///
+/// _NOTE:_ This only prints out the command, it's up to you to copy-paste it and run it.
 fn print_as_curl_request(presigned_req: &PresignedRequest, body: Option<&str>) {
     println!(
         "curl -X {} {} \\",
@@ -121,4 +128,45 @@ fn print_as_curl_request(presigned_req: &PresignedRequest, body: Option<&str>) {
     }
 
     println!("--verbose");
+}
+
+/// This function demonstrates how you can send a presigned request using [hyper](https://crates.io/crates/hyper)
+async fn send_presigned_request_with_hyper(req: PresignedRequest, body: hyper::Body) {
+    let conn = aws_smithy_client::conns::https();
+    let client = hyper::Client::builder().build(conn);
+    let req = req.to_http_request(body).unwrap();
+
+    let res = client.request(req).await;
+
+    match res {
+        Ok(res) => {
+            println!("Response: {:?}", res)
+        }
+        Err(err) => {
+            println!("Error: {}", err)
+        }
+    }
+}
+
+/// This function demonstrates how you can send a presigned request using [reqwest](https://crates.io/crates/reqwest)
+async fn send_presigned_request_with_reqwest(
+    req: &PresignedRequest,
+    body: impl Into<reqwest::Body>,
+) {
+    let client = reqwest::Client::new();
+    let res = client
+        .request(req.method().clone(), &req.uri().to_string())
+        .headers(req.headers().clone())
+        .body(body)
+        .send()
+        .await;
+
+    match res {
+        Ok(res) => {
+            println!("Response: {:?}", res)
+        }
+        Err(err) => {
+            println!("Error: {}", err)
+        }
+    }
 }

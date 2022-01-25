@@ -153,6 +153,11 @@ pub mod request {
     use std::fmt::{Debug, Formatter};
 
     /// Represents a presigned request. This only includes the HTTP request method, URI, and headers.
+    ///
+    /// **This struct has conversion convenience functions:**
+    ///
+    /// - [`PresignedRequest::to_http_request<B>`][Self::to_http_request] returns an [`http::Request<B>`](https://docs.rs/http/0.2.6/http/request/struct.Request.html)
+    /// - [`PresignedRequest::into`](#impl-From<PresignedRequest>) returns an [`http::request::Builder`](https://docs.rs/http/0.2.6/http/request/struct.Builder.html)
     #[non_exhaustive]
     pub struct PresignedRequest(http::Request<()>);
 
@@ -176,6 +181,13 @@ pub mod request {
         /// added directly.
         pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
             self.0.headers()
+        }
+
+        /// Given a body, convert this `PresignedRequest` into an `http::Request`
+        pub fn to_http_request<B>(self, body: B) -> Result<http::Request<B>, http::Error> {
+            let builder: http::request::Builder = self.into();
+
+            builder.body(body)
         }
     }
 
