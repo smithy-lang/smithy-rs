@@ -184,7 +184,7 @@ fn resolve_git_repo(repo: &str, path: &Path) -> Result<PathBuf> {
 /// before syncing a commit into the target branch.
 fn rebase_on_main(aws_sdk_path: &Path, branch: &str) -> Result<()> {
     let _ = run(&["git", "fetch", "origin", "main"], aws_sdk_path).context(here!())?;
-    if let Err(err) = run(&["git", "rebase", "main"], aws_sdk_path) {
+    if let Err(err) = run(&["git", "rebase", "origin/main"], aws_sdk_path) {
         bail!(
             "Failed to rebase `{0}` on top of `main`. This means there are conflicts \
             between `{0}` and `main` that need to be manually resolved. This should only \
