@@ -1,24 +1,5 @@
-# Example changelog entries
-# [[aws-sdk-rust]]
-# message = "Fix typos in module documentation for generated crates"
-# references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
-# author = "rcoh"
-#
-# [[smithy-rs]]
-# message = "Fix typos in module documentation for generated crates"
-# references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
-# author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Convert several `info` spans to `debug` in aws-config"
-references = ["smithy-rs#1087"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "rcoh"
-
 [[smithy-rs]]
-message = "Improve docs on `Endpoint::{mutable, immutable}`"
-references = ["smithy-rs#1087"]
+message = "Provide SigningService creation via owned String"
+references = ["smithy-rs#1114"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "rcoh"
+author = "mchoicpe-amazon"
