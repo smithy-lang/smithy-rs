@@ -11,10 +11,12 @@
 
 use crate::fs::Fs;
 use crate::package::{discover_package_manifests, parse_version};
+use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use semver::Version;
 use std::collections::BTreeMap;
 use std::env;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use toml::value::Table;
 use tracing::info;
@@ -27,7 +29,7 @@ pub enum Mode {
     Execute,
 }
 
-pub async fn subcommand_fix_manifests(mode: Mode, location: &str) -> Result<()> {
+pub async fn subcommand_fix_manifests(mode: Mode, location: &Path) -> Result<()> {
     let manifest_paths = discover_package_manifests(location.into()).await?;
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;
@@ -139,15 +141,37 @@ fn fix_dep_sets(versions: &BTreeMap<String, Version>, metadata: &mut toml::Value
     Ok(changed)
 }
 
-fn block_local_publish(manifest_path: &Path, metadata: &mut toml::Value) -> Result<bool> {
+fn is_example_manifest(manifest_path: impl AsRef<Path>) -> bool {
+    // Examine parent directories until either `examples/` or `aws-sdk-rust/` is found
+    let mut path = manifest_path.as_ref();
+    while let Some(parent) = path.parent() {
+        path = parent;
+        if path.file_name() == Some(OsStr::new("examples")) {
+            return true;
+        } else if path.file_name() == Some(OsStr::new(SDK_REPO_NAME)) {
+            break;
+        }
+    }
+    false
+}
+
+fn conditionally_disallow_publish(
+    manifest_path: &Path,
+    metadata: &mut toml::Value,
+) -> Result<bool> {
+    let is_github_actions = env::var("GITHUB_ACTIONS").unwrap_or_default() == "true";
+    let is_example = is_example_manifest(manifest_path);
+
     // Safe-guard to prevent accidental publish to crates.io. Add some friction
     // to publishing from a local development machine by detecting that the tool
-    // is not being run from CI, and disallow publish in that case.
-    if env::var("GITHUB_ACTIONS").unwrap_or_default() != "true" {
+    // is not being run from CI, and disallow publish in that case. Also disallow
+    // publishing of examples.
+    if !is_github_actions || is_example {
         if let Some(package) = metadata.as_table_mut().unwrap().get_mut("package") {
             info!(
-                "Detected local build. Disallowing publish for {:?}.",
-                manifest_path
+                "Detected {}. Disallowing publish for {:?}.",
+                if is_example { "example" } else { "local build" },
+                manifest_path,
             );
             package
                 .as_table_mut()
@@ -166,7 +190,8 @@ async fn fix_manifests(
     mode: Mode,
 ) -> Result<()> {
     for manifest in manifests {
-        let package_changed = block_local_publish(&manifest.path, &mut manifest.metadata)?;
+        let package_changed =
+            conditionally_disallow_publish(&manifest.path, &mut manifest.metadata)?;
         let dependencies_changed = fix_dep_sets(versions, &mut manifest.metadata)?;
         if package_changed || dependencies_changed > 0 {
             let contents =
@@ -269,5 +294,22 @@ mod tests {
             ",
             actual_build_deps.to_string()
         );
+    }
+
+    #[test]
+    fn test_is_example_manifest() {
+        assert!(!is_example_manifest("aws-sdk-rust/sdk/s3/Cargo.toml"));
+        assert!(!is_example_manifest(
+            "aws-sdk-rust/sdk/aws-config/Cargo.toml"
+        ));
+        assert!(!is_example_manifest(
+            "/path/to/aws-sdk-rust/sdk/aws-config/Cargo.toml"
+        ));
+        assert!(!is_example_manifest("sdk/aws-config/Cargo.toml"));
+        assert!(is_example_manifest("examples/foo/Cargo.toml"));
+        assert!(is_example_manifest("examples/foo/bar/Cargo.toml"));
+        assert!(is_example_manifest(
+            "aws-sdk-rust/examples/foo/bar/Cargo.toml"
+        ));
     }
 }

@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Convert several `info` spans to `debug` in aws-config"
+references = ["smithy-rs#1087"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Improve docs on `Endpoint::{mutable, immutable}`"
+references = ["smithy-rs#1087"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
