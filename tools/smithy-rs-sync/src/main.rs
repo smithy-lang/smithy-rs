@@ -80,19 +80,11 @@ fn sync_aws_sdk_with_smithy_rs(
     branch: &str,
     max_commits_to_sync: usize,
 ) -> Result<()> {
-    // In case these are relative paths, canonicalize them into absolute paths
-    let aws_sdk = aws_sdk.canonicalize().context(here!())?;
-    let smithy_rs = smithy_rs.canonicalize().context(here!())?;
+    let aws_sdk = resolve_git_repo("aws-sdk-rust", aws_sdk)?;
+    let smithy_rs = resolve_git_repo("smithy-rs", smithy_rs)?;
 
-    eprintln!("aws-sdk-rust path:\t{}", aws_sdk.display());
-    if !is_a_git_repository(&aws_sdk) {
-        eprintln!("warning: aws-sdk-rust is not a git repository");
-    }
-
-    eprintln!("smithy-rs path:\t\t{}", smithy_rs.display());
-    if !is_a_git_repository(&aws_sdk) {
-        eprintln!("warning: smithy-rs is not a git repository");
-    }
+    // Rebase aws-sdk-rust's target branch on top of main
+    rebase_on_main(&aws_sdk, branch).context(here!())?;
 
     // Open the repositories we'll be working with
     let smithy_rs_repo = Repository::open(&smithy_rs).context("couldn't open smithy-rs repo")?;
@@ -167,6 +159,43 @@ fn sync_aws_sdk_with_smithy_rs(
         );
     }
 
+    Ok(())
+}
+
+fn resolve_git_repo(repo: &str, path: &Path) -> Result<PathBuf> {
+    // In case these are relative paths, canonicalize them into absolute paths
+    let full_path = path.canonicalize().context(here!())?;
+    eprintln!("{} path:\t{:?}", repo, path);
+    if !is_a_git_repository(path) {
+        bail!("{} is not a git repository", repo);
+    }
+    Ok(full_path)
+}
+
+/// Rebases the given branch on top of `main`.
+///
+/// Running this every sync should ensure `next` will always rebase-merge cleanly
+/// onto `main` when it's time for a release, and will also ensure history is common
+/// between `main` and `next` after a rebase-merge occurs for release.
+///
+/// The reason this works is because rebasing on main will produce the exact same
+/// commits as the rebase-merge pull-request will into main so long as no conflicts
+/// need to be resolved. Since the sync is run regularly, this will catch conflicts
+/// before syncing a commit into the target branch.
+fn rebase_on_main(aws_sdk_path: &Path, branch: &str) -> Result<()> {
+    let _ = run(&["git", "fetch", "origin", "main"], aws_sdk_path).context(here!())?;
+    if let Err(err) = run(&["git", "rebase", "main"], aws_sdk_path) {
+        bail!(
+            "Failed to rebase `{0}` on top of `main`. This means there are conflicts \
+            between `{0}` and `main` that need to be manually resolved. This should only \
+            happen if changes were made to the same file in both `main` and `{0}` after \
+            their last common ancestor commit.\
+            \
+            {1}",
+            branch,
+            err
+        )
+    }
     Ok(())
 }
 
