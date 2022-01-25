@@ -163,7 +163,7 @@ fn sync_aws_sdk_with_smithy_rs(
 }
 
 fn resolve_git_repo(repo: &str, path: &Path) -> Result<PathBuf> {
-    // In case these are relative paths, canonicalize them into absolute paths
+    // In case this is a relative path, canonicalize it into an absolute path
     let full_path = path.canonicalize().context(here!())?;
     eprintln!("{} path:\t{:?}", repo, path);
     if !is_a_git_repository(path) {
