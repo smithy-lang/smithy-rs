@@ -5,7 +5,7 @@
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_s3::input::PutObjectInput;
-use aws_sdk_s3::presigning::config::PresigningConfig;
+use aws_sdk_s3::presigning::{config::PresigningConfig, request::PresignedRequest};
 use aws_sdk_s3::{Client, Config, Region, PKG_VERSION};
 use std::error::Error;
 use std::time::Duration;
@@ -75,21 +75,50 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .put_object()
         .bucket(&bucket)
         .key(&object)
+        .metadata("some-metadata", "abcd")
         .presigned(PresigningConfig::expires_in(expires_in)?)
         .await?;
-    println!("From client: {:?}", presigned_request.uri());
+    println!("From client: {:?}\n", presigned_request.uri());
 
     // Or, they can be made directly from an operation input
     let presigned_request = PutObjectInput::builder()
         .bucket(bucket)
         .key(object)
+        .metadata("some-metadata", "abcd")
         .build()?
         .presigned(
             &Config::from(&shared_config),
             PresigningConfig::expires_in(expires_in)?,
         )
         .await?;
-    println!("From operation input: {:?}", presigned_request.uri());
+    println!("From operation input: {:?}\n", presigned_request.uri());
+
+    print_as_curl_request(&presigned_request, Some("some test content"));
 
     Ok(())
+}
+
+fn print_as_curl_request(presigned_req: &PresignedRequest, body: Option<&str>) {
+    println!(
+        "curl -X {} {} \\",
+        presigned_req.method(),
+        presigned_req.uri()
+    );
+
+    if let Some(body) = body {
+        println!("-d '{}' \\", body);
+    }
+
+    for (name, value) in presigned_req.headers() {
+        // This value conversion method is naïve and will drop values that aren't valid UTF8
+        // It's only here for demonstration purposes; Don't use this unless you're confident
+        // that your header values are valid UTF-8
+        println!(
+            "-H '{}: {}' \\",
+            name,
+            value.to_str().unwrap_or_default().to_string()
+        )
+    }
+
+    println!("--verbose");
 }

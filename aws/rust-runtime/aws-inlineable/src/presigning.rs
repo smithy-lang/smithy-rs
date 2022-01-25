@@ -186,6 +186,20 @@ pub mod request {
                 .finish()
         }
     }
+
+    impl Into<http::request::Builder> for PresignedRequest {
+        fn into(self) -> http::request::Builder {
+            let mut builder = http::request::Builder::new()
+                .uri(self.uri())
+                .method(self.method());
+
+            if let Some(headers) = builder.headers_mut() {
+                *headers = self.headers().clone();
+            }
+
+            builder
+        }
+    }
 }
 
 /// Tower middleware service for creating presigned requests
