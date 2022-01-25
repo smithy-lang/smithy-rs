@@ -5,6 +5,8 @@
 
 //! Presigned request types and configuration.
 
+use crate::presigning::request::PresignedRequest;
+
 /// Presigning config and builder
 pub mod config {
     use std::fmt;
@@ -186,19 +188,19 @@ pub mod request {
                 .finish()
         }
     }
+}
 
-    impl Into<http::request::Builder> for PresignedRequest {
-        fn into(self) -> http::request::Builder {
-            let mut builder = http::request::Builder::new()
-                .uri(self.uri())
-                .method(self.method());
+impl From<PresignedRequest> for http::request::Builder {
+    fn from(req: PresignedRequest) -> Self {
+        let mut builder = http::request::Builder::new()
+            .uri(req.uri())
+            .method(req.method());
 
-            if let Some(headers) = builder.headers_mut() {
-                *headers = self.headers().clone();
-            }
-
-            builder
+        if let Some(headers) = builder.headers_mut() {
+            *headers = req.headers().clone();
         }
+
+        builder
     }
 }
 
