@@ -12,13 +12,7 @@
 # author = "rcoh"
 
 # [[aws-sdk-rust]]
-# message = "The S3 presigning example was updated to include the metadata field and now includes a curl command generator."
-# references = ["aws-sdk-rust#423"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
-# author = "Velfi"
-
-# [[aws-sdk-rust]]
-# message = "Added `impl Into<http::request::Builder> for PresignedRequest`"
+# message = "Added `impl Into<http::request::Builder> for PresignedRequest` and a conversion method for turning `PresignedRequest`s into `http::Request`s."
 # references = ["aws-sdk-rust#423"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "Velfi"
