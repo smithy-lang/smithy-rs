@@ -5,8 +5,6 @@
 
 //! Presigned request types and configuration.
 
-use crate::presigning::request::PresignedRequest;
-
 /// Presigning config and builder
 pub mod config {
     use std::fmt;
