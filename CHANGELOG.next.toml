@@ -34,3 +34,9 @@ message = "SDK examples now come from [`awsdocs/aws-doc-sdk-examples`](https://g
 references = ["smithy-rs#1118"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Provide SigningService creation via owned String"
+references = ["smithy-rs#1114"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "mchoicpe-amazon"
