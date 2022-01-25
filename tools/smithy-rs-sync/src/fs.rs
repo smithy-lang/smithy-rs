@@ -218,7 +218,7 @@ mod tests {
         let dir = TempDir::new("smithy-rs-sync_test-fs").unwrap();
         let file_path = dir.path().join(HANDWRITTEN_DOTFILE);
         // two newlines to test
-        let mut handwritten_files = handwritten_files.join("\n\n");
+        let handwritten_files = handwritten_files.join("\n\n");
         std::fs::write(file_path, handwritten_files).expect("failed to write");
         dir
     }
