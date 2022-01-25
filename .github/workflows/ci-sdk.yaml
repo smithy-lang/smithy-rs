@@ -176,6 +176,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - uses: actions/checkout@v2
+      with:
+        repository: awsdocs/aws-doc-sdk-examples
     - uses: actions/cache@v2
       name: Gradle Cache
       with:
@@ -194,6 +197,11 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
+    - name: Take examples from `awsdocs/aws-doc-sdk-examples`
+      run: |
+        mv aws-doc-sdk-examples/rust_dev_preview aws/sdk/examples
+        rm -rf aws/sdk/examples/.cargo
+        rm aws/sdk/examples/Cargo.toml
     - name: Generate and check all services
       run: ./gradlew -Paws.fullsdk=true :aws:sdk:assemble
     - name: Generate a name for the SDK

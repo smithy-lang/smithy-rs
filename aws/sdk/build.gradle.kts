@@ -179,7 +179,9 @@ task("relocateExamples") {
             }
         }
     }
-    inputs.dir(projectDir.resolve("examples"))
+    if (awsServices.examples.isNotEmpty()) {
+        inputs.dir(projectDir.resolve("examples"))
+    }
     outputs.dir(outputDir)
 }
 
@@ -252,7 +254,9 @@ task("generateCargoWorkspace") {
         outputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
     }
     inputs.property("servicelist", awsServices.moduleNames.toString())
-    inputs.dir(projectDir.resolve("examples"))
+    if (awsServices.examples.isNotEmpty()) {
+        inputs.dir(projectDir.resolve("examples"))
+    }
     outputs.file(outputDir.resolve("Cargo.toml"))
     outputs.upToDateWhen { false }
 }
