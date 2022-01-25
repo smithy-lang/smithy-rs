@@ -23,6 +23,18 @@ references = ["smithy-rs#1087"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "SDK examples now come from [`awsdocs/aws-doc-sdk-examples`](https://github.com/awsdocs/aws-doc-sdk-examples) rather than from `smithy-rs`"
+references = ["smithy-rs#1118"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "SDK examples now come from [`awsdocs/aws-doc-sdk-examples`](https://github.com/awsdocs/aws-doc-sdk-examples) rather than from `smithy-rs`"
+references = ["smithy-rs#1118"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
 [[smithy-rs]]
 message = "Provide SigningService creation via owned String"
 references = ["smithy-rs#1114"]
