@@ -269,15 +269,16 @@ fn setup_examples(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<()>
     let from = from.as_os_str().to_string_lossy();
 
     eprintln!("\tcleaning examples...");
-    let _ = run(&["rm", "-rf", "aws/sdk/examples"], smithy_rs_path).context(here!())?;
+    fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/examples")).context(here!())?;
 
     eprintln!(
         "\tcopying examples from '{}' to 'smithy-rs/aws/sdk/examples'...",
         from
     );
     let _ = run(&["cp", "-r", &from, "aws/sdk/examples"], smithy_rs_path).context(here!())?;
-    let _ = run(&["rm", "-rf", "aws/sdk/examples/.cargo"], smithy_rs_path).context(here!())?;
-    let _ = run(&["rm", "aws/sdk/examples/Cargo.toml"], smithy_rs_path).context(here!())?;
+    fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/examples/.cargo"))
+        .context(here!())?;
+    std::fs::remove_file(smithy_rs_path.join("aws/sdk/examples/Cargo.toml")).context(here!())?;
     Ok(())
 }
 
@@ -294,7 +295,7 @@ fn build_sdk(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<PathBuf>
         .expect("for our use case, this will always be UTF-8");
 
     // The output of running these commands isn't logged anywhere unless they fail
-    let _ = run(&["rm", "-rf", "aws/sdk/build"], smithy_rs_path).context(here!())?;
+    fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/build")).context(here!())?;
     let _ = run(&[gradlew, ":aws:sdk:clean"], smithy_rs_path).context(here!())?;
     let _ = run(
         &[gradlew, "-Paws.fullsdk=true", ":aws:sdk:assemble"],
