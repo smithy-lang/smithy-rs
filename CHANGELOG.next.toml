@@ -12,6 +12,12 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Added `impl Into<http::request::Builder> for PresignedRequest` and a conversion method for turning `PresignedRequest`s into `http::Request`s."
+references = ["aws-sdk-rust#423"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
 message = "Convert several `info` spans to `debug` in aws-config"
 references = ["smithy-rs#1087"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
