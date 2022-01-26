@@ -1,4 +1,16 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+0.36.0 (January 26, 2022)
+=========================
+**New this release:**
+- ([smithy-rs#1087](https://github.com/awslabs/smithy-rs/issues/1087)) Improve docs on `Endpoint::{mutable, immutable}`
+- ([smithy-rs#1118](https://github.com/awslabs/smithy-rs/issues/1118)) SDK examples now come from [`awsdocs/aws-doc-sdk-examples`](https://github.com/awsdocs/aws-doc-sdk-examples) rather than from `smithy-rs`
+- ([smithy-rs#1114](https://github.com/awslabs/smithy-rs/issues/1114), @mchoicpe-amazon) Provide SigningService creation via owned String
+
+**Contributors**
+Thank you for your contributions! ❤
+- @mchoicpe-amazon ([smithy-rs#1114](https://github.com/awslabs/smithy-rs/issues/1114))
+
+
 0.35.2 (January 20th, 2022)
 ===========================
 _Changes only impact generated AWS SDK_
