@@ -24,6 +24,9 @@ struct Opt {
     /// The path to the aws-sdk-rust folder.
     #[structopt(long, parse(from_os_str))]
     aws_sdk: PathBuf,
+    /// Path to the aws-doc-sdk-examples repository.
+    #[structopt(long, parse(from_os_str))]
+    sdk_examples: PathBuf,
     /// The branch in aws-sdk-rust that commits will be mirrored to.
     #[structopt(long, default_value = "next")]
     branch: String,
@@ -65,23 +68,32 @@ fn main() -> Result<()> {
     let Opt {
         smithy_rs,
         aws_sdk,
+        sdk_examples,
         branch,
         max_commits_to_sync,
     } = Opt::from_args();
 
-    sync_aws_sdk_with_smithy_rs(&smithy_rs, &aws_sdk, &branch, max_commits_to_sync)
-        .map_err(|e| e.context("The sync failed"))
+    sync_aws_sdk_with_smithy_rs(
+        &smithy_rs,
+        &aws_sdk,
+        &sdk_examples,
+        &branch,
+        max_commits_to_sync,
+    )
+    .map_err(|e| e.context("The sync failed"))
 }
 
 /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
 fn sync_aws_sdk_with_smithy_rs(
     smithy_rs: &Path,
     aws_sdk: &Path,
+    sdk_examples: &Path,
     branch: &str,
     max_commits_to_sync: usize,
 ) -> Result<()> {
     let aws_sdk = resolve_git_repo("aws-sdk-rust", aws_sdk)?;
     let smithy_rs = resolve_git_repo("smithy-rs", smithy_rs)?;
+    let sdk_examples = resolve_git_repo("aws-doc-sdk-examples", sdk_examples)?;
 
     // Rebase aws-sdk-rust's target branch on top of main
     rebase_on_main(&aws_sdk, branch).context(here!())?;
@@ -126,7 +138,7 @@ fn sync_aws_sdk_with_smithy_rs(
             )
         })?;
 
-        let build_artifacts = build_sdk(&smithy_rs).context("couldn't build SDK")?;
+        let build_artifacts = build_sdk(&sdk_examples, &smithy_rs).context("couldn't build SDK")?;
         clean_out_existing_sdk(&aws_sdk)
             .context("couldn't clean out existing SDK from aws-sdk-rust")?;
 
@@ -183,6 +195,10 @@ fn resolve_git_repo(repo: &str, path: &Path) -> Result<PathBuf> {
 /// need to be resolved. Since the sync is run regularly, this will catch conflicts
 /// before syncing a commit into the target branch.
 fn rebase_on_main(aws_sdk_path: &Path, branch: &str) -> Result<()> {
+    eprintln!(
+        "Rebasing aws-sdk-rust/{} on top of aws-sdk-rust/main...",
+        branch
+    );
     let _ = run(&["git", "fetch", "origin", "main"], aws_sdk_path).context(here!())?;
     if let Err(err) = run(&["git", "rebase", "origin/main"], aws_sdk_path) {
         bail!(
@@ -245,9 +261,31 @@ fn set_last_synced_commit(repo_path: &Path, oid: &Oid) -> Result<()> {
         .with_context(|| format!("Couldn't write commit hash to '{}'", path.display()))
 }
 
+/// Place the examples from aws-doc-sdk-examples into the correct place in smithy-rs
+/// to be included with the generated SDK.
+fn setup_examples(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<()> {
+    let from = sdk_examples_path.canonicalize().context(here!())?;
+    let from = from.join("rust_dev_preview");
+    let from = from.as_os_str().to_string_lossy();
+
+    eprintln!("\tcleaning examples...");
+    let _ = run(&["rm", "-rf", "aws/sdk/examples"], smithy_rs_path).context(here!())?;
+
+    eprintln!(
+        "\tcopying examples from '{}' to 'smithy-rs/aws/sdk/examples'...",
+        from
+    );
+    let _ = run(&["cp", "-r", &from, "aws/sdk/examples"], smithy_rs_path).context(here!())?;
+    let _ = run(&["rm", "-rf", "aws/sdk/examples/.cargo"], smithy_rs_path).context(here!())?;
+    let _ = run(&["rm", "aws/sdk/examples/Cargo.toml"], smithy_rs_path).context(here!())?;
+    Ok(())
+}
+
 /// Run the necessary commands to build the SDK. On success, returns the path to the folder containing
 /// the build artifacts.
-fn build_sdk(smithy_rs_path: &Path) -> Result<PathBuf> {
+fn build_sdk(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<PathBuf> {
+    setup_examples(sdk_examples_path, smithy_rs_path).context(here!())?;
+
     eprintln!("\tbuilding the SDK...");
     let start = Instant::now();
     let gradlew = smithy_rs_path.join("gradlew");
