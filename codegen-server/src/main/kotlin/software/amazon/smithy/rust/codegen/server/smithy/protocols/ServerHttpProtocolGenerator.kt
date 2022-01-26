@@ -561,12 +561,6 @@ private class ServerHttpProtocolImplGenerator(
         return when (binding.location) {
             HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
             HttpLocation.PAYLOAD -> {
-                val docShapeHandler: RustWriter.(String) -> Unit = { body ->
-                    rust(
-                        "#T($body)",
-                        structuredDataParser.documentParser(operationShape),
-                    )
-                }
                 val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
                     rust("#T($body)", structuredDataParser.payloadParser(binding.member))
                 }
@@ -574,7 +568,6 @@ private class ServerHttpProtocolImplGenerator(
                     operationShape,
                     binding,
                     errorSymbol,
-                    docHandler = docShapeHandler,
                     structuredHandler = structureShapeHandler
                 )
                 return if (binding.member.isStreaming(model)) {

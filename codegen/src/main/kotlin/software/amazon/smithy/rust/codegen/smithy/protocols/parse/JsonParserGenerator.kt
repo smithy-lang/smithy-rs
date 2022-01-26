@@ -118,7 +118,7 @@ class JsonParserGenerator(
 
     override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
-        check(shape is UnionShape || shape is StructureShape) { "payload parser should only be used on structures & unions" }
+        check(shape is UnionShape || shape is StructureShape || shape is DocumentShape) { "payload parser should only be used on structures & unions" }
         val fnName = symbolProvider.deserializeFunctionName(shape) + "_payload"
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
@@ -159,28 +159,6 @@ class JsonParserGenerator(
         }
         val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_json_err"
         return structureParser(fnName, errorShape, errorShape.members().toList())
-    }
-
-    override fun documentParser(operationShape: OperationShape): RuntimeType {
-        val fnName = "parse_document"
-        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
-            it.rustBlockTemplate(
-                "pub fn $fnName(input: &[u8]) -> Result<#{Document}, #{Error}>",
-                "Document" to RuntimeType.Document(runtimeConfig),
-                *codegenScope,
-            ) {
-                rustTemplate(
-                    """
-                    let mut tokens_owned = #{json_token_iter}(input).peekable();
-                    let tokens = &mut tokens_owned;
-                    """,
-                    *codegenScope
-                )
-                rustTemplate("let result = #{expect_document}(tokens);", *codegenScope)
-                expectEndOfTokenStream()
-                rust("result")
-            }
-        }
     }
 
     private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", jsonDeserModule) {
