@@ -126,9 +126,15 @@ class JsonParserGenerator(
                 *codegenScope,
                 "Shape" to symbolProvider.toSymbol(shape)
             ) {
+                val input = if (shape is DocumentShape) {
+                    "input"
+                } else {
+                    "#{or_empty}(input)"
+                }
+
                 rustTemplate(
                     """
-                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
+                    let mut tokens_owned = #{json_token_iter}($input).peekable();
                     let tokens = &mut tokens_owned;
                     """,
                     *codegenScope
@@ -363,8 +369,9 @@ class JsonParserGenerator(
                     withBlock("Ok(Some(builder.build()", "))") {
                         if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
                             rustTemplate(
-                                ".map_err(|err| #{Error}::new(#{ErrorReason}::Custom(" +
-                                    "format!(\"{}\", err).into()), None))?",
+                                """.map_err(|err| #{Error}::new(
+                                #{ErrorReason}::Custom(format!({}, err).into()), None)
+                                )?""",
                                 *codegenScope
                             )
                         }
