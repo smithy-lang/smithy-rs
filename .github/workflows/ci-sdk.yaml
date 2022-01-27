@@ -70,9 +70,7 @@ jobs:
         - name: Unused Dependencies
           run: cargo +nightly udeps
         - name: Additional per-crate checks
-          run: ../tools/additional-per-crate-checks.sh ./sdk/
-        - name: Canary check
-          run: ../tools/ci-cdk/canary-lambda/ci-check.sh
+          run: ../tools/additional-per-crate-checks.sh ./sdk/ ../tools/ci-cdk/
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0
@@ -173,11 +171,15 @@ jobs:
         RUSTC_FORCE_INCREMENTAL: 1
         RUSTFLAGS: -D warnings
 
-  all-services-check:
-    name: Full SDK - Generate and cargo check
+  generate-all-services:
+    name: Full SDK - Generate
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - uses: actions/checkout@v2
+      with:
+        repository: awsdocs/aws-doc-sdk-examples
+        path: aws-doc-sdk-examples
     - uses: actions/cache@v2
       name: Gradle Cache
       with:
@@ -196,8 +198,13 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
+    - name: Take examples from `awsdocs/aws-doc-sdk-examples`
+      run: |
+        mv aws-doc-sdk-examples/rust_dev_preview aws/sdk/examples
+        rm -rf aws/sdk/examples/.cargo
+        rm aws/sdk/examples/Cargo.toml
     - name: Generate and check all services
-      run: ./gradlew -Paws.fullsdk=true :aws:sdk:cargoCheck
+      run: ./gradlew -Paws.fullsdk=true :aws:sdk:assemble
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
@@ -208,3 +215,59 @@ jobs:
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: sdk.tar
+
+  check-all-examples:
+    name: Full SDK - Check examples
+    runs-on: ubuntu-latest
+    needs: generate-all-services
+    env:
+      # Disable incremental compilation to reduce disk space use
+      CARGO_INCREMENTAL: 0
+      RUSTFLAGS: -D warnings
+    steps:
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        path: artifact
+    - name: untar
+      run: tar -xvf ./artifact/sdk.tar
+    - name: Check the SDK
+      run: cargo check
+      working-directory: ./examples
+
+  check-all-services:
+    name: Full SDK - Check services
+    runs-on: ubuntu-latest
+    needs: generate-all-services
+    env:
+      # Disable incremental compilation to reduce disk space use
+      CARGO_INCREMENTAL: 0
+      RUSTFLAGS: -D warnings
+    steps:
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        default: true
+    - name: Generate a name for the SDK
+      id: gen-name
+      run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
+    - uses: actions/download-artifact@v2
+      name: Download SDK Artifact
+      with:
+        name: aws-sdk-${{ env.name }}-${{ github.sha }}
+        path: artifact
+    - name: untar
+      run: tar -xvf ./artifact/sdk.tar
+    - name: Check the SDK
+      run: cargo check
+      working-directory: ./sdk

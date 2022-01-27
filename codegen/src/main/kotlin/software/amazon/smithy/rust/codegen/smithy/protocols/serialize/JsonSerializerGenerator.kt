@@ -242,7 +242,7 @@ class JsonSerializerGenerator(
         }
     }
 
-    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
+    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType? {
         val outputShape = operationShape.outputShape(model)
         val includedMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
         val fnName = symbolProvider.serializeFunctionName(outputShape)

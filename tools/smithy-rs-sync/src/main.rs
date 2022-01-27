@@ -24,6 +24,9 @@ struct Opt {
     /// The path to the aws-sdk-rust folder.
     #[structopt(long, parse(from_os_str))]
     aws_sdk: PathBuf,
+    /// Path to the aws-doc-sdk-examples repository.
+    #[structopt(long, parse(from_os_str))]
+    sdk_examples: PathBuf,
     /// The branch in aws-sdk-rust that commits will be mirrored to.
     #[structopt(long, default_value = "next")]
     branch: String,
@@ -65,34 +68,35 @@ fn main() -> Result<()> {
     let Opt {
         smithy_rs,
         aws_sdk,
+        sdk_examples,
         branch,
         max_commits_to_sync,
     } = Opt::from_args();
 
-    sync_aws_sdk_with_smithy_rs(&smithy_rs, &aws_sdk, &branch, max_commits_to_sync)
-        .map_err(|e| e.context("The sync failed"))
+    sync_aws_sdk_with_smithy_rs(
+        &smithy_rs,
+        &aws_sdk,
+        &sdk_examples,
+        &branch,
+        max_commits_to_sync,
+    )
+    .map_err(|e| e.context("The sync failed"))
 }
 
 /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
 fn sync_aws_sdk_with_smithy_rs(
     smithy_rs: &Path,
     aws_sdk: &Path,
+    sdk_examples: &Path,
     branch: &str,
     max_commits_to_sync: usize,
 ) -> Result<()> {
-    // In case these are relative paths, canonicalize them into absolute paths
-    let aws_sdk = aws_sdk.canonicalize().context(here!())?;
-    let smithy_rs = smithy_rs.canonicalize().context(here!())?;
+    let aws_sdk = resolve_git_repo("aws-sdk-rust", aws_sdk)?;
+    let smithy_rs = resolve_git_repo("smithy-rs", smithy_rs)?;
+    let sdk_examples = resolve_git_repo("aws-doc-sdk-examples", sdk_examples)?;
 
-    eprintln!("aws-sdk-rust path:\t{}", aws_sdk.display());
-    if !is_a_git_repository(&aws_sdk) {
-        eprintln!("warning: aws-sdk-rust is not a git repository");
-    }
-
-    eprintln!("smithy-rs path:\t\t{}", smithy_rs.display());
-    if !is_a_git_repository(&aws_sdk) {
-        eprintln!("warning: smithy-rs is not a git repository");
-    }
+    // Rebase aws-sdk-rust's target branch on top of main
+    rebase_on_main(&aws_sdk, branch).context(here!())?;
 
     // Open the repositories we'll be working with
     let smithy_rs_repo = Repository::open(&smithy_rs).context("couldn't open smithy-rs repo")?;
@@ -134,7 +138,7 @@ fn sync_aws_sdk_with_smithy_rs(
             )
         })?;
 
-        let build_artifacts = build_sdk(&smithy_rs).context("couldn't build SDK")?;
+        let build_artifacts = build_sdk(&sdk_examples, &smithy_rs).context("couldn't build SDK")?;
         clean_out_existing_sdk(&aws_sdk)
             .context("couldn't clean out existing SDK from aws-sdk-rust")?;
 
@@ -167,6 +171,47 @@ fn sync_aws_sdk_with_smithy_rs(
         );
     }
 
+    Ok(())
+}
+
+fn resolve_git_repo(repo: &str, path: &Path) -> Result<PathBuf> {
+    // In case this is a relative path, canonicalize it into an absolute path
+    let full_path = path.canonicalize().context(here!())?;
+    eprintln!("{} path:\t{:?}", repo, path);
+    if !is_a_git_repository(path) {
+        bail!("{} is not a git repository", repo);
+    }
+    Ok(full_path)
+}
+
+/// Rebases the given branch on top of `main`.
+///
+/// Running this every sync should ensure `next` will always rebase-merge cleanly
+/// onto `main` when it's time for a release, and will also ensure history is common
+/// between `main` and `next` after a rebase-merge occurs for release.
+///
+/// The reason this works is because rebasing on main will produce the exact same
+/// commits as the rebase-merge pull-request will into main so long as no conflicts
+/// need to be resolved. Since the sync is run regularly, this will catch conflicts
+/// before syncing a commit into the target branch.
+fn rebase_on_main(aws_sdk_path: &Path, branch: &str) -> Result<()> {
+    eprintln!(
+        "Rebasing aws-sdk-rust/{} on top of aws-sdk-rust/main...",
+        branch
+    );
+    let _ = run(&["git", "fetch", "origin", "main"], aws_sdk_path).context(here!())?;
+    if let Err(err) = run(&["git", "rebase", "origin/main"], aws_sdk_path) {
+        bail!(
+            "Failed to rebase `{0}` on top of `main`. This means there are conflicts \
+            between `{0}` and `main` that need to be manually resolved. This should only \
+            happen if changes were made to the same file in both `main` and `{0}` after \
+            their last common ancestor commit.\
+            \
+            {1}",
+            branch,
+            err
+        )
+    }
     Ok(())
 }
 
@@ -216,9 +261,32 @@ fn set_last_synced_commit(repo_path: &Path, oid: &Oid) -> Result<()> {
         .with_context(|| format!("Couldn't write commit hash to '{}'", path.display()))
 }
 
+/// Place the examples from aws-doc-sdk-examples into the correct place in smithy-rs
+/// to be included with the generated SDK.
+fn setup_examples(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<()> {
+    let from = sdk_examples_path.canonicalize().context(here!())?;
+    let from = from.join("rust_dev_preview");
+    let from = from.as_os_str().to_string_lossy();
+
+    eprintln!("\tcleaning examples...");
+    fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/examples")).context(here!())?;
+
+    eprintln!(
+        "\tcopying examples from '{}' to 'smithy-rs/aws/sdk/examples'...",
+        from
+    );
+    let _ = run(&["cp", "-r", &from, "aws/sdk/examples"], smithy_rs_path).context(here!())?;
+    fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/examples/.cargo"))
+        .context(here!())?;
+    std::fs::remove_file(smithy_rs_path.join("aws/sdk/examples/Cargo.toml")).context(here!())?;
+    Ok(())
+}
+
 /// Run the necessary commands to build the SDK. On success, returns the path to the folder containing
 /// the build artifacts.
-fn build_sdk(smithy_rs_path: &Path) -> Result<PathBuf> {
+fn build_sdk(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<PathBuf> {
+    setup_examples(sdk_examples_path, smithy_rs_path).context(here!())?;
+
     eprintln!("\tbuilding the SDK...");
     let start = Instant::now();
     let gradlew = smithy_rs_path.join("gradlew");
@@ -227,7 +295,8 @@ fn build_sdk(smithy_rs_path: &Path) -> Result<PathBuf> {
         .expect("for our use case, this will always be UTF-8");
 
     // The output of running these commands isn't logged anywhere unless they fail
-    let _ = run(&["rm", "-rf", "aws/sdk/build"], smithy_rs_path).context(here!())?;
+    fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/build")).context(here!())?;
+    let _ = run(&[gradlew, ":aws:sdk:clean"], smithy_rs_path).context(here!())?;
     let _ = run(
         &[gradlew, "-Paws.fullsdk=true", ":aws:sdk:assemble"],
         smithy_rs_path,

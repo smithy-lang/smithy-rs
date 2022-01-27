@@ -7,6 +7,7 @@
 # Generates a Cargo.toml with the given AWS SDK version for this canary
 
 import argparse
+import sys
 
 BASE_MANIFEST = """
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
@@ -38,9 +39,10 @@ serde_json = "1"
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
+tracing-texray = "0.1.1"
 """
 
 notable_versions = [

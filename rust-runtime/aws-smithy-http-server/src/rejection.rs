@@ -73,13 +73,6 @@ define_rejection! {
 
 define_rejection! {
     #[status = BAD_REQUEST]
-    #[body = "Expected query string in URI but none found"]
-    /// Rejection type used if the URI has no query string and we need to deserialize data from it.
-    pub struct MissingQueryString;
-}
-
-define_rejection! {
-    #[status = BAD_REQUEST]
     #[body = "Failed to parse request MIME type"]
     /// Rejection type used if the MIME type parsing failed.
     pub struct MimeParsingFailed;
@@ -140,7 +133,6 @@ composite_rejection! {
         BodyAlreadyExtracted,
         HeadersAlreadyExtracted,
         ExtensionsAlreadyExtracted,
-        MissingQueryString,
     }
 }
 

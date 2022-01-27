@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::cargo::{capture_error, output_text, CargoOperation};
 use crate::package::PackageHandle;
+use crate::shell::{capture_error, output_text, ShellOperation};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::borrow::Cow;
 use std::path::Path;
 use std::process::Command;
 use tracing::info;
@@ -29,7 +28,7 @@ impl<'a> Publish<'a> {
 }
 
 #[async_trait]
-impl<'a> CargoOperation for Publish<'a> {
+impl<'a> ShellOperation for Publish<'a> {
     type Output = ();
 
     async fn spawn(&self) -> Result<()> {
@@ -57,13 +56,6 @@ impl<'a> CargoOperation for Publish<'a> {
             }
         }
         Ok(())
-    }
-
-    fn plan(&self) -> Option<Cow<'static, str>> {
-        Some(Cow::Owned(format!(
-            "[in {:?}]: cargo publish --jobs 1",
-            self.package_path
-        )))
     }
 }
 

@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::cargo::{handle_failure, CargoOperation};
+use crate::shell::{handle_failure, ShellOperation};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::borrow::Cow;
 use std::process::Command;
 
 pub struct AddOwner<'a> {
@@ -26,7 +25,7 @@ impl<'a> AddOwner<'a> {
 }
 
 #[async_trait]
-impl<'a> CargoOperation for AddOwner<'a> {
+impl<'a> ShellOperation for AddOwner<'a> {
     type Output = ();
 
     async fn spawn(&self) -> Result<()> {
@@ -39,10 +38,6 @@ impl<'a> CargoOperation for AddOwner<'a> {
         let output = tokio::task::spawn_blocking(move || command.output()).await??;
         handle_failure("add owner", &output)?;
         Ok(())
-    }
-
-    fn plan(&self) -> Option<Cow<'static, str>> {
-        None
     }
 }
 
