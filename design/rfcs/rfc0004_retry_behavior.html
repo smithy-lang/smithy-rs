@@ -1,0 +1,404 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0004: Retry Behavior - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> Http Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">6.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">6.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">6.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">6.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html" class="active"><strong aria-hidden="true">6.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">6.5.</strong> RFC-0005: Smithy Rust service framework</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-retry-behavior"><a class="header" href="#rfc-retry-behavior">RFC: Retry Behavior</a></h1>
+<blockquote>
+<p>Status: Implemented</p>
+</blockquote>
+<p>For a summarized list of proposed changes, see the <a href="#changes-checklist">Changes Checklist</a> section.</p>
+<p>It is not currently possible for users of the SDK to configure a client's maximum number of retry attempts. This RFC establishes a method for users to set the number of retries to attempt when calling a service and would allow users to disable retries entirely. This RFC would introduce breaking changes to the <code>retry</code> module of the <code>aws-smithy-client</code> crate.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<ul>
+<li><strong>Smithy Client</strong>: A <code>aws_smithy_client::Client&lt;C, M, R&gt;</code> struct that is responsible for gluing together
+the connector, middleware, and retry policy. This is not generated and lives in the <code>aws-smithy-client</code> crate.</li>
+<li><strong>Fluent Client</strong>: A code-generated <code>Client&lt;C, M, R&gt;</code> that has methods for each service operation on it.
+A fluent builder is generated alongside it to make construction easier.</li>
+<li><strong>AWS Client</strong>: A specialized Fluent Client that defaults to using a <code>DynConnector</code>, <code>AwsMiddleware</code>,
+and <code>Standard</code> retry policy.</li>
+<li><strong>Shared Config</strong>: An <code>aws_types::Config</code> struct that is responsible for storing shared configuration data that is used across all services. This is not generated and lives in the <code>aws-types</code> crate.</li>
+<li><strong>Service-specific Config</strong>: A code-generated <code>Config</code> that has methods for setting service-specific configuration. Each <code>Config</code> is defined in the <code>config</code> module of its parent service. For example, the S3-specific config struct is <code>use</code>able from <code>aws_sdk_s3::config::Config</code> and re-exported as <code>aws_sdk_s3::Config</code>.</li>
+<li><strong>Standard retry behavior</strong>: The standard set of retry rules across AWS SDKs. This mode includes a standard set of errors that are retried, and support for retry quotas. The default maximum number of attempts with this mode is three, unless <code>max_attempts</code> is explicitly configured.</li>
+<li><strong>Adaptive retry behavior</strong>: Adaptive retry mode dynamically limits the rate of AWS requests to maximize success rate. This may be at the expense of request latency. Adaptive retry mode is not recommended when predictable latency is important.
+<ul>
+<li><em>Note: supporting the &quot;adaptive&quot; retry behavior is considered outside the scope of this RFC</em></li>
+</ul>
+</li>
+</ul>
+<h2 id="configuring-the-maximum-number-of-retries"><a class="header" href="#configuring-the-maximum-number-of-retries">Configuring the maximum number of retries</a></h2>
+<p>This RFC will demonstrate <em>(with examples)</em> the following ways that Users can set the maximum number of retry attempts:</p>
+<ul>
+<li>By calling the <code>Config::retry_config(..)</code> or <code>Config::disable_retries()</code> methods when building a service-specific config</li>
+<li>By calling the <code>Config::retry_config(..)</code> or <code>Config::disable_retries()</code> methods when building a shared config</li>
+<li>By setting the <code>AWS_MAX_ATTEMPTS</code> environment variable</li>
+</ul>
+<p>The above list is in order of decreasing precedence e.g. setting maximum retry attempts with the <code>max_attempts</code> builder method will override a value set by <code>AWS_MAX_ATTEMPTS</code>.</p>
+<p><em>The default number of retries is 3 as specified in the <a href="https://docs.aws.amazon.com/sdkref/latest/guide/setting-global-max_attempts.html">AWS SDKs and Tools Reference Guide</a>.</em></p>
+<h3 id="setting-an-environment-variable"><a class="header" href="#setting-an-environment-variable">Setting an environment variable</a></h3>
+<p>Here's an example app that logs your AWS user's identity</p>
+<pre><pre class="playground"><code class="language-rust">use aws_sdk_sts as sts;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), sts::Error&gt; {
+    let config = aws_config::load_from_env().await;
+
+    let sts = sts::Client::new(&amp;config);
+    let resp = sts.get_caller_identity().send().await?;
+    println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
+    Ok(())
+}
+</code></pre></pre>
+<p>Then, in your terminal:</p>
+<pre><code class="language-sh"># Set the env var before running the example program
+export AWS_MAX_ATTEMPTS=5
+# Run the example program
+cargo run
+</code></pre>
+<h3 id="calling-a-method-on-an-aws-shared-config"><a class="header" href="#calling-a-method-on-an-aws-shared-config">Calling a method on an AWS shared config</a></h3>
+<p>Here's an example app that creates a shared config with custom retry behavior and then logs your AWS user's identity</p>
+<pre><pre class="playground"><code class="language-rust">use aws_sdk_sts as sts;
+use aws_types::retry_config::StandardRetryConfig;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), sts::Error&gt; {
+    let retry_config = StandardRetryConfig::builder().max_attempts(5).build();
+    let config = aws_config::from_env().retry_config(retry_config).load().await;
+
+    let sts = sts::Client::new(&amp;config);
+    let resp = sts.get_caller_identity().send().await?;
+    println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
+    Ok(())
+}
+</code></pre></pre>
+<h3 id="calling-a-method-on-service-specific-config"><a class="header" href="#calling-a-method-on-service-specific-config">Calling a method on service-specific config</a></h3>
+<p>Here's an example app that creates a service-specific config with custom retry behavior and then logs your AWS user's identity</p>
+<pre><pre class="playground"><code class="language-rust">use aws_sdk_sts as sts;
+use aws_types::retry_config::StandardRetryConfig;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), sts::Error&gt; {
+    let config = aws_config::load_from_env().await;
+    let retry_config = StandardRetryConfig::builder().max_attempts(5).build();
+    let sts_config = sts::config::Config::from(&amp;config).retry_config(retry_config).build();
+
+    let sts = sts::Client::new(&amp;sts_config);
+    let resp = sts.get_caller_identity().send().await?;
+    println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
+    Ok(())
+}
+</code></pre></pre>
+<h3 id="disabling-retries"><a class="header" href="#disabling-retries">Disabling retries</a></h3>
+<p>Here's an example app that creates a shared config that disables retries and then logs your AWS user's identity</p>
+<pre><pre class="playground"><code class="language-rust">use aws_sdk_sts as sts;
+use aws_types::config::Config;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), sts::Error&gt; {
+    let config = aws_config::from_env().disable_retries().load().await;
+    let sts_config = sts::config::Config::from(&amp;config).build();
+
+    let sts = sts::Client::new(&amp;sts_config);
+    let resp = sts.get_caller_identity().send().await?;
+    println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
+    Ok(())
+}
+</code></pre></pre>
+<p>Retries can also be disabled by explicitly passing the <code>RetryConfig::NoRetries</code> enum variant to the <code>retry_config</code> builder method:</p>
+<pre><pre class="playground"><code class="language-rust">use aws_sdk_sts as sts;
+use aws_types::retry_config::RetryConfig;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), sts::Error&gt; {
+    let config = aws_config::load_from_env().await;
+    let sts_config = sts::config::Config::from(&amp;config).retry_config(RetryConfig::NoRetries).build();
+
+    let sts = sts::Client::new(&amp;sts_config);
+    let resp = sts.get_caller_identity().send().await?;
+    println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
+    Ok(())
+}
+</code></pre></pre>
+<h2 id="behind-the-scenes"><a class="header" href="#behind-the-scenes">Behind the scenes</a></h2>
+<p>Currently, when users want to send a request, the following occurs:</p>
+<ol>
+<li>The user creates either a shared config or a service-specific config</li>
+<li>The user creates a fluent client for the service they want to interact with and passes the config they created. Internally, this creates an AWS client with a default retry policy</li>
+<li>The user calls an operation builder method on the client which constructs a request</li>
+<li>The user sends the request by awaiting the <code>send()</code> method</li>
+<li>The smithy client creates a new <code>Service</code> and attaches a copy of its retry policy</li>
+<li>The <code>Service</code> is <code>call</code>ed, sending out the request and retrying it according to the retry policy</li>
+</ol>
+<p>After this change, the process will work like this:</p>
+<ol>
+<li>The user creates either a shared config or a service-specific config
+<ul>
+<li>If <code>AWS_MAX_ATTEMPTS</code> is set to zero, this is invalid and we will log it with <code>tracing::warn</code>. However, this will not error until a request is made</li>
+<li>If <code>AWS_MAX_ATTEMPTS</code> is 1, retries will be disabled</li>
+<li>If <code>AWS_MAX_ATTEMPTS</code> is greater than 1, retries will be attempted at most as many times as is specified</li>
+<li>If the user creates the config with the <code>.disable_retries</code> builder method, retries will be disabled</li>
+<li>If the user creates the config with the <code>retry_config</code> builder method, retry behavior will be set according to the <code>RetryConfig</code> they passed</li>
+</ul>
+</li>
+<li>The user creates a fluent client for the service they want to interact with and passes the config they created
+<ul>
+<li>Provider precedence will determine what retry behavior is actually set, working like how <code>Region</code> is set</li>
+</ul>
+</li>
+<li>The user calls an operation builder method on the client which constructs a request</li>
+<li>The user sends the request by awaiting the <code>send()</code> method</li>
+<li>The smithy client creates a new <code>Service</code> and attaches a copy of its retry policy</li>
+<li>The <code>Service</code> is <code>call</code>ed, sending out the request and retrying it according to the retry policy</li>
+</ol>
+<p>These changes will be made in such a way that they enable us to add the &quot;adaptive&quot; retry behavior at a later date without introducing a breaking change.</p>
+<h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Create new Kotlin decorator <code>RetryConfigDecorator</code>
+<ul>
+<li>Based on <a href="https://github.com/awslabs/smithy-rs/blob/main/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/RegionDecorator.kt">RegionDecorator.kt</a></li>
+<li>This decorator will live in the <code>codegen</code> project because it has relevance outside the SDK</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+<strong>Breaking changes:</strong>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Rename <code>aws_smithy_client::retry::Config</code> to <code>StandardRetryConfig</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Rename <code>aws_smithy_client::retry::Config::with_max_retries</code> method to <code>with_max_attempts</code> in order to follow AWS convention</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Passing 0 to <code>with_max_attempts</code> will panic with a helpful, descriptive error message</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Create non-exhaustive <code>aws_types::retry_config::RetryConfig</code> enum wrapping structs that represent specific retry behaviors
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+A <code>NoRetry</code> variant that disables retries. Doesn't wrap a struct since it doesn't need to contain any data</li>
+<li><input disabled="" type="checkbox" checked=""/>
+A <code>Standard</code> variant that enables the standard retry behavior. Wraps a <code>StandardRetryConfig</code> struct.</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Create <code>aws_config::meta::retry_config::RetryConfigProviderChain</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Create <code>aws_config::meta::retry_config::ProvideRetryConfig</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Create <code>EnvironmentVariableMaxAttemptsProvider</code> struct
+<ul>
+<li>Setting AWS_MAX_ATTEMPTS=0 and trying to load from env will panic with a helpful, descriptive error message</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add <code>retry_config</code> method to <code>aws_config::ConfigLoader</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Update <code>AwsFluentClientDecorator</code> to correctly configure the max retry attempts of its inner <code>aws_hyper::Client</code> based on the passed-in <code>Config</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add tests
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Test that setting retry_config to 1 disables retries</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Test that setting retry_config to <code>n</code> limits retries to <code>n</code> where <code>n</code> is a non-zero integer</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Test that correct precedence is respected when overriding retry behavior in a service-specific config</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Test that correct precedence is respected when overriding retry behavior in a shared config</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Test that creating a config from env if AWS_MAX_ATTEMPTS=0 will panic with a helpful, descriptive error message</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Test that setting invalid <code>max_attempts=0</code> with a <code>StandardRetryConfig</code> will panic with a helpful, descriptive error message</li>
+</ul>
+</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0003_presigning_api.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../rfcs/rfc0005_service_generation.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0003_presigning_api.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../rfcs/rfc0005_service_generation.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </body>
+</html>
