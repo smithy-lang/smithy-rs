@@ -82,8 +82,29 @@ class ErrorGenerator(
     private fun renderError(isServer: Boolean) {
         val symbol = symbolProvider.toSymbol(shape)
         val messageShape = shape.errorMessageMember()
-        val message = messageShape?.let { "self.${symbolProvider.toMemberName(it)}.as_deref()" } ?: "None"
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
+        val returnType = if (symbolProvider.config().handleRequired) {
+            messageShape?.let {
+                if (messageShape.isRequired()) {
+                    "&str"
+                } else {
+                    "Option<&str>"
+                }
+            } ?: "Option<&str>"
+        } else {
+            "Option<&str>"
+        }
+        val message = if (symbolProvider.config().handleRequired) {
+            messageShape?.let {
+                if (messageShape.isOptional()) {
+                    "self.${symbolProvider.toMemberName(it)}.as_deref()"
+                } else {
+                    "self.${symbolProvider.toMemberName(it)}.as_ref()"
+                }
+            } ?: "None"
+        } else {
+            messageShape?.let { "self.${symbolProvider.toMemberName(it)}.as_deref()" } ?: "None"
+        }
         writer.rustBlock("impl ${symbol.name}") {
             val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)
             if (retryKindWriteable != null) {
@@ -95,7 +116,7 @@ class ErrorGenerator(
             rust(
                 """
                 /// Returns the error message.
-                pub fn message(&self) -> Option<&str> { $message }
+                pub fn message(&self) -> $returnType { $message }
                 """
             )
             if (isServer) {

@@ -965,8 +965,8 @@ private class ServerHttpProtocolImplGenerator(
     }
 
     private fun generateParsePercentEncodedStrAsStringFn(binding: HttpBindingDescriptor): RuntimeType {
-        val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
+        val output = symbolProvider.toSymbol(binding.member).makeOptional()
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyRejection}>",
@@ -978,8 +978,8 @@ private class ServerHttpProtocolImplGenerator(
                 //     * `String` in case it doesn't.
                 rustTemplate(
                     """
-                    let value = <_>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
-                    Ok(Some(value))
+                    let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
+                    Ok(Some(value.to_string()))
                     """.trimIndent(),
                     *codegenScope,
                 )
@@ -1008,7 +1008,7 @@ private class ServerHttpProtocolImplGenerator(
                     """
                     let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
                     let value = #{DateTime}::from_str(&value, #{format})?;
-                    Ok(Some(value))
+                    Ok(value)
                     """.trimIndent(),
                     *codegenScope,
                     "format" to timestampFormatType,
@@ -1019,8 +1019,8 @@ private class ServerHttpProtocolImplGenerator(
 
     // TODO These functions can be replaced with the ones in https://docs.rs/aws-smithy-types/latest/aws_smithy_types/primitive/trait.Parse.html
     private fun generateParseStrAsPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
-        val output = symbolProvider.toSymbol(binding.member).makeOptional()
         val fnName = generateParseStrFnName(binding)
+        val output = symbolProvider.toSymbol(binding.member).makeOptional()
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyRejection}>",

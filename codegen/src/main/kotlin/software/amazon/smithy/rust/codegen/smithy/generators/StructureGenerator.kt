@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
@@ -140,10 +141,15 @@ class StructureGenerator(
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
                 renderMemberDoc(member, memberSymbol)
-                val memberType = memberSymbol.rustType()
+                val memberType = if (symbolProvider.config().handleRequired && member.isRequired()) {
+                    memberSymbol.rustType()
+                } else {
+                    memberSymbol.makeOptional().rustType()
+                }
                 val returnType = when {
                     memberType.isCopy() -> memberType
                     memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
+                    memberType.isDeref() -> memberType.asDeref().asRef()
                     else -> memberType.asRef()
                 }
                 rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
@@ -151,7 +157,7 @@ class StructureGenerator(
                         memberType.isCopy() -> rust("self.$memberName")
                         memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
                         memberType is RustType.Option -> rust("self.$memberName.as_ref()")
-                        memberType.isDeref() -> rust("self.$memberName.deref()")
+                        memberType.isDeref() -> rust("use std::ops::Deref; self.$memberName.deref()")
                         else -> rust("&self.$memberName")
                     }
                 }
@@ -170,7 +176,11 @@ class StructureGenerator(
             forEachMember(members) { member, memberName, memberSymbol ->
                 renderMemberDoc(member, memberSymbol)
                 memberSymbol.expectRustMetadata().render(this)
-                write("$memberName: #T,", symbolProvider.toSymbol(member))
+                if (symbolProvider.config().handleRequired && member.isRequired()) {
+                    write("$memberName: #T,", symbolProvider.toSymbol(member))
+                } else {
+                    write("$memberName: #T,", symbolProvider.toSymbol(member).makeOptional())
+                }
             }
         }
 

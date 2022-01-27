@@ -337,9 +337,14 @@ class JsonSerializerGenerator(
         val writer = context.writerExpression
         val value = context.valueExpression
         when (target) {
-            is StringShape -> when (target.hasTrait<EnumTrait>()) {
-                true -> rust("$writer.string(${value.name}.as_str());")
-                false -> rust("$writer.string(${value.name});")
+            is StringShape -> {
+                when (target.hasTrait<EnumTrait>()) {
+                    true -> rust("$writer.string(${value.name}.as_str());")
+                    false -> {
+                        val suffix = if (symbolProvider.config().handleRequired) { ".as_str()" } else { "" }
+                        rust("$writer.string(${value.name}$suffix);")
+                    }
+                }
             }
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
             is NumberShape -> {

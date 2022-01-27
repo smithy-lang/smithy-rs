@@ -63,7 +63,8 @@ data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
     val handleOptionality: Boolean = true,
-    val handleRustBoxing: Boolean = true
+    val handleRustBoxing: Boolean = true,
+    val handleRequired: Boolean = false
 )
 
 val DefaultConfig =
@@ -71,6 +72,7 @@ val DefaultConfig =
         runtimeConfig = RuntimeConfig(),
         handleOptionality = true,
         handleRustBoxing = true,
+        handleRequired = false,
         codegenConfig = CodegenConfig()
     )
 
@@ -170,9 +172,13 @@ class SymbolVisitor(
     }
 
     private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol {
-        return if (nullableIndex.isNullable(member)) {
-            symbol.makeOptional()
-        } else symbol
+        if (config.handleRequired && member.isRequired()) {
+            return symbol
+        } else {
+            return if (nullableIndex.isNullable(member)) {
+                symbol.makeOptional()
+            } else symbol
+        }
     }
 
     private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
