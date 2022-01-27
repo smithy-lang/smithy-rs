@@ -1,9 +1,10 @@
-# Smithy Rust ![status](https://github.com/awslabs/smithy-rs/workflows/CI/badge.svg)
-Smithy code generators for Rust
+Smithy Rust ![status](https://github.com/awslabs/smithy-rs/workflows/CI/badge.svg)
+==================================================================================
 
-The nightly SDK build can be found under `Actions -> CI (take latest run) -> Artifacts`
+Smithy code generators for Rust that generate clients, servers, and the entire AWS SDK.
+The latest unreleased SDK build can be found in [aws-sdk-rust/next](https://github.com/awslabs/aws-sdk-rust/tree/next).
 
-[Design documentation (WIP)](https://awslabs.github.io/smithy-rs/)
+[Design documentation](https://awslabs.github.io/smithy-rs/design)
 
 **All internal and external interfaces are considered unstable and subject to change without notice.**
 
@@ -19,6 +20,7 @@ The generated SDK will be placed in `aws/sdk/build/aws-sdk`.
 ./gradlew :aws:sdk:test # Run all the tests
 ./gradlew :aws:sdk:cargoCheck # only validate that it compiles
 ```
+
 ## Run tests
 ```./test.sh```
 
