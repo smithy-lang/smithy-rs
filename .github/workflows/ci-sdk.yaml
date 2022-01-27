@@ -268,6 +268,8 @@ jobs:
         path: artifact
     - name: untar
       run: tar -xvf ./artifact/sdk.tar
+    - name: Remove examples from workspace
+      run: sed -i '/"examples\//d' Cargo.toml
     - name: Check the SDK
       run: cargo check
       working-directory: ./sdk
