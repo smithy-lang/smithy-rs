@@ -1,7 +1,7 @@
 RFC: Supporting multiple HTTP versions for SDKs that use Event Stream
 =====================================================================
 
-> Status: Merged.
+> Status: Accepted
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
