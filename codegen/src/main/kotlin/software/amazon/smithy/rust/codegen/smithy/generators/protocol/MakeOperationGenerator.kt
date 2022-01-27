@@ -137,15 +137,13 @@ open class MakeOperationGenerator(
     }
 
     open fun generateRequestBuilderBaseFn(writer: RustWriter, operationShape: OperationShape) {
-        val inputShape = operationShape.inputShape(codegenContext.model)
         val httpBindingGenerator = RequestBindingGenerator(
             codegenContext,
-            protocol.defaultTimestampFormat,
-            httpBindingResolver,
-            operationShape,
-            inputShape,
+            protocol,
+            operationShape
         )
         val contentType = httpBindingResolver.requestContentType(operationShape)
+        val inputShape = operationShape.inputShape(codegenContext.model)
         httpBindingGenerator.renderUpdateHttpBuilder(writer)
         writer.inRequestBuilderBaseFn(inputShape) {
             Attribute.AllowUnusedMut.render(this)
@@ -154,7 +152,7 @@ open class MakeOperationGenerator(
             for (header in additionalHeaders) {
                 writer.rustTemplate(
                     """
-                    builder = #{header_util}::set_header_if_absent(
+                    builder = #{header_util}::set_request_header_if_absent(
                         builder,
                         #{http}::header::HeaderName::from_static(${header.first.dq()}),
                         ${header.second.dq()}

@@ -147,7 +147,7 @@ open class ProtocolGenerator(
                         """
                         let mut builder = builder;
                         if let Some(content_length) = body.content_length() {
-                            builder = #{header_util}::set_header_if_absent(
+                            builder = #{header_util}::set_request_header_if_absent(
                                         builder,
                                         #{http}::header::CONTENT_LENGTH,
                                         content_length
@@ -194,35 +194,13 @@ open class ProtocolGenerator(
     }
 
     /**
-     * Render all code required for serializing responses and deserializing requests for an operation.
-     *
-     * This primarily relies on the [traitGenerator] to generate implementations of the `ParseHttpRequest`,
-     * `SerializeHttpResponse` and `SerializeHttpError` traits for the operations.
+     * The server implementation uses this method to generate implementations of the `FromRequest` and `IntoResponse`
+     * traits for operation input and output shapes, respectively.
      */
     fun serverRenderOperation(
         operationWriter: RustWriter,
         operationShape: OperationShape,
-        customizations: List<OperationCustomization>
     ) {
-        val operationName = symbolProvider.toSymbol(operationShape).name
-        operationWriter.rust(
-            """
-            /// Operation shape for `$operationName`.
-            """
-        )
-        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
-        operationWriter.rustBlock("pub struct $operationName") {
-            write("_private: ()")
-        }
-        operationWriter.implBlock(operationShape, symbolProvider) {
-            rust("/// Creates a new `$operationName` operation.")
-            rustBlock("pub fn new() -> Self") {
-                rust("Self { _private: () }")
-            }
-
-            writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
-        }
-        // Render all operation traits
         traitGenerator.generateTraitImpls(operationWriter, operationShape)
     }
 
