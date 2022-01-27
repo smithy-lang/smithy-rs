@@ -14,6 +14,8 @@ jobs:
       with:
         persist-credentials: false
     - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
     - name: Generate docs
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -28,7 +30,7 @@ jobs:
         mdbook build --dest-dir ../../output
         popd &>/dev/null
 
-        git checkout origin/github-pages
+        git checkout origin/github-pages -b github-pages
         rm -rf design
         mv ../output design
         git add design
