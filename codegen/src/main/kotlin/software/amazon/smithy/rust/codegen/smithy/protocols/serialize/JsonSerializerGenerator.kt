@@ -20,6 +20,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -163,6 +164,30 @@ class JsonSerializerGenerator(
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
+
+                // All Smithy specs for AWS protocols that serialize to JSON
+                // contain:
+                //
+                // > Error responses in <protocol> are serialized
+                // > identically to standard responses with one additional
+                // > component to distinguish which error is contained. The
+                // > component MUST be one of the following: an additional header
+                // > with the name `X-Amzn-Errortype`, a body field with the name
+                // > code, or a body field named `__type`.
+                // > The value of this component SHOULD contain the error's
+                // > shape name.
+                //
+                // *Some* Smithy specs for AWS protocols that serialize to JSON
+                // additionally contain:
+                //
+                // > New server-side protocol implementations SHOULD use a body
+                // > field named `__type`.
+                //
+                // Since our server implementation is recent, we choose to
+                // implement this latter behavior.
+                if (structureShape.hasTrait<ErrorTrait>()) {
+                    rust("""object.key("__type").string("${structureShape.id.name}");""")
+                }
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)
             }
