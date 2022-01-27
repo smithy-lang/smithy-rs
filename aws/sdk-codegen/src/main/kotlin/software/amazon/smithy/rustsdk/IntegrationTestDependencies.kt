@@ -55,7 +55,7 @@ class IntegrationTestDependencies(
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
-        LibRsSection.Body -> writable {
+        is LibRsSection.Body -> writable {
             if (hasTests) {
                 val smithyClient = CargoDependency.SmithyClient(runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
