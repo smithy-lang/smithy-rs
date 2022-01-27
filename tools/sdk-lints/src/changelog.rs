@@ -216,7 +216,6 @@ pub(crate) fn update_changelogs(
         update.push('\n');
         update.push_str(&render(entries, version, date));
         let current = std::fs::read_to_string(path)?.replace(USE_UPDATE_CHANGELOGS, "");
-        update.push('\n');
         update.push_str(&current);
         std::fs::write(path, update)?;
     }
