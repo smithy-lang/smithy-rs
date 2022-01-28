@@ -257,9 +257,7 @@ class BuilderGenerator(
                 val default = memberSymbol.defaultValue()
                 withBlock("$memberName: self.$memberName", ",") {
                     // Write the modifier
-                    rust("// Write the modifier. required: ${member.isRequired()}, optional: ${memberSymbol.isOptional()}, default: $default")
                     when {
-                        !member.isRequired() -> {}
                         !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
                         !memberSymbol.isOptional() -> withBlock(
                             ".ok_or(",

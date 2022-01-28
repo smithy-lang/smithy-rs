@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
-import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
@@ -141,11 +140,7 @@ class StructureGenerator(
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
                 renderMemberDoc(member, memberSymbol)
-                val memberType = if (symbolProvider.config().handleRequired && member.isRequired()) {
-                    memberSymbol.rustType()
-                } else {
-                    memberSymbol.makeOptional().rustType()
-                }
+                val memberType = memberSymbol.rustType()
                 val returnType = when {
                     memberType.isCopy() -> memberType
                     memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
@@ -176,11 +171,7 @@ class StructureGenerator(
             forEachMember(members) { member, memberName, memberSymbol ->
                 renderMemberDoc(member, memberSymbol)
                 memberSymbol.expectRustMetadata().render(this)
-                if (symbolProvider.config().handleRequired && member.isRequired()) {
-                    write("$memberName: #T,", symbolProvider.toSymbol(member))
-                } else {
-                    write("$memberName: #T,", symbolProvider.toSymbol(member).makeOptional())
-                }
+                write("$memberName: #T,", symbolProvider.toSymbol(member))
             }
         }
 

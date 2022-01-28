@@ -68,6 +68,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
                 codegenConfig = settings.codegenConfig,
+                handleOptionality = false,
                 handleRequired = true
             )
         val baseModel = baselineTransform(context.model)

@@ -172,13 +172,17 @@ class SymbolVisitor(
     }
 
     private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol {
-        if (config.handleRequired && member.isRequired()) {
-            return symbol
-        } else {
-            return if (nullableIndex.isNullable(member)) {
-                symbol.makeOptional()
-            } else symbol
-        }
+        return if (nullableIndex.isNullable(member)) {
+            symbol.makeOptional()
+        } else symbol
+    }
+
+    private fun handleRequired(symbol: Symbol, member: MemberShape): Symbol {
+        return if (member.isRequired()) {
+            symbol
+        } else if (nullableIndex.isNullable(member)) {
+            symbol.makeOptional()
+        } else symbol
     }
 
     private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
@@ -292,6 +296,8 @@ class SymbolVisitor(
             handleRustBoxing(it, shape)
         }.letIf(config.handleOptionality) {
             handleOptionality(it, shape)
+        }.letIf(config.handleRequired) {
+            handleRequired(it, shape)
         }
     }
 
