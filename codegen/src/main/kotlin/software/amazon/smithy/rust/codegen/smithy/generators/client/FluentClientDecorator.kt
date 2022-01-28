@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.client
 
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -45,7 +45,13 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.smithy.generators.PaginatorGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.isPaginated
+import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull

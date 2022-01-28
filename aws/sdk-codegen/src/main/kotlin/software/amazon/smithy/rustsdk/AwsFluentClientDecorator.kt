@@ -23,12 +23,12 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.ClientGenerics
-import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.smithy.generators.client.ClientGenerics
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
