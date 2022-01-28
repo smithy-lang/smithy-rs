@@ -243,7 +243,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
 
 class FluentClientGenerator(
     private val codegenContext: CodegenContext,
-    private val generics: ClientGenerics = ClientGenerics(
+    private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
         retryDefault = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType().member("retry::Standard"),
@@ -282,7 +282,7 @@ class FluentClientGenerator(
             """
             ##[derive(Debug)]
             pub(crate) struct Handle#{generics_decl:W} {
-                pub(crate) client: #{client}::Client${generics.inst},
+                pub(crate) client: #{client}::Client#{smithy_inst:W},
                 pub(crate) conf: crate::Config,
             }
 
@@ -301,15 +301,15 @@ class FluentClientGenerator(
             ##[doc(inline)]
             pub use #{client}::Builder;
 
-            impl${generics.inst} From<#{client}::Client${generics.inst}> for Client${generics.inst} {
-                fn from(client: #{client}::Client${generics.inst}) -> Self {
+            impl${generics.inst} From<#{client}::Client#{smithy_inst:W}> for Client${generics.inst} {
+                fn from(client: #{client}::Client#{smithy_inst:W}) -> Self {
                     Self::with_config(client, crate::Config::builder().build())
                 }
             }
 
             impl${generics.inst} Client${generics.inst} {
                 /// Creates a client with the given service configuration.
-                pub fn with_config(client: #{client}::Client${generics.inst}, conf: crate::Config) -> Self {
+                pub fn with_config(client: #{client}::Client#{smithy_inst:W}, conf: crate::Config) -> Self {
                     Self {
                         handle: std::sync::Arc::new(Handle {
                             client,
@@ -325,6 +325,7 @@ class FluentClientGenerator(
             }
             """,
             "generics_decl" to generics.decl,
+            "smithy_inst" to generics.smithyInst,
             "client" to clientDep.asType(),
             "client_docs" to writable
             {
@@ -338,7 +339,7 @@ class FluentClientGenerator(
             },
         )
         writer.rustBlockTemplate(
-            "impl${generics.inst} Client${generics.inst} where #{bounds:W}",
+            "impl${generics.inst} Client${generics.inst} #{bounds:W}",
             "client" to clientDep.asType(),
             "bounds" to generics.bounds
         ) {
@@ -437,10 +438,13 @@ class FluentClientGenerator(
                 )
 
                 rustBlockTemplate(
-                    "impl${generics.inst} ${operationSymbol.name}${generics.inst} where #{bounds:W}",
+                    "impl${generics.inst} ${operationSymbol.name}${generics.inst} #{bounds:W}",
                     "client" to clientDep.asType(),
                     "bounds" to generics.bounds
                 ) {
+                    val inputType = symbolProvider.toSymbol(operation.inputShape(model))
+                    val outputType = symbolProvider.toSymbol(operation.outputShape(model))
+                    val errorType = operation.errorSymbol(symbolProvider)
                     rustTemplate(
                         """
                         /// Creates a new `${operationSymbol.name}`.
@@ -457,12 +461,7 @@ class FluentClientGenerator(
                         /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
                         /// set when configuring the client.
                         pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
-                        where
-                            R::Policy: #{client}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias,
-                            #{ok},
-                            #{operation_err},
-                            #{input}OperationRetryAlias>,
-                        {
+                        where #{send_bounds:W} {
                             let op = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?
                                 .make_operation(&self.handle.conf)
                                 .await
@@ -470,12 +469,11 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
-                        "input" to symbolProvider.toSymbol(operation.inputShape(model)),
-                        "ok" to symbolProvider.toSymbol(operation.outputShape(model)),
-                        "operation_err" to operation.errorSymbol(symbolProvider),
+                        "ok" to outputType,
+                        "operation_err" to errorType,
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType()
                             .copy(name = "result::SdkError"),
-                        "client" to clientDep.asType(),
+                        "send_bounds" to generics.sendBounds(inputType, outputType, errorType)
                     )
                     PaginatorGenerator.paginatorType(codegenContext, generics, operation)?.also { paginatorType ->
                         rustTemplate(
