@@ -1,0 +1,370 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0007: Split release process - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> Http Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">6.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">6.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">6.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">6.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">6.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">6.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">6.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html" class="active"><strong aria-hidden="true">6.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">6.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">6.9.</strong> RFC-0009: Example Consolidation</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-split-release-process"><a class="header" href="#rfc-split-release-process">RFC: Split Release Process</a></h1>
+<blockquote>
+<p>Status: Implemented in <a href="https://github.com/awslabs/smithy-rs/pull/986">smithy-rs#986</a> and <a href="https://github.com/awslabs/aws-sdk-rust/pull/351">aws-sdk-rust#351</a></p>
+</blockquote>
+<p>At the time of writing, the <code>aws-sdk-rust</code> repository is used exclusively
+for the entire release process of both the Rust runtime crates from <code>smithy-rs</code> as
+well as the AWS runtime crates and the AWS SDK. This worked well when <code>smithy-rs</code> was
+only used for the AWS SDK, but now that it's also used for server codegen, there
+are issues around publishing the server-specific runtime crates since they don't
+belong to the SDK.</p>
+<p>This RFC proposes a new split-release process so that the entire <code>smithy-rs</code> runtime
+can be published separately before the AWS SDK is published.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<ul>
+<li><strong>Smithy Runtime Crate</strong>: A crate that gets published to crates.io and supports
+the code generated by <code>smithy-rs</code>. These crates don't provide any SDK-only functionality.
+These crates can support client and/or server code, and clients or servers may use
+only a subset of them.</li>
+<li><strong>AWS Runtime Crate</strong>: A crate of SDK-specific code that supports the code generated
+by the <code>aws/codegen</code> module in <code>smithy-rs</code>. These also get published to crates.io.</li>
+<li><strong>Publish-ready Bundle</strong>: A build artifact that is ready to publish to crates.io without
+additional steps (such as running the publisher tool's <code>fix-manifests</code> subcommand). Publishing
+one group of crates before another is not considered an additional step for this definition.</li>
+<li><strong>Releaser</strong>: A developer, automated process, or combination of the two that performs the actual release.</li>
+</ul>
+<h2 id="requirements"><a class="header" href="#requirements">Requirements</a></h2>
+<p>At a high level, the requirements are: publish from both <code>smithy-rs</code> and <code>aws-sdk-rust</code>
+while preserving our current level of confidence in the quality of the release. This
+can be enumerated as:</p>
+<ol>
+<li>All Smithy runtime crates must be published together from <code>smithy-rs</code></li>
+<li>AWS runtime crates and the SDK must be published together from <code>aws-sdk-rust</code></li>
+<li>CI on <code>smithy-rs</code> must give confidence that the Smithy runtime crates,
+AWS runtime crates, and SDK are all at the right quality bar for publish.</li>
+<li>CI on the <code>aws-sdk-rust</code> repository must give confidence that the AWS SDK and its
+runtime crates are at the right quality bar for publish. To do this successfully,
+it must run against the exact versions of the Smithy runtime crates the code was
+generated against <em>both before AND after they have been published to crates.io</em>.</li>
+</ol>
+<h2 id="background-how-publishing-worked-before"><a class="header" href="#background-how-publishing-worked-before">Background: How Publishing Worked Before</a></h2>
+<p>The publish process to crates.io relied on copying all the Smithy runtime crates
+into the final <code>aws-sdk-rust</code> repository. Overall, the process looked as follows:</p>
+<ol>
+<li><code>smithy-rs</code> generates a complete <code>aws-sdk-rust</code> source bundle at CI time</li>
+<li>The releaser copies the generated bundle over to <code>aws-sdk-rust</code></li>
+<li>The releaser runs the <code>publisher fix-manifests</code> subcommand to correct the
+<code>Cargo.toml</code> files generated by <code>smithy-rs</code></li>
+<li>The <code>aws-sdk-rust</code> CI performs one last pass on the code to verify it's sound</li>
+<li>The releaser runs the <code>publisher publish</code> subcommand to push all the crates up to crates.io</li>
+</ol>
+<h2 id="proposed-solution"><a class="header" href="#proposed-solution">Proposed Solution</a></h2>
+<p>CI in <code>smithy-rs</code> will be revised to generate two separate build artifacts where it generates
+just an SDK artifact previously. Now, it will have two build targets that get executed from CI
+to generate these artifacts:</p>
+<ul>
+<li><code>rust-runtime:assemble</code> - Generates a publish-ready bundle of Smithy runtime crates.</li>
+<li><code>aws:sdk:assemble</code> - Generates a publish-ready bundle of AWS runtime crates, SDK crates,
+and just the Smithy runtime crates that are used by the SDK.</li>
+</ul>
+<p>The <code>aws-sdk-rust</code> repository will have a new <code>next</code> branch that has its own set of CI workflows
+and branch protection rules. The releaser will take the <code>aws:sdk:assemble</code> artifact and apply it
+directly to this <code>next</code> branch as would have previously been done against the <code>main</code> branch.
+The <code>main</code> branch will continue to have the same CI as <code>next</code>.</p>
+<p>When it's time to cut a release, the releaser will do the following:</p>
+<ol>
+<li>Tag <code>smithy-rs</code> with the desired version number</li>
+<li>Wait for CI to build artifacts for the tagged release</li>
+<li>Pull-request the SDK artifacts over to <code>aws-sdk-rust/next</code> (this will be automated in the future)</li>
+<li>Pull-request merge <code>aws-sdk-rust/next</code> into <code>aws-sdk-rust/main</code></li>
+<li>Wait for successful CI in <code>main</code></li>
+<li>Tag release for <code>main</code></li>
+<li>Publish SDK with publisher tool</li>
+</ol>
+<p>The server team can then download the <code>rust-runtime:assemble</code> build artifact for the tagged release
+in <code>smithy-rs</code>, and publish the <code>aws-smithy-http-server</code> crate from there.</p>
+<h3 id="avoiding-mistakes-by-disallowing-creation-of-publish-ready-bundles-outside-of-ci"><a class="header" href="#avoiding-mistakes-by-disallowing-creation-of-publish-ready-bundles-outside-of-ci">Avoiding mistakes by disallowing creation of publish-ready bundles outside of CI</a></h3>
+<p>It should be difficult to accidentally publish a locally built set of crates. To add friction to this,
+the <code>smithy-rs</code> build process will look for the existence of the <code>GITHUB_ACTIONS=true</code> environment variable.
+If this environment variable is not set, then it will pass a flag to the Rust codegen plugin that tells it to
+emit a <code>publish = false</code> under <code>[package]</code> in the generated <code>Cargo.toml</code>.</p>
+<p>This could be easily circumvented, but the goal is to reduce the chances of accidentally publishing
+crates rather than making it impossible.</p>
+<h2 id="alternatives-considered"><a class="header" href="#alternatives-considered">Alternatives Considered</a></h2>
+<h3 id="publish-smithy-runtime-crates-from-smithy-rs-build-artifacts"><a class="header" href="#publish-smithy-runtime-crates-from-smithy-rs-build-artifacts">Publish Smithy runtime crates from <code>smithy-rs</code> build artifacts</a></h3>
+<p>This approach is similar to the proposed solution, except that the SDK would not publish
+the Smithy runtime crates. The <code>aws-sdk-rust/main</code> branch would have a small tweak to its CI
+so that the SDK is tested against the Smithy runtime crates that are published to crates.io
+This CI process would look as follows:</p>
+<ol>
+<li>Shallow clone <code>aws-sdk-rust</code> with the revision being tested</li>
+<li>Run a script to remove the <code>path</code> argument for the Smithy runtime crate dependencies for every crate
+in <code>aws-sdk-rust</code>. For example,</li>
+</ol>
+<pre><code class="language-toml">aws-smithy-types = { version = &quot;0.33.0&quot;, path = &quot;../aws-smithy-types&quot; }
+</code></pre>
+<p>Would become:</p>
+<pre><code class="language-toml">aws-smithy-types = { version = &quot;0.33.0&quot; }
+</code></pre>
+<ol start="3">
+<li>Run the tests as usual</li>
+</ol>
+<p>When it's time to cut a release, the releaser will do the following:</p>
+<ol>
+<li>Tag <code>smithy-rs</code> with the desired version number</li>
+<li>Wait for CI to build artifacts for the tagged release</li>
+<li>Pull-request the SDK artifacts over to <code>aws-sdk-rust/next</code></li>
+<li>Wait for successful CI in <code>aws-sdk-rust/next</code></li>
+<li>Download the Smithy runtime crates build artifact and publish it to crates.io</li>
+<li>Pull-request merge <code>aws-sdk-rust/next</code> into <code>aws-sdk-rust/main</code></li>
+<li>Wait for successful CI in <code>main</code> (this time actually running against the crates.io Smithy runtime crates)</li>
+<li>Tag release for <code>main</code></li>
+<li>Publish SDK with publisher tool</li>
+</ol>
+<h3 id="keep-smithy-runtime-crates-in-smithy-rs"><a class="header" href="#keep-smithy-runtime-crates-in-smithy-rs">Keep Smithy runtime crates in <code>smithy-rs</code></a></h3>
+<p>This approach is similar to the previous alternative, except that the <code>aws-sdk-rust</code> repository
+won't have a snapshot of the Smithy runtime crates, and an additional step needs to be performed
+during CI for the <code>next</code> branch so that it looks as follows:</p>
+<ol>
+<li>Make a shallow clone of <code>aws-sdk-rust/next</code></li>
+<li>Retrieve the <code>smithy-rs</code> commit hash that was used to generate the SDK from a file
+that was generated alongside the rest of the build artifacts from <code>smithy-rs</code> and
+copied into <code>aws-sdk-rust</code>.</li>
+<li>Make a shallow clone of <code>smithy-rs</code> at the correct commit hash</li>
+<li>Use a script to add a <code>[patch]</code> section to all the AWS SDK crates to point to the
+Smithy runtime crates from the local clone of <code>smithy-rs</code>.
+For example:</li>
+</ol>
+<pre><code class="language-toml"># The dependencies section is left alone, but is here for context
+[dependencies]
+# Some version of aws-smithy-types that isn't on crates.io yet, referred to as `&lt;unreleased&gt;` below
+aws-smithy-types = &quot;&lt;unreleased&gt;&quot;
+
+# This patch section gets added by the script
+[patch.crates-io]
+aws-smithy-types = { version = &quot;&lt;unreleased&gt;&quot;, path = &quot;path/to/local/smithy-rs/rust-runtime/aws-smithy-types&quot;}
+</code></pre>
+<ol start="5">
+<li>Run CI as normal.</li>
+</ol>
+<p><strong>Note:</strong> <code>smithy-rs</code> would need to do the same patching in CI as <code>aws-sdk-rust/next</code> since the generated
+SDK would not have path dependencies for the Smithy runtime crates (since they are a publish-ready bundle
+intended for landing in <code>aws-sdk-rust</code>). The script that does this patching could live in <code>smithy-rs</code> and be
+reused by <code>aws-sdk-rust</code>.</p>
+<p>The disadvantage of this approach is that a customer having an issue with the current release wouldn't be able
+to get a fix sooner by patching their own project's crate manifest to use the <code>aws-sdk-rust/next</code> branch before
+a release is cut since their project wouldn't be able to find the unreleased Smithy runtime crates.</p>
+<h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes Checklist</a></h2>
+<ul>
+<li>In <code>smithy-rs</code>:
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Move publisher tool from <code>aws-sdk-rust</code> into <code>smithy-rs</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Modify <code>aws:sdk:assemble</code> target to run the publisher <code>fix-manifests</code> subcommand</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add <code>rust-runtime:assemble</code> target that generates publish-ready Smithy runtime crates</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add CI step to create Smithy runtime bundle artifact</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add <code>GITHUB_ACTIONS=true</code> env var check for setting the <code>publish</code> flag in generated AND runtime manifests</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Revise publisher tool to publish from an arbitrary directory</li>
+</ul>
+</li>
+<li>In <code>aws-sdk-rust</code>:
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement CI for the <code>aws-sdk-rust/next</code> branch</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Remove the publisher tool</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Update release process documentation</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0006_service_specific_middleware.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../rfcs/rfc0008_paginators.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0006_service_specific_middleware.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../rfcs/rfc0008_paginators.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </body>
+</html>
