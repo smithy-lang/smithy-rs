@@ -241,10 +241,6 @@ class XmlBindingTraitParserGenerator(
         }
     }
 
-    override fun documentParser(operationShape: OperationShape): RuntimeType {
-        PANIC("Document shapes are not supported by rest XML")
-    }
-
     override fun serverInputParser(operationShape: OperationShape): RuntimeType? {
         val inputShape = operationShape.inputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
