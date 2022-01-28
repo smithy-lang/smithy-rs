@@ -110,42 +110,6 @@ sealed class FluentClientSection(name: String) : Section(name) {
 
 abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSection>()
 
-data class ClientGenerics(
-    val connectorDefault: RuntimeType?,
-    val middlewareDefault: RuntimeType?,
-    val retryDefault: RuntimeType?,
-    val client: RuntimeType
-) {
-    /** Declaration with defaults set */
-    val decl = writable {
-        rustTemplate(
-            "<C #{c:W}, M#{m:W}, R#{r:W}>",
-            "c" to defaultType(connectorDefault),
-            "m" to defaultType(middlewareDefault),
-            "r" to defaultType(retryDefault)
-        )
-    }
-
-    /** Instantiation */
-    val inst: String = "<C, M, R>"
-
-    /** Trait bounds */
-    val bounds = writable {
-        rustTemplate(
-            """
-            C: #{client}::bounds::SmithyConnector,
-            M: #{client}::bounds::SmithyMiddleware<C>,
-            R: #{client}::retry::NewRequestPolicy,
-            """,
-            "client" to client
-        )
-    }
-
-    private fun defaultType(default: RuntimeType?) = writable {
-        default?.also { rust("= #T", default) }
-    }
-}
-
 class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
     private val moduleUseName = codegenContext.moduleUseName()
     private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
