@@ -83,28 +83,13 @@ class ErrorGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val messageShape = shape.errorMessageMember()
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
-        val returnType = if (symbolProvider.config().handleRequired) {
-            messageShape?.let {
-                if (messageShape.isRequired()) {
-                    "&str"
-                } else {
-                    "Option<&str>"
-                }
-            } ?: "Option<&str>"
-        } else {
-            "Option<&str>"
-        }
-        val message = if (symbolProvider.config().handleRequired) {
-            messageShape?.let {
-                if (messageShape.isOptional()) {
-                    "self.${symbolProvider.toMemberName(it)}.as_deref()"
-                } else {
-                    "self.${symbolProvider.toMemberName(it)}.as_ref()"
-                }
-            } ?: "None"
-        } else {
-            messageShape?.let { "self.${symbolProvider.toMemberName(it)}.as_deref()" } ?: "None"
-        }
+        val (returnType, message) = messageShape?.let {
+            if (symbolProvider.config().handleRequired && messageShape.isRequired()) {
+                "&str" to "self.${symbolProvider.toMemberName(it)}.as_ref()"
+            } else {
+                "Option<&str>" to "self.${symbolProvider.toMemberName(it)}.as_deref()"
+            }
+        } ?: "Option<&str>" to "None"
         writer.rustBlock("impl ${symbol.name}") {
             val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)
             if (retryKindWriteable != null) {

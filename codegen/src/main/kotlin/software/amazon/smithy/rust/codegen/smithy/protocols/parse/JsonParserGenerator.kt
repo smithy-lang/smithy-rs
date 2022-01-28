@@ -81,7 +81,6 @@ class JsonParserGenerator(
         "skip_to_end" to smithyJson.member("deserialize::token::skip_to_end"),
         "Token" to smithyJson.member("deserialize::Token"),
         "or_empty" to orEmptyJson(),
-        "Cow" to RuntimeType.Cow,
     )
 
     /**

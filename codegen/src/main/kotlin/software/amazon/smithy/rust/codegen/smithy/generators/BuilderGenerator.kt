@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -61,6 +62,7 @@ class BuilderGenerator(
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
+    private val nullableIndex = NullableIndex.of(model)
 
     fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
@@ -138,15 +140,10 @@ class BuilderGenerator(
     ) {
         // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
         // is the same as the resulting member type, and is always optional.
-        val inputType = if (symbolProvider.config().handleRequired && member.isRequired()) {
-            outerType
+        val (inputType, inputVal) = if (symbolProvider.config().handleRequired && member.isRequired() || !nullableIndex.isNullable(member)) {
+            outerType to "Some(input)"
         } else {
-            outerType.asOptional()
-        }
-        val inputVal = if (symbolProvider.config().handleRequired && member.isRequired()) {
-            "Some(input)"
-        } else {
-            "input"
+            outerType.asOptional() to "input"
         }
         writer.documentShape(member, model)
         writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {

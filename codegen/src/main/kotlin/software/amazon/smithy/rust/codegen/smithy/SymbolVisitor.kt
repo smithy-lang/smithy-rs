@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -291,6 +292,9 @@ class SymbolVisitor(
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
         val targetSymbol = this.toSymbol(target)
+        if (config.handleOptionality && config.handleRequired) {
+            throw CodegenException("CodegenVisitor handleOptionality and handleRequired options are conflicting")
+        }
         // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
