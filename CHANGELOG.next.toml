@@ -78,3 +78,12 @@ message = "MSRV increased from `1.54` to `1.56.1` per our 2-behind MSRV policy."
 references = ["smithy-rs#1130"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+`Client` no longer has generics, and now uses `DynConnector` and `DynMiddleware` to allow for connector/middleware customization.
+This should only break references to the client that specified generic types for it.
+"""
+references = ["smithy-rs#1132"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
