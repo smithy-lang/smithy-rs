@@ -155,7 +155,13 @@ class ServerProtocolTestGenerator(
                 }
             }
             is TestCase.ResponseTest -> {
-                it
+                val howToFixIt = BrokenResponseTests[Pair(codegenContext.serviceShape.id.toString(), it.testCase.id)]
+                if (howToFixIt == null) {
+                    it
+                } else {
+                    val fixed = howToFixIt(it.testCase)
+                    TestCase.ResponseTest(fixed, it.targetShape)
+                }
             }
         }
     }
@@ -230,9 +236,9 @@ class ServerProtocolTestGenerator(
         checkQueryParams(this, httpRequestTestCase.queryParams)
         checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
         checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
-        checkHeaders(this, httpRequestTestCase.headers)
-        checkForbidHeaders(this, httpRequestTestCase.forbidHeaders)
-        checkRequiredHeaders(this, httpRequestTestCase.requireHeaders)
+        checkHeaders(this, "&http_request.headers()", httpRequestTestCase.headers)
+        checkForbidHeaders(this, "&http_request.headers()", httpRequestTestCase.forbidHeaders)
+        checkRequiredHeaders(this, "&http_request.headers()", httpRequestTestCase.requireHeaders)
         if (protocolSupport.requestBodyDeserialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
@@ -302,8 +308,11 @@ class ServerProtocolTestGenerator(
             """,
             *codegenScope
         )
-        checkHttpExtensions(this)
-        if (!testCase.body.isEmpty()) {
+        checkHeaders(this, "&http_response.headers()", testCase.headers)
+        checkForbidHeaders(this, "&http_response.headers()", testCase.forbidHeaders)
+        checkRequiredHeaders(this, "&http_response.headers()", testCase.requireHeaders)
+        checkHttpResponseExtensions(this)
+        if (!testCase.body.isEmpty) {
             rustTemplate(
                 """
                 let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
@@ -312,14 +321,6 @@ class ServerProtocolTestGenerator(
                 *codegenScope
             )
         }
-    }
-
-    private fun checkRequiredHeaders(rustWriter: RustWriter, requireHeaders: List<String>) {
-        basicCheck(requireHeaders, rustWriter, "required_headers", "require_headers")
-    }
-
-    private fun checkForbidHeaders(rustWriter: RustWriter, forbidHeaders: List<String>) {
-        basicCheck(forbidHeaders, rustWriter, "forbidden_headers", "forbid_headers")
     }
 
     private fun checkBody(rustWriter: RustWriter, body: String, testCase: HttpRequestTestCase) {
@@ -340,24 +341,49 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    private fun checkHttpExtensions(rustWriter: RustWriter) {
+    private fun checkHttpResponseExtensions(rustWriter: RustWriter) {
         rustWriter.rustTemplate(
             """
-            let request_extensions = http_response.extensions().get::<aws_smithy_http_server::RequestExtensions>().expect("extension `RequestExtensions` not found");
-            #{AssertEq}(request_extensions.namespace, ${operationShape.id.getNamespace().dq()});
-            #{AssertEq}(request_extensions.operation_name, ${operationSymbol.name.dq()});
+            let response_extensions = http_response.extensions()
+                .get::<#{SmithyHttpServer}::ResponseExtensions>()
+                .expect("extension `ResponseExtensions` not found");
             """.trimIndent(),
             *codegenScope
         )
+        rustWriter.writeWithNoFormatting(
+            """
+            assert_eq!(response_extensions.operation(), format!("{}#{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
+            """.trimIndent()
+        )
     }
 
-    private fun checkHeaders(rustWriter: RustWriter, headers: Map<String, String>) {
+    private fun checkRequiredHeaders(rustWriter: RustWriter, actualExpression: String, requireHeaders: List<String>) {
+        basicCheck(
+            requireHeaders,
+            rustWriter,
+           "required_headers",
+           actualExpression,
+           "require_headers"
+        )
+    }
+
+    private fun checkForbidHeaders(rustWriter: RustWriter, actualExpression: String, forbidHeaders: List<String>) {
+        basicCheck(
+            forbidHeaders,
+            rustWriter,
+           "forbidden_headers",
+            actualExpression,
+           "forbid_headers"
+        )
+    }
+
+    private fun checkHeaders(rustWriter: RustWriter, actualExpression: String, headers: Map<String, String>) {
         if (headers.isEmpty()) {
             return
         }
         val variableName = "expected_headers"
         rustWriter.withBlock("let $variableName = [", "];") {
-            write(
+            writeWithNoFormatting(
                 headers.entries.joinToString(",") {
                     "(${it.key.dq()}, ${it.value.dq()})"
                 }
@@ -365,7 +391,7 @@ class ServerProtocolTestGenerator(
         }
         assertOk(rustWriter) {
             write(
-                "#T(&http_request, $variableName)",
+                "#T($actualExpression, $variableName)",
                 RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers")
             )
         }
@@ -374,33 +400,52 @@ class ServerProtocolTestGenerator(
     private fun checkRequiredQueryParams(
         rustWriter: RustWriter,
         requiredParams: List<String>
-    ) = basicCheck(requiredParams, rustWriter, "required_params", "require_query_params")
+    ) = basicCheck(
+        requiredParams,
+        rustWriter,
+       "required_params",
+       "&http_request",
+       "require_query_params"
+    )
 
     private fun checkForbidQueryParams(
         rustWriter: RustWriter,
         forbidParams: List<String>
-    ) = basicCheck(forbidParams, rustWriter, "forbid_params", "forbid_query_params")
+    ) = basicCheck(
+        forbidParams,
+        rustWriter,
+       "forbid_params",
+       "&http_request",
+       "forbid_query_params"
+    )
 
     private fun checkQueryParams(
         rustWriter: RustWriter,
         queryParams: List<String>
-    ) = basicCheck(queryParams, rustWriter, "expected_query_params", "validate_query_string")
+    ) = basicCheck(
+        queryParams,
+        rustWriter,
+        "expected_query_params",
+        "&http_request",
+        "validate_query_string"
+    )
 
     private fun basicCheck(
         params: List<String>,
         rustWriter: RustWriter,
-        variableName: String,
+        expectedVariableName: String,
+        actualExpression: String,
         checkFunction: String
     ) {
         if (params.isEmpty()) {
             return
         }
-        rustWriter.withBlock("let $variableName = ", ";") {
+        rustWriter.withBlock("let $expectedVariableName = ", ";") {
             strSlice(this, params)
         }
         assertOk(rustWriter) {
             write(
-                "#T(&http_request, $variableName)",
+                "#T($actualExpression, $expectedVariableName)",
                 RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction)
             )
         }
@@ -446,21 +491,9 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonHttpPrefixHeadersArePresent", Action.Request),
             FailingTest(RestJson, "RestJsonHttpPrefixHeadersAreNotPresent", Action.Request),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatHeaderInputs", Action.Request),
-            FailingTest(RestJson, "RestJsonInputAndOutputWithStringHeaders", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPrefixHeadersArePresent", Action.Response),
-            FailingTest(RestJson, "RestJsonNullAndEmptyHeaders", Action.Response),
-            FailingTest(RestJson, "MediaTypeHeaderOutputBase64", Action.Response),
-            FailingTest(RestJson, "RestJsonInputAndOutputWithEnumHeaders", Action.Response),
-            FailingTest(RestJson, "RestJsonSupportsNaNFloatHeaderOutputs", Action.Response),
-            FailingTest(RestJson, "RestJsonInputAndOutputWithNumericHeaders", Action.Response),
-            FailingTest(RestJson, "RestJsonInputAndOutputWithBooleanHeaders", Action.Response),
-            FailingTest(RestJson, "RestJsonInputAndOutputWithTimestampHeaders", Action.Response),
-            FailingTest(RestJson, "HttpPrefixHeadersResponse", Action.Response),
-            FailingTest(RestJson, "RestJsonSupportsNegativeInfinityFloatHeaderOutputs", Action.Response),
-            FailingTest(RestJson, "RestJsonSupportsInfinityFloatHeaderOutputs", Action.Response),
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
-            FailingTest(RestJson, "RestJsonTimestampFormatHeaders", Action.Response),
 
+            FailingTest(RestJson, "RestJsonEmptyInputAndEmptyOutput", Action.Response),
             FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithBlob", Action.Request),
             FailingTest(RestJson, "RestJsonOutputUnionWithUnitMember", Action.Response),
             FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
@@ -473,7 +506,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "DocumentOutputArray", Action.Response),
             FailingTest(RestJson, "DocumentTypeAsPayloadOutput", Action.Response),
             FailingTest(RestJson, "DocumentTypeAsPayloadOutputString", Action.Response),
-            FailingTest(RestJson, "RestJsonEmptyInputAndEmptyOutput", Action.Response),
             FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
             FailingTest(RestJson, "RestJsonInvalidGreetingError", Action.Response),
@@ -494,7 +526,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonSupportsNaNFloatLabels", Action.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCode", Action.Response),
             FailingTest(RestJson, "StringPayloadResponse", Action.Response),
-            FailingTest(RestJson, "RestJsonIgnoreQueryParamsInResponse", Action.Response),
             FailingTest(RestJson, "RestJsonJsonBlobs", Action.Response),
             FailingTest(RestJson, "RestJsonJsonEnums", Action.Response),
             FailingTest(RestJson, "RestJsonLists", Action.Response),
@@ -523,9 +554,8 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonNoInputAndOutputWithJson", Action.Response),
             FailingTest(RestJson, "RestJsonRecursiveShapes", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Request),
-            FailingTest(RestJson, "RestJsonSimpleScalarProperties", Action.Response),
-            FailingTest(RestJson, "RestJsonServersDontSerializeNullStructureValues", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Response),
+            FailingTest(RestJson, "RestJsonSimpleScalarProperties", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsInfinityFloatInputs", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNegativeInfinityFloatInputs", Action.Response),
             FailingTest(RestJson, "RestJsonStreamingTraitsWithBlob", Action.Request),
@@ -544,6 +574,7 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonTestPayloadBlob", Action.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", Action.Request),
             FailingTest(RestJson, "RestJsonTestPayloadStructure", Action.Request),
+
             FailingTest("com.amazonaws.s3#AmazonS3", "GetBucketLocationUnwrappedOutput", Action.Response),
             FailingTest("com.amazonaws.s3#AmazonS3", "S3DefaultAddressing", Action.Request),
             FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostAddressing", Action.Request),
@@ -653,6 +684,16 @@ class ServerProtocolTestGenerator(
                     }
                 }""".trimMargin()).asObjectNode().get()
              ).build()
+        // This test assumes that errors in responses are identified by an `X-Amzn-Errortype` header with the error shape name.
+        // However, Smithy specifications for AWS protocols that serialize to JSON recommend that new server implementations
+        // serialize error types using a `__type` field in the body.
+        // Our implementation follows this recommendation, so we fix the test by removing the header and instead expecting
+        // the error type to be in the body.
+        private fun fixRestJsonEmptyComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
+            testCase.toBuilder()
+                .headers(emptyMap())
+                .body("""{"__type":"ComplexError"}""")
+                .build()
 
         // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
         // This is because they have not been written from a server perspective, and as such the expected `params` field is incomplete.
@@ -663,6 +704,10 @@ class ServerProtocolTestGenerator(
             Pair(RestJson, "RestJsonSupportsInfinityFloatQueryValues") to ::fixRestJsonSupportsInfinityFloatQueryValues,
             Pair(RestJson, "RestJsonSupportsNegativeInfinityFloatQueryValues") to ::fixRestJsonSupportsNegativeInfinityFloatQueryValues,
             Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes
+        )
+
+        private val BrokenResponseTests = mapOf(
+            Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage
         )
     }
 }

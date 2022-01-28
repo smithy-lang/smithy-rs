@@ -10,8 +10,21 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
+
 [[smithy-rs]]
 message = "Refactor `Document` shape parser generation"
 references = ["smithy-rs#1123"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "MSRV increased from `1.54` to `1.56.1` per our 2-behind MSRV policy."
+references = ["smithy-rs#1130"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "MSRV increased from `1.54` to `1.56.1` per our 2-behind MSRV policy."
+references = ["smithy-rs#1130"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
