@@ -344,7 +344,7 @@ class ServerProtocolTestGenerator(
     private fun checkHttpResponseExtensions(rustWriter: RustWriter) {
         rustWriter.rustTemplate(
             """
-            let request_extensions = http_response.extensions()
+            let response_extensions = http_response.extensions()
                 .get::<#{SmithyHttpServer}::ResponseExtensions>()
                 .expect("extension `ResponseExtensions` not found");
             """.trimIndent(),
@@ -352,7 +352,7 @@ class ServerProtocolTestGenerator(
         )
         rustWriter.writeWithNoFormatting(
             """
-            assert_eq!(request_extensions.operation(), format!("{}#{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
+            assert_eq!(response_extensions.operation(), format!("{}#{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
             """.trimIndent()
         )
     }

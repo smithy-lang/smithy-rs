@@ -319,13 +319,13 @@ private class ServerHttpProtocolImplGenerator(
     }
 
     /*
-     * Set `http::Extensions` for the current request. They can be used later for things like metrics, logging, etc..
+     * Set `http::Extensions` for the current request. They can be used later for things like metrics, logging...
      */
     private fun setHttpExtensions(operationShape: OperationShape): String {
-        val namespace = operationShape.id.getNamespace()
+        val namespace = operationShape.id.namespace
         val operationName = symbolProvider.toSymbol(operationShape).name
         return """
-            response.extensions_mut().insert(#{SmithyHttpServer}::ResponseExtensions::new(${namespace.dq()}, ${operationName.dq()}));
+            response.extensions_mut().insert(#{SmithyHttpServer}::ResponseExtensions::new("$namespace", "$operationName"));
         """.trimIndent()
     }
 
