@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.TitleTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
@@ -78,6 +79,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
         return baseCustomizations + object : LibRsCustomization() {
             override fun section(section: LibRsSection) = when (section) {
                 is LibRsSection.Body -> writable {
+                    Attribute.DocInline.render(this)
                     rust("pub use client::Client;")
                 }
                 else -> emptySection
