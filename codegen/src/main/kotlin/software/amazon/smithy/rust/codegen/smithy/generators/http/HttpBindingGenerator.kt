@@ -174,10 +174,8 @@ class HttpBindingGenerator(
         operationShape: OperationShape,
         binding: HttpBindingDescriptor,
         errorT: RuntimeType,
-        // Deserialize a single structure or union member marked as a payload
-        structuredHandler: RustWriter.(String) -> Unit,
-        // Deserialize a document type marked as a payload
-        docHandler: RustWriter.(String) -> Unit,
+        // Deserialize a single structure, union or document member marked as a payload
+        payloadParser: RustWriter.(String) -> Unit,
         httpMessageType: HttpMessageType = HttpMessageType.RESPONSE
     ): RuntimeType {
         check(binding.location == HttpBinding.Location.PAYLOAD)
@@ -204,8 +202,7 @@ class HttpBindingGenerator(
                     deserializePayloadBody(
                         binding,
                         errorT,
-                        structuredHandler = structuredHandler,
-                        docShapeHandler = docHandler,
+                        structuredHandler = payloadParser,
                         httpMessageType
                     )
                 }
@@ -253,7 +250,6 @@ class HttpBindingGenerator(
         binding: HttpBindingDescriptor,
         errorSymbol: RuntimeType,
         structuredHandler: RustWriter.(String) -> Unit,
-        docShapeHandler: RustWriter.(String) -> Unit,
         httpMessageType: HttpMessageType = HttpMessageType.RESPONSE
     ) {
         val member = binding.member
@@ -262,7 +258,7 @@ class HttpBindingGenerator(
         // of an empty instance of the response type.
         withBlock("(!body.is_empty()).then(||{", "}).transpose()") {
             when (targetShape) {
-                is StructureShape, is UnionShape -> this.structuredHandler("body")
+                is StructureShape, is UnionShape, is DocumentShape -> this.structuredHandler("body")
                 is StringShape -> {
                     when (httpMessageType) {
                         HttpMessageType.RESPONSE -> {
@@ -288,7 +284,6 @@ class HttpBindingGenerator(
                     "Ok(#T::new(body))",
                     RuntimeType.Blob(runtimeConfig)
                 )
-                is DocumentShape -> this.docShapeHandler("body")
                 // `httpPayload` can be applied to set/map/list shapes.
                 // However, none of the AWS protocols support it.
                 // Smithy CLI will refuse to build the model if you apply the trait to these shapes, so this branch

@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
-
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -29,14 +28,12 @@ class ServerRequestBindingGenerator(
         operationShape: OperationShape,
         binding: HttpBindingDescriptor,
         errorT: RuntimeType,
-        structuredHandler: RustWriter.(String) -> Unit,
-        docHandler: RustWriter.(String) -> Unit
+        structuredHandler: RustWriter.(String) -> Unit
     ): RuntimeType = httpBindingGenerator.generateDeserializePayloadFn(
         operationShape,
         binding,
         errorT,
         structuredHandler,
-        docHandler,
         HttpMessageType.REQUEST
     )
 }
