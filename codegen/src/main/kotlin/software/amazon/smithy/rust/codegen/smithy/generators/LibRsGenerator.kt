@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 sealed class LibRsSection(name: String) : Section(name) {
     object Attributes : LibRsSection("Attributes")
     data class ModuleDocumentation(val subsection: String) : LibRsSection("ModuleDocumentation")
-    object Body : LibRsSection("Body")
+    data class Body(val model: Model) : LibRsSection("Body")
     companion object {
         val Examples = "Examples"
         val CrateOrganization = "CrateOrganization"
@@ -67,6 +67,6 @@ class LibRsGenerator(
             // TODO(docs): Automated feature documentation
         }
         modules.forEach { it.render(writer) }
-        customizations.forEach { it.section(LibRsSection.Body)(writer) }
+        customizations.forEach { it.section(LibRsSection.Body(model))(writer) }
     }
 }

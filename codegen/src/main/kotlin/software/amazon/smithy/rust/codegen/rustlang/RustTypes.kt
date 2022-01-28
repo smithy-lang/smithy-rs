@@ -328,6 +328,7 @@ sealed class Attribute {
          */
         val NonExhaustive = Custom("non_exhaustive")
         val AllowUnusedMut = Custom("allow(unused_mut)")
+        val DocInline = Custom("doc(inline)")
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {

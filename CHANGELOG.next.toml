@@ -18,6 +18,62 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
 
 [[aws-sdk-rust]]
+message = """
+Moved the following re-exports into a `types` module for all services:
+- `aws_sdk_<service>::AggregatedBytes` -> `aws_sdk_<service>::types::AggregatedBytes`
+- `aws_sdk_<service>::Blob` -> `aws_sdk_<service>::types::Blob`
+- `aws_sdk_<service>::ByteStream` -> `aws_sdk_<service>::types::ByteStream`
+- `aws_sdk_<service>::DateTime` -> `aws_sdk_<service>::types::DateTime`
+- `aws_sdk_<service>::SdkError` -> `aws_sdk_<service>::types::SdkError`
+"""
+references = ["smithy-rs#1085"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+`AggregatedBytes` and `ByteStream` are now only re-exported if the service has streaming operations,
+and `Blob`/`DateTime` are only re-exported if the service uses them.
+"""
+references = ["smithy-rs#1085"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The `Client` and `Config` re-exports now have their documentation inlined in the service docs"
+references = ["smithy-rs#1085"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+Moved the following re-exports into a `types` module for all services:
+- `<service>::AggregatedBytes` -> `<service>::types::AggregatedBytes`
+- `<service>::Blob` -> `<service>::types::Blob`
+- `<service>::ByteStream` -> `<service>::types::ByteStream`
+- `<service>::DateTime` -> `<service>::types::DateTime`
+- `<service>::SdkError` -> `<service>::types::SdkError`
+"""
+references = ["smithy-rs#1085"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+`AggregatedBytes` and `ByteStream` are now only re-exported if the service has streaming operations,
+and `Blob`/`DateTime` are only re-exported if the service uses them.
+"""
+references = ["smithy-rs#1085"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `Client` and `Config` re-exports now have their documentation inlined in the service docs"
+references = ["smithy-rs#1085"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = "MSRV increased from `1.54` to `1.56.1` per our 2-behind MSRV policy."
 references = ["smithy-rs#1130"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
