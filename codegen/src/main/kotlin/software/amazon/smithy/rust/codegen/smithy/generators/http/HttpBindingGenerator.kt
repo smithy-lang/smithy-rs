@@ -113,7 +113,11 @@ class HttpBindingGenerator(
      */
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpLocation.HEADER)
-        val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
+        val outputT = if (symbolProvider.config().handleRequired && binding.member.isRequired()) {
+            symbolProvider.toSymbol(binding.member)
+        } else {
+            symbolProvider.toSymbol(binding.member).makeOptional()
+        }
         val fnName = "deser_header_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
             writer.rustBlock(
@@ -123,14 +127,18 @@ class HttpBindingGenerator(
                 headerUtil
             ) {
                 rust("let headers = header_map.get_all(${binding.locationName.dq()}).iter();")
-                deserializeFromHeader(model.expectShape(binding.member.target), binding.member)
+                deserializeFromHeader(model.expectShape(binding.member.target), binding.member, binding.locationName)
             }
         }
     }
 
     fun generateDeserializePrefixHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpBinding.Location.PREFIX_HEADERS)
-        val outputT = symbolProvider.toSymbol(binding.member)
+        val outputT = if (symbolProvider.config().handleRequired && binding.member.isRequired()) {
+            symbolProvider.toSymbol(binding.member)
+        } else {
+            symbolProvider.toSymbol(binding.member).makeOptional()
+        }
         check(outputT.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputT.rustType() }
         val target = model.expectShape(binding.member.target)
         check(target is MapShape)
@@ -142,7 +150,7 @@ class HttpBindingGenerator(
                 symbolProvider.toSymbol(model.expectShape(target.value.target)),
                 headerUtil
             ) {
-                deserializeFromHeader(model.expectShape(target.value.target), binding.member)
+                deserializeFromHeader(model.expectShape(target.value.target), binding.member, binding.locationName)
             }
         }
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
@@ -299,7 +307,7 @@ class HttpBindingGenerator(
      * Parse a value from a header.
      * This function produces an expression which produces the precise type required by the target shape.
      */
-    private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape) {
+    private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape, locationName: String) {
         val rustType = symbolProvider.toSymbol(targetType).rustType().stripOuter<RustType.Option>()
         // Normally, we go through a flow that looks for `,`s but that's wrong if the output
         // is just a single string (which might include `,`s.).
@@ -374,17 +382,24 @@ class HttpBindingGenerator(
                     })
                     """
                 )
-            else -> rustTemplate(
-                """
-                if $parsedValue.len() > 1 {
-                    Err(#{header_util}::ParseError::new_with_message(format!("expected one item but found {}", $parsedValue.len())))
+            else -> {
+                val returnValue = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
+                    """$parsedValue.pop().ok_or(#{header_util}::ParseError::new_with_message("Missing mandatory header $locationName"))"""
                 } else {
-                    let mut $parsedValue = $parsedValue;
-                    Ok($parsedValue.pop())
+                    "Ok($parsedValue.pop())"
                 }
-                """,
-                "header_util" to headerUtil
-            )
+                rustTemplate(
+                    """
+                    if $parsedValue.len() > 1 {
+                        Err(#{header_util}::ParseError::new_with_message(format!("expected one item but found {}", $parsedValue.len())))
+                    } else {
+                        let mut $parsedValue = $parsedValue;
+                        $returnValue
+                    }
+                    """,
+                    "header_util" to headerUtil
+                )
+            }
         }
     }
 

@@ -138,10 +138,19 @@ class BuilderGenerator(
     ) {
         // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
         // is the same as the resulting member type, and is always optional.
-        val inputType = outerType.asOptional()
+        val inputType = if (symbolProvider.config().handleRequired && member.isRequired()) {
+            outerType
+        } else {
+            outerType.asOptional()
+        }
+        val inputVal = if (symbolProvider.config().handleRequired && member.isRequired()) {
+            "Some(input)"
+        } else {
+            "input"
+        }
         writer.documentShape(member, model)
         writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
-            rust("self.$memberName = input; self")
+            rust("self.$memberName = $inputVal; self")
         }
     }
 

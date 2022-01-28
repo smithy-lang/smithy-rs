@@ -80,7 +80,8 @@ class JsonParserGenerator(
         "skip_value" to smithyJson.member("deserialize::token::skip_value"),
         "skip_to_end" to smithyJson.member("deserialize::token::skip_to_end"),
         "Token" to smithyJson.member("deserialize::Token"),
-        "or_empty" to orEmptyJson()
+        "or_empty" to orEmptyJson(),
+        "Cow" to RuntimeType.Cow,
     )
 
     /**
@@ -217,15 +218,15 @@ class JsonParserGenerator(
 
     private fun RustWriter.deserializeMember(memberShape: MemberShape) {
         when (val target = model.expectShape(memberShape.target)) {
-            is StringShape -> deserializeString(target)
+            is StringShape -> deserializeString(target, memberShape)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
-            is NumberShape -> deserializeNumber(target)
+            is NumberShape -> deserializeNumber(target, memberShape)
             is BlobShape -> rustTemplate("#{expect_blob_or_null}(tokens.next())?", *codegenScope)
             is TimestampShape -> deserializeTimestamp(memberShape)
-            is CollectionShape -> deserializeCollection(target)
-            is MapShape -> deserializeMap(target)
-            is StructureShape -> deserializeStruct(target)
-            is UnionShape -> deserializeUnion(target)
+            is CollectionShape -> deserializeCollection(target, memberShape)
+            is MapShape -> deserializeMap(target, memberShape)
+            is StructureShape -> deserializeStruct(target, memberShape)
+            is UnionShape -> deserializeUnion(target, memberShape)
             is DocumentShape -> rustTemplate("Some(#{expect_document}(tokens)?)", *codegenScope)
             else -> PANIC("unexpected shape: $target")
         }
@@ -244,15 +245,21 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeString(target: StringShape) {
-        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ").transpose()?", *codegenScope) {
+    private fun RustWriter.deserializeString(target: StringShape, memberShape: MemberShape) {
+        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
+            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
+        } else { "" }
+        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ").transpose()?$suffix", *codegenScope) {
             deserializeStringInner(target, "s")
         }
     }
 
-    private fun RustWriter.deserializeNumber(target: NumberShape) {
+    private fun RustWriter.deserializeNumber(target: NumberShape, memberShape: MemberShape) {
+        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
+            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
+        } else { "" }
         val symbol = symbolProvider.toSymbol(target)
-        rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())", "T" to symbol, *codegenScope)
+        rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())$suffix", "T" to symbol, *codegenScope)
     }
 
     private fun RustWriter.deserializeTimestamp(member: MemberShape) {
@@ -262,10 +269,13 @@ class JsonParserGenerator(
                 TimestampFormatTrait.Format.EPOCH_SECONDS
             )
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-        rustTemplate("#{expect_timestamp_or_null}(tokens.next(), #{T})?", "T" to timestampFormatType, *codegenScope)
+        val suffix = if (symbolProvider.config().handleRequired && member.isRequired()) {
+            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${member.memberName} required"))?"""
+        } else { "" }
+        rustTemplate("#{expect_timestamp_or_null}(tokens.next(), #{T})?$suffix", "T" to timestampFormatType, *codegenScope)
     }
 
-    private fun RustWriter.deserializeCollection(shape: CollectionShape) {
+    private fun RustWriter.deserializeCollection(shape: CollectionShape, memberShape: MemberShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
         val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
@@ -307,10 +317,13 @@ class JsonParserGenerator(
                 }
             }
         }
-        rust("#T(tokens)?", parser)
+        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
+            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
+        } else { "" }
+        rust("#T(tokens)?$suffix", parser)
     }
 
-    private fun RustWriter.deserializeMap(shape: MapShape) {
+    private fun RustWriter.deserializeMap(shape: MapShape, memberShape: MemberShape) {
         val keyTarget = model.expectShape(shape.key.target) as StringShape
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
@@ -347,10 +360,13 @@ class JsonParserGenerator(
                 }
             }
         }
-        rust("#T(tokens)?", parser)
+        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
+            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
+        } else { "" }
+        rust("#T(tokens)?$suffix", parser)
     }
 
-    private fun RustWriter.deserializeStruct(shape: StructureShape) {
+    private fun RustWriter.deserializeStruct(shape: StructureShape, memberShape: MemberShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
@@ -379,10 +395,13 @@ class JsonParserGenerator(
                 }
             }
         }
-        rust("#T(tokens)?", nestedParser)
+        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
+            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
+        } else { "" }
+        rust("#T(tokens)?$suffix", nestedParser)
     }
 
-    private fun RustWriter.deserializeUnion(shape: UnionShape) {
+    private fun RustWriter.deserializeUnion(shape: UnionShape, memberShape: MemberShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
@@ -450,7 +469,10 @@ class JsonParserGenerator(
                 rust("Ok(variant)")
             }
         }
-        rust("#T(tokens)?", nestedParser)
+        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
+            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
+        } else { "" }
+        rust("#T(tokens)?$suffix", nestedParser)
     }
 
     private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {

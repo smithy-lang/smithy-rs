@@ -235,6 +235,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         val Hyper = CargoDependency.Hyper.asType()
 
+        val Cow = RuntimeType("Cow", dependency = null, namespace = "std::borrow")
+
         fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType(
                 "Receiver",
