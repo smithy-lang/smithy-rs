@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -102,7 +101,7 @@ private class ServerHttpProtocolImplGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
-    val httpBindingResolver = protocol.httpBindingResolver
+    private val httpBindingResolver = protocol.httpBindingResolver
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
 
@@ -918,7 +917,7 @@ private class ServerHttpProtocolImplGenerator(
     private fun serverRenderHeaderParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
         val httpBindingGenerator =
             ServerRequestBindingGenerator(
-                ServerRestJson(codegenContext),
+                protocol,
                 codegenContext,
                 operationShape,
             )

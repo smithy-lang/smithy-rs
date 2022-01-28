@@ -493,7 +493,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonSupportsNaNFloatHeaderInputs", Action.Request),
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
 
-            FailingTest(RestJson, "RestJsonEmptyInputAndEmptyOutput", Action.Response),
             FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithBlob", Action.Request),
             FailingTest(RestJson, "RestJsonOutputUnionWithUnitMember", Action.Response),
             FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
@@ -524,7 +523,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonHttpPayloadWithStructure", Action.Request),
             FailingTest(RestJson, "RestJsonHttpPayloadWithStructure", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatLabels", Action.Request),
-            FailingTest(RestJson, "RestJsonHttpResponseCode", Action.Response),
             FailingTest(RestJson, "StringPayloadResponse", Action.Response),
             FailingTest(RestJson, "RestJsonJsonBlobs", Action.Response),
             FailingTest(RestJson, "RestJsonJsonEnums", Action.Response),
@@ -551,7 +549,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonDeserializeMapUnionValue", Action.Response),
             FailingTest(RestJson, "RestJsonDeserializeStructureUnionValue", Action.Response),
             FailingTest(RestJson, "RestJsonNoInputAndNoOutput", Action.Response),
-            FailingTest(RestJson, "RestJsonNoInputAndOutputWithJson", Action.Response),
             FailingTest(RestJson, "RestJsonRecursiveShapes", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Request),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Response),

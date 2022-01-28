@@ -8,6 +8,8 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ToShapeId
+import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -47,6 +49,44 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     }
 }
 
+/**
+ * This [HttpBindingResolver] mostly delegates to [HttpTraitHttpBindingResolver].
+ */
+class RestJsonHttpBindingResolver(
+    model: Model,
+    contentTypes: ProtocolContentTypes,
+) : HttpBindingResolver {
+    private val innerResolver = HttpTraitHttpBindingResolver(model, contentTypes)
+
+    override fun httpTrait(operationShape: OperationShape): HttpTrait = innerResolver.httpTrait(operationShape)
+
+    override fun requestBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
+        innerResolver.requestBindings(operationShape)
+
+    override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
+        innerResolver.responseBindings(operationShape)
+
+    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
+        innerResolver.errorResponseBindings(errorShape)
+
+    override fun timestampFormat(
+        memberShape: MemberShape,
+        location: HttpLocation,
+        defaultTimestampFormat: TimestampFormatTrait.Format
+    ): TimestampFormatTrait.Format =
+        innerResolver.timestampFormat(memberShape, location, defaultTimestampFormat)
+
+    override fun requestContentType(operationShape: OperationShape): String? =
+        innerResolver.requestContentType(operationShape)
+
+    /**
+     * In the RestJson1 protocol, HTTP responses have a default `Content-Type: application/json` header if it is not
+     * overridden by a specific mechanism (e.g. an output shape member is targeted with `httpPayload` or `mediaType` traits.
+     */
+    override fun responseContentType(operationShape: OperationShape): String =
+        innerResolver.responseContentType(operationShape) ?: "application/json"
+}
+
 class RestJson(private val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
@@ -60,7 +100,7 @@ class RestJson(private val codegenContext: CodegenContext) : Protocol {
     private val jsonDeserModule = RustModule.private("json_deser")
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
+        RestJsonHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
