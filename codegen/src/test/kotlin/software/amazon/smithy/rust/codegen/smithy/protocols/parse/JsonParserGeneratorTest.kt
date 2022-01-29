@@ -120,7 +120,6 @@ class JsonParserGeneratorTest {
             ::restJsonFieldName
         )
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
-        val documentGenerator = parserGenerator.documentParser(model.lookup("test#Op"))
         val payloadGenerator = parserGenerator.payloadParser(model.lookup("test#OpOutput\$top"))
         val errorParser = parserGenerator.errorParser(model.lookup("test#Error"))
 
@@ -132,7 +131,6 @@ class JsonParserGeneratorTest {
                 use model::Choice;
 
                 // Generate the document serializer even though it's not tested directly
-                // ${writer.format(documentGenerator)}
                 // ${writer.format(payloadGenerator)}
 
                 let json = br#"
