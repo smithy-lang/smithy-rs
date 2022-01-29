@@ -8,39 +8,114 @@ The latest unreleased SDK build can be found in [aws-sdk-rust/next](https://gith
 
 **All internal and external interfaces are considered unstable and subject to change without notice.**
 
-## Setup
+Setup
+-----
+
 1. `./gradlew` will setup gradle for you. JDK 11 is required.
 2. Running tests requires a working Rust installation. See [Rust docs](https://www.rust-lang.org/learn/get-started) for
 installation instructions on your platform. Minimum supported Rust version is the latest released Rust version, although older versions may work.
 
-## Generate an AWS SDK
-The generated SDK will be placed in `aws/sdk/build/aws-sdk`.
-```
-./gradlew :aws:sdk:assemble # Generate an SDK. Do not attempt to compile / run tests
-./gradlew :aws:sdk:test # Run all the tests
-./gradlew :aws:sdk:cargoCheck # only validate that it compiles
-```
+Development
+-----------
 
-## Run tests
-```./test.sh```
-
-This will run all the unit tests, codegen example models & Dynamo DB, validate that the generated code compiles, and run any tests targeting the generated code.
-
-## Development
-For development, pre-commit hooks may be useful. Setup:
-```
+For development, pre-commit hooks make it easier to pass automated linting when opening a pull request. Setup:
+```bash
 brew install pre-commit # (or appropriate for your platform: https://pre-commit.com/)
 pre-commit install
 ```
 
-### Project Layout
+Project Layout
+--------------
+
 * `aws`: AWS specific codegen & Rust code (signing, endpoints, customizations, etc.)
   Common commands:
-     * `./gradlew :aws:sdk:assemble`: Generate (but do not test / compile etc.) a fresh SDK into `sdk/build/aws-sdk`
-     * `./gradlew :aws:sdk:test`: Generate & run all tests for a fresh SDK
-     * `./gradlew :aws:sdk:{cargoCheck, cargoTest, cargoDocs, cargoClippy}`: Generate & run specified cargo command.
+  * `./gradlew :aws:sdk:assemble`: Generate (but do not test / compile etc.) a fresh SDK into `sdk/build/aws-sdk`
+  * `./gradlew :aws:sdk:test`: Generate & run all tests for a fresh SDK
+  * `./gradlew :aws:sdk:{cargoCheck, cargoTest, cargoDocs, cargoClippy}`: Generate & run specified cargo command.
 * `codegen`: Whitelabel Smithy client code generation
 * `codegen-test`: Smithy protocol test generation & integration tests for Smithy client whitelabel code
 * [`design`](design): Design documentation. See the [design/README.md](design/README.md) for details about building / viewing.
 * `codegen-server`: Whitelabel Smithy server code generation
 * `codegen-server-test`: Smithy protocol test generation & integration tests for Smithy server whitelabel code
+
+Testing
+-------
+
+Running all of smithy-rs's tests can take a very long time, so it's better to know which parts
+to test based on the changes being made, and allow continuous integration to find other issues
+when posting a pull request.
+
+In general, the components of smithy-rs affect each other in the following order (with earlier affecting later):
+
+1. `rust-runtime`
+2. `codegen` and `codegen-server`
+3. `aws/rust-runtime`
+4. `aws/sdk-codegen`
+
+Some components, such as `codegen-test` and `codegen-server-test`, are purely for testing other components.
+
+### Testing `rust-runtime` and `aws/rust-runtime`
+
+To test the `rust-runtime` crates:
+
+```bash
+# Run all Rust tests for `rust-runtime/`
+./gradlew rust-runtime:cargoTest
+# Run clippy for `rust-runtime/`
+./gradlew rust-runtime:cargoClippy
+```
+
+For `aws/rust-runtime`, just prefix with `aws:`:
+
+```bash
+# Run all Rust tests for `rust-runtime/`
+./gradlew aws:rust-runtime:cargoTest
+# Run clippy for `rust-runtime/`
+./gradlew aws:rust-runtime:cargoClippy
+```
+
+Some runtime crates have a `additional-ci` script that can also be run. These scripts often require
+[`cargo-hack`](https://github.com/taiki-e/cargo-hack) and [`cargo-udeps`](https://github.com/est31/cargo-udeps)
+to be installed.
+
+### Testing Client/Server Codegen
+
+To test the code generation, the following can be used:
+
+```bash
+# Run Kotlin codegen unit tests
+./gradlew codegen:check
+# Run client codegen tests
+./gradlew codegen-test:check
+# Run server codegen tests
+./gradlew codegen-server-test:check
+```
+
+Several Kotlin unit tests generate Rust projects and compile them. When these fail, they typically
+output links to the location of the generated code so that it can be inspected.
+
+To look at generated code when the codegen tests fail, check these paths depending on the test suite that's failing:
+- For codegen-test: `codegen-test/build/smithyprojections/codegen-test`
+- For codgen-server-test: `codegen-server-test/build/smithyprojections/codegen-server-test`
+
+### Testing SDK Codegen
+
+See the readme in `aws/sdk/` for more information about these targets as they can be configured
+to generate more or less AWS service clients.
+
+```bash
+# Run Kotlin codegen unit tests
+./gradlew aws:sdk-codegen:check
+# Generate an SDK, but do not attempt to compile / run tests. Useful for inspecting generated code
+./gradlew :aws:sdk:assemble
+# Run all the tests
+./gradlew :aws:sdk:test
+# Validate that the generated code compiles
+./gradlew :aws:sdk:cargoCheck
+# Validate that the generated code passes Clippy
+./gradlew :aws:sdk:cargoClippy
+# Validate the generated docs
+./gradlew :aws:sdk:cargoDoc
+```
+
+The generated SDK will be placed in `aws/sdk/build/aws-sdk`.
