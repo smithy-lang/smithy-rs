@@ -147,7 +147,7 @@ class PaginatorGenerator private constructor(
                 ///
                 /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next)).
                 pub fn send(self) -> impl #{Stream}<Item = std::result::Result<#{Output}, #{SdkError}<#{Error}>>> + Unpin
-                where #{send_bounds:W} {
+                #{send_bounds:W} {
                     // Move individual fields out of self for the borrow checker
                     let builder = self.builder;
                     let handle = self.handle;
@@ -251,7 +251,7 @@ class PaginatorGenerator private constructor(
                     ///
                     /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](tokio_stream::StreamExt::collect).
                     pub fn send(self) -> impl #{Stream}<Item = std::result::Result<${itemType()}, #{SdkError}<#{Error}>>> + Unpin
-                    where #{send_bounds:W} {
+                    #{send_bounds:W} {
                         #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
                     }
                 }

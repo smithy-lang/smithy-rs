@@ -81,8 +81,8 @@ author = "jdisanti"
 
 [[aws-sdk-rust]]
 message = """
-`Client` no longer has generics, and now uses `DynConnector` and `DynMiddleware` to allow for connector/middleware customization.
-This should only break references to the client that specified generic types for it.
+Fluent clients for all services no longer have generics, and now use `DynConnector` and `DynMiddleware` to allow
+for connector/middleware customization. This should only break references to the client that specified generic types for it.
 """
 references = ["smithy-rs#1132"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }

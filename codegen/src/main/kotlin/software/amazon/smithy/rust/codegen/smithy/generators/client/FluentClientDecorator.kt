@@ -461,7 +461,7 @@ class FluentClientGenerator(
                         /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
                         /// set when configuring the client.
                         pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
-                        where #{send_bounds:W} {
+                        #{send_bounds:W} {
                             let op = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?
                                 .make_operation(&self.handle.conf)
                                 .await

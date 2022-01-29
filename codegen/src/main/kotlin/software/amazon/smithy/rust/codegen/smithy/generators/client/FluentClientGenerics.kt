@@ -68,6 +68,7 @@ data class FlexibleClientGenerics(
     override fun sendBounds(input: Symbol, output: Symbol, error: RuntimeType): Writable = writable {
         rustTemplate(
             """
+            where
             R::Policy: #{client}::bounds::SmithyRetryPolicy<
                 #{Input}OperationOutputAlias,
                 #{Output},
