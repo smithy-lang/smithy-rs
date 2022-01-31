@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFac
 import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 
 /*
- * RestJson1 server-side protocol factory. This factory builds the [ServerHttpProtocolGenerator]
+ * RestJson1 server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
  * with RestJson1 specific configurations.
  */
 class ServerRestJsonFactory : ProtocolGeneratorFactory<ServerHttpProtocolGenerator> {

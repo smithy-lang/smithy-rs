@@ -50,7 +50,11 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
 }
 
 /**
- * This [HttpBindingResolver] mostly delegates to [HttpTraitHttpBindingResolver].
+ * This [HttpBindingResolver] implementation mostly delegates to the [HttpTraitHttpBindingResolver] class, since the
+ * RestJson1 protocol can be almost entirely described by Smithy's HTTP binding traits
+ * (https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html).
+ * The only protocol-specific behavior that is truly custom is the response `Content-Type` header, which defaults to
+ * `application/json` if not overridden.
  */
 class RestJsonHttpBindingResolver(
     model: Model,
