@@ -47,6 +47,7 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
+import java.util.logging.Logger
 import kotlin.reflect.KClass
 
 val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
@@ -134,6 +135,7 @@ data class MaybeRenamed(val name: String, val renamedFrom: String?)
 interface RustSymbolProvider : SymbolProvider {
     fun config(): SymbolVisitorConfig
     fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
+    fun handleRequired(member: MemberShape): Boolean
 }
 
 class SymbolVisitor(
@@ -142,11 +144,24 @@ class SymbolVisitor(
     private val config: SymbolVisitorConfig = DefaultConfig
 ) : RustSymbolProvider,
     ShapeVisitor<Symbol> {
+    private val logger = Logger.getLogger(javaClass.name)
     private val nullableIndex = NullableIndex.of(model)
     override fun config(): SymbolVisitorConfig = config
 
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)
+    }
+
+    override fun handleRequired(member: MemberShape): Boolean {
+        logger.warning("handleRequired: ${config.handleRequired}, isRequired: ${member.isRequired()}, nullable: ${nullableIndex.isNullable(member)}")
+        /* return config.handleRequired && member.isRequired() || !nullableIndex.isNullable(member) */
+        if (config.handleRequired && member.isRequired()) {
+            return true
+        } else if (!nullableIndex.isNullable(member)) {
+            return true
+        } else {
+            return false
+        }
     }
 
     private fun Shape.contextName(): String {
@@ -178,7 +193,7 @@ class SymbolVisitor(
         } else symbol
     }
 
-    private fun handleRequired(symbol: Symbol, member: MemberShape): Symbol {
+    private fun handleRequiredTrait(symbol: Symbol, member: MemberShape): Symbol {
         return if (member.isRequired()) {
             symbol
         } else if (nullableIndex.isNullable(member)) {
@@ -301,7 +316,7 @@ class SymbolVisitor(
         }.letIf(config.handleOptionality) {
             handleOptionality(it, shape)
         }.letIf(config.handleRequired) {
-            handleRequired(it, shape)
+            handleRequiredTrait(it, shape)
         }
     }
 

@@ -24,6 +24,10 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
  * Default delegator to enable easily decorating another symbol provider.
  */
 open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSymbolProvider {
+    override fun handleRequired(member: MemberShape): Boolean {
+        return base.handleRequired(member)
+    }
+
     override fun config(): SymbolVisitorConfig {
         return base.config()
     }
