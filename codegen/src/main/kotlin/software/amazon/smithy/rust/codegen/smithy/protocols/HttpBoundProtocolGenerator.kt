@@ -361,22 +361,14 @@ class HttpBoundProtocolTraitImplGenerator(
                 null
             }
             HttpLocation.PAYLOAD -> {
-                val docShapeHandler: RustWriter.(String) -> Unit = { body ->
-                    rust(
-                        "#T($body).map_err(#T::unhandled)",
-                        structuredDataParser.documentParser(operationShape),
-                        errorSymbol
-                    )
-                }
-                val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
+                val payloadParser: RustWriter.(String) -> Unit = { body ->
                     rust("#T($body).map_err(#T::unhandled)", structuredDataParser.payloadParser(member), errorSymbol)
                 }
                 val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
                     operationShape,
                     binding,
                     errorSymbol,
-                    docHandler = docShapeHandler,
-                    structuredHandler = structureShapeHandler
+                    payloadParser = payloadParser
                 )
                 return if (binding.member.isStreaming(model)) {
                     writable { rust("Some(#T(response.body_mut())?)", deserializer) }
