@@ -89,6 +89,54 @@ author = "jdisanti"
 message = """
 Fluent clients for all services no longer have generics, and now use `DynConnector` and `DynMiddleware` to allow
 for connector/middleware customization. This should only break references to the client that specified generic types for it.
+
+If you customized the AWS client's connector or middleware with something like the following:
+```rust
+let client = aws_sdk_s3::Client::with_config(
+    aws_sdk_s3::client::Builder::new()
+        .connector(my_custom_connector) // Connector customization
+        .middleware(my_custom_middleware) // Middleware customization
+        .default_async_sleep()
+        .build(),
+    config
+);
+```
+Then you will need to wrap the custom connector or middleware in
+[`DynConnector`](https://docs.rs/aws-smithy-client/0.36.0/aws_smithy_client/erase/struct.DynConnector.html)
+and
+[`DynMiddleware`](https://docs.rs/aws-smithy-client/0.36.0/aws_smithy_client/erase/struct.DynMiddleware.html)
+respectively:
+```rust
+let client = aws_sdk_s3::Client::with_config(
+    aws_sdk_s3::client::Builder::new()
+        .connector(DynConnector::new(my_custom_connector)) // Now with `DynConnector`
+        .middleware(DynMiddleware::new(my_custom_middleware)) // Now with `DynMiddleware`
+        .default_async_sleep()
+        .build(),
+    config
+);
+```
+
+If you had functions that took a generic connector, such as the following:
+```rust
+fn some_function<C, E>(conn: C) -> Result<()>
+where
+    C: aws_smithy_client::bounds::SmithyConnector<Error = E> + Send + 'static,
+    E: Into<aws_smithy_http::result::ConnectorError>
+{
+    // ...
+}
+```
+
+Then the generics and trait bounds will no longer be necessary:
+```rust
+fn some_function(conn: DynConnector) -> Result<()> {
+    // ...
+}
+```
+
+Similarly, functions that took a generic middleware can replace the generic with `DynMiddleware` and
+remove their trait bounds.
 """
 references = ["smithy-rs#1132"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
