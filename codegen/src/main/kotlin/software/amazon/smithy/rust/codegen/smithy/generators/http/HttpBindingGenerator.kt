@@ -38,7 +38,6 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
-import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
@@ -113,11 +112,7 @@ class HttpBindingGenerator(
      */
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpLocation.HEADER)
-        val outputT = if (symbolProvider.config().handleRequired && binding.member.isRequired()) {
-            symbolProvider.toSymbol(binding.member)
-        } else {
-            symbolProvider.toSymbol(binding.member).makeOptional()
-        }
+        val outputT = symbolProvider.toSymbol(binding.member)
         val fnName = "deser_header_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
             writer.rustBlock(
@@ -134,11 +129,7 @@ class HttpBindingGenerator(
 
     fun generateDeserializePrefixHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpBinding.Location.PREFIX_HEADERS)
-        val outputT = if (symbolProvider.config().handleRequired && binding.member.isRequired()) {
-            symbolProvider.toSymbol(binding.member)
-        } else {
-            symbolProvider.toSymbol(binding.member).makeOptional()
-        }
+        val outputT = symbolProvider.toSymbol(binding.member)
         check(outputT.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputT.rustType() }
         val target = model.expectShape(binding.member.target)
         check(target is MapShape)
@@ -383,7 +374,7 @@ class HttpBindingGenerator(
                     """
                 )
             else -> {
-                val returnValue = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
+                val returnValue = if (symbolProvider.handleRequired(memberShape)) {
                     """$parsedValue.pop().ok_or(#{header_util}::ParseError::new_with_message("Missing mandatory header $locationName"))"""
                 } else {
                     "Ok($parsedValue.pop())"

@@ -157,7 +157,7 @@ class Instantiator(
         } else {
             writer.conditionalBlock(
                 "Some(", ")",
-                conditional = if (symbolProvider.config().handleRequired && shape.isRequired()) {
+                conditional = if (symbolProvider.handleRequired(shape)) {
                     false
                 } else {
                     ctx.builder || symbol.isOptional()

@@ -29,7 +29,6 @@ class EventStreamSymbolProvider(
     base: RustSymbolProvider,
     private val model: Model
 ) : WrappingSymbolProvider(base) {
-
     override fun toSymbol(shape: Shape): Symbol {
         val initial = super.toSymbol(shape)
 
