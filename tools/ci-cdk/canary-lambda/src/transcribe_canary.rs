@@ -11,7 +11,7 @@ use bytes::BufMut;
 use transcribe::model::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
 };
-use transcribe::Blob;
+use transcribe::types::Blob;
 
 const CHUNK_SIZE: usize = 8192;
 use crate::canary::{CanaryEnv, Clients};
