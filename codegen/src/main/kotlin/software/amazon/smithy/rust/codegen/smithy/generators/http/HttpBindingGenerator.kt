@@ -157,7 +157,7 @@ class HttpBindingGenerator(
                     let headers = #T::headers_for_prefix(header_map, ${binding.locationName.dq()});
                     let out: std::result::Result<_, _> = headers.map(|(key, header_name)| {
                         let values = header_map.get_all(header_name);
-                        #T(values.iter()).map(|v| (key.to_string(), v.unwrap()))
+                        #T(values.iter()).map(|v| (key.to_string(), v.expect("we've checked there's at least one value for this header name")))
                     }).collect();
                     out.map(Some)
                     """,
@@ -295,7 +295,7 @@ class HttpBindingGenerator(
 
     /**
      * Parse a value from a header.
-     * This function produces an expression which produces the precise output type required by the output shape.
+     * This function produces an expression which produces the precise type required by the target shape.
      */
     private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape) {
         val rustType = symbolProvider.toSymbol(targetType).rustType().stripOuter<RustType.Option>()
@@ -387,9 +387,9 @@ class HttpBindingGenerator(
     }
 
     /**
-     * Generate a unique name for the deserializer function for a given operationShape -> member pair.
+     * Generate a unique name for the deserializer function for a given [operationShape] and HTTP binding.
      */
-    // rename here technically not required, operations and members cannot be renamed
+    // Rename here technically not required, operations and members cannot be renamed.
     private fun fnName(operationShape: OperationShape, binding: HttpBindingDescriptor) =
         "${operationShape.id.getName(service).toSnakeCase()}_${binding.member.container.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
 

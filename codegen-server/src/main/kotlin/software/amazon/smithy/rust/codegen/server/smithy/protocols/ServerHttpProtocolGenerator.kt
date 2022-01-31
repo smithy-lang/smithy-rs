@@ -607,6 +607,7 @@ private class ServerHttpProtocolImplGenerator(
         val errorSymbol = getDeserializeErrorSymbol(binding)
         return when (binding.location) {
             HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
+            HttpLocation.PREFIX_HEADERS -> writable { serverRenderPrefixHeadersParser(this, binding, operationShape) }
             HttpLocation.PAYLOAD -> {
                 val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
                     rust("#T($body)", structuredDataParser.payloadParser(binding.member))
@@ -911,11 +912,30 @@ private class ServerHttpProtocolImplGenerator(
     private fun serverRenderHeaderParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
         val httpBindingGenerator =
             ServerRequestBindingGenerator(
-                ServerRestJson(codegenContext),
+                protocol,
                 codegenContext,
                 operationShape,
             )
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
+        writer.rustTemplate(
+            """
+            #{deserializer}(request.headers().ok_or(#{SmithyHttpServer}::rejection::HeadersAlreadyExtracted)?)?
+            """.trimIndent(),
+            "deserializer" to deserializer,
+            *codegenScope
+        )
+    }
+
+    private fun serverRenderPrefixHeadersParser(writer: RustWriter, binding: HttpBindingDescriptor, operationShape: OperationShape) {
+        check(binding.location == HttpLocation.PREFIX_HEADERS)
+
+        val httpBindingGenerator =
+            ServerRequestBindingGenerator(
+                protocol,
+                codegenContext,
+                operationShape,
+            )
+        val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
         writer.rustTemplate(
             """
             #{deserializer}(request.headers().ok_or(#{SmithyHttpServer}::rejection::HeadersAlreadyExtracted)?)?
