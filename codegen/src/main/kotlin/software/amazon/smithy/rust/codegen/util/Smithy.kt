@@ -60,7 +60,7 @@ fun MemberShape.isOutputEventStream(model: Model): Boolean {
     return isEventStream(model) && model.expectShape(container).hasTrait<SyntheticInputTrait>()
 }
 
-private fun Shape.hasEventStreamMember(model: Model): Boolean {
+fun Shape.hasEventStreamMember(model: Model): Boolean {
     return members().any { it.isEventStream(model) }
 }
 
