@@ -559,6 +559,7 @@ private class ServerHttpProtocolImplGenerator(
     ) {
         val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
+        val streamingMember = inputShape.findStreamingMember(model)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
         val parser = structuredDataParser.serverInputParser(operationShape)
@@ -576,13 +577,23 @@ private class ServerHttpProtocolImplGenerator(
                 *codegenScope,
                 "parser" to parser,
             )
+        } else if (streamingMember != null) {
+            rustTemplate(
+                """
+                let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
+                input = input.${streamingMember.setterName()}(Some(body.into()));
+                """.trimIndent(),
+                *codegenScope
+            )
         }
-        for (binding in bindings) {
-            val member = binding.member
-            val parsedValue = serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
-            if (parsedValue != null) {
-                withBlock("input = input.${member.setterName()}(", ");") {
-                    parsedValue(this)
+        if (streamingMember == null) {
+            for (binding in bindings) {
+                val member = binding.member
+                val parsedValue = serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
+                if (parsedValue != null) {
+                    withBlock("input = input.${member.setterName()}(", ");") {
+                        parsedValue(this)
+                    }
                 }
             }
         }
