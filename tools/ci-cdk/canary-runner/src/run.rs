@@ -17,12 +17,32 @@ use aws_sdk_lambda as lambda;
 use aws_sdk_s3 as s3;
 use cloudwatch::model::StandardUnit;
 use s3::ByteStream;
+use semver::Version;
+use smithy_rs_tool_common::git;
+use smithy_rs_tool_common::shell::ShellOperation;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 use std::{env, path::Path};
 use structopt::StructOpt;
 use tokio::process::Command;
 use tracing::{error, info};
+
+lazy_static::lazy_static! {
+    // Occasionally, a breaking change introduced in smithy-rs will cause the canary to fail
+    // for older versions of the SDK since the canary is in the smithy-rs repository and will
+    // get fixed for that breaking change. When this happens, the older SDK versions can be
+    // pinned to a commit hash in the smithy-rs repository to get old canary code that still
+    // compiles against that version of the SDK.
+    static ref PINNED_SMITHY_RS_VERSIONS: Vec<(Version, &'static str)> = {
+        let mut pinned = vec![
+            // Versions <= 0.6.0 no longer compile against the canary after this commit in smithy-rs
+            // due to the breaking change in https://github.com/awslabs/smithy-rs/pull/1085
+            (Version::parse("0.6.0").unwrap(), "d48c234796a16d518ca9e1dda5c7a1da4904318c"),
+        ];
+        pinned.sort();
+        pinned
+    };
+}
 
 #[derive(StructOpt, Debug)]
 pub struct RunOpt {
@@ -104,6 +124,8 @@ async fn run_canary(opt: RunOpt, config: &aws_config::Config) -> Result<Duration
     env::set_current_dir(repo_root.join("smithy-rs/tools/ci-cdk/canary-lambda"))
         .context("failed to change working directory")?;
 
+    use_correct_revision(&opt).await?;
+
     info!("Generating canary Cargo.toml...");
     generate_cargo_toml(&opt.sdk_version).await?;
 
@@ -147,6 +169,24 @@ async fn run_canary(opt: RunOpt, config: &aws_config::Config) -> Result<Duration
     delete_lambda_fn(lambda_client, bundle_name).await?;
 
     invoke_result.map(|_| invoke_time)
+}
+
+async fn use_correct_revision(opt: &RunOpt) -> Result<()> {
+    let sdk_version = Version::parse(&opt.sdk_version).expect("valid version");
+    if let Some((version, commit_hash)) = PINNED_SMITHY_RS_VERSIONS
+        .iter()
+        .find(|(v, _)| v >= &sdk_version)
+    {
+        info!(
+            "SDK version {} requires smithy-rs@{} to successfully compile the canary",
+            version, commit_hash
+        );
+        let smithy_rs_root = git::find_git_repository_root("smithy-rs", ".")?;
+        git::CheckoutRevision::new(smithy_rs_root, *commit_hash)
+            .spawn()
+            .await?;
+    }
+    Ok(())
 }
 
 async fn generate_cargo_toml(sdk_version: &str) -> Result<()> {

@@ -18,7 +18,7 @@ pub async fn subcommand_hydrate_readme(
     output: &Path,
 ) -> Result<()> {
     let cwd = std::env::current_dir()?;
-    let repository = Repository::new(SMITHYRS_REPO_NAME, &cwd).await?;
+    let repository = Repository::new(SMITHYRS_REPO_NAME, &cwd)?;
     let template_path = repository.root.join("aws/SDK_README.md.hb");
     let template_contents = fs::read(&template_path)
         .with_context(|| format!("Failed to read README template file at {:?}", template_path))?;

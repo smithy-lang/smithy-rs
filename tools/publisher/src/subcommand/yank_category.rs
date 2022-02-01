@@ -39,7 +39,7 @@ pub async fn subcommand_yank_category(
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
-    let location = resolve_publish_location(location).await;
+    let location = resolve_publish_location(location);
 
     info!("Discovering crates to yank...");
     let (batches, _) = discover_and_validate_package_batches(Fs::Real, &location).await?;

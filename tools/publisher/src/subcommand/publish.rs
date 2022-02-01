@@ -33,7 +33,7 @@ pub async fn subcommand_publish(location: &Path) -> Result<()> {
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
-    let location = resolve_publish_location(location).await;
+    let location = resolve_publish_location(location);
 
     info!("Discovering crates to publish...");
     let (batches, stats) = discover_and_validate_package_batches(Fs::Real, &location).await?;
@@ -94,7 +94,7 @@ async fn confirm_correct_tag(batches: &[Vec<Package>], location: &Path) -> Resul
         .next();
     if let Some(aws_config_version) = aws_config_version {
         let expected_tag = format!("v{}", aws_config_version);
-        let repository = Repository::new(SDK_REPO_NAME, location).await?;
+        let repository = Repository::new(SDK_REPO_NAME, location)?;
         let current_tag = repository.current_tag().await?;
         if expected_tag != current_tag {
             bail!(

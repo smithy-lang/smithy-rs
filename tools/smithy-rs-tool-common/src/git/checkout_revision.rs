@@ -3,38 +3,39 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::shell::{handle_failure, output_text, ShellOperation};
+use crate::shell::{handle_failure, ShellOperation};
 use anyhow::Result;
 use std::path::PathBuf;
 use std::process::Command;
 
-pub struct GetLastCommit {
+pub struct CheckoutRevision {
     program: &'static str,
     path: PathBuf,
+    revision: String,
 }
 
-impl GetLastCommit {
-    pub fn new(path: impl Into<PathBuf>) -> GetLastCommit {
-        GetLastCommit {
+impl CheckoutRevision {
+    pub fn new(path: impl Into<PathBuf>, revision: impl Into<String>) -> Self {
+        CheckoutRevision {
             program: "git",
             path: path.into(),
+            revision: revision.into(),
         }
     }
 }
 
-impl ShellOperation for GetLastCommit {
-    type Output = String;
+impl ShellOperation for CheckoutRevision {
+    type Output = ();
 
-    fn run(&self) -> Result<String> {
+    fn run(&self) -> Result<()> {
         let mut command = Command::new(self.program);
-        command.arg("rev-parse");
-        command.arg("HEAD");
+        command.arg("checkout");
+        command.arg(&self.revision);
         command.current_dir(&self.path);
 
         let output = command.output()?;
-        handle_failure("get last commit", &output)?;
-        let (stdout, _) = output_text(&output);
-        Ok(stdout.trim().into())
+        handle_failure("checkout revision", &output)?;
+        Ok(())
     }
 }
 
@@ -43,27 +44,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn get_last_commit_success() {
-        let last_commit = GetLastCommit {
-            program: "./git_revparse_head",
+    fn checkout_revision_success() {
+        CheckoutRevision {
+            program: "./git_checkout_revision",
             path: "./fake_git".into(),
+            revision: "test-revision".into(),
         }
         .run()
         .unwrap();
-        assert_eq!("commithash", last_commit);
     }
 
     #[test]
-    fn get_last_commit_faijlure() {
-        let result = GetLastCommit {
+    fn checkout_revision_failure() {
+        let result = CheckoutRevision {
             program: "./git_fails",
             path: "./fake_git".into(),
+            revision: "test-revision".into(),
         }
         .run();
 
         assert!(result.is_err(), "expected error, got {:?}", result);
         assert_eq!(
-            "Failed to get last commit:\n\
+            "Failed to checkout revision:\n\
             Status: 1\n\
             Stdout: some stdout failure message\n\n\
             Stderr: some stderr failure message\n\n",
