@@ -557,7 +557,7 @@ fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvide
     val fluentBuilderFullyQualifiedName = operation.fullyQualifiedFluentBuilder(symbolProvider)
     return input.members().map { memberShape ->
         val builderInputDoc = memberShape.asFluentBuilderInputDoc(symbolProvider)
-        val builderInputLink = "$fluentBuilderFullyQualifiedName::${memberShape.memberName.toSnakeCase()}"
+        val builderInputLink = docLink("$fluentBuilderFullyQualifiedName::${symbolProvider.toMemberName(memberShape)}")
         val builderSetterDoc = memberShape.asFluentBuilderSetterDoc(symbolProvider)
         val builderSetterLink = "$fluentBuilderFullyQualifiedName::${memberShape.setterName()}"
 
