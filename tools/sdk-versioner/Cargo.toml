@@ -12,6 +12,7 @@ publish = false
 anyhow = "1.0"
 structopt = "0.3"
 toml = { version = "0.5.8", features = ["preserve_order"] }
+smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
 
 [dev-dependencies]
 pretty_assertions = "1"

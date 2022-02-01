@@ -5,13 +5,12 @@
 
 use crate::cargo;
 use crate::fs::Fs;
-use crate::package::{
-    discover_and_validate_package_batches, Package, PackageCategory, PackageHandle, Publish,
-};
+use crate::package::{discover_and_validate_package_batches, Package, PackageHandle, Publish};
 use crate::repo::resolve_publish_location;
 use anyhow::{bail, Result};
 use dialoguer::Confirm;
 use semver::Version;
+use smithy_rs_tool_common::package::PackageCategory;
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::path::Path;
 use std::sync::Arc;

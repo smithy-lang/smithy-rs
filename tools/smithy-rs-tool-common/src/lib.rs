@@ -5,4 +5,5 @@
 
 pub mod git;
 pub mod github_actions;
+pub mod package;
 pub mod shell;
