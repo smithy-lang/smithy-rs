@@ -555,13 +555,13 @@ class FluentClientGenerator(
 fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvider, operation: OperationShape, model: Model): List<String> {
     val input = operation.inputShape(model)
     val fluentBuilderFullyQualifiedName = operation.fullyQualifiedFluentBuilder(symbolProvider)
-    return input.members().map { member ->
-        val builderInputDoc = member.asFluentBuilderInputDoc(symbolProvider)
-        val builderInputLink = "$fluentBuilderFullyQualifiedName::${symbolProvider.toMemberName(member)}"
-        val builderSetterDoc = member.asFluentBuilderSetterDoc(symbolProvider)
-        val builderSetterLink = "$fluentBuilderFullyQualifiedName::${member.setterName()}"
+    return input.members().map { memberShape ->
+        val builderInputDoc = memberShape.asFluentBuilderInputDoc(symbolProvider)
+        val builderInputLink = "$fluentBuilderFullyQualifiedName::${memberShape.memberName.toSnakeCase()}"
+        val builderSetterDoc = memberShape.asFluentBuilderSetterDoc(symbolProvider)
+        val builderSetterLink = "$fluentBuilderFullyQualifiedName::${memberShape.setterName()}"
 
-        val docTrait = member.getMemberTrait(model, DocumentationTrait::class.java).orNull()
+        val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs = when (docTrait?.value?.isNotBlank()) {
             true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
             else -> "(undocumented)"
@@ -578,7 +578,7 @@ fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvide
 fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, shape: StructureShape, model: Model): List<String> {
     val structName = symbolProvider.toSymbol(shape).rustType().qualifiedName()
     return shape.members().map { memberShape ->
-        val name = symbolProvider.toMemberName(memberShape)
+        val name = memberShape.memberName.toSnakeCase()
         val member = symbolProvider.toSymbol(memberShape).rustType().render(fullyQualified = false)
         val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs = when (docTrait?.value?.isNotBlank()) {
@@ -605,7 +605,7 @@ fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: SymbolProvider): 
  * `<MemberShape representing a struct method>` -> `"method_name(MethodInputType)"`
  */
 fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
-    val memberName = symbolProvider.toMemberName(this)
+    val memberName = this.memberName.toSnakeCase()
     val outerType = symbolProvider.toSymbol(this).rustType()
 
     return "$memberName(${outerType.stripOuter<RustType.Option>().asArgumentType(fullyQualified = false)})"
