@@ -164,7 +164,9 @@ class SymbolVisitor(
      *
      * The nullabiltiy index check is guarded by [useNullableIndex] as in certain scenarios (IE during deserialization) we still want to
      * use Options to avoid changing the deserialization engine and delegate the translation from the [Option] to the real type inside
-     * the [BuilderGenerator]
+     * the [BuilderGenerator].
+     *
+     * This method is written as a set of if / else for clarity.
      */
     override fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean): Boolean {
         return if (config.handleRequired) {

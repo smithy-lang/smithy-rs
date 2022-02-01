@@ -136,8 +136,7 @@ class BuilderGenerator(
         member: MemberShape,
         memberName: String
     ) {
-        // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
-        // is the same as the resulting member type, and is always optional.
+        // Render a `set_foo` method.
         val (inputType, inputVal) = if (symbolProvider.isRequiredTraitHandled(member)) {
             outerType to "Some(input)"
         } else {

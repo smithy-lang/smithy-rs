@@ -341,7 +341,7 @@ class JsonSerializerGenerator(
                 when (target.hasTrait<EnumTrait>()) {
                     true -> rust("$writer.string(${value.name}.as_str());")
                     false -> {
-                        val suffix = if (symbolProvider.config().handleRequired) { ".as_str()" } else { "" }
+                        val suffix = if (symbolProvider.isRequiredTraitHandled(context.shape)) { ".as_str()" } else { "" }
                         rust("$writer.string(${value.name}$suffix);")
                     }
                 }

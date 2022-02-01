@@ -113,8 +113,6 @@ class HttpBindingGenerator(
      */
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpLocation.HEADER)
-        // TODO: can we remove this check and rely on what the symbol visitor is telling us?
-        // This is the only place where we have to make the symbol optional..
         val outputT = if (symbolProvider.isRequiredTraitHandled(binding.member)) {
             symbolProvider.toSymbol(binding.member)
         } else {
@@ -382,7 +380,7 @@ class HttpBindingGenerator(
                 )
             else -> {
                 val returnValue = if (symbolProvider.isRequiredTraitHandled(memberShape)) {
-                    """$parsedValue.pop().ok_or_else(|| #{header_util}::ParseError::new_with_message("Missing mandatory header '$locationName'"))"""
+                    """$parsedValue.pop().ok_or_else(|| #{header_util}::ParseError::new_with_message("missing mandatory header '$locationName'"))"""
                 } else {
                     "Ok($parsedValue.pop())"
                 }
