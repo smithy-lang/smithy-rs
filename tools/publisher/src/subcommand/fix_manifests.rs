@@ -14,8 +14,8 @@ use crate::package::{discover_package_manifests, parse_version};
 use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use semver::Version;
+use smithy_rs_tool_common::github_actions::running_in_github_actions;
 use std::collections::BTreeMap;
-use std::env;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use toml::value::Table;
@@ -159,7 +159,7 @@ fn conditionally_disallow_publish(
     manifest_path: &Path,
     metadata: &mut toml::Value,
 ) -> Result<bool> {
-    let is_github_actions = env::var("GITHUB_ACTIONS").unwrap_or_default() == "true";
+    let is_github_actions = running_in_github_actions();
     let is_example = is_example_manifest(manifest_path);
 
     // Safe-guard to prevent accidental publish to crates.io. Add some friction

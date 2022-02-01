@@ -9,10 +9,10 @@ use crate::package::{
     discover_and_validate_package_batches, Package, PackageCategory, PackageHandle, Publish,
 };
 use crate::repo::resolve_publish_location;
-use crate::shell::ShellOperation;
 use anyhow::{bail, Result};
 use dialoguer::Confirm;
 use semver::Version;
+use smithy_rs_tool_common::shell::ShellOperation;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -81,7 +81,7 @@ pub async fn subcommand_yank_category(
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         tasks.push(tokio::spawn(async move {
             info!("Yanking `{}`...", package.handle);
-            let result = cargo::Yank::new(&package.handle, &package.crate_path)
+            let result = cargo::Yank::new(package.handle.clone(), &package.crate_path)
                 .spawn()
                 .await;
             drop(permit);

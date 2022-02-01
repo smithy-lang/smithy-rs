@@ -15,8 +15,8 @@ pub use get_owners::GetOwners;
 pub use publish::Publish;
 pub use yank::Yank;
 
-use crate::shell::handle_failure;
 use anyhow::{Context, Result};
+use smithy_rs_tool_common::shell::handle_failure;
 use std::process::Command;
 
 /// Confirms that cargo exists on the path.

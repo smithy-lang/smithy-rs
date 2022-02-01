@@ -7,14 +7,14 @@ use crate::fs::Fs;
 use crate::package::{
     discover_and_validate_package_batches, Package, PackageBatch, PackageHandle, PackageStats,
 };
-use crate::repo::{find_git_repository_root, resolve_publish_location};
-use crate::shell::ShellOperation;
+use crate::repo::{resolve_publish_location, Repository};
 use crate::CRATE_OWNER;
 use crate::{cargo, SDK_REPO_NAME};
 use anyhow::{bail, Result};
 use crates_io_api::{AsyncClient, Error};
 use dialoguer::Confirm;
 use lazy_static::lazy_static;
+use smithy_rs_tool_common::shell::ShellOperation;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -60,7 +60,7 @@ pub async fn subcommand_publish(location: &Path) -> Result<()> {
                 // Only publish if it hasn't been published yet.
                 if !is_published(&package.handle).await? {
                     info!("Publishing `{}`...", package.handle);
-                    cargo::Publish::new(&package.handle, &package.crate_path)
+                    cargo::Publish::new(package.handle.clone(), &package.crate_path)
                         .spawn()
                         .await?;
                     // Sometimes it takes a little bit of time for the new package version
@@ -94,7 +94,7 @@ async fn confirm_correct_tag(batches: &[Vec<Package>], location: &Path) -> Resul
         .next();
     if let Some(aws_config_version) = aws_config_version {
         let expected_tag = format!("v{}", aws_config_version);
-        let repository = find_git_repository_root(SDK_REPO_NAME, location).await?;
+        let repository = Repository::new(SDK_REPO_NAME, location).await?;
         let current_tag = repository.current_tag().await?;
         if expected_tag != current_tag {
             bail!(

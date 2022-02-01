@@ -9,10 +9,19 @@ use std::process::Output;
 
 #[async_trait]
 pub trait ShellOperation {
-    type Output;
+    type Output: Send + 'static;
+
+    /// Runs the command synchronously.
+    fn run(&self) -> Result<Self::Output>;
 
     /// Runs the command asynchronously.
-    async fn spawn(&self) -> Result<Self::Output>;
+    #[cfg(feature = "async-shell")]
+    async fn spawn(self) -> Result<Self::Output>
+    where
+        Self: Sized + 'static,
+    {
+        tokio::task::spawn_blocking(move || self.run()).await?
+    }
 }
 
 /// Returns (stdout, stderr)
