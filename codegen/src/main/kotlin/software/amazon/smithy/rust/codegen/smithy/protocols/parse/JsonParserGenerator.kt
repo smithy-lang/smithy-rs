@@ -191,6 +191,12 @@ class JsonParserGenerator(
         return structureParser(fnName, inputShape, includedMembers)
     }
 
+    private fun getSuffixForRequiredTrait(shape: MemberShape): String {
+        return if (symbolProvider.isRequiredTraitHandled(shape, false)) {
+            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${shape.memberName} is required"))?"""
+        } else { "" }
+    }
+
     private fun RustWriter.expectEndOfTokenStream() {
         rustBlock("if tokens.next().is_some()") {
             rustTemplate(
@@ -245,20 +251,14 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.deserializeString(target: StringShape, memberShape: MemberShape) {
-        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
-            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
-        } else { "" }
-        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ").transpose()?$suffix", *codegenScope) {
+        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ").transpose()?${getSuffixForRequiredTrait(memberShape)}", *codegenScope) {
             deserializeStringInner(target, "s")
         }
     }
 
     private fun RustWriter.deserializeNumber(target: NumberShape, memberShape: MemberShape) {
-        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
-            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
-        } else { "" }
         val symbol = symbolProvider.toSymbol(target)
-        rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())$suffix", "T" to symbol, *codegenScope)
+        rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())${getSuffixForRequiredTrait(memberShape)}", "T" to symbol, *codegenScope)
     }
 
     private fun RustWriter.deserializeTimestamp(member: MemberShape) {
@@ -268,10 +268,7 @@ class JsonParserGenerator(
                 TimestampFormatTrait.Format.EPOCH_SECONDS
             )
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-        val suffix = if (symbolProvider.config().handleRequired && member.isRequired()) {
-            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${member.memberName} required"))?"""
-        } else { "" }
-        rustTemplate("#{expect_timestamp_or_null}(tokens.next(), #{T})?$suffix", "T" to timestampFormatType, *codegenScope)
+        rustTemplate("#{expect_timestamp_or_null}(tokens.next(), #{T})?${getSuffixForRequiredTrait(member)}", "T" to timestampFormatType, *codegenScope)
     }
 
     private fun RustWriter.deserializeCollection(shape: CollectionShape, memberShape: MemberShape) {
@@ -316,10 +313,7 @@ class JsonParserGenerator(
                 }
             }
         }
-        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
-            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
-        } else { "" }
-        rust("#T(tokens)?$suffix", parser)
+        rust("#T(tokens)?${getSuffixForRequiredTrait(memberShape)}", parser)
     }
 
     private fun RustWriter.deserializeMap(shape: MapShape, memberShape: MemberShape) {
@@ -359,10 +353,7 @@ class JsonParserGenerator(
                 }
             }
         }
-        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
-            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
-        } else { "" }
-        rust("#T(tokens)?$suffix", parser)
+        rust("#T(tokens)?${getSuffixForRequiredTrait(memberShape)}", parser)
     }
 
     private fun RustWriter.deserializeStruct(shape: StructureShape, memberShape: MemberShape) {
@@ -394,10 +385,7 @@ class JsonParserGenerator(
                 }
             }
         }
-        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
-            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
-        } else { "" }
-        rust("#T(tokens)?$suffix", nestedParser)
+        rust("#T(tokens)?${getSuffixForRequiredTrait(memberShape)}", nestedParser)
     }
 
     private fun RustWriter.deserializeUnion(shape: UnionShape, memberShape: MemberShape) {
@@ -468,10 +456,7 @@ class JsonParserGenerator(
                 rust("Ok(variant)")
             }
         }
-        val suffix = if (symbolProvider.config().handleRequired && memberShape.isRequired()) {
-            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${memberShape.memberName} required"))?"""
-        } else { "" }
-        rust("#T(tokens)?$suffix", nestedParser)
+        rust("#T(tokens)?${getSuffixForRequiredTrait(memberShape)}", nestedParser)
     }
 
     private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape) {

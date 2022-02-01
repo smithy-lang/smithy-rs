@@ -84,7 +84,7 @@ class ErrorGenerator(
         val messageShape = shape.errorMessageMember()
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
         val (returnType, message) = messageShape?.let {
-            if (symbolProvider.handleRequired(messageShape)) {
+            if (symbolProvider.isRequiredTraitHandled(messageShape)) {
                 "&str" to "self.${symbolProvider.toMemberName(it)}.as_ref()"
             } else {
                 "Option<&str>" to "self.${symbolProvider.toMemberName(it)}.as_deref()"

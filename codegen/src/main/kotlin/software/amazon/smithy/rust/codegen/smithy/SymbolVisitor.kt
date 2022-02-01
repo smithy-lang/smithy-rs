@@ -135,7 +135,7 @@ data class MaybeRenamed(val name: String, val renamedFrom: String?)
 interface RustSymbolProvider : SymbolProvider {
     fun config(): SymbolVisitorConfig
     fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
-    fun handleRequired(member: MemberShape): Boolean
+    fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean = true): Boolean
 }
 
 class SymbolVisitor(
@@ -152,15 +152,31 @@ class SymbolVisitor(
         return shape.accept(this)
     }
 
-    override fun handleRequired(member: MemberShape): Boolean {
-        logger.warning("handleRequired: ${config.handleRequired}, isRequired: ${member.isRequired()}, nullable: ${nullableIndex.isNullable(member)}")
-        /* return config.handleRequired && member.isRequired() || !nullableIndex.isNullable(member) */
-        if (config.handleRequired && member.isRequired()) {
-            return true
-        } else if (!nullableIndex.isNullable(member)) {
-            return true
+    /**
+     * This function is used in various parts of the code generation to understand if a type should be required or not
+     * in the context of making structure attributes mandatory when the @required trait is used on them.
+     *
+     * This method allow to disambiguate into different scenarios:
+     * 1) client codegen: since the client does not have [config.handleRequired] set to true, we always return false to prevent
+     *    changes in the client codegen behavior.
+     * 2) server codegen: since the server has [config.handleRequired] set to true, we check first if the member is marked as required,
+     *    otherwise handle the nullability index or just return false.
+     *
+     * The nullabiltiy index check is guarded by [useNullableIndex] as in certain scenarios (IE during deserialization) we still want to
+     * use Options to avoid changing the deserialization engine and delegate the translation from the [Option] to the real type inside
+     * the [BuilderGenerator]
+     */
+    override fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean): Boolean {
+        return if (config.handleRequired) {
+            if (member.isRequired()) {
+                true
+            } else if (useNullableIndex && !nullableIndex.isNullable(member)) {
+                true
+            } else {
+                false
+            }
         } else {
-            return false
+            false
         }
     }
 
@@ -308,7 +324,7 @@ class SymbolVisitor(
         val target = model.expectShape(shape.target)
         val targetSymbol = this.toSymbol(target)
         if (config.handleOptionality && config.handleRequired) {
-            throw CodegenException("CodegenVisitor handleOptionality and handleRequired options are conflicting")
+            throw CodegenException("CodegenVisitor 'handleOptionality' and 'handleRequired' configuration options cannot be both true at the same time")
         }
         // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>
         return targetSymbol.letIf(config.handleRustBoxing) {
