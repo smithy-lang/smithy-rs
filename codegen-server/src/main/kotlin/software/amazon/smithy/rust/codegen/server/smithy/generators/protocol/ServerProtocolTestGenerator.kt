@@ -119,7 +119,7 @@ class ServerProtocolTestGenerator(
         allTests.forEach {
             renderTestCaseBlock(it.testCase, this) {
                 when (it) {
-                    is TestCase.RequestTest -> this.renderHttpRequestTestCase(it.testCase, it.targetShape)
+                    is TestCase.RequestTest -> this.renderHttpRequestTestCase(it.testCase)
                     is TestCase.ResponseTest -> this.renderHttpResponseTestCase(it.testCase, it.targetShape)
                 }
             }
@@ -197,17 +197,18 @@ class ServerProtocolTestGenerator(
         }
     }
 
+    /**
+     * Renders an HTTP request test case.
+     * We are given an HTTP request in the test case, and we assert that when we deserialize said HTTP request into
+     * an operation's input shape, the resulting shape is of the form we expect, as defined in the test case.
+     */
     private fun RustWriter.renderHttpRequestTestCase(
         httpRequestTestCase: HttpRequestTestCase,
-        inputShape: StructureShape,
     ) {
         if (!protocolSupport.requestDeserialization) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
-        writeInline("let expected =")
-        instantiator.render(this, inputShape, httpRequestTestCase.params)
-        write(";\n")
 
         rustTemplate(
             """
@@ -233,17 +234,8 @@ class ServerProtocolTestGenerator(
         httpRequestTestCase.host.orNull()?.also {
             rust("""todo!("endpoint trait not supported yet");""")
         }
-        checkQueryParams(this, httpRequestTestCase.queryParams)
-        checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
-        checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
-        checkHeaders(this, "&http_request.headers()", httpRequestTestCase.headers)
-        checkForbidHeaders(this, "&http_request.headers()", httpRequestTestCase.forbidHeaders)
-        checkRequiredHeaders(this, "&http_request.headers()", httpRequestTestCase.requireHeaders)
         if (protocolSupport.requestBodyDeserialization) {
-            // "If no request body is defined, then no assertions are made about the body of the message."
-            httpRequestTestCase.body.orNull()?.also { body ->
-                checkBody(this, body, httpRequestTestCase)
-            }
+            checkParams(httpRequestTestCase, this)
         }
 
         // Explicitly warn if the test case defined parameters that we aren't doing anything with
@@ -267,23 +259,29 @@ class ServerProtocolTestGenerator(
         it.id == testCase.id && it.action == testCase.action() && it.service == codegenContext.serviceShape.id.toString()
     } != null
 
+    /**
+     * Renders an HTTP response test case.
+     * We are given an operation output shape or an error shape in the `params` field, and we assert that when we
+     * serialize said shape, the resulting HTTP response is of the form we expect, as defined in the test case.
+     * [shape] is either an operation output shape or an error shape.
+     */
     private fun RustWriter.renderHttpResponseTestCase(
         testCase: HttpResponseTestCase,
-        expectedShape: StructureShape
+        shape: StructureShape
     ) {
         if (!protocolSupport.responseSerialization || (
-            !protocolSupport.errorSerialization && expectedShape.hasTrait<ErrorTrait>()
+            !protocolSupport.errorSerialization && shape.hasTrait<ErrorTrait>()
             )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
         writeInline("let output =")
-        instantiator.render(this, expectedShape, testCase.params)
+        instantiator.render(this, shape, testCase.params)
         write(";")
         val operationImpl = if (operationShape.errors.isNotEmpty()) {
-            if (expectedShape.hasTrait<ErrorTrait>()) {
-                val variant = symbolProvider.toSymbol(expectedShape).name
+            if (shape.hasTrait<ErrorTrait>()) {
+                val variant = symbolProvider.toSymbol(shape).name
                 "$operationImplementationName::Error($operationErrorName::$variant(output))"
             } else {
                 "$operationImplementationName::Output(output)"
@@ -323,7 +321,11 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    private fun checkBody(rustWriter: RustWriter, body: String, testCase: HttpRequestTestCase) {
+    private fun checkParams(httpRequestTestCase: HttpRequestTestCase, rustWriter: RustWriter) {
+        rustWriter.writeInline("let expected = ")
+        instantiator.render(rustWriter, inputShape, httpRequestTestCase.params)
+        rustWriter.write(";")
+
         val operationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustWriter.rustTemplate(
             """
@@ -397,39 +399,6 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    private fun checkRequiredQueryParams(
-        rustWriter: RustWriter,
-        requiredParams: List<String>
-    ) = basicCheck(
-        requiredParams,
-        rustWriter,
-       "required_params",
-       "&http_request",
-       "require_query_params"
-    )
-
-    private fun checkForbidQueryParams(
-        rustWriter: RustWriter,
-        forbidParams: List<String>
-    ) = basicCheck(
-        forbidParams,
-        rustWriter,
-       "forbid_params",
-       "&http_request",
-       "forbid_query_params"
-    )
-
-    private fun checkQueryParams(
-        rustWriter: RustWriter,
-        queryParams: List<String>
-    ) = basicCheck(
-        queryParams,
-        rustWriter,
-        "expected_query_params",
-        "&http_request",
-        "validate_query_string"
-    )
-
     private fun basicCheck(
         params: List<String>,
         rustWriter: RustWriter,
@@ -494,10 +463,8 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
 
             FailingTest(RestJson, "RestJsonEmptyInputAndEmptyOutput", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithBlob", Action.Request),
             FailingTest(RestJson, "RestJsonOutputUnionWithUnitMember", Action.Response),
             FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
-            FailingTest(RestJson, "RestJsonQueryStringEscaping", Action.Request),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", Action.Request),
             FailingTest(RestJson, "DocumentOutput", Action.Response),
             FailingTest(RestJson, "DocumentOutputString", Action.Response),
@@ -519,9 +486,7 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "EnumPayloadResponse", Action.Response),
             FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithBlob", Action.Response),
             FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithNoBlobBody", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob", Action.Request),
             FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadWithStructure", Action.Request),
             FailingTest(RestJson, "RestJsonHttpPayloadWithStructure", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatLabels", Action.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCode", Action.Response),
@@ -568,12 +533,8 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithNoBlobBody", Action.Response),
             FailingTest(RestJson, "RestJsonStreamingTraitsWithMediaTypeWithBlob", Action.Request),
             FailingTest(RestJson, "RestJsonStreamingTraitsWithMediaTypeWithBlob", Action.Response),
-            FailingTest(RestJson, "RestJsonTestBodyStructure", Action.Request),
-            FailingTest(RestJson, "RestJsonHttpWithEmptyBody", Action.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", Action.Request),
-            FailingTest(RestJson, "RestJsonTestPayloadBlob", Action.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", Action.Request),
-            FailingTest(RestJson, "RestJsonTestPayloadStructure", Action.Request),
 
             FailingTest("com.amazonaws.s3#AmazonS3", "GetBucketLocationUnwrappedOutput", Action.Response),
             FailingTest("com.amazonaws.s3#AmazonS3", "S3DefaultAddressing", Action.Request),
@@ -684,6 +645,15 @@ class ServerProtocolTestGenerator(
                     }
                 }""".trimMargin()).asObjectNode().get()
              ).build()
+        private fun fixRestJsonQueryStringEscaping(testCase: HttpRequestTestCase): HttpRequestTestCase =
+            testCase.toBuilder().params(
+                Node.parse("""{
+                   "queryString": "%:/?#[]@!${'$'}&'()*+,;=😹",
+                   "queryParamsMapOfStringList": {
+                       "String": ["%:/?#[]@!${'$'}&'()*+,;=😹"]
+                   }
+               }""".trimMargin()).asObjectNode().get()
+            ).build()
         // This test assumes that errors in responses are identified by an `X-Amzn-Errortype` header with the error shape name.
         // However, Smithy specifications for AWS protocols that serialize to JSON recommend that new server implementations
         // serialize error types using a `__type` field in the body.
@@ -703,11 +673,12 @@ class ServerProtocolTestGenerator(
             Pair(RestJson, "RestJsonSupportsNaNFloatQueryValues") to ::fixRestJsonSupportsNaNFloatQueryValues,
             Pair(RestJson, "RestJsonSupportsInfinityFloatQueryValues") to ::fixRestJsonSupportsInfinityFloatQueryValues,
             Pair(RestJson, "RestJsonSupportsNegativeInfinityFloatQueryValues") to ::fixRestJsonSupportsNegativeInfinityFloatQueryValues,
-            Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes
+            Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes,
+            Pair(RestJson, "RestJsonQueryStringEscaping") to ::fixRestJsonQueryStringEscaping,
         )
 
         private val BrokenResponseTests = mapOf(
-            Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage
+            Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage,
         )
     }
 }

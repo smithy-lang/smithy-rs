@@ -1,5 +1,7 @@
 ## Summary
 
+> Status: Implemented
+
 Smithy [models paginated responses](https://awslabs.github.io/smithy/1.0/spec/core/behavior-traits.html#paginated-trait)
 . Customers of Smithy generated code & the Rust SDK will have an improved user experience if code is generated to
 support this. Fundamentally, paginators are a way to automatically make a series of requests with the SDK, where subsequent
