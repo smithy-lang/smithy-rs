@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
+import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
@@ -112,7 +113,13 @@ class HttpBindingGenerator(
      */
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpLocation.HEADER)
-        val outputT = symbolProvider.toSymbol(binding.member)
+        // TODO: can we remove this check and rely on what the symbol visitor is telling us?
+        // This is the only place where we have to make the symbol optional..
+        val outputT = if (symbolProvider.isRequiredTraitHandled(binding.member)) {
+            symbolProvider.toSymbol(binding.member)
+        } else {
+            symbolProvider.toSymbol(binding.member).makeOptional()
+        }
         val fnName = "deser_header_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
             writer.rustBlock(
