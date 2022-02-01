@@ -12,6 +12,7 @@
 use std::sync::Arc;
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 
@@ -28,6 +29,7 @@ pub struct Config {
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
+    http_connector: Option<HttpConnector>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -39,6 +41,7 @@ pub struct Builder {
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
     timeout_config: Option<TimeoutConfig>,
+    http_connector: Option<HttpConnector>,
 }
 
 impl Builder {
@@ -283,6 +286,24 @@ impl Builder {
         self
     }
 
+    /// Sets the name of the app that is using the client.
+    ///
+    /// This _optional_ name is used to identify the application in the user agent that
+    /// gets sent along with requests.
+    pub fn http_connector(mut self, http_connector: HttpConnector) -> Self {
+        self.set_http_connector(Some(http_connector));
+        self
+    }
+
+    /// Sets the name of the app that is using the client.
+    ///
+    /// This _optional_ name is used to identify the application in the user agent that
+    /// gets sent along with requests.
+    pub fn set_http_connector(&mut self, http_connector: Option<HttpConnector>) -> &mut Self {
+        self.http_connector = http_connector;
+        self
+    }
+
     /// Build a [`Config`](Config) from this builder
     pub fn build(self) -> Config {
         Config {
@@ -292,6 +313,7 @@ impl Builder {
             retry_config: self.retry_config,
             sleep_impl: self.sleep_impl,
             timeout_config: self.timeout_config,
+            http_connector: self.http_connector,
         }
     }
 }
