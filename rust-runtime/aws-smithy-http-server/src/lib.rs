@@ -30,6 +30,9 @@ pub use self::routing::Router;
 #[doc(inline)]
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
+#[doc(inline)]
+pub use aws_smithy_http::byte_stream::ByteStream;
+
 /// Alias for a type-erased error type.
 pub use axum_core::BoxError;
 
