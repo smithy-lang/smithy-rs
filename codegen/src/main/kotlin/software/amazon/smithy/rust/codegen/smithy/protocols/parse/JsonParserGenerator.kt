@@ -193,7 +193,7 @@ class JsonParserGenerator(
 
     private fun getSuffixForRequiredTrait(shape: MemberShape): String {
         return if (symbolProvider.isRequiredTraitHandled(shape, false)) {
-            """.ok_or(aws_smithy_json::deserialize::Error::custom("Shape ${shape.memberName} is required"))?"""
+            """.ok_or_else(|| aws_smithy_json::deserialize::Error::custom("Shape ${shape.memberName} is required"))?"""
         } else { "" }
     }
 
