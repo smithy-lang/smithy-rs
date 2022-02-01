@@ -157,7 +157,7 @@ class HttpBindingGenerator(
                     let headers = #T::headers_for_prefix(header_map, ${binding.locationName.dq()});
                     let out: std::result::Result<_, _> = headers.map(|(key, header_name)| {
                         let values = header_map.get_all(header_name);
-                        #T(values.iter()).map(|v| (key.to_string(), v.expect("we've checked there's at least one value for this header name")))
+                        #T(values.iter()).map(|v| (key.to_string(), v.expect("we have checked there is at least one value for this header name")))
                     }).collect();
                     out.map(Some)
                     """,
