@@ -465,7 +465,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonEmptyInputAndEmptyOutput", Action.Response),
             FailingTest(RestJson, "RestJsonOutputUnionWithUnitMember", Action.Response),
             FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
-            FailingTest(RestJson, "RestJsonQueryStringEscaping", Action.Request),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", Action.Request),
             FailingTest(RestJson, "DocumentOutput", Action.Response),
             FailingTest(RestJson, "DocumentOutputString", Action.Response),
@@ -646,6 +645,15 @@ class ServerProtocolTestGenerator(
                     }
                 }""".trimMargin()).asObjectNode().get()
              ).build()
+        private fun fixRestJsonQueryStringEscaping(testCase: HttpRequestTestCase): HttpRequestTestCase =
+            testCase.toBuilder().params(
+                Node.parse("""{
+                   "queryString": "%:/?#[]@!${'$'}&'()*+,;=😹",
+                   "queryParamsMapOfStringList": {
+                       "String": ["%:/?#[]@!${'$'}&'()*+,;=😹"]
+                   }
+               }""".trimMargin()).asObjectNode().get()
+            ).build()
         // This test assumes that errors in responses are identified by an `X-Amzn-Errortype` header with the error shape name.
         // However, Smithy specifications for AWS protocols that serialize to JSON recommend that new server implementations
         // serialize error types using a `__type` field in the body.
@@ -665,11 +673,12 @@ class ServerProtocolTestGenerator(
             Pair(RestJson, "RestJsonSupportsNaNFloatQueryValues") to ::fixRestJsonSupportsNaNFloatQueryValues,
             Pair(RestJson, "RestJsonSupportsInfinityFloatQueryValues") to ::fixRestJsonSupportsInfinityFloatQueryValues,
             Pair(RestJson, "RestJsonSupportsNegativeInfinityFloatQueryValues") to ::fixRestJsonSupportsNegativeInfinityFloatQueryValues,
-            Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes
+            Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes,
+            Pair(RestJson, "RestJsonQueryStringEscaping") to ::fixRestJsonQueryStringEscaping,
         )
 
         private val BrokenResponseTests = mapOf(
-            Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage
+            Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage,
         )
     }
 }
