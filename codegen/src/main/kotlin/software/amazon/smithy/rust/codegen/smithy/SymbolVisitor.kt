@@ -208,7 +208,6 @@ class SymbolVisitor(
             symbol
         }
 
-
     private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
         return if (shape.hasTrait<RustBoxTrait>()) {
             val rustType = RustType.Box(symbol.rustType())
