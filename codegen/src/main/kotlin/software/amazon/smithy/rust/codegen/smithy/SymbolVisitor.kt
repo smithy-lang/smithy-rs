@@ -151,24 +151,24 @@ class SymbolVisitor(
     }
 
     /**
-     * This function is used in various parts of the code generation to understand if a type should be required or not
-     * in the context of making structure attributes mandatory when the @required trait is used on them.
+     * This method is used in various parts of the code generation to understand if a type should be required or not
+     * in the context of making struct members mandatory when the `@required` trait is used on the corresponding
+     * structure shape members.
      *
      * This behaviour is enabled only in the server codegen and configured when instantiating a new [SymbolVisitor].
      *
-     * This method allow to disambiguate into different scenarios:
-     * 1) client codegen: since the client does not have [config.handleRequired] set to true, we always return false to prevent
+     * This method allows to disambiguate between the following scenarios:
+     * 1) client codegen: since the client does not have [config.handleRequired] set to `true`, we always return `false` to prevent
      *    changes in the client codegen behavior.
-     * 2) server codegen: since the server has [config.handleRequired] set to true, we check first if the member is marked as required,
-     *    otherwise handle the nullability index or just return false.
+     * 2) server codegen: since the server has [config.handleRequired] set to `true`, we check first if the member is marked as required,
+     *    otherwise handle the nullability index or just return `false`.
      *
-     * The nullabiltiy index check is guarded by [useNullableIndex] as in certain scenarios (IE during deserialization) we still want to
-     * use Options to avoid changing the deserialization engine and delegate the translation from the [Option] to the real type inside
+     * The nullabiltiy index check is guarded by [useNullableIndex] as in certain scenarios (i.e. during deserialization) we still want to
+     * use `Option`s to avoid changing the deserialization engine and delegate the translation from the [Option] to the real type inside
      * the [BuilderGenerator].
      */
-    override fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean): Boolean {
-        return config.handleRequired && (member.isRequired() || (useNullableIndex && !nullableIndex.isNullable(member)))
-    }
+    override fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean) =
+        config.handleRequired && (member.isRequired || (useNullableIndex && !nullableIndex.isNullable(member)))
 
     private fun Shape.contextName(): String {
         return if (serviceShape != null) {
@@ -199,13 +199,15 @@ class SymbolVisitor(
         } else symbol
     }
 
-    private fun handleRequiredTrait(symbol: Symbol, member: MemberShape): Symbol {
-        return if (member.isRequired()) {
+    private fun handleRequiredTrait(symbol: Symbol, member: MemberShape): Symbol =
+        if (member.isRequired) {
             symbol
         } else if (nullableIndex.isNullable(member)) {
             symbol.makeOptional()
-        } else symbol
-    }
+        } else {
+            symbol
+        }
+
 
     private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
         return if (shape.hasTrait<RustBoxTrait>()) {

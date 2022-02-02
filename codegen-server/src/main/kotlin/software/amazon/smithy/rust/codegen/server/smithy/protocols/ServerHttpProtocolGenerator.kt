@@ -1075,7 +1075,6 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
-    private fun getReturnTypeForMember(member: MemberShape): String {
-        return if (symbolProvider.isRequiredTraitHandled(member)) { "value" } else { "Some(value)" }
-    }
+    private fun getReturnTypeForMember(member: MemberShape) = 
+        if (symbolProvider.isRequiredTraitHandled(member)) { "value" } else { "Some(value)" }
 }

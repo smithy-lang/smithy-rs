@@ -191,11 +191,12 @@ class JsonParserGenerator(
         return structureParser(fnName, inputShape, includedMembers)
     }
 
-    private fun getSuffixForRequiredTrait(shape: MemberShape): String {
-        return if (symbolProvider.isRequiredTraitHandled(shape, false)) {
-            """.ok_or_else(|| aws_smithy_json::deserialize::Error::custom("Shape ${shape.memberName} is required"))?"""
-        } else { "" }
-    }
+    private fun getSuffixForRequiredTrait(shape: MemberShape) = 
+        if (symbolProvider.isRequiredTraitHandled(shape, false)) {
+            """.ok_or_else(|| aws_smithy_json::deserialize::Error::custom("shape ${shape.memberName} is required"))?"""
+        } else { 
+            "" 
+        }
 
     private fun RustWriter.expectEndOfTokenStream() {
         rustBlock("if tokens.next().is_some()") {

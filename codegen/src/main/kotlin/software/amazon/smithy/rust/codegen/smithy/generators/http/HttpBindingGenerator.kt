@@ -380,7 +380,7 @@ class HttpBindingGenerator(
                 )
             else -> {
                 val returnValue = if (symbolProvider.isRequiredTraitHandled(memberShape)) {
-                    """$parsedValue.pop().ok_or_else(|| #{header_util}::ParseError::new_with_message("missing mandatory header '$locationName'"))"""
+                    """$parsedValue.pop().ok_or_else(|| #{header_util}::ParseError::new_with_message("missing required header '$locationName'"))"""
                 } else {
                     "Ok($parsedValue.pop())"
                 }
