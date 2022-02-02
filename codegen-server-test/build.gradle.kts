@@ -32,7 +32,10 @@ dependencies {
 data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
 
 val CodegenTests = listOf(
-    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json")
+    CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
+    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
+    CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+    CodegenTest("com.amazonaws.s3#AmazonS3", "s3")
 )
 
 /**
@@ -124,7 +127,6 @@ tasks.register<Exec>("cargoClippy") {
     dependsOn("assemble")
 }
 
-// tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
-tasks["test"].finalizedBy("cargoTest")
+tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
 
 tasks["clean"].doFirst { delete("smithy-build.json") }
