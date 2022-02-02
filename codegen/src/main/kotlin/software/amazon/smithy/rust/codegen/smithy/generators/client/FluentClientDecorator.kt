@@ -550,7 +550,7 @@ fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvide
 fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, shape: StructureShape, model: Model): List<String> {
     val structName = symbolProvider.toSymbol(shape).rustType().qualifiedName()
     return shape.members().map { memberShape ->
-        val name = symbolProvider.toMemberName(memberShape).removePrefix("r##")
+        val name = symbolProvider.toMemberName(memberShape)
         val member = symbolProvider.toSymbol(memberShape).rustType().render(fullyQualified = false)
         val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs = when (docTrait?.value?.isNotBlank()) {
@@ -581,7 +581,7 @@ fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: SymbolProvider): 
  * _NOTE: This function generates the type names that appear under **"The fluent builder is configurable:"**_
  */
 fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
-    val memberName = symbolProvider.toMemberName(this).removePrefix("r##")
+    val memberName = symbolProvider.toMemberName(this)
     val outerType = symbolProvider.toSymbol(this).rustType()
 
     return "$memberName(${outerType.stripOuter<RustType.Option>().asArgumentType(fullyQualified = false)})"
