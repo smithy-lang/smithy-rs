@@ -71,9 +71,15 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
     abstract fun enumMeta(stringShape: StringShape): RustMetadata
 }
 
-class BaseSymbolMetadataProvider(base: RustSymbolProvider, handleRequired: Boolean = false) : SymbolMetadataProvider(base) {
-    // Server structure should not have #[non_exaustive] tag as model changes are always breaking changes.
-    val additionalAttributes = if (handleRequired) { listOf() } else { listOf(NonExhaustive) }
+/**
+ * The base metadata supports a list of attributes that are used by generators to decorate code.
+ * By default we apply #[non_exhaustive] only to client structures since model changes should
+ * be considered as breaking only when generating server code.
+ */
+class BaseSymbolMetadataProvider(
+    base: RustSymbolProvider,
+    additionalAttributes: List<Attribute> = listOf(NonExhaustive)
+) : SymbolMetadataProvider(base) {
     private val containerDefault = RustMetadata(
         Attribute.Derives(defaultDerives.toSet()),
         additionalAttributes = additionalAttributes,
