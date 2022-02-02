@@ -12,7 +12,6 @@
 use std::sync::Arc;
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
