@@ -519,17 +519,19 @@ class FluentClientGenerator(
 /**
  * For a given `operation` shape, return a list of strings where each string describes the name and input type of one of
  * the operation's corresponding fluent builder methods as well as that method's documentation from the smithy model
+ *
+ * _NOTE: This function generates the docs that appear under **"The fluent builder is configurable:"**_
  */
 fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvider, operation: OperationShape, model: Model): List<String> {
     val input = operation.inputShape(model)
     val fluentBuilderFullyQualifiedName = operation.fullyQualifiedFluentBuilder(symbolProvider)
-    return input.members().map { member ->
-        val builderInputDoc = member.asFluentBuilderInputDoc(symbolProvider)
-        val builderInputLink = "$fluentBuilderFullyQualifiedName::${symbolProvider.toMemberName(member)}"
-        val builderSetterDoc = member.asFluentBuilderSetterDoc(symbolProvider)
-        val builderSetterLink = "$fluentBuilderFullyQualifiedName::${member.setterName()}"
+    return input.members().map { memberShape ->
+        val builderInputDoc = memberShape.asFluentBuilderInputDoc(symbolProvider)
+        val builderInputLink = docLink("$fluentBuilderFullyQualifiedName::${symbolProvider.toMemberName(memberShape)}")
+        val builderSetterDoc = memberShape.asFluentBuilderSetterDoc(symbolProvider)
+        val builderSetterLink = docLink("$fluentBuilderFullyQualifiedName::${memberShape.setterName()}")
 
-        val docTrait = member.getMemberTrait(model, DocumentationTrait::class.java).orNull()
+        val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs = when (docTrait?.value?.isNotBlank()) {
             true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
             else -> "(undocumented)"
@@ -542,6 +544,8 @@ fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvide
 /**
  * For a give `struct` shape, return a list of strings where each string describes the name and type of a struct field
  * as well as that field's documentation from the smithy model
+ *
+ *  * _NOTE: This function generates the list of types that appear under **"On success, responds with"**_
  */
 fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, shape: StructureShape, model: Model): List<String> {
     val structName = symbolProvider.toSymbol(shape).rustType().qualifiedName()
@@ -561,6 +565,8 @@ fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, 
 /**
  * Generate a valid fully-qualified Type for a fluent builder e.g.
  * `OperationShape(AssumeRole)` -> `"crate::client::fluent_builders::AssumeRole"`
+ *
+ *  * _NOTE: This function generates the links that appear under **"The fluent builder is configurable:"**_
  */
 fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: SymbolProvider): String {
     val operationName = symbolProvider.toSymbol(this).name
@@ -571,6 +577,8 @@ fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: SymbolProvider): 
 /**
  * Generate a string that looks like a Rust function pointer for documenting a fluent builder method e.g.
  * `<MemberShape representing a struct method>` -> `"method_name(MethodInputType)"`
+ *
+ * _NOTE: This function generates the type names that appear under **"The fluent builder is configurable:"**_
  */
 fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
     val memberName = symbolProvider.toMemberName(this)
@@ -582,6 +590,8 @@ fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String 
 /**
  * Generate a string that looks like a Rust function pointer for documenting a fluent builder setter method e.g.
  * `<MemberShape representing a struct method>` -> `"set_method_name(Option<MethodInputType>)"`
+ *
+ *  _NOTE: This function generates the setter type names that appear under **"The fluent builder is configurable:"**_
  */
 fun MemberShape.asFluentBuilderSetterDoc(symbolProvider: SymbolProvider): String {
     val memberName = this.setterName()
