@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomizati
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation

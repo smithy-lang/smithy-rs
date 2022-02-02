@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.client
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 
 class FluentClientCore(private val model: Model) {
     /** Generate and write Rust code for a builder method that sets a Vec<T> */
