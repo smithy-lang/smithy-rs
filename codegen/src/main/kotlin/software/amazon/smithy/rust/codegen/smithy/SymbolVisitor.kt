@@ -156,6 +156,8 @@ class SymbolVisitor(
      * This function is used in various parts of the code generation to understand if a type should be required or not
      * in the context of making structure attributes mandatory when the @required trait is used on them.
      *
+     * This behaviour is enabled only in the server codegen and configured when instantiating a new [SymbolVisitor].
+     *
      * This method allow to disambiguate into different scenarios:
      * 1) client codegen: since the client does not have [config.handleRequired] set to true, we always return false to prevent
      *    changes in the client codegen behavior.
@@ -165,21 +167,9 @@ class SymbolVisitor(
      * The nullabiltiy index check is guarded by [useNullableIndex] as in certain scenarios (IE during deserialization) we still want to
      * use Options to avoid changing the deserialization engine and delegate the translation from the [Option] to the real type inside
      * the [BuilderGenerator].
-     *
-     * This method is written as a set of if / else for clarity.
      */
     override fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean): Boolean {
-        return if (config.handleRequired) {
-            if (member.isRequired()) {
-                true
-            } else if (useNullableIndex && !nullableIndex.isNullable(member)) {
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
+        return config.handleRequired && (member.isRequired() || (useNullableIndex && !nullableIndex.isNullable(member)))
     }
 
     private fun Shape.contextName(): String {
