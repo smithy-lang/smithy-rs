@@ -527,7 +527,7 @@ fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvide
         val builderInputDoc = memberShape.asFluentBuilderInputDoc(symbolProvider)
         val builderInputLink = docLink("$fluentBuilderFullyQualifiedName::${symbolProvider.toMemberName(memberShape)}")
         val builderSetterDoc = memberShape.asFluentBuilderSetterDoc(symbolProvider)
-        val builderSetterLink = "$fluentBuilderFullyQualifiedName::${memberShape.setterName()}"
+        val builderSetterLink = docLink("$fluentBuilderFullyQualifiedName::${memberShape.setterName()}")
 
         val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs = when (docTrait?.value?.isNotBlank()) {
@@ -546,7 +546,7 @@ fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvide
 fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, shape: StructureShape, model: Model): List<String> {
     val structName = symbolProvider.toSymbol(shape).rustType().qualifiedName()
     return shape.members().map { memberShape ->
-        val name = memberShape.memberName.toSnakeCase()
+        val name = symbolProvider.toMemberName(memberShape)
         val member = symbolProvider.toSymbol(memberShape).rustType().render(fullyQualified = false)
         val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs = when (docTrait?.value?.isNotBlank()) {
@@ -573,7 +573,7 @@ fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: SymbolProvider): 
  * `<MemberShape representing a struct method>` -> `"method_name(MethodInputType)"`
  */
 fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
-    val memberName = this.memberName.toSnakeCase()
+    val memberName = symbolProvider.toMemberName(this)
     val outerType = symbolProvider.toSymbol(this).rustType()
 
     return "$memberName(${outerType.stripOuter<RustType.Option>().asArgumentType(fullyQualified = false)})"
