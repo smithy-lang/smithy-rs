@@ -12,6 +12,7 @@
 use std::sync::Arc;
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
@@ -286,19 +287,13 @@ impl Builder {
         self
     }
 
-    /// Sets the name of the app that is using the client.
-    ///
-    /// This _optional_ name is used to identify the application in the user agent that
-    /// gets sent along with requests.
+    /// Sets the HTTP connector that clients will use to make HTTP requests.
     pub fn http_connector(mut self, http_connector: HttpConnector) -> Self {
         self.set_http_connector(Some(http_connector));
         self
     }
 
-    /// Sets the name of the app that is using the client.
-    ///
-    /// This _optional_ name is used to identify the application in the user agent that
-    /// gets sent along with requests.
+    /// Sets the HTTP connector that clients will use to make HTTP requests.
     pub fn set_http_connector(&mut self, http_connector: Option<HttpConnector>) -> &mut Self {
         self.http_connector = http_connector;
         self
@@ -348,6 +343,11 @@ impl Config {
     /// Configured app name
     pub fn app_name(&self) -> Option<&AppName> {
         self.app_name.as_ref()
+    }
+
+    /// Configured HTTP Connector
+    pub fn http_connector(&self) -> Option<&HttpConnector> {
+        self.http_connector.as_ref()
     }
 
     /// Config builder
