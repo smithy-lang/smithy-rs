@@ -558,7 +558,6 @@ private class ServerHttpProtocolImplGenerator(
     ) {
         val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
-        val streamingMember = inputShape.findStreamingMember(model)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
         val parser = structuredDataParser.serverInputParser(operationShape)
@@ -576,23 +575,13 @@ private class ServerHttpProtocolImplGenerator(
                 *codegenScope,
                 "parser" to parser,
             )
-        } else if (streamingMember != null) {
-            rustTemplate(
-                """
-                let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
-                input = input.${streamingMember.setterName()}(Some(body.into()));
-                """.trimIndent(),
-                *codegenScope
-            )
         }
-        if (streamingMember == null) {
-            for (binding in bindings) {
-                val member = binding.member
-                val parsedValue = serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
-                if (parsedValue != null) {
-                    withBlock("input = input.${member.setterName()}(", ");") {
-                        parsedValue(this)
-                    }
+        for (binding in bindings) {
+            val member = binding.member
+            val parsedValue = serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
+            if (parsedValue != null) {
+                withBlock("input = input.${member.setterName()}(", ");") {
+                    parsedValue(this)
                 }
             }
         }
@@ -615,18 +604,28 @@ private class ServerHttpProtocolImplGenerator(
         return when (binding.location) {
             HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
             HttpLocation.PAYLOAD -> {
-                val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
-                    rust("#T($body)", structuredDataParser.payloadParser(binding.member))
-                }
-                val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
-                    operationShape,
-                    binding,
-                    errorSymbol,
-                    structuredHandler = structureShapeHandler
-                )
                 return if (binding.member.isStreaming(model)) {
-                    writable { rust("""todo!("streaming request bodies");""") }
+                    writable {
+                        rustTemplate(
+                            """
+                            {
+                                let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
+                                Some(body.into())
+                            }
+                            """.trimIndent(),
+                            *codegenScope
+                        )
+                    }
                 } else {
+                    val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
+                        rust("#T($body)", structuredDataParser.payloadParser(binding.member))
+                    }
+                    val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
+                        operationShape,
+                        binding,
+                        errorSymbol,
+                        structuredHandler = structureShapeHandler
+                    )
                     writable {
                         rustTemplate(
                             """
