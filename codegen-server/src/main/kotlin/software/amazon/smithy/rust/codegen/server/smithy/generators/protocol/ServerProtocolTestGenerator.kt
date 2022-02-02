@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -326,15 +327,37 @@ class ServerProtocolTestGenerator(
             """
             use #{AxumCore}::extract::FromRequest;
             let mut http_request = #{AxumCore}::extract::RequestParts::new(http_request);
-            let input_wrapper = super::$operationName::from_request(&mut http_request).await.expect("failed to parse request");
-            let input = input_wrapper.0;
+            let parsed = super::$operationName::from_request(&mut http_request).await.expect("failed to parse request").0;
             """,
             *codegenScope,
         )
-        if (operationShape.outputShape(model).hasStreamingMember(model)) {
-            rustWriter.rust("""todo!("streaming types aren't supported yet");""")
+
+        if (inputShape.hasStreamingMember(model)) {
+            // A streaming shape does not implement `PartialEq`, so we have to iterate over the input shape's members
+            // and handle the equality assertion separately.
+            for (member in inputShape.members()) {
+                val memberName = codegenContext.symbolProvider.toMemberName(member)
+                if (member.isStreaming(codegenContext.model)) {
+                    rustWriter.rustTemplate(
+                        """
+                        #{AssertEq}(
+                            parsed.$memberName.collect().await.unwrap().into_bytes(),
+                            expected.$memberName.collect().await.unwrap().into_bytes()
+                        );
+                        """,
+                        *codegenScope
+                    )
+                } else {
+                    rustWriter.rustTemplate(
+                        """
+                        #{AssertEq}(parsed.$memberName, expected.$memberName, "Unexpected value for `$memberName`");
+                        """,
+                        *codegenScope
+                    )
+                }
+            }
         } else {
-            rustWriter.rustTemplate("#{AssertEq}(input, expected);", *codegenScope)
+            rustWriter.rustTemplate("#{AssertEq}(parsed, expected);", *codegenScope)
         }
     }
 
@@ -511,12 +534,11 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonNoInputAndNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonNoInputAndOutputWithJson", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithBlob", Action.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithNoBlobBody", Action.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", Action.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithNoBlobBody", Action.Request),
+            FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Response),
+            FailingTest(RestJson, "RestJsonSimpleScalarProperties", Action.Response),
+            FailingTest(RestJson, "RestJsonSupportsInfinityFloatInputs", Action.Response),
+            FailingTest(RestJson, "RestJsonSupportsNegativeInfinityFloatInputs", Action.Response),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", Action.Response),
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithMediaTypeWithBlob", Action.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", Action.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", Action.Request),
 
