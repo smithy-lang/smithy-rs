@@ -71,10 +71,12 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
     abstract fun enumMeta(stringShape: StringShape): RustMetadata
 }
 
-class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvider(base) {
+class BaseSymbolMetadataProvider(base: RustSymbolProvider, handleRequired: Boolean = false) : SymbolMetadataProvider(base) {
+    // Server structure should not have #[non_exaustive] tag as model changes are always breaking changes.
+    val additionalAttributes = if (handleRequired) { listOf() } else { listOf(NonExhaustive) }
     private val containerDefault = RustMetadata(
         Attribute.Derives(defaultDerives.toSet()),
-        additionalAttributes = listOf(NonExhaustive),
+        additionalAttributes = additionalAttributes,
         public = true
     )
 
