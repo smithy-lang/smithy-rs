@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 //! Default connectors based on what TLS features are active. Also contains HTTP-related abstractions
 //! that enable passing HTTP connectors around.
 

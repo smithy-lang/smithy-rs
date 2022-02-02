@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use crate::environment::app_name::EnvironmentVariableAppNameProvider;
 use crate::profile::app_name;
 use crate::provider_config::ProviderConfig;

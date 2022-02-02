@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 use aws_smithy_types::timeout::TimeoutConfig;
 
 use crate::environment::timeout_config::EnvironmentVariableTimeoutConfigProvider;
