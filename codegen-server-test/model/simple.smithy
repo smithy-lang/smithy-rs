@@ -20,12 +20,18 @@ operation Healthcheck {
 }
 
 structure HealthcheckInputRequest {
-    member: FloatSet
 }
 
 structure HealthcheckOutputResponse {
+    @httpPayload
+    stringPayload: String,
+
+    // @httpPayload
+    // intPayload: Integer,
+
+    // @httpPayload
+    // blobPayload: StreamingBlob
 }
 
-set FloatSet {
-    member: Float
-}
+@streaming
+blob StreamingBlob
