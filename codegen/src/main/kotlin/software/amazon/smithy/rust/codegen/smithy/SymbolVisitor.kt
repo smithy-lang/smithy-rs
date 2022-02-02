@@ -47,7 +47,6 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
-import java.util.logging.Logger
 import kotlin.reflect.KClass
 
 val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
@@ -144,7 +143,6 @@ class SymbolVisitor(
     private val config: SymbolVisitorConfig = DefaultConfig
 ) : RustSymbolProvider,
     ShapeVisitor<Symbol> {
-    private val logger = Logger.getLogger(javaClass.name)
     private val nullableIndex = NullableIndex.of(model)
     override fun config(): SymbolVisitorConfig = config
 
