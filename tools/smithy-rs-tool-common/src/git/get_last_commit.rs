@@ -10,14 +10,14 @@ use std::process::Command;
 
 pub struct GetLastCommit {
     program: &'static str,
-    path: PathBuf,
+    repo_path: PathBuf,
 }
 
 impl GetLastCommit {
-    pub fn new(path: impl Into<PathBuf>) -> GetLastCommit {
+    pub fn new(repo_path: impl Into<PathBuf>) -> GetLastCommit {
         GetLastCommit {
             program: "git",
-            path: path.into(),
+            repo_path: repo_path.into(),
         }
     }
 }
@@ -29,7 +29,7 @@ impl ShellOperation for GetLastCommit {
         let mut command = Command::new(self.program);
         command.arg("rev-parse");
         command.arg("HEAD");
-        command.current_dir(&self.path);
+        command.current_dir(&self.repo_path);
 
         let output = command.output()?;
         handle_failure("get last commit", &output)?;
@@ -46,7 +46,7 @@ mod tests {
     fn get_last_commit_success() {
         let last_commit = GetLastCommit {
             program: "./git_revparse_head",
-            path: "./fake_git".into(),
+            repo_path: "./fake_git".into(),
         }
         .run()
         .unwrap();
@@ -57,7 +57,7 @@ mod tests {
     fn get_last_commit_faijlure() {
         let result = GetLastCommit {
             program: "./git_fails",
-            path: "./fake_git".into(),
+            repo_path: "./fake_git".into(),
         }
         .run();
 
