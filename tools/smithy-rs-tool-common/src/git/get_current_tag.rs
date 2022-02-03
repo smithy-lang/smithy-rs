@@ -5,34 +5,33 @@
 
 use crate::shell::{handle_failure, output_text, ShellOperation};
 use anyhow::Result;
-use async_trait::async_trait;
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 
-pub struct GetCurrentTag<'a> {
+pub struct GetCurrentTag {
     program: &'static str,
-    path: &'a Path,
+    path: PathBuf,
 }
 
-impl<'a> GetCurrentTag<'a> {
-    pub fn new(path: &'a Path) -> GetCurrentTag<'a> {
+impl GetCurrentTag {
+    pub fn new(path: impl Into<PathBuf>) -> GetCurrentTag {
         GetCurrentTag {
             program: "git",
-            path,
+            path: path.into(),
         }
     }
 }
 
-#[async_trait]
-impl<'a> ShellOperation for GetCurrentTag<'a> {
+impl ShellOperation for GetCurrentTag {
     type Output = String;
 
-    async fn spawn(&self) -> Result<String> {
+    fn run(&self) -> Result<String> {
         let mut command = Command::new(self.program);
         command.arg("describe");
         command.arg("--tags");
-        command.current_dir(self.path);
-        let output = tokio::task::spawn_blocking(move || command.output()).await??;
+        command.current_dir(&self.path);
+
+        let output = command.output()?;
         handle_failure("get current tag", &output)?;
         let (stdout, _) = output_text(&output);
         Ok(stdout.trim().into())
@@ -43,11 +42,23 @@ impl<'a> ShellOperation for GetCurrentTag<'a> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn get_current_tag_success() {
+    #[test]
+    fn get_current_tag_success() {
         let tag = GetCurrentTag {
             program: "./git_describe_tags",
-            path: "./fake_git".as_ref(),
+            path: "./fake_git".into(),
+        }
+        .run()
+        .unwrap();
+        assert_eq!("some-tag", tag);
+    }
+
+    #[cfg(feature = "async-shell")]
+    #[tokio::test]
+    async fn get_current_tag_success_async() {
+        let tag = GetCurrentTag {
+            program: "./git_describe_tags",
+            path: "./fake_git".into(),
         }
         .spawn()
         .await
@@ -55,14 +66,13 @@ mod tests {
         assert_eq!("some-tag", tag);
     }
 
-    #[tokio::test]
-    async fn get_current_tag_failure() {
+    #[test]
+    fn get_current_tag_failure() {
         let result = GetCurrentTag {
             program: "./git_fails",
-            path: "./fake_git".as_ref(),
+            path: "./fake_git".into(),
         }
-        .spawn()
-        .await;
+        .run();
 
         assert!(result.is_err(), "expected error, got {:?}", result);
         assert_eq!(

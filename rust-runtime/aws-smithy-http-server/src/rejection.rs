@@ -178,6 +178,12 @@ impl From<aws_smithy_types::date_time::DateTimeParseError> for SmithyRejection {
     }
 }
 
+impl From<aws_smithy_types::date_time::DateTimeFormatError> for SmithyRejection {
+    fn from(err: aws_smithy_types::date_time::DateTimeFormatError) -> Self {
+        SmithyRejection::Serialize(Serialize::from_err(err))
+    }
+}
+
 impl From<aws_smithy_types::primitive::PrimitiveParseError> for SmithyRejection {
     fn from(err: aws_smithy_types::primitive::PrimitiveParseError) -> Self {
         SmithyRejection::Deserialize(Deserialize::from_err(err))

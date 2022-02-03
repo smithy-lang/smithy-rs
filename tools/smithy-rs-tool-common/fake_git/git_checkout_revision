@@ -1,0 +1,5 @@
+#!/bin/bash
+if [[ "$1" != "checkout" || "$2" != "test-revision" ]]; then
+    echo "wrong arguments" >&2
+    exit 1
+fi

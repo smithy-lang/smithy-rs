@@ -14,6 +14,7 @@ authors = ["Zelda Hessler <zhessler@amazon.com>"]
 anyhow = "1"
 git2 = "0.13"
 gitignore = "1"
+smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
 structopt = { version = "0.3", default-features = false }
 
 [dev-dependencies]

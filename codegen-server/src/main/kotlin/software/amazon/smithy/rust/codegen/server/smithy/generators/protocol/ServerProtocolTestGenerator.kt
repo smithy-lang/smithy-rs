@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -212,16 +213,16 @@ class ServerProtocolTestGenerator(
 
         rustTemplate(
             """
-                ##[allow(unused_mut)] let mut http_request = http::Request::builder()
-                    .uri("${httpRequestTestCase.uri}")
-                """,
-                *codegenScope
+            ##[allow(unused_mut)] let mut http_request = http::Request::builder()
+                .uri("${httpRequestTestCase.uri}")
+            """,
+            *codegenScope
         )
         for (header in httpRequestTestCase.headers) {
             rust(".header(${header.key.dq()}, ${header.value.dq()})")
         }
         rustTemplate(
-    """
+            """
             .body(#{SmithyHttpServer}::Body::from(#{Bytes}::from_static(b${httpRequestTestCase.body.orNull()?.dq()})))
             .unwrap();
             """,
@@ -310,14 +311,9 @@ class ServerProtocolTestGenerator(
         checkForbidHeaders(this, "&http_response.headers()", testCase.forbidHeaders)
         checkRequiredHeaders(this, "&http_response.headers()", testCase.requireHeaders)
         checkHttpResponseExtensions(this)
-        if (!testCase.body.isEmpty) {
-            rustTemplate(
-                """
-                let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
-                #{AssertEq}(${escape(testCase.body.get()).dq()}, body);
-                """,
-                *codegenScope
-            )
+        // "If no request body is defined, then no assertions are made about the body of the message."
+        if (testCase.body.isPresent) {
+            checkBody(this, testCase.body.get(), testCase.bodyMediaType.orNull())
         }
     }
 
@@ -331,15 +327,65 @@ class ServerProtocolTestGenerator(
             """
             use #{AxumCore}::extract::FromRequest;
             let mut http_request = #{AxumCore}::extract::RequestParts::new(http_request);
-            let input_wrapper = super::$operationName::from_request(&mut http_request).await.expect("failed to parse request");
-            let input = input_wrapper.0;
+            let parsed = super::$operationName::from_request(&mut http_request).await.expect("failed to parse request").0;
             """,
             *codegenScope,
         )
-        if (operationShape.outputShape(model).hasStreamingMember(model)) {
-            rustWriter.rust("""todo!("streaming types aren't supported yet");""")
+
+        if (inputShape.hasStreamingMember(model)) {
+            // A streaming shape does not implement `PartialEq`, so we have to iterate over the input shape's members
+            // and handle the equality assertion separately.
+            for (member in inputShape.members()) {
+                val memberName = codegenContext.symbolProvider.toMemberName(member)
+                if (member.isStreaming(codegenContext.model)) {
+                    rustWriter.rustTemplate(
+                        """
+                        #{AssertEq}(
+                            parsed.$memberName.collect().await.unwrap().into_bytes(),
+                            expected.$memberName.collect().await.unwrap().into_bytes()
+                        );
+                        """,
+                        *codegenScope
+                    )
+                } else {
+                    rustWriter.rustTemplate(
+                        """
+                        #{AssertEq}(parsed.$memberName, expected.$memberName, "Unexpected value for `$memberName`");
+                        """,
+                        *codegenScope
+                    )
+                }
+            }
         } else {
-            rustWriter.rustTemplate("#{AssertEq}(input, expected);", *codegenScope)
+            rustWriter.rustTemplate("#{AssertEq}(parsed, expected);", *codegenScope)
+        }
+    }
+
+    private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
+        rustWriter.rustTemplate(
+            """
+            let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
+            """,
+            *codegenScope
+        )
+        if (body == "") {
+            rustWriter.rustTemplate(
+                """
+                // No body
+                #{AssertEq}(std::str::from_utf8(&body).unwrap(), "");
+                """,
+                *codegenScope
+            )
+        } else {
+            assertOk(rustWriter) {
+                rustWriter.write(
+                    "#T(&body, ${
+                    rustWriter.escape(body).dq()
+                    }, #T::from(${(mediaType ?: "unknown").dq()}))",
+                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_body"),
+                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType")
+                )
+            }
         }
     }
 
@@ -363,9 +409,9 @@ class ServerProtocolTestGenerator(
         basicCheck(
             requireHeaders,
             rustWriter,
-           "required_headers",
-           actualExpression,
-           "require_headers"
+            "required_headers",
+            actualExpression,
+            "require_headers"
         )
     }
 
@@ -373,9 +419,9 @@ class ServerProtocolTestGenerator(
         basicCheck(
             forbidHeaders,
             rustWriter,
-           "forbidden_headers",
+            "forbidden_headers",
             actualExpression,
-           "forbid_headers"
+            "forbid_headers"
         )
     }
 
@@ -463,14 +509,8 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
 
             FailingTest(RestJson, "RestJsonEmptyInputAndEmptyOutput", Action.Response),
-            FailingTest(RestJson, "RestJsonOutputUnionWithUnitMember", Action.Response),
             FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", Action.Request),
-            FailingTest(RestJson, "DocumentOutput", Action.Response),
-            FailingTest(RestJson, "DocumentOutputString", Action.Response),
-            FailingTest(RestJson, "DocumentOutputNumber", Action.Response),
-            FailingTest(RestJson, "DocumentOutputBoolean", Action.Response),
-            FailingTest(RestJson, "DocumentOutputArray", Action.Response),
             FailingTest(RestJson, "DocumentTypeAsPayloadOutput", Action.Response),
             FailingTest(RestJson, "DocumentTypeAsPayloadOutputString", Action.Response),
             FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
@@ -491,48 +531,10 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonSupportsNaNFloatLabels", Action.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCode", Action.Response),
             FailingTest(RestJson, "StringPayloadResponse", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonBlobs", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonEnums", Action.Response),
-            FailingTest(RestJson, "RestJsonLists", Action.Response),
-            FailingTest(RestJson, "RestJsonListsEmpty", Action.Response),
-            FailingTest(RestJson, "RestJsonListsSerializeNull", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonMaps", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializesNullMapValues", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializesZeroValuesInMaps", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializesSparseSetMap", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializesDenseSetMap", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializesSparseSetMapAndRetainsNull", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonTimestamps", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonTimestampsWithDateTimeFormat", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonTimestampsWithEpochSecondsFormat", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonTimestampsWithHttpDateFormat", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeStringUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeBooleanUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeNumberUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeBlobUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeTimestampUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeEnumUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeListUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeMapUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeStructureUnionValue", Action.Response),
             FailingTest(RestJson, "RestJsonNoInputAndNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonNoInputAndOutputWithJson", Action.Response),
-            FailingTest(RestJson, "RestJsonRecursiveShapes", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Request),
-            FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Response),
-            FailingTest(RestJson, "RestJsonSimpleScalarProperties", Action.Response),
-            FailingTest(RestJson, "RestJsonSupportsInfinityFloatInputs", Action.Response),
-            FailingTest(RestJson, "RestJsonSupportsNegativeInfinityFloatInputs", Action.Response),
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithBlob", Action.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithNoBlobBody", Action.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithBlob", Action.Response),
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithNoBlobBody", Action.Response),
-            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", Action.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithNoBlobBody", Action.Request),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", Action.Response),
-            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithNoBlobBody", Action.Response),
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithMediaTypeWithBlob", Action.Request),
-            FailingTest(RestJson, "RestJsonStreamingTraitsWithMediaTypeWithBlob", Action.Response),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", Action.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", Action.Request),
 
@@ -603,56 +605,64 @@ class ServerProtocolTestGenerator(
                 ).asObjectNode().get()
             ).build()
         private fun fixRestJsonAllQueryStringTypes(testCase: HttpRequestTestCase): HttpRequestTestCase =
-             testCase.toBuilder().params(
-                 Node.parse("""{
-                    "queryString": "Hello there",
-                    "queryStringList": ["a", "b", "c"],
-                    "queryStringSet": ["a", "b", "c"],
-                    "queryByte": 1,
-                    "queryShort": 2,
-                    "queryInteger": 3,
-                    "queryIntegerList": [1, 2, 3],
-                    "queryIntegerSet": [1, 2, 3],
-                    "queryLong": 4,
-                    "queryFloat": 1.1,
-                    "queryDouble": 1.1,
-                    "queryDoubleList": [1.1, 2.1, 3.1],
-                    "queryBoolean": true,
-                    "queryBooleanList": [true, false, true],
-                    "queryTimestamp": 1,
-                    "queryTimestampList": [1, 2, 3],
-                    "queryEnum": "Foo",
-                    "queryEnumList": ["Foo", "Baz", "Bar"],
-                    "queryParamsMapOfStringList": {
-                        "String": ["Hello there"],
-                        "StringList": ["a", "b", "c"],
-                        "StringSet": ["a", "b", "c"],
-                        "Byte": ["1"],
-                        "Short": ["2"],
-                        "Integer": ["3"],
-                        "IntegerList": ["1", "2", "3"],
-                        "IntegerSet": ["1", "2", "3"],
-                        "Long": ["4"],
-                        "Float": ["1.1"],
-                        "Double": ["1.1"],
-                        "DoubleList": ["1.1", "2.1", "3.1"],
-                        "Boolean": ["true"],
-                        "BooleanList": ["true", "false", "true"],
-                        "Timestamp": ["1970-01-01T00:00:01Z"],
-                        "TimestampList": ["1970-01-01T00:00:01Z", "1970-01-01T00:00:02Z", "1970-01-01T00:00:03Z"],
-                        "Enum": ["Foo"],
-                        "EnumList": ["Foo", "Baz", "Bar"]
+            testCase.toBuilder().params(
+                Node.parse(
+                    """
+                    {
+                        "queryString": "Hello there",
+                        "queryStringList": ["a", "b", "c"],
+                        "queryStringSet": ["a", "b", "c"],
+                        "queryByte": 1,
+                        "queryShort": 2,
+                        "queryInteger": 3,
+                        "queryIntegerList": [1, 2, 3],
+                        "queryIntegerSet": [1, 2, 3],
+                        "queryLong": 4,
+                        "queryFloat": 1.1,
+                        "queryDouble": 1.1,
+                        "queryDoubleList": [1.1, 2.1, 3.1],
+                        "queryBoolean": true,
+                        "queryBooleanList": [true, false, true],
+                        "queryTimestamp": 1,
+                        "queryTimestampList": [1, 2, 3],
+                        "queryEnum": "Foo",
+                        "queryEnumList": ["Foo", "Baz", "Bar"],
+                        "queryParamsMapOfStringList": {
+                            "String": ["Hello there"],
+                            "StringList": ["a", "b", "c"],
+                            "StringSet": ["a", "b", "c"],
+                            "Byte": ["1"],
+                            "Short": ["2"],
+                            "Integer": ["3"],
+                            "IntegerList": ["1", "2", "3"],
+                            "IntegerSet": ["1", "2", "3"],
+                            "Long": ["4"],
+                            "Float": ["1.1"],
+                            "Double": ["1.1"],
+                            "DoubleList": ["1.1", "2.1", "3.1"],
+                            "Boolean": ["true"],
+                            "BooleanList": ["true", "false", "true"],
+                            "Timestamp": ["1970-01-01T00:00:01Z"],
+                            "TimestampList": ["1970-01-01T00:00:01Z", "1970-01-01T00:00:02Z", "1970-01-01T00:00:03Z"],
+                            "Enum": ["Foo"],
+                            "EnumList": ["Foo", "Baz", "Bar"]
+                        }
                     }
-                }""".trimMargin()).asObjectNode().get()
-             ).build()
+                    """.trimMargin()
+                ).asObjectNode().get()
+            ).build()
         private fun fixRestJsonQueryStringEscaping(testCase: HttpRequestTestCase): HttpRequestTestCase =
             testCase.toBuilder().params(
-                Node.parse("""{
-                   "queryString": "%:/?#[]@!${'$'}&'()*+,;=😹",
-                   "queryParamsMapOfStringList": {
-                       "String": ["%:/?#[]@!${'$'}&'()*+,;=😹"]
-                   }
-               }""".trimMargin()).asObjectNode().get()
+                Node.parse(
+                    """
+                    {
+                        "queryString": "%:/?#[]@!${'$'}&'()*+,;=😹",
+                        "queryParamsMapOfStringList": {
+                            "String": ["%:/?#[]@!${'$'}&'()*+,;=😹"]
+                        }
+                    }
+                    """.trimMargin()
+                ).asObjectNode().get()
             ).build()
         // This test assumes that errors in responses are identified by an `X-Amzn-Errortype` header with the error shape name.
         // However, Smithy specifications for AWS protocols that serialize to JSON recommend that new server implementations
