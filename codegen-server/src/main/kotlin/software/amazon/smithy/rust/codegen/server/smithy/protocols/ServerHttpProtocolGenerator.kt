@@ -48,6 +48,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
@@ -444,12 +445,25 @@ private class ServerHttpProtocolImplGenerator(
         operationShape: OperationShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        // avoid non-usage warnings for response
+        val bodyGenerator = HttpBoundProtocolBodyGenerator(codegenContext, protocol)
+        withBlock("let body =", ";") {
+            bodyGenerator.generateBody(this, "output", operationShape)
+        }
+
+        // val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
+        // structuredDataSerializer.serverOutputSerializer(operationShape)?.let { serializer ->
+        //     rust(
+        //         "let payload = #T(output)?;",
+        //         serializer
+        //     )
+        // } ?: rust("""let payload = "";""")
+
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
 
         for (binding in bindings) {
+            // TODO This actually only handles response code binding.
             val serializedValue = serverRenderBindingSerializer(binding, operationShape)
             if (serializedValue != null) {
                 serializedValue(this)
@@ -475,7 +489,7 @@ private class ServerHttpProtocolImplGenerator(
         }
         rustTemplate(
             """
-            builder.body(#{SmithyHttpServer}::body::to_boxed(payload))?
+            builder.body(#{SmithyHttpServer}::body::to_boxed(body))?
             """,
             *codegenScope,
         )
@@ -526,10 +540,7 @@ private class ServerHttpProtocolImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val member = binding.member
         return when (binding.location) {
-            HttpLocation.HEADER,
-            HttpLocation.PREFIX_HEADERS,
-            HttpLocation.DOCUMENT,
-            HttpLocation.PAYLOAD -> {
+            HttpLocation.HEADER, HttpLocation.PREFIX_HEADERS, HttpLocation.DOCUMENT, HttpLocation.PAYLOAD -> {
                 // All of these are handled separately.
                 null
             }

@@ -10,7 +10,7 @@ service SimpleService {
     version: "2022-01-01",
     operations: [
         StringPayloadOperation,
-        IntPayloadOperation,
+        StructurePayloadOperation,
         BlobPayloadOperation,
     ],
 }
@@ -21,10 +21,10 @@ operation StringPayloadOperation {
     output: StringPayloadOperationOutput
 }
 
-@http(uri: "/intPayloadOperation", method: "GET")
-operation IntPayloadOperation {
+@http(uri: "/structurePayloadOperation", method: "GET")
+operation StructurePayloadOperation {
     input: NoInput,
-    output: IntPayloadOperationOutput
+    output: StructurePayloadOperationOutput
 }
 
 @http(uri: "/blobPayloadOperation", method: "GET")
@@ -39,14 +39,19 @@ structure NoInput {
 @streaming
 blob StreamingBlob
 
+structure MyStructure {
+    aString: String,
+    anInt: Integer
+}
+
 structure StringPayloadOperationOutput {
     @httpPayload
     stringPayload: String,
 }
 
-structure IntPayloadOperationOutput {
+structure StructurePayloadOperationOutput {
     @httpPayload
-    intPayload: Integer,
+    structPayload: MyStructure,
 }
 
 structure BlobPayloadOperationOutput {

@@ -445,24 +445,43 @@ class HttpBoundProtocolBodyGenerator(
     }
 
     override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape) {
+        val server = true
+
         val bodyMetadata = bodyMetadata(operationShape)
         val serializerGenerator = protocol.structuredDataSerializer(operationShape)
-        val inputShape = operationShape.inputShape(model)
-        val payloadMemberName =
-            httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
-        if (payloadMemberName == null) {
-            serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
-                writer.rust(
-                    "#T(&self)?",
-                    serializer,
-                )
-            } ?: writer.rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
+        val payloadMemberName = if (server) {
+            httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
         } else {
-            val member = inputShape.expectMember(payloadMemberName)
+            httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
+        }
+        if (payloadMemberName == null) {
+            if (server) {
+                serializerGenerator.serverOutputSerializer(operationShape)?.let { serializer ->
+                    writer.rust(
+                        "#T(&$self)?",
+                        serializer,
+                    )
+                } ?: writer.rustTemplate("\"\"", *codegenScope)
+            } else {
+                serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
+                    writer.rust(
+                        "#T(&$self)?",
+                        serializer,
+                    )
+                } ?: writer.rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
+            }
+        } else {
+            val member = if (server) {
+                operationShape.outputShape(model).expectMember(payloadMemberName)
+            } else {
+                operationShape.inputShape(model).expectMember(payloadMemberName)
+            }
+
+            // TODO Server event streams
             if (operationShape.isInputEventStream(model)) {
                 writer.serializeViaEventStream(operationShape, member, serializerGenerator)
             } else {
-                writer.serializeViaPayload(bodyMetadata, member, serializerGenerator)
+                writer.serializeViaPayload(bodyMetadata, self, member, serializerGenerator)
             }
         }
     }
@@ -505,8 +524,10 @@ class HttpBoundProtocolBodyGenerator(
         )
     }
 
+    // TODO Document self
     private fun RustWriter.serializeViaPayload(
         bodyMetadata: BodyMetadata,
+        self: String,
         member: MemberShape,
         serializerGenerator: StructuredDataSerializerGenerator
     ) {
@@ -516,6 +537,7 @@ class HttpBoundProtocolBodyGenerator(
             false -> "&"
         }
         val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
+            // TODO Make this return the inner type better.
             it.rustBlockTemplate(
                 "pub fn $fnName(payload: $ref #{Member}) -> std::result::Result<#{SdkBody}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),
@@ -542,15 +564,15 @@ class HttpBoundProtocolBodyGenerator(
                         }
                     }
                 }
-                // When the body is a streaming blob it _literally_ is a SdkBody already
-                // mute this clippy warning to make the codegen a little simpler
+                // When the body is a streaming blob it _literally_ is a `SdkBody` already.
+                // mute this clippy warning to make the codegen a little simpler.
                 Attribute.Custom("allow(clippy::useless_conversion)").render(this)
                 withBlock("Ok(#T::from(", "))", RuntimeType.sdkBody(runtimeConfig)) {
                     renderPayload(member, "payload", serializerGenerator)
                 }
             }
         }
-        rust("#T($ref self.${symbolProvider.toMemberName(member)})?", serializer)
+        rust("#T($ref $self.${symbolProvider.toMemberName(member)})?", serializer)
     }
 
     private fun RustWriter.renderPayload(
