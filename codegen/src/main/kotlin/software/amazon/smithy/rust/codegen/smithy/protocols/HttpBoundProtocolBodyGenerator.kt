@@ -35,9 +35,11 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isEventStream
 import software.amazon.smithy.rust.codegen.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
+// TODO Should rename to PayloadGenerator
 class HttpBoundProtocolBodyGenerator(
     codegenContext: CodegenContext,
     private val protocol: Protocol,
@@ -58,6 +60,7 @@ class HttpBoundProtocolBodyGenerator(
         "hyper" to CargoDependency.HyperWithStream.asType(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
+        "ByteStream" to RuntimeType.byteStream(runtimeConfig),
         "ByteSlab" to RuntimeType.ByteSlab,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "BuildError" to runtimeConfig.operationBuildError(),
@@ -65,17 +68,24 @@ class HttpBoundProtocolBodyGenerator(
     )
 
     override fun bodyMetadata(operationShape: OperationShape): ProtocolBodyGenerator.BodyMetadata {
-        val inputShape = operationShape.inputShape(model)
-        val payloadMemberName =
-            httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
+        val server = true
 
-        // Only streaming operations take ownership, so that's event streams and blobs.
+        val (shape, payloadMemberName) = if (server) {
+            operationShape.outputShape(model) to
+                    httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
+        } else {
+            operationShape.inputShape(model) to
+                    httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
+        }
+
+        // Only streaming operations (blob streaming and event streams) and *blob non-streaming* operations need to
+        // take ownership.
         return if (payloadMemberName == null) {
             ProtocolBodyGenerator.BodyMetadata(takesOwnership = false)
         } else if (operationShape.isInputEventStream(model)) {
             ProtocolBodyGenerator.BodyMetadata(takesOwnership = true)
         } else {
-            val member = inputShape.expectMember(payloadMemberName)
+            val member = shape.expectMember(payloadMemberName)
             when (val type = model.expectShape(member.target)) {
                 is StringShape, is DocumentShape, is StructureShape, is UnionShape -> ProtocolBodyGenerator.BodyMetadata(
                     takesOwnership = false
@@ -176,9 +186,9 @@ class HttpBoundProtocolBodyGenerator(
         val fnName = "serialize_payload_${member.container.name.toSnakeCase()}"
         val ref = if (bodyMetadata.takesOwnership) "" else "&"
         val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
-            // TODO Make this return the inner type better.
+            val outputT = if (member.isStreaming(model)) "ByteStream" else "ByteSlab"
             it.rustBlockTemplate(
-                "pub fn $fnName(payload: $ref#{Member}) -> Result<#{ByteSlab}, #{BuildError}>",
+                "pub fn $fnName(payload: $ref#{Member}) -> Result<#{$outputT}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),
                 *codegenScope
             ) {
@@ -237,10 +247,15 @@ class HttpBoundProtocolBodyGenerator(
             }
 
             is BlobShape -> {
+                // TODO Move the below comment to the client?
                 // This works for streaming and non-streaming blobs because they both have `into_inner()` which
                 // can be converted into an `SdkBody`!
                 // Write the raw blob to the payload.
-                rust("$payloadName.into_inner()")
+                if (member.isStreaming(model)) {
+                    rust(payloadName)
+                } else {
+                    rust("$payloadName.into_inner()")
+                }
             }
             is StructureShape, is UnionShape -> {
                 check(

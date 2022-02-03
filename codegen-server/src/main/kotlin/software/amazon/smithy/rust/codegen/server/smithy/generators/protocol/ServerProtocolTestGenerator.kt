@@ -358,7 +358,6 @@ class ServerProtocolTestGenerator(
             }
         } else {
             rustWriter.rustTemplate("#{AssertEq}(parsed, expected);", *codegenScope)
-<<<<<<< HEAD
         }
     }
 
@@ -387,8 +386,6 @@ class ServerProtocolTestGenerator(
                     RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType")
                 )
             }
-=======
->>>>>>> 9b268db2 (Add blob streaming support for server request protocol tests)
         }
     }
 

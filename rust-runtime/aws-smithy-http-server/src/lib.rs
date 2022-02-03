@@ -19,8 +19,9 @@ pub mod routing;
 pub mod protocols;
 pub mod rejection;
 
-#[doc(inline)]
-pub use self::body::{boxed, to_boxed, Body, BoxBody, HttpBody};
+// TODO Since this is doc(hidden) and only used by codegen, don't export from lib.rs at all.
+#[doc(hidden)]
+pub use self::body::{to_boxed, Body, BoxBody, HttpBody};
 #[doc(inline)]
 pub use self::error::Error;
 #[doc(inline)]

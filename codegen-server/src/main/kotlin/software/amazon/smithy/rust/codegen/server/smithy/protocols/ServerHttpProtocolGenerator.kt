@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
@@ -156,7 +157,7 @@ private class ServerHttpProtocolImplGenerator(
             ##[#{AsyncTrait}::async_trait]
             impl<B> #{AxumCore}::extract::FromRequest<B> for $inputName
             where
-                B: #{SmithyHttpServer}::HttpBody + Send, ${getStreamingBodyTraitBounds(operationShape)}
+                B: #{SmithyHttpServer}::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
                 B::Data: Send,
                 B::Error: Into<#{SmithyHttpServer}::BoxError>,
                 #{SmithyRejection}: From<<B as #{SmithyHttpServer}::HttpBody>::Error>
@@ -327,7 +328,7 @@ private class ServerHttpProtocolImplGenerator(
                     #{SmithyRejection}
                 >
                 where
-                    B: #{SmithyHttpServer}::HttpBody + Send, ${getStreamingBodyTraitBounds(operationShape)}
+                    B: #{SmithyHttpServer}::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
                     B::Data: Send,
                     B::Error: Into<#{SmithyHttpServer}::BoxError>,
                     #{SmithyRejection}: From<<B as #{SmithyHttpServer}::HttpBody>::Error>
@@ -444,11 +445,6 @@ private class ServerHttpProtocolImplGenerator(
         operationShape: OperationShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        val bodyGenerator = HttpBoundProtocolBodyGenerator(codegenContext, protocol)
-        withBlock("let body =", ";") {
-            bodyGenerator.generateBody(this, "output", operationShape)
-        }
-
         // val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
         // structuredDataSerializer.serverOutputSerializer(operationShape)?.let { serializer ->
         //     rust(
@@ -486,9 +482,36 @@ private class ServerHttpProtocolImplGenerator(
         //         )
         //     } ?: rust("""let payload = "";""")
         // }
+
+        // if (operationShape.outputShape(model).findStreamingMember(model) != null) {
+        //     // `payload` is of type `ByteStream`, which implements `Stream`, but not `Into<Body>`.
+        //     rustTemplate("let payload = #{SmithyHttpServer}::body::Body::wrap_stream(payload);", *codegenScope)
+        // }
+        // rustTemplate(
+        //     """
+        //     builder.body(#{SmithyHttpServer}::body::to_boxed(payload))?
+        //     """,
+        //     *codegenScope,
+        // )
+        val streamingMember = operationShape.outputShape(model).findStreamingMember(model)
+        if (streamingMember != null) {
+            val memberName = symbolProvider.toMemberName(streamingMember)
+            rustTemplate(
+                """
+                let body = #{SmithyHttpServer}::body::to_boxed(#{SmithyHttpServer}::body::Body::wrap_stream(output.$memberName));
+                """,
+                *codegenScope,
+            )
+        } else {
+            val bodyGenerator = HttpBoundProtocolBodyGenerator(codegenContext, protocol)
+            withBlockTemplate("let body = #{SmithyHttpServer}::body::to_boxed(", ");", *codegenScope) {
+                bodyGenerator.generateBody(this, "output", operationShape)
+            }
+        }
+
         rustTemplate(
             """
-            builder.body(#{SmithyHttpServer}::body::to_boxed(body))?
+            builder.body(body)?
             """,
             *codegenScope,
         )
@@ -1085,11 +1108,10 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
-    private fun getStreamingBodyTraitBounds(operationShape: OperationShape): String {
+    private fun streamingBodyTraitBounds(operationShape: OperationShape) =
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
-            return "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
+            "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
         } else {
-            return ""
+            ""
         }
-    }
 }

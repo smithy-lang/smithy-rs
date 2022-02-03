@@ -73,7 +73,7 @@ class ServerOperationHandlerGenerator(
                 let error = aws_smithy_http_server::ExtensionRejection::new(r.to_string());
                 let mut response = r.into_response();
                 response.extensions_mut().insert(error);
-                return response.map($serverCrate::boxed);
+                return response.map($serverCrate::body::boxed);
                 }
             """.trimIndent()
             writer.rustBlockTemplate(
@@ -109,7 +109,7 @@ class ServerOperationHandlerGenerator(
                         };
                         $callImpl
                         let output_wrapper: $outputWrapperName = output_inner.into();
-                        output_wrapper.into_response().map(#{SmithyHttpServer}::boxed)
+                        output_wrapper.into_response().map(#{SmithyHttpServer}::body::boxed)
                     }
                     """,
                     *codegenScope
