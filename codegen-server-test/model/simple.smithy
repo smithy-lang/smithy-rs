@@ -9,29 +9,47 @@ use aws.protocols#restJson1
 service SimpleService {
     version: "2022-01-01",
     operations: [
-        Healthcheck,
+        StringPayloadOperation,
+        IntPayloadOperation,
+        BlobPayloadOperation,
     ],
 }
 
-@http(uri: "/healthcheck?fooKey=bar", method: "GET")
-operation Healthcheck {
-    input: HealthcheckInputRequest,
-    output: HealthcheckOutputResponse
+@http(uri: "/stringPayloadOperation", method: "GET")
+operation StringPayloadOperation {
+    input: NoInput,
+    output: StringPayloadOperationOutput
 }
 
-structure HealthcheckInputRequest {
+@http(uri: "/intPayloadOperation", method: "GET")
+operation IntPayloadOperation {
+    input: NoInput,
+    output: IntPayloadOperationOutput
 }
 
-structure HealthcheckOutputResponse {
-    @httpPayload
-    stringPayload: String,
+@http(uri: "/blobPayloadOperation", method: "GET")
+operation BlobPayloadOperation {
+    input: NoInput,
+    output: BlobPayloadOperationOutput
+}
 
-    // @httpPayload
-    // intPayload: Integer,
-
-    // @httpPayload
-    // blobPayload: StreamingBlob
+structure NoInput {
 }
 
 @streaming
 blob StreamingBlob
+
+structure StringPayloadOperationOutput {
+    @httpPayload
+    stringPayload: String,
+}
+
+structure IntPayloadOperationOutput {
+    @httpPayload
+    intPayload: Integer,
+}
+
+structure BlobPayloadOperationOutput {
+    @httpPayload
+    blobPayload: StreamingBlob
+}
