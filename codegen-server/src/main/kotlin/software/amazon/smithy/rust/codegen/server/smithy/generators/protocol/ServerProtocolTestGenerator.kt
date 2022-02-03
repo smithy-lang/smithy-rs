@@ -380,7 +380,7 @@ class ServerProtocolTestGenerator(
             assertOk(rustWriter) {
                 rustWriter.write(
                     "#T(&body, ${
-                        rustWriter.escape(body).dq()
+                    rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_body"),
                     RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType")
@@ -534,10 +534,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonNoInputAndNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonNoInputAndOutputWithJson", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Request),
-            FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Response),
-            FailingTest(RestJson, "RestJsonSimpleScalarProperties", Action.Response),
-            FailingTest(RestJson, "RestJsonSupportsInfinityFloatInputs", Action.Response),
-            FailingTest(RestJson, "RestJsonSupportsNegativeInfinityFloatInputs", Action.Response),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", Action.Response),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", Action.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", Action.Request),
