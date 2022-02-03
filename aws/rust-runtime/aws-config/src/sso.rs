@@ -37,7 +37,7 @@ impl crate::provider_config::ProviderConfig {
     pub(crate) fn sso_client(
         &self,
     ) -> aws_smithy_client::Client<aws_smithy_client::erase::DynConnector, SsoMiddleware> {
-        use crate::expect_connector;
+        use crate::connector::expect_connector;
         use aws_smithy_client::http_connector::HttpSettings;
 
         aws_smithy_client::Builder::<(), SsoMiddleware>::new()

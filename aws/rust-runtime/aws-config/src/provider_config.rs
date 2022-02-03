@@ -17,6 +17,7 @@ use std::error::Error;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
+use crate::connector::default_connector;
 use http::Uri;
 use hyper::client::connect::Connection;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -52,11 +53,17 @@ impl Debug for ProviderConfig {
 
 impl Default for ProviderConfig {
     fn default() -> Self {
+        let connector = HttpConnector::ConnectorFn(Arc::new(
+            |settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>| {
+                default_connector(settings, sleep)
+            },
+        ));
+
         Self {
             env: Env::default(),
             fs: Fs::default(),
             time_source: TimeSource::default(),
-            connector: HttpConnector::default(),
+            connector,
             sleep: default_async_sleep(),
             region: None,
         }

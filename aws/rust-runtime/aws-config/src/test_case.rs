@@ -14,6 +14,7 @@ use aws_types::os_shim_internal::{Env, Fs};
 
 use serde::Deserialize;
 
+use crate::connector::default_connector;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
@@ -181,9 +182,7 @@ impl TestEnvironment {
         // swap out the connector generated from `http-traffic.json` for a real connector:
         let settings = HttpSettings::default();
         let (_test_connector, config) = self.provider_config().await;
-        let live_connector =
-            aws_smithy_client::http_connector::default_connector(&settings, config.sleep())
-                .unwrap();
+        let live_connector = default_connector(&settings, config.sleep()).unwrap();
         let live_connector = RecordingConnection::new(live_connector);
         let config = config.with_http_connector(DynConnector::new(live_connector.clone()));
         let provider = make_provider(config).await;

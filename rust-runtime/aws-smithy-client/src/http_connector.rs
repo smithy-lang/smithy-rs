@@ -11,44 +11,6 @@ use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::{fmt::Debug, sync::Arc};
 
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
-fn base(settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>) -> crate::hyper_ext::Builder {
-    let mut hyper = crate::hyper_ext::Adapter::builder().timeout(&settings.timeout_config);
-    if let Some(sleep) = sleep {
-        hyper = hyper.sleep_impl(sleep);
-    }
-    hyper
-}
-
-/// Given `HttpSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
-#[cfg(feature = "rustls")]
-pub fn default_connector(
-    settings: &HttpSettings,
-    sleep: Option<Arc<dyn AsyncSleep>>,
-) -> Option<DynConnector> {
-    let hyper = base(settings, sleep).build(crate::conns::https());
-    Some(DynConnector::new(hyper))
-}
-
-/// Given `HttpSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
-#[cfg(all(not(feature = "rustls"), feature = "native-tls"))]
-pub fn default_connector(
-    settings: &HttpSettings,
-    sleep: Option<Arc<dyn AsyncSleep>>,
-) -> Option<DynConnector> {
-    let hyper = base(settings, sleep).build(crate::conns::native_tls());
-    Some(DynConnector::new(hyper))
-}
-
-/// Given `HttpSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
-#[cfg(not(any(feature = "rustls", feature = "native-tls")))]
-pub fn default_connector(
-    _settings: &HttpSettings,
-    _sleep: Option<Arc<dyn AsyncSleep>>,
-) -> Option<DynConnector> {
-    None
-}
-
 /// Type alias for a Connector factory function.
 pub type MakeConnectorFn =
     dyn Fn(&HttpSettings, Option<Arc<dyn AsyncSleep>>) -> Option<DynConnector> + Send + Sync;
@@ -60,16 +22,6 @@ pub enum HttpConnector {
     Prebuilt(Option<DynConnector>),
     /// A factory function that will be used to create new `DynConnector`s whenever one is needed.
     ConnectorFn(Arc<MakeConnectorFn>),
-}
-
-impl Default for HttpConnector {
-    fn default() -> Self {
-        Self::ConnectorFn(Arc::new(
-            |settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>| {
-                default_connector(settings, sleep)
-            },
-        ))
-    }
 }
 
 impl Debug for HttpConnector {

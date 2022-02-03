@@ -82,6 +82,8 @@ mod http_credential_provider;
 
 pub mod sso;
 
+pub mod connector;
+
 // Re-export types from smithy-types
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
@@ -116,6 +118,7 @@ pub use loader::ConfigLoader;
 mod loader {
     use std::sync::Arc;
 
+    use crate::connector::default_connector;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_client::http_connector::{HttpConnector, HttpSettings};
     use aws_smithy_types::retry::RetryConfig;
@@ -330,9 +333,7 @@ mod loader {
             } else {
                 let settings = HttpSettings::default().with_timeout_config(timeout_config.clone());
                 let sleep_impl = sleep_impl.clone();
-                HttpConnector::Prebuilt(aws_smithy_client::http_connector::default_connector(
-                    &settings, sleep_impl,
-                ))
+                HttpConnector::Prebuilt(default_connector(&settings, sleep_impl))
             };
 
             let credentials_provider = if let Some(provider) = self.credentials_provider {
@@ -395,12 +396,4 @@ mod loader {
             );
         }
     }
-}
-
-// unused when all crate features are disabled
-/// Unwrap an [`Option<DynConnector>`](aws_smithy_client::erase::DynConnector), and panic with a helpful error message if it's `None`
-pub fn expect_connector(
-    connector: Option<aws_smithy_client::erase::DynConnector>,
-) -> aws_smithy_client::erase::DynConnector {
-    connector.expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.")
 }

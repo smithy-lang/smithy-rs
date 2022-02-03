@@ -20,7 +20,7 @@ use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::credentials::CredentialsError;
 use aws_types::{credentials, Credentials};
 
-use crate::expect_connector;
+use crate::connector::expect_connector;
 use crate::json_credentials::{parse_json_credentials, JsonCredentials};
 use crate::provider_config::ProviderConfig;
 

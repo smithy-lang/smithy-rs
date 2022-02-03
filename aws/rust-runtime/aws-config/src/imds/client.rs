@@ -35,7 +35,7 @@ use http::uri::InvalidUri;
 use http::{Response, Uri};
 use tokio::sync::OnceCell;
 
-use crate::expect_connector;
+use crate::connector::expect_connector;
 use crate::imds::client::token::TokenMiddleware;
 use crate::profile::ProfileParseError;
 use crate::provider_config::ProviderConfig;
