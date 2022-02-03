@@ -5,30 +5,20 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.shapes.BlobShape
-import software.amazon.smithy.model.shapes.DocumentShape
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.assignment
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -36,27 +26,16 @@ import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.EventStreamMarshallerGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
-import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
-import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.isEventStream
-import software.amazon.smithy.rust.codegen.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -396,224 +375,6 @@ class HttpBoundProtocolTraitImplGenerator(
             else -> {
                 UNREACHABLE("Unexpected binding location: ${binding.location}")
             }
-        }
-    }
-}
-
-class HttpBoundProtocolBodyGenerator(
-    codegenContext: CodegenContext,
-    private val protocol: Protocol,
-) : ProtocolBodyGenerator {
-    private val symbolProvider = codegenContext.symbolProvider
-    private val model = codegenContext.model
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
-    private val httpBindingResolver = protocol.httpBindingResolver
-
-    private val operationSerModule = RustModule.private("operation_ser")
-
-    private val codegenScope = arrayOf(
-        "ParseStrict" to RuntimeType.parseStrictResponse(runtimeConfig),
-        "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
-        "http" to RuntimeType.http,
-        "hyper" to CargoDependency.HyperWithStream.asType(),
-        "operation" to RuntimeType.operationModule(runtimeConfig),
-        "Bytes" to RuntimeType.Bytes,
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "BuildError" to runtimeConfig.operationBuildError(),
-        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType()
-    )
-
-    override fun bodyMetadata(operationShape: OperationShape): BodyMetadata {
-        val inputShape = operationShape.inputShape(model)
-        val payloadMemberName =
-            httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
-
-        // Only streaming operations take ownership, so that's event streams and blobs
-        return if (payloadMemberName == null) {
-            BodyMetadata(takesOwnership = false)
-        } else if (operationShape.isInputEventStream(model)) {
-            BodyMetadata(takesOwnership = true)
-        } else {
-            val member = inputShape.expectMember(payloadMemberName)
-            when (val type = model.expectShape(member.target)) {
-                is StringShape, is DocumentShape, is StructureShape, is UnionShape -> BodyMetadata(takesOwnership = false)
-                is BlobShape -> BodyMetadata(takesOwnership = true)
-                else -> UNREACHABLE("Unexpected payload target type: $type")
-            }
-        }
-    }
-
-    override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape) {
-        val server = true
-
-        val bodyMetadata = bodyMetadata(operationShape)
-        val serializerGenerator = protocol.structuredDataSerializer(operationShape)
-        val payloadMemberName = if (server) {
-            httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
-        } else {
-            httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
-        }
-        if (payloadMemberName == null) {
-            if (server) {
-                serializerGenerator.serverOutputSerializer(operationShape)?.let { serializer ->
-                    writer.rust(
-                        "#T(&$self)?",
-                        serializer,
-                    )
-                } ?: writer.rustTemplate("\"\"", *codegenScope)
-            } else {
-                serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
-                    writer.rust(
-                        "#T(&$self)?",
-                        serializer,
-                    )
-                } ?: writer.rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
-            }
-        } else {
-            val member = if (server) {
-                operationShape.outputShape(model).expectMember(payloadMemberName)
-            } else {
-                operationShape.inputShape(model).expectMember(payloadMemberName)
-            }
-
-            // TODO Server event streams
-            if (operationShape.isInputEventStream(model)) {
-                writer.serializeViaEventStream(operationShape, member, serializerGenerator)
-            } else {
-                writer.serializeViaPayload(bodyMetadata, self, member, serializerGenerator)
-            }
-        }
-    }
-
-    private fun RustWriter.serializeViaEventStream(
-        operationShape: OperationShape,
-        memberShape: MemberShape,
-        serializerGenerator: StructuredDataSerializerGenerator
-    ) {
-        val memberName = symbolProvider.toMemberName(memberShape)
-        val unionShape = model.expectShape(memberShape.target, UnionShape::class.java)
-
-        val marshallerConstructorFn = EventStreamMarshallerGenerator(
-            model,
-            mode,
-            runtimeConfig,
-            symbolProvider,
-            unionShape,
-            serializerGenerator,
-            httpBindingResolver.requestContentType(operationShape)
-                ?: throw CodegenException("event streams must set a content type"),
-        ).render()
-
-        // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
-        // parameters that are not `@eventHeader` or `@eventPayload`.
-        rustTemplate(
-            """
-            {
-                let marshaller = #{marshallerConstructorFn}();
-                let signer = _config.new_event_stream_signer(properties.clone());
-                let adapter: #{SmithyHttp}::event_stream::MessageStreamAdapter<_, #{OperationError}> =
-                    self.$memberName.into_body_stream(marshaller, signer);
-                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
-                body
-            }
-            """,
-            *codegenScope,
-            "marshallerConstructorFn" to marshallerConstructorFn,
-            "OperationError" to operationShape.errorSymbol(symbolProvider)
-        )
-    }
-
-    // TODO Document self
-    private fun RustWriter.serializeViaPayload(
-        bodyMetadata: BodyMetadata,
-        self: String,
-        member: MemberShape,
-        serializerGenerator: StructuredDataSerializerGenerator
-    ) {
-        val fnName = "ser_payload_${member.container.name.toSnakeCase()}"
-        val ref = when (bodyMetadata.takesOwnership) {
-            true -> ""
-            false -> "&"
-        }
-        val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
-            // TODO Make this return the inner type better.
-            it.rustBlockTemplate(
-                "pub fn $fnName(payload: $ref #{Member}) -> std::result::Result<#{SdkBody}, #{BuildError}>",
-                "Member" to symbolProvider.toSymbol(member),
-                *codegenScope
-            ) {
-                // If this targets a member & the member is None, return an empty vec
-                val ref = when (bodyMetadata.takesOwnership) {
-                    false -> ".as_ref()"
-                    true -> ""
-                }
-
-                if (symbolProvider.toSymbol(member).isOptional()) {
-                    withBlockTemplate(
-                        """
-                        let payload = match payload$ref {
-                            Some(t) => t,
-                            None => return Ok(#{SdkBody}::from(""",
-                        "))};",
-                        *codegenScope
-                    ) {
-                        when (val targetShape = model.expectShape(member.target)) {
-                            is StringShape, is BlobShape, is DocumentShape -> rust("".dq())
-                            is StructureShape -> rust("#T()", serializerGenerator.unsetStructure(targetShape))
-                        }
-                    }
-                }
-                // When the body is a streaming blob it _literally_ is a `SdkBody` already.
-                // mute this clippy warning to make the codegen a little simpler.
-                Attribute.Custom("allow(clippy::useless_conversion)").render(this)
-                withBlock("Ok(#T::from(", "))", RuntimeType.sdkBody(runtimeConfig)) {
-                    renderPayload(member, "payload", serializerGenerator)
-                }
-            }
-        }
-        rust("#T($ref $self.${symbolProvider.toMemberName(member)})?", serializer)
-    }
-
-    private fun RustWriter.renderPayload(
-        member: MemberShape,
-        payloadName: String,
-        serializer: StructuredDataSerializerGenerator
-    ) {
-        when (val targetShape = model.expectShape(member.target)) {
-            // Write the raw string to the payload
-            is StringShape -> {
-                if (targetShape.hasTrait<EnumTrait>()) {
-                    rust("$payloadName.as_str()")
-                } else {
-                    rust("""$payloadName.to_string()""")
-                }
-            }
-
-            // This works for streaming & non streaming blobs because they both have `into_inner()` which
-            // can be converted into an SDK body!
-            is BlobShape -> {
-                // Write the raw blob to the payload
-                rust("$payloadName.into_inner()")
-            }
-            is StructureShape, is UnionShape -> {
-                check(
-                    !((targetShape as? UnionShape)?.isEventStream() ?: false)
-                ) { "Event Streams should be handled further up" }
-
-                // JSON serialize the structure or union targeted
-                rust(
-                    "#T($payloadName)?",
-                    serializer.payloadSerializer(member)
-                )
-            }
-            is DocumentShape -> {
-                rust(
-                    "#T($payloadName)?",
-                    serializer.documentSerializer(),
-                )
-            }
-            else -> PANIC("Unexpected payload target type: $targetShape")
         }
     }
 }

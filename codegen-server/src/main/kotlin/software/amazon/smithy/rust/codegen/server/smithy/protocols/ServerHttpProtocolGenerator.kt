@@ -48,7 +48,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
@@ -469,24 +468,24 @@ private class ServerHttpProtocolImplGenerator(
                 serializedValue(this)
             }
         }
-        val streamingMember = operationShape.outputShape(model).findStreamingMember(model)
-        if (streamingMember != null) {
-            val memberName = symbolProvider.toMemberName(streamingMember)
-            rustTemplate(
-                """
-                let payload = #{SmithyHttpServer}::body::Body::wrap_stream(output.$memberName);
-                """,
-                *codegenScope,
-            )
-        } else {
-            val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
-            structuredDataSerializer.serverOutputSerializer(operationShape)?.let { serializer ->
-                rust(
-                    "let payload = #T(&output)?;",
-                    serializer
-                )
-            } ?: rust("""let payload = "";""")
-        }
+        // val streamingMember = operationShape.outputShape(model).findStreamingMember(model)
+        // if (streamingMember != null) {
+        //     val memberName = symbolProvider.toMemberName(streamingMember)
+        //     rustTemplate(
+        //         """
+        //         let payload = #{SmithyHttpServer}::body::Body::wrap_stream(output.$memberName);
+        //         """,
+        //         *codegenScope,
+        //     )
+        // } else {
+        //     val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
+        //     structuredDataSerializer.serverOutputSerializer(operationShape)?.let { serializer ->
+        //         rust(
+        //             "let payload = #T(&output)?;",
+        //             serializer
+        //         )
+        //     } ?: rust("""let payload = "";""")
+        // }
         rustTemplate(
             """
             builder.body(#{SmithyHttpServer}::body::to_boxed(body))?

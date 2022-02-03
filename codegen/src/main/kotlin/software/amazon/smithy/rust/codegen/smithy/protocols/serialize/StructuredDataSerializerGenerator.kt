@@ -12,6 +12,9 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 interface StructuredDataSerializerGenerator {
+    // TODO Update docs, they now return Vec<u8>.
+    // Double-check we need `Result`s
+
     /**
      * Generate a serializer for a request payload. Expected signature:
      * ```rust
@@ -20,6 +23,7 @@ interface StructuredDataSerializerGenerator {
      * }
      * ```
      */
+    // TODO Does this need to return `Result`?
     fun payloadSerializer(member: MemberShape): RuntimeType
 
     /**
@@ -40,7 +44,7 @@ interface StructuredDataSerializerGenerator {
     /**
      * Generate a serializer for a document.
      * ```rust
-     * fn serialize_document(input: &Document) -> Result<SdkBody, Error> {
+     * fn serialize_document(input: &Document) -> Vec<u8> {
      *     ...
      * }
      * ```

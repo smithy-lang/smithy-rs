@@ -140,6 +140,7 @@ class JsonSerializerGenerator(
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "JsonObjectWriter" to smithyJson.member("serialize::JsonObjectWriter"),
         "JsonValueWriter" to smithyJson.member("serialize::JsonValueWriter"),
+        "ByteSlab" to RuntimeType.ByteSlab,
     )
     private val serializerUtil = SerializerUtil(model)
     private val operationSerModule = RustModule.private("operation_ser")
@@ -217,13 +218,15 @@ class JsonSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType {
-        return RuntimeType.forInlineFun("rest_json_unsetpayload", operationSerModule) { writer ->
+        val fnName = "rest_json_unsetpayload"
+        return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
             writer.rustTemplate(
                 """
-                pub fn rest_json_unsetpayload() -> std::vec::Vec<u8> {
+                pub fn $fnName() -> #{ByteSlab} {
                     b"{}"[..].into()
                 }
-                """
+                """,
+                *codegenScope
             )
         }
     }
@@ -256,10 +259,10 @@ class JsonSerializerGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustTemplate(
                 """
-                pub fn $fnName(input: &#{Document}) -> Result<#{SdkBody}, #{Error}> {
+                pub fn $fnName(input: &#{Document}) -> #{ByteSlab} {
                     let mut out = String::new();
                     #{JsonValueWriter}::new(&mut out).document(input);
-                    Ok(#{SdkBody}::from(out))
+                    out.into_bytes()
                 }
                 """,
                 "Document" to RuntimeType.Document(runtimeConfig), *codegenScope
