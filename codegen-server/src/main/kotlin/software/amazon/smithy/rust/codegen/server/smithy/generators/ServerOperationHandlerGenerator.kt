@@ -41,6 +41,7 @@ class ServerOperationHandlerGenerator(
         "PinProjectLite" to ServerCargoDependency.PinProjectLite.asType(),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
+        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
         "Phantom" to ServerRuntimeType.Phantom,
@@ -135,7 +136,7 @@ class ServerOperationHandlerGenerator(
             symbolProvider.toSymbol(operation.outputShape(model)).fullName
         }
         val streamingBodyTraitBounds = if (operation.inputShape(model).hasStreamingMember(model)) {
-            "\n B: Into<#{SmithyHttpServer}::ByteStream>,"
+            "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
         } else {
             ""
         }

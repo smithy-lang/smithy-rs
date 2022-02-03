@@ -119,6 +119,7 @@ private class ServerHttpProtocolImplGenerator(
         "PercentEncoding" to CargoDependency.PercentEncoding.asType(),
         "Regex" to CargoDependency.Regex.asType(),
         "SerdeUrlEncoded" to ServerCargoDependency.SerdeUrlEncoded.asType(),
+        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
         "http" to RuntimeType.http
@@ -1056,7 +1057,7 @@ private class ServerHttpProtocolImplGenerator(
 
     private fun getStreamingBodyTraitBounds(operationShape: OperationShape): String {
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
-            return "\n B: Into<#{SmithyHttpServer}::ByteStream>,"
+            return "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
         } else {
             return ""
         }
