@@ -3,34 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::shell::{handle_failure, output_text, ShellOperation};
 use anyhow::Result;
-use async_trait::async_trait;
 use regex::Regex;
+use smithy_rs_tool_common::shell::{handle_failure, output_text, ShellOperation};
 use std::process::Command;
 
-pub struct GetOwners<'a> {
+pub struct GetOwners {
     program: &'static str,
-    package_name: &'a str,
+    package_name: String,
 }
 
-impl<'a> GetOwners<'a> {
-    pub fn new(package_name: &'a str) -> GetOwners<'a> {
+impl GetOwners {
+    pub fn new(package_name: impl Into<String>) -> GetOwners {
         GetOwners {
             program: "cargo",
-            package_name,
+            package_name: package_name.into(),
         }
     }
 }
 
-#[async_trait]
-impl<'a> ShellOperation for GetOwners<'a> {
+impl ShellOperation for GetOwners {
     type Output = Vec<String>;
 
-    async fn spawn(&self) -> Result<Vec<String>> {
+    fn run(&self) -> Result<Vec<String>> {
         let mut command = Command::new(self.program);
-        command.arg("owner").arg("--list").arg(self.package_name);
-        let output = tokio::task::spawn_blocking(move || command.output()).await??;
+        command.arg("owner").arg("--list").arg(&self.package_name);
+        let output = command.output()?;
         handle_failure("get crate owners", &output)?;
 
         let mut result = Vec::new();
@@ -59,7 +57,7 @@ mod tests {
     async fn get_owners_success() {
         let owners = GetOwners {
             program: "./fake_cargo/cargo_owner_list",
-            package_name: "aws-sdk-s3",
+            package_name: "aws-sdk-s3".into(),
         }
         .spawn()
         .await
@@ -77,7 +75,7 @@ mod tests {
     async fn get_owners_failed() {
         let result = GetOwners {
             program: "./fake_cargo/cargo_fails",
-            package_name: "aws-sdk-s3",
+            package_name: "aws-sdk-s3".into(),
         }
         .spawn()
         .await;

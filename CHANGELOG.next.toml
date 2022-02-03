@@ -18,6 +18,12 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Fix some docs links not working because they were escaped when they shouldn't have been"
+references = ["smithy-rs#1129"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
+[[aws-sdk-rust]]
 message = """
 Moved the following re-exports into a `types` module for all services:
 - `aws_sdk_<service>::AggregatedBytes` -> `aws_sdk_<service>::types::AggregatedBytes`
