@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 data class CommandFailed(val output: String) : Exception("Command Failed\n$output")
 
 fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = mapOf(), timeout: Long = 3600): String {
-    val parts = this.split("\\s".toRegex())
+    val parts = this.replace("cargo", "/Users/rcoh/.cargo/bin/cargo").split("\\s".toRegex())
     val builder = ProcessBuilder(*parts.toTypedArray())
         .redirectOutput(ProcessBuilder.Redirect.PIPE)
         .redirectError(ProcessBuilder.Redirect.PIPE)

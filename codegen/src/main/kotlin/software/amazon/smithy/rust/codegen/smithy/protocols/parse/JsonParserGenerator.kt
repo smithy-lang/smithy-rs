@@ -191,12 +191,7 @@ class JsonParserGenerator(
         return structureParser(fnName, inputShape, includedMembers)
     }
 
-    private fun getSuffixForRequiredTrait(shape: MemberShape) =
-        if (symbolProvider.isRequiredTraitHandled(shape, false)) {
-            """.ok_or_else(|| aws_smithy_json::deserialize::Error::custom("shape ${shape.memberName} is required"))?"""
-        } else {
-            ""
-        }
+    private fun getSuffixForRequiredTrait(shape: MemberShape) = ""
 
     private fun RustWriter.expectEndOfTokenStream() {
         rustBlock("if tokens.next().is_some()") {
@@ -226,7 +221,7 @@ class JsonParserGenerator(
         when (val target = model.expectShape(memberShape.target)) {
             is StringShape -> deserializeString(target, memberShape)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
-            is NumberShape -> deserializeNumber(target, memberShape)
+            is NumberShape -> deserializeNumber(target)
             is BlobShape -> rustTemplate("#{expect_blob_or_null}(tokens.next())?", *codegenScope)
             is TimestampShape -> deserializeTimestamp(memberShape)
             is CollectionShape -> deserializeCollection(target, memberShape)
@@ -257,9 +252,9 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeNumber(target: NumberShape, memberShape: MemberShape) {
+    private fun RustWriter.deserializeNumber(target: NumberShape) {
         val symbol = symbolProvider.toSymbol(target)
-        rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())${getSuffixForRequiredTrait(memberShape)}", "T" to symbol, *codegenScope)
+        rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())", "T" to symbol, *codegenScope)
     }
 
     private fun RustWriter.deserializeTimestamp(member: MemberShape) {

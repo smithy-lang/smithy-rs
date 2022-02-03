@@ -113,11 +113,7 @@ class HttpBindingGenerator(
      */
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpLocation.HEADER)
-        val outputT = if (symbolProvider.isRequiredTraitHandled(binding.member)) {
-            symbolProvider.toSymbol(binding.member)
-        } else {
-            symbolProvider.toSymbol(binding.member).makeOptional()
-        }
+        val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
         val fnName = "deser_header_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
             writer.rustBlock(
@@ -379,11 +375,7 @@ class HttpBindingGenerator(
                     """
                 )
             else -> {
-                val returnValue = if (symbolProvider.isRequiredTraitHandled(memberShape)) {
-                    """$parsedValue.pop().ok_or_else(|| #{header_util}::ParseError::new_with_message("missing required header '$locationName'"))"""
-                } else {
-                    "Ok($parsedValue.pop())"
-                }
+                val returnValue = "Ok($parsedValue.pop())"
                 rustTemplate(
                     """
                     if $parsedValue.len() > 1 {

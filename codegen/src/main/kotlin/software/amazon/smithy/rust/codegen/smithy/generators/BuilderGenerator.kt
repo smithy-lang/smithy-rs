@@ -137,14 +137,10 @@ class BuilderGenerator(
         memberName: String
     ) {
         // Render a `set_foo` method.
-        val (inputType, inputVal) = if (symbolProvider.isRequiredTraitHandled(member)) {
-            outerType to "Some(input)"
-        } else {
-            outerType.asOptional() to "input"
-        }
+        val inputType = outerType.asOptional()
         writer.documentShape(member, model)
         writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
-            rust("self.$memberName = $inputVal; self")
+            rust("self.$memberName = input; self")
         }
     }
 

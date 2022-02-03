@@ -46,11 +46,14 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperat
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.toOptional
+import software.amazon.smithy.rust.codegen.smithy.wrapOptional
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -603,9 +606,18 @@ private class ServerHttpProtocolImplGenerator(
     ): Writable? {
         val errorSymbol = getDeserializeErrorSymbol(binding)
         return when (binding.location) {
-            HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
+            HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) } // always optional
             HttpLocation.PREFIX_HEADERS -> writable { serverRenderPrefixHeadersParser(this, binding, operationShape) }
             HttpLocation.PAYLOAD -> {
+                val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
+                    rust(symbolProvider.toOptional(binding.member, "#T($body)"), structuredDataParser.payloadParser(binding.member))
+                }
+                val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
+                    operationShape,
+                    binding,
+                    errorSymbol,
+                    structuredHandler = structureShapeHandler
+                )
                 return if (binding.member.isStreaming(model)) {
                     writable {
                         rustTemplate(
@@ -728,7 +740,7 @@ private class ServerHttpProtocolImplGenerator(
                         rustTemplate(
                             """
                             input = input.${binding.member.setterName()}(
-                                #{deserializer}(m$index)?
+                                ${symbolProvider.toOptional(binding.member, "#{deserializer}(m$index)?")}
                             );
                             """.trimIndent(),
                             *codegenScope,
@@ -825,7 +837,7 @@ private class ServerHttpProtocolImplGenerator(
                         """
                         if !seen_$memberName && k == "${it.locationName}" {
                             input = input.${it.member.setterName()}(
-                                #{deserializer}(&v)?
+                                ${symbolProvider.toOptional(it.member, "#{deserializer}(&v)?")}
                             );
                             seen_$memberName = true;
                         }
@@ -1008,7 +1020,7 @@ private class ServerHttpProtocolImplGenerator(
                     """
                     let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
                     let value = #{DateTime}::from_str(&value, #{format})?;
-                    Ok(${getReturnTypeForMember(binding.member)})
+                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """.trimIndent(),
                     *codegenScope,
                     "format" to timestampFormatType,
@@ -1030,7 +1042,7 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let value = std::str::FromStr::from_str(value)?;
-                    Ok(${getReturnTypeForMember(binding.member)})
+                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """.trimIndent(),
                     *codegenScope,
                 )
@@ -1075,6 +1087,6 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
-    private fun getReturnTypeForMember(member: MemberShape) = 
-        if (symbolProvider.isRequiredTraitHandled(member)) { "value" } else { "Some(value)" }
+    private fun getReturnTypeForMember(member: MemberShape) =
+        if (symbolProvider.toSymbol(member).isOptional()) { "Some(value)" } else { "value" }
 }

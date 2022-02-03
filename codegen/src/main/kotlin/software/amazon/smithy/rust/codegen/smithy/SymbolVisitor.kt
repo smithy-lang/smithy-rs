@@ -137,6 +137,9 @@ interface RustSymbolProvider : SymbolProvider {
     fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean = true): Boolean
 }
 
+fun SymbolProvider.wrapOptional(member: MemberShape, s: String): String = s.letIf(toSymbol(member).isOptional()) { "Some($s)" }
+fun SymbolProvider.toOptional(member: MemberShape, s: String): String = s.letIf(!toSymbol(member).isOptional()) { "Some($s)" }
+
 class SymbolVisitor(
     private val model: Model,
     private val serviceShape: ServiceShape?,

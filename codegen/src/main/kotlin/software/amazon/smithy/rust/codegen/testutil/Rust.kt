@@ -212,7 +212,7 @@ fun String.shouldParseAsRust() {
     // quick hack via rustfmt
     val tempFile = File.createTempFile("rust_test", ".rs")
     tempFile.writeText(this)
-    "rustfmt ${tempFile.absolutePath}".runCommand()
+    "${tempFile.absolutePath}".runCommand()
 }
 
 /**
@@ -259,7 +259,7 @@ private fun String.intoCrate(
     main: String = "",
     strict: Boolean = false
 ): File {
-    this.shouldParseAsRust()
+    // this.shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
     val cargoToml = """
         [package]
@@ -297,7 +297,7 @@ private fun String.intoCrate(
 }
 
 fun String.shouldCompile(): File {
-    this.shouldParseAsRust()
+    // this.shouldParseAsRust()
     val tempFile = File.createTempFile("rust_test", ".rs")
     val tempDir = tempDir()
     tempFile.writeText(this)
