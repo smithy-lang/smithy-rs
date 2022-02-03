@@ -310,14 +310,9 @@ class ServerProtocolTestGenerator(
         checkForbidHeaders(this, "&http_response.headers()", testCase.forbidHeaders)
         checkRequiredHeaders(this, "&http_response.headers()", testCase.requireHeaders)
         checkHttpResponseExtensions(this)
-        if (!testCase.body.isEmpty) {
-            rustTemplate(
-                """
-                let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
-                #{AssertEq}(${escape(testCase.body.get()).dq()}, body);
-                """,
-                *codegenScope
-            )
+        // "If no request body is defined, then no assertions are made about the body of the message."
+        if (testCase.body.isPresent) {
+            checkBody(this, testCase.body.get(), testCase.bodyMediaType.orNull())
         }
     }
 
@@ -340,6 +335,34 @@ class ServerProtocolTestGenerator(
             rustWriter.rust("""todo!("streaming types aren't supported yet");""")
         } else {
             rustWriter.rustTemplate("#{AssertEq}(input, expected);", *codegenScope)
+        }
+    }
+
+    private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
+        rustWriter.rustTemplate(
+            """
+            let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
+            """,
+            *codegenScope
+        )
+        if (body == "") {
+            rustWriter.rustTemplate(
+                """
+                // No body
+                #{AssertEq}(std::str::from_utf8(&body).unwrap(), "");
+                """,
+                *codegenScope
+            )
+        } else {
+            assertOk(rustWriter) {
+                rustWriter.write(
+                    "#T(&body, ${
+                        rustWriter.escape(body).dq()
+                    }, #T::from(${(mediaType ?: "unknown").dq()}))",
+                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_body"),
+                    RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "MediaType")
+                )
+            }
         }
     }
 
@@ -463,14 +486,8 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
 
             FailingTest(RestJson, "RestJsonEmptyInputAndEmptyOutput", Action.Response),
-            FailingTest(RestJson, "RestJsonOutputUnionWithUnitMember", Action.Response),
             FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", Action.Request),
-            FailingTest(RestJson, "DocumentOutput", Action.Response),
-            FailingTest(RestJson, "DocumentOutputString", Action.Response),
-            FailingTest(RestJson, "DocumentOutputNumber", Action.Response),
-            FailingTest(RestJson, "DocumentOutputBoolean", Action.Response),
-            FailingTest(RestJson, "DocumentOutputArray", Action.Response),
             FailingTest(RestJson, "DocumentTypeAsPayloadOutput", Action.Response),
             FailingTest(RestJson, "DocumentTypeAsPayloadOutputString", Action.Response),
             FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
@@ -491,38 +508,9 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonSupportsNaNFloatLabels", Action.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCode", Action.Response),
             FailingTest(RestJson, "StringPayloadResponse", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonBlobs", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonEnums", Action.Response),
-            FailingTest(RestJson, "RestJsonLists", Action.Response),
-            FailingTest(RestJson, "RestJsonListsEmpty", Action.Response),
-            FailingTest(RestJson, "RestJsonListsSerializeNull", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonMaps", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializesNullMapValues", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializesZeroValuesInMaps", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializesSparseSetMap", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializesDenseSetMap", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializesSparseSetMapAndRetainsNull", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonTimestamps", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonTimestampsWithDateTimeFormat", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonTimestampsWithEpochSecondsFormat", Action.Response),
-            FailingTest(RestJson, "RestJsonJsonTimestampsWithHttpDateFormat", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeStringUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeBooleanUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeNumberUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeBlobUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeTimestampUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeEnumUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeListUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeMapUnionValue", Action.Response),
-            FailingTest(RestJson, "RestJsonDeserializeStructureUnionValue", Action.Response),
             FailingTest(RestJson, "RestJsonNoInputAndNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonNoInputAndOutputWithJson", Action.Response),
-            FailingTest(RestJson, "RestJsonRecursiveShapes", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Request),
-            FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Response),
-            FailingTest(RestJson, "RestJsonSimpleScalarProperties", Action.Response),
-            FailingTest(RestJson, "RestJsonSupportsInfinityFloatInputs", Action.Response),
-            FailingTest(RestJson, "RestJsonSupportsNegativeInfinityFloatInputs", Action.Response),
             FailingTest(RestJson, "RestJsonStreamingTraitsWithBlob", Action.Request),
             FailingTest(RestJson, "RestJsonStreamingTraitsWithNoBlobBody", Action.Request),
             FailingTest(RestJson, "RestJsonStreamingTraitsWithBlob", Action.Response),
