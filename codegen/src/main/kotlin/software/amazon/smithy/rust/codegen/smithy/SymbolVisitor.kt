@@ -137,8 +137,14 @@ interface RustSymbolProvider : SymbolProvider {
     fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean = true): Boolean
 }
 
-fun SymbolProvider.wrapOptional(member: MemberShape, s: String): String = s.letIf(toSymbol(member).isOptional()) { "Some($s)" }
-fun SymbolProvider.toOptional(member: MemberShape, s: String): String = s.letIf(!toSymbol(member).isOptional()) { "Some($s)" }
+/**
+ * Make the return [value] optional if the [member] symbol is as well optional.
+ */
+fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) { "Some($value)" }
+/**
+ * Make the return [value] optional if the [member] symbol is not optional.
+ */
+fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) { "Some($value)" }
 
 class SymbolVisitor(
     private val model: Model,
