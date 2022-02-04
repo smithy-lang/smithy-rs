@@ -602,7 +602,7 @@ private class ServerHttpProtocolImplGenerator(
     ): Writable? {
         val errorSymbol = getDeserializeErrorSymbol(binding)
         return when (binding.location) {
-            HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) } // always optional
+            HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
             HttpLocation.PREFIX_HEADERS -> writable { serverRenderPrefixHeadersParser(this, binding, operationShape) }
             HttpLocation.PAYLOAD -> {
                 return if (binding.member.isStreaming(model)) {
