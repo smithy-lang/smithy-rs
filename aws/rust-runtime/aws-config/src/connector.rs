@@ -13,15 +13,17 @@ use aws_smithy_client::http_connector::HttpSettings;
 
 // unused when all crate features are disabled
 /// Unwrap an [`Option<DynConnector>`](aws_smithy_client::erase::DynConnector), and panic with a helpful error message if it's `None`
-pub(crate) fn expect_connector(
-    connector: Option<aws_smithy_client::erase::DynConnector>,
-) -> aws_smithy_client::erase::DynConnector {
+pub(crate) fn expect_connector(connector: Option<DynConnector>) -> DynConnector {
     connector.expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.")
 }
 
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
-fn base(settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>) -> hyper_ext::Builder {
-    let mut hyper = hyper_ext::Adapter::builder().timeout(&settings.timeout_config);
+fn base(
+    settings: &HttpSettings,
+    sleep: Option<Arc<dyn AsyncSleep>>,
+) -> aws_smithy_client::hyper_ext::Builder {
+    let mut hyper =
+        aws_smithy_client::hyper_ext::Adapter::builder().timeout(&settings.timeout_config);
     if let Some(sleep) = sleep {
         hyper = hyper.sleep_impl(sleep);
     }
@@ -34,7 +36,7 @@ pub fn default_connector(
     settings: &HttpSettings,
     sleep: Option<Arc<dyn AsyncSleep>>,
 ) -> Option<DynConnector> {
-    let hyper = base(settings, sleep).build(conns::https());
+    let hyper = base(settings, sleep).build(aws_smithy_client::conns::https());
     Some(DynConnector::new(hyper))
 }
 
@@ -44,7 +46,7 @@ pub fn default_connector(
     settings: &HttpSettings,
     sleep: Option<Arc<dyn AsyncSleep>>,
 ) -> Option<DynConnector> {
-    let hyper = base(settings, sleep).build(conns::native_tls());
+    let hyper = base(settings, sleep).build(aws_smithy_client::conns::native_tls());
     Some(DynConnector::new(hyper))
 }
 
