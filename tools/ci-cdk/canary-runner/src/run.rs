@@ -19,6 +19,7 @@ use cloudwatch::model::StandardUnit;
 use s3::ByteStream;
 use semver::Version;
 use smithy_rs_tool_common::git;
+use smithy_rs_tool_common::macros::here;
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
@@ -114,20 +115,24 @@ pub async fn run(opt: RunOpt) -> Result<()> {
     request_builder
         .send()
         .await
-        .context("failed to emit metrics")?;
+        .context(here!("failed to emit metrics"))?;
 
     result.map(|_| ())
 }
 
 async fn run_canary(opt: RunOpt, config: &aws_config::Config) -> Result<Duration> {
     let repo_root = git_root().await?;
-    env::set_current_dir(repo_root.join("smithy-rs/tools/ci-cdk/canary-lambda"))
+    env::set_current_dir(repo_root.join("tools/ci-cdk/canary-lambda"))
         .context("failed to change working directory")?;
 
-    use_correct_revision(&opt).await?;
+    use_correct_revision(&opt)
+        .await
+        .context(here!("failed to select correct revision of smithy-rs"))?;
 
     info!("Generating canary Cargo.toml...");
-    generate_cargo_toml(&opt.sdk_version).await?;
+    generate_cargo_toml(&opt.sdk_version)
+        .await
+        .context(here!())?;
 
     info!("Building the canary...");
     let bundle_path = build_bundle(&opt.sdk_version).await?;
@@ -144,7 +149,8 @@ async fn run_canary(opt: RunOpt, config: &aws_config::Config) -> Result<Duration
         bundle_file_name,
         &bundle_path,
     )
-    .await?;
+    .await
+    .context(here!())?;
 
     info!(
         "Creating the canary Lambda function named {}...",
@@ -158,7 +164,8 @@ async fn run_canary(opt: RunOpt, config: &aws_config::Config) -> Result<Duration
         &opt.lambda_code_s3_bucket_name,
         &opt.lambda_test_s3_bucket_name,
     )
-    .await?;
+    .await
+    .context(here!())?;
 
     info!("Invoking the canary Lambda...");
     let invoke_start_time = SystemTime::now();
@@ -166,7 +173,9 @@ async fn run_canary(opt: RunOpt, config: &aws_config::Config) -> Result<Duration
     let invoke_time = invoke_start_time.elapsed().expect("time in range");
 
     info!("Deleting the canary Lambda...");
-    delete_lambda_fn(lambda_client, bundle_name).await?;
+    delete_lambda_fn(lambda_client, bundle_name)
+        .await
+        .context(here!())?;
 
     invoke_result.map(|_| invoke_time)
 }
@@ -181,10 +190,11 @@ async fn use_correct_revision(opt: &RunOpt) -> Result<()> {
             "SDK version {} requires smithy-rs@{} to successfully compile the canary",
             version, commit_hash
         );
-        let smithy_rs_root = git::find_git_repository_root("smithy-rs", ".")?;
+        let smithy_rs_root = git::find_git_repository_root("smithy-rs", ".").context(here!())?;
         git::CheckoutRevision::new(smithy_rs_root, *commit_hash)
             .spawn()
-            .await?;
+            .await
+            .context(here!())?;
     }
     Ok(())
 }
@@ -194,7 +204,8 @@ async fn generate_cargo_toml(sdk_version: &str) -> Result<()> {
         .arg("--sdk-version")
         .arg(sdk_version)
         .status()
-        .await?;
+        .await
+        .context(here!("failed to run write-cargo-toml.py"))?;
     if !status.success() {
         bail!("Failed to generate canary Cargo.toml");
     }
@@ -207,7 +218,8 @@ async fn build_bundle(sdk_version: &str) -> Result<PathBuf> {
         .arg(sdk_version)
         .stderr(std::process::Stdio::inherit())
         .output()
-        .await?;
+        .await
+        .context(here!())?;
     if !output.status.success() {
         error!(
             "{}",
@@ -215,7 +227,9 @@ async fn build_bundle(sdk_version: &str) -> Result<PathBuf> {
         );
         bail!("Failed to build the canary bundle");
     } else {
-        Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
+        Ok(PathBuf::from(
+            String::from_utf8(output.stdout).context(here!())?.trim(),
+        ))
     }
 }
 
@@ -232,11 +246,11 @@ async fn upload_bundle(
         .body(
             ByteStream::from_path(bundle_path)
                 .await
-                .context("failed to load bundle file")?,
+                .context(here!("failed to load bundle file"))?,
         )
         .send()
         .await
-        .context("failed to upload bundle to S3")?;
+        .context(here!("failed to upload bundle to S3"))?;
     Ok(())
 }
 
@@ -276,7 +290,7 @@ async fn create_lambda_fn(
         .timeout(60)
         .send()
         .await
-        .context("failed to create canary Lambda function")?;
+        .context(here!("failed to create canary Lambda function"))?;
 
     let mut attempts = 0;
     let mut state = State::Pending;
@@ -288,7 +302,7 @@ async fn create_lambda_fn(
             .function_name(bundle_name)
             .send()
             .await
-            .context("failed to get Lambda function status")?;
+            .context(here!("failed to get Lambda function status"))?;
         state = configuration.state.unwrap();
         attempts += 1;
     }
@@ -310,7 +324,7 @@ async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Resu
         .payload(Blob::new(&b"{}"[..]))
         .send()
         .await
-        .context("failed to invoke the canary Lambda")?;
+        .context(here!("failed to invoke the canary Lambda"))?;
 
     if let Some(log_result) = response.log_result {
         info!(
@@ -336,7 +350,7 @@ async fn delete_lambda_fn(lambda_client: lambda::Client, bundle_name: &str) -> R
         .function_name(bundle_name)
         .send()
         .await
-        .context("failed to delete Lambda")?;
+        .context(here!("failed to delete Lambda"))?;
     Ok(())
 }
 

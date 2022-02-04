@@ -18,7 +18,7 @@ pub use get_last_commit::GetLastCommit;
 
 /// Attempts to find git repository root from the given location.
 pub fn find_git_repository_root(repo_name: &str, location: impl AsRef<Path>) -> Result<PathBuf> {
-    let mut current_dir = location.as_ref().canonicalize()?.to_path_buf();
+    let mut current_dir = location.as_ref().canonicalize()?;
     let os_name = OsStr::new(repo_name);
     loop {
         if is_git_root(&current_dir) {
