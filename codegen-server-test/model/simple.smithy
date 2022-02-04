@@ -19,32 +19,35 @@ service SimpleService {
 
 @http(uri: "/stringPayloadOperation", method: "GET")
 operation StringPayloadOperation {
-    input: StringPayloadOperationInput,
+    input: NoInput,
     output: StringPayloadOperationOutput
 }
 
 @http(uri: "/structurePayloadOperation", method: "GET")
 operation StructurePayloadOperation {
-    input: StructurePayloadOperationInput,
+    input: NoInput,
     output: StructurePayloadOperationOutput
 }
 
 @http(uri: "/documentPayloadOperation", method: "GET")
 operation DocumentPayloadOperation {
-    input: DocumentPayloadOperationInput,
+    input: NoInput,
     output: DocumentPayloadOperationOutput
 }
 
 @http(uri: "/streamingBlobPayloadOperation", method: "GET")
 operation StreamingBlobPayloadOperation {
-    input: StreamingBlobPayloadOperationInput,
+    input: NoInput,
     output: StreamingBlobPayloadOperationOutput
 }
 
 @http(uri: "/blobPayloadOperation", method: "GET")
 operation BlobPayloadOperation {
-    input: BlobPayloadOperationInput,
+    input: NoInput,
     output: BlobPayloadOperationOutput
+}
+
+structure NoInput {
 }
 
 @streaming
@@ -76,31 +79,6 @@ structure StreamingBlobPayloadOperationOutput {
 }
 
 structure BlobPayloadOperationOutput {
-    @httpPayload
-    BlobPayload: Blob
-}
-
-structure StringPayloadOperationInput {
-    @httpPayload
-    stringPayload: String,
-}
-
-structure StructurePayloadOperationInput {
-    @httpPayload
-    structPayload: MyStructure,
-}
-
-structure DocumentPayloadOperationInput {
-    @httpPayload
-    documentPayload: Document,
-}
-
-structure StreamingBlobPayloadOperationInput {
-    @httpPayload
-    streamingBlobPayload: StreamingBlob
-}
-
-structure BlobPayloadOperationInput {
     @httpPayload
     BlobPayload: Blob
 }
