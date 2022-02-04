@@ -340,9 +340,7 @@ class JsonSerializerGenerator(
             is StringShape -> {
                 when (target.hasTrait<EnumTrait>()) {
                     true -> rust("$writer.string(${value.name}.as_str());")
-                    false -> {
-                        rust("$writer.string(${value.name}.as_str());")
-                    }
+                    false -> rust("$writer.string(${value.name}.as_str());")
                 }
             }
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")

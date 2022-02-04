@@ -453,7 +453,7 @@ private class ServerHttpProtocolImplGenerator(
         serverRenderResponseHeaders(operationShape)
 
         for (binding in bindings) {
-            val serializedValue = serverRenderBindingSerializer(binding, operationShape)
+            val serializedValue = serverRenderBindingSerializer(binding)
             if (serializedValue != null) {
                 serializedValue(this)
             }
@@ -524,9 +524,7 @@ private class ServerHttpProtocolImplGenerator(
 
     private fun serverRenderBindingSerializer(
         binding: HttpBindingDescriptor,
-        operationShape: OperationShape,
     ): Writable? {
-        val operationName = symbolProvider.toSymbol(operationShape).name
         val member = binding.member
         return when (binding.location) {
             HttpLocation.HEADER,
@@ -609,15 +607,6 @@ private class ServerHttpProtocolImplGenerator(
             HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) } // always optional
             HttpLocation.PREFIX_HEADERS -> writable { serverRenderPrefixHeadersParser(this, binding, operationShape) }
             HttpLocation.PAYLOAD -> {
-                val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
-                    rust(symbolProvider.toOptional(binding.member, "#T($body)"), structuredDataParser.payloadParser(binding.member))
-                }
-                val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
-                    operationShape,
-                    binding,
-                    errorSymbol,
-                    structuredHandler = structureShapeHandler
-                )
                 return if (binding.member.isStreaming(model)) {
                     writable {
                         rustTemplate(
@@ -1084,6 +1073,13 @@ private class ServerHttpProtocolImplGenerator(
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")
             }
+        }
+    }
+    private fun getStreamingBodyTraitBounds(operationShape: OperationShape): String {
+        if (operationShape.inputShape(model).hasStreamingMember(model)) {
+            return "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
+        } else {
+            return ""
         }
     }
 
