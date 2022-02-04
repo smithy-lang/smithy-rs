@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.client
 
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -45,7 +45,13 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.smithy.generators.PaginatorGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.isPaginated
+import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
@@ -103,42 +109,6 @@ sealed class FluentClientSection(name: String) : Section(name) {
 }
 
 abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSection>()
-
-data class ClientGenerics(
-    val connectorDefault: RuntimeType?,
-    val middlewareDefault: RuntimeType?,
-    val retryDefault: RuntimeType?,
-    val client: RuntimeType
-) {
-    /** Declaration with defaults set */
-    val decl = writable {
-        rustTemplate(
-            "<C #{c:W}, M#{m:W}, R#{r:W}>",
-            "c" to defaultType(connectorDefault),
-            "m" to defaultType(middlewareDefault),
-            "r" to defaultType(retryDefault)
-        )
-    }
-
-    /** Instantiation */
-    val inst: String = "<C, M, R>"
-
-    /** Trait bounds */
-    val bounds = writable {
-        rustTemplate(
-            """
-            C: #{client}::bounds::SmithyConnector,
-            M: #{client}::bounds::SmithyMiddleware<C>,
-            R: #{client}::retry::NewRequestPolicy,
-            """,
-            "client" to client
-        )
-    }
-
-    private fun defaultType(default: RuntimeType?) = writable {
-        default?.also { rust("= #T", default) }
-    }
-}
 
 class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
     private val moduleUseName = codegenContext.moduleUseName()
@@ -273,7 +243,7 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
 
 class FluentClientGenerator(
     private val codegenContext: CodegenContext,
-    private val generics: ClientGenerics = ClientGenerics(
+    private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
         retryDefault = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType().member("retry::Standard"),
@@ -312,7 +282,7 @@ class FluentClientGenerator(
             """
             ##[derive(Debug)]
             pub(crate) struct Handle#{generics_decl:W} {
-                pub(crate) client: #{client}::Client${generics.inst},
+                pub(crate) client: #{client}::Client#{smithy_inst:W},
                 pub(crate) conf: crate::Config,
             }
 
@@ -331,15 +301,15 @@ class FluentClientGenerator(
             ##[doc(inline)]
             pub use #{client}::Builder;
 
-            impl${generics.inst} From<#{client}::Client${generics.inst}> for Client${generics.inst} {
-                fn from(client: #{client}::Client${generics.inst}) -> Self {
+            impl${generics.inst} From<#{client}::Client#{smithy_inst:W}> for Client${generics.inst} {
+                fn from(client: #{client}::Client#{smithy_inst:W}) -> Self {
                     Self::with_config(client, crate::Config::builder().build())
                 }
             }
 
             impl${generics.inst} Client${generics.inst} {
                 /// Creates a client with the given service configuration.
-                pub fn with_config(client: #{client}::Client${generics.inst}, conf: crate::Config) -> Self {
+                pub fn with_config(client: #{client}::Client#{smithy_inst:W}, conf: crate::Config) -> Self {
                     Self {
                         handle: std::sync::Arc::new(Handle {
                             client,
@@ -355,6 +325,7 @@ class FluentClientGenerator(
             }
             """,
             "generics_decl" to generics.decl,
+            "smithy_inst" to generics.smithyInst,
             "client" to clientDep.asType(),
             "client_docs" to writable
             {
@@ -368,7 +339,7 @@ class FluentClientGenerator(
             },
         )
         writer.rustBlockTemplate(
-            "impl${generics.inst} Client${generics.inst} where #{bounds:W}",
+            "impl${generics.inst} Client${generics.inst} #{bounds:W}",
             "client" to clientDep.asType(),
             "bounds" to generics.bounds
         ) {
@@ -467,10 +438,13 @@ class FluentClientGenerator(
                 )
 
                 rustBlockTemplate(
-                    "impl${generics.inst} ${operationSymbol.name}${generics.inst} where #{bounds:W}",
+                    "impl${generics.inst} ${operationSymbol.name}${generics.inst} #{bounds:W}",
                     "client" to clientDep.asType(),
                     "bounds" to generics.bounds
                 ) {
+                    val inputType = symbolProvider.toSymbol(operation.inputShape(model))
+                    val outputType = symbolProvider.toSymbol(operation.outputShape(model))
+                    val errorType = operation.errorSymbol(symbolProvider)
                     rustTemplate(
                         """
                         /// Creates a new `${operationSymbol.name}`.
@@ -487,12 +461,7 @@ class FluentClientGenerator(
                         /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
                         /// set when configuring the client.
                         pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
-                        where
-                            R::Policy: #{client}::bounds::SmithyRetryPolicy<#{input}OperationOutputAlias,
-                            #{ok},
-                            #{operation_err},
-                            #{input}OperationRetryAlias>,
-                        {
+                        #{send_bounds:W} {
                             let op = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?
                                 .make_operation(&self.handle.conf)
                                 .await
@@ -500,12 +469,11 @@ class FluentClientGenerator(
                             self.handle.client.call(op).await
                         }
                         """,
-                        "input" to symbolProvider.toSymbol(operation.inputShape(model)),
-                        "ok" to symbolProvider.toSymbol(operation.outputShape(model)),
-                        "operation_err" to operation.errorSymbol(symbolProvider),
+                        "ok" to outputType,
+                        "operation_err" to errorType,
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType()
                             .copy(name = "result::SdkError"),
-                        "client" to clientDep.asType(),
+                        "send_bounds" to generics.sendBounds(inputType, outputType, errorType)
                     )
                     PaginatorGenerator.paginatorType(codegenContext, generics, operation)?.also { paginatorType ->
                         rustTemplate(
@@ -551,17 +519,19 @@ class FluentClientGenerator(
 /**
  * For a given `operation` shape, return a list of strings where each string describes the name and input type of one of
  * the operation's corresponding fluent builder methods as well as that method's documentation from the smithy model
+ *
+ * _NOTE: This function generates the docs that appear under **"The fluent builder is configurable:"**_
  */
 fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvider, operation: OperationShape, model: Model): List<String> {
     val input = operation.inputShape(model)
     val fluentBuilderFullyQualifiedName = operation.fullyQualifiedFluentBuilder(symbolProvider)
-    return input.members().map { member ->
-        val builderInputDoc = member.asFluentBuilderInputDoc(symbolProvider)
-        val builderInputLink = "$fluentBuilderFullyQualifiedName::${symbolProvider.toMemberName(member)}"
-        val builderSetterDoc = member.asFluentBuilderSetterDoc(symbolProvider)
-        val builderSetterLink = "$fluentBuilderFullyQualifiedName::${member.setterName()}"
+    return input.members().map { memberShape ->
+        val builderInputDoc = memberShape.asFluentBuilderInputDoc(symbolProvider)
+        val builderInputLink = docLink("$fluentBuilderFullyQualifiedName::${symbolProvider.toMemberName(memberShape)}")
+        val builderSetterDoc = memberShape.asFluentBuilderSetterDoc(symbolProvider)
+        val builderSetterLink = docLink("$fluentBuilderFullyQualifiedName::${memberShape.setterName()}")
 
-        val docTrait = member.getMemberTrait(model, DocumentationTrait::class.java).orNull()
+        val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs = when (docTrait?.value?.isNotBlank()) {
             true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
             else -> "(undocumented)"
@@ -574,6 +544,8 @@ fun generateOperationShapeDocs(writer: RustWriter, symbolProvider: SymbolProvide
 /**
  * For a give `struct` shape, return a list of strings where each string describes the name and type of a struct field
  * as well as that field's documentation from the smithy model
+ *
+ *  * _NOTE: This function generates the list of types that appear under **"On success, responds with"**_
  */
 fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, shape: StructureShape, model: Model): List<String> {
     val structName = symbolProvider.toSymbol(shape).rustType().qualifiedName()
@@ -593,6 +565,8 @@ fun generateShapeMemberDocs(writer: RustWriter, symbolProvider: SymbolProvider, 
 /**
  * Generate a valid fully-qualified Type for a fluent builder e.g.
  * `OperationShape(AssumeRole)` -> `"crate::client::fluent_builders::AssumeRole"`
+ *
+ *  * _NOTE: This function generates the links that appear under **"The fluent builder is configurable:"**_
  */
 fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: SymbolProvider): String {
     val operationName = symbolProvider.toSymbol(this).name
@@ -603,6 +577,8 @@ fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: SymbolProvider): 
 /**
  * Generate a string that looks like a Rust function pointer for documenting a fluent builder method e.g.
  * `<MemberShape representing a struct method>` -> `"method_name(MethodInputType)"`
+ *
+ * _NOTE: This function generates the type names that appear under **"The fluent builder is configurable:"**_
  */
 fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
     val memberName = symbolProvider.toMemberName(this)
@@ -614,6 +590,8 @@ fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String 
 /**
  * Generate a string that looks like a Rust function pointer for documenting a fluent builder setter method e.g.
  * `<MemberShape representing a struct method>` -> `"set_method_name(Option<MethodInputType>)"`
+ *
+ *  _NOTE: This function generates the setter type names that appear under **"The fluent builder is configurable:"**_
  */
 fun MemberShape.asFluentBuilderSetterDoc(symbolProvider: SymbolProvider): String {
     val memberName = this.setterName()

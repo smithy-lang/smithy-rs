@@ -6,11 +6,10 @@
 //! Local filesystem git repository discovery. This enables the tool to
 //! orient itself despite being run anywhere from within the git repo.
 
-use crate::git;
-use crate::shell::ShellOperation;
 use crate::{SDK_REPO_CRATE_PATH, SDK_REPO_NAME};
 use anyhow::Result;
-use std::ffi::OsStr;
+use smithy_rs_tool_common::git;
+use smithy_rs_tool_common::shell::ShellOperation;
 use std::path::{Path, PathBuf};
 
 /// Git repository containing crates to be published.
@@ -20,51 +19,24 @@ pub struct Repository {
 }
 
 impl Repository {
+    pub fn new(repo_name: &str, path: impl Into<PathBuf>) -> Result<Repository> {
+        let root = git::find_git_repository_root(repo_name, path.into())?;
+        Ok(Repository { root })
+    }
+
     /// Returns the current tag of this repository
     pub async fn current_tag(&self) -> Result<String> {
         git::GetCurrentTag::new(&self.root).spawn().await
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("failed to find {0} repository root")]
-    RepositoryRootNotFound(String),
-}
-
 /// Given a `location`, this function looks for the `aws-sdk-rust` git repository. If found,
 /// it resolves the `sdk/` directory. Otherwise, it returns the original `location`.
-pub async fn resolve_publish_location(location: &Path) -> PathBuf {
-    match find_git_repository_root(SDK_REPO_NAME, location).await {
+pub fn resolve_publish_location(location: &Path) -> PathBuf {
+    match Repository::new(SDK_REPO_NAME, location) {
         // If the given path was the `aws-sdk-rust` repo root, then resolve the `sdk/` directory to publish from
         Ok(sdk_repo) => sdk_repo.root.join(SDK_REPO_CRATE_PATH),
         // Otherwise, publish from the given path (likely the smithy-rs runtime bundle)
         Err(_) => location.into(),
     }
-}
-
-/// Attempts to find git repository root from the given location.
-pub async fn find_git_repository_root(
-    repo_name: &str,
-    location: impl Into<PathBuf>,
-) -> Result<Repository> {
-    let mut current_dir = location.into();
-    let os_name = OsStr::new(repo_name);
-    loop {
-        if is_git_root(&current_dir) {
-            if let Some(file_name) = current_dir.file_name() {
-                if os_name == file_name {
-                    return Ok(Repository { root: current_dir });
-                }
-            }
-            return Err(Error::RepositoryRootNotFound(repo_name.into()).into());
-        } else if !current_dir.pop() {
-            return Err(Error::RepositoryRootNotFound(repo_name.into()).into());
-        }
-    }
-}
-
-fn is_git_root(path: &Path) -> bool {
-    let path = path.join(".git");
-    path.exists() && path.is_dir()
 }
