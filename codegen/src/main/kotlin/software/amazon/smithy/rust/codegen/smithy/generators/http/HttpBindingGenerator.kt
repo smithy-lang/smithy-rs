@@ -61,7 +61,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  *     - serializing data to an HTTP request (we are a client),
  *     - serializing data to an HTTP response (we are a server),
  */
-enum class HttpMessageType {
+public enum class HttpMessageType {
     REQUEST, RESPONSE
 }
 

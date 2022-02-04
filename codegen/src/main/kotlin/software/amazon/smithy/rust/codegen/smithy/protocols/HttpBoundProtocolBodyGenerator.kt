@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
@@ -29,7 +30,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.EventStrea
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
-import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
@@ -67,14 +67,14 @@ class HttpBoundProtocolBodyGenerator(
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType()
     )
 
-    override fun bodyMetadata(operationShape: OperationShape): ProtocolBodyGenerator.BodyMetadata {
-        val server = true
-
-        val (shape, payloadMemberName) = if (server) {
-            operationShape.outputShape(model) to
+    override fun bodyMetadata(
+        operationShape: OperationShape,
+        httpMessageType: HttpMessageType
+    ): ProtocolBodyGenerator.BodyMetadata {
+        val (shape, payloadMemberName) = when (httpMessageType) {
+            HttpMessageType.RESPONSE -> operationShape.outputShape(model) to
                     httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
-        } else {
-            operationShape.inputShape(model) to
+            HttpMessageType.REQUEST -> operationShape.inputShape(model) to
                     httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
         }
 
@@ -96,37 +96,36 @@ class HttpBoundProtocolBodyGenerator(
         }
     }
 
-    override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape) {
-        val server = true
-
-        val bodyMetadata = bodyMetadata(operationShape)
+    override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape, httpMessageType: HttpMessageType) {
+        val bodyMetadata = bodyMetadata(operationShape, httpMessageType)
         val serializerGenerator = protocol.structuredDataSerializer(operationShape)
-        val payloadMemberName = if (server) {
-            httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
-        } else {
-            httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
-        }
+        val payloadMemberName = when (httpMessageType) {
+            HttpMessageType.RESPONSE ->
+                httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD)
+            HttpMessageType.REQUEST ->
+                httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD)
+        }.firstOrNull()?.memberName
         if (payloadMemberName == null) {
-            if (server) {
-                serializerGenerator.serverOutputSerializer(operationShape)?.let { serializer ->
-                    writer.rust(
-                        "#T(&$self)?",
-                        serializer,
-                    )
-                } ?: writer.rustTemplate("\"\"", *codegenScope)
+            val serializer = when (httpMessageType) {
+                HttpMessageType.RESPONSE ->
+                    serializerGenerator.serverOutputSerializer(operationShape)
+                HttpMessageType.REQUEST ->
+                    serializerGenerator.operationSerializer(operationShape)
+            }
+            if (serializer == null) {
+                writer.rust("\"\"")
             } else {
-                serializerGenerator.operationSerializer(operationShape)?.let { serializer ->
-                    writer.rust(
-                        "#T(&$self)?",
-                        serializer,
-                    )
-                } ?: writer.rustTemplate("#{SdkBody}::from(\"\")", *codegenScope)
+                writer.rust(
+                    "#T(&$self)?",
+                    serializer,
+                )
             }
         } else {
-            val member = if (server) {
-                operationShape.outputShape(model).expectMember(payloadMemberName)
-            } else {
-                operationShape.inputShape(model).expectMember(payloadMemberName)
+            val member = when (httpMessageType) {
+                HttpMessageType.RESPONSE ->
+                    operationShape.outputShape(model).expectMember(payloadMemberName)
+                HttpMessageType.REQUEST ->
+                    operationShape.inputShape(model).expectMember(payloadMemberName)
             }
 
             // TODO Server event streams
@@ -208,7 +207,7 @@ class HttpBoundProtocolBodyGenerator(
                             is StringShape, is BlobShape, is DocumentShape -> rust(
                                 // TODO Can we get rid of this allocation and make the function return a slice of bytes?
                                 """
-                                b"\"\"".to_vec()
+                                b"".to_vec()
                                 """
                             )
                             // If this targets a member and the member is `None`, return an "empty" `Vec<u8>`.
@@ -239,7 +238,7 @@ class HttpBoundProtocolBodyGenerator(
                 // Write the raw string to the payload.
                 // TODO Can we get rid of this allocation and make the function return a slice of bytes?
                 if (targetShape.hasTrait<EnumTrait>()) {
-                    rust("$payloadName.as_bytes().to_vec()")
+                    rust("$payloadName.as_str().as_bytes().to_vec()")
                 } else {
                     // TODO Cannot use `into_bytes()` because payload is behind shared reference.
                     rust("$payloadName.as_bytes().to_vec()")
@@ -247,13 +246,15 @@ class HttpBoundProtocolBodyGenerator(
             }
 
             is BlobShape -> {
-                // TODO Move the below comment to the client?
+                // TODO Comment does not apply
                 // This works for streaming and non-streaming blobs because they both have `into_inner()` which
                 // can be converted into an `SdkBody`!
                 // Write the raw blob to the payload.
                 if (member.isStreaming(model)) {
+                    // Return the `ByteStream`.
                     rust(payloadName)
                 } else {
+                    // Convert the `Blob` into a `Vec<u8>` and return it.
                     rust("$payloadName.into_inner()")
                 }
             }

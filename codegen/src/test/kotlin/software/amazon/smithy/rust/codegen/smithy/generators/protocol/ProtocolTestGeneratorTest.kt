@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator.BodyMetadata
+import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
@@ -36,10 +36,10 @@ import software.amazon.smithy.rust.codegen.util.runCommand
 import java.nio.file.Path
 
 private class TestProtocolBodyGenerator(private val body: String) : ProtocolBodyGenerator {
-    override fun bodyMetadata(operationShape: OperationShape): BodyMetadata =
-        BodyMetadata(takesOwnership = false)
+    override fun bodyMetadata(operationShape: OperationShape, httpMessageType: HttpMessageType) =
+        TODO("`TestProtocolBodyGenerator` does not use this method")
 
-    override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape) {
+    override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape, httpMessageType: HttpMessageType) {
         writer.writeWithNoFormatting(body)
     }
 }
@@ -75,7 +75,7 @@ private class TestProtocolMakeOperationGenerator(
     private val httpRequestBuilder: String
 ) : MakeOperationGenerator(codegenContext, protocol, TestProtocolBodyGenerator(body)) {
     override fun generateRequestBuilderBaseFn(writer: RustWriter, operationShape: OperationShape) {
-        writer.inRequestBuilderBaseFn(operationShape.inputShape(codegenContext.model)) {
+        writer.inRequestBuilderBaseFn(operationShape.inputShape(model)) {
             withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
                 writeWithNoFormatting(httpRequestBuilder)
             }

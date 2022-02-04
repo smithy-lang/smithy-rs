@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -46,14 +47,16 @@ interface ProtocolBodyGenerator {
      * Most operations will parse the HTTP body as a reference, but for operations that will consume the entire stream later,
      * they will need to take ownership and different code needs to be generated.
      */
-    fun bodyMetadata(operationShape: OperationShape): BodyMetadata
+    fun bodyMetadata(operationShape: OperationShape, httpMessageType: HttpMessageType = HttpMessageType.REQUEST): BodyMetadata
 
     /**
-     * Write the body into [writer]
+     * Write the body into [writer].
      *
-     * This should be an expression that returns an `SdkBody`
+     * This should be an expression that returns bytes:
+     *     - a `Vec<u8>` for non-streaming operations; or
+     *     - a `ByteStream` for streaming operations.
      */
-    fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape)
+    fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape, httpMessageType: HttpMessageType = HttpMessageType.REQUEST)
 }
 
 /**

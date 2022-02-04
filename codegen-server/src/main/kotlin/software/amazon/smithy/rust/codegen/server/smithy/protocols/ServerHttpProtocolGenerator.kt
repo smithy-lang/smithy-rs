@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
@@ -505,7 +506,7 @@ private class ServerHttpProtocolImplGenerator(
         } else {
             val bodyGenerator = HttpBoundProtocolBodyGenerator(codegenContext, protocol)
             withBlockTemplate("let body = #{SmithyHttpServer}::body::to_boxed(", ");", *codegenScope) {
-                bodyGenerator.generateBody(this, "output", operationShape)
+                bodyGenerator.generateBody(this, "output", operationShape, httpMessageType = HttpMessageType.RESPONSE)
             }
         }
 
