@@ -67,10 +67,6 @@ internal class BuilderGeneratorTest {
                 override fun toMemberName(shape: MemberShape?): String {
                     return baseProvider.toMemberName(shape)
                 }
-
-                override fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean): Boolean {
-                    return false
-                }
             }
         val writer = RustWriter.forModule("model")
         val innerGenerator = StructureGenerator(

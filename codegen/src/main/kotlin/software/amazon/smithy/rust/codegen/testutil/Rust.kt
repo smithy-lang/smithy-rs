@@ -12,7 +12,6 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumDefinition
@@ -102,10 +101,6 @@ object TestWorkspace {
             }
 
             override fun toSymbol(shape: Shape?): Symbol {
-                PANIC("")
-            }
-
-            override fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean): Boolean {
                 PANIC("")
             }
         }

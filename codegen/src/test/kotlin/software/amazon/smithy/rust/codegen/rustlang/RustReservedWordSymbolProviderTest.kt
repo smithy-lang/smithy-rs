@@ -32,10 +32,6 @@ internal class RustReservedWordSymbolProviderTest {
         override fun toSymbol(shape: Shape): Symbol {
             return Symbol.builder().name(shape.id.name).build()
         }
-
-        override fun isRequiredTraitHandled(member: MemberShape, useNullableIndex: Boolean): Boolean {
-            return false
-        }
     }
 
     @Test

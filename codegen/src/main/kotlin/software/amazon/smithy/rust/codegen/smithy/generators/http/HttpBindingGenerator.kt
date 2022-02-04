@@ -123,7 +123,7 @@ class HttpBindingGenerator(
                 headerUtil
             ) {
                 rust("let headers = header_map.get_all(${binding.locationName.dq()}).iter();")
-                deserializeFromHeader(model.expectShape(binding.member.target), binding.member, binding.locationName)
+                deserializeFromHeader(model.expectShape(binding.member.target), binding.member)
             }
         }
     }
@@ -142,7 +142,7 @@ class HttpBindingGenerator(
                 symbolProvider.toSymbol(model.expectShape(target.value.target)),
                 headerUtil
             ) {
-                deserializeFromHeader(model.expectShape(target.value.target), binding.member, binding.locationName)
+                deserializeFromHeader(model.expectShape(target.value.target), binding.member)
             }
         }
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
@@ -299,7 +299,7 @@ class HttpBindingGenerator(
      * Parse a value from a header.
      * This function produces an expression which produces the precise type required by the target shape.
      */
-    private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape, locationName: String) {
+    private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape) {
         val rustType = symbolProvider.toSymbol(targetType).rustType().stripOuter<RustType.Option>()
         // Normally, we go through a flow that looks for `,`s but that's wrong if the output
         // is just a single string (which might include `,`s.).
@@ -374,20 +374,17 @@ class HttpBindingGenerator(
                     })
                     """
                 )
-            else -> {
-                val returnValue = "Ok($parsedValue.pop())"
-                rustTemplate(
-                    """
-                    if $parsedValue.len() > 1 {
-                        Err(#{header_util}::ParseError::new_with_message(format!("expected one item but found {}", $parsedValue.len())))
-                    } else {
-                        let mut $parsedValue = $parsedValue;
-                        $returnValue
-                    }
-                    """,
-                    "header_util" to headerUtil
-                )
-            }
+            else -> rustTemplate(
+                """
+                if $parsedValue.len() > 1 {
+                    Err(#{header_util}::ParseError::new_with_message(format!("expected one item but found {}", $parsedValue.len())))
+                } else {
+                    let mut $parsedValue = $parsedValue;
+                    Ok($parsedValue.pop())
+                }
+                """,
+                "header_util" to headerUtil
+            )
         }
     }
 
