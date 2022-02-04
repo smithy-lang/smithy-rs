@@ -5,5 +5,7 @@
 
 pub mod git;
 pub mod github_actions;
+#[macro_use]
+pub mod macros;
 pub mod package;
 pub mod shell;
