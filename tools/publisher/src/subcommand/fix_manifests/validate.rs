@@ -4,9 +4,10 @@
  */
 
 use crate::fs::Fs;
-use crate::package::{discover_and_validate_package_batches, PackageCategory};
+use crate::package::discover_and_validate_package_batches;
 use anyhow::{anyhow, bail, Result};
 use semver::Version;
+use smithy_rs_tool_common::package::PackageCategory;
 use std::collections::BTreeMap;
 use std::path::Path;
 use tracing::info;

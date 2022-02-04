@@ -1,11 +1,12 @@
 #!/bin/bash
-
 #
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0.
 #
-
+# Run by CI to check the canary-lambda
 set -e
-cargo clippy --all-features -- -D warnings
+cd "$(dirname $0)"
+
+cargo test
 cargo test --all-features
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+cargo clippy

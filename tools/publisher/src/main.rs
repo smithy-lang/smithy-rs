@@ -14,10 +14,8 @@ use subcommand::hydrate_readme::subcommand_hydrate_readme;
 
 mod cargo;
 mod fs;
-mod git;
 mod package;
 mod repo;
-mod shell;
 mod sort;
 mod subcommand;
 

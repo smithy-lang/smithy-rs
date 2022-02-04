@@ -4,24 +4,13 @@
  */
 
 use anyhow::bail;
+use smithy_rs_tool_common::package::{PackageCategory, SDK_PREFIX};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use structopt::StructOpt;
 use toml::value::{Table, Value};
-
-const AWS_CONFIG: &str = "aws-config";
-const AWS_RUNTIME_CRATES: &[&str] = &[
-    "aws-endpoint",
-    "aws-http",
-    "aws-hyper",
-    "aws-sig-auth",
-    "aws-sigv4",
-    "aws-types",
-];
-const SDK_PREFIX: &str = "aws-sdk-";
-const SMITHY_PREFIX: &str = "aws-smithy-";
 
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -105,7 +94,8 @@ fn update_manifest(manifest_path: &Path, opt: &Opt) -> anyhow::Result<()> {
 fn update_dependencies(dependencies: &mut Table, opt: &Opt) -> anyhow::Result<bool> {
     let mut changed = false;
     for (key, value) in dependencies.iter_mut() {
-        if is_sdk_or_runtime_crate(key) {
+        let category = PackageCategory::from_package_name(key);
+        if !matches!(category, PackageCategory::Unknown) {
             if !value.is_table() {
                 *value = Value::Table(Table::new());
             }
@@ -116,20 +106,11 @@ fn update_dependencies(dependencies: &mut Table, opt: &Opt) -> anyhow::Result<bo
     Ok(changed)
 }
 
-fn is_sdk_crate(name: &str) -> bool {
-    is_service_crate(name) || name == AWS_CONFIG || AWS_RUNTIME_CRATES.iter().any(|&k| k == name)
-}
-
-fn is_sdk_or_runtime_crate(name: &str) -> bool {
-    is_sdk_crate(name) || name.starts_with(SMITHY_PREFIX)
-}
-
-fn is_service_crate(name: &str) -> bool {
-    name.starts_with(SDK_PREFIX)
-}
-
 fn crate_path_name(name: &str) -> &str {
-    if is_service_crate(name) {
+    if matches!(
+        PackageCategory::from_package_name(name),
+        PackageCategory::AwsSdk
+    ) {
         &name[SDK_PREFIX.len()..]
     } else {
         name
@@ -137,7 +118,10 @@ fn crate_path_name(name: &str) -> &str {
 }
 
 fn update_dependency_value(crate_name: &str, value: &mut Table, opt: &Opt) {
-    let is_sdk_crate = is_sdk_crate(crate_name);
+    let is_sdk_crate = matches!(
+        PackageCategory::from_package_name(crate_name),
+        PackageCategory::AwsSdk | PackageCategory::AwsRuntime,
+    );
 
     // Remove keys that will be replaced
     value.remove("version");

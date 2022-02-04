@@ -18,6 +18,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpPro
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
 /**
@@ -39,6 +41,7 @@ class ServerOperationHandlerGenerator(
         "PinProjectLite" to ServerCargoDependency.PinProjectLite.asType(),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
+        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
         "Phantom" to ServerRuntimeType.Phantom,
@@ -132,13 +135,18 @@ class ServerOperationHandlerGenerator(
         } else {
             symbolProvider.toSymbol(operation.outputShape(model)).fullName
         }
+        val streamingBodyTraitBounds = if (operation.inputShape(model).hasStreamingMember(model)) {
+            "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
+        } else {
+            ""
+        }
         return """
             $inputFn
             Fut: std::future::Future<Output = $outputType> + Send,
-            B: $serverCrate::HttpBody + Send + 'static,
+            B: $serverCrate::HttpBody + Send + 'static, $streamingBodyTraitBounds
             B::Data: Send,
             B::Error: Into<$serverCrate::BoxError>,
             $serverCrate::rejection::SmithyRejection: From<<B as $serverCrate::HttpBody>::Error>
-        """
+        """.trimIndent()
     }
 }

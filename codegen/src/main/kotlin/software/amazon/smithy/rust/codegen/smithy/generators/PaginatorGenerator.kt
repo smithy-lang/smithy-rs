@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.PANIC
@@ -45,13 +46,13 @@ class PaginatorGenerator private constructor(
     private val symbolProvider: RustSymbolProvider,
     service: ServiceShape,
     operation: OperationShape,
-    private val generics: ClientGenerics
+    private val generics: FluentClientGenerics
 ) {
 
     companion object {
         fun paginatorType(
             codegenContext: CodegenContext,
-            generics: ClientGenerics,
+            generics: FluentClientGenerics,
             operationShape: OperationShape
         ): RuntimeType? {
             return if (operationShape.isPaginated(codegenContext.model)) {
@@ -79,7 +80,9 @@ class PaginatorGenerator private constructor(
         documentation = "Paginators for the service"
     )
 
+    private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputType = operation.outputShape(model)
+    private val errorType = operation.errorSymbol(symbolProvider)
 
     private fun paginatorType(): RuntimeType = RuntimeType.forInlineFun(
         paginatorName,
@@ -91,12 +94,13 @@ class PaginatorGenerator private constructor(
         "generics" to generics.decl,
         "bounds" to generics.bounds,
         "page_size_setter" to pageSizeSetter(),
+        "send_bounds" to generics.sendBounds(inputType, symbolProvider.toSymbol(outputType), errorType),
 
         // Operation Types
         "operation" to symbolProvider.toSymbol(operation),
-        "Input" to symbolProvider.toSymbol(operation.inputShape(model)),
-        "Output" to symbolProvider.toSymbol(operation.outputShape(model)),
-        "Error" to operation.errorSymbol(symbolProvider),
+        "Input" to inputType,
+        "Output" to symbolProvider.toSymbol(outputType),
+        "Error" to errorType,
         "Builder" to operation.inputShape(model).builderSymbol(symbolProvider),
 
         // SDK Types
@@ -125,7 +129,7 @@ class PaginatorGenerator private constructor(
                 builder: #{Builder}
             }
 
-            impl${generics.inst} ${paginatorName}${generics.inst} where #{bounds:W} {
+            impl${generics.inst} ${paginatorName}${generics.inst} #{bounds:W} {
                 /// Create a new paginator-wrapper
                 pub(crate) fn new(handle: std::sync::Arc<crate::client::Handle${generics.inst}>, builder: #{Builder}) -> Self {
                     Self {
@@ -143,13 +147,7 @@ class PaginatorGenerator private constructor(
                 ///
                 /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next)).
                 pub fn send(self) -> impl #{Stream}<Item = std::result::Result<#{Output}, #{SdkError}<#{Error}>>> + Unpin
-                where
-                    R::Policy: #{client}::bounds::SmithyRetryPolicy<
-                        #{Input}OperationOutputAlias,
-                        #{Output},
-                        #{Error},
-                        #{Input}OperationRetryAlias
-                    >, {
+                #{send_bounds:W} {
                     // Move individual fields out of self for the borrow checker
                     let builder = self.builder;
                     let handle = self.handle;
@@ -246,20 +244,14 @@ class PaginatorGenerator private constructor(
                 /// This is created with [`.items()`]($paginatorName::items)
                 pub struct ${paginatorName}Items#{generics:W}($paginatorName${generics.inst});
 
-                impl ${generics.inst} ${paginatorName}Items${generics.inst} where #{bounds:W} {
+                impl ${generics.inst} ${paginatorName}Items${generics.inst} #{bounds:W} {
                     /// Create the pagination stream
                     ///
                     /// _Note: No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next))._
                     ///
                     /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](tokio_stream::StreamExt::collect).
                     pub fn send(self) -> impl #{Stream}<Item = std::result::Result<${itemType()}, #{SdkError}<#{Error}>>> + Unpin
-                    where
-                        R::Policy: #{client}::bounds::SmithyRetryPolicy<
-                            #{Input}OperationOutputAlias,
-                            #{Output},
-                            #{Error},
-                            #{Input}OperationRetryAlias
-                        >, {
+                    #{send_bounds:W} {
                         #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
                     }
                 }

@@ -10,40 +10,13 @@ use crate::sort::dependency_order;
 use anyhow::{Context, Result};
 use cargo_toml::{Dependency, DepsSet, Manifest};
 use semver::Version;
+use smithy_rs_tool_common::package::PackageCategory;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error as StdError;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tracing::warn;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum PackageCategory {
-    SmithyRuntime,
-    AwsRuntime,
-    AwsSdk,
-    Unknown,
-}
-
-impl PackageCategory {
-    /// Returns true if the category is `AwsRuntime` or `AwsSdk`
-    pub fn is_sdk(&self) -> bool {
-        matches!(self, PackageCategory::AwsRuntime | PackageCategory::AwsSdk)
-    }
-
-    /// Categorizes a package based on its name
-    pub fn from_package_name(name: &str) -> PackageCategory {
-        if name.starts_with("aws-smithy-") {
-            PackageCategory::SmithyRuntime
-        } else if name.starts_with("aws-sdk-") {
-            PackageCategory::AwsSdk
-        } else if name.starts_with("aws-") {
-            PackageCategory::AwsRuntime
-        } else {
-            PackageCategory::Unknown
-        }
-    }
-}
 
 /// Information required to identify a package (crate).
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
