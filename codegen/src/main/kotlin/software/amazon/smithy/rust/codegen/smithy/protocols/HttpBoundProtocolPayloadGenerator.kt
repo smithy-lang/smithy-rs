@@ -9,7 +9,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -24,7 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.EventStreamMarshallerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
@@ -39,11 +38,11 @@ import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-// TODO Should rename to PayloadGenerator
-class HttpBoundProtocolBodyGenerator(
+class HttpBoundProtocolPayloadGenerator(
     codegenContext: CodegenContext,
     private val protocol: Protocol,
-) : ProtocolBodyGenerator {
+    private val httpMessageType: HttpMessageType = HttpMessageType.REQUEST
+) : ProtocolPayloadGenerator {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -53,13 +52,7 @@ class HttpBoundProtocolBodyGenerator(
     private val operationSerModule = RustModule.private("operation_ser")
 
     private val codegenScope = arrayOf(
-        // TODO prune
-        "ParseStrict" to RuntimeType.parseStrictResponse(runtimeConfig),
-        "ParseResponse" to RuntimeType.parseResponse(runtimeConfig),
-        "http" to RuntimeType.http,
         "hyper" to CargoDependency.HyperWithStream.asType(),
-        "operation" to RuntimeType.operationModule(runtimeConfig),
-        "Bytes" to RuntimeType.Bytes,
         "ByteStream" to RuntimeType.byteStream(runtimeConfig),
         "ByteSlab" to RuntimeType.ByteSlab,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
@@ -67,10 +60,7 @@ class HttpBoundProtocolBodyGenerator(
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType()
     )
 
-    override fun bodyMetadata(
-        operationShape: OperationShape,
-        httpMessageType: HttpMessageType
-    ): ProtocolBodyGenerator.BodyMetadata {
+    override fun payloadMetadata(operationShape: OperationShape): ProtocolPayloadGenerator.PayloadMetadata {
         val (shape, payloadMemberName) = when (httpMessageType) {
             HttpMessageType.RESPONSE -> operationShape.outputShape(model) to
                     httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
@@ -81,23 +71,23 @@ class HttpBoundProtocolBodyGenerator(
         // Only streaming operations (blob streaming and event streams) and *blob non-streaming* operations need to
         // take ownership.
         return if (payloadMemberName == null) {
-            ProtocolBodyGenerator.BodyMetadata(takesOwnership = false)
+            ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = false)
         } else if (operationShape.isInputEventStream(model)) {
-            ProtocolBodyGenerator.BodyMetadata(takesOwnership = true)
+            ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = true)
         } else {
             val member = shape.expectMember(payloadMemberName)
             when (val type = model.expectShape(member.target)) {
-                is StringShape, is DocumentShape, is StructureShape, is UnionShape -> ProtocolBodyGenerator.BodyMetadata(
+                is StringShape, is DocumentShape, is StructureShape, is UnionShape -> ProtocolPayloadGenerator.PayloadMetadata(
                     takesOwnership = false
                 )
-                is BlobShape -> ProtocolBodyGenerator.BodyMetadata(takesOwnership = true)
+                is BlobShape -> ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = true)
                 else -> UNREACHABLE("Unexpected payload target type: $type")
             }
         }
     }
 
-    override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape, httpMessageType: HttpMessageType) {
-        val bodyMetadata = bodyMetadata(operationShape, httpMessageType)
+    override fun generatePayload(writer: RustWriter, self: String, operationShape: OperationShape) {
+        val bodyMetadata = payloadMetadata(operationShape)
         val serializerGenerator = protocol.structuredDataSerializer(operationShape)
         val payloadMemberName = when (httpMessageType) {
             HttpMessageType.RESPONSE ->
@@ -160,15 +150,15 @@ class HttpBoundProtocolBodyGenerator(
         // parameters that are not `@eventHeader` or `@eventPayload`.
         rustTemplate(
             """
-        {
-            let marshaller = #{marshallerConstructorFn}();
-            let signer = _config.new_event_stream_signer(properties.clone());
-            let adapter: #{SmithyHttp}::event_stream::MessageStreamAdapter<_, #{OperationError}> =
-                self.$memberName.into_body_stream(marshaller, signer);
-            let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
-            body
-        }
-        """,
+            {
+                let marshaller = #{marshallerConstructorFn}();
+                let signer = _config.new_event_stream_signer(properties.clone());
+                let adapter: #{SmithyHttp}::event_stream::MessageStreamAdapter<_, #{OperationError}> =
+                    self.$memberName.into_body_stream(marshaller, signer);
+                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
+                body
+            }
+            """,
             *codegenScope,
             "marshallerConstructorFn" to marshallerConstructorFn,
             "OperationError" to operationShape.errorSymbol(symbolProvider)
@@ -177,13 +167,13 @@ class HttpBoundProtocolBodyGenerator(
 
     // TODO Document self
     private fun RustWriter.serializeViaPayload(
-        bodyMetadata: ProtocolBodyGenerator.BodyMetadata,
+        payloadMetadata: ProtocolPayloadGenerator.PayloadMetadata,
         self: String,
         member: MemberShape,
         serializerGenerator: StructuredDataSerializerGenerator
     ) {
         val fnName = "serialize_payload_${member.container.name.toSnakeCase()}"
-        val ref = if (bodyMetadata.takesOwnership) "" else "&"
+        val ref = if (payloadMetadata.takesOwnership) "" else "&"
         val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
             val outputT = if (member.isStreaming(model)) "ByteStream" else "ByteSlab"
             it.rustBlockTemplate(
@@ -191,7 +181,7 @@ class HttpBoundProtocolBodyGenerator(
                 "Member" to symbolProvider.toSymbol(member),
                 *codegenScope
             ) {
-                val asRef = if (bodyMetadata.takesOwnership) "" else ".as_ref()"
+                val asRef = if (payloadMetadata.takesOwnership) "" else ".as_ref()"
 
                 if (symbolProvider.toSymbol(member).isOptional()) {
                     withBlockTemplate(
@@ -216,10 +206,6 @@ class HttpBoundProtocolBodyGenerator(
                     }
                 }
 
-                // TODO Comment does not apply
-                // When the body is a streaming blob it _literally_ is an `SdkBody` already.
-                // Mute this Clippy warning to make the codegen a little simpler in that case.
-                Attribute.Custom("allow(clippy::useless_conversion)").render(this)
                 withBlock("Ok(", ")") {
                     renderPayload(member, "payload", serializerGenerator)
                 }
@@ -246,9 +232,6 @@ class HttpBoundProtocolBodyGenerator(
             }
 
             is BlobShape -> {
-                // TODO Comment does not apply
-                // This works for streaming and non-streaming blobs because they both have `into_inner()` which
-                // can be converted into an `SdkBody`!
                 // Write the raw blob to the payload.
                 if (member.isStreaming(model)) {
                     // Return the `ByteStream`.

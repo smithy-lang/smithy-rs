@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -31,32 +30,38 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 /**
- * Request Body Generator
+ * Payload Body Generator.
+ *
+ * Used to generate payloads that will go into HTTP bodies for HTTP requests (used by clients)
+ * and responses (used by servers).
  *
  * **Note:** There is only one real implementation of this interface. The other implementation is test only.
  * All protocols use the same class.
  *
- * Different protocols (e.g. JSON vs. XML) need to use different functionality to generate request bodies.
+ * Different protocols (e.g. JSON vs. XML) need to use different functionality to generate payload bodies.
  */
-interface ProtocolBodyGenerator {
-    data class BodyMetadata(val takesOwnership: Boolean)
+interface ProtocolPayloadGenerator {
+    data class PayloadMetadata(val takesOwnership: Boolean)
 
     /**
-     * Code generation needs to handle whether or not `generateBody` takes ownership of the input for a given operation shape
+     * Code generation needs to handle whether or not [generatePayload] takes ownership of the input or output
+     * for a given operation shape.
      *
-     * Most operations will parse the HTTP body as a reference, but for operations that will consume the entire stream later,
-     * they will need to take ownership and different code needs to be generated.
+     * Most operations will use the HTTP payload as a reference, but for operations that will consume the entire stream
+     * later,they will need to take ownership and different code needs to be generated.
      */
-    fun bodyMetadata(operationShape: OperationShape, httpMessageType: HttpMessageType = HttpMessageType.REQUEST): BodyMetadata
+    fun payloadMetadata(operationShape: OperationShape): PayloadMetadata
 
     /**
-     * Write the body into [writer].
+     * Write the payload into [writer].
+     *
+     * [self] is the name of the variable binding for the Rust struct that is to be serialized into the payload.
      *
      * This should be an expression that returns bytes:
      *     - a `Vec<u8>` for non-streaming operations; or
      *     - a `ByteStream` for streaming operations.
      */
-    fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape, httpMessageType: HttpMessageType = HttpMessageType.REQUEST)
+    fun generatePayload(writer: RustWriter, self: String, operationShape: OperationShape)
 }
 
 /**

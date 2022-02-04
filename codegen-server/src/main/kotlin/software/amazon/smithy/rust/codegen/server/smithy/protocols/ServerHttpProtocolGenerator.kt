@@ -49,11 +49,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTr
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.findStreamingMember
@@ -76,7 +75,7 @@ class ServerHttpProtocolGenerator(
 ) : ProtocolGenerator(
     codegenContext,
     protocol,
-    MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolBodyGenerator(codegenContext, protocol)),
+    MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolPayloadGenerator(codegenContext, protocol)),
     ServerHttpProtocolImplGenerator(codegenContext, protocol),
 ) {
     // Define suffixes for operation input / output / error wrappers
@@ -442,71 +441,30 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
+    /**
+     * Render an HTTP response (headers, response code, body) for an operation's output and the given [bindings].
+     */
     private fun RustWriter.serverRenderOutputShapeResponseSerializer(
         operationShape: OperationShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        // val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
-        // structuredDataSerializer.serverOutputSerializer(operationShape)?.let { serializer ->
-        //     rust(
-        //         "let payload = #T(output)?;",
-        //         serializer
-        //     )
-        // } ?: rust("""let payload = "";""")
-
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
+        bindings.find { it.location == HttpLocation.RESPONSE_CODE }?.let { serverRenderResponseCodeBinding(it) }
 
-        for (binding in bindings) {
-            // TODO This actually only handles response code binding.
-            val serializedValue = serverRenderBindingSerializer(binding, operationShape)
-            if (serializedValue != null) {
-                serializedValue(this)
-            }
-        }
-        // val streamingMember = operationShape.outputShape(model).findStreamingMember(model)
-        // if (streamingMember != null) {
-        //     val memberName = symbolProvider.toMemberName(streamingMember)
-        //     rustTemplate(
-        //         """
-        //         let payload = #{SmithyHttpServer}::body::Body::wrap_stream(output.$memberName);
-        //         """,
-        //         *codegenScope,
-        //     )
-        // } else {
-        //     val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
-        //     structuredDataSerializer.serverOutputSerializer(operationShape)?.let { serializer ->
-        //         rust(
-        //             "let payload = #T(&output)?;",
-        //             serializer
-        //         )
-        //     } ?: rust("""let payload = "";""")
-        // }
-
-        // if (operationShape.outputShape(model).findStreamingMember(model) != null) {
-        //     // `payload` is of type `ByteStream`, which implements `Stream`, but not `Into<Body>`.
-        //     rustTemplate("let payload = #{SmithyHttpServer}::body::Body::wrap_stream(payload);", *codegenScope)
-        // }
-        // rustTemplate(
-        //     """
-        //     builder.body(#{SmithyHttpServer}::body::to_boxed(payload))?
-        //     """,
-        //     *codegenScope,
-        // )
-        val streamingMember = operationShape.outputShape(model).findStreamingMember(model)
-        if (streamingMember != null) {
-            val memberName = symbolProvider.toMemberName(streamingMember)
+        operationShape.outputShape(model).findStreamingMember(model)?.let {
+            val memberName = symbolProvider.toMemberName(it)
             rustTemplate(
                 """
                 let body = #{SmithyHttpServer}::body::to_boxed(#{SmithyHttpServer}::body::Body::wrap_stream(output.$memberName));
                 """,
                 *codegenScope,
             )
-        } else {
-            val bodyGenerator = HttpBoundProtocolBodyGenerator(codegenContext, protocol)
+        } ?:run {
+            val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
             withBlockTemplate("let body = #{SmithyHttpServer}::body::to_boxed(", ");", *codegenScope) {
-                bodyGenerator.generateBody(this, "output", operationShape, httpMessageType = HttpMessageType.RESPONSE)
+                payloadGenerator.generatePayload(this, "output", operationShape)
             }
         }
 
@@ -556,33 +514,22 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
-    private fun serverRenderBindingSerializer(
-        binding: HttpBindingDescriptor,
-        operationShape: OperationShape,
-    ): Writable? {
-        val operationName = symbolProvider.toSymbol(operationShape).name
-        val member = binding.member
-        return when (binding.location) {
-            HttpLocation.HEADER, HttpLocation.PREFIX_HEADERS, HttpLocation.DOCUMENT, HttpLocation.PAYLOAD -> {
-                // All of these are handled separately.
-                null
-            }
-            HttpLocation.RESPONSE_CODE -> writable {
-                val memberName = symbolProvider.toMemberName(member)
-                rustTemplate(
-                    """
+    private fun serverRenderResponseCodeBinding(
+        binding: HttpBindingDescriptor
+    ): Writable {
+        check(binding.location == HttpLocation.RESPONSE_CODE)
+        return writable {
+            val memberName = symbolProvider.toMemberName(binding.member)
+            rustTemplate(
+                """
                     let status = output.$memberName
                         .ok_or_else(|| #{SmithyHttpServer}::rejection::Serialize::from("$memberName missing or empty"))?;
                     let http_status: u16 = std::convert::TryFrom::<i32>::try_from(status)
                         .map_err(|_| #{SmithyHttpServer}::rejection::Serialize::from("invalid status code"))?;
                     """.trimIndent(),
-                    *codegenScope,
-                )
-                rust("builder = builder.status(http_status);")
-            }
-            else -> {
-                UNREACHABLE("Unexpected binding location: ${binding.location}")
-            }
+                *codegenScope,
+            )
+            rust("builder = builder.status(http_status);")
         }
     }
 

@@ -35,7 +35,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 open class MakeOperationGenerator(
     protected val codegenContext: CodegenContext,
     private val protocol: Protocol,
-    private val bodyGenerator: ProtocolBodyGenerator,
+    private val bodyGenerator: ProtocolPayloadGenerator,
     private val functionName: String = "make_operation",
     private val public: Boolean = true
 ) {
@@ -68,7 +68,7 @@ open class MakeOperationGenerator(
         val returnType = "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
         val outputSymbol = symbolProvider.toSymbol(shape)
 
-        val takesOwnership = bodyGenerator.bodyMetadata(shape).takesOwnership
+        val takesOwnership = bodyGenerator.payloadMetadata(shape).takesOwnership
         val mut = customizations.any { it.mutSelf() }
         val consumes = customizations.any { it.consumesSelf() } || takesOwnership
         val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
@@ -90,7 +90,7 @@ open class MakeOperationGenerator(
             // Clippy warning to make the codegen a little simpler in that case.
             Attribute.Custom("allow(clippy::useless_conversion)").render(this)
             withBlockTemplate("let body = #{SdkBody}::from(", ");", *codegenScope) {
-                bodyGenerator.generateBody(this, "self", shape)
+                bodyGenerator.generatePayload(this, "self", shape)
                 val isStreaming = shape.inputShape(model).findStreamingMember(model) != null
                 if (isStreaming) {
                     // Consume the `ByteStream` into its inner `SdkBody`.
