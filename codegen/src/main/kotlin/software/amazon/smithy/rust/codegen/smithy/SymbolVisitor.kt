@@ -62,7 +62,6 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
 data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
-    val handleOptionality: Boolean = true,
     val handleRustBoxing: Boolean = true,
     val handleRequired: Boolean = false
 )
@@ -70,7 +69,6 @@ data class SymbolVisitorConfig(
 val DefaultConfig =
     SymbolVisitorConfig(
         runtimeConfig = RuntimeConfig(),
-        handleOptionality = true,
         handleRustBoxing = true,
         handleRequired = false,
         codegenConfig = CodegenConfig()
@@ -298,7 +296,7 @@ class SymbolVisitor(
         // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
-        }.letIf(config.handleOptionality) {
+        }.let {
             handleOptionality(it, shape)
         }
     }

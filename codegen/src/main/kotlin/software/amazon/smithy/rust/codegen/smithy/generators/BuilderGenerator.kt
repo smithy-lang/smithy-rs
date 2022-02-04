@@ -136,7 +136,8 @@ class BuilderGenerator(
         member: MemberShape,
         memberName: String
     ) {
-        // Render a `set_foo` method.
+        // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
+        // is the same as the resulting member type, and is always optional.
         val inputType = outerType.asOptional()
         writer.documentShape(member, model)
         writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {

@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdError
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.stdfmt
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
 import software.amazon.smithy.rust.codegen.util.dq
@@ -84,10 +85,10 @@ class ErrorGenerator(
         val messageShape = shape.errorMessageMember()
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
         val (returnType, message) = messageShape?.let {
-            if (symbolProvider.config().handleRequired && messageShape.isRequired()) {
-                "&str" to "self.${symbolProvider.toMemberName(it)}.as_ref()"
-            } else {
+            if (symbolProvider.toSymbol(messageShape).isOptional()) {
                 "Option<&str>" to "self.${symbolProvider.toMemberName(it)}.as_deref()"
+            } else {
+                "&str" to "self.${symbolProvider.toMemberName(it)}.as_ref()"
             }
         } ?: "Option<&str>" to "None"
         writer.rustBlock("impl ${symbol.name}") {
