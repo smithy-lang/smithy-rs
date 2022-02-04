@@ -36,4 +36,8 @@ class ServerRequestBindingGenerator(
         structuredHandler,
         HttpMessageType.REQUEST
     )
+
+    fun generateDeserializePrefixHeadersFn(
+        binding: HttpBindingDescriptor,
+    ): RuntimeType = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
 }
