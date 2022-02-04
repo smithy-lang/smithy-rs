@@ -503,8 +503,6 @@ class ServerProtocolTestGenerator(
         private val ExpectFail = setOf<FailingTest>(
             // Headers.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", Action.Request),
-            FailingTest(RestJson, "RestJsonHttpPrefixHeadersArePresent", Action.Request),
-            FailingTest(RestJson, "RestJsonHttpPrefixHeadersAreNotPresent", Action.Request),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatHeaderInputs", Action.Request),
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
 
