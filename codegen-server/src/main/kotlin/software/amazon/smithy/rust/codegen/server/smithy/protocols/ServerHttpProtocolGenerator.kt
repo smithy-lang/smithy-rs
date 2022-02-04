@@ -45,12 +45,13 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperat
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.toOptional
+import software.amazon.smithy.rust.codegen.smithy.wrapOptional
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -450,7 +451,7 @@ private class ServerHttpProtocolImplGenerator(
         serverRenderResponseHeaders(operationShape)
 
         for (binding in bindings) {
-            val serializedValue = serverRenderBindingSerializer(binding, operationShape)
+            val serializedValue = serverRenderBindingSerializer(binding)
             if (serializedValue != null) {
                 serializedValue(this)
             }
@@ -521,9 +522,7 @@ private class ServerHttpProtocolImplGenerator(
 
     private fun serverRenderBindingSerializer(
         binding: HttpBindingDescriptor,
-        operationShape: OperationShape,
     ): Writable? {
-        val operationName = symbolProvider.toSymbol(operationShape).name
         val member = binding.member
         return when (binding.location) {
             HttpLocation.HEADER,
@@ -728,7 +727,7 @@ private class ServerHttpProtocolImplGenerator(
                         rustTemplate(
                             """
                             input = input.${binding.member.setterName()}(
-                                #{deserializer}(m$index)?
+                                ${symbolProvider.toOptional(binding.member, "#{deserializer}(m$index)?")}
                             );
                             """.trimIndent(),
                             *codegenScope,
@@ -825,7 +824,7 @@ private class ServerHttpProtocolImplGenerator(
                         """
                         if !seen_$memberName && k == "${it.locationName}" {
                             input = input.${it.member.setterName()}(
-                                #{deserializer}(&v)?
+                                ${symbolProvider.toOptional(it.member, "#{deserializer}(&v)?")}
                             );
                             seen_$memberName = true;
                         }
@@ -979,7 +978,7 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let value = <_>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
-                    Ok(Some(value))
+                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """.trimIndent(),
                     *codegenScope,
                 )
@@ -1008,7 +1007,7 @@ private class ServerHttpProtocolImplGenerator(
                     """
                     let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
                     let value = #{DateTime}::from_str(&value, #{format})?;
-                    Ok(Some(value))
+                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """.trimIndent(),
                     *codegenScope,
                     "format" to timestampFormatType,
@@ -1019,7 +1018,7 @@ private class ServerHttpProtocolImplGenerator(
 
     // TODO These functions can be replaced with the ones in https://docs.rs/aws-smithy-types/latest/aws_smithy_types/primitive/trait.Parse.html
     private fun generateParseStrAsPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
-        val output = symbolProvider.toSymbol(binding.member).makeOptional()
+        val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
@@ -1030,7 +1029,7 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let value = std::str::FromStr::from_str(value)?;
-                    Ok(Some(value))
+                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """.trimIndent(),
                     *codegenScope,
                 )
@@ -1074,7 +1073,6 @@ private class ServerHttpProtocolImplGenerator(
             }
         }
     }
-
     private fun getStreamingBodyTraitBounds(operationShape: OperationShape): String {
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
             return "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
