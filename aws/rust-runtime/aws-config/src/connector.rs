@@ -8,10 +8,8 @@
 use std::sync::Arc;
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_client::conns;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::HttpSettings;
-use aws_smithy_client::hyper_ext;
 
 // unused when all crate features are disabled
 /// Unwrap an [`Option<DynConnector>`](aws_smithy_client::erase::DynConnector), and panic with a helpful error message if it's `None`
