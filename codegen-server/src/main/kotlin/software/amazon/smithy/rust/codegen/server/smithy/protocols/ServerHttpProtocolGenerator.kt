@@ -45,7 +45,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperat
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -967,7 +966,6 @@ private class ServerHttpProtocolImplGenerator(
     private fun generateParsePercentEncodedStrAsStringFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
-        val returnVal = if (symbolProvider.toSymbol(binding.member).isOptional()) { "Some(value)" } else { "value" }
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyRejection}>",
@@ -980,7 +978,7 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let value = <_>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
-                    Ok($returnVal)
+                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """.trimIndent(),
                     *codegenScope,
                 )
