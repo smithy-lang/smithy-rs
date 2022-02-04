@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
@@ -202,14 +201,8 @@ class SymbolVisitor(
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
     }
 
-    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol {
-        return if (nullableIndex.isNullable(member)) {
-            symbol.makeOptional()
-        } else symbol
-    }
-
-    private fun handleRequiredTrait(symbol: Symbol, member: MemberShape): Symbol =
-        if (member.isRequired) {
+    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
+        if (config.handleRequired && member.isRequired) {
             symbol
         } else if (nullableIndex.isNullable(member)) {
             symbol.makeOptional()
@@ -323,16 +316,11 @@ class SymbolVisitor(
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
         val targetSymbol = this.toSymbol(target)
-        if (config.handleOptionality && config.handleRequired) {
-            throw CodegenException("CodegenVisitor 'handleOptionality' and 'handleRequired' configuration options cannot be both true at the same time")
-        }
         // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
         }.letIf(config.handleOptionality) {
             handleOptionality(it, shape)
-        }.letIf(config.handleRequired) {
-            handleRequiredTrait(it, shape)
         }
     }
 
