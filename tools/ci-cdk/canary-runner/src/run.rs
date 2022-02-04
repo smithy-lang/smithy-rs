@@ -122,7 +122,7 @@ pub async fn run(opt: RunOpt) -> Result<()> {
 
 async fn run_canary(opt: RunOpt, config: &aws_config::Config) -> Result<Duration> {
     let repo_root = git_root().await?;
-    env::set_current_dir(repo_root.join("smithy-rs/tools/ci-cdk/canary-lambda"))
+    env::set_current_dir(repo_root.join("tools/ci-cdk/canary-lambda"))
         .context("failed to change working directory")?;
 
     use_correct_revision(&opt)
