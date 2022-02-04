@@ -59,36 +59,13 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
 class RestJsonHttpBindingResolver(
     model: Model,
     contentTypes: ProtocolContentTypes,
-) : HttpBindingResolver {
-    private val innerResolver = HttpTraitHttpBindingResolver(model, contentTypes)
-
-    override fun httpTrait(operationShape: OperationShape): HttpTrait = innerResolver.httpTrait(operationShape)
-
-    override fun requestBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
-        innerResolver.requestBindings(operationShape)
-
-    override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
-        innerResolver.responseBindings(operationShape)
-
-    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
-        innerResolver.errorResponseBindings(errorShape)
-
-    override fun timestampFormat(
-        memberShape: MemberShape,
-        location: HttpLocation,
-        defaultTimestampFormat: TimestampFormatTrait.Format
-    ): TimestampFormatTrait.Format =
-        innerResolver.timestampFormat(memberShape, location, defaultTimestampFormat)
-
-    override fun requestContentType(operationShape: OperationShape): String? =
-        innerResolver.requestContentType(operationShape)
-
+) : HttpTraitHttpBindingResolver(model, contentTypes) {
     /**
      * In the RestJson1 protocol, HTTP responses have a default `Content-Type: application/json` header if it is not
      * overridden by a specific mechanism (e.g. an output shape member is targeted with `httpPayload` or `mediaType` traits.
      */
     override fun responseContentType(operationShape: OperationShape): String =
-        innerResolver.responseContentType(operationShape) ?: "application/json"
+        super.responseContentType(operationShape) ?: "application/json"
 }
 
 class RestJson(private val codegenContext: CodegenContext) : Protocol {
