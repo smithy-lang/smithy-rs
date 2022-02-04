@@ -37,7 +37,7 @@ import java.nio.file.Path
 
 private class TestProtocolBodyGenerator(private val body: String) : ProtocolBodyGenerator {
     override fun bodyMetadata(operationShape: OperationShape, httpMessageType: HttpMessageType) =
-        TODO("`TestProtocolBodyGenerator` does not use this method")
+        ProtocolBodyGenerator.BodyMetadata(takesOwnership = false)
 
     override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape, httpMessageType: HttpMessageType) {
         writer.writeWithNoFormatting(body)
@@ -207,7 +207,7 @@ class ProtocolTestGeneratorTest {
      */
     private fun generateService(
         httpRequestBuilder: String,
-        body: String = "${correctBody.dq()}.to_string().into()",
+        body: String = "${correctBody.dq()}.to_string()",
         correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())"""
     ): Path {
         val (pluginContext, testDir) = generatePluginContext(model)
@@ -267,7 +267,7 @@ class ProtocolTestGeneratorTest {
             .header("X-Greeting", "Hi")
             .method("POST")
             """,
-            """"{}".to_string().into()"""
+            """"{}".to_string()"""
         )
 
         val err = assertThrows<CommandFailed> {
