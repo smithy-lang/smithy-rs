@@ -2,7 +2,7 @@
 name = "smithy-rs-tool-common"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
-edition = "2021"
+edition = "2018"
 license = "Apache-2.0"
 publish = false
 

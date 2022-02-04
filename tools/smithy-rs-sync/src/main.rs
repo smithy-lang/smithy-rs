@@ -9,6 +9,7 @@ use crate::fs::{delete_all_generated_files_and_folders, find_handwritten_files_a
 use anyhow::{bail, Context, Result};
 use git2::{Commit, Oid, Repository, ResetType};
 use smithy_rs_tool_common::git::GetLastCommit;
+use smithy_rs_tool_common::macros::here;
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -41,17 +42,6 @@ const BOT_NAME: &str = "AWS SDK Rust Bot";
 const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
 const BOT_COMMIT_PREFIX: &str = "[autosync]";
 const COMMIT_HASH_FILENAME: &str = ".smithyrs-githash";
-
-/// A macro for attaching info to error messages pointing to the line of code responsible for the error.
-/// [Thanks to dtolnay for this macro](https://github.com/dtolnay/anyhow/issues/22#issuecomment-542309452)
-macro_rules! here {
-    () => {
-        concat!("error at ", file!(), ":", line!(), ":", column!())
-    };
-}
-
-// export this macro for use in other modules in this crate
-pub(crate) use here;
 
 /// Run this app in order to keep aws-sdk-rust in sync with smithy-rs.
 ///
