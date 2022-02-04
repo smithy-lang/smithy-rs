@@ -118,7 +118,7 @@ class HttpBoundProtocolPayloadGenerator(
                     operationShape.inputShape(model).expectMember(payloadMemberName)
             }
 
-            // TODO Server event streams
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1157) Add support for server event streams.
             if (operationShape.isInputEventStream(model)) {
                 writer.serializeViaEventStream(operationShape, member, serializerGenerator)
             } else {
@@ -165,7 +165,6 @@ class HttpBoundProtocolPayloadGenerator(
         )
     }
 
-    // TODO Document self
     private fun RustWriter.serializeViaPayload(
         payloadMetadata: ProtocolPayloadGenerator.PayloadMetadata,
         self: String,

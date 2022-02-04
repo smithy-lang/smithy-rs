@@ -16,7 +16,8 @@ interface StructuredDataSerializerGenerator {
     // Double-check we need `Result`s
 
     /**
-     * Generate a serializer for a request payload. Expected signature:
+     * Generate a serializer for a request payload.
+     *
      * ```rust
      * fn serialize_some_payload(input: &PayloadSmithyType) -> Result<Vec<u8>, Error> {
      *     ...
@@ -28,21 +29,29 @@ interface StructuredDataSerializerGenerator {
 
     /**
      * Generate the correct data when attempting to serialize a structure that is unset
+     *
+     * ```rust
+     * fn rest_json_unsetpayload() -> Vec<u8> {
+     *     ...
+     * }
      */
     fun unsetStructure(structure: StructureShape): RuntimeType
 
     /**
      * Generate a serializer for an operation input.
+     *
      * ```rust
      * fn serialize_some_operation(input: &SomeSmithyType) -> Result<SdkBody, Error> {
      *     ...
      * }
      * ```
      */
+    // TODO Make this return `Vec<u8>`.
     fun operationSerializer(operationShape: OperationShape): RuntimeType?
 
     /**
      * Generate a serializer for a document.
+     *
      * ```rust
      * fn serialize_document(input: &Document) -> Vec<u8> {
      *     ...
@@ -52,7 +61,8 @@ interface StructuredDataSerializerGenerator {
     fun documentSerializer(): RuntimeType
 
     /**
-     * Generate a serializer for a server operation output structure
+     * Generate a serializer for a server operation output structure.
+     *
      * ```rust
      * fn serialize_structure_crate_output_my_output_structure(value: &SomeSmithyType) -> Result<String, Error> {
      *     ...
@@ -62,7 +72,8 @@ interface StructuredDataSerializerGenerator {
     fun serverOutputSerializer(operationShape: OperationShape): RuntimeType?
 
     /**
-     * Generate a serializer for a server operation error structure
+     * Generate a serializer for a server operation error structure.
+     *
      * ```rust
      * fn serialize_structure_crate_output_my_error_structure(value: &SomeSmithyType) -> Result<String, Error> {
      *     ...
