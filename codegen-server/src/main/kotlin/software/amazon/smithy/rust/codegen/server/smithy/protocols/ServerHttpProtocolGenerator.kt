@@ -11,7 +11,6 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -968,6 +967,7 @@ private class ServerHttpProtocolImplGenerator(
     private fun generateParsePercentEncodedStrAsStringFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
+        val returnVal = if (symbolProvider.toSymbol(binding.member).isOptional()) { "Some(value)" } else { "value" }
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyRejection}>",
@@ -980,7 +980,7 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let value = <_>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
-                    Ok(${getReturnTypeForMember(binding.member)})
+                    Ok($returnVal)
                     """.trimIndent(),
                     *codegenScope,
                 )
@@ -1082,7 +1082,4 @@ private class ServerHttpProtocolImplGenerator(
             return ""
         }
     }
-
-    private fun getReturnTypeForMember(member: MemberShape) =
-        if (symbolProvider.toSymbol(member).isOptional()) { "Some(value)" } else { "value" }
 }

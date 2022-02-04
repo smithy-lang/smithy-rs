@@ -147,3 +147,23 @@ remove their trait bounds.
 references = ["smithy-rs#1132"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+Builders setters are now only accepting `Option<T>` in all cases, while previously they accepted `T` for certain
+numeric types. This promotes more consistency in the Builders interface and allows the Server codegen to properly
+handle the @required trait, making input/output structures members mandatory when the trait is used.
+"""
+references = ["smithy-rs#1148"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "crisidev"
+
+[[aws-sdk-rust]]
+message = """
+Builders setters are now only accepting `Option<T>` in all cases, while previously they accepted `T` for certain
+numeric types. This promotes more consistency in the Builders interface and allows the Server codegen to properly
+handle the @required trait, making input/output structures members mandatory when the trait is used.
+"""
+references = ["smithy-rs#1148"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "crisidev"
