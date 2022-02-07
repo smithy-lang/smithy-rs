@@ -36,7 +36,6 @@ val TestRuntimeConfig =
 val TestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     codegenConfig = CodegenConfig(),
-    handleOptionality = true,
     handleRustBoxing = true
 )
 

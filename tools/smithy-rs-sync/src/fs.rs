@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use super::here;
 use anyhow::Context;
 use gitignore::Pattern;
+use smithy_rs_tool_common::macros::here;
 use std::error::Error;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
