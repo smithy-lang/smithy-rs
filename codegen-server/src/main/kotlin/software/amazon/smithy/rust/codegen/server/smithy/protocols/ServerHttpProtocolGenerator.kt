@@ -47,12 +47,14 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperat
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.toOptional
+import software.amazon.smithy.rust.codegen.smithy.wrapOptional
+import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.findStreamingMember
@@ -486,6 +488,21 @@ private class ServerHttpProtocolImplGenerator(
      * The `Content-Type` header is also set according to the protocol and the contents of the shape to be serialized.
      */
     private fun RustWriter.serverRenderResponseHeaders(operationShape: OperationShape, errorShape: StructureShape? = null) {
+        val bindingGenerator = ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
+        val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
+        if (addHeadersFn != null) {
+            // notice that we need to borrow the output only for output shapes but not for error shapes
+            val outputOwnedOrBorrow = if (errorShape == null) "&output" else "output"
+            rust(
+                """
+                builder = #{T}($outputOwnedOrBorrow, builder)?;
+                """.trimIndent(),
+                addHeadersFn
+            )
+        }
+
+        // set the content type header *after* the response bindings headers have been set
+        // to allow operations that bind a member to content-type to take precedence
         val contentType = httpBindingResolver.responseContentType(operationShape)
         if (contentType != null) {
             rustTemplate(
@@ -499,19 +516,6 @@ private class ServerHttpProtocolImplGenerator(
                 *codegenScope
             )
         }
-
-        val bindingGenerator = ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
-        val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
-        if (addHeadersFn != null) {
-            // notice that we need to borrow the output only for output shapes but not for error shapes
-            val outputOwnedOrBorrow = if (errorShape == null) "&output" else "output"
-            rust(
-                """
-                builder = #{T}($outputOwnedOrBorrow, builder)?;
-                """.trimIndent(),
-                addHeadersFn
-            )
-        }
     }
 
     private fun serverRenderResponseCodeBinding(
@@ -522,11 +526,11 @@ private class ServerHttpProtocolImplGenerator(
             val memberName = symbolProvider.toMemberName(binding.member)
             rustTemplate(
                 """
-                    let status = output.$memberName
-                        .ok_or_else(|| #{SmithyHttpServer}::rejection::Serialize::from("$memberName missing or empty"))?;
-                    let http_status: u16 = std::convert::TryFrom::<i32>::try_from(status)
-                        .map_err(|_| #{SmithyHttpServer}::rejection::Serialize::from("invalid status code"))?;
-                    """.trimIndent(),
+                let status = output.$memberName
+                    .ok_or_else(|| #{SmithyHttpServer}::rejection::Serialize::from("$memberName missing or empty"))?;
+                let http_status: u16 = std::convert::TryFrom::<i32>::try_from(status)
+                    .map_err(|_| #{SmithyHttpServer}::rejection::Serialize::from("invalid status code"))?;
+                """.trimIndent(),
                 *codegenScope,
             )
             rust("builder = builder.status(http_status);")
@@ -709,7 +713,7 @@ private class ServerHttpProtocolImplGenerator(
                         rustTemplate(
                             """
                             input = input.${binding.member.setterName()}(
-                                #{deserializer}(m$index)?
+                                ${symbolProvider.toOptional(binding.member, "#{deserializer}(m$index)?")}
                             );
                             """.trimIndent(),
                             *codegenScope,
@@ -806,7 +810,7 @@ private class ServerHttpProtocolImplGenerator(
                         """
                         if !seen_$memberName && k == "${it.locationName}" {
                             input = input.${it.member.setterName()}(
-                                #{deserializer}(&v)?
+                                ${symbolProvider.toOptional(it.member, "#{deserializer}(&v)?")}
                             );
                             seen_$memberName = true;
                         }
@@ -960,7 +964,7 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let value = <_>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
-                    Ok(Some(value))
+                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """.trimIndent(),
                     *codegenScope,
                 )
@@ -989,7 +993,7 @@ private class ServerHttpProtocolImplGenerator(
                     """
                     let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
                     let value = #{DateTime}::from_str(&value, #{format})?;
-                    Ok(Some(value))
+                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """.trimIndent(),
                     *codegenScope,
                     "format" to timestampFormatType,
@@ -1000,7 +1004,7 @@ private class ServerHttpProtocolImplGenerator(
 
     // TODO These functions can be replaced with the ones in https://docs.rs/aws-smithy-types/latest/aws_smithy_types/primitive/trait.Parse.html
     private fun generateParseStrAsPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
-        val output = symbolProvider.toSymbol(binding.member).makeOptional()
+        val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
@@ -1011,7 +1015,7 @@ private class ServerHttpProtocolImplGenerator(
                 rustTemplate(
                     """
                     let value = std::str::FromStr::from_str(value)?;
-                    Ok(Some(value))
+                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """.trimIndent(),
                     *codegenScope,
                 )

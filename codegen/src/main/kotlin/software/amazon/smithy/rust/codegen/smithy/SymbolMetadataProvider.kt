@@ -15,7 +15,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.PartialEq
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -67,10 +66,18 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
     abstract fun enumMeta(stringShape: StringShape): RustMetadata
 }
 
-class BaseSymbolMetadataProvider(base: RustSymbolProvider) : SymbolMetadataProvider(base) {
+/**
+ * The base metadata supports a list of attributes that are used by generators to decorate code.
+ * By default we apply #[non_exhaustive] only to client structures since model changes should
+ * be considered as breaking only when generating server code.
+ */
+class BaseSymbolMetadataProvider(
+    base: RustSymbolProvider,
+    additionalAttributes: List<Attribute>,
+) : SymbolMetadataProvider(base) {
     private val containerDefault = RustMetadata(
         Attribute.Derives(defaultDerives.toSet()),
-        additionalAttributes = listOf(NonExhaustive),
+        additionalAttributes = additionalAttributes,
         public = true
     )
 
