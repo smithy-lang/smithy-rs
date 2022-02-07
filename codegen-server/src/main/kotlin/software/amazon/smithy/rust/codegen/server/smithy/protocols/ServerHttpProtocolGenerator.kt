@@ -492,6 +492,21 @@ private class ServerHttpProtocolImplGenerator(
      * The `Content-Type` header is also set according to the protocol and the contents of the shape to be serialized.
      */
     private fun RustWriter.serverRenderResponseHeaders(operationShape: OperationShape, errorShape: StructureShape? = null) {
+        val bindingGenerator = ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
+        val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
+        if (addHeadersFn != null) {
+            // notice that we need to borrow the output only for output shapes but not for error shapes
+            val outputOwnedOrBorrow = if (errorShape == null) "&output" else "output"
+            rust(
+                """
+                builder = #{T}($outputOwnedOrBorrow, builder)?;
+                """.trimIndent(),
+                addHeadersFn
+            )
+        }
+
+        // set the content type header *after* the response bindings headers have been set
+        // to allow operations that bind a member to content-type to take precedence
         val contentType = httpBindingResolver.responseContentType(operationShape)
         if (contentType != null) {
             rustTemplate(
@@ -503,19 +518,6 @@ private class ServerHttpProtocolImplGenerator(
                 );
                 """,
                 *codegenScope
-            )
-        }
-
-        val bindingGenerator = ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
-        val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
-        if (addHeadersFn != null) {
-            // notice that we need to borrow the output only for output shapes but not for error shapes
-            val outputOwnedOrBorrow = if (errorShape == null) "&output" else "output"
-            rust(
-                """
-                builder = #{T}($outputOwnedOrBorrow, builder)?;
-                """.trimIndent(),
-                addHeadersFn
             )
         }
     }
