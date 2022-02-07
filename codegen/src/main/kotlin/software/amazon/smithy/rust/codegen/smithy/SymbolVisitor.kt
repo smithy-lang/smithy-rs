@@ -62,15 +62,15 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
 data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
-    val handleOptionality: Boolean = true,
-    val handleRustBoxing: Boolean = true
+    val handleRustBoxing: Boolean = true,
+    val handleRequired: Boolean = false
 )
 
 val DefaultConfig =
     SymbolVisitorConfig(
         runtimeConfig = RuntimeConfig(),
-        handleOptionality = true,
         handleRustBoxing = true,
+        handleRequired = false,
         codegenConfig = CodegenConfig()
     )
 
@@ -133,6 +133,15 @@ interface RustSymbolProvider : SymbolProvider {
     fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
 }
 
+/**
+ * Make the return [value] optional if the [member] symbol is as well optional.
+ */
+fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) { "Some($value)" }
+/**
+ * Make the return [value] optional if the [member] symbol is not optional.
+ */
+fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) { "Some($value)" }
+
 class SymbolVisitor(
     private val model: Model,
     private val serviceShape: ServiceShape?,
@@ -169,11 +178,14 @@ class SymbolVisitor(
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
     }
 
-    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol {
-        return if (nullableIndex.isNullable(member)) {
+    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
+        if (config.handleRequired && member.isRequired) {
+            symbol
+        } else if (nullableIndex.isNullable(member)) {
             symbol.makeOptional()
-        } else symbol
-    }
+        } else {
+            symbol
+        }
 
     private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
         return if (shape.hasTrait<RustBoxTrait>()) {
@@ -284,7 +296,7 @@ class SymbolVisitor(
         // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
-        }.letIf(config.handleOptionality) {
+        }.let {
             handleOptionality(it, shape)
         }
     }

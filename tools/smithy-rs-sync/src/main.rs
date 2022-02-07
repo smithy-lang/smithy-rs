@@ -6,8 +6,11 @@
 mod fs;
 
 use crate::fs::{delete_all_generated_files_and_folders, find_handwritten_files_and_folders};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use git2::{Commit, Oid, Repository, ResetType};
+use smithy_rs_tool_common::git::GetLastCommit;
+use smithy_rs_tool_common::macros::here;
+use smithy_rs_tool_common::shell::ShellOperation;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -39,17 +42,6 @@ const BOT_NAME: &str = "AWS SDK Rust Bot";
 const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
 const BOT_COMMIT_PREFIX: &str = "[autosync]";
 const COMMIT_HASH_FILENAME: &str = ".smithyrs-githash";
-
-/// A macro for attaching info to error messages pointing to the line of code responsible for the error.
-/// [Thanks to dtolnay for this macro](https://github.com/dtolnay/anyhow/issues/22#issuecomment-542309452)
-macro_rules! here {
-    () => {
-        concat!("error at ", file!(), ":", line!(), ":", column!())
-    };
-}
-
-// export this macro for use in other modules in this crate
-pub(crate) use here;
 
 /// Run this app in order to keep aws-sdk-rust in sync with smithy-rs.
 ///
@@ -399,7 +391,7 @@ fn create_mirror_commit(aws_sdk_path: &Path, based_on_commit: &Commit) -> Result
         aws_sdk_path,
     )
     .context(here!())?;
-    let commit_hash = find_last_commit(aws_sdk_path).context(here!())?;
+    let commit_hash = GetLastCommit::new(aws_sdk_path).run().context(here!())?;
 
     eprintln!("\tsuccessfully created mirror commit {}", commit_hash);
 
@@ -462,19 +454,6 @@ where
     Ok(())
 }
 
-fn find_last_commit(repo_path: &Path) -> Result<String> {
-    let output = Command::new("git")
-        .arg("rev-parse")
-        .arg("HEAD")
-        .current_dir(&repo_path)
-        .output()
-        .map_err(|err| anyhow!("couldn't get commit hash: {}", err))?;
-
-    let hash = String::from_utf8_lossy(&output.stdout);
-
-    Ok(hash.to_string())
-}
-
 /// For a slice containing `S` where `S: AsRef<OsStr>`, join all `S` into a space-separated String.
 fn stringify_args<S>(args: &[S]) -> String
 where
@@ -482,10 +461,6 @@ where
 {
     let args: Vec<_> = args.iter().map(|s| s.as_ref().to_string_lossy()).collect();
     args.join(" ")
-}
-
-fn _is_running_in_github_action() -> bool {
-    std::env::var("GITHUB_ACTIONS").unwrap_or_default() == "true"
 }
 
 fn is_a_git_repository(dir: &Path) -> bool {

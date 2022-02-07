@@ -18,3 +18,7 @@
   - [RFC-0003: API for Pre-signed URLs](./rfcs/rfc0003_presigning_api.md)
   - [RFC-0004: Retry Behavior](./rfcs/rfc0004_retry_behavior.md)
   - [RFC-0005: Smithy Rust service framework](./rfcs/rfc0005_service_generation.md)
+  - [RFC-0006: Service-specific middleware](./rfcs/rfc0006_service_specific_middleware.md)
+  - [RFC-0007: Split release process](./rfcs/rfc0007_split_release_process.md)
+  - [RFC-0008: Paginators](./rfcs/rfc0008_paginators.md)
+  - [RFC-0009: Example Consolidation](./rfcs/rfc0009_example_consolidation.md)

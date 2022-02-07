@@ -144,6 +144,7 @@ class StructureGenerator(
                 val returnType = when {
                     memberType.isCopy() -> memberType
                     memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
+                    memberType.isDeref() -> memberType.asDeref().asRef()
                     else -> memberType.asRef()
                 }
                 rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
@@ -151,7 +152,7 @@ class StructureGenerator(
                         memberType.isCopy() -> rust("self.$memberName")
                         memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
                         memberType is RustType.Option -> rust("self.$memberName.as_ref()")
-                        memberType.isDeref() -> rust("self.$memberName.deref()")
+                        memberType.isDeref() -> rust("use std::ops::Deref; self.$memberName.deref()")
                         else -> rust("&self.$memberName")
                     }
                 }

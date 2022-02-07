@@ -26,7 +26,7 @@ bytes = "1.1"
 futures-util = { version = "0.3", default-features = false }
 http = "0.2"
 http-body = "0.4"
-hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp"] }
+hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp", "stream"] }
 mime = "0.3"
 nom = "7"
 pin-project-lite = "0.2"
