@@ -8,8 +8,6 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ToShapeId
-import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
