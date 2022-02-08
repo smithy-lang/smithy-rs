@@ -28,10 +28,10 @@ impl<T> fmt::Debug for EventStreamInput<T> {
 
 impl<T> EventStreamInput<T> {
     #[doc(hidden)]
-    pub fn into_body_stream<E: StdError + Send + 'static>(
+    pub fn into_body_stream<E: StdError + Send + Sync + 'static>(
         self,
-        marshaller: impl MarshallMessage<Input = T> + Send + 'static,
-        signer: impl SignMessage + Send + 'static,
+        marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
+        signer: impl SignMessage + Send + Sync + 'static,
     ) -> MessageStreamAdapter<T, E> {
         MessageStreamAdapter::new(marshaller, signer, self.input_stream)
     }
@@ -55,8 +55,8 @@ where
 /// marshalled into an Event Stream frame, (e.g., if the message payload was too large).
 #[pin_project]
 pub struct MessageStreamAdapter<T, E> {
-    marshaller: Box<dyn MarshallMessage<Input = T> + Send>,
-    signer: Box<dyn SignMessage + Send>,
+    marshaller: Box<dyn MarshallMessage<Input = T> + Send + Sync>,
+    signer: Box<dyn SignMessage + Send + Sync>,
     #[pin]
     stream: Pin<Box<dyn Stream<Item = Result<T, BoxError>> + Send>>,
     end_signal_sent: bool,
@@ -65,11 +65,11 @@ pub struct MessageStreamAdapter<T, E> {
 
 impl<T, E> MessageStreamAdapter<T, E>
 where
-    E: StdError + Send + 'static,
+    E: StdError + Send + Sync + 'static,
 {
     pub fn new(
-        marshaller: impl MarshallMessage<Input = T> + Send + 'static,
-        signer: impl SignMessage + Send + 'static,
+        marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
+        signer: impl SignMessage + Send + Sync + 'static,
         stream: Pin<Box<dyn Stream<Item = Result<T, BoxError>> + Send>>,
     ) -> Self {
         MessageStreamAdapter {
@@ -84,7 +84,7 @@ where
 
 impl<T, E> Stream for MessageStreamAdapter<T, E>
 where
-    E: StdError + Send + 'static,
+    E: StdError + Send + Sync + 'static,
 {
     type Item = Result<Bytes, SdkError<E>>;
 
@@ -190,7 +190,7 @@ mod tests {
     where
         S: Stream<Item = Result<O, E>> + Send + 'static,
         O: Into<Bytes> + 'static,
-        E: Into<Box<dyn StdError + Send>> + 'static,
+        E: Into<Box<dyn StdError + Send + Sync>> + 'static,
     {
         stream
     }
