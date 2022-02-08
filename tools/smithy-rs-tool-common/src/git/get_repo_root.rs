@@ -43,7 +43,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn get_last_commit_success() {
+    fn get_repo_root_success() {
         let last_commit = GetRepoRoot {
             program: "./git_revparse_show_toplevel",
             start_path: "./fake_git".into(),
@@ -54,7 +54,7 @@ mod tests {
     }
 
     #[test]
-    fn get_last_commit_faijlure() {
+    fn get_repo_root_failure() {
         let result = GetRepoRoot {
             program: "./git_fails",
             start_path: "./fake_git".into(),

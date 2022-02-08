@@ -54,7 +54,7 @@ mod tests {
     }
 
     #[test]
-    fn get_last_commit_faijlure() {
+    fn get_last_commit_failure() {
         let result = GetLastCommit {
             program: "./git_fails",
             repo_path: "./fake_git".into(),
