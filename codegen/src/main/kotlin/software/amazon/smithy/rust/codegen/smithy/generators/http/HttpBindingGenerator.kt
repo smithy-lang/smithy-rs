@@ -170,7 +170,7 @@ class HttpBindingGenerator(
     }
 
     /**
-     * Generate a function to deserialize `[binding]` from the response payload.
+     * Generate a function to deserialize `[binding]` from the request / response payload.
      */
     fun generateDeserializePayloadFn(
         operationShape: OperationShape,
@@ -181,10 +181,10 @@ class HttpBindingGenerator(
         httpMessageType: HttpMessageType = HttpMessageType.RESPONSE
     ): RuntimeType {
         check(binding.location == HttpBinding.Location.PAYLOAD)
-        val outputT = symbolProvider.toSymbol(binding.member)
         val fnName = "deser_payload_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
             if (binding.member.isStreaming(model)) {
+                val outputT = symbolProvider.toSymbol(binding.member)
                 rustWriter.rustBlock(
                     "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
                     RuntimeType.sdkBody(runtimeConfig),
@@ -200,6 +200,9 @@ class HttpBindingGenerator(
                     }
                 }
             } else {
+                // The output needs to be Optional when deserializing the payload body or the caller signature
+                // will not match.
+                val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
                 rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
                     deserializePayloadBody(
                         binding,
