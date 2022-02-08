@@ -6,9 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
 import software.amazon.smithy.aws.traits.ServiceTrait
-import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeType
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
