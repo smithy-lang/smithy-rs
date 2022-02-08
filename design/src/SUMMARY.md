@@ -22,3 +22,4 @@
   - [RFC-0007: Split release process](./rfcs/rfc0007_split_release_process.md)
   - [RFC-0008: Paginators](./rfcs/rfc0008_paginators.md)
   - [RFC-0009: Example Consolidation](./rfcs/rfc0009_example_consolidation.md)
+  - [RFC-0010: Waiters](./rfcs/rfc0010_waiters.md)
