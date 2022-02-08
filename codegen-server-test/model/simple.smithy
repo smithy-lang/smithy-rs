@@ -3,105 +3,82 @@ $version: "1.0"
 namespace com.amazonaws.simple
 
 use aws.protocols#restJson1
-use smithy.test#httpRequestTests
-use smithy.test#httpResponseTests
 
 @restJson1
 @title("SimpleService")
-@documentation("A simple service example, with a Service resource that can be registered and a readonly healthcheck")
 service SimpleService {
     version: "2022-01-01",
-    resources: [
-        Service,
-    ],
     operations: [
-        Healthcheck,
+        StringPayloadOperation,
+        StructurePayloadOperation,
+        DocumentPayloadOperation,
+        StreamingBlobPayloadOperation,
+        BlobPayloadOperation,
     ],
 }
 
-@documentation("Id of the service that will be registered")
-string ServiceId
-
-@documentation("Name of the service that will be registered")
-string ServiceName
-
-@error("client")
-@documentation(
-    """
-    Returned when a new resource cannot be created because one already exists.
-    """
-)
-structure ResourceAlreadyExists {
-    @required
-    message: String
+@http(uri: "/stringPayloadOperation", method: "GET")
+operation StringPayloadOperation {
+    input: NoInput,
+    output: StringPayloadOperationOutput
 }
 
-@documentation("A resource that can register services")
-resource Service {
-    identifiers: { id: ServiceId },
-    put: RegisterService,
+@http(uri: "/structurePayloadOperation", method: "GET")
+operation StructurePayloadOperation {
+    input: NoInput,
+    output: StructurePayloadOperationOutput
 }
 
-@idempotent
-@http(method: "PUT", uri: "/service/{id}")
-@documentation("Service register operation")
-@httpRequestTests([
-    {
-        id: "RegisterServiceRequestTest",
-        protocol: "aws.protocols#restJson1",
-        uri: "/service/1",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        params: { id: "1", name: "TestService" },
-        body: "{\"name\":\"TestService\"}",
-        method: "PUT",
-    }
-])
-@httpResponseTests([
-    {
-        id: "RegisterServiceResponseTest",
-        protocol: "aws.protocols#restJson1",
-        params: { id: "1", name: "TestService" },
-        body: "{\"id\":\"1\",\"name\":\"TestService\"}",
-        code: 200,
-    }
-])
-operation RegisterService {
-    input: RegisterServiceInputRequest,
-    output: RegisterServiceOutputResponse,
-    errors: [ResourceAlreadyExists]
+@http(uri: "/documentPayloadOperation", method: "GET")
+operation DocumentPayloadOperation {
+    input: NoInput,
+    output: DocumentPayloadOperationOutput
 }
 
-@documentation("Service register input structure")
-structure RegisterServiceInputRequest {
-    @required
-    @httpLabel
-    id: ServiceId,
-    name: ServiceName,
+@http(uri: "/streamingBlobPayloadOperation", method: "GET")
+operation StreamingBlobPayloadOperation {
+    input: NoInput,
+    output: StreamingBlobPayloadOperationOutput
 }
 
-@documentation("Service register output structure")
-structure RegisterServiceOutputResponse {
-    @required
-    id: ServiceId,
-    name: ServiceName,
+@http(uri: "/blobPayloadOperation", method: "GET")
+operation BlobPayloadOperation {
+    input: NoInput,
+    output: BlobPayloadOperationOutput
 }
 
-@readonly
-@http(uri: "/healthcheck", method: "GET")
-@documentation("Read-only healthcheck operation")
-operation Healthcheck {
-    input: HealthcheckInputRequest,
-    output: HealthcheckOutputResponse
+structure NoInput {
 }
 
-@documentation("Service healthcheck output structure")
-structure HealthcheckInputRequest {
+@streaming
+blob StreamingBlob
 
+structure MyStructure {
+    aString: String,
+    anInt: Integer
 }
 
-@documentation("Service healthcheck input structure")
-structure HealthcheckOutputResponse {
+structure StringPayloadOperationOutput {
+    @httpPayload
+    stringPayload: String,
+}
 
+structure StructurePayloadOperationOutput {
+    @httpPayload
+    structPayload: MyStructure,
+}
+
+structure DocumentPayloadOperationOutput {
+    @httpPayload
+    documentPayload: Document,
+}
+
+structure StreamingBlobPayloadOperationOutput {
+    @httpPayload
+    streamingBlobPayload: StreamingBlob
+}
+
+structure BlobPayloadOperationOutput {
+    @httpPayload
+    BlobPayload: Blob
 }
