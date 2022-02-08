@@ -16,6 +16,7 @@ service SimpleService {
     ],
     operations: [
         Healthcheck,
+        StoreServiceBlob,
     ],
 }
 
@@ -103,5 +104,28 @@ structure HealthcheckInputRequest {
 
 @documentation("Service healthcheck input structure")
 structure HealthcheckOutputResponse {
+
+}
+
+@readonly
+@http(method: "GET", uri: "/service/{id}/blob")
+@documentation("Stores a blob for a service id")
+operation StoreServiceBlob {
+    input: StoreServiceBlobInput,
+    output: StoreServiceBlobOutput
+}
+
+@documentation("Store a blob for a service id input structure")
+structure StoreServiceBlobInput {
+    @required
+    @httpLabel
+    id: ServiceId,
+    @required
+    @httpPayload
+    content: Blob,
+}
+
+@documentation("Store a blob for a service id input structure")
+structure StoreServiceBlobOutput {
 
 }
