@@ -63,9 +63,9 @@ class HttpBoundProtocolPayloadGenerator(
     override fun payloadMetadata(operationShape: OperationShape): ProtocolPayloadGenerator.PayloadMetadata {
         val (shape, payloadMemberName) = when (httpMessageType) {
             HttpMessageType.RESPONSE -> operationShape.outputShape(model) to
-                    httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
+                httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
             HttpMessageType.REQUEST -> operationShape.inputShape(model) to
-                    httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
+                httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
         }
 
         // Only:
@@ -192,7 +192,7 @@ class HttpBoundProtocolPayloadGenerator(
                                 Some(t) => t,
                                 None => return Ok(
                             """,
-                     ")};",
+                        ")};",
                         *codegenScope
                     ) {
                         when (val targetShape = model.expectShape(member.target)) {

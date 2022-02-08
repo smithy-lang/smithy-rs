@@ -223,7 +223,7 @@ class ServerProtocolTestGenerator(
         }
         rustTemplate(
             """
-            .body(#{SmithyHttpServer}::Body::from(#{Bytes}::from_static(b${httpRequestTestCase.body.orNull()?.dq()})))
+            .body(#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static(b${httpRequestTestCase.body.orNull()?.dq()})))
             .unwrap();
             """,
             *codegenScope

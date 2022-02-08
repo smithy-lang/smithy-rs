@@ -159,10 +159,10 @@ private class ServerHttpProtocolImplGenerator(
             ##[#{AsyncTrait}::async_trait]
             impl<B> #{AxumCore}::extract::FromRequest<B> for $inputName
             where
-                B: #{SmithyHttpServer}::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
+                B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
                 B::Data: Send,
                 B::Error: Into<#{SmithyHttpServer}::BoxError>,
-                #{SmithyRejection}: From<<B as #{SmithyHttpServer}::HttpBody>::Error>
+                #{SmithyRejection}: From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
             {
                 type Rejection = #{SmithyRejection};
                 async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
@@ -330,10 +330,10 @@ private class ServerHttpProtocolImplGenerator(
                     #{SmithyRejection}
                 >
                 where
-                    B: #{SmithyHttpServer}::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
+                    B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
                     B::Data: Send,
                     B::Error: Into<#{SmithyHttpServer}::BoxError>,
-                    #{SmithyRejection}: From<<B as #{SmithyHttpServer}::HttpBody>::Error>
+                    #{SmithyRejection}: From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
                 """.trimIndent(),
                 *codegenScope,
                 "I" to inputSymbol,
