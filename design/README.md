@@ -1,4 +1,4 @@
-Design docs are hosted [here](https://awslabs.github.io/smithy-rs).
+Design docs are hosted [here](https://awslabs.github.io/smithy-rs/design/).
 
 To render design docs locally:
 ```

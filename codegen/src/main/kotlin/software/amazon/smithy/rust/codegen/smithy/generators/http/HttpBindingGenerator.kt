@@ -157,7 +157,9 @@ class HttpBindingGenerator(
                     let headers = #T::headers_for_prefix(header_map, ${binding.locationName.dq()});
                     let out: std::result::Result<_, _> = headers.map(|(key, header_name)| {
                         let values = header_map.get_all(header_name);
-                        #T(values.iter()).map(|v| (key.to_string(), v.unwrap()))
+                        #T(values.iter()).map(|v| (key.to_string(), v.expect(
+                            "we have checked there is at least one value for this header name; please file a bug report under https://github.com/awslabs/smithy-rs/issues
+                        ")))
                     }).collect();
                     out.map(Some)
                     """,
@@ -168,7 +170,7 @@ class HttpBindingGenerator(
     }
 
     /**
-     * Generate a function to deserialize `[binding]` from the response payload.
+     * Generate a function to deserialize `[binding]` from the request / response payload.
      */
     fun generateDeserializePayloadFn(
         operationShape: OperationShape,
@@ -179,10 +181,10 @@ class HttpBindingGenerator(
         httpMessageType: HttpMessageType = HttpMessageType.RESPONSE
     ): RuntimeType {
         check(binding.location == HttpBinding.Location.PAYLOAD)
-        val outputT = symbolProvider.toSymbol(binding.member)
         val fnName = "deser_payload_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { rustWriter ->
             if (binding.member.isStreaming(model)) {
+                val outputT = symbolProvider.toSymbol(binding.member)
                 rustWriter.rustBlock(
                     "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
                     RuntimeType.sdkBody(runtimeConfig),
@@ -198,6 +200,9 @@ class HttpBindingGenerator(
                     }
                 }
             } else {
+                // The output needs to be Optional when deserializing the payload body or the caller signature
+                // will not match.
+                val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
                 rustWriter.rustBlock("pub fn $fnName(body: &[u8]) -> std::result::Result<#T, #T>", outputT, errorT) {
                     deserializePayloadBody(
                         binding,
@@ -295,7 +300,7 @@ class HttpBindingGenerator(
 
     /**
      * Parse a value from a header.
-     * This function produces an expression which produces the precise output type required by the output shape.
+     * This function produces an expression which produces the precise type required by the target shape.
      */
     private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape) {
         val rustType = symbolProvider.toSymbol(targetType).rustType().stripOuter<RustType.Option>()
@@ -387,9 +392,9 @@ class HttpBindingGenerator(
     }
 
     /**
-     * Generate a unique name for the deserializer function for a given operationShape -> member pair.
+     * Generate a unique name for the deserializer function for a given [operationShape] and HTTP binding.
      */
-    // rename here technically not required, operations and members cannot be renamed
+    // Rename here technically not required, operations and members cannot be renamed.
     private fun fnName(operationShape: OperationShape, binding: HttpBindingDescriptor) =
         "${operationShape.id.getName(service).toSnakeCase()}_${binding.member.container.name.toSnakeCase()}_${binding.memberName.toSnakeCase()}"
 

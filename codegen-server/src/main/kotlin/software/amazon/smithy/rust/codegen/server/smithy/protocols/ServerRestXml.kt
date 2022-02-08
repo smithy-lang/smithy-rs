@@ -10,17 +10,18 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
 
 /*
- * RestJson1 server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
- * with RestJson1 specific configurations.
+ * RestXml server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
+ * with RestXml specific configurations.
  */
-class ServerRestJsonFactory : ProtocolGeneratorFactory<ServerHttpProtocolGenerator> {
-    override fun protocol(codegenContext: CodegenContext): Protocol = RestJson(codegenContext)
+class ServerRestXmlFactory(private val generator: (CodegenContext) -> Protocol = { RestXml(it) }) :
+    ProtocolGeneratorFactory<ServerHttpProtocolGenerator> {
+    override fun protocol(codegenContext: CodegenContext): Protocol = generator(codegenContext)
 
     override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpProtocolGenerator =
-        ServerHttpProtocolGenerator(codegenContext, RestJson(codegenContext))
+        ServerHttpProtocolGenerator(codegenContext, RestXml(codegenContext))
 
     override fun transformModel(model: Model): Model = model
 

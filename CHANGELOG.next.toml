@@ -11,6 +11,103 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "Several modules defined in the `aws_config` crate that used to be declared within another module's file have been moved to their own files. The moved modules are `sts`, `connector`, and `default_providers`. They still have the exact same import paths."
+references = ["smithy-rs#1144"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "The `aws_config::http_provider` module has been renamed to `aws_config::http_credential_provider` to better reflect its purpose."
+references = ["smithy-rs#1144"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+Some APIs required that timeout configuration be specified with an `aws_smithy_client::timeout::Settings` struct while
+others required an `aws_smithy_types::timeout::TimeoutConfig` struct. Both were equivalent. Now `aws_smithy_types::timeout::TimeoutConfig`
+is used everywhere and `aws_smithy_client::timeout::Settings` has been removed. Here's how to migrate code your code that
+depended on `timeout::Settings`:
+
+The old way:
+```rust
+let timeout = timeout::Settings::new()
+    .with_connect_timeout(Duration::from_secs(1))
+    .with_read_timeout(Duration::from_secs(2));
+```
+
+The new way:
+```rust
+// This example is passing values, so they're wrapped in `Option::Some`. You can disable a timeout by passing `None`.
+let timeout = TimeoutConfig::new()
+    .with_connect_timeout(Some(Duration::from_secs(1)))
+    .with_read_timeout(Some(Duration::from_secs(2)));
+```
+"""
+references = ["smithy-rs#1144"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+Some APIs required that timeout configuration be specified with an `aws_smithy_client::timeout::Settings` struct while
+others required an `aws_smithy_types::timeout::TimeoutConfig` struct. Both were equivalent. Now `aws_smithy_types::timeout::TimeoutConfig`
+is used everywhere and `aws_smithy_client::timeout::Settings` has been removed. Here's how to migrate code your code that
+depended on `timeout::Settings`:
+
+The old way:
+```rust
+let timeout = timeout::Settings::new()
+    .with_connect_timeout(Duration::from_secs(1))
+    .with_read_timeout(Duration::from_secs(2));
+```
+
+The new way:
+```rust
+// This example is passing values, so they're wrapped in `Option::Some`. You can disable a timeout by passing `None`.
+let timeout = TimeoutConfig::new()
+    .with_connect_timeout(Some(Duration::from_secs(1)))
+    .with_read_timeout(Some(Duration::from_secs(2)));
+```
+"""
+references = ["smithy-rs#1144"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+`MakeConnectorFn`, `HttpConnector`, and `HttpSettings` have been moved from `aws_config::provider_config` to
+`aws_smithy_client::http_connector`. This is in preparation for a later update that will change how connectors are
+created and configured.
+
+If you were using these structs/enums, you can migrate your old code by importing them from their new location.
+"""
+references = ["smithy-rs#1144"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+`MakeConnectorFn`, `HttpConnector`, and `HttpSettings` have been moved from `aws_config::provider_config` to
+`aws_smithy_client::http_connector`. This is in preparation for a later update that will change how connectors are
+created and configured.
+"""
+references = ["smithy-rs#1144"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+Along with moving `HttpConnector` to `aws_smithy_client`, the `HttpConnector::make_connector` method has been renamed to
+`HttpConnector::connector`.
+
+If you were using this method, you can migrate your old code by calling `connector` instead of `make_connector`.
+"""
+references = ["smithy-rs#1144"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
 [[smithy-rs]]
 message = "Refactor `Document` shape parser generation"
 references = ["smithy-rs#1123"]

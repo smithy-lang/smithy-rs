@@ -267,7 +267,7 @@ class JsonSerializerGenerator(
         }
     }
 
-    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType? {
+    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
         val outputShape = operationShape.outputShape(model)
         val includedMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
         val fnName = symbolProvider.serializeFunctionName(outputShape)
@@ -337,10 +337,7 @@ class JsonSerializerGenerator(
         val writer = context.writerExpression
         val value = context.valueExpression
         when (target) {
-            is StringShape -> when (target.hasTrait<EnumTrait>()) {
-                true -> rust("$writer.string(${value.name}.as_str());")
-                false -> rust("$writer.string(${value.name});")
-            }
+            is StringShape -> rust("$writer.string(${value.name}.as_str());")
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
             is NumberShape -> {
                 val numberType = when (symbolProvider.toSymbol(target).rustType()) {
