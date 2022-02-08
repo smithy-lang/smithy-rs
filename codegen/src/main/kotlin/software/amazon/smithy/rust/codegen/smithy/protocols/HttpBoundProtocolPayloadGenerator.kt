@@ -68,8 +68,11 @@ class HttpBoundProtocolPayloadGenerator(
                     httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
         }
 
-        // Only streaming operations (blob streaming and event streams) and *blob non-streaming* operations need to
-        // take ownership.
+        // Only:
+        //     - streaming operations (blob streaming and event streams),
+        //     - *blob non-streaming* operations; and
+        //     - string payloads
+        // need to take ownership.
         return if (payloadMemberName == null) {
             ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = false)
         } else if (operationShape.isInputEventStream(model)) {
@@ -77,10 +80,10 @@ class HttpBoundProtocolPayloadGenerator(
         } else {
             val member = shape.expectMember(payloadMemberName)
             when (val type = model.expectShape(member.target)) {
-                is StringShape, is DocumentShape, is StructureShape, is UnionShape -> ProtocolPayloadGenerator.PayloadMetadata(
+                is DocumentShape, is StructureShape, is UnionShape -> ProtocolPayloadGenerator.PayloadMetadata(
                     takesOwnership = false
                 )
-                is BlobShape -> ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = true)
+                is StringShape, is BlobShape -> ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = true)
                 else -> UNREACHABLE("Unexpected payload target type: $type")
             }
         }
@@ -193,13 +196,12 @@ class HttpBoundProtocolPayloadGenerator(
                         *codegenScope
                     ) {
                         when (val targetShape = model.expectShape(member.target)) {
+                            // Return an empty `Vec<u8>`.
                             is StringShape, is BlobShape, is DocumentShape -> rust(
-                                // TODO Can we get rid of this allocation and make the function return a slice of bytes?
                                 """
-                                b"".to_vec()
+                                Vec::new()
                                 """
                             )
-                            // If this targets a member and the member is `None`, return an "empty" `Vec<u8>`.
                             is StructureShape -> rust("#T()", serializerGenerator.unsetStructure(targetShape))
                         }
                     }
@@ -221,12 +223,12 @@ class HttpBoundProtocolPayloadGenerator(
         when (val targetShape = model.expectShape(member.target)) {
             is StringShape -> {
                 // Write the raw string to the payload.
-                // TODO Can we get rid of this allocation and make the function return a slice of bytes?
                 if (targetShape.hasTrait<EnumTrait>()) {
+                    // Convert an enum to `&str` then to `&[u8]` then to `Vec<u8>`.
                     rust("$payloadName.as_str().as_bytes().to_vec()")
                 } else {
-                    // TODO Cannot use `into_bytes()` because payload is behind shared reference.
-                    rust("$payloadName.as_bytes().to_vec()")
+                    // Convert a `String` to `Vec<u8>`.
+                    rust("$payloadName.into_bytes()")
                 }
             }
 
