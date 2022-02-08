@@ -113,7 +113,7 @@ data class ProtocolContentTypes(
 /**
  * An [HttpBindingResolver] that relies on the HttpTrait data in the Smithy models.
  */
-class HttpTraitHttpBindingResolver(
+open class HttpTraitHttpBindingResolver(
     model: Model,
     private val contentTypes: ProtocolContentTypes,
 ) : HttpBindingResolver {
