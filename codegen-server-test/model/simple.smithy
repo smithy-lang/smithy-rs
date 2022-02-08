@@ -15,6 +15,7 @@ service SimpleService {
         DocumentPayloadOperation,
         StreamingBlobPayloadOperation,
         BlobPayloadOperation,
+        NoPayloadOperation,
     ],
 }
 
@@ -54,7 +55,20 @@ operation BlobPayloadOperation {
     output: BlobPayloadOperationOutput
 }
 
+@http(uri: "/noPayloadOperation", method: "GET")
+operation NoPayloadOperation {
+    input: NoInput,
+    output: SomeOutput
+}
+
 structure NoInput {
+}
+
+structure SomeOutput {
+    @required
+    aString: String,
+
+    anotherString: String
 }
 
 @streaming
