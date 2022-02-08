@@ -12,9 +12,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 interface StructuredDataSerializerGenerator {
-    // TODO Update docs, they now return Vec<u8>.
-    // Double-check we need `Result`s
-
     /**
      * Generate a serializer for a request payload.
      *
@@ -24,7 +21,6 @@ interface StructuredDataSerializerGenerator {
      * }
      * ```
      */
-    // TODO Does this need to return `Result`?
     fun payloadSerializer(member: MemberShape): RuntimeType
 
     /**
@@ -39,6 +35,7 @@ interface StructuredDataSerializerGenerator {
 
     /**
      * Generate a serializer for an operation input.
+     * This serializer is only used by Smithy clients.
      *
      * ```rust
      * fn serialize_some_operation(input: &SomeSmithyType) -> Result<SdkBody, Error> {
@@ -46,7 +43,6 @@ interface StructuredDataSerializerGenerator {
      * }
      * ```
      */
-    // TODO Make this return `Vec<u8>`.
     fun operationSerializer(operationShape: OperationShape): RuntimeType?
 
     /**
