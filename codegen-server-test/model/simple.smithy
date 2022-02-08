@@ -3,125 +3,105 @@ $version: "1.0"
 namespace com.amazonaws.simple
 
 use aws.protocols#restJson1
+use smithy.test#httpRequestTests
+use smithy.test#httpResponseTests
 
 @restJson1
 @title("SimpleService")
+@documentation("A simple service example, with a Service resource that can be registered and a readonly healthcheck")
 service SimpleService {
     version: "2022-01-01",
+    resources: [
+        Service,
+    ],
     operations: [
-        StringPayloadOperation,
-        StringEnumPayloadOperation,
-        StructurePayloadOperation,
-        DocumentPayloadOperation,
-        StreamingBlobPayloadOperation,
-        BlobPayloadOperation,
-        NoPayloadOperation,
+        Healthcheck,
     ],
 }
 
-@http(uri: "/stringPayloadOperation", method: "GET")
-operation StringPayloadOperation {
-    input: NoInput,
-    output: StringPayloadOperationOutput
-}
+@documentation("Id of the service that will be registered")
+string ServiceId
 
-@http(uri: "/stringEnumPayloadOperation", method: "GET")
-operation StringEnumPayloadOperation {
-    input: NoInput,
-    output: StringEnumPayloadOperationOutput
-}
+@documentation("Name of the service that will be registered")
+string ServiceName
 
-@http(uri: "/structurePayloadOperation", method: "GET")
-operation StructurePayloadOperation {
-    input: NoInput,
-    output: StructurePayloadOperationOutput
-}
-
-@http(uri: "/documentPayloadOperation", method: "GET")
-operation DocumentPayloadOperation {
-    input: NoInput,
-    output: DocumentPayloadOperationOutput
-}
-
-@http(uri: "/streamingBlobPayloadOperation", method: "GET")
-operation StreamingBlobPayloadOperation {
-    input: NoInput,
-    output: StreamingBlobPayloadOperationOutput
-}
-
-@http(uri: "/blobPayloadOperation", method: "GET")
-operation BlobPayloadOperation {
-    input: NoInput,
-    output: BlobPayloadOperationOutput
-}
-
-@http(uri: "/noPayloadOperation", method: "GET")
-operation NoPayloadOperation {
-    input: NoInput,
-    output: SomeOutput
-}
-
-structure NoInput {
-}
-
-structure SomeOutput {
+@error("client")
+@documentation(
+    """
+    Returned when a new resource cannot be created because one already exists.
+    """
+)
+structure ResourceAlreadyExists {
     @required
-    aString: String,
-
-    anotherString: String
+    message: String
 }
 
-@streaming
-blob StreamingBlob
+@documentation("A resource that can register services")
+resource Service {
+    identifiers: { id: ServiceId },
+    put: RegisterService,
+}
 
-@enum([
+@idempotent
+@http(method: "PUT", uri: "/service/{id}")
+@documentation("Service register operation")
+@httpRequestTests([
     {
-        value: "t2.nano",
-        name: "T2_NANO",
-    },
-    {
-        value: "t2.micro",
-        name: "T2_MICRO",
-    },
-    {
-        value: "m256.mega",
-        name: "M256_MEGA",
-        deprecated: true
+        id: "RegisterServiceRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/service/1",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        params: { id: "1", name: "TestService" },
+        body: "{\"name\":\"TestService\"}",
+        method: "PUT",
     }
 ])
-string StringEnum
-
-structure MyStructure {
-    aString: String,
-    anInt: Integer
+@httpResponseTests([
+    {
+        id: "RegisterServiceResponseTest",
+        protocol: "aws.protocols#restJson1",
+        params: { id: "1", name: "TestService" },
+        body: "{\"id\":\"1\",\"name\":\"TestService\"}",
+        code: 200,
+    }
+])
+operation RegisterService {
+    input: RegisterServiceInputRequest,
+    output: RegisterServiceOutputResponse,
+    errors: [ResourceAlreadyExists]
 }
 
-structure StringPayloadOperationOutput {
-    @httpPayload
-    stringPayload: String,
+@documentation("Service register input structure")
+structure RegisterServiceInputRequest {
+    @required
+    @httpLabel
+    id: ServiceId,
+    name: ServiceName,
 }
 
-structure StringEnumPayloadOperationOutput {
-    @httpPayload
-    stringEnumPayload: StringEnum,
+@documentation("Service register output structure")
+structure RegisterServiceOutputResponse {
+    @required
+    id: ServiceId,
+    name: ServiceName,
 }
 
-structure StructurePayloadOperationOutput {
-    @httpPayload
-    structPayload: MyStructure,
+@readonly
+@http(uri: "/healthcheck", method: "GET")
+@documentation("Read-only healthcheck operation")
+operation Healthcheck {
+    input: HealthcheckInputRequest,
+    output: HealthcheckOutputResponse
 }
 
-structure DocumentPayloadOperationOutput {
-    @httpPayload
-    documentPayload: Document,
+@documentation("Service healthcheck output structure")
+structure HealthcheckInputRequest {
+
 }
 
-structure StreamingBlobPayloadOperationOutput {
-    @httpPayload
-    streamingBlobPayload: StreamingBlob
-}
+@documentation("Service healthcheck input structure")
+structure HealthcheckOutputResponse {
 
-structure BlobPayloadOperationOutput {
-    @httpPayload
-    BlobPayload: Blob
 }
