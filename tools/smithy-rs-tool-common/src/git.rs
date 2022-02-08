@@ -18,10 +18,13 @@ pub use get_last_commit::GetLastCommit;
 
 /// Attempts to find git repository root from the given location.
 pub fn find_git_repository_root(repo_name: &str, location: impl AsRef<Path>) -> Result<PathBuf> {
+    dbg!(&repo_name);
     let mut current_dir = location.as_ref().canonicalize()?;
     let os_name = OsStr::new(repo_name);
     loop {
+        dbg!(&current_dir);
         if is_git_root(&current_dir) {
+            dbg!(&current_dir.file_name());
             if let Some(file_name) = current_dir.file_name() {
                 if os_name == file_name {
                     return Ok(current_dir);

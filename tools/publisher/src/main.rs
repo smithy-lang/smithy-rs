@@ -21,7 +21,7 @@ mod subcommand;
 
 pub const SDK_REPO_CRATE_PATH: &str = "sdk";
 pub const SDK_REPO_NAME: &str = "aws-sdk-rust";
-pub const SMITHYRS_REPO_NAME: &str = "smithy-rs";
+pub const SMITHYRS_REPO_NAME: &str = "SmithyRsSource";
 pub const CRATE_OWNER: &str = "github:awslabs:rust-sdk-owners";
 
 #[derive(Parser, Debug)]
