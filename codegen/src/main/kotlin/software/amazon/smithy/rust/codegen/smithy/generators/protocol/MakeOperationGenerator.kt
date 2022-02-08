@@ -6,7 +6,10 @@
 package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
 import software.amazon.smithy.aws.traits.ServiceTrait
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeType
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -91,8 +94,8 @@ open class MakeOperationGenerator(
             Attribute.Custom("allow(clippy::useless_conversion)").render(this)
             withBlockTemplate("let body = #{SdkBody}::from(", ");", *codegenScope) {
                 bodyGenerator.generatePayload(this, "self", shape)
-                val isStreaming = shape.inputShape(model).findStreamingMember(model) != null
-                if (isStreaming) {
+                val isBlobStreaming = shape.inputShape(model).findStreamingMember(model)?.type == ShapeType.BLOB
+                if (isBlobStreaming) {
                     // Consume the `ByteStream` into its inner `SdkBody`.
                     rust(".into_inner()")
                 }
