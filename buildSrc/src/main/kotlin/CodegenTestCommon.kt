@@ -39,7 +39,7 @@ fun generateSmithyBuild(projectDir: String, pluginName: String, tests: List<Code
             $projections 
         }
     }
-    """
+    """.trimIndent()
 }
 
 enum class Cargo(val toString: String) {
@@ -55,7 +55,7 @@ fun generateCargoWorkspace(pluginName: String, tests: List<CodegenTest>) =
     members = [
         ${tests.joinToString(",") { "\"${it.module}/$pluginName\"" }}
     ]
-    """
+    """.trimIndent()
 
 /**
  * Filter the service integration tests for which to generate Rust crates in [allTests] using the given [properties].
