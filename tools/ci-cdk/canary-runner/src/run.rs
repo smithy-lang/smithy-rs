@@ -190,8 +190,7 @@ async fn use_correct_revision(opt: &RunOpt) -> Result<()> {
             "SDK version {} requires smithy-rs@{} to successfully compile the canary",
             version, commit_hash
         );
-        let smithy_rs_root =
-            git::find_git_repository_root("SmithyRsSource", ".").context(here!())?;
+        let smithy_rs_root = git::find_git_repository_root("smithy-rs", ".").context(here!())?;
         git::CheckoutRevision::new(smithy_rs_root, *commit_hash)
             .spawn()
             .await
