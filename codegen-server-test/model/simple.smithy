@@ -125,7 +125,7 @@ structure StoreServiceBlobInput {
     content: Blob,
 }
 
-@documentation("Store a blob for a service id input structure")
+@documentation("Store a blob for a service id output structure")
 structure StoreServiceBlobOutput {
 
 }
