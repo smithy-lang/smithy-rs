@@ -10,6 +10,7 @@ service SimpleService {
     version: "2022-01-01",
     operations: [
         StringPayloadOperation,
+        StringEnumPayloadOperation,
         StructurePayloadOperation,
         DocumentPayloadOperation,
         StreamingBlobPayloadOperation,
@@ -21,6 +22,12 @@ service SimpleService {
 operation StringPayloadOperation {
     input: NoInput,
     output: StringPayloadOperationOutput
+}
+
+@http(uri: "/stringEnumPayloadOperation", method: "GET")
+operation StringEnumPayloadOperation {
+    input: NoInput,
+    output: StringEnumPayloadOperationOutput
 }
 
 @http(uri: "/structurePayloadOperation", method: "GET")
@@ -53,6 +60,23 @@ structure NoInput {
 @streaming
 blob StreamingBlob
 
+@enum([
+    {
+        value: "t2.nano",
+        name: "T2_NANO",
+    },
+    {
+        value: "t2.micro",
+        name: "T2_MICRO",
+    },
+    {
+        value: "m256.mega",
+        name: "M256_MEGA",
+        deprecated: true
+    }
+])
+string StringEnum
+
 structure MyStructure {
     aString: String,
     anInt: Integer
@@ -61,6 +85,11 @@ structure MyStructure {
 structure StringPayloadOperationOutput {
     @httpPayload
     stringPayload: String,
+}
+
+structure StringEnumPayloadOperationOutput {
+    @httpPayload
+    stringEnumPayload: StringEnum,
 }
 
 structure StructurePayloadOperationOutput {
