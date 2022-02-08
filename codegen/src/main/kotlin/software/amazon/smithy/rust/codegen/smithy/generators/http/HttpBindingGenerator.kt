@@ -170,7 +170,7 @@ class HttpBindingGenerator(
     }
 
     /**
-     * Generate a function to deserialize `[binding]` from the response payload.
+     * Generate a function to deserialize `[binding]` from the request / response payload.
      */
     fun generateDeserializePayloadFn(
         operationShape: OperationShape,
