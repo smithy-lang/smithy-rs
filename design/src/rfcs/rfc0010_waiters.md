@@ -1,7 +1,7 @@
 RFC: Waiters
 ============
 
-> Status: Request for comment
+> Status: Accepted
 
 Waiters are a convenient polling mechanism to wait for a resource to become available or to
 be deleted. For example, a waiter could be used to wait for a S3 bucket to be created after
