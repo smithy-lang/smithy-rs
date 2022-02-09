@@ -50,6 +50,13 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
     }
 }
 
+/**
+ * The artifact type for whom we are generating the structure.
+ */
+public enum class TYPE {
+    CLIENT, SERVER
+}
+
 class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
@@ -65,17 +72,10 @@ class StructureGenerator(
     }
     private val name = symbolProvider.toSymbol(shape).name
 
-    fun render() {
+    fun render(forWhom: TYPE = TYPE.CLIENT) {
         renderStructure()
         errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render()
-        }
-    }
-
-    fun renderServer() {
-        renderStructure()
-        errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).renderServer()
+            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render(forWhom)
         }
     }
 
