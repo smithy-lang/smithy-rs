@@ -5,6 +5,7 @@
 
 use crate::error::ErrorPrinter;
 use crate::visitor::Visitor;
+use anyhow::bail;
 use anyhow::{Context, Result};
 use clap::Parser;
 use owo_colors::{OwoColorize, Stream};
@@ -37,10 +38,26 @@ struct Args {
     /// Enable verbose output for debugging
     #[clap(short, long)]
     verbose: bool,
+    /// Nightly version of Rustdoc to use. By default, `+nightly` will be used.
+    /// This argument can be used to pin to specific nightly version (i.e., `+nightly-2022-02-08`).
+    #[clap(long)]
+    nightly_version: Option<String>,
+}
+
+impl Args {
+    fn validate(&self) -> Result<()> {
+        if let Some(version) = &self.nightly_version {
+            if !version.starts_with("+nightly") {
+                bail!("Nightly version must start with `+nightly`");
+            }
+        }
+        Ok(())
+    }
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
+    args.validate()?;
     if args.verbose {
         let filter_layer = EnvFilter::try_from_default_env()
             .or_else(|_| EnvFilter::try_new("debug"))
@@ -69,9 +86,10 @@ fn main() -> Result<()> {
         FORMAT_VERSION
     );
     println!("Running rustdoc to produce json doc output...");
-    let package = cargo::CargoRustDocJson::new(&args.crate_path, args.target_path)
-        .run()
-        .context(here!())?;
+    let package =
+        cargo::CargoRustDocJson::new(&args.crate_path, args.target_path, args.nightly_version)
+            .run()
+            .context(here!())?;
 
     println!("Examining all public types...");
     let errors = Visitor::new(config, package)?.visit_all()?;

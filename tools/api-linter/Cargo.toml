@@ -5,6 +5,7 @@ authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisant
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
+publish = false
 
 [dependencies]
 anyhow = "1"

@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use rustdoc_types::Crate;
 use smithy_rs_tool_common::macros::here;
 use smithy_rs_tool_common::shell::{handle_failure, ShellOperation};
+use std::borrow::Cow;
 use std::fs;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -18,14 +19,23 @@ pub struct CargoRustDocJson {
     crate_path: PathBuf,
     /// Expected `target/` directory where the output will be
     target_path: PathBuf,
+    /// Nightly version to use
+    nightly_version: Cow<'static, str>,
 }
 
 impl CargoRustDocJson {
-    pub fn new(crate_path: impl Into<PathBuf>, target_path: impl Into<PathBuf>) -> Self {
+    pub fn new(
+        crate_path: impl Into<PathBuf>,
+        target_path: impl Into<PathBuf>,
+        nightly_version: Option<String>,
+    ) -> Self {
         CargoRustDocJson {
             program: "cargo",
             crate_path: crate_path.into(),
             target_path: target_path.into(),
+            nightly_version: nightly_version
+                .map(Cow::Owned)
+                .unwrap_or(Cow::Borrowed("+nightly")),
         }
     }
 }
@@ -39,7 +49,7 @@ impl ShellOperation for CargoRustDocJson {
         let mut command = Command::new(self.program);
         command
             .current_dir(&self.crate_path)
-            .arg("+nightly")
+            .arg(self.nightly_version.as_ref())
             .arg("rustdoc")
             .arg("--")
             .arg("--document-private-items")
