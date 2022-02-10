@@ -158,7 +158,7 @@ class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider
     RustCrate(fileManifest, symbolProvider, DefaultPublicModules) {
     val baseDir: Path = fileManifest.baseDir
 
-    fun generatedFiles(): List<Path> = fileManifest.files.toList()
+    fun generatedFiles(): List<Path> = fileManifest.files.toList().sorted()
 }
 
 /**
