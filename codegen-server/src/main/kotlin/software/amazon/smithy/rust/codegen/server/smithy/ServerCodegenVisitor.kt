@@ -16,7 +16,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -30,7 +29,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.TYPE
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
@@ -166,7 +165,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     override fun structureShape(shape: StructureShape) {
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
-            StructureGenerator(model, symbolProvider, writer, shape).render(TYPE.SERVER)
+            StructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
             val builderGenerator =
                 BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
             builderGenerator.render(writer)

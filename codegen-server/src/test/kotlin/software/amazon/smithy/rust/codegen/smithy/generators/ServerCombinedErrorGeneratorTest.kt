@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.lookup
 
@@ -51,7 +50,7 @@ class ServerCombinedErrorGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(RustModule.public("error")) { writer ->
             listOf("FooException", "ComplexError", "InvalidGreeting").forEach {
-                model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, writer, TYPE.SERVER)
+                model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, writer, CodegenTarget.SERVER)
             }
             val generator = ServerCombinedErrorGenerator(model, symbolProvider, model.lookup("error#Greeting"))
             generator.render(writer)

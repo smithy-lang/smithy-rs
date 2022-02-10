@@ -53,7 +53,7 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
 /**
  * The artifact type for whom we are generating the structure.
  */
-public enum class TYPE {
+enum class CodegenTarget {
     CLIENT, SERVER
 }
 
@@ -72,7 +72,7 @@ class StructureGenerator(
     }
     private val name = symbolProvider.toSymbol(shape).name
 
-    fun render(forWhom: TYPE = TYPE.CLIENT) {
+    fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
         errorTrait?.also { errorTrait ->
             ErrorGenerator(symbolProvider, writer, shape, errorTrait).render(forWhom)
