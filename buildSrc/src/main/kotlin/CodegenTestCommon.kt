@@ -1,9 +1,9 @@
+import java.lang.IllegalArgumentException
+
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-
-import java.security.InvalidParameterException
 
 /**
  * This file contains common functionality shared across the buildscripts for the `codegen-test` and `codegen-server-test`
@@ -87,7 +87,7 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
             "test" -> Cargo.TEST
             "docs" -> Cargo.DOCS
             "clippy" -> Cargo.CLIPPY
-            else -> throw InvalidParameterException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `docs`, `clippy`)")
+            else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `docs`, `clippy`)")
         }
     }
 
