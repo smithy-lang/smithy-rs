@@ -115,7 +115,7 @@ jobs:
       # windows doesn't support using --check like this
       if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: clippy check
-      run: cargo clippy -- -D warnings
+      run: cargo clippy --all-features -- -D warnings
       working-directory: ${{ matrix.runtime }}
       # don't bother running Clippy twice, it will have the same results on Windows
       if: ${{ matrix.os == 'ubuntu-latest' }}
