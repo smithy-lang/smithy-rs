@@ -50,13 +50,6 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
     }
 }
 
-/**
- * The artifact type for whom we are generating the structure.
- */
-enum class CodegenTarget {
-    CLIENT, SERVER
-}
-
 class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
