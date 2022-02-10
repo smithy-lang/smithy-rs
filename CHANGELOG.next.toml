@@ -244,3 +244,9 @@ remove their trait bounds.
 references = ["smithy-rs#1132"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Fixed example showing how to use hardcoded credentials in `aws-types`"
+references = ["smithy-rs#1180"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
