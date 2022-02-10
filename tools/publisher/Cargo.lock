@@ -1234,6 +1234,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

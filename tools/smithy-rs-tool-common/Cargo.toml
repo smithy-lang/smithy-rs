@@ -15,3 +15,4 @@ async-shell = ["tokio"]
 anyhow = "1"
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "macros"], optional = true }
+tracing = "0.1"

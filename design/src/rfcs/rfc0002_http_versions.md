@@ -32,7 +32,7 @@ the following terms will be used:
   the connector, middleware, and retry policy. This isn't intended to be used directly.
 - **Fluent Client**: A code generated `Client<C, M, R>` that has methods for each service operation on it.
   A fluent builder is generated alongside it to make construction easier.
-- **AWS Client**: A specialized Fluent Client that defaults to using a `DynConnector`, `AwsMiddleware`,
+- **AWS Client**: A specialized Fluent Client that uses a `DynConnector`, `DefaultMiddleware`,
   and `Standard` retry policy.
 
 All of these are just called `Client` in code today. This is something that could be clarified in a separate refactor.
