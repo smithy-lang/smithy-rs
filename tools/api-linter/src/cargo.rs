@@ -9,7 +9,6 @@ use smithy_rs_tool_common::macros::here;
 use smithy_rs_tool_common::shell::{handle_failure, ShellOperation};
 use std::borrow::Cow;
 use std::fs;
-use std::io::BufReader;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -69,9 +68,8 @@ impl ShellOperation for CargoRustDocJson {
             .context(here!())?
             .join(format!("doc/{}.json", crate_name.replace('-', "_")));
 
-        let file = fs::File::open(output_file_name).context(here!())?;
-        let reader = BufReader::new(file);
-        let package: Crate = serde_json::from_reader(reader)
+        let json = fs::read_to_string(output_file_name).context(here!())?;
+        let package: Crate = serde_json::from_str(&json)
             .context(
                 "Failed to parse rustdoc output. This can happen if the locally installed \
                 version of rustdoc doesn't match the rustdoc JSON types from the `rustdoc-types` \

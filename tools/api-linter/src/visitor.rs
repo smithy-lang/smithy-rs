@@ -457,9 +457,8 @@ impl Visitor {
     }
 
     fn check_external(&self, context: &ContextStack, what: &RefType, id: &Id) -> Result<()> {
-        if let Some(crate_name) = self.crate_name(id) {
-            let type_name = self.type_name(id)?;
-            if !is_allowed_type(&self.config, &self.root_crate_name, crate_name, &type_name) {
+        if let Ok(type_name) = self.type_name(id) {
+            if !self.config.allows_type(&self.root_crate_name, &type_name) {
                 self.add_error(ValidationError::unapproved_external_type_ref(
                     self.type_name(id)?,
                     what,
@@ -492,10 +491,6 @@ impl Visitor {
         self.paths.get(id)
     }
 
-    fn crate_name(&self, id: &Id) -> Option<&str> {
-        self.item_summary(id)?.path.get(0).map(|s| s.as_str())
-    }
-
     fn type_name(&self, id: &Id) -> Result<String> {
         Ok(self.item_summary(id).context(here!())?.path.join("::"))
     }
@@ -518,46 +513,5 @@ impl Visitor {
             .get(&package.root)
             .ok_or_else(|| anyhow!("root not found in index"))
             .context(here!())
-    }
-}
-
-fn is_allowed_type(
-    config: &Config,
-    root_crate_name: &str,
-    crate_name: &str,
-    type_name: &str,
-) -> bool {
-    match crate_name {
-        _ if crate_name == root_crate_name => true,
-        "alloc" => config.allow_alloc,
-        "core" => config.allow_core,
-        "std" => config.allow_std,
-        _ => config
-            .allowed_external_types
-            .iter()
-            .any(|glob| glob.matches(type_name)),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::is_allowed_type;
-    use crate::config::Config;
-    use wildmatch::WildMatch;
-
-    #[test]
-    fn test_is_allowed_type() {
-        let config = Config {
-            allowed_external_types: vec![WildMatch::new("one::*"), WildMatch::new("two::*")],
-            ..Default::default()
-        };
-        assert!(is_allowed_type(&config, "root", "alloc", "alloc::System"));
-        assert!(is_allowed_type(&config, "root", "core", "std::vec::Vec"));
-        assert!(is_allowed_type(&config, "root", "std", "std::path::Path"));
-
-        assert!(is_allowed_type(&config, "root", "root", "root::thing"));
-        assert!(is_allowed_type(&config, "root", "one", "one::thing"));
-        assert!(is_allowed_type(&config, "root", "two", "two::thing"));
-        assert!(!is_allowed_type(&config, "root", "three", "three::thing"));
     }
 }

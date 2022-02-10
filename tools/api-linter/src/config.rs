@@ -41,6 +41,23 @@ pub struct Config {
     pub allowed_external_types: Vec<WildMatch>,
 }
 
+impl Config {
+    /// Returns true if the given `type_name` is allowed by this config for the given `root_crate_name`.
+    pub fn allows_type(&self, root_crate_name: &str, type_name: &str) -> bool {
+        let type_crate_name = &type_name[0..type_name.find("::").unwrap_or(type_name.len())];
+        match type_crate_name {
+            _ if type_crate_name == root_crate_name => true,
+            "alloc" => self.allow_alloc,
+            "core" => self.allow_core,
+            "std" => self.allow_std,
+            _ => self
+                .allowed_external_types
+                .iter()
+                .any(|glob| glob.matches(type_name)),
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -87,6 +104,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::Config;
+    use wildmatch::WildMatch;
 
     #[test]
     fn deserialize_config() {
@@ -105,5 +123,21 @@ mod tests {
         assert!(!config.allowed_external_types[0].matches("other::something"));
         assert!(config.allowed_external_types[1].matches("another_test::something::foo::something"));
         assert!(!config.allowed_external_types[1].matches("another_test::other::foo::something"));
+    }
+
+    #[test]
+    fn test_allows_type() {
+        let config = Config {
+            allowed_external_types: vec![WildMatch::new("one::*"), WildMatch::new("two::*")],
+            ..Default::default()
+        };
+        assert!(config.allows_type("root", "alloc::System"));
+        assert!(config.allows_type("root", "std::vec::Vec"));
+        assert!(config.allows_type("root", "std::path::Path"));
+
+        assert!(config.allows_type("root", "root::thing"));
+        assert!(config.allows_type("root", "one::thing"));
+        assert!(config.allows_type("root", "two::thing"));
+        assert!(!config.allows_type("root", "three::thing"));
     }
 }
