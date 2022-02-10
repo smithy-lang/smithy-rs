@@ -97,22 +97,36 @@ impl Credentials {
     /// [`ProvideCredentials`](crate::credentials::ProvideCredentials) directly, so no custom provider
     /// implementation is required when wiring these up to a client:
     /// ```rust
-    /// use aws_types::Credentials;
-    /// # mod dynamodb {
-    /// # use aws_types::credentials::ProvideCredentials;
-    /// # pub struct Config;
-    /// # impl Config {
-    /// #    pub fn builder() -> Self {
-    /// #        Config
-    /// #    }
-    /// #    pub fn credentials_provider(self, provider: impl ProvideCredentials + 'static) -> Self {
-    /// #       self
-    /// #    }
+    /// use aws_types::{Credentials, Region};
+    /// # mod service {
+    /// #     use aws_types::credentials::ProvideCredentials;
+    /// #     pub struct Config;
+    /// #     impl Config {
+    /// #        pub fn builder() -> Self {
+    /// #            Config
+    /// #        }
+    /// #        pub fn credentials_provider(self, provider: impl ProvideCredentials + 'static) -> Self {
+    /// #            self
+    /// #        }
+    /// #        pub fn region(self, region: Region) -> Self {
+    /// #            self
+    /// #        }
+    /// #     }
+    /// #     pub struct Client;
+    /// #     impl Client {
+    /// #        pub fn from_conf(config: Config) -> Self {
+    /// #            Client
+    /// #        }
+    /// #     }
     /// # }
-    /// # }
+    /// # use service::Config;
     ///
-    /// let my_creds = Credentials::from_keys("akid", "secret_key", None);
-    /// let conf = dynamodb::Config::builder().credentials_provider(my_creds);
+    /// let creds = Credentials::from_keys("akid", "secret_key", None);
+    /// let config = Config::builder()
+    ///     .credentials_provider(creds)
+    ///     .region(Region::new("us-east-1"))
+    ///     .build();
+    /// let client = Client::from_conf(config);
     /// ```
     #[cfg(feature = "hardcoded-credentials")]
     pub fn from_keys(
