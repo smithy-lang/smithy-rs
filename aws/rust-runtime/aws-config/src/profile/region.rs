@@ -120,7 +120,7 @@ fn resolve_profile_chain_for_region(
             visited_profiles.push(selected_profile);
         }
 
-        // Attempt to get region and source_profile fro current profile
+        // Attempt to get region and source_profile for current profile
         let selected_profile_region = profile
             .get("region")
             .map(|region| Region::new(region.to_owned()));
