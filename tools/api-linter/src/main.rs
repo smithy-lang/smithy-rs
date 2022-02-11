@@ -7,6 +7,7 @@ use crate::error::ErrorPrinter;
 use crate::visitor::Visitor;
 use anyhow::{anyhow, bail};
 use anyhow::{Context, Result};
+use cargo::Features;
 use clap::Parser;
 use owo_colors::{OwoColorize, Stream};
 use rustdoc_types::FORMAT_VERSION;
@@ -74,6 +75,12 @@ struct Args {
     /// Format to output results in
     #[clap(long, default_value_t = OutputFormat::Errors)]
     output_format: OutputFormat,
+    /// Enables all crate features
+    #[clap(long)]
+    all_features: bool,
+    /// Comma delimited list of features to enable in the crate
+    #[clap(long)]
+    features: Option<String>,
 }
 
 impl Args {
@@ -83,12 +90,25 @@ impl Args {
                 bail!("Nightly version must start with `+nightly`");
             }
         }
+        if self.all_features && self.features.is_some() {
+            bail!("Cannot specify both `--all-features` and `--features`");
+        }
         Ok(())
+    }
+
+    fn features(&self) -> Features {
+        if self.all_features {
+            Features::All
+        } else if let Some(features) = &self.features {
+            Features::Specific(features.clone())
+        } else {
+            Features::Default
+        }
     }
 }
 
 fn main() -> Result<()> {
-    let args = Args::parse();
+    let mut args = Args::parse();
     args.validate()?;
     if args.verbose {
         let filter_layer = EnvFilter::try_from_default_env()
@@ -118,10 +138,14 @@ fn main() -> Result<()> {
         FORMAT_VERSION
     );
     eprintln!("Running rustdoc to produce json doc output...");
-    let package =
-        cargo::CargoRustDocJson::new(&args.crate_path, args.target_path, args.nightly_version)
-            .run()
-            .context(here!())?;
+    let package = cargo::CargoRustDocJson::new(
+        &args.crate_path,
+        &args.target_path,
+        args.nightly_version.take(),
+        args.features(),
+    )
+    .run()
+    .context(here!())?;
 
     eprintln!("Examining all public types...");
     let errors = Visitor::new(config, package)?.visit_all()?;
@@ -146,7 +170,7 @@ fn main() -> Result<()> {
         }
         OutputFormat::MarkdownTable => {
             println!("| Crate | Type | Used In |");
-            println!("| ---   | ---   | ---     |");
+            println!("| ---   | ---  | ---     |");
             let mut rows = Vec::new();
             for error in &errors {
                 let type_name = error.type_name();

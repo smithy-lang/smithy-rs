@@ -1,5 +1,5 @@
 | Crate | Type | Used In |
-| ---   | ---   | ---     |
+| ---   | ---  | ---     |
 | external_lib | external_lib::AssociatedGenericTrait | test-crate/src/lib.rs:107:0 |
 | external_lib | external_lib::AssociatedGenericTrait | test-crate/src/lib.rs:118:4 |
 | external_lib | external_lib::SimpleTrait | test-crate/src/lib.rs:105:0 |

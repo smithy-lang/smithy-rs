@@ -12,6 +12,12 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+pub enum Features {
+    All,
+    Specific(String),
+    Default,
+}
+
 /// Runs the `cargo rustdoc` command required to produce Rustdoc's JSON output with a nightly compiler.
 pub struct CargoRustDocJson {
     program: &'static str,
@@ -21,6 +27,8 @@ pub struct CargoRustDocJson {
     target_path: PathBuf,
     /// Nightly version to use
     nightly_version: Cow<'static, str>,
+    /// Features to enable
+    features: Features,
 }
 
 impl CargoRustDocJson {
@@ -28,6 +36,7 @@ impl CargoRustDocJson {
         crate_path: impl Into<PathBuf>,
         target_path: impl Into<PathBuf>,
         nightly_version: Option<String>,
+        features: Features,
     ) -> Self {
         CargoRustDocJson {
             program: "cargo",
@@ -36,6 +45,7 @@ impl CargoRustDocJson {
             nightly_version: nightly_version
                 .map(Cow::Owned)
                 .unwrap_or(Cow::Borrowed("+nightly")),
+            features,
         }
     }
 }
@@ -50,7 +60,17 @@ impl ShellOperation for CargoRustDocJson {
         command
             .current_dir(&self.crate_path)
             .arg(self.nightly_version.as_ref())
-            .arg("rustdoc")
+            .arg("rustdoc");
+        match &self.features {
+            Features::All => {
+                command.arg("--all-features");
+            }
+            Features::Specific(list) => {
+                command.arg("--features").arg(list);
+            }
+            Features::Default => {}
+        }
+        command
             .arg("--")
             .arg("--document-private-items")
             .arg("-Z")
