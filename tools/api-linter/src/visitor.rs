@@ -5,7 +5,7 @@
 
 use crate::config::Config;
 use crate::context::{ContextStack, ContextType};
-use crate::error::{RefType, ValidationError};
+use crate::error::{ErrorLocation, ValidationError};
 use anyhow::{anyhow, Context as _, Result};
 use rustdoc_types::{
     Crate, FnDecl, GenericArgs, GenericBound, GenericParamDef, GenericParamDefKind, Generics, Id,
@@ -96,13 +96,13 @@ impl Visitor {
             ItemEnum::AssocType { bounds, default } => {
                 context.push(ContextType::AssocType, item);
                 if let Some(typ) = default {
-                    self.visit_type(&context, &RefType::AssocType, typ)?;
+                    self.visit_type(&context, &ErrorLocation::AssocType, typ)?;
                 }
                 self.visit_generic_bounds(&context, bounds)?;
             }
             ItemEnum::Constant(constant) => {
                 context.push(ContextType::Constant, item);
-                self.visit_type(&context, &RefType::Constant, &constant.type_)?;
+                self.visit_type(&context, &ErrorLocation::Constant, &constant.type_)?;
             }
             ItemEnum::Enum(enm) => {
                 context.push(ContextType::Enum, item);
@@ -123,7 +123,7 @@ impl Visitor {
             ItemEnum::Import(import) => {
                 if let Some(id) = &import.id {
                     context.push_raw(ContextType::ReExport, &import.name, item.span.as_ref());
-                    self.check_external(&context, &RefType::ReExport, id)
+                    self.check_external(&context, &ErrorLocation::ReExport, id)
                         .context(here!())?;
                 }
             }
@@ -151,7 +151,7 @@ impl Visitor {
             ItemEnum::OpaqueTy(_) => unimplemented!("visit_item ItemEnum::OpaqueTy"),
             ItemEnum::Static(sttc) => {
                 context.push(ContextType::Static, item);
-                self.visit_type(&context, &RefType::Static, &sttc.type_)?;
+                self.visit_type(&context, &ErrorLocation::Static, &sttc.type_)?;
             }
             ItemEnum::Struct(strct) => {
                 context.push(ContextType::Struct, item);
@@ -159,7 +159,7 @@ impl Visitor {
             }
             ItemEnum::StructField(typ) => {
                 context.push(ContextType::StructField, item);
-                self.visit_type(&context, &RefType::StructField, typ)
+                self.visit_type(&context, &ErrorLocation::StructField, typ)
                     .context(here!())?;
             }
             ItemEnum::Trait(trt) => {
@@ -168,7 +168,7 @@ impl Visitor {
             }
             ItemEnum::Typedef(typedef) => {
                 context.push(ContextType::TypeDef, item);
-                self.visit_type(&context, &RefType::TypeDef, &typedef.type_)
+                self.visit_type(&context, &ErrorLocation::TypeDef, &typedef.type_)
                     .context(here!())?;
                 self.visit_generics(&context, &typedef.generics)?;
             }
@@ -225,7 +225,7 @@ impl Visitor {
                 self.visit_item(context, self.item(id)?)?;
             }
             if let Some(trait_) = &imp.trait_ {
-                self.visit_type(context, &RefType::ImplementedTrait, trait_)
+                self.visit_type(context, &ErrorLocation::ImplementedTrait, trait_)
                     .context(here!())?;
             }
         } else {
@@ -240,18 +240,18 @@ impl Visitor {
             if index == 0 && name == "self" {
                 continue;
             }
-            self.visit_type(context, &RefType::ArgumentNamed(name.into()), typ)
+            self.visit_type(context, &ErrorLocation::ArgumentNamed(name.into()), typ)
                 .context(here!())?;
         }
         if let Some(output) = &decl.output {
-            self.visit_type(context, &RefType::ReturnValue, output)
+            self.visit_type(context, &ErrorLocation::ReturnValue, output)
                 .context(here!())?;
         }
         Ok(())
     }
 
     #[instrument(level = "debug", skip(self, context, typ), fields(path = %context.to_string()))]
-    fn visit_type(&self, context: &ContextStack, what: &RefType, typ: &Type) -> Result<()> {
+    fn visit_type(&self, context: &ContextStack, what: &ErrorLocation, typ: &Type) -> Result<()> {
         match typ {
             Type::ResolvedPath {
                 id,
@@ -273,7 +273,7 @@ impl Visitor {
             }
             Type::Tuple(types) => {
                 for typ in types {
-                    self.visit_type(context, &RefType::EnumTupleEntry, typ)?;
+                    self.visit_type(context, &ErrorLocation::EnumTupleEntry, typ)?;
                 }
             }
             Type::Slice(typ) => self.visit_type(context, what, typ).context(here!())?,
@@ -301,8 +301,8 @@ impl Visitor {
             Type::QualifiedPath {
                 self_type, trait_, ..
             } => {
-                self.visit_type(context, &RefType::QualifiedSelfType, self_type)?;
-                self.visit_type(context, &RefType::QualifiedSelfTypeAsTrait, trait_)?;
+                self.visit_type(context, &ErrorLocation::QualifiedSelfType, self_type)?;
+                self.visit_type(context, &ErrorLocation::QualifiedSelfTypeAsTrait, trait_)?;
             }
         }
         Ok(())
@@ -315,7 +315,7 @@ impl Visitor {
                 for arg in args {
                     match arg {
                         rustdoc_types::GenericArg::Type(typ) => {
-                            self.visit_type(context, &RefType::GenericArg, typ)?
+                            self.visit_type(context, &ErrorLocation::GenericArg, typ)?
                         }
                         rustdoc_types::GenericArg::Lifetime(_)
                         | rustdoc_types::GenericArg::Const(_)
@@ -326,8 +326,12 @@ impl Visitor {
                     match &binding.binding {
                         rustdoc_types::TypeBindingKind::Equality(term) => {
                             if let Term::Type(typ) = term {
-                                self.visit_type(context, &RefType::GenericDefaultBinding, typ)
-                                    .context(here!())?;
+                                self.visit_type(
+                                    context,
+                                    &ErrorLocation::GenericDefaultBinding,
+                                    typ,
+                                )
+                                .context(here!())?;
                             }
                         }
                         rustdoc_types::TypeBindingKind::Constraint(bounds) => {
@@ -338,11 +342,11 @@ impl Visitor {
             }
             GenericArgs::Parenthesized { inputs, output } => {
                 for input in inputs {
-                    self.visit_type(context, &RefType::ClosureInput, input)
+                    self.visit_type(context, &ErrorLocation::ClosureInput, input)
                         .context(here!())?;
                 }
                 if let Some(output) = output {
-                    self.visit_type(context, &RefType::ClosureOutput, output)
+                    self.visit_type(context, &ErrorLocation::ClosureOutput, output)
                         .context(here!())?;
                 }
             }
@@ -359,19 +363,23 @@ impl Visitor {
                 ..
             } = bound
             {
-                self.visit_type(context, &RefType::TraitBound, trait_)
+                self.visit_type(context, &ErrorLocation::TraitBound, trait_)
                     .context(here!())?;
                 for param_def in generic_params {
                     match &param_def.kind {
                         GenericParamDefKind::Type { bounds, default } => {
                             self.visit_generic_bounds(context, bounds)?;
                             if let Some(default) = default {
-                                self.visit_type(context, &RefType::GenericDefaultBinding, default)
-                                    .context(here!())?;
+                                self.visit_type(
+                                    context,
+                                    &ErrorLocation::GenericDefaultBinding,
+                                    default,
+                                )
+                                .context(here!())?;
                             }
                         }
                         GenericParamDefKind::Const { ty, .. } => {
-                            self.visit_type(context, &RefType::GenericDefaultBinding, ty)
+                            self.visit_type(context, &ErrorLocation::GenericDefaultBinding, ty)
                                 .context(here!())?;
                         }
                         _ => {}
@@ -393,12 +401,12 @@ impl Visitor {
                 GenericParamDefKind::Type { bounds, default } => {
                     self.visit_generic_bounds(context, bounds)?;
                     if let Some(typ) = default {
-                        self.visit_type(context, &RefType::GenericDefaultBinding, typ)
+                        self.visit_type(context, &ErrorLocation::GenericDefaultBinding, typ)
                             .context(here!())?;
                     }
                 }
                 GenericParamDefKind::Const { ty, .. } => {
-                    self.visit_type(context, &RefType::ConstGeneric, ty)
+                    self.visit_type(context, &ErrorLocation::ConstGeneric, ty)
                         .context(here!())?;
                 }
                 _ => {}
@@ -413,7 +421,7 @@ impl Visitor {
         for where_pred in &generics.where_predicates {
             match where_pred {
                 WherePredicate::BoundPredicate { ty, bounds } => {
-                    self.visit_type(context, &RefType::WhereBound, ty)
+                    self.visit_type(context, &ErrorLocation::WhereBound, ty)
                         .context(here!())?;
                     self.visit_generic_bounds(context, bounds)?;
                 }
@@ -421,7 +429,7 @@ impl Visitor {
                     self.visit_generic_bounds(context, bounds)?;
                 }
                 WherePredicate::EqPredicate { lhs, .. } => {
-                    self.visit_type(context, &RefType::WhereBound, lhs)
+                    self.visit_type(context, &ErrorLocation::WhereBound, lhs)
                         .context(here!())?;
                 }
             }
@@ -437,7 +445,7 @@ impl Visitor {
                 for typ in types {
                     let mut variant_context = context.clone();
                     variant_context.push(ContextType::EnumVariant, item);
-                    self.visit_type(context, &RefType::EnumTupleEntry, typ)?;
+                    self.visit_type(context, &ErrorLocation::EnumTupleEntry, typ)?;
                 }
             }
             Variant::Struct(ids) => {
@@ -449,7 +457,7 @@ impl Visitor {
         Ok(())
     }
 
-    fn check_external(&self, context: &ContextStack, what: &RefType, id: &Id) -> Result<()> {
+    fn check_external(&self, context: &ContextStack, what: &ErrorLocation, id: &Id) -> Result<()> {
         if let Ok(type_name) = self.type_name(id) {
             if !self.config.allows_type(&self.root_crate_name, &type_name) {
                 self.add_error(ValidationError::unapproved_external_type_ref(

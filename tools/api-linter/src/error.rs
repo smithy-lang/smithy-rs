@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 /// Sometimes, something more specific is not necessary, so there are duplicates of entries
 /// from [`ContextType`](crate::context::ContextType) in this enum.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum RefType {
+pub enum ErrorLocation {
     AssocType,
     ArgumentNamed(String),
     ClosureInput,
@@ -42,7 +42,7 @@ pub enum RefType {
     WhereBound,
 }
 
-impl fmt::Display for RefType {
+impl fmt::Display for ErrorLocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             Self::AssocType => "associated type",
@@ -74,7 +74,7 @@ impl fmt::Display for RefType {
 pub enum ValidationError {
     UnapprovedExternalTypeRef {
         type_name: String,
-        what: RefType,
+        what: ErrorLocation,
         in_what_type: String,
         location: Option<Span>,
         sort_key: String,
@@ -84,7 +84,7 @@ pub enum ValidationError {
 impl ValidationError {
     pub fn unapproved_external_type_ref(
         type_name: impl Into<String>,
-        what: &RefType,
+        what: &ErrorLocation,
         in_what_type: impl Into<String>,
         location: Option<&Span>,
     ) -> Self {
