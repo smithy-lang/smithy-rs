@@ -69,7 +69,7 @@ jobs:
         - name: Clippy
           run: cargo clippy
         - name: Unused Dependencies
-          run: cargo +${{ env.nightly_version }} udeps
+          run: cargo "+${NIGHTLY_VERSION}" udeps
         - name: Additional per-crate checks
           run: ../tools/additional-per-crate-checks.sh ./sdk/ ../tools/ci-cdk/
     env:
@@ -79,6 +79,7 @@ jobs:
       # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
       # so we have to manually restore the target directory override
       CARGO_TARGET_DIR: ../target
+      NIGHTLY_VERSION: ${{ env.nightly_version }}
     steps:
     - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
@@ -98,7 +99,7 @@ jobs:
     - name: Install additional cargo binaries
       run: |
         if [[ ! -f ~/.cargo/bin/cargo-udeps ]]; then
-          cargo +${{ env.nightly_version }} install cargo-udeps
+          cargo "+${NIGHTLY_VERSION}" install cargo-udeps
         fi
         if [[ ! -f ~/.cargo/bin/cargo-hack ]]; then
           cargo install cargo-hack
