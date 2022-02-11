@@ -106,6 +106,12 @@ impl ValidationError {
         }
     }
 
+    pub fn type_name(&self) -> &str {
+        match self {
+            Self::UnapprovedExternalTypeRef { type_name, .. } => type_name,
+        }
+    }
+
     pub fn location(&self) -> Option<&Span> {
         match self {
             Self::UnapprovedExternalTypeRef { location, .. } => location.as_ref(),

@@ -1,6 +1,3 @@
-This build understands rustdoc format version 10
-Running rustdoc to produce json doc output...
-Examining all public types...
 error: Unapproved external type `external_lib::AssociatedGenericTrait` referenced in public API
    --> test-crate/src/lib.rs:107:1
     |

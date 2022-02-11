@@ -44,3 +44,18 @@ fn with_some_allowed_types() {
     ]);
     assert_str_eq!(expected_output, actual_output);
 }
+
+#[test]
+fn with_output_format_markdown_table() {
+    let expected_output =
+        fs::read_to_string("tests/output-format-markdown-table-expected-output.txt").unwrap();
+    let actual_output = run_with_args(&[
+        "--crate-path",
+        "test-workspace/test-crate",
+        "--target-path",
+        "../target",
+        "--output-format",
+        "markdown-table",
+    ]);
+    assert_str_eq!(expected_output, actual_output);
+}
