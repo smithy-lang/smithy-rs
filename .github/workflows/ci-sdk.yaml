@@ -11,7 +11,6 @@ env:
   rust_version: 1.56.1
   rust_toolchain_components: clippy,rustfmt
   java_version: 11
-  nightly_version: nightly-2022-02-08
 
 jobs:
   generate-smoke-test:
@@ -69,7 +68,7 @@ jobs:
         - name: Clippy
           run: cargo clippy
         - name: Unused Dependencies
-          run: cargo "+${NIGHTLY_VERSION}" udeps
+          run: cargo +nightly-2022-02-08 udeps
         - name: Additional per-crate checks
           run: ../tools/additional-per-crate-checks.sh ./sdk/ ../tools/ci-cdk/
     env:
@@ -79,7 +78,6 @@ jobs:
       # Note: the .cargo/config.toml is lost because we untar the SDK rather than checking out the repo,
       # so we have to manually restore the target directory override
       CARGO_TARGET_DIR: ../target
-      NIGHTLY_VERSION: ${{ env.nightly_version }}
     steps:
     - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1
@@ -89,7 +87,7 @@ jobs:
         default: true
     - uses: actions-rs/toolchain@v1
       with:
-        toolchain: ${{ env.nightly_version }}
+        toolchain: nightly-2022-02-08
         default: false
     - name: Cache cargo bin
       uses: actions/cache@v2
@@ -99,7 +97,7 @@ jobs:
     - name: Install additional cargo binaries
       run: |
         if [[ ! -f ~/.cargo/bin/cargo-udeps ]]; then
-          cargo "+${NIGHTLY_VERSION}" install cargo-udeps
+          cargo +nightly-2022-02-08 install cargo-udeps
         fi
         if [[ ! -f ~/.cargo/bin/cargo-hack ]]; then
           cargo install cargo-hack
