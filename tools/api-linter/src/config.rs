@@ -8,6 +8,7 @@ use serde::{Deserialize, Deserializer};
 use std::fmt;
 use wildmatch::WildMatch;
 
+/// Struct reprepsentation of the TOML config files that specify which external types are allowed.
 #[derive(Debug, Deserialize)]
 pub struct Config {
     /// Whether or not to allow types from `alloc`. Defaults to true.

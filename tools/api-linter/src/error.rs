@@ -12,6 +12,13 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+/// Where the error occurred relative to the [`ContextStack`](crate::context::ContextStack).
+///
+/// For example, if the context stack is a path to a function, then this could point to something
+/// specific about that function, such as a specific function argument that is in error.
+///
+/// Sometimes, something more specific is not necessary, so there are duplicates of entries
+/// from [`ContextType`](crate::context::ContextType) in this enum.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RefType {
     AssocType,
@@ -62,6 +69,7 @@ impl fmt::Display for RefType {
     }
 }
 
+/// Error type for validation errors that get displayed to the user on the CLI.
 #[derive(Debug)]
 pub enum ValidationError {
     UnapprovedExternalTypeRef {
@@ -177,6 +185,8 @@ impl fmt::Display for ValidationError {
     }
 }
 
+/// Pretty printer for error context. This makes validation errors look similar to the
+/// compiler errors from rustc.
 pub struct ErrorPrinter {
     crate_path: PathBuf,
     file_cache: HashMap<PathBuf, String>,

@@ -6,6 +6,14 @@
 use rustdoc_types::{Item, Span};
 use std::fmt;
 
+/// In a [`ContextStack`], the `ContextType` identifies what kind of thing each name in the
+/// stack represents.
+///
+/// For example, if there was an enum `Foo` inside module `bar`, then a context stack would
+/// roughly look like the following:
+/// ```
+/// [(ContextType::Module, "bar"), (ContextType::Enum, "Foo")]
+/// ```
 #[derive(Copy, Clone, Debug)]
 pub enum ContextType {
     AssocType,
@@ -24,6 +32,7 @@ pub enum ContextType {
     TypeDef,
 }
 
+/// Represents one piece of context in a [`ContextStack`].
 #[derive(Clone, Debug)]
 struct Context {
     typ: ContextType,
@@ -37,6 +46,10 @@ impl Context {
     }
 }
 
+/// Represents the full context to an item being visited by [`Visitor`](crate::visitor::Visitor).
+///
+/// This is equivalent to the type path of that item, which has to be re-assembled since
+/// it is lost in the flat structure of the Rustdoc JSON output.
 #[derive(Clone, Debug)]
 pub struct ContextStack {
     stack: Vec<Context>,
@@ -58,10 +71,12 @@ impl ContextStack {
             .push(Context::new(typ, name.into(), span.cloned()));
     }
 
+    /// Returns the span (file + beginning and end positions) of the last [`Context`] in the stack.
     pub fn last_span(&self) -> Option<&Span> {
         self.stack.last().map(|c| c.span.as_ref()).flatten()
     }
 
+    /// Returns the [`ContextType`] of the last [`Context`] in the stack.
     pub fn last_typ(&self) -> Option<ContextType> {
         self.stack.last().map(|c| c.typ)
     }

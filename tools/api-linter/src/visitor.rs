@@ -23,6 +23,8 @@ macro_rules! enter_debug_span {
     };
 }
 
+/// Visits all items in the Rustdoc JSON output to discover external types in public APIs
+/// and track them as validation errors if the [`Config`] doesn't allow them.
 pub struct Visitor {
     config: Config,
     root_crate_id: u32,
@@ -44,6 +46,8 @@ impl Visitor {
         })
     }
 
+    /// This is the entry point for visiting the entire Rustdoc JSON tree, starting
+    /// from the root module (the only module where `is_crate` is true).
     pub fn visit_all(self) -> Result<BTreeSet<ValidationError>> {
         let root_context = ContextStack::new(&self.root_crate_name);
         let root_module = self
@@ -66,6 +70,9 @@ impl Visitor {
         Ok(self.errors.take())
     }
 
+    /// Returns true if the given item is public. In some cases, this must be determined
+    /// by examining the surrounding context. For example, enum variants are public if the
+    /// enum is public, even if their visibility is set to `Visibility::Default`.
     fn is_public(context: &ContextStack, item: &Item) -> bool {
         match item.visibility {
             Visibility::Public => true,

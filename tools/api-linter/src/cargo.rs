@@ -12,6 +12,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Runs the `cargo rustdoc` command required to produce Rustdoc's JSON output with a nightly compiler.
 pub struct CargoRustDocJson {
     program: &'static str,
     /// Path of the crate to examine
