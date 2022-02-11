@@ -14,14 +14,8 @@ use rustdoc_types::{
 use smithy_rs_tool_common::macros::here;
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
-use tracing::{debug, debug_span};
-
-macro_rules! enter_debug_span {
-    ($guard_name:ident, $name:expr, $($fields:tt)*) => {
-        let _span = debug_span!($name, $($fields)*);
-        let $guard_name = _span.enter();
-    };
-}
+use tracing::debug;
+use tracing_attributes::instrument;
 
 /// Visits all items in the Rustdoc JSON output to discover external types in public APIs
 /// and track them as validation errors if the [`Config`] doesn't allow them.
@@ -90,9 +84,8 @@ impl Visitor {
         }
     }
 
+    #[instrument(level = "debug", skip(self, context, item), fields(path = %context.to_string(), name = ?item.name, id = %item.id.0))]
     fn visit_item(&self, context: &ContextStack, item: &Item) -> Result<()> {
-        enter_debug_span!(_g, "visit_item", path = %context.to_string(), name = ?item.name, id = %item.id.0);
-
         if !Self::is_public(context, item) {
             return Ok(());
         }
@@ -196,6 +189,7 @@ impl Visitor {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self, context, strct), fields(path = %context.to_string()))]
     fn visit_struct(&self, context: &ContextStack, strct: &Struct) -> Result<()> {
         self.visit_generics(context, &strct.generics)?;
         for id in &strct.fields {
@@ -208,8 +202,8 @@ impl Visitor {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self, context, trt), fields(path = %context.to_string()))]
     fn visit_trait(&self, context: &ContextStack, trt: &Trait) -> Result<()> {
-        enter_debug_span!(_g, "visit_trait", path = %context.to_string());
         self.visit_generics(context, &trt.generics)?;
         self.visit_generic_bounds(context, &trt.bounds)?;
         for id in &trt.items {
@@ -219,9 +213,8 @@ impl Visitor {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self, context, item), fields(path = %context.to_string(), id = %item.id.0))]
     fn visit_impl(&self, context: &ContextStack, item: &Item) -> Result<()> {
-        enter_debug_span!(_g, "visit_impl", path = %context.to_string(), id = %item.id.0);
-
         if let ItemEnum::Impl(imp) = &item.inner {
             // Ignore blanket implementations
             if imp.blanket_impl.is_some() {
@@ -241,9 +234,8 @@ impl Visitor {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self, context, decl), fields(path = %context.to_string()))]
     fn visit_fn_decl(&self, context: &ContextStack, decl: &FnDecl) -> Result<()> {
-        enter_debug_span!(_g, "visit_fn_decl", path = %context.to_string());
-
         for (index, (name, typ)) in decl.inputs.iter().enumerate() {
             if index == 0 && name == "self" {
                 continue;
@@ -258,9 +250,8 @@ impl Visitor {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self, context, typ), fields(path = %context.to_string()))]
     fn visit_type(&self, context: &ContextStack, what: &RefType, typ: &Type) -> Result<()> {
-        enter_debug_span!(_g, "visit_type", path = %context.to_string(), what = %what);
-
         match typ {
             Type::ResolvedPath {
                 id,
@@ -317,9 +308,8 @@ impl Visitor {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self, context, args), fields(path = %context.to_string()))]
     fn visit_generic_args(&self, context: &ContextStack, args: &GenericArgs) -> Result<()> {
-        enter_debug_span!(_g, "visit_generic_args", path = %context.to_string());
-
         match args {
             GenericArgs::AngleBracketed { args, bindings } => {
                 for arg in args {
@@ -360,9 +350,8 @@ impl Visitor {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self, context, bounds), fields(path = %context.to_string()))]
     fn visit_generic_bounds(&self, context: &ContextStack, bounds: &[GenericBound]) -> Result<()> {
-        enter_debug_span!(_g, "visit_generic_bounds", path = %context.to_string());
-
         for bound in bounds {
             if let GenericBound::TraitBound {
                 trait_,
@@ -393,13 +382,12 @@ impl Visitor {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self, context, params), fields(path = %context.to_string()))]
     fn visit_generic_param_defs(
         &self,
         context: &ContextStack,
         params: &[GenericParamDef],
     ) -> Result<()> {
-        enter_debug_span!(_g, "visit_generic_param_defs", path = %context.to_string());
-
         for param in params {
             match &param.kind {
                 GenericParamDefKind::Type { bounds, default } => {
@@ -419,9 +407,8 @@ impl Visitor {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self, context, generics), fields(path = %context.to_string()))]
     fn visit_generics(&self, context: &ContextStack, generics: &Generics) -> Result<()> {
-        enter_debug_span!(_g, "visit_generics", path = %context.to_string());
-
         self.visit_generic_param_defs(context, &generics.params)?;
         for where_pred in &generics.where_predicates {
             match where_pred {
@@ -442,9 +429,8 @@ impl Visitor {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self, context, item, variant), fields(path = %context.to_string(), id = %item.id.0))]
     fn visit_variant(&self, context: &ContextStack, item: &Item, variant: &Variant) -> Result<()> {
-        enter_debug_span!(_g, "visit_variant", path = %context.to_string(), id = %item.id.0);
-
         match variant {
             Variant::Plain => {}
             Variant::Tuple(types) => {

@@ -33,6 +33,7 @@ dependencies = [
  "test_bin",
  "toml",
  "tracing",
+ "tracing-attributes",
  "tracing-subscriber",
  "wildmatch",
 ]

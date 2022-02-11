@@ -18,6 +18,7 @@ serde_json = "1"
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
 toml = "0.5"
 tracing = "0.1"
+tracing-attributes = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 wildmatch = "2"
 
