@@ -95,43 +95,61 @@ class HttpBoundProtocolPayloadGenerator(
     }
 
     override fun generatePayload(writer: RustWriter, self: String, operationShape: OperationShape) {
-        val bodyMetadata = payloadMetadata(operationShape)
-        val serializerGenerator = protocol.structuredDataSerializer(operationShape)
-        val payloadMemberName = when (httpMessageType) {
-            HttpMessageType.RESPONSE ->
-                httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD)
-            HttpMessageType.REQUEST ->
-                httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD)
-        }.firstOrNull()?.memberName
-        if (payloadMemberName == null) {
-            val serializer = when (httpMessageType) {
-                HttpMessageType.RESPONSE ->
-                    serializerGenerator.serverOutputSerializer(operationShape)
-                HttpMessageType.REQUEST ->
-                    serializerGenerator.operationSerializer(operationShape)
-            }
-            if (serializer == null) {
-                writer.rust("\"\"")
-            } else {
-                writer.rust(
-                    "#T(&$self)?",
-                    serializer,
-                )
-            }
-        } else {
-            val member = when (httpMessageType) {
-                HttpMessageType.RESPONSE ->
-                    operationShape.outputShape(model).expectMember(payloadMemberName)
-                HttpMessageType.REQUEST ->
-                    operationShape.inputShape(model).expectMember(payloadMemberName)
-            }
+        when (httpMessageType) {
+            HttpMessageType.RESPONSE -> generateResponsePayload(writer, self, operationShape)
+            HttpMessageType.REQUEST -> generateRequestPayload(writer, self, operationShape)
+        }
+    }
 
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1157) Add support for server event streams.
-            if (operationShape.isInputEventStream(model)) {
-                writer.serializeViaEventStream(operationShape, member, serializerGenerator)
-            } else {
-                writer.serializeViaPayload(bodyMetadata, self, member, serializerGenerator)
-            }
+    private fun generateRequestPayload(writer: RustWriter, self: String, operationShape: OperationShape) {
+        val payloadMemberName = httpBindingResolver.requestMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
+
+        if (payloadMemberName == null) {
+            val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+            generateStructureSerializer(writer, self, serializerGenerator.operationSerializer(operationShape))
+        } else {
+            val payloadMember = operationShape.inputShape(model).expectMember(payloadMemberName)
+            generatePayloadMemberSerializer(writer, self, operationShape, payloadMember)
+        }
+    }
+
+    private fun generateResponsePayload(writer: RustWriter, self: String, operationShape: OperationShape) {
+        val payloadMemberName = httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()?.memberName
+
+        if (payloadMemberName == null) {
+            val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+            generateStructureSerializer(writer, self, serializerGenerator.serverOutputSerializer(operationShape))
+        } else {
+            val payloadMember = operationShape.outputShape(model).expectMember(payloadMemberName)
+            generatePayloadMemberSerializer(writer, self, operationShape, payloadMember)
+        }
+    }
+
+    private fun generatePayloadMemberSerializer(
+        writer: RustWriter,
+        self: String,
+        operationShape: OperationShape,
+        payloadMember: MemberShape
+    ) {
+        val serializerGenerator = protocol.structuredDataSerializer(operationShape)
+
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1157) Add support for server event streams.
+        if (operationShape.isInputEventStream(model)) {
+            writer.serializeViaEventStream(operationShape, payloadMember, serializerGenerator)
+        } else {
+            val bodyMetadata = payloadMetadata(operationShape)
+            writer.serializeViaPayload(bodyMetadata, self, payloadMember, serializerGenerator)
+        }
+    }
+
+    private fun generateStructureSerializer(writer: RustWriter, self: String, serializer: RuntimeType?) {
+        if (serializer == null) {
+            writer.rust("\"\"")
+        } else {
+            writer.rust(
+                "#T(&$self)?",
+                serializer,
+            )
         }
     }
 
