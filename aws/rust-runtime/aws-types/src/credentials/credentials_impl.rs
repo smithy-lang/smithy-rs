@@ -97,9 +97,11 @@ impl Credentials {
     /// [`ProvideCredentials`](crate::credentials::ProvideCredentials) directly, so no custom provider
     /// implementation is required when wiring these up to a client:
     /// ```rust
-    /// use aws_types::{Credentials, Region};
+    /// use aws_types::Credentials;
+    /// use aws_types::region::Region;
     /// # mod service {
     /// #     use aws_types::credentials::ProvideCredentials;
+    /// #     use aws_types::region::Region;
     /// #     pub struct Config;
     /// #     impl Config {
     /// #        pub fn builder() -> Self {
@@ -111,6 +113,7 @@ impl Credentials {
     /// #        pub fn region(self, region: Region) -> Self {
     /// #            self
     /// #        }
+    /// #        pub fn build(self) -> Config { Config }
     /// #     }
     /// #     pub struct Client;
     /// #     impl Client {
@@ -119,7 +122,7 @@ impl Credentials {
     /// #        }
     /// #     }
     /// # }
-    /// # use service::Config;
+    /// # use service::{Config, Client};
     ///
     /// let creds = Credentials::from_keys("akid", "secret_key", None);
     /// let config = Config::builder()
