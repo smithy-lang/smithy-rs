@@ -64,9 +64,9 @@ jobs:
         - name: Unit Tests
           run: cargo test --all-features
         - name: Docs
-          run: cargo doc --no-deps --document-private-items
+          run: cargo doc --no-deps --document-private-items --all-features
         - name: Clippy
-          run: cargo clippy
+          run: cargo clippy --all-features
         - name: Unused Dependencies
           run: cargo +nightly-2022-02-08 udeps
         - name: Additional per-crate checks
