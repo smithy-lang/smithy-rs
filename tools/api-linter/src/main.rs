@@ -7,7 +7,7 @@ use crate::error::ErrorPrinter;
 use crate::visitor::Visitor;
 use anyhow::{anyhow, bail};
 use anyhow::{Context, Result};
-use cargo::Features;
+use cargo_metadata::{CargoOpt, Metadata};
 use clap::Parser;
 use owo_colors::{OwoColorize, Stream};
 use rustdoc_types::FORMAT_VERSION;
@@ -53,63 +53,39 @@ impl FromStr for OutputFormat {
     }
 }
 
-#[derive(Parser, Debug)]
-#[clap(author, version, about)]
-struct Args {
-    /// Path to the crate to examine
+#[derive(clap::Args, Debug)]
+struct ApiLinterArgs {
+    /// Enables all crate features
     #[clap(long)]
-    crate_path: PathBuf,
-    /// Expected `target/` directory for that crate
+    all_features: bool,
+    /// Disables default features
     #[clap(long)]
-    target_path: PathBuf,
+    no_default_features: bool,
+    /// Comma delimited list of features to enable in the crate
+    #[clap(long, use_delimiter = true)]
+    features: Option<Vec<String>>,
+    /// Path to the Cargo manifest
+    manifest_path: Option<PathBuf>,
+
     /// Path to config toml to read
     #[clap(long)]
     config: Option<PathBuf>,
     /// Enable verbose output for debugging
     #[clap(short, long)]
     verbose: bool,
-    /// Nightly version of Rustdoc to use. By default, `+nightly` will be used.
-    /// This argument can be used to pin to specific nightly version (i.e., `+nightly-2022-02-08`).
-    #[clap(long)]
-    nightly_version: Option<String>,
     /// Format to output results in
     #[clap(long, default_value_t = OutputFormat::Errors)]
     output_format: OutputFormat,
-    /// Enables all crate features
-    #[clap(long)]
-    all_features: bool,
-    /// Comma delimited list of features to enable in the crate
-    #[clap(long)]
-    features: Option<String>,
 }
 
-impl Args {
-    fn validate(&self) -> Result<()> {
-        if let Some(version) = &self.nightly_version {
-            if !version.starts_with("+nightly") {
-                bail!("Nightly version must start with `+nightly`");
-            }
-        }
-        if self.all_features && self.features.is_some() {
-            bail!("Cannot specify both `--all-features` and `--features`");
-        }
-        Ok(())
-    }
-
-    fn features(&self) -> Features {
-        if self.all_features {
-            Features::All
-        } else if let Some(features) = &self.features {
-            Features::Specific(features.clone())
-        } else {
-            Features::Default
-        }
-    }
+#[derive(Parser, Debug)]
+#[clap(author, version, about, bin_name = "cargo")]
+enum Args {
+    ApiLinter(ApiLinterArgs),
 }
 
 fn main() -> Result<()> {
-    let mut args = Args::parse();
-    args.validate()?;
+    let Args::ApiLinter(args) = Args::parse();
     if args.verbose {
         let filter_layer = EnvFilter::try_from_default_env()
             .or_else(|_| EnvFilter::try_new("debug"))
@@ -133,16 +109,38 @@ fn main() -> Result<()> {
         Default::default()
     };
 
+    let mut cargo_metadata_cmd = cargo_metadata::MetadataCommand::new();
+    if args.all_features {
+        cargo_metadata_cmd.features(CargoOpt::AllFeatures);
+    }
+    if args.no_default_features {
+        cargo_metadata_cmd.features(CargoOpt::NoDefaultFeatures);
+    }
+    if let Some(features) = args.features {
+        cargo_metadata_cmd.features(CargoOpt::SomeFeatures(features));
+    }
+    let crate_path = if let Some(manifest_path) = args.manifest_path {
+        cargo_metadata_cmd.manifest_path(&manifest_path);
+        manifest_path
+            .canonicalize()?
+            .parent()
+            .expect("parent path")
+            .to_path_buf()
+    } else {
+        std::env::current_dir()?
+    };
+    let cargo_metadata = cargo_metadata_cmd.exec()?;
+    let cargo_features = resolve_features(&cargo_metadata)?;
+
     eprintln!(
         "This build understands rustdoc format version {}",
         FORMAT_VERSION
     );
     eprintln!("Running rustdoc to produce json doc output...");
     let package = cargo::CargoRustDocJson::new(
-        &args.crate_path,
-        &args.target_path,
-        args.nightly_version.take(),
-        args.features(),
+        &crate_path,
+        &cargo_metadata.target_directory,
+        cargo_features,
     )
     .run()
     .context(here!())?;
@@ -151,7 +149,7 @@ fn main() -> Result<()> {
     let errors = Visitor::new(config, package)?.visit_all()?;
     match args.output_format {
         OutputFormat::Errors => {
-            let mut error_printer = ErrorPrinter::new(&args.crate_path);
+            let mut error_printer = ErrorPrinter::new(&crate_path);
             for error in &errors {
                 println!("{}", error);
                 if let Some(location) = error.location() {
@@ -191,4 +189,20 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn resolve_features(metadata: &Metadata) -> Result<Vec<String>> {
+    let root_package = metadata
+        .root_package()
+        .ok_or_else(|| anyhow!("No root package found"))?;
+    if let Some(resolve) = &metadata.resolve {
+        let root_node = resolve
+            .nodes
+            .iter()
+            .find(|&n| n.id == root_package.id)
+            .ok_or_else(|| anyhow!("Failed to find node for root package"))?;
+        Ok(root_node.features.clone())
+    } else {
+        bail!("Cargo metadata didn't have resolved nodes");
+    }
 }

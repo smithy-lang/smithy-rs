@@ -7,4 +7,4 @@ set -e
 cd "$(dirname $0)"
 
 cargo clippy
-cargo test
+cargo +nightly test

@@ -1,5 +1,5 @@
 [package]
-name = "api-linter"
+name = "cargo-api-linter"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
 edition = "2021"
@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 anyhow = "1"
+cargo_metadata = "0.14"
 clap = { version = "3", features = ["derive"] }
 owo-colors = { version = "3", features = ["supports-colors"] }
 pest = "2" # For pretty error formatting

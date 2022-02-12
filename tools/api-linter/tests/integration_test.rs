@@ -6,15 +6,18 @@
 use pretty_assertions::assert_str_eq;
 use smithy_rs_tool_common::shell::{handle_failure, output_text};
 use std::fs;
+use std::path::Path;
 use test_bin::get_test_bin;
 
-fn run_with_args(args: &[&str]) -> String {
-    let mut cmd = get_test_bin("api-linter");
+fn run_with_args(in_path: impl AsRef<Path>, args: &[&str]) -> String {
+    let mut cmd = get_test_bin("cargo-api-linter");
+    cmd.current_dir(in_path.as_ref());
+    cmd.arg("api-linter");
     for &arg in args {
         cmd.arg(arg);
     }
-    let output = cmd.output().expect("failed to start api-linter");
-    handle_failure("api-linter", &output).unwrap();
+    let output = cmd.output().expect("failed to start cargo-api-linter");
+    handle_failure("cargo-api-linter", &output).unwrap();
     let (stdout, _) = output_text(&output);
     stdout
 }
@@ -22,26 +25,17 @@ fn run_with_args(args: &[&str]) -> String {
 #[test]
 fn with_default_config() {
     let expected_output = fs::read_to_string("tests/default-config-expected-output.txt").unwrap();
-    let actual_output = run_with_args(&[
-        "--crate-path",
-        "test-workspace/test-crate",
-        "--target-path",
-        "../target",
-    ]);
+    let actual_output = run_with_args("test-workspace/test-crate", &[]);
     assert_str_eq!(expected_output, actual_output);
 }
 
 #[test]
 fn with_some_allowed_types() {
     let expected_output = fs::read_to_string("tests/allow-some-types-expected-output.txt").unwrap();
-    let actual_output = run_with_args(&[
-        "--crate-path",
+    let actual_output = run_with_args(
         "test-workspace/test-crate",
-        "--target-path",
-        "../target",
-        "--config",
-        "tests/allow-some-types.toml",
-    ]);
+        &["--config", "../../tests/allow-some-types.toml"],
+    );
     assert_str_eq!(expected_output, actual_output);
 }
 
@@ -49,13 +43,9 @@ fn with_some_allowed_types() {
 fn with_output_format_markdown_table() {
     let expected_output =
         fs::read_to_string("tests/output-format-markdown-table-expected-output.txt").unwrap();
-    let actual_output = run_with_args(&[
-        "--crate-path",
+    let actual_output = run_with_args(
         "test-workspace/test-crate",
-        "--target-path",
-        "../target",
-        "--output-format",
-        "markdown-table",
-    ]);
+        &["--output-format", "markdown-table"],
+    );
     assert_str_eq!(expected_output, actual_output);
 }
