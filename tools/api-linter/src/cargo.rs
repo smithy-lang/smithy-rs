@@ -3,13 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use anyhow::{Context, Result};
-use rustdoc_types::Crate;
+use anyhow::{bail, Context, Result};
+use rustdoc_types::{Crate, FORMAT_VERSION};
+use serde::Deserialize;
 use smithy_rs_tool_common::macros::here;
 use smithy_rs_tool_common::shell::{handle_failure, ShellOperation};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+
+#[derive(Deserialize)]
+struct CrateFormatVersion {
+    format_version: u32,
+}
 
 /// Runs the `cargo rustdoc` command required to produce Rustdoc's JSON output with a nightly compiler.
 pub struct CargoRustDocJson {
@@ -70,12 +76,26 @@ impl ShellOperation for CargoRustDocJson {
             .join(format!("doc/{}.json", crate_name.replace('-', "_")));
 
         let json = fs::read_to_string(output_file_name).context(here!())?;
+        let format_version: CrateFormatVersion = serde_json::from_str(&json)
+            .context("Failed to find `format_version` in rustdoc JSON output.")
+            .context(here!())?;
+        if format_version.format_version != FORMAT_VERSION {
+            bail!(
+                "The version of rustdoc being used produces JSON format version {0}, but \
+                this tool requires format version {1}. This can happen if the locally \
+                installed version of rustdoc doesn't match the rustdoc JSON types from \
+                the `rustdoc-types` crate.\n\n\
+                If this occurs with the latest Rust nightly and the latest version of this \
+                tool, then this is a bug, and the tool needs to be upgraded to the latest \
+                format version.\n\n\
+                Otherwise, you'll need to determine a Rust nightly version that matches \
+                this tool's supported format version (or vice versa).",
+                format_version.format_version,
+                FORMAT_VERSION
+            );
+        }
         let package: Crate = serde_json::from_str(&json)
-            .context(
-                "Failed to parse rustdoc output. This can happen if the locally installed \
-                version of rustdoc doesn't match the rustdoc JSON types from the `rustdoc-types` \
-                crate. Try updating your nightly compiler as well as that crate to resolve.",
-            )
+            .context("Failed to parse rustdoc output.")
             .context(here!())?;
         Ok(package)
     }

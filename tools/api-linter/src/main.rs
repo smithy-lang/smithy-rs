@@ -10,7 +10,6 @@ use anyhow::{Context, Result};
 use cargo_metadata::{CargoOpt, Metadata};
 use clap::Parser;
 use owo_colors::{OwoColorize, Stream};
-use rustdoc_types::FORMAT_VERSION;
 use smithy_rs_tool_common::macros::here;
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::fmt;
@@ -132,10 +131,6 @@ fn main() -> Result<()> {
     let cargo_metadata = cargo_metadata_cmd.exec()?;
     let cargo_features = resolve_features(&cargo_metadata)?;
 
-    eprintln!(
-        "This build understands rustdoc format version {}",
-        FORMAT_VERSION
-    );
     eprintln!("Running rustdoc to produce json doc output...");
     let package = cargo::CargoRustDocJson::new(
         &crate_path,
