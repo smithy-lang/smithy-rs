@@ -12,12 +12,12 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-/// Where the error occurred relative to the [`ContextStack`](crate::context::ContextStack).
+/// Where the error occurred relative to the [`Path`](crate::path::Path).
 ///
-/// For example, if the context stack is a path to a function, then this could point to something
+/// For example, if the path is a path to a function, then this could point to something
 /// specific about that function, such as a specific function argument that is in error.
 ///
-/// There is overlap in this enum with [`ContextType`](crate::context::ContextType) since
+/// There is overlap in this enum with [`ComponentType`](crate::path::ComponentType) since
 /// some paths are specific enough to locate the external type.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ErrorLocation {

@@ -22,8 +22,8 @@ use tracing_subscriber::EnvFilter;
 
 mod cargo;
 mod config;
-mod context;
 mod error;
+mod path;
 mod visitor;
 
 #[derive(Debug)]
