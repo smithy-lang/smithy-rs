@@ -42,7 +42,7 @@ fn with_some_allowed_types() {
 #[test]
 fn with_output_format_markdown_table() {
     let expected_output =
-        fs::read_to_string("tests/output-format-markdown-table-expected-output.txt").unwrap();
+        fs::read_to_string("tests/output-format-markdown-table-expected-output.md").unwrap();
     let actual_output = run_with_args(
         "test-workspace/test-crate",
         &["--output-format", "markdown-table"],
