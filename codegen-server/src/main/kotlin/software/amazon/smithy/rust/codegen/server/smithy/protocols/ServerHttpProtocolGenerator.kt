@@ -352,6 +352,9 @@ private class ServerHttpProtocolImplGenerator(
         val fnName = "serialize_${operationShape.id.name.toSnakeCase()}_response"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
+        val includedMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
+        val unusedVars = if (includedMembers.isEmpty()) "##[allow(unused_variables)] " else ""
+
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
 
@@ -359,7 +362,7 @@ private class ServerHttpProtocolImplGenerator(
             // However we currently always take ownership here, but worth noting in case in the future we want
             // to generate different signatures for streaming vs non-streaming for some reason.
             it.rustBlockTemplate(
-                "pub fn $fnName(output: #{O}) -> std::result::Result<#{AxumCore}::response::Response, #{SmithyRejection}>",
+                "pub fn $fnName(${unusedVars}output: #{O}) -> std::result::Result<#{AxumCore}::response::Response, #{SmithyRejection}>",
                 *codegenScope,
                 "O" to outputSymbol,
             ) {
