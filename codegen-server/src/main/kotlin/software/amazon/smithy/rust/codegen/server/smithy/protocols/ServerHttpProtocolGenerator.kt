@@ -315,7 +315,6 @@ private class ServerHttpProtocolImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_request"
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
-        val includedMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
 
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
@@ -351,7 +350,6 @@ private class ServerHttpProtocolImplGenerator(
         val fnName = "serialize_${operationShape.id.name.toSnakeCase()}_response"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val includedMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
 
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
