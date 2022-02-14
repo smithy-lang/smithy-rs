@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 
 import software.amazon.smithy.aws.traits.ServiceTrait
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -16,7 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -27,6 +28,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
@@ -34,10 +36,11 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 open class MakeOperationGenerator(
     protected val codegenContext: CodegenContext,
     private val protocol: Protocol,
-    private val bodyGenerator: ProtocolBodyGenerator,
+    private val bodyGenerator: ProtocolPayloadGenerator,
     private val functionName: String = "make_operation",
     private val public: Boolean = true
 ) {
+    protected val model = codegenContext.model
     protected val runtimeConfig = codegenContext.runtimeConfig
     protected val symbolProvider = codegenContext.symbolProvider
     protected val httpBindingResolver = protocol.httpBindingResolver
@@ -66,7 +69,7 @@ open class MakeOperationGenerator(
         val returnType = "std::result::Result<$baseReturnType, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
         val outputSymbol = symbolProvider.toSymbol(shape)
 
-        val takesOwnership = bodyGenerator.bodyMetadata(shape).takesOwnership
+        val takesOwnership = bodyGenerator.payloadMetadata(shape).takesOwnership
         val mut = customizations.any { it.mutSelf() }
         val consumes = customizations.any { it.consumesSelf() } || takesOwnership
         val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
@@ -83,14 +86,24 @@ open class MakeOperationGenerator(
             writeCustomizations(customizations, OperationSection.MutateInput(customizations, "self", "_config"))
             rust("let properties = aws_smithy_http::property_bag::SharedPropertyBag::new();")
             rust("let request = request_builder_base(&self)?;")
-            withBlock("let body =", ";") {
-                bodyGenerator.generateBody(this, "self", shape)
+
+            // When the payload is a `ByteStream`, `into_inner()` already returns an `SdkBody`, so we mute this
+            // Clippy warning to make the codegen a little simpler in that case.
+            Attribute.Custom("allow(clippy::useless_conversion)").render(this)
+            withBlockTemplate("let body = #{SdkBody}::from(", ");", *codegenScope) {
+                bodyGenerator.generatePayload(this, "self", shape)
+                val streamingMember = shape.inputShape(model).findStreamingMember(model)
+                val isBlobStreaming = streamingMember != null && model.expectShape(streamingMember.target) is BlobShape
+                if (isBlobStreaming) {
+                    // Consume the `ByteStream` into its inner `SdkBody`.
+                    rust(".into_inner()")
+                }
             }
             rust("let request = Self::assemble(request, body);")
             rustTemplate(
                 """
                 ##[allow(unused_mut)]
-                let mut request = #{operation}::Request::from_parts(request.map(#{SdkBody}::from), properties);
+                let mut request = #{operation}::Request::from_parts(request, properties);
                 """,
                 *codegenScope
             )
