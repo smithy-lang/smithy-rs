@@ -153,7 +153,6 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         project.withModule(RustModule.public("input")) {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/xml_ser.rs")
         project.compileAndTest()
     }
 }

@@ -167,7 +167,6 @@ internal class EndpointConfigCustomizationTest {
                 """
             )
         }
-        println("file:///" + project.baseDir + "/src/aws_endpoint.rs")
         project.compileAndTest()
     }
 }

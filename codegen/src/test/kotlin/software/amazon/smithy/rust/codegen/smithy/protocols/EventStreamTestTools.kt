@@ -355,13 +355,6 @@ object EventStreamTestTools {
         project.withModule(RustModule.public("output")) {
             operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/error.rs")
-        println("file:///${project.baseDir}/src/event_stream.rs")
-        println("file:///${project.baseDir}/src/event_stream_serde.rs")
-        println("file:///${project.baseDir}/src/json_ser.rs")
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/operation_ser.rs")
         return TestEventStreamProject(model, serviceShape, operationShape, unionShape, symbolProvider, project)
     }
 

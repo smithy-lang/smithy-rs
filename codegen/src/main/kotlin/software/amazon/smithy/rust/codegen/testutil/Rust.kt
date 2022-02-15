@@ -154,9 +154,11 @@ fun RustWriter.unitTest(
     }
 }
 
-class TestWriterDelegator(fileManifest: FileManifest, symbolProvider: RustSymbolProvider) :
+class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider: RustSymbolProvider) :
     RustCrate(fileManifest, symbolProvider, DefaultPublicModules) {
     val baseDir: Path = fileManifest.baseDir
+
+    fun generatedFiles(): List<Path> = fileManifest.files.toList().sorted()
 }
 
 /**
@@ -177,6 +179,10 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
         manifestCustomizations = emptyMap(),
         libRsCustomizations = listOf(),
     )
+    println("Generated files:")
+    generatedFiles().forEach { path ->
+        println("file:///$path")
+    }
     try {
         "cargo fmt".runCommand(baseDir)
     } catch (e: Exception) {
