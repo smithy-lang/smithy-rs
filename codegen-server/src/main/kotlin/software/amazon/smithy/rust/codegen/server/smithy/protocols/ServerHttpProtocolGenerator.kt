@@ -315,15 +315,13 @@ private class ServerHttpProtocolImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_request"
         val inputShape = operationShape.inputShape(model)
         val inputSymbol = symbolProvider.toSymbol(inputShape)
-        val includedMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
-        val unusedVars = if (includedMembers.isEmpty()) "##[allow(unused_variables)] " else ""
 
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 """
                 pub async fn $fnName<B>(
-                    ${unusedVars}request: &mut #{AxumCore}::extract::RequestParts<B>
+                    ##[allow(unused_variables)] request: &mut #{AxumCore}::extract::RequestParts<B>
                 ) -> std::result::Result<
                     #{I},
                     #{SmithyRejection}
@@ -352,6 +350,7 @@ private class ServerHttpProtocolImplGenerator(
         val fnName = "serialize_${operationShape.id.name.toSnakeCase()}_response"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
+
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
 
@@ -359,7 +358,14 @@ private class ServerHttpProtocolImplGenerator(
             // However we currently always take ownership here, but worth noting in case in the future we want
             // to generate different signatures for streaming vs non-streaming for some reason.
             it.rustBlockTemplate(
-                "pub fn $fnName(output: #{O}) -> std::result::Result<#{AxumCore}::response::Response, #{SmithyRejection}>",
+                """
+                pub fn $fnName(
+                    ##[allow(unused_variables)] output: #{O}
+                ) -> std::result::Result<
+                    #{AxumCore}::response::Response,
+                    #{SmithyRejection}
+                >
+                """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
             ) {
