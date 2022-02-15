@@ -1,0 +1,299 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0011: Publishing Alpha to Crates.io - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> Http Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">6.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">6.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">6.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">6.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">6.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">6.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">6.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">6.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">6.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">6.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">6.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html" class="active"><strong aria-hidden="true">6.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-publishing-the-alpha-sdk-to-cratesio"><a class="header" href="#rfc-publishing-the-alpha-sdk-to-cratesio">RFC: Publishing the Alpha SDK to Crates.io</a></h1>
+<blockquote>
+<p>Status: Implemented</p>
+</blockquote>
+<p>The AWS SDK for Rust and its supporting Smithy crates need to be published to <a href="https://crates.io/">crates.io</a>
+so that customers can include them in their projects and also publish crates of their own that depend on them.</p>
+<p>This doc proposes a short-term solution for publishing to crates.io. This approach is intended to be executed
+manually by a developer using scripts and an SOP no more than once per week, and should require less than a
+dev week to implement.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<ul>
+<li><strong>AWS SDK Crate</strong>: A crate that provides a client for calling a given AWS service, such as <code>aws-sdk-s3</code> for calling S3.</li>
+<li><strong>AWS Runtime Crate</strong>: Any runtime crate that the AWS SDK generated code relies on, such as <code>aws-types</code>.</li>
+<li><strong>Smithy Runtime Crate</strong>: Any runtime crate that the smithy-rs generated code relies on, such as <code>smithy-types</code>.</li>
+</ul>
+<h2 id="requirements"><a class="header" href="#requirements">Requirements</a></h2>
+<h3 id="versioning"><a class="header" href="#versioning">Versioning</a></h3>
+<p>Cargo uses <a href="https://github.com/dtolnay/semver#requirements">semver</a> for versioning,
+with a <code>major.minor.patch-pre</code> format:</p>
+<ul>
+<li><code>major</code>: Incompatible API changes</li>
+<li><code>minor</code>: Added functionality in backwards compatible manner</li>
+<li><code>patch</code>: Backwards compatible bug fixes</li>
+<li><code>pre</code>: Pre-release version tag (omitted for normal releases)</li>
+</ul>
+<p>For now, AWS SDK crates (including <code>aws-config</code>) will maintain a consistent <code>major</code> and <code>minor</code> version number
+across all services. The latest version of <code>aws-sdk-s3</code> will always have the same <code>major.minor</code> version as the
+latest <code>aws-sdk-dynamodb</code>, for example. The <code>patch</code> version is allowed to be different between service crates,
+but it is unlikely that we will make use of <code>patch</code> versions throughout alpha and dev preview.
+Smithy runtime crates will have different version numbers from the AWS SDK crates, but will also maintain
+a consistent <code>major.minor</code>.</p>
+<p>The <code>pre</code> version tag will be <code>alpha</code> during the Rust SDK alpha, and will be removed once the SDK is in
+dev preview.</p>
+<p>During alpha, the <code>major</code> version will always be 0, and the <code>minor</code> will be bumped for all published
+crates for every release. A later RFC may change the process during dev preview.</p>
+<h3 id="yanking"><a class="header" href="#yanking">Yanking</a></h3>
+<p>Mistakes will inevitably be made, and a mechanism is needed to yank packages while keeping the latest version
+of the SDK successfully consumable from crates.io. To keep this simple, the entire published batch of crates
+will be yanked if any crate in that batch needs to be yanked. For example, if 260 crates were published in a batch,
+and it turns out there's a problem that requires yanking one of them, then all 260 will be yanked. Attempting to do
+partial yanking will require a lot of effort and be difficult to get right. Yanking should be a last resort.</p>
+<h2 id="concrete-scenarios"><a class="header" href="#concrete-scenarios">Concrete Scenarios</a></h2>
+<p>The following changes will be bundled together as a <code>minor</code> version bump during weekly releases:</p>
+<ul>
+<li>AWS model updates</li>
+<li>New features</li>
+<li>Bug fixes in runtime crates or codegen</li>
+</ul>
+<p>In exceptional circumstances, a <code>patch</code> version will be issued if the fix doesn't require API breaking changes:</p>
+<ul>
+<li>CVE discovered in a runtime crate</li>
+<li>Buggy update to a runtime crate</li>
+</ul>
+<p>In the event of a CVE being discovered in an external dependency, if the external dependency is
+internal to a crate, then a <code>patch</code> revision can be issued for that crate to correct it. Otherwise if the CVE
+is in a dependency that is part of the public API, a <code>minor</code> revision will be issued with an expedited release.</p>
+<p>For a CVE in generated code, a <code>minor</code> revision will be issued with an expedited release.</p>
+<h2 id="proposal"><a class="header" href="#proposal">Proposal</a></h2>
+<p>The short-term approach builds off our pre-crates.io weekly release process. That process was the following:</p>
+<ol>
+<li>Run script to update AWS models</li>
+<li>Manually update AWS SDK version in <code>aws/sdk/gradle.properties</code> in smithy-rs</li>
+<li>Tag smithy-rs</li>
+<li>Wait for GitHub actions to generate AWS SDK using newly released smithy-rs</li>
+<li>Check out aws-sdk-rust, delete existing SDK code, unzip generated SDK in place, and update readme</li>
+<li>Tag aws-sdk-rust</li>
+</ol>
+<p>To keep things simple:</p>
+<ul>
+<li>The Smithy runtime crates will have the same smithy-rs version</li>
+<li>All AWS crates will have the same AWS SDK version</li>
+<li><code>patch</code> revisions are exceptional and will be one-off manually published by a developer</li>
+</ul>
+<p>All runtime crate version numbers in smithy-rs will be locked at <code>0.0.0-smithy-rs-head</code>. This is a fake
+version number that gets replaced when generating the SDK.</p>
+<p>The SDK generator script in smithy-rs will be updated to:</p>
+<ul>
+<li>Replace Smithy runtime crate versions with the smithy-rs version from <code>aws/sdk/gradle.properties</code></li>
+<li>Replace AWS runtime crate versions with AWS SDK version from <code>aws/sdk/gradle.properties</code></li>
+<li>Add correct version numbers to all path dependencies in all the final crates that end up in the build artifacts</li>
+</ul>
+<p>This will result in all the crates having the correct version and manifests when imported into aws-sdk-rust.
+From there, a script needs to be written to determine crate dependency order, and publish crates (preferably
+with throttling and retry) in the correct order. This script needs to be able to recover from an interruption
+part way through publishing all the crates, and it also needs to output a list of all crate versions published
+together. This crate list will be commented on the release issue so that yanking the batch can be done if
+necessary.</p>
+<p>The new release process would be:</p>
+<ol>
+<li>Run script to update AWS models</li>
+<li>Manually update <em>both</em> the AWS SDK version <em>and</em> the smithy-rs version in <code>aws/sdk/gradle.properties</code> in smithy-rs</li>
+<li>Tag smithy-rs</li>
+<li>Wait for automation to sync changes to <code>aws-sdk-rust/next</code></li>
+<li>Cut a PR to merge <code>aws-sdk-rust/next</code> into <code>aws-sdk-rust/main</code></li>
+<li>Tag aws-sdk-rust</li>
+<li>Run publish script</li>
+</ol>
+<h3 id="short-term-changes-checklist"><a class="header" href="#short-term-changes-checklist">Short-term Changes Checklist</a></h3>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Prepare runtime crate manifests for publication to crates.io (https://github.com/awslabs/smithy-rs/pull/755)</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Update SDK generator to set correct crate versions (https://github.com/awslabs/smithy-rs/pull/755)</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Write bulk publish script</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Write bulk yank script</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Write automation to sync smithy-rs to aws-sdk-rust</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0010_waiters.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0010_waiters.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </body>
+</html>
