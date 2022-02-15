@@ -183,10 +183,11 @@ class XmlBindingTraitSerializerGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
             writer.rustTemplate(
                 """
-                pub fn $fnName() -> std::vec::Vec<u8> {
-                    vec![]
+                pub fn $fnName() -> #{ByteSlab} {
+                    Vec::new()
                 }
-                """
+                """,
+                "ByteSlab" to RuntimeType.ByteSlab
             )
         }
     }
