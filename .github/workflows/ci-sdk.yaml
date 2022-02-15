@@ -64,11 +64,11 @@ jobs:
         - name: Unit Tests
           run: cargo test --all-features
         - name: Docs
-          run: cargo doc --no-deps --document-private-items
+          run: cargo doc --no-deps --document-private-items --all-features
         - name: Clippy
-          run: cargo clippy
+          run: cargo clippy --all-features
         - name: Unused Dependencies
-          run: cargo +nightly udeps
+          run: cargo +nightly-2022-02-08 udeps
         - name: Additional per-crate checks
           run: ../tools/additional-per-crate-checks.sh ./sdk/ ../tools/ci-cdk/
     env:
@@ -87,7 +87,7 @@ jobs:
         default: true
     - uses: actions-rs/toolchain@v1
       with:
-        toolchain: nightly
+        toolchain: nightly-2022-02-08
         default: false
     - name: Cache cargo bin
       uses: actions/cache@v2
@@ -97,7 +97,7 @@ jobs:
     - name: Install additional cargo binaries
       run: |
         if [[ ! -f ~/.cargo/bin/cargo-udeps ]]; then
-          cargo +nightly install cargo-udeps
+          cargo +nightly-2022-02-08 install cargo-udeps
         fi
         if [[ ! -f ~/.cargo/bin/cargo-hack ]]; then
           cargo install cargo-hack
@@ -117,7 +117,7 @@ jobs:
       with:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         target-dir: ../target
-    # This runs the commands from the matrix strategy
+      # This runs the commands from the matrix strategy
     - name: ${{ matrix.test.name }}
       run: ${{ matrix.test.run }}
       working-directory: aws-sdk
@@ -153,7 +153,7 @@ jobs:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
         default: true
-    # The integration tests path-depend on crates in the build/ path, so we have to download a generated SDK
+      # The integration tests path-depend on crates in the build/ path, so we have to download a generated SDK
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
