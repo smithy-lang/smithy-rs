@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
@@ -35,11 +34,11 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.nio.file.Path
 
-private class TestProtocolBodyGenerator(private val body: String) : ProtocolBodyGenerator {
-    override fun bodyMetadata(operationShape: OperationShape): BodyMetadata =
-        BodyMetadata(takesOwnership = false)
+private class TestProtocolPayloadGenerator(private val body: String) : ProtocolPayloadGenerator {
+    override fun payloadMetadata(operationShape: OperationShape) =
+        ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = false)
 
-    override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape) {
+    override fun generatePayload(writer: RustWriter, self: String, operationShape: OperationShape) {
         writer.writeWithNoFormatting(body)
     }
 }
@@ -73,9 +72,9 @@ private class TestProtocolMakeOperationGenerator(
     protocol: Protocol,
     body: String,
     private val httpRequestBuilder: String
-) : MakeOperationGenerator(codegenContext, protocol, TestProtocolBodyGenerator(body)) {
+) : MakeOperationGenerator(codegenContext, protocol, TestProtocolPayloadGenerator(body)) {
     override fun generateRequestBuilderBaseFn(writer: RustWriter, operationShape: OperationShape) {
-        writer.inRequestBuilderBaseFn(operationShape.inputShape(codegenContext.model)) {
+        writer.inRequestBuilderBaseFn(operationShape.inputShape(model)) {
             withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
                 writeWithNoFormatting(httpRequestBuilder)
             }
@@ -207,7 +206,7 @@ class ProtocolTestGeneratorTest {
      */
     private fun generateService(
         httpRequestBuilder: String,
-        body: String = "${correctBody.dq()}.to_string().into()",
+        body: String = "${correctBody.dq()}.to_string()",
         correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())"""
     ): Path {
         val (pluginContext, testDir) = generatePluginContext(model)
@@ -267,7 +266,7 @@ class ProtocolTestGeneratorTest {
             .header("X-Greeting", "Hi")
             .method("POST")
             """,
-            """"{}".to_string().into()"""
+            """"{}".to_string()"""
         )
 
         val err = assertThrows<CommandFailed> {
