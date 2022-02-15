@@ -12,6 +12,15 @@ tasks["jar"].enabled = false
 plugins { id("software.amazon.smithy").version("0.5.3") }
 
 val smithyVersion: String by project
+val defaultRustFlags: String by project
+val defaultRustDocFlags: String by project
+
+buildscript {
+    val smithyVersion: String by project
+    dependencies {
+        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
+    }
+}
 
 dependencies {
     implementation(project(":codegen-server"))
@@ -24,9 +33,17 @@ data class CodegenTest(val service: String, val module: String, val extraConfig:
 
 val CodegenTests = listOf(
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("com.amazonaws.ebs#Ebs", "ebs")
+    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
+    CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+    CodegenTest("com.amazonaws.s3#AmazonS3", "s3")
 )
 
+/**
+ * `includeFluentClient` must be set to `false` as we are not generating all the supporting
+ * code for it.
+ * TODO: Review how can we make this a default in the server so that customers don't
+ *       have to specify it.
+ */
 fun generateSmithyBuild(tests: List<CodegenTest>): String {
     val projections =
         tests.joinToString(",\n") {
@@ -34,15 +51,13 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
             "${it.module}": {
                 "plugins": {
                     "rust-server-codegen": {
-                      "codegen": {
-                        "includeFluentClient": false
-                      },
                       "runtimeConfig": {
                         "relativePath": "${rootProject.projectDir.absolutePath}/rust-runtime"
                       },
                       "service": "${it.service}",
                       "module": "${it.module}",
                       "moduleVersion": "0.0.1",
+                      "moduleDescription": "test",
                       "moduleAuthors": ["protocoltest@example.com"]
                       ${it.extraConfig ?: ""}
                  }
@@ -81,36 +96,33 @@ task("generateCargoWorkspace") {
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
-
+tasks["assemble"].dependsOn("smithyBuildJar")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 tasks.register<Exec>("cargoCheck") {
     workingDir("build/smithyprojections/codegen-server-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "check")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoTest") {
     workingDir("build/smithyprojections/codegen-server-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "test")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoDocs") {
     workingDir("build/smithyprojections/codegen-server-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTDOCFLAGS", defaultRustDocFlags)
     commandLine("cargo", "doc", "--no-deps")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoClippy") {
     workingDir("build/smithyprojections/codegen-server-test/")
-    // disallow warnings
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "clippy")
     dependsOn("assemble")
 }

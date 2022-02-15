@@ -71,12 +71,13 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
             ServiceConfig.BuilderImpl -> {
                 rustTemplate(
                     """
-                    /// Set the credentials provider for this service
+                    /// Sets the credentials provider for this service
                     pub fn credentials_provider(mut self, credentials_provider: impl #{credentials}::ProvideCredentials + 'static) -> Self {
                         self.credentials_provider = Some(#{credentials}::SharedCredentialsProvider::new(credentials_provider));
                         self
                     }
 
+                    /// Sets the credentials provider for this service
                     pub fn set_credentials_provider(&mut self, credentials_provider: Option<#{credentials}::SharedCredentialsProvider>) -> &mut Self {
                         self.credentials_provider = credentials_provider;
                         self
@@ -118,10 +119,10 @@ class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
     }
 }
 
-fun awsAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-auth")
+fun awsHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-http")
 
 fun defaultProvider() =
     RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("no_credentials")).member("NoCredentials")
 
 fun setProvider(runtimeConfig: RuntimeConfig) =
-    RuntimeType("set_provider", awsAuth(runtimeConfig), "aws_auth")
+    RuntimeType("set_provider", awsHttp(runtimeConfig), "aws_http::auth")

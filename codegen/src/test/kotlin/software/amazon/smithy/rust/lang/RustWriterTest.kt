@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.lang
 
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldContainOnlyOnce
 import org.junit.jupiter.api.Test
@@ -18,32 +19,24 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docs
+import software.amazon.smithy.rust.codegen.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndRun
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.shouldCompile
-import software.amazon.smithy.rust.codegen.testutil.shouldParseAsRust
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.util.lookup
-import software.amazon.smithy.rust.testutil.shouldMatchResource
 
 class RustWriterTest {
-    @Test
-    fun `empty file`() {
-        val sut = RustWriter.forModule("empty")
-        sut.toString().shouldParseAsRust()
-        sut.toString().shouldCompile()
-        sut.toString().shouldMatchResource(javaClass, "empty.rs")
-    }
-
     @Test
     fun `inner modules correctly handle dependencies`() {
         val sut = RustWriter.forModule("parent")
         val requestBuilder = RuntimeType.HttpRequestBuilder
         sut.withModule("inner") {
-            rustBlock("fn build(builer: #T)", requestBuilder) {
+            rustBlock("fn build(builder: #T)", requestBuilder) {
             }
         }
         val httpDep = CargoDependency.Http.dependencies[0]
@@ -77,10 +70,10 @@ class RustWriterTest {
         output shouldContain "struct Test"
         output.compileAndRun(
             """
-        let test = Test { member: ${RustType.HashSet.Namespace}::${RustType.HashSet.Type}::default(), otherMember: "hello".to_string() };
-        assert_eq!(test.otherMember, "hello");
-        assert_eq!(test.member.is_empty(), true);
-         """
+            let test = Test { member: ${RustType.HashSet.Namespace}::${RustType.HashSet.Type}::default(), otherMember: "hello".to_string() };
+            assert_eq!(test.otherMember, "hello");
+            assert_eq!(test.member.is_empty(), true);
+            """
         )
     }
 
@@ -93,7 +86,7 @@ class RustWriterTest {
             |/* handle weird characters */
             |`a backtick`
             |[a link](asdf)
-        """.trimMargin()
+            """.trimMargin()
         )
         sut.rustBlock("fn main()") { }
         sut.compileAndTest()
@@ -103,13 +96,19 @@ class RustWriterTest {
     @Test
     fun `generate doc links`() {
         val model = """
-        namespace test
-        structure Foo {}
+            namespace test
+            structure Foo {}
         """.asSmithyModel()
         val shape = model.lookup<StructureShape>("test#Foo")
         val symbol = testSymbolProvider(model).toSymbol(shape)
         val sut = RustWriter.forModule("lib")
         sut.docs("A link! #D", symbol)
         sut.toString() shouldContain "/// A link! [`Foo`](crate::model::Foo)"
+    }
+
+    @Test
+    fun `empty writable`() {
+        val w = writable {}
+        w.isEmpty() shouldBe true
     }
 }

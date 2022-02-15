@@ -77,7 +77,7 @@ class EnumGeneratorTest {
                 """
                 /// It has some docs that #need to be escaped
                 ///
-                /// **NOTE:** `::Unknown` has been renamed to `::UnknownValue`.
+                /// _Note: `::Unknown` has been renamed to `::UnknownValue`._
                 UnknownValue,
                 """.trimIndent()
         }
@@ -157,15 +157,15 @@ class EnumGeneratorTest {
         @Test
         fun `unnamed enums are implement eq and hash`() {
             val model = """
-            namespace test
-            @enum([
-            {
-                value: "Foo",
-            },
-            {
-                value: "Bar",
-            }])
-            string FooEnum
+                namespace test
+                @enum([
+                {
+                    value: "Foo",
+                },
+                {
+                    value: "Bar",
+                }])
+                string FooEnum
             """.asSmithyModel()
             val shape: StringShape = model.lookup("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
@@ -185,25 +185,25 @@ class EnumGeneratorTest {
         @Test
         fun `it generates unamed enums`() {
             val model = """
-            namespace test
-            @enum([
-                {
-                    value: "Foo",
-                },
-                {
-                    value: "Baz",
-                },
-                {
-                    value: "Bar",
-                },
-                {
-                    value: "1",
-                },
-                {
-                    value: "0",
-                },
-            ])
-            string FooEnum
+                namespace test
+                @enum([
+                    {
+                        value: "Foo",
+                    },
+                    {
+                        value: "Baz",
+                    },
+                    {
+                        value: "Bar",
+                    },
+                    {
+                        value: "1",
+                    },
+                    {
+                        value: "0",
+                    },
+                ])
+                string FooEnum
             """.asSmithyModel()
             val shape: StringShape = model.lookup("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
@@ -266,9 +266,9 @@ class EnumGeneratorTest {
 
             rendered shouldContain
                 """
-                    /// Some top-level documentation.
-                    ///
-                    /// **NOTE:** `SomeEnum::Unknown` has been renamed to `::UnknownValue`.
+                /// Some top-level documentation.
+                ///
+                /// _Note: `SomeEnum::Unknown` has been renamed to `::UnknownValue`._
                 """.trimIndent()
         }
 
@@ -292,7 +292,7 @@ class EnumGeneratorTest {
 
             rendered shouldContain
                 """
-                    /// Some top-level documentation.
+                /// Some top-level documentation.
                 """.trimIndent()
         }
     }
@@ -300,13 +300,13 @@ class EnumGeneratorTest {
     @Test
     fun `it handles variants that clash with Rust reserved words`() {
         val model = """
-                namespace test
-                @enum([
-                    { name: "Known", value: "Known" },
-                    { name: "Self", value: "other" },
-                ])
-                string SomeEnum
-            """.asSmithyModel()
+            namespace test
+            @enum([
+                { name: "Known", value: "Known" },
+                { name: "Self", value: "other" },
+            ])
+            string SomeEnum
+        """.asSmithyModel()
 
         val shape: StringShape = model.lookup("test#SomeEnum")
         val trait = shape.expectTrait<EnumTrait>()
@@ -316,9 +316,9 @@ class EnumGeneratorTest {
 
         writer.compileAndTest(
             """
-                assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);
-                assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
-                """
+            assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);
+            assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
+            """
         )
     }
 }

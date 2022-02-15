@@ -1,56 +1,50 @@
 [package]
 name = "aws-config"
-version = "0.1.0"
+version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
+description = "AWS SDK config and credential provider implementations."
 edition = "2018"
 exclude = ["test-data/*", "integration-tests/*"]
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-default-provider = ["profile", "imds", "meta", "sts", "environment"]
-profile = ["sts", "web-identity-token", "meta", "environment", "imds"]
-meta = ["tokio/sync"]
-imds = ["profile", "smithy-http", "smithy-types", "smithy-http-tower", "smithy-json", "tower", "aws-http", "meta"]
-environment = ["meta"]
-sts = ["aws-sdk-sts", "aws-hyper"]
-web-identity-token = ["sts", "profile"]
+rustls = ["aws-smithy-client/rustls"]
+native-tls = ["aws-smithy-client/native-tls"]
+rt-tokio = ["aws-smithy-async/rt-tokio"]
 
-# SSO is not supported
-sso = []
-
-rustls = ["smithy-client/rustls"]
-native-tls = ["smithy-client/native-tls"]
-rt-tokio = ["smithy-async/rt-tokio"]
-
-default = ["default-provider", "rustls", "rt-tokio"]
+default = ["rustls", "rt-tokio"]
 
 [dependencies]
-aws-types = { path = "../../sdk/build/aws-sdk/aws-types" }
-smithy-async = { path = "../../sdk/build/aws-sdk/smithy-async" }
-smithy-client = { path = "../../sdk/build/aws-sdk/smithy-client" }
+aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
+aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false }
+aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
+aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client" }
+aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
+aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
+tokio = { version = "1", features = ["sync"] }
 tracing = { version = "0.1" }
-tokio = { version = "1", features = ["sync"], optional = true }
-aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sts", optional = true }
+hyper = { version = "0.14", default-features = false }
 
-# TODO: remove when middleware stacks are moved inside of clients directly
-aws-hyper = { path = "../../sdk/build/aws-sdk/aws-hyper", optional = true }
+aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
+aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-tower" }
+aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json" }
 
-# imds
-smithy-http = { path = "../../sdk/build/aws-sdk/smithy-http", optional = true }
-smithy-types = { path = "../../sdk/build/aws-sdk/smithy-types", optional = true }
-smithy-http-tower = { path = "../../sdk/build/aws-sdk/smithy-http-tower", optional = true }
-tower = { version = "0.4.8", optional = true }
-aws-http = { path = "../../sdk/build/aws-sdk/aws-http", optional = true }
+# implementation detail of SSO credential caching
+ring = "0.16"
+hex = "0.4.3"
+zeroize = "1"
+
 bytes = "1.1.0"
 http = "0.2.4"
-smithy-json = { path = "../../sdk/build/aws-sdk/smithy-json", optional = true }
-
+tower = { version = "0.4.8" }
 
 [dev-dependencies]
 futures-util = "0.3.16"
-tracing-test = "0.1.0"
+tracing-test = "0.2.1"
 
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full", "test-util"] }
 # used to test compatibility
 async-trait = "0.1.51"
 env_logger = "0.9.0"
@@ -62,4 +56,13 @@ arbitrary = "1.0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-smithy-client = { path = "../../sdk/build/aws-sdk/smithy-client", features = ["test-util"] }
+aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
+
+# used for a usage example
+hyper-rustls = { version = "0.23.0", features = ["webpki-tokio", "http2", "http1"] }
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

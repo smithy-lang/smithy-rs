@@ -5,15 +5,22 @@
 
 //! Configuration Options for Credential Providers
 
-use crate::connector::default_connector;
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
+use aws_smithy_client::erase::DynConnector;
 use aws_types::os_shim_internal::{Env, Fs, TimeSource};
-use aws_types::region::Region;
-use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
-use smithy_client::erase::DynConnector;
+use aws_types::{
+    http_connector::{HttpConnector, HttpSettings},
+    region::Region,
+};
 
-use smithy_client::timeout;
+use std::error::Error;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+
+use crate::connector::default_connector;
+use http::Uri;
+use hyper::client::connect::Connection;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 /// Configuration options for Credential Providers
 ///
@@ -28,41 +35,9 @@ pub struct ProviderConfig {
     env: Env,
     fs: Fs,
     time_source: TimeSource,
-    connector: Connector,
+    connector: HttpConnector,
     sleep: Option<Arc<dyn AsyncSleep>>,
     region: Option<Region>,
-}
-
-type MakeConnectorFn =
-    dyn Fn(&HttpSettings, Option<Arc<dyn AsyncSleep>>) -> Option<DynConnector> + Send + Sync;
-
-#[derive(Clone)]
-enum Connector {
-    Prebuilt(Option<DynConnector>),
-    MakeConnector(Arc<MakeConnectorFn>),
-}
-
-impl Default for Connector {
-    fn default() -> Self {
-        Self::MakeConnector(Arc::new(
-            |settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>| {
-                default_connector(&settings, sleep)
-            },
-        ))
-    }
-}
-
-impl Connector {
-    fn make_connector(
-        &self,
-        settings: &HttpSettings,
-        sleep: Option<Arc<dyn AsyncSleep>>,
-    ) -> Option<DynConnector> {
-        match self {
-            Connector::Prebuilt(conn) => conn.clone(),
-            Connector::MakeConnector(func) => func(&settings, sleep),
-        }
-    }
 }
 
 impl Debug for ProviderConfig {
@@ -78,11 +53,17 @@ impl Debug for ProviderConfig {
 
 impl Default for ProviderConfig {
     fn default() -> Self {
+        let connector = HttpConnector::ConnectorFn(Arc::new(
+            |settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>| {
+                default_connector(settings, sleep)
+            },
+        ));
+
         Self {
             env: Env::default(),
             fs: Fs::default(),
             time_source: TimeSource::default(),
-            connector: Connector::default(),
+            connector,
             sleep: default_async_sleep(),
             region: None,
         }
@@ -103,22 +84,11 @@ impl ProviderConfig {
             env: Env::from_slice(&[]),
             fs: Fs::from_raw_map(HashMap::new()),
             time_source: TimeSource::manual(&ManualTimeSource::new(UNIX_EPOCH)),
-            connector: Connector::Prebuilt(None),
+            connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
         }
     }
-}
-
-/// HttpSettings for HTTP connectors
-///
-/// # Stabilility
-/// As HTTP settings stabilize, they will move to `aws-types::config::Config` so that they
-/// can be used to configure HTTP connectors for service clients.
-#[non_exhaustive]
-#[derive(Default)]
-pub(crate) struct HttpSettings {
-    pub(crate) timeout_config: timeout::Settings,
 }
 
 impl ProviderConfig {
@@ -132,13 +102,14 @@ impl ProviderConfig {
     ///
     ///
     /// # Examples
-    /// ```rust
+    /// ```no_run
+    /// # #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    /// # fn example() {
     /// use aws_config::provider_config::ProviderConfig;
     /// use aws_sdk_sts::Region;
     /// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
     /// let conf = ProviderConfig::without_region().with_region(Some(Region::new("us-east-1")));
     ///
-    /// # if cfg!(any(feature = "rustls", feature = "native-tls")) {
     /// let credential_provider = WebIdentityTokenCredentialsProvider::builder().configure(&conf).build();
     /// # }
     /// ```
@@ -152,7 +123,7 @@ impl ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
             time_source: TimeSource::default(),
-            connector: Connector::Prebuilt(None),
+            connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
         }
@@ -161,7 +132,7 @@ impl ProviderConfig {
     /// Create a default provider config with the region region automatically loaded from the default chain.
     ///
     /// # Examples
-    /// ```rust
+    /// ```no_run
     /// # async fn test() {
     /// use aws_config::provider_config::ProviderConfig;
     /// use aws_sdk_sts::Region;
@@ -170,7 +141,6 @@ impl ProviderConfig {
     /// let credential_provider = WebIdentityTokenCredentialsProvider::builder().configure(&conf).build();
     /// }
     /// ```
-    #[cfg(feature = "default-provider")]
     pub async fn with_default_region() -> Self {
         Self::without_region().load_default_region().await
     }
@@ -195,12 +165,12 @@ impl ProviderConfig {
     #[allow(dead_code)]
     pub(crate) fn default_connector(&self) -> Option<DynConnector> {
         self.connector
-            .make_connector(&HttpSettings::default(), self.sleep.clone())
+            .connector(&HttpSettings::default(), self.sleep.clone())
     }
 
     #[allow(dead_code)]
     pub(crate) fn connector(&self, settings: &HttpSettings) -> Option<DynConnector> {
-        self.connector.make_connector(settings, self.sleep.clone())
+        self.connector.connector(settings, self.sleep.clone())
     }
 
     #[allow(dead_code)]
@@ -219,7 +189,6 @@ impl ProviderConfig {
         self
     }
 
-    #[cfg(feature = "default-provider")]
     /// Use the [default region chain](crate::default_provider::region) to set the
     /// region for this configuration
     ///
@@ -252,11 +221,42 @@ impl ProviderConfig {
 
     /// Override the HTTPS connector for this configuration
     ///
-    /// ## Note: Stability
-    /// This method is expected to change to support HTTP configuration
-    pub fn with_connector(self, connector: DynConnector) -> Self {
+    /// **Warning**: Use of this method will prevent you from taking advantage of the HTTP connect timeouts.
+    /// Consider [`ProviderConfig::with_tcp_connector`].
+    ///
+    /// # Stability
+    /// This method is expected to change to support HTTP configuration.
+    pub fn with_http_connector(self, connector: DynConnector) -> Self {
         ProviderConfig {
-            connector: Connector::Prebuilt(Some(connector)),
+            connector: HttpConnector::Prebuilt(Some(connector)),
+            ..self
+        }
+    }
+
+    /// Override the TCP connector for this configuration
+    ///
+    /// This connector MUST provide an HTTPS encrypted connection.
+    ///
+    /// # Stability
+    /// This method may change to support HTTP configuration.
+    pub fn with_tcp_connector<C>(self, connector: C) -> Self
+    where
+        C: Clone + Send + Sync + 'static,
+        C: tower::Service<Uri>,
+        C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
+        C::Future: Unpin + Send + 'static,
+        C::Error: Into<Box<dyn Error + Send + Sync + 'static>>,
+    {
+        let connector_fn = move |settings: &HttpSettings, sleep: Option<Arc<dyn AsyncSleep>>| {
+            let mut builder =
+                aws_smithy_client::hyper_ext::Adapter::builder().timeout(&settings.timeout_config);
+            if let Some(sleep) = sleep {
+                builder = builder.sleep_impl(sleep);
+            };
+            Some(DynConnector::new(builder.build(connector.clone())))
+        };
+        ProviderConfig {
+            connector: HttpConnector::ConnectorFn(Arc::new(connector_fn)),
             ..self
         }
     }

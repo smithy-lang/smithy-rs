@@ -22,14 +22,30 @@ val kotestVersion: String by project
 dependencies {
     implementation(project(":codegen"))
     runtimeOnly(project(":aws:rust-runtime"))
+    implementation("org.jsoup:jsoup:1.14.3")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
+val generateAwsSdkVersion by tasks.registering {
+    // generate the version of the runtime to use as a resource.
+    // this keeps us from having to manually change version numbers in multiple places
+    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rustsdk"
+    val versionFile = file("$resourcesDir/sdk-crate-version.txt")
+    outputs.file(versionFile)
+    val crateVersion = project.properties["aws.sdk.version"]?.toString()!!
+    inputs.property("crateVersion", crateVersion)
+    sourceSets.main.get().output.dir(resourcesDir)
+    doLast {
+        versionFile.writeText(crateVersion)
+    }
+}
+
 tasks.compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
+    dependsOn(generateAwsSdkVersion)
 }
 
 tasks.compileTestKotlin {
@@ -66,7 +82,6 @@ tasks.test {
     }
 }
 
-
 // Configure jacoco (code coverage) to generate an HTML report
 tasks.jacocoTestReport {
     reports {
@@ -78,7 +93,6 @@ tasks.jacocoTestReport {
 
 // Always run the jacoco test report after testing.
 tasks["test"].finalizedBy(tasks["jacocoTestReport"])
-
 
 publishing {
     publications {

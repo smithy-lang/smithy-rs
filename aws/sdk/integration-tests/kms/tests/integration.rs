@@ -4,28 +4,33 @@
  */
 
 use aws_http::user_agent::AwsUserAgent;
-use aws_hyper::{Client, SdkError};
 use aws_sdk_kms as kms;
+use aws_sdk_kms::middleware::DefaultMiddleware;
+use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_client::{Client as CoreClient, SdkError};
+use aws_smithy_http::body::SdkBody;
 use http::header::AUTHORIZATION;
 use http::Uri;
 use kms::operation::GenerateRandom;
 use kms::Credentials;
 use kms::{Config, Region};
-use smithy_client::test_connection::TestConnection;
-use smithy_http::body::SdkBody;
 use std::time::{Duration, UNIX_EPOCH};
 
-// TODO: having the full HTTP requests right in the code is a bit gross, consider something
+type Client<C> = CoreClient<C, DefaultMiddleware>;
+
+// TODO(DVR): having the full HTTP requests right in the code is a bit gross, consider something
 // like https://github.com/davidbarsky/sigv4/blob/master/aws-sigv4/src/lib.rs#L283-L315 to store
 // the requests/responses externally
 
 /// Validate that for CN regions we set the URI correctly
 #[tokio::test]
 async fn generate_random_cn() {
-    let creds = Credentials::from_keys(
+    let creds = Credentials::new(
         "ANOTREAL",
         "notrealrnrELgWzOk3IfjzDKtFBhDby",
         Some("notarealsessiontoken".to_string()),
+        None,
+        "test",
     );
     let conn = TestConnection::new(vec![(
         http::Request::builder()
@@ -53,10 +58,12 @@ async fn generate_random_cn() {
 
 #[tokio::test]
 async fn generate_random() {
-    let creds = Credentials::from_keys(
+    let creds = Credentials::new(
         "ANOTREAL",
         "notrealrnrELgWzOk3IfjzDKtFBhDby",
         Some("notarealsessiontoken".to_string()),
+        None,
+        "test",
     );
     let conn = TestConnection::new(vec![(
         http::Request::builder()
@@ -84,6 +91,7 @@ async fn generate_random() {
         .build()
         .unwrap()
         .make_operation(&conf)
+        .await
         .expect("valid operation");
     op.properties_mut()
         .insert(UNIX_EPOCH + Duration::from_secs(1614952162));
@@ -104,10 +112,12 @@ async fn generate_random() {
 
 #[tokio::test]
 async fn generate_random_malformed_response() {
-    let creds = Credentials::from_keys(
+    let creds = Credentials::new(
         "ANOTREAL",
         "notrealrnrELgWzOk3IfjzDKtFBhDby",
         Some("notarealsessiontoken".to_string()),
+        None,
+        "test",
     );
     let conn = TestConnection::new(vec![(
         http::Request::builder().body(SdkBody::from(r#"{"NumberOfBytes":64}"#)).unwrap(),
@@ -126,16 +136,19 @@ async fn generate_random_malformed_response() {
         .build()
         .unwrap()
         .make_operation(&conf)
+        .await
         .expect("valid operation");
     client.call(op).await.expect_err("response was malformed");
 }
 
 #[tokio::test]
 async fn generate_random_keystore_not_found() {
-    let creds = Credentials::from_keys(
+    let creds = Credentials::new(
         "ANOTREAL",
         "notrealrnrELgWzOk3IfjzDKtFBhDby",
         Some("notarealsessiontoken".to_string()),
+        None,
+        "test",
     );
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
@@ -171,6 +184,7 @@ async fn generate_random_keystore_not_found() {
         .build()
         .unwrap()
         .make_operation(&conf)
+        .await
         .expect("valid operation");
 
     op.properties_mut()

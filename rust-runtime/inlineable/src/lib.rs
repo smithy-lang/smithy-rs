@@ -13,6 +13,8 @@ mod json_errors;
 mod rest_xml_unwrapped_errors;
 #[allow(unused)]
 mod rest_xml_wrapped_errors;
+#[allow(unused)]
+mod server_operation_handler_trait;
 
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
 // requiring a proptest dependency
@@ -27,10 +29,7 @@ mod test {
     fn test_uuid() {
         assert_eq!(uuid_v4(0), "00000000-0000-4000-8000-000000000000");
         assert_eq!(uuid_v4(12341234), "2ff4cb00-0000-4000-8000-000000000000");
-        assert_eq!(
-            uuid_v4(u128::max_value()),
-            "ffffffff-ffff-4fff-ffff-ffffffffffff"
-        );
+        assert_eq!(uuid_v4(u128::MAX), "ffffffff-ffff-4fff-ffff-ffffffffffff");
     }
 
     #[test]

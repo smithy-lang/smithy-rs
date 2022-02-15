@@ -1,0 +1,4 @@
+*                                       @awslabs/rust-sdk-owners
+/codegen-server/                        @awslabs/smithy-rs-server
+/codegen-server-test/                   @awslabs/smithy-rs-server
+/rust-runtime/aws-smithy-http-server/   @awslabs/smithy-rs-server

@@ -3,19 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_http::AwsErrorRetryPolicy;
+use aws_http::retry::AwsErrorRetryPolicy;
 use aws_sdk_kms as kms;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::operation::{self, Parts};
+use aws_smithy_http::response::ParseStrictResponse;
+use aws_smithy_http::result::SdkError;
+use aws_smithy_http::retry::ClassifyResponse;
+use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use bytes::Bytes;
 use kms::error::CreateAliasError;
 use kms::operation::{CreateAlias, GenerateRandom};
 use kms::output::GenerateRandomOutput;
-use kms::Blob;
-use smithy_http::body::SdkBody;
-use smithy_http::operation::{self, Parts};
-use smithy_http::response::ParseStrictResponse;
-use smithy_http::result::SdkError;
-use smithy_http::retry::ClassifyResponse;
-use smithy_types::retry::{ErrorKind, RetryKind};
+use kms::types::Blob;
 
 #[test]
 fn validate_sensitive_trait() {
@@ -35,7 +35,7 @@ fn assert_debug<T: std::fmt::Debug>() {}
 #[tokio::test]
 async fn types_are_send_sync() {
     assert_send_sync::<kms::Error>();
-    assert_send_sync::<kms::SdkError<CreateAliasError>>();
+    assert_send_sync::<kms::types::SdkError<CreateAliasError>>();
     assert_send_sync::<kms::error::CreateAliasError>();
     assert_send_sync::<kms::output::CreateAliasOutput>();
     assert_send_sync::<kms::Client>();
@@ -71,6 +71,7 @@ async fn create_alias_op() -> Parts<CreateAlias, AwsErrorRetryPolicy> {
         .build()
         .unwrap()
         .make_operation(&conf)
+        .await
         .expect("valid request")
         .into_request_response();
     parts

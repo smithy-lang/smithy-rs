@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::http_request::url_escape::percent_encode;
+use crate::http_request::url_escape::percent_encode_query;
 use http::Uri;
 
 /// Utility for updating the query string in a [`Uri`].
@@ -49,10 +49,10 @@ impl QueryWriter {
             self.new_path_and_query.push(prefix);
         }
         self.prefix = Some('&');
-        self.new_path_and_query.push_str(&percent_encode(k));
+        self.new_path_and_query.push_str(&percent_encode_query(k));
         self.new_path_and_query.push('=');
 
-        self.new_path_and_query.push_str(&percent_encode(v));
+        self.new_path_and_query.push_str(&percent_encode_query(v));
     }
 
     /// Returns just the built query string.
@@ -122,6 +122,36 @@ mod test {
         query_writer.insert("key", "val%ue");
         query_writer.insert("ano%ther", "value");
         assert_eq!("key=val%25ue&ano%25ther=value", query_writer.build_query());
+    }
+
+    #[test]
+    // This test ensures that the percent encoding applied to queries always produces a valid URI if
+    // the starting URI is valid
+    fn doesnt_panic_when_adding_query_to_valid_uri() {
+        let uri = Uri::from_static("http://www.example.com");
+
+        let mut problematic_chars = Vec::new();
+
+        for byte in u8::MIN..=u8::MAX {
+            match std::str::from_utf8(&[byte]) {
+                // If we can't make a str from the byte then we certainly can't make a URL from it
+                Err(_) => {
+                    continue;
+                }
+                Ok(value) => {
+                    let mut query_writer = QueryWriter::new(&uri);
+                    query_writer.insert("key", value);
+
+                    if let Err(_) = std::panic::catch_unwind(|| query_writer.build_uri()) {
+                        problematic_chars.push(char::from(byte));
+                    };
+                }
+            }
+        }
+
+        if !problematic_chars.is_empty() {
+            panic!("we got some bad bytes here: {:#?}", problematic_chars)
+        }
     }
 
     #[test]

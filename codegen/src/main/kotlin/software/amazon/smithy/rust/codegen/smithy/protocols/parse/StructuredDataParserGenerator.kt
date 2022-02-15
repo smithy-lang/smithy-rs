@@ -23,7 +23,8 @@ interface StructuredDataParserGenerator {
      */
     fun payloadParser(member: MemberShape): RuntimeType
 
-    /** Generate a parser for operation input
+    /**
+     * Generate a parser for operation input
      * Because only a subset of fields of the operation may be impacted by the document, a builder is passed
      * through:
      *
@@ -47,11 +48,14 @@ interface StructuredDataParserGenerator {
     fun errorParser(errorShape: StructureShape): RuntimeType?
 
     /**
+     * Generate a parser for a server operation input structure
      * ```rust
-     * fn parse_document(inp: &[u8]) -> Result<Document, Error> {
-     *   ...
+     * fn deser_operation_crate_operation_my_operation_input(
+     *    value: &[u8], builder: my_operation_input::Builder
+     * ) -> Result<my_operation_input::Builder, Error> {
+     *    ..
      * }
      * ```
      */
-    fun documentParser(operationShape: OperationShape): RuntimeType
+    fun serverInputParser(operationShape: OperationShape): RuntimeType?
 }

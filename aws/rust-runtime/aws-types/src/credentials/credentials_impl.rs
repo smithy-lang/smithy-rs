@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use aws_smithy_types::date_time::Format;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 use zeroize::Zeroizing;
 
 /// AWS SDK Credentials
@@ -27,9 +28,9 @@ struct Inner {
 
     /// Credential Expiry
     ///
-    /// A timepoint at which the credentials should no longer
-    /// be used because they have expired. The primary purpose of this value is to allow
-    /// credentials to communicate to the caching provider when they need to be refreshed.
+    /// A SystemTime at which the credentials should no longer be used because they have expired.
+    /// The primary purpose of this value is to allow credentials to communicate to the caching
+    /// provider when they need to be refreshed.
     ///
     /// If these credentials never expire, this value will be set to `None`
     expires_after: Option<SystemTime>,
@@ -45,16 +46,28 @@ impl Debug for Credentials {
             .field("access_key_id", &self.0.access_key_id.as_str())
             .field("secret_access_key", &"** redacted **");
         if let Some(expiry) = self.expiry() {
-            // TODO: format the expiry nicely
-            creds.field("expires_after", &expiry);
+            if let Some(formatted) = expiry.duration_since(UNIX_EPOCH).ok().and_then(|dur| {
+                aws_smithy_types::DateTime::from_secs(dur.as_secs() as _)
+                    .fmt(Format::DateTime)
+                    .ok()
+            }) {
+                creds.field("expires_after", &formatted);
+            } else {
+                creds.field("expires_after", &expiry);
+            }
         }
         creds.finish()
     }
 }
 
+#[cfg(feature = "hardcoded-credentials")]
 const STATIC_CREDENTIALS: &str = "Static";
 
 impl Credentials {
+    /// Creates `Credentials`.
+    ///
+    /// This is intended to be used from a custom credentials provider implementation.
+    /// It is __NOT__ secure to hardcode credentials into your application.
     pub fn new(
         access_key_id: impl Into<String>,
         secret_access_key: impl Into<String>,
@@ -71,6 +84,54 @@ impl Credentials {
         }))
     }
 
+    /// Creates `Credentials` from hardcoded access key, secret key, and session token.
+    ///
+    /// _Note: In general, you should prefer to use the credential providers that come
+    /// with the AWS SDK to get credentials. It is __NOT__ secure to hardcode credentials
+    /// into your application. If you're writing a custom credentials provider, then
+    /// use [`Credentials::new`] instead of this._
+    ///
+    /// This function requires the `hardcoded-credentials` feature to be enabled.
+    ///
+    /// [`Credentials`](crate::Credentials) implement
+    /// [`ProvideCredentials`](crate::credentials::ProvideCredentials) directly, so no custom provider
+    /// implementation is required when wiring these up to a client:
+    /// ```rust
+    /// use aws_types::Credentials;
+    /// use aws_types::region::Region;
+    /// # mod service {
+    /// #     use aws_types::credentials::ProvideCredentials;
+    /// #     use aws_types::region::Region;
+    /// #     pub struct Config;
+    /// #     impl Config {
+    /// #        pub fn builder() -> Self {
+    /// #            Config
+    /// #        }
+    /// #        pub fn credentials_provider(self, provider: impl ProvideCredentials + 'static) -> Self {
+    /// #            self
+    /// #        }
+    /// #        pub fn region(self, region: Region) -> Self {
+    /// #            self
+    /// #        }
+    /// #        pub fn build(self) -> Config { Config }
+    /// #     }
+    /// #     pub struct Client;
+    /// #     impl Client {
+    /// #        pub fn from_conf(config: Config) -> Self {
+    /// #            Client
+    /// #        }
+    /// #     }
+    /// # }
+    /// # use service::{Config, Client};
+    ///
+    /// let creds = Credentials::from_keys("akid", "secret_key", None);
+    /// let config = Config::builder()
+    ///     .credentials_provider(creds)
+    ///     .region(Region::new("us-east-1"))
+    ///     .build();
+    /// let client = Client::from_conf(config);
+    /// ```
+    #[cfg(feature = "hardcoded-credentials")]
     pub fn from_keys(
         access_key_id: impl Into<String>,
         secret_access_key: impl Into<String>,
@@ -85,23 +146,49 @@ impl Credentials {
         )
     }
 
+    /// Returns the access key ID.
     pub fn access_key_id(&self) -> &str {
         &self.0.access_key_id
     }
 
+    /// Returns the secret access key.
     pub fn secret_access_key(&self) -> &str {
         &self.0.secret_access_key
     }
 
+    /// Returns the time when the credentials will expire.
     pub fn expiry(&self) -> Option<SystemTime> {
         self.0.expires_after
     }
 
+    /// Returns a mutable reference to the time when the credentials will expire.
     pub fn expiry_mut(&mut self) -> &mut Option<SystemTime> {
         &mut Arc::make_mut(&mut self.0).expires_after
     }
 
+    /// Returns the session token.
     pub fn session_token(&self) -> Option<&str> {
         self.0.session_token.as_deref()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::Credentials;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    #[test]
+    fn debug_impl() {
+        let creds = Credentials::new(
+            "akid",
+            "secret",
+            Some("token".into()),
+            Some(UNIX_EPOCH + Duration::from_secs(1234567890)),
+            "debug tester",
+        );
+        assert_eq!(
+            format!("{:?}", creds),
+            r#"Credentials { provider_name: "debug tester", access_key_id: "akid", secret_access_key: "** redacted **", expires_after: "2009-02-13T23:31:30Z" }"#
+        );
     }
 }

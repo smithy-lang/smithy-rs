@@ -6,7 +6,9 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -19,6 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGene
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.util.getTrait
 
 class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun protocol(codegenContext: CodegenContext): Protocol = RestJson(codegenContext)
@@ -30,12 +33,37 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
+            /* Client support */
             requestSerialization = true,
             requestBodySerialization = true,
             responseDeserialization = true,
-            errorDeserialization = true
+            errorDeserialization = true,
+            /* Server support */
+            requestDeserialization = false,
+            requestBodyDeserialization = false,
+            responseSerialization = false,
+            errorSerialization = false
         )
     }
+}
+
+/**
+ * This [HttpBindingResolver] implementation mostly delegates to the [HttpTraitHttpBindingResolver] class, since the
+ * RestJson1 protocol can be almost entirely described by Smithy's HTTP binding traits
+ * (https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html).
+ * The only protocol-specific behavior that is truly custom is the response `Content-Type` header, which defaults to
+ * `application/json` if not overridden.
+ */
+class RestJsonHttpBindingResolver(
+    model: Model,
+    contentTypes: ProtocolContentTypes,
+) : HttpTraitHttpBindingResolver(model, contentTypes) {
+    /**
+     * In the RestJson1 protocol, HTTP responses have a default `Content-Type: application/json` header if it is not
+     * overridden by a specific mechanism (e.g. an output shape member is targeted with `httpPayload` or `mediaType` traits.
+     */
+    override fun responseContentType(operationShape: OperationShape): String =
+        super.responseContentType(operationShape) ?: "application/json"
 }
 
 class RestJson(private val codegenContext: CodegenContext) : Protocol {
@@ -51,17 +79,15 @@ class RestJson(private val codegenContext: CodegenContext) : Protocol {
     private val jsonDeserModule = RustModule.private("json_deser")
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
+        RestJsonHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return JsonParserGenerator(codegenContext, httpBindingResolver)
-    }
+    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
+        JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
-        return JsonSerializerGenerator(codegenContext, httpBindingResolver)
-    }
+    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
@@ -87,4 +113,8 @@ class RestJson(private val codegenContext: CodegenContext) : Protocol {
                 *errorScope
             )
         }
+}
+
+fun restJsonFieldName(member: MemberShape): String {
+    return member.getTrait<JsonNameTrait>()?.value ?: member.memberName
 }

@@ -17,10 +17,10 @@ import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -29,18 +29,18 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientCustomization
-import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientSection
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.util.cloneOperation
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 import kotlin.streams.toList
 
@@ -89,15 +89,6 @@ class AwsPresigningDecorator internal constructor(
     override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
 
-    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
-        val hasPresignedOps = codegenContext.model.shapes().anyMatch { shape ->
-            shape is OperationShape && presignableOperations.containsKey(shape.id)
-        }
-        if (hasPresignedOps) {
-            rustCrate.mergeFeature(Feature("client", default = true, listOf("tower")))
-        }
-    }
-
     override fun operationCustomizations(
         codegenContext: CodegenContext,
         operation: OperationShape,
@@ -142,7 +133,6 @@ class AwsInputPresignedMethod(
     private val symbolProvider = codegenContext.symbolProvider
 
     private val codegenScope = arrayOf(
-        "aws_hyper" to runtimeConfig.awsRuntimeDependency("aws-hyper").copy(optional = true).asType(),
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
         "PresignedRequestService" to AwsRuntimeType.Presigning.member("service::PresignedRequestService"),
@@ -151,6 +141,7 @@ class AwsInputPresignedMethod(
         "aws_sigv4" to runtimeConfig.awsRuntimeDependency("aws-sigv4").asType(),
         "sig_auth" to runtimeConfig.sigAuth().asType(),
         "tower" to CargoDependency.Tower.asType(),
+        "Middleware" to runtimeConfig.defaultMiddleware()
     )
 
     override fun section(section: OperationSection): Writable = writable {
@@ -173,23 +164,16 @@ class AwsInputPresignedMethod(
             MakeOperationGenerator(
                 codegenContext,
                 protocol,
-                HttpBoundProtocolBodyGenerator(codegenContext, protocol),
+                HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
                 // Prefixed with underscore to avoid colliding with modeled functions
                 functionName = makeOperationFn,
                 public = false,
             ).generateMakeOperation(this, syntheticOp, section.customizations)
         }
 
+        documentPresignedMethod(hasConfigArg = true)
         rustBlockTemplate(
             """
-            /// Creates a presigned request for this operation. The credentials provider from the `config`
-            /// will be used to generate the request's signature, and the `presigning_config` provides additional
-            /// presigning-specific config values, such as the amount of time the request should be valid for after
-            /// creation.
-            ///
-            /// Presigned requests can be given to other users or applications to access a resource or perform
-            /// an operation without having access to the AWS security credentials.
-            ##[cfg(feature = "client")]
             pub async fn presigned(
                 self,
                 config: &crate::config::Config,
@@ -202,6 +186,7 @@ class AwsInputPresignedMethod(
             rustTemplate(
                 """
                 let (mut request, _) = self.$makeOperationFn(config)
+                    .await
                     .map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?
                     .into_request_response();
                 """,
@@ -237,7 +222,7 @@ class AwsInputPresignedMethod(
             }
             rustTemplate(
                 """
-                let middleware = #{aws_hyper}::AwsMiddleware::default();
+                let middleware = #{Middleware}::default();
                 let mut svc = #{tower}::builder::ServiceBuilder::new()
                     .layer(&middleware)
                     .service(#{PresignedRequestService}::new());
@@ -263,6 +248,7 @@ class AwsPresignedFluentBuilderMethod(
 
     override fun section(section: FluentClientSection): Writable = writable {
         if (section is FluentClientSection.FluentBuilderImpl && section.operationShape.hasTrait(PresignableTrait::class.java)) {
+            documentPresignedMethod(hasConfigArg = false)
             rustBlockTemplate(
                 """
                 pub async fn presigned(
@@ -353,4 +339,22 @@ class MoveDocumentMembersToQueryParamsTransform(
             }
         }
     }
+}
+
+private fun RustWriter.documentPresignedMethod(hasConfigArg: Boolean) {
+    val configBlurb = if (hasConfigArg)
+        "The credentials provider from the `config` will be used to generate the request's signature.\n"
+    else
+        ""
+    docs(
+        """
+        Creates a presigned request for this operation.
+
+        ${configBlurb}The `presigning_config` provides additional presigning-specific config values, such as the
+        amount of time the request should be valid for after creation.
+
+        Presigned requests can be given to other users or applications to access a resource or perform
+        an operation without having access to the AWS security credentials.
+        """
+    )
 }

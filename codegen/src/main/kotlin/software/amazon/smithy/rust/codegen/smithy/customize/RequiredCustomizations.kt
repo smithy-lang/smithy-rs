@@ -6,7 +6,9 @@
 package software.amazon.smithy.rust.codegen.smithy.customize
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.CrateVersionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.EndpointPrefixGenerator
@@ -39,5 +41,10 @@ class RequiredCustomizations : RustCodegenDecorator {
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         return baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) + AllowLintsGenerator()
+    }
+
+    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+        // Add rt-tokio feature for `ByteStream::from_path`
+        rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
     }
 }

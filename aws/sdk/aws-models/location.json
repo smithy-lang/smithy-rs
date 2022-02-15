@@ -328,8 +328,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#auth": [],
-                "smithy.api#documentation": "<p>Evaluates device positions against the geofence geometries from a given geofence\n            collection.</p>\n        <p>This operation always returns an empty response because geofences are asynchronously\n            evaluated. The evaluation determines if the device has entered or exited a geofenced\n            area, and then publishes one of the following events to Amazon EventBridge:</p>\n        <ul>\n            <li>\n                <p>\n                  <code>ENTER</code> if Amazon Location determines that the tracked device has entered\n                    a geofenced area.</p>\n            </li>\n            <li>\n                <p>\n                  <code>EXIT</code> if Amazon Location determines that the tracked device has exited a\n                    geofenced area.</p>\n            </li>\n         </ul>\n        <note>\n            <p>The last geofence that a device was observed within is tracked for 30 days after\n                the most recent device position update.</p>\n        </note>",
+                "smithy.api#documentation": "<p>Evaluates device positions against the geofence geometries from a given geofence\n            collection.</p>\n        <p>This operation always returns an empty response because geofences are asynchronously\n            evaluated. The evaluation determines if the device has entered or exited a geofenced\n            area, and then publishes one of the following events to Amazon EventBridge:</p>\n        <ul>\n            <li>\n                <p>\n                  <code>ENTER</code> if Amazon Location determines that the tracked device has entered\n                    a geofenced area.</p>\n            </li>\n            <li>\n                <p>\n                  <code>EXIT</code> if Amazon Location determines that the tracked device has exited a\n                    geofenced area.</p>\n            </li>\n         </ul>\n        <note>\n            <p>The last geofence that a device was observed within is tracked for 30 days after\n                the most recent device position update.</p>\n        </note>\n        <note>\n            <p>Geofence evaluation uses the given device position. It does not account for the \n                optional <code>Accuracy</code> of a <code>DevicePositionUpdate</code>.</p>\n        </note>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "geofencing."
                 },
@@ -771,7 +770,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Uploads position update data for one or more devices to a tracker resource. Amazon Location\n           uses the data when it reports the last known device position and position history. Amazon Location retains location data for 30 \n           days.</p>\n         <note>\n           <p>Position updates are handled based on the <code>PositionFiltering</code> property of the tracker. \n               When <code>PositionFiltering</code> is set to <code>TimeBased</code>, updates are evaluated against linked geofence collections, \n               and location data is stored at a maximum of one position per 30 second interval. If your update frequency is more often than \n               every 30 seconds, only one update per 30 seconds is stored for each unique device ID.\n               When <code>PositionFiltering</code> is set to <code>DistanceBased</code> filtering, location data is stored and evaluated against linked geofence \n               collections only if the device has moved more than 30 m (98.4 ft).</p>\n         </note>",
+                "smithy.api#documentation": "<p>Uploads position update data for one or more devices to a tracker resource. Amazon Location\n           uses the data when it reports the last known device position and position history. Amazon Location retains location data for 30 \n           days.</p>\n         <note>\n           <p>Position updates are handled based on the <code>PositionFiltering</code> property of the tracker. \n               When <code>PositionFiltering</code> is set to <code>TimeBased</code>, updates are evaluated against linked geofence collections, \n               and location data is stored at a maximum of one position per 30 second interval. If your update frequency is more often than \n               every 30 seconds, only one update per 30 seconds is stored for each unique device ID.</p>\n            <p>When <code>PositionFiltering</code> is set to <code>DistanceBased</code> filtering, location data is stored and evaluated against linked geofence \n                collections only if the device has moved more than 30 m (98.4 ft).</p>\n            <p>When <code>PositionFiltering</code> is set to <code>AccuracyBased</code> filtering,\n                location data is stored and evaluated against linked geofence collections only if the\n                device has moved more than the measured accuracy. For example, if two consecutive\n                updates from a device have a horizontal accuracy of 5 m and 10 m, the second update\n                is neither stored or evaluated if the device has moved less than 15 m. If\n                <code>PositionFiltering</code> is set to <code>AccuracyBased</code> filtering, Amazon Location\n                uses the default value <code>{ \"Horizontal\": 0}</code> when accuracy is not provided on\n                a <code>DevicePositionUpdate</code>.</p>\n         </note>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "tracking."
                 },
@@ -895,7 +894,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>\n            <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html\">Calculates a route</a> given the following required parameters:\n                <code>DeparturePostiton</code> and <code>DestinationPosition</code>. Requires that\n            you first <a href=\"https://docs.aws.amazon.com/location-routes/latest/APIReference/API_CreateRouteCalculator.html\">create a\n                route calculator resource</a>\n         </p>\n        <p>By default, a request that doesn't specify a departure time uses the best time of day\n            to travel with the best traffic conditions when calculating the route.</p>\n        <p>Additional options include:</p>\n        <ul>\n            <li>\n                <p>\n                  <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#departure-time\">Specifying a departure time</a> using either <code>DepartureTime</code> or\n                        <code>DepartureNow</code>. This calculates a route based on predictive\n                    traffic data at the given time. </p>\n                <note>\n                    <p>You can't specify both <code>DepartureTime</code> and\n                            <code>DepartureNow</code> in a single request. Specifying both\n                        parameters returns an error message.</p>\n                </note>\n            </li>\n            <li>\n                <p>\n                  <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#travel-mode\">Specifying a travel mode</a> using TravelMode. This lets you specify an\n                    additional route preference such as <code>CarModeOptions</code> if traveling by\n                        <code>Car</code>, or <code>TruckModeOptions</code> if traveling by\n                        <code>Truck</code>.</p>\n            </li>\n         </ul>\n        <p>\n            </p>",
+                "smithy.api#documentation": "<p>\n            <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html\">Calculates a route</a> given the following required parameters:\n                <code>DeparturePosition</code> and <code>DestinationPosition</code>. Requires that\n            you first <a href=\"https://docs.aws.amazon.com/location-routes/latest/APIReference/API_CreateRouteCalculator.html\">create a\n                route calculator resource</a>.</p>\n        <p>By default, a request that doesn't specify a departure time uses the best time of day\n            to travel with the best traffic conditions when calculating the route.</p>\n        <p>Additional options include:</p>\n        <ul>\n            <li>\n                <p>\n                  <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/departure-time.html\">Specifying a departure time</a> using either <code>DepartureTime</code>\n                    or <code>DepartNow</code>. This calculates a route based on predictive traffic\n                    data at the given time. </p>\n                <note>\n                    <p>You can't specify both <code>DepartureTime</code> and\n                            <code>DepartNow</code> in a single request. Specifying both parameters\n                        returns a validation error.</p>\n                </note>\n            </li>\n            <li>\n                <p>\n                  <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/travel-mode.html\">Specifying a travel mode</a> using TravelMode sets the transportation\n                    mode used to calculate the routes. This also lets you specify additional route\n                    preferences in <code>CarModeOptions</code> if traveling by <code>Car</code>, or\n                        <code>TruckModeOptions</code> if traveling by <code>Truck</code>.</p>\n            </li>\n         </ul>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "routes."
                 },
@@ -927,13 +926,208 @@
                 "smithy.api#documentation": "<p>Contains details about additional route preferences for requests that specify\n                <code>TravelMode</code> as <code>Car</code>.</p>"
             }
         },
+        "com.amazonaws.location#CalculateRouteMatrix": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.location#CalculateRouteMatrixRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.location#CalculateRouteMatrixResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.location#AccessDeniedException"
+                },
+                {
+                    "target": "com.amazonaws.location#InternalServerException"
+                },
+                {
+                    "target": "com.amazonaws.location#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.location#ThrottlingException"
+                },
+                {
+                    "target": "com.amazonaws.location#ValidationException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>\n            <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route-matrix.html\"> Calculates a\n            route matrix</a> given the following required parameters:\n            <code>DeparturePositions</code> and <code>DestinationPositions</code>.\n            <code>CalculateRouteMatrix</code> calculates routes and returns the travel time and \n            travel distance from each departure position to each destination position in the \n            request. For example, given departure positions A and B, and destination positions \n            X and Y, <code>CalculateRouteMatrix</code> will return time and distance for routes \n            from A to X, A to Y, B to X, and B to Y (in that order). The number of results returned \n            (and routes calculated) will be the number of <code>DeparturePositions</code> \n            times the number of <code>DestinationPositions</code>.</p>\n        <note>\n            <p>Your account is charged for each route calculated, not the number of requests.</p>\n        </note>\n        <p>Requires that you first <a href=\"https://docs.aws.amazon.com/location-routes/latest/APIReference/API_CreateRouteCalculator.html\">create a\n            route calculator resource</a>.</p>\n        <p>By default, a request that doesn't specify a departure time uses the best time of day\n            to travel with the best traffic conditions when calculating routes.</p>\n        <p>Additional options include:</p>\n        <ul>\n            <li>\n                <p>\n                  <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/departure-time.html\">\n                        Specifying a departure time</a> using either <code>DepartureTime</code>\n                    or <code>DepartNow</code>. This calculates routes based on predictive traffic\n                    data at the given time. </p>\n                <note>\n                    <p>You can't specify both <code>DepartureTime</code> and\n                            <code>DepartNow</code> in a single request. Specifying both parameters\n                        returns a validation error.</p>\n                </note>\n            </li>\n            <li>\n                <p>\n                  <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/travel-mode.html\">Specifying a travel mode</a> using TravelMode sets the transportation\n                    mode used to calculate the routes. This also lets you specify additional route\n                    preferences in <code>CarModeOptions</code> if traveling by <code>Car</code>, or\n                        <code>TruckModeOptions</code> if traveling by <code>Truck</code>.</p>\n            </li>\n         </ul>",
+                "smithy.api#endpoint": {
+                    "hostPrefix": "routes."
+                },
+                "smithy.api#http": {
+                    "method": "POST",
+                    "uri": "/routes/v0/calculators/{CalculatorName}/calculate/route-matrix",
+                    "code": 200
+                },
+                "smithy.api#readonly": {}
+            }
+        },
+        "com.amazonaws.location#CalculateRouteMatrixRequest": {
+            "type": "structure",
+            "members": {
+                "CalculatorName": {
+                    "target": "com.amazonaws.location#ResourceName",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The name of the route calculator resource that you want to use to calculate the route matrix. </p>",
+                        "smithy.api#httpLabel": {},
+                        "smithy.api#required": {}
+                    }
+                },
+                "DeparturePositions": {
+                    "target": "com.amazonaws.location#PositionList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The list of departure (origin) positions for the route matrix. An array of points,\n            each of which is itself a 2-value array defined in <a href=\"https://earth-info.nga.mil/GandG/wgs84/index.html\">WGS 84</a> format:\n            <code>[longitude, latitude]</code>. For example, <code>[-123.115,\n            49.285]</code>.</p>\n        <important>\n            <p>Depending on the data provider selected in the route calculator resource there may be additional\n                restrictions on the inputs you can choose. See <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route-matrix.html#matrix-routing-position-limits\">\n                    Position restrictions</a> in the <i>Amazon Location Service Developer Guide</i>.</p>\n        </important>\n        <note>\n            <p>For route calculators that use Esri as the data provider, if you specify a \n                departure that's not located on a road, Amazon Location <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/snap-to-nearby-road.html\"> moves the position \n                to the nearest road</a>. The snapped value is available in the result in \n                <code>SnappedDeparturePositions</code>.</p>\n        </note>\n        <p>Valid Values: <code>[-180 to 180,-90 to 90]</code>\n         </p>",
+                        "smithy.api#length": {
+                            "min": 1,
+                            "max": 350
+                        },
+                        "smithy.api#required": {}
+                    }
+                },
+                "DestinationPositions": {
+                    "target": "com.amazonaws.location#PositionList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The list of destination positions for the route matrix. An array of points, each of\n            which is itself a 2-value array defined in <a href=\"https://earth-info.nga.mil/GandG/wgs84/index.html\">WGS 84</a> format:\n            <code>[longitude, latitude]</code>. For example, <code>[-122.339,\n            47.615]</code>\n         </p>\n        <important>\n            <p>Depending on the data provider selected in the route calculator resource there may be additional\n                restrictions on the inputs you can choose. See <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route-matrix.html#matrix-routing-position-limits\">\n                    Position restrictions</a> in the <i>Amazon Location Service Developer Guide</i>.</p>\n        </important>\n        <note>\n            <p>For route calculators that use Esri as the data provider, if you specify a \n                destination that's not located on a road, Amazon Location <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/snap-to-nearby-road.html\"> moves the position \n                to the nearest road</a>. The snapped value is available in the result in \n                <code>SnappedDestinationPositions</code>.</p>\n        </note>\n        <p>Valid Values: <code>[-180 to 180,-90 to 90]</code>\n         </p>",
+                        "smithy.api#length": {
+                            "min": 1,
+                            "max": 350
+                        },
+                        "smithy.api#required": {}
+                    }
+                },
+                "TravelMode": {
+                    "target": "com.amazonaws.location#TravelMode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies the mode of transport when calculating a route. Used in estimating the speed\n            of travel and road compatibility.</p>\n        <p>The <code>TravelMode</code> you specify also determines how you specify route\n            preferences: </p>\n        <ul>\n            <li>\n                <p>If traveling by <code>Car</code> use the <code>CarModeOptions</code>\n                    parameter.</p>\n            </li>\n            <li>\n                <p>If traveling by <code>Truck</code> use the <code>TruckModeOptions</code>\n                    parameter.</p>\n            </li>\n         </ul>\n        <p>Default Value: <code>Car</code>\n         </p>"
+                    }
+                },
+                "DepartureTime": {
+                    "target": "com.amazonaws.location#Timestamp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies the desired time of departure. Uses the given time to calculate the route\n            matrix. You can't set both <code>DepartureTime</code> and <code>DepartNow</code>. If\n            neither is set, the best time of day to travel with the best traffic conditions is used\n            to calculate the route matrix.</p>\n        <note>\n            <p>Setting a departure time in the past returns a <code>400\n                    ValidationException</code> error.</p>\n        </note>\n        <ul>\n            <li>\n                <p>In <a href=\"https://www.iso.org/iso-8601-date-and-time-format.html\">ISO\n                        8601</a> format: <code>YYYY-MM-DDThh:mm:ss.sssZ</code>. For example,\n                        <code>2020–07-2T12:15:20.000Z+01:00</code>\n               </p>\n            </li>\n         </ul>"
+                    }
+                },
+                "DepartNow": {
+                    "target": "smithy.api#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Sets the time of departure as the current time. Uses the current time to calculate the\n            route matrix. You can't set both <code>DepartureTime</code> and <code>DepartNow</code>.\n            If neither is set, the best time of day to travel with the best traffic conditions is\n            used to calculate the route matrix.</p>\n        <p>Default Value: <code>false</code>\n         </p>\n        <p>Valid Values: <code>false</code> | <code>true</code>\n         </p>"
+                    }
+                },
+                "DistanceUnit": {
+                    "target": "com.amazonaws.location#DistanceUnit",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Set the unit system to specify the distance.</p>\n        <p>Default Value: <code>Kilometers</code>\n         </p>"
+                    }
+                },
+                "CarModeOptions": {
+                    "target": "com.amazonaws.location#CalculateRouteCarModeOptions",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies route preferences when traveling by <code>Car</code>, such as avoiding\n            routes that use ferries or tolls.</p>\n        <p>Requirements: <code>TravelMode</code> must be specified as <code>Car</code>.</p>"
+                    }
+                },
+                "TruckModeOptions": {
+                    "target": "com.amazonaws.location#CalculateRouteTruckModeOptions",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies route preferences when traveling by <code>Truck</code>, such as avoiding\n            routes that use ferries or tolls, and truck specifications to consider when choosing an\n            optimal road.</p>\n        <p>Requirements: <code>TravelMode</code> must be specified as <code>Truck</code>.</p>"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.location#CalculateRouteMatrixResponse": {
+            "type": "structure",
+            "members": {
+                "RouteMatrix": {
+                    "target": "com.amazonaws.location#RouteMatrix",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The calculated route matrix containing the results for all pairs of \n        <code>DeparturePositions</code> to <code>DestinationPositions</code>. \n            Each row corresponds to one entry in <code>DeparturePositions</code>. Each\n            entry in the row corresponds to the route from that entry in\n            <code>DeparturePositions</code> to an entry in <code>DestinationPositions</code>. \n        </p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "SnappedDeparturePositions": {
+                    "target": "com.amazonaws.location#PositionList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>For routes calculated using an Esri route calculator resource, departure positions \n            are snapped to the closest road. For Esri route calculator resources, this returns \n            the list of departure/origin positions used for calculation of the \n            <code>RouteMatrix</code>.</p>",
+                        "smithy.api#length": {
+                            "min": 1,
+                            "max": 350
+                        }
+                    }
+                },
+                "SnappedDestinationPositions": {
+                    "target": "com.amazonaws.location#PositionList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The list of destination positions for the route matrix used for calculation of the <code>RouteMatrix</code>.</p>",
+                        "smithy.api#length": {
+                            "min": 1,
+                            "max": 350
+                        }
+                    }
+                },
+                "Summary": {
+                    "target": "com.amazonaws.location#CalculateRouteMatrixSummary",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains information about the route matrix, <code>DataSource</code>,\n        <code>DistanceUnit</code>, <code>RouteCount</code> and <code>ErrorCount</code>.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Returns the result of the route matrix calculation.</p>"
+            }
+        },
+        "com.amazonaws.location#CalculateRouteMatrixSummary": {
+            "type": "structure",
+            "members": {
+                "DataSource": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The data provider of traffic and road network data used to calculate the routes.\n            Indicates one of the available providers:</p>\n        <ul>\n            <li>\n                <p>\n                  <code>Esri</code>\n               </p>\n            </li>\n            <li>\n                <p>\n                  <code>Here</code>\n               </p>\n            </li>\n         </ul>\n        <p>For more information about data providers, see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Amazon Location Service data providers</a>.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "RouteCount": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The count of cells in the route matrix. Equal to the number of <code>DeparturePositions</code>\n         multiplied by the number of <code>DestinationPositions</code>.</p>",
+                        "smithy.api#range": {
+                            "min": 1,
+                            "max": 160000
+                        },
+                        "smithy.api#required": {}
+                    }
+                },
+                "ErrorCount": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The count of error results in the route matrix. If this number is 0, all routes were calculated successfully.</p>",
+                        "smithy.api#range": {
+                            "min": 1,
+                            "max": 160000
+                        },
+                        "smithy.api#required": {}
+                    }
+                },
+                "DistanceUnit": {
+                    "target": "com.amazonaws.location#DistanceUnit",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The unit of measurement for route distances.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>A summary of the calculated route matrix.</p>"
+            }
+        },
         "com.amazonaws.location#CalculateRouteRequest": {
             "type": "structure",
             "members": {
                 "CalculatorName": {
                     "target": "com.amazonaws.location#ResourceName",
                     "traits": {
-                        "smithy.api#documentation": "<p>The name of the route calculator resource that you want to use to calculate a route. </p>",
+                        "smithy.api#documentation": "<p>The name of the route calculator resource that you want to use to calculate the route. </p>",
                         "smithy.api#httpLabel": {},
                         "smithy.api#required": {}
                     }
@@ -941,21 +1135,21 @@
                 "DeparturePosition": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>The start position for the route. Defined in <a href=\"https://earth-info.nga.mil/GandG/wgs84/index.html\">WGS 84</a> format:\n                <code>[longitude, latitude]</code>.</p>\n        <ul>\n            <li>\n                <p>For example, <code>[-123.115, 49.285]</code>\n               </p>\n            </li>\n         </ul>\n        <note>\n            <p>If you specify a departure that's not located on a road, Amazon Location <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">moves the\n                position to the nearest road</a>. If Esri is the provider for your route calculator, \n                specifying a route that is longer than 400 km returns a <code>400 RoutesValidationException</code> error.</p>\n        </note>\n        <p>Valid Values: <code>[-180 to 180,-90 to 90]</code>\n         </p>",
+                        "smithy.api#documentation": "<p>The start position for the route. Defined in <a href=\"https://earth-info.nga.mil/GandG/wgs84/index.html\">WGS 84</a> format:\n                <code>[longitude, latitude]</code>.</p>\n        <ul>\n            <li>\n                <p>For example, <code>[-123.115, 49.285]</code>\n               </p>\n            </li>\n         </ul>\n        <note>\n            <p>If you specify a departure that's not located on a road, Amazon Location <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/snap-to-nearby-road.html\">moves the\n                position to the nearest road</a>. If Esri is the provider for your route calculator, \n                specifying a route that is longer than 400 km returns a <code>400 RoutesValidationException</code> error.</p>\n        </note>\n        <p>Valid Values: <code>[-180 to 180,-90 to 90]</code>\n         </p>",
                         "smithy.api#required": {}
                     }
                 },
                 "DestinationPosition": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>The finish position for the route. Defined in <a href=\"https://earth-info.nga.mil/GandG/wgs84/index.html\">WGS 84</a> format:\n                <code>[longitude, latitude]</code>.</p>\n        <ul>\n            <li>\n                <p> For example, <code>[-122.339, 47.615]</code>\n               </p>\n            </li>\n         </ul>\n        <note>\n            <p>If you specify a destination that's not located on a road, Amazon Location <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">moves the position to the nearest road</a>. </p>\n        </note>\n        <p>Valid Values: <code>[-180 to 180,-90 to 90]</code>\n         </p>",
+                        "smithy.api#documentation": "<p>The finish position for the route. Defined in <a href=\"https://earth-info.nga.mil/GandG/wgs84/index.html\">WGS 84</a> format:\n                <code>[longitude, latitude]</code>.</p>\n        <ul>\n            <li>\n                <p> For example, <code>[-122.339, 47.615]</code>\n               </p>\n            </li>\n         </ul>\n        <note>\n            <p>If you specify a destination that's not located on a road, Amazon Location <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/snap-to-nearby-road.html\">moves the position to the nearest road</a>. </p>\n        </note>\n        <p>Valid Values: <code>[-180 to 180,-90 to 90]</code>\n         </p>",
                         "smithy.api#required": {}
                     }
                 },
                 "WaypointPositions": {
                     "target": "com.amazonaws.location#WaypointPositionList",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies an ordered list of up to 23 intermediate positions to include along a route\n            between the departure position and destination position. </p>\n        <ul>\n            <li>\n                <p>For example, from the <code>DeparturePosition</code>\n                    <code>[-123.115, 49.285]</code>, the route follows the order that the waypoint\n                    positions are given <code>[[-122.757, 49.0021],[-122.349, 47.620]]</code>\n               </p>\n            </li>\n         </ul>\n        <note>\n            <p>If you specify a waypoint position that's not located on a road, Amazon Location <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">moves the position to the nearest road</a>. </p>\n            <p>Specifying more than 23 waypoints returns a <code>400 ValidationException</code>\n                error.</p>\n            <p>If Esri is the provider for your route calculator, specifying a \n                route that is longer than 400 km returns a <code>400 RoutesValidationException</code> error.</p>\n        </note>\n        <p>Valid Values: <code>[-180 to 180,-90 to 90]</code>\n         </p>",
+                        "smithy.api#documentation": "<p>Specifies an ordered list of up to 23 intermediate positions to include along a route\n            between the departure position and destination position. </p>\n        <ul>\n            <li>\n                <p>For example, from the <code>DeparturePosition</code>\n                    <code>[-123.115, 49.285]</code>, the route follows the order that the waypoint\n                    positions are given <code>[[-122.757, 49.0021],[-122.349, 47.620]]</code>\n               </p>\n            </li>\n         </ul>\n        <note>\n            <p>If you specify a waypoint position that's not located on a road, Amazon Location <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/snap-to-nearby-road.html\">moves the position to the nearest road</a>. </p>\n            <p>Specifying more than 23 waypoints returns a <code>400 ValidationException</code>\n                error.</p>\n            <p>If Esri is the provider for your route calculator, specifying a \n                route that is longer than 400 km returns a <code>400 RoutesValidationException</code> error.</p>\n        </note>\n        <p>Valid Values: <code>[-180 to 180,-90 to 90]</code>\n         </p>",
                         "smithy.api#length": {
                             "max": 23
                         }
@@ -964,13 +1158,13 @@
                 "TravelMode": {
                     "target": "com.amazonaws.location#TravelMode",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the mode of transport when calculating a route. Used in estimating the speed\n            of travel and road compatibility.</p>\n        <p>The <code>TravelMode</code> you specify determines how you specify route preferences: </p>\n        <ul>\n            <li>\n                <p>If traveling by <code>Car</code> use the <code>CarModeOptions</code>\n                    parameter.</p>\n            </li>\n            <li>\n                <p>If traveling by <code>Truck</code> use the <code>TruckModeOptions</code>\n                    parameter.</p>\n            </li>\n         </ul>\n        <p>Default Value: <code>Car</code>\n         </p>"
+                        "smithy.api#documentation": "<p>Specifies the mode of transport when calculating a route. Used in estimating the speed\n            of travel and road compatibility.</p>\n        <p>The <code>TravelMode</code> you specify also determines how you specify route\n            preferences: </p>\n        <ul>\n            <li>\n                <p>If traveling by <code>Car</code> use the <code>CarModeOptions</code>\n                    parameter.</p>\n            </li>\n            <li>\n                <p>If traveling by <code>Truck</code> use the <code>TruckModeOptions</code>\n                    parameter.</p>\n            </li>\n         </ul>\n        <p>Default Value: <code>Car</code>\n         </p>"
                     }
                 },
                 "DepartureTime": {
                     "target": "com.amazonaws.location#Timestamp",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the desired time of departure. Uses the given time to calculate a route.\n            Otherwise, the best time of day to travel with the best traffic conditions is used to\n            calculate the route.</p>\n        <note>\n            <p>Setting a departure time in the past returns a <code>400\n                    ValidationException</code> error.</p>\n        </note>\n        <ul>\n            <li>\n                <p>In <a href=\"https://www.iso.org/iso-8601-date-and-time-format.html\">ISO\n                        8601</a> format: <code>YYYY-MM-DDThh:mm:ss.sssZ</code>. For example,\n                        <code>2020–07-2T12:15:20.000Z+01:00</code>\n               </p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>Specifies the desired time of departure. Uses the given time to calculate the route.\n            Otherwise, the best time of day to travel with the best traffic conditions is used to\n            calculate the route.</p>\n        <note>\n            <p>Setting a departure time in the past returns a <code>400\n                    ValidationException</code> error.</p>\n        </note>\n        <ul>\n            <li>\n                <p>In <a href=\"https://www.iso.org/iso-8601-date-and-time-format.html\">ISO\n                        8601</a> format: <code>YYYY-MM-DDThh:mm:ss.sssZ</code>. For example,\n                        <code>2020–07-2T12:15:20.000Z+01:00</code>\n               </p>\n            </li>\n         </ul>"
                     }
                 },
                 "DepartNow": {
@@ -1011,7 +1205,7 @@
                 "Legs": {
                     "target": "com.amazonaws.location#LegList",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains details about each path between a pair of positions included along a route\n            such as: <code>StartPosition</code>, <code>EndPosition</code>, <code>Distance</code>,\n                <code>DurationSeconds</code>, <code>Geometry</code>, and <code>Steps</code>. The\n            number of legs returned corresponds to one fewer than the total number of positions in\n            the request. </p>\n        <p>For example, a route with a departure position and destination position returns one\n            leg with the positions <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">snapped to a nearby road</a>:</p>\n        <ul>\n            <li>\n                <p>The <code>StartPosition</code> is the departure position.</p>\n            </li>\n            <li>\n                <p>The <code>EndPosition</code> is the destination position.</p>\n            </li>\n         </ul>\n        <p>A route with a waypoint between the departure and destination position returns two\n            legs with the positions snapped to a nearby road:</p>\n        <ul>\n            <li>\n                <p>Leg 1: The <code>StartPosition</code> is the departure position . The\n                        <code>EndPosition</code> is the waypoint positon.</p>\n            </li>\n            <li>\n                <p>Leg 2: The <code>StartPosition</code> is the waypoint position. The\n                        <code>EndPosition</code> is the destination position.</p>\n            </li>\n         </ul>",
+                        "smithy.api#documentation": "<p>Contains details about each path between a pair of positions included along a route\n            such as: <code>StartPosition</code>, <code>EndPosition</code>, <code>Distance</code>,\n                <code>DurationSeconds</code>, <code>Geometry</code>, and <code>Steps</code>. The\n            number of legs returned corresponds to one fewer than the total number of positions in\n            the request. </p>\n        <p>For example, a route with a departure position and destination position returns one\n            leg with the positions <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/snap-to-nearby-road.html\">snapped to a nearby road</a>:</p>\n        <ul>\n            <li>\n                <p>The <code>StartPosition</code> is the departure position.</p>\n            </li>\n            <li>\n                <p>The <code>EndPosition</code> is the destination position.</p>\n            </li>\n         </ul>\n        <p>A route with a waypoint between the departure and destination position returns two\n            legs with the positions snapped to a nearby road:</p>\n        <ul>\n            <li>\n                <p>Leg 1: The <code>StartPosition</code> is the departure position . The\n                        <code>EndPosition</code> is the waypoint positon.</p>\n            </li>\n            <li>\n                <p>Leg 2: The <code>StartPosition</code> is the waypoint position. The\n                        <code>EndPosition</code> is the destination position.</p>\n            </li>\n         </ul>",
                         "smithy.api#required": {}
                     }
                 },
@@ -1067,7 +1261,7 @@
                 "DistanceUnit": {
                     "target": "com.amazonaws.location#DistanceUnit",
                     "traits": {
-                        "smithy.api#documentation": "<p>The unit of measurement for the distance.</p>",
+                        "smithy.api#documentation": "<p>The unit of measurement for route distances.</p>",
                         "smithy.api#required": {}
                     }
                 }
@@ -1194,14 +1388,21 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the pricing plan for the geofence collection.</p>\n        <p>For additional details and restrictions on each pricing plan option, see the <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing\n            page</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. If included, the only allowed value is RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. If included, the only allowed value is \n            <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "PricingPlanDataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the data provider for the geofence collection.</p>\n        <ul>\n            <li>\n                <p>Required value for the following pricing plans: <code>MobileAssetTracking\n                    </code>| <code>MobileAssetManagement</code>\n               </p>\n            </li>\n         </ul>\n        <p>For more information about <a href=\"https://aws.amazon.com/location/data-providers/\">Data Providers</a>, and <a href=\"https://aws.amazon.com/location/pricing/\">Pricing plans</a>, see the Amazon Location\n            Service product page.</p>\n\t        <note>\n\t           <p>Amazon Location Service only uses <code>PricingPlanDataSource</code> to calculate billing for\n                your geofence collection. Your data won't be shared with the data provider, and will\n                remain in your AWS account or Region unless you move it.</p>\n\t        </note>\n        <p>Valid Values: <code>Esri </code>| <code>Here</code>\n         </p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. No longer allowed."
+                        },
+                        "smithy.api#documentation": "<p>This parameter is no longer used.</p>"
                     }
                 },
                 "Description": {
@@ -1213,7 +1414,7 @@
                 "Tags": {
                     "target": "com.amazonaws.location#TagMap",
                     "traits": {
-                        "smithy.api#documentation": "<p>Applies one or more tags to the geofence collection. A tag is a key-value pair helps\n            manage, identify, search, and filter your resources by labelling them.</p>\n        <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n        <p>Restrictions:</p>\n        <ul>\n            <li>\n                <p>Maximum 50 tags per resource</p>\n            </li>\n            <li>\n                <p>Each resource tag must be unique with a maximum of one value.</p>\n            </li>\n            <li>\n                <p>Maximum key length: 128 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Maximum value length: 256 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters:\n                    + - = . _ : / @. </p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>Applies one or more tags to the geofence collection. A tag is a key-value pair helps\n            manage, identify, search, and filter your resources by labelling them.</p>\n        <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n        <p>Restrictions:</p>\n        <ul>\n            <li>\n                <p>Maximum 50 tags per resource</p>\n            </li>\n            <li>\n                <p>Each resource tag must be unique with a maximum of one value.</p>\n            </li>\n            <li>\n                <p>Maximum key length: 128 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Maximum value length: 256 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters:\n                    + - = . _ : / @. </p>\n            </li>\n            <li>\n                <p>Cannot use \"aws:\" as a prefix for a key.</p>\n            </li>\n         </ul>"
                     }
                 },
                 "KmsKeyId": {
@@ -1276,7 +1477,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Creates a map resource in your AWS account, which provides map tiles of different\n            styles sourced from global location data providers.</p>",
+                "smithy.api#documentation": "<p>Creates a map resource in your AWS account, which provides map tiles of different\n            styles sourced from global location data providers.</p>\n        <note>\n            <p>If your application is tracking or routing assets you use in your business, such \n                as delivery vehicles or employees, you may only use HERE as your geolocation \n                provider. See section 82 of the <a href=\"http://aws.amazon.com/service-terms\">AWS\n                    service terms</a> for more details.</p>\n        </note>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "maps."
                 },
@@ -1308,8 +1509,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the pricing plan for your map resource.</p>\n        <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. If included, the only allowed value is RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. If included, the only allowed value is \n            <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "Description": {
@@ -1321,7 +1525,7 @@
                 "Tags": {
                     "target": "com.amazonaws.location#TagMap",
                     "traits": {
-                        "smithy.api#documentation": "<p>Applies one or more tags to the map resource. A tag is a key-value pair helps manage,\n            identify, search, and filter your resources by labelling them.</p>\n         <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n         <p>Restrictions:</p>\n         <ul>\n            <li>\n               <p>Maximum 50 tags per resource</p>\n            </li>\n            <li>\n               <p>Each resource tag must be unique with a maximum of one value.</p>\n            </li>\n            <li>\n               <p>Maximum key length: 128 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n               <p>Maximum value length:  256 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n               <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters: + - = . _ : /\n                    @. </p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>Applies one or more tags to the map resource. A tag is a key-value pair helps manage,\n            identify, search, and filter your resources by labelling them.</p>\n         <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n         <p>Restrictions:</p>\n         <ul>\n            <li>\n               <p>Maximum 50 tags per resource</p>\n            </li>\n            <li>\n               <p>Each resource tag must be unique with a maximum of one value.</p>\n            </li>\n            <li>\n               <p>Maximum key length: 128 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n               <p>Maximum value length:  256 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n               <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters: + - = . _ : /\n                    @. </p>\n            </li>\n            <li>\n               <p>Cannot use \"aws:\" as a prefix for a key.</p>\n            </li>\n         </ul>"
                     }
                 }
             }
@@ -1378,7 +1582,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Creates a place index resource in your AWS account, which supports functions with\n         geospatial data sourced from your chosen data provider.</p>",
+                "smithy.api#documentation": "<p>Creates a place index resource in your AWS account. Use a place index resource to\n            geocode addresses and other text queries by using the <code>SearchPlaceIndexForText</code> operation,\n            and reverse geocode coordinates by using the <code>SearchPlaceIndexForPosition</code> operation, and\n            enable autosuggestions by using the <code>SearchPlaceIndexForSuggestions</code> operation.</p>\n         <note>\n            <p>If your application is tracking or routing assets you use in your business, such \n            as delivery vehicles or employees, you may only use HERE as your geolocation \n            provider. See section 82 of the <a href=\"http://aws.amazon.com/service-terms\">AWS\n               service terms</a> for more details.</p>\n         </note>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "places."
                 },
@@ -1403,15 +1607,18 @@
                 "DataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the data provider of geospatial data.</p>\n         <note>\n            <p>This field is case-sensitive. Enter the valid values as shown. For example, entering\n               <code>HERE</code> returns an error.</p>\n         </note>\n         <p>Valid values include:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>Esri</code> – For additional information about <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/esri.html\">Esri</a>'s coverage in your\n               region of interest, see <a href=\"https://developers.arcgis.com/rest/geocode/api-reference/geocode-coverage.htm\">Esri details on geocoding coverage</a>.</p>\n            </li>\n            <li>\n               <p>\n                  <code>Here</code> – For additional information about <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/HERE.html\">HERE Technologies</a>'\n               coverage in your region of interest, see <a href=\"https://developer.here.com/documentation/geocoder/dev_guide/topics/coverage-geocoder.html\">HERE details on goecoding coverage</a>.</p>\n               <important>\n                  <p>Place index resources using HERE Technologies as a data provider can't <a href=\"https://docs.aws.amazon.com/location-places/latest/APIReference/API_DataSourceConfiguration.html\">store results</a> for locations in Japan. For more information, see the\n                     <a href=\"https://aws.amazon.com/service-terms/\">AWS Service Terms</a>\n                  for Amazon Location Service.</p>\n               </important>\n            </li>\n         </ul>\n         <p>For additional information , see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Data providers</a>\n         on the <i>Amazon Location Service Developer Guide</i>.</p>",
+                        "smithy.api#documentation": "<p>Specifies the geospatial data provider for the new place index.</p>\n         <note>\n            <p>This field is case-sensitive. Enter the valid values as shown. For example, entering\n               <code>HERE</code> returns an error.</p>\n         </note>\n         <p>Valid values include:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>Esri</code> – For additional information about <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/esri.html\">Esri</a>'s coverage in your\n               region of interest, see <a href=\"https://developers.arcgis.com/rest/geocode/api-reference/geocode-coverage.htm\">Esri details on geocoding coverage</a>.</p>\n            </li>\n            <li>\n               <p>\n                  <code>Here</code> – For additional information about <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/HERE.html\">HERE Technologies</a>'\n               coverage in your region of interest, see <a href=\"https://developer.here.com/documentation/geocoder/dev_guide/topics/coverage-geocoder.html\">HERE details on goecoding coverage</a>.</p>\n               <important>\n                  <p>If you specify HERE Technologies (<code>Here</code>) as the data provider,\n                  you may not <a href=\"https://docs.aws.amazon.com/location-places/latest/APIReference/API_DataSourceConfiguration.html\">store results</a> for locations in Japan. For more information, see the\n                     <a href=\"https://aws.amazon.com/service-terms/\">AWS Service Terms</a>\n                  for Amazon Location Service.</p>\n               </important>\n            </li>\n         </ul>\n         <p>For additional information , see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Data providers</a>\n         on the <i>Amazon Location Service Developer Guide</i>.</p>",
                         "smithy.api#required": {}
                     }
                 },
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the pricing plan for your place index resource.</p>\n         <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. If included, the only allowed value is RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. If included, the only allowed value is \n         <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "Description": {
@@ -1429,7 +1636,7 @@
                 "Tags": {
                     "target": "com.amazonaws.location#TagMap",
                     "traits": {
-                        "smithy.api#documentation": "<p>Applies one or more tags to the place index resource. A tag is a key-value pair helps\n         manage, identify, search, and filter your resources by labelling them.</p>\n         <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n         <p>Restrictions:</p>\n         <ul>\n            <li>\n               <p>Maximum 50 tags per resource</p>\n            </li>\n            <li>\n               <p>Each resource tag must be unique with a maximum of one value.</p>\n            </li>\n            <li>\n               <p>Maximum key length: 128 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n               <p>Maximum value length: 256 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n               <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters: + -\n               = . _ : / @. </p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>Applies one or more tags to the place index resource. A tag is a key-value pair that helps you\n         manage, identify, search, and filter your resources.</p>\n         <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n         <p>Restrictions:</p>\n         <ul>\n            <li>\n               <p>Maximum 50 tags per resource.</p>\n            </li>\n            <li>\n               <p>Each tag key must be unique and must have exactly one associated value.</p>\n            </li>\n            <li>\n               <p>Maximum key length: 128 Unicode characters in UTF-8.</p>\n            </li>\n            <li>\n               <p>Maximum value length: 256 Unicode characters in UTF-8.</p>\n            </li>\n            <li>\n               <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters: + -\n               = . _ : / @</p>\n            </li>\n            <li>\n               <p>Cannot use \"aws:\" as a prefix for a key.</p>\n            </li>\n         </ul>"
                     }
                 }
             }
@@ -1486,7 +1693,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Creates a route calculator resource in your AWS account.</p>\n        <p>You can send requests to a route calculator resource to estimate travel time,\n            distance, and get directions. A route calculator sources traffic and road network data\n            from your chosen data provider.</p>",
+                "smithy.api#documentation": "<p>Creates a route calculator resource in your AWS account.</p>\n        <p>You can send requests to a route calculator resource to estimate travel time,\n            distance, and get directions. A route calculator sources traffic and road network data\n            from your chosen data provider.</p>\n        <note>\n            <p>If your application is tracking or routing assets you use in your business, such \n                as delivery vehicles or employees, you may only use HERE as your geolocation \n                provider. See section 82 of the <a href=\"http://aws.amazon.com/service-terms\">AWS\n                service terms</a> for more details.</p>\n        </note>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "routes."
                 },
@@ -1518,8 +1725,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the pricing plan for your route calculator resource.</p>\n        <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. If included, the only allowed value is RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. If included, the only allowed value is \n            <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "Description": {
@@ -1531,7 +1741,7 @@
                 "Tags": {
                     "target": "com.amazonaws.location#TagMap",
                     "traits": {
-                        "smithy.api#documentation": "<p>Applies one or more tags to the route calculator resource. A tag is a key-value pair\n            helps manage, identify, search, and filter your resources by labelling them.</p>\n        <ul>\n            <li>\n                <p>For example: { <code>\"tag1\" : \"value1\"</code>, <code>\"tag2\" :\n                    \"value2\"</code>}</p>\n            </li>\n         </ul>\n        <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n        <p>Restrictions:</p>\n        <ul>\n            <li>\n                <p>Maximum 50 tags per resource</p>\n            </li>\n            <li>\n                <p>Each resource tag must be unique with a maximum of one value.</p>\n            </li>\n            <li>\n                <p>Maximum key length: 128 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Maximum value length: 256 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters:\n                    + - = . _ : / @. </p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>Applies one or more tags to the route calculator resource. A tag is a key-value pair\n            helps manage, identify, search, and filter your resources by labelling them.</p>\n        <ul>\n            <li>\n                <p>For example: { <code>\"tag1\" : \"value1\"</code>, <code>\"tag2\" :\n                    \"value2\"</code>}</p>\n            </li>\n         </ul>\n        <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n        <p>Restrictions:</p>\n        <ul>\n            <li>\n                <p>Maximum 50 tags per resource</p>\n            </li>\n            <li>\n                <p>Each resource tag must be unique with a maximum of one value.</p>\n            </li>\n            <li>\n                <p>Maximum key length: 128 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Maximum value length: 256 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters:\n                    + - = . _ : / @. </p>\n            </li>\n            <li>\n                <p>Cannot use \"aws:\" as a prefix for a key.</p>\n            </li>\n         </ul>"
                     }
                 }
             }
@@ -1613,8 +1823,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the pricing plan for the tracker resource.</p>\n         <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. If included, the only allowed value is RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. If included, the only allowed value is \n           <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "KmsKeyId": {
@@ -1626,7 +1839,11 @@
                 "PricingPlanDataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the data provider for the tracker resource.</p>\n         <ul>\n            <li>\n               <p>Required value for the following pricing plans: <code>MobileAssetTracking\n               </code>| <code>MobileAssetManagement</code>\n               </p>\n           </li>\n         </ul>\n         <p>For more information about <a href=\"https://aws.amazon.com/location/data-providers/\">Data Providers</a>, and <a href=\"https://aws.amazon.com/location/pricing/\">Pricing plans</a>, see the Amazon Location\n           Service product page.</p>\n\t        <note>\n\t           <p>Amazon Location Service only uses <code>PricingPlanDataSource</code> to calculate billing for your tracker resource. Your data will not be shared with the data provider, and will remain in your AWS account or Region unless you move it.</p>\n\t        </note>\n        <p>Valid values: <code>Esri</code> | <code>Here</code>\n         </p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. No longer allowed."
+                        },
+                        "smithy.api#documentation": "<p>This parameter is no longer used.</p>"
                     }
                 },
                 "Description": {
@@ -1638,13 +1855,13 @@
                 "Tags": {
                     "target": "com.amazonaws.location#TagMap",
                     "traits": {
-                        "smithy.api#documentation": "<p>Applies one or more tags to the tracker resource. A tag is a key-value pair helps\n            manage, identify, search, and filter your resources by labelling them.</p>\n        <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n        <p>Restrictions:</p>\n        <ul>\n            <li>\n                <p>Maximum 50 tags per resource</p>\n            </li>\n            <li>\n                <p>Each resource tag must be unique with a maximum of one value.</p>\n            </li>\n            <li>\n                <p>Maximum key length: 128 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Maximum value length: 256 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters:\n                    + - = . _ : / @. </p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>Applies one or more tags to the tracker resource. A tag is a key-value pair helps\n            manage, identify, search, and filter your resources by labelling them.</p>\n        <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n        <p>Restrictions:</p>\n        <ul>\n            <li>\n                <p>Maximum 50 tags per resource</p>\n            </li>\n            <li>\n                <p>Each resource tag must be unique with a maximum of one value.</p>\n            </li>\n            <li>\n                <p>Maximum key length: 128 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Maximum value length: 256 Unicode characters in UTF-8</p>\n            </li>\n            <li>\n                <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters:\n                    + - = . _ : / @. </p>\n            </li>\n            <li>\n                <p>Cannot use \"aws:\" as a prefix for a key.</p>\n            </li>\n         </ul>"
                     }
                 },
                 "PositionFiltering": {
                     "target": "com.amazonaws.location#PositionFiltering",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies the position filtering for the tracker resource.</p>\n        <p>Valid values:</p>\n        <ul>\n            <li>\n                <p>\n                    <code>TimeBased</code> - Location updates are evaluated against linked geofence collections, \n                    but not every location update is stored. If your update frequency is more often than 30 seconds, \n                    only one update per 30 seconds is stored for each unique device ID.\n                </p>\n            </li>\n            <li>\n                <p>\n                    <code>DistanceBased</code> - If the device has moved less than 30 m (98.4 ft), location updates are \n                    ignored. Location updates within this distance are neither evaluated against linked geofence collections, nor stored. \n                    This helps control costs by reducing the number of geofence evaluations and device positions to retrieve. \n                    Distance-based filtering can also reduce the jitter effect when displaying device trajectory on a map.\n                </p>\n            </li>\n         </ul>\n        <p>This field is optional. If not specified, the default value is <code>TimeBased</code>.</p>"
+                        "smithy.api#documentation": "<p>Specifies the position filtering for the tracker resource.</p>\n        <p>Valid values:</p>\n        <ul>\n            <li>\n                <p>\n                    <code>TimeBased</code> - Location updates are evaluated against linked geofence collections, \n                    but not every location update is stored. If your update frequency is more often than 30 seconds, \n                    only one update per 30 seconds is stored for each unique device ID.\n                </p>\n            </li>\n            <li>\n                <p>\n                    <code>DistanceBased</code> - If the device has moved less than 30 m (98.4 ft), location updates are \n                    ignored. Location updates within this area are neither evaluated against linked geofence collections, nor stored.\n                    This helps control costs by reducing the number of geofence evaluations and historical device positions to paginate through.\n                    Distance-based filtering can also reduce the effects of GPS noise when displaying device trajectories on a map.\n                </p>\n            </li>\n            <li>\n                <p>\n                    <code>AccuracyBased</code> - If the device has moved less than the measured accuracy,\n                    location updates are ignored. For example, if two consecutive updates from a device\n                    have a horizontal accuracy of 5 m and 10 m, the second update is ignored if the device\n                    has moved less than 15 m. Ignored location updates are neither evaluated against\n                    linked geofence collections, nor stored. This can reduce the effects of GPS noise\n                    when displaying device trajectories on a map, and can help control your costs by reducing the\n                    number of geofence evaluations.\n                </p>\n            </li>\n         </ul>\n        <p>This field is optional. If not specified, the default value is <code>TimeBased</code>.</p>"
                     }
                 }
             }
@@ -1681,7 +1898,7 @@
                 "IntendedUse": {
                     "target": "com.amazonaws.location#IntendedUse",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies how the results of an operation will be stored by the caller. </p>\n         <p>Valid values include:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>SingleUse</code> specifies that the results won't be stored. </p>\n            </li>\n            <li>\n               <p>\n                  <code>Storage</code> specifies that the result can be cached or stored in a database.</p>\n            </li>\n         </ul>\n         <p>Default value:  <code>SingleUse</code>\n         </p>"
+                        "smithy.api#documentation": "<p>Specifies how the results of an operation will be stored by the caller. </p>\n         <p>Valid values include:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>SingleUse</code> specifies that the results won't be stored. </p>\n            </li>\n            <li>\n               <p>\n                  <code>Storage</code> specifies that the result can be cached or stored in a database.</p>\n            </li>\n         </ul>\n         <p>Default value: <code>SingleUse</code>\n         </p>"
                     }
                 }
             },
@@ -1990,7 +2207,6 @@
                 }
             ],
             "traits": {
-                "smithy.api#auth": [],
                 "smithy.api#documentation": "<p>Retrieves the geofence collection details.</p>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "geofencing."
@@ -2043,14 +2259,21 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>The pricing plan selected for the specified geofence collection.</p>\n        <p>For additional details and restrictions on each pricing plan option, see the <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing\n                page</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Always returns RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. Always returns <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "PricingPlanDataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The specified data provider for the geofence collection.</p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Unused."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. Always returns an empty string.</p>"
                     }
                 },
                 "KmsKeyId": {
@@ -2107,7 +2330,6 @@
                 }
             ],
             "traits": {
-                "smithy.api#auth": [],
                 "smithy.api#documentation": "<p>Retrieves the map resource details.</p>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "maps."
@@ -2153,8 +2375,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>The pricing plan selected for the specified map resource.</p>\n\n        <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Always returns RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. Always returns <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "DataSource": {
@@ -2226,7 +2451,6 @@
                 }
             ],
             "traits": {
-                "smithy.api#auth": [],
                 "smithy.api#documentation": "<p>Retrieves the place index resource details.</p>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "places."
@@ -2272,8 +2496,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>The pricing plan selected for the specified place index resource.</p>\n         <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Always returns RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. Always returns <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "Description": {
@@ -2300,7 +2527,7 @@
                 "DataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The data provider of geospatial data. Indicates one of the available providers:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>Esri</code>\n               </p>\n            </li>\n            <li>\n               <p>\n                  <code>Here</code>\n               </p>\n            </li>\n         </ul>\n         <p>For additional details on data providers, see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Amazon Location Service data providers</a>.</p>",
+                        "smithy.api#documentation": "<p>The data provider of geospatial data. Values can be one of the following:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>Esri</code>\n               </p>\n            </li>\n            <li>\n               <p>\n                  <code>Here</code>\n               </p>\n            </li>\n         </ul>\n         <p>For more information about data providers, see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Amazon Location Service data providers</a>.</p>",
                         "smithy.api#required": {}
                     }
                 },
@@ -2345,7 +2572,6 @@
                 }
             ],
             "traits": {
-                "smithy.api#auth": [],
                 "smithy.api#documentation": "<p>Retrieves the route calculator resource details.</p>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "routes."
@@ -2391,8 +2617,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>The pricing plan selected for the specified route calculator resource.</p>\n        <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Always returns RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>Always returns <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "Description": {
@@ -2457,7 +2686,6 @@
                 }
             ],
             "traits": {
-                "smithy.api#auth": [],
                 "smithy.api#documentation": "<p>Retrieves the tracker resource details.</p>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "tracking."
@@ -2510,14 +2738,21 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>The pricing plan selected for the specified tracker resource.</p>\n        <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Always returns RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>Always returns <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "PricingPlanDataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The specified data provider for the tracker resource.</p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Unused."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. Always returns an empty string.</p>"
                     }
                 },
                 "Tags": {
@@ -2589,6 +2824,18 @@
                         "smithy.api#documentation": "<p>The last known device position.</p>",
                         "smithy.api#required": {}
                     }
+                },
+                "Accuracy": {
+                    "target": "com.amazonaws.location#PositionalAccuracy",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The accuracy of the device position.</p>"
+                    }
+                },
+                "PositionProperties": {
+                    "target": "com.amazonaws.location#PropertyMap",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The properties associated with the position.</p>"
+                    }
                 }
             },
             "traits": {
@@ -2623,6 +2870,18 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The latest device position defined in <a href=\"https://earth-info.nga.mil/GandG/wgs84/index.html\">WGS 84</a> format:\n                <code>[X or longitude, Y or latitude]</code>.</p>",
                         "smithy.api#required": {}
+                    }
+                },
+                "Accuracy": {
+                    "target": "com.amazonaws.location#PositionalAccuracy",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The accuracy of the device position.</p>"
+                    }
+                },
+                "PositionProperties": {
+                    "target": "com.amazonaws.location#PropertyMap",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Associates one of more properties with the position update. A property is a key-value\n            pair stored with the position update and added to any geofence event the update may\n            trigger.</p>\n        <p>Format: <code>\"key\" : \"value\"</code>\n         </p>"
                     }
                 }
             },
@@ -2999,6 +3258,18 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The last known device position.</p>",
                         "smithy.api#required": {}
+                    }
+                },
+                "Accuracy": {
+                    "target": "com.amazonaws.location#PositionalAccuracy",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The accuracy of the device position.</p>"
+                    }
+                },
+                "PositionProperties": {
+                    "target": "com.amazonaws.location#PropertyMap",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The properties associated with the position.</p>"
                     }
                 }
             }
@@ -3501,20 +3772,29 @@
                 }
             }
         },
+        "com.amazonaws.location#LanguageTag": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 2,
+                    "max": 35
+                }
+            }
+        },
         "com.amazonaws.location#Leg": {
             "type": "structure",
             "members": {
                 "StartPosition": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>The starting position of the leg. Follows the format\n            <code>[longitude,latitude]</code>.</p>\n        <note>\n            <p>If the <code>StartPosition</code> isn't located on a road, it's <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">snapped to a nearby road</a>. </p>\n        </note>",
+                        "smithy.api#documentation": "<p>The starting position of the leg. Follows the format\n            <code>[longitude,latitude]</code>.</p>\n        <note>\n            <p>If the <code>StartPosition</code> isn't located on a road, it's <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/snap-to-nearby-road.html\">snapped to a nearby road</a>. </p>\n        </note>",
                         "smithy.api#required": {}
                     }
                 },
                 "EndPosition": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>The terminating position of the leg. Follows the format\n                <code>[longitude,latitude]</code>.</p>\n        <note>\n            <p>If the <code>EndPosition</code> isn't located on a road, it's <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">snapped to a nearby road</a>. </p>\n        </note>",
+                        "smithy.api#documentation": "<p>The terminating position of the leg. Follows the format\n                <code>[longitude,latitude]</code>.</p>\n        <note>\n            <p>If the <code>EndPosition</code> isn't located on a road, it's <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/nap-to-nearby-road.html\">snapped to a nearby road</a>. </p>\n        </note>",
                         "smithy.api#required": {}
                     }
                 },
@@ -3553,7 +3833,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>Contains the calculated route's details for each path between a pair of positions. The\n            number of legs returned corresponds to one fewer than the total number of positions in\n            the request. </p>\n        <p>For example, a route with a departure position and destination position returns one\n            leg with the positions <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/calculate-route.html#snap-to-nearby-road\">snapped to a nearby road</a>:</p>\n        <ul>\n            <li>\n                <p>The <code>StartPosition</code> is the departure position.</p>\n            </li>\n            <li>\n                <p>The <code>EndPosition</code> is the destination position.</p>\n            </li>\n         </ul>\n        <p>A route with a waypoint between the departure and destination position returns two\n            legs with the positions snapped to a nearby road:</p>\n        <ul>\n            <li>\n                <p>Leg 1: The <code>StartPosition</code> is the departure position . The\n                        <code>EndPosition</code> is the waypoint positon.</p>\n            </li>\n            <li>\n                <p>Leg 2: The <code>StartPosition</code> is the waypoint position. The\n                        <code>EndPosition</code> is the destination position.</p>\n            </li>\n         </ul>"
+                "smithy.api#documentation": "<p>Contains the calculated route's details for each path between a pair of positions. The\n            number of legs returned corresponds to one fewer than the total number of positions in\n            the request. </p>\n        <p>For example, a route with a departure position and destination position returns one\n            leg with the positions <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/snap-to-nearby-road.html\">snapped to a nearby road</a>:</p>\n        <ul>\n            <li>\n                <p>The <code>StartPosition</code> is the departure position.</p>\n            </li>\n            <li>\n                <p>The <code>EndPosition</code> is the destination position.</p>\n            </li>\n         </ul>\n        <p>A route with a waypoint between the departure and destination position returns two\n            legs with the positions snapped to a nearby road:</p>\n        <ul>\n            <li>\n                <p>Leg 1: The <code>StartPosition</code> is the departure position . The\n                        <code>EndPosition</code> is the waypoint positon.</p>\n            </li>\n            <li>\n                <p>Leg 2: The <code>StartPosition</code> is the waypoint position. The\n                        <code>EndPosition</code> is the destination position.</p>\n            </li>\n         </ul>"
             }
         },
         "com.amazonaws.location#LegGeometry": {
@@ -3726,6 +4006,18 @@
                         "smithy.api#documentation": "<p>The last known device position. Empty if no positions currently stored.</p>",
                         "smithy.api#required": {}
                     }
+                },
+                "Accuracy": {
+                    "target": "com.amazonaws.location#PositionalAccuracy",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The accuracy of the device position.</p>"
+                    }
+                },
+                "PositionProperties": {
+                    "target": "com.amazonaws.location#PropertyMap",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The properties associated with the position.</p>"
+                    }
                 }
             },
             "traits": {
@@ -3838,14 +4130,21 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>The pricing plan for the specified geofence collection.</p>\n        <p>For additional details and restrictions on each pricing plan option, see the <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing\n            page</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Always returns RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. Always returns <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "PricingPlanDataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The specified data provider for the geofence collection.</p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Unused."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. Always returns an empty string.</p>"
                     }
                 },
                 "CreateTime": {
@@ -4109,8 +4408,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>The pricing plan for the specified map resource.</p>\n        <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Always returns RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. Always returns <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "CreateTime": {
@@ -4213,7 +4515,7 @@
                 "NextToken": {
                     "target": "com.amazonaws.location#Token",
                     "traits": {
-                        "smithy.api#documentation": "<p>A pagination token indicating there are additional pages available. You can use the\n         token in a following request to fetch the next set of results.</p>"
+                        "smithy.api#documentation": "<p>A pagination token indicating that there are additional pages available. You can use the\n         token in a new request to fetch the next page of results.</p>"
                     }
                 }
             }
@@ -4238,15 +4540,18 @@
                 "DataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The data provider of geospatial data. Indicates one of the available providers:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>Esri</code>\n               </p>\n            </li>\n            <li>\n               <p>\n                  <code>Here</code>\n               </p>\n            </li>\n         </ul>\n         <p>For additional details on data providers, see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Amazon Location Service data providers</a>.</p>",
+                        "smithy.api#documentation": "<p>The data provider of geospatial data. Values can be one of the following:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>Esri</code>\n               </p>\n            </li>\n            <li>\n               <p>\n                  <code>Here</code>\n               </p>\n            </li>\n         </ul>\n         <p>For more information about data providers, see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Amazon Location Service data providers</a>.</p>",
                         "smithy.api#required": {}
                     }
                 },
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>The pricing plan for the specified place index resource.</p>\n         <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Always returns RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. Always returns <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "CreateTime": {
@@ -4381,8 +4686,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>The pricing plan for the specified route calculator resource.</p>\n        <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Always returns RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>Always returns <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "CreateTime": {
@@ -4663,14 +4971,21 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>The pricing plan for the specified tracker resource.</p>\n        <p>For additional details and restrictions on each pricing plan option, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>",
-                        "smithy.api#required": {}
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Always returns RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>Always returns <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "PricingPlanDataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The specified data provider for the tracker resource.</p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. Unused."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. Always returns an empty string.</p>"
                     }
                 },
                 "CreateTime": {
@@ -4700,6 +5015,21 @@
         },
         "com.amazonaws.location#LocationService": {
             "type": "service",
+            "traits": {
+                "aws.api#service": {
+                    "sdkId": "Location",
+                    "arnNamespace": "geo",
+                    "cloudFormationName": "LocationService",
+                    "cloudTrailEventSource": "geo.amazonaws.com",
+                    "endpointPrefix": "geo"
+                },
+                "aws.auth#sigv4": {
+                    "name": "geo"
+                },
+                "aws.protocols#restJson1": {},
+                "smithy.api#documentation": "Suite of geospatial services including Maps, Places, Routes, Tracking, and Geofencing",
+                "smithy.api#title": "Amazon Location Service"
+            },
             "version": "2020-11-19",
             "resources": [
                 {
@@ -4720,22 +5050,7 @@
                 {
                     "target": "com.amazonaws.location#TrackerResource"
                 }
-            ],
-            "traits": {
-                "aws.api#service": {
-                    "sdkId": "Location",
-                    "arnNamespace": "geo",
-                    "cloudFormationName": "LocationService",
-                    "cloudTrailEventSource": "geo.amazonaws.com",
-                    "endpointPrefix": "geo"
-                },
-                "aws.auth#sigv4": {
-                    "name": "geo"
-                },
-                "aws.protocols#restJson1": {},
-                "smithy.api#documentation": "Suite of geospatial services including Maps, Places, Routes, Tracking, and Geofencing",
-                "smithy.api#title": "Amazon Location Service"
-            }
+            ]
         },
         "com.amazonaws.location#MapConfiguration": {
             "type": "structure",
@@ -4850,7 +5165,7 @@
                 "SubRegion": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>A country, or an area that's part of a larger region .  For example, <code>Metro\n            Vancouver</code>.</p>"
+                        "smithy.api#documentation": "<p>A country, or an area that's part of a larger region.  For example, <code>Metro\n            Vancouver</code>.</p>"
                     }
                 },
                 "Region": {
@@ -4869,6 +5184,18 @@
                     "target": "smithy.api#String",
                     "traits": {
                         "smithy.api#documentation": "<p>A group of numbers and letters in a country-specific format, which accompanies the\n         address for the purpose of identifying a location. </p>"
+                    }
+                },
+                "Interpolated": {
+                    "target": "smithy.api#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            <code>True</code> if the result is interpolated from other known places.</p>\n         <p>\n            <code>False</code> if the Place is a known place.</p>\n         <p>Not returned when the partner does not provide the information.</p>\n         <p>For example, returns <code>False</code> for an address location that is found in the \n         partner data, but returns <code>True</code> if an address does not exist in the partner\n         data and its location is calculated by interpolating between other known addresses.\n      </p>"
+                    }
+                },
+                "TimeZone": {
+                    "target": "com.amazonaws.location#TimeZone",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The time zone in which the <code>Place</code> is located. Returned only when using \n         Here as the selected partner.</p>"
                     }
                 }
             },
@@ -4917,6 +5244,9 @@
                     "target": "com.amazonaws.location#SearchPlaceIndexForPosition"
                 },
                 {
+                    "target": "com.amazonaws.location#SearchPlaceIndexForSuggestions"
+                },
+                {
                     "target": "com.amazonaws.location#SearchPlaceIndexForText"
                 }
             ],
@@ -4961,13 +5291,42 @@
                 "smithy.api#enum": [
                     {
                         "value": "TimeBased",
-                        "documentation": "Filtering device position updates based on time"
+                        "documentation": "Filters device position updates according to their sample time"
                     },
                     {
                         "value": "DistanceBased",
-                        "documentation": "Filtering device position updates based on distance"
+                        "documentation": "Filters device position updates according to the distance between them"
+                    },
+                    {
+                        "value": "AccuracyBased",
+                        "documentation": "Filters device position updates according to their accuracy"
                     }
                 ]
+            }
+        },
+        "com.amazonaws.location#PositionList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.location#Position"
+            }
+        },
+        "com.amazonaws.location#PositionalAccuracy": {
+            "type": "structure",
+            "members": {
+                "Horizontal": {
+                    "target": "smithy.api#Double",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Estimated maximum distance, in meters, between the measured position and the true\n            position of a device, along the Earth's surface.</p>",
+                        "smithy.api#range": {
+                            "min": 0,
+                            "max": 10000
+                        },
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Defines the level of certainty of the position.</p>"
             }
         },
         "com.amazonaws.location#PricingPlan": {
@@ -4987,6 +5346,34 @@
                         "documentation": "This pricing plan must be picked for mobile asset management use cases"
                     }
                 ]
+            }
+        },
+        "com.amazonaws.location#PropertyMap": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#String",
+                "traits": {
+                    "smithy.api#length": {
+                        "min": 1,
+                        "max": 20
+                    }
+                }
+            },
+            "value": {
+                "target": "smithy.api#String",
+                "traits": {
+                    "smithy.api#length": {
+                        "min": 1,
+                        "max": 40
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#length": {
+                    "min": 0,
+                    "max": 3
+                },
+                "smithy.api#sensitive": {}
             }
         },
         "com.amazonaws.location#PutGeofence": {
@@ -5144,6 +5531,9 @@
             "operations": [
                 {
                     "target": "com.amazonaws.location#CalculateRoute"
+                },
+                {
+                    "target": "com.amazonaws.location#CalculateRouteMatrix"
                 }
             ],
             "traits": {
@@ -5156,19 +5546,119 @@
                 "aws.iam#disableConditionKeyInference": {}
             }
         },
+        "com.amazonaws.location#RouteMatrix": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.location#RouteMatrixRow"
+            }
+        },
+        "com.amazonaws.location#RouteMatrixEntry": {
+            "type": "structure",
+            "members": {
+                "Distance": {
+                    "target": "smithy.api#Double",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The total distance of travel for the route.</p>",
+                        "smithy.api#range": {
+                            "min": 0
+                        }
+                    }
+                },
+                "DurationSeconds": {
+                    "target": "smithy.api#Double",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The expected duration of travel for the route.</p>",
+                        "smithy.api#range": {
+                            "min": 0
+                        }
+                    }
+                },
+                "Error": {
+                    "target": "com.amazonaws.location#RouteMatrixEntryError",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An error corresponding to the calculation of a route between the \n            <code>DeparturePosition</code> and <code>DestinationPosition</code>.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The result for one <code>SnappedDeparturePosition</code> \n            <code>SnappedDestinationPosition</code> pair.</p>"
+            }
+        },
+        "com.amazonaws.location#RouteMatrixEntryError": {
+            "type": "structure",
+            "members": {
+                "Code": {
+                    "target": "com.amazonaws.location#RouteMatrixErrorCode",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The type of error which occurred for the route calculation.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "Message": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A message about the error that occurred for the route calculation.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>An error corresponding to the calculation of a route between the\n        <code>DeparturePosition</code> and <code>DestinationPosition</code>.</p>\n        <p>The error code can be one of the following:</p>\n        <ul>\n            <li>\n                <p>\n                  <code>RouteNotFound</code> - Unable to find a \n                    valid route with the given parameters.</p>\n            </li>\n         </ul>\n        <ul>\n            <li>\n                <p>\n                  <code>RouteTooLong</code> - Route calculation went \n                    beyond the maximum size of a route and was terminated before completion.</p>\n            </li>\n         </ul>\n        <ul>\n            <li>\n                <p>\n                  <code>PositionsNotFound</code> - One or more of the \n                    input positions were not found on the route network.</p>\n            </li>\n         </ul>\n        <ul>\n            <li>\n                <p>\n                  <code>DestinationPositionNotFound</code> - The \n                    destination position was not found on the route network.</p>\n            </li>\n         </ul>\n        <ul>\n            <li>\n                <p>\n                  <code>DeparturePositionNotFound</code> - The \n                    departure position was not found on the route network.</p>\n            </li>\n         </ul>\n        <ul>\n            <li>\n                <p>\n                  <code>OtherValidationError</code> - The given inputs were not valid or a \n                    route was not found. More information is given in the error \n                    <code>Message</code>\n               </p>\n            </li>\n         </ul>"
+            }
+        },
+        "com.amazonaws.location#RouteMatrixErrorCode": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "RouteNotFound"
+                    },
+                    {
+                        "value": "RouteTooLong"
+                    },
+                    {
+                        "value": "PositionsNotFound"
+                    },
+                    {
+                        "value": "DestinationPositionNotFound"
+                    },
+                    {
+                        "value": "DeparturePositionNotFound"
+                    },
+                    {
+                        "value": "OtherValidationError"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.location#RouteMatrixRow": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.location#RouteMatrixEntry"
+            }
+        },
         "com.amazonaws.location#SearchForPositionResult": {
             "type": "structure",
             "members": {
                 "Place": {
                     "target": "com.amazonaws.location#Place",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains details about the relevant point of interest.</p>",
+                        "smithy.api#documentation": "<p>Details about the search result, such as its address and position.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "Distance": {
+                    "target": "smithy.api#Double",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The distance in meters of a great-circle arc between the query position and the \n         result.</p>\n         <note>\n            <p>A great-circle arc is the shortest path on a sphere, in this case the \n            Earth. This returns the shortest distance between two locations.</p>\n         </note>",
+                        "smithy.api#range": {
+                            "min": 0
+                        },
                         "smithy.api#required": {}
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>Specifies a single point of interest, or Place as a result of a search query obtained\n         from a dataset configured in the place index resource.</p>"
+                "smithy.api#documentation": "<p>Contains a search result from a position search query that is run on a place index resource.</p>"
             }
         },
         "com.amazonaws.location#SearchForPositionResultList": {
@@ -5177,19 +5667,59 @@
                 "target": "com.amazonaws.location#SearchForPositionResult"
             }
         },
+        "com.amazonaws.location#SearchForSuggestionsResult": {
+            "type": "structure",
+            "members": {
+                "Text": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The text of the place suggestion, typically formatted as an address string.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Contains a place suggestion resulting from a place suggestion query that is run on a place index resource.</p>"
+            }
+        },
+        "com.amazonaws.location#SearchForSuggestionsResultList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.location#SearchForSuggestionsResult"
+            }
+        },
         "com.amazonaws.location#SearchForTextResult": {
             "type": "structure",
             "members": {
                 "Place": {
                     "target": "com.amazonaws.location#Place",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains details about the relevant point of interest.</p>",
+                        "smithy.api#documentation": "<p>Details about the search result, such as its address and position.</p>",
                         "smithy.api#required": {}
+                    }
+                },
+                "Distance": {
+                    "target": "smithy.api#Double",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The distance in meters of a great-circle arc between the bias position specified \n         and the result. <code>Distance</code> will be returned only if a bias position was \n         specified in the query.</p>\n         <note>\n            <p>A great-circle arc is the shortest path on a sphere, in this case the \n            Earth. This returns the shortest distance between two locations.</p>\n         </note>",
+                        "smithy.api#range": {
+                            "min": 0
+                        }
+                    }
+                },
+                "Relevance": {
+                    "target": "smithy.api#Double",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The relative confidence in the match for a result among the results returned. For \n         example, if more fields for an address match (including house number, street, city, \n         country/region, and postal code), the relevance score is closer to 1.</p>\n         <p>Returned only when the partner selected is Esri.</p>",
+                        "smithy.api#range": {
+                            "min": 0,
+                            "max": 1
+                        }
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>Contains relevant Places returned by calling\n         <code>SearchPlaceIndexForText</code>.</p>"
+                "smithy.api#documentation": "<p>Contains a search result from a text search query that is run on a place index resource.</p>"
             }
         },
         "com.amazonaws.location#SearchForTextResultList": {
@@ -5250,14 +5780,20 @@
                 "Position": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>Specifies a coordinate for the query defined by a longitude, and latitude.</p>\n         <ul>\n            <li>\n               <p>The first position is the X coordinate, or longitude.</p>\n            </li>\n            <li>\n               <p>The second position is the Y coordinate, or latitude. </p>\n            </li>\n         </ul>\n         <p>For example, <code>position=xLongitude&amp;position=yLatitude</code> .</p>",
+                        "smithy.api#documentation": "<p>Specifies the longitude and latitude of the position to query.</p>\n         <p>\n         This parameter must contain a pair of numbers. The first number represents the X coordinate, or longitude; \n            the second number represents the Y coordinate, or latitude.</p>\n         <p>For example, <code>[-123.1174, 49.2847]</code> represents a position with\n         longitude <code>-123.1174</code> and\n         latitude <code>49.2847</code>.</p>",
                         "smithy.api#required": {}
                     }
                 },
                 "MaxResults": {
                     "target": "com.amazonaws.location#PlaceIndexSearchResultLimit",
                     "traits": {
-                        "smithy.api#documentation": "<p>An optional paramer. The maximum number of results returned per request. </p>\n         <p>Default value: <code>50</code>\n         </p>"
+                        "smithy.api#documentation": "<p>An optional parameter. The maximum number of results returned per request.</p>\n         <p>Default value: <code>50</code>\n         </p>"
+                    }
+                },
+                "Language": {
+                    "target": "com.amazonaws.location#LanguageTag",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The preferred language used to return results. The value must be a valid <a href=\"https://tools.ietf.org/search/bcp47\">BCP 47</a> language tag, for example,\n         <code>en</code> for English.</p> \n         <p>This setting affects the languages used in the results. It does not change which \n         results are returned. If the language is not specified, or not supported for a \n         particular result, the partner automatically chooses a language for the result.</p>"
                     }
                 }
             }
@@ -5268,7 +5804,7 @@
                 "Summary": {
                     "target": "com.amazonaws.location#SearchPlaceIndexForPositionSummary",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains a summary of the request.</p>",
+                        "smithy.api#documentation": "<p>Contains a summary of the request. Echoes the input values for <code>Position</code>,\n         <code>Language</code>, <code>MaxResults</code>, and the <code>DataSource</code> of the place index.\n      </p>",
                         "smithy.api#required": {}
                     }
                 },
@@ -5287,26 +5823,201 @@
                 "Position": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>The position given in the reverse geocoding request.</p>",
+                        "smithy.api#documentation": "<p>The position specified in the request.</p>",
                         "smithy.api#required": {}
                     }
                 },
                 "MaxResults": {
                     "target": "com.amazonaws.location#PlaceIndexSearchResultLimit",
                     "traits": {
-                        "smithy.api#documentation": "<p>An optional parameter. The maximum number of results returned per request. </p>\n         <p>Default value: <code>50</code>\n         </p>"
+                        "smithy.api#documentation": "<p>Contains the optional result count limit that is specified in the request.</p>\n         <p>Default value: <code>50</code>\n         </p>"
                     }
                 },
                 "DataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The data provider of geospatial data. Indicates one of the available providers:</p>\n         <ul>\n            <li>\n               <p>Esri</p>\n            </li>\n            <li>\n               <p>HERE</p>\n            </li>\n         </ul>\n         <p>For additional details on data providers, see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Amazon Location Service data providers</a>.</p>",
+                        "smithy.api#documentation": "<p>The geospatial data provider attached to the place index resource specified in the request.\n         Values can be one of the following:</p>\n         <ul>\n            <li>\n               <p>Esri</p>\n            </li>\n            <li>\n               <p>Here</p>\n            </li>\n         </ul>\n         <p>For more information about data providers, see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Amazon Location Service data providers</a>.</p>",
                         "smithy.api#required": {}
+                    }
+                },
+                "Language": {
+                    "target": "com.amazonaws.location#LanguageTag",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The preferred language used to return results. Matches the language in the request. \n         The value is a valid <a href=\"https://tools.ietf.org/search/bcp47\">BCP 47</a> language tag, for example,\n         <code>en</code> for English.</p>"
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>A summary of the reverse geocoding request sent using <code>SearchPlaceIndexForPosition</code>.</p>"
+                "smithy.api#documentation": "<p>A summary of the request sent by using <code>SearchPlaceIndexForPosition</code>.</p>"
+            }
+        },
+        "com.amazonaws.location#SearchPlaceIndexForSuggestions": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.location#SearchPlaceIndexForSuggestionsRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.location#SearchPlaceIndexForSuggestionsResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.location#AccessDeniedException"
+                },
+                {
+                    "target": "com.amazonaws.location#InternalServerException"
+                },
+                {
+                    "target": "com.amazonaws.location#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.location#ThrottlingException"
+                },
+                {
+                    "target": "com.amazonaws.location#ValidationException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Generates suggestions for addresses and points of interest based on partial or\n         misspelled free-form text. This operation is also known as autocomplete, autosuggest,\n         or fuzzy matching.</p>\n         <p>Optional parameters let you narrow your search results by bounding box or\n         country, or bias your search toward a specific position on the globe.</p>\n         <note>\n            <p>You can search for suggested place names near a specified position by using <code>BiasPosition</code>, or\n            filter results within a bounding box by using <code>FilterBBox</code>. These parameters are mutually exclusive; \n            using both <code>BiasPosition</code> and <code>FilterBBox</code> in the same command returns an error.</p>\n         </note>",
+                "smithy.api#endpoint": {
+                    "hostPrefix": "places."
+                },
+                "smithy.api#http": {
+                    "method": "POST",
+                    "uri": "/places/v0/indexes/{IndexName}/search/suggestions",
+                    "code": 200
+                },
+                "smithy.api#readonly": {}
+            }
+        },
+        "com.amazonaws.location#SearchPlaceIndexForSuggestionsRequest": {
+            "type": "structure",
+            "members": {
+                "IndexName": {
+                    "target": "com.amazonaws.location#ResourceName",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The name of the place index resource you want to use for the search.</p>",
+                        "smithy.api#httpLabel": {},
+                        "smithy.api#required": {}
+                    }
+                },
+                "Text": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The free-form partial text to use to generate place suggestions. For example,\n         <code>eiffel tow</code>.</p>",
+                        "smithy.api#length": {
+                            "min": 1,
+                            "max": 200
+                        },
+                        "smithy.api#required": {},
+                        "smithy.api#sensitive": {}
+                    }
+                },
+                "BiasPosition": {
+                    "target": "com.amazonaws.location#Position",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An optional parameter that indicates a preference for place suggestions that are closer to a specified position.</p>\n         <p>\n         If provided, this parameter must contain a pair of numbers. The first number represents the X coordinate, or longitude; \n           the second number represents the Y coordinate, or latitude.</p>\n         <p>For example, <code>[-123.1174, 49.2847]</code> represents the position with\n            longitude <code>-123.1174</code> and\n            latitude <code>49.2847</code>.</p>\n         <note>\n            <p>\n               <code>BiasPosition</code> and <code>FilterBBox</code> are mutually exclusive. Specifying both options results in an error.\n         </p>\n         </note>"
+                    }
+                },
+                "FilterBBox": {
+                    "target": "com.amazonaws.location#BoundingBox",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An optional parameter that limits the search results by returning only suggestions within a specified bounding box.</p>\n         <p>\n         If provided, this parameter must contain a total of four consecutive numbers in two pairs.\n         The first pair of numbers represents the X and Y coordinates (longitude and latitude, respectively)\n         of the southwest corner of the bounding box; the second pair of numbers represents the X and Y coordinates (longitude and latitude, respectively)\n         of the northeast corner of the bounding box.</p>\n         <p>For example, <code>[-12.7935, -37.4835, -12.0684, -36.9542]</code> represents\n         a bounding box where the southwest corner has longitude <code>-12.7935</code> and latitude <code>-37.4835</code>, \n         and the northeast corner has longitude <code>-12.0684</code> and latitude <code>-36.9542</code>.</p>\n         <note>\n            <p>\n               <code>FilterBBox</code> and <code>BiasPosition</code> are mutually exclusive. Specifying both options results in an error.\n         </p>\n         </note>"
+                    }
+                },
+                "FilterCountries": {
+                    "target": "com.amazonaws.location#CountryCodeList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An optional parameter that limits the search results by returning only suggestions within the provided list of countries.</p>\n         <ul>\n            <li>\n               <p>Use the <a href=\"https://www.iso.org/iso-3166-country-codes.html\">ISO 3166</a> 3-digit\n            country code. For example, Australia uses three upper-case characters:\n            <code>AUS</code>.</p>\n            </li>\n         </ul>"
+                    }
+                },
+                "MaxResults": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An optional parameter. The maximum number of results returned per request. </p>\n         <p>The default: <code>5</code>\n         </p>",
+                        "smithy.api#range": {
+                            "min": 1,
+                            "max": 15
+                        }
+                    }
+                },
+                "Language": {
+                    "target": "com.amazonaws.location#LanguageTag",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The preferred language used to return results. The value must be a valid <a href=\"https://tools.ietf.org/search/bcp47\">BCP 47</a> language tag, for example,\n         <code>en</code> for English.</p> \n         <p>This setting affects the languages used in the results. It does not change which \n         results are returned. If the language is not specified, or not supported for a \n         particular result, the partner automatically chooses a language for the result.</p>\n         <p>Used only when the partner selected is Here.</p>"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.location#SearchPlaceIndexForSuggestionsResponse": {
+            "type": "structure",
+            "members": {
+                "Summary": {
+                    "target": "com.amazonaws.location#SearchPlaceIndexForSuggestionsSummary",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains a summary of the request. Echoes the input values for <code>BiasPosition</code>,\n         <code>FilterBBox</code>, <code>FilterCountries</code>, <code>Language</code>, <code>MaxResults</code>,\n         and <code>Text</code>. Also includes the <code>DataSource</code> of the place index.\n      </p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "Results": {
+                    "target": "com.amazonaws.location#SearchForSuggestionsResultList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A list of place suggestions that best match the search text.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "com.amazonaws.location#SearchPlaceIndexForSuggestionsSummary": {
+            "type": "structure",
+            "members": {
+                "Text": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The free-form partial text input specified in the request.</p>",
+                        "smithy.api#required": {},
+                        "smithy.api#sensitive": {}
+                    }
+                },
+                "BiasPosition": {
+                    "target": "com.amazonaws.location#Position",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the coordinates for the optional bias position specified in the request.</p>\n         <p>This parameter contains a pair of numbers. The first number represents the X \n         coordinate, or longitude; the second number represents the Y coordinate, or latitude.</p>\n         <p>For example, <code>[-123.1174, 49.2847]</code> represents the position with\n         longitude <code>-123.1174</code> and latitude <code>49.2847</code>.</p>"
+                    }
+                },
+                "FilterBBox": {
+                    "target": "com.amazonaws.location#BoundingBox",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the coordinates for the optional bounding box specified in the request.</p>"
+                    }
+                },
+                "FilterCountries": {
+                    "target": "com.amazonaws.location#CountryCodeList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the optional country filter specified in the request.</p>"
+                    }
+                },
+                "MaxResults": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the optional result count limit specified in the request.</p>"
+                    }
+                },
+                "DataSource": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The geospatial data provider attached to the place index resource specified in the request.\n         Values can be one of the following:</p>\n         <ul>\n            <li>\n               <p>Esri</p>\n            </li>\n            <li>\n               <p>Here</p>\n            </li>\n         </ul>\n         <p>For more information about data providers, see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Amazon Location Service data providers</a>.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "Language": {
+                    "target": "com.amazonaws.location#LanguageTag",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The preferred language used to return results. Matches the language in the request. \n         The value is a valid <a href=\"https://tools.ietf.org/search/bcp47\">BCP 47</a> language tag, for example,\n         <code>en</code> for English.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>A summary of the request sent by using <code>SearchPlaceIndexForSuggestions</code>.</p>"
             }
         },
         "com.amazonaws.location#SearchPlaceIndexForText": {
@@ -5335,7 +6046,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Geocodes free-form text, such as an address, name, city, or region to allow you to\n         search for Places or points of interest. </p>\n         <p>Includes the option to apply additional parameters to narrow your list of\n         results.</p>\n         <note>\n            <p>You can search for places near a given position using <code>BiasPosition</code>, or\n            filter results within a bounding box using <code>FilterBBox</code>. Providing both\n            parameters simultaneously returns an error.</p>\n         </note>",
+                "smithy.api#documentation": "<p>Geocodes free-form text, such as an address, name, city, or region to allow you to\n         search for Places or points of interest. </p>\n         <p>Optional parameters let you narrow your search results by bounding box or\n         country, or bias your search toward a specific position on the globe.</p>\n         <note>\n            <p>You can search for places near a given position using <code>BiasPosition</code>, or\n            filter results within a bounding box using <code>FilterBBox</code>. Providing both\n            parameters simultaneously returns an error.</p>\n         </note>\n         <p>Search results are returned in order of highest to lowest relevance.</p>",
                 "smithy.api#endpoint": {
                     "hostPrefix": "places."
                 },
@@ -5361,7 +6072,7 @@
                 "Text": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The address, name,\n         city, or region to be used in the search. In free-form text format. For example, <code>123 Any\n            Street</code>.</p>",
+                        "smithy.api#documentation": "<p>The address, name,\n         city, or region to be used in the search in free-form text format. For example, <code>123 Any\n            Street</code>.</p>",
                         "smithy.api#length": {
                             "min": 1,
                             "max": 200
@@ -5373,25 +6084,31 @@
                 "BiasPosition": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>Searches for results closest to the given position. An optional parameter defined by\n         longitude, and latitude.</p>\n         <ul>\n            <li>\n               <p>The first <code>bias</code> position is the X coordinate, or longitude.</p>\n            </li>\n            <li>\n               <p>The second <code>bias</code> position is the Y coordinate, or latitude. </p>\n            </li>\n         </ul>\n         <p>For example, <code>bias=xLongitude&amp;bias=yLatitude</code>.</p>"
+                        "smithy.api#documentation": "<p>An optional parameter that indicates a preference for places that are closer to a specified position.</p>\n         <p>\n         If provided, this parameter must contain a pair of numbers. The first number represents the X coordinate, or longitude; the \n         second number represents the Y coordinate, or latitude.</p>\n         <p>For example, <code>[-123.1174, 49.2847]</code> represents the position with\n         longitude <code>-123.1174</code> and\n         latitude <code>49.2847</code>.</p>\n         <note>\n            <p>\n               <code>BiasPosition</code> and <code>FilterBBox</code> are mutually exclusive. Specifying both options \n            results in an error.\n         </p>\n         </note>"
                     }
                 },
                 "FilterBBox": {
                     "target": "com.amazonaws.location#BoundingBox",
                     "traits": {
-                        "smithy.api#documentation": "<p>Filters the results by returning only Places within the provided bounding box. An\n         optional parameter.</p>\n         <p>The first 2 <code>bbox</code> parameters describe the lower southwest corner:</p>\n         <ul>\n            <li>\n               <p>The first <code>bbox</code> position is the X coordinate or longitude of the lower\n               southwest corner.</p>\n            </li>\n            <li>\n               <p>The second <code>bbox</code> position is the Y coordinate or latitude of the lower\n               southwest corner.</p>\n            </li>\n         </ul>\n         <p>For example, <code>bbox=xLongitudeSW&amp;bbox=yLatitudeSW</code>.</p>\n         <p>The next <code>bbox</code> parameters describe the upper northeast corner:</p>\n         <ul>\n            <li>\n               <p>The third <code>bbox</code> position is the X coordinate, or longitude of the\n               upper northeast corner.</p>\n            </li>\n            <li>\n               <p>The fourth <code>bbox</code> position is the Y coordinate, or longitude of the\n               upper northeast corner.</p>\n            </li>\n         </ul>\n         <p>For example, <code>bbox=xLongitudeNE&amp;bbox=yLatitudeNE</code>\n         </p>"
+                        "smithy.api#documentation": "<p>An optional parameter that limits the search results by returning only places that are within the provided bounding box.</p>\n         <p>\n         If provided, this parameter must contain a total of four consecutive numbers in two pairs.\n         The first pair of numbers represents the X and Y coordinates (longitude and latitude, respectively)\n         of the southwest corner of the bounding box; the second pair of numbers represents the X and Y coordinates (longitude and latitude, respectively)\n         of the northeast corner of the bounding box.</p>\n         <p>For example, <code>[-12.7935, -37.4835, -12.0684, -36.9542]</code> represents\n         a bounding box where the southwest corner has longitude <code>-12.7935</code> and latitude <code>-37.4835</code>, \n         and the northeast corner has longitude <code>-12.0684</code> and latitude <code>-36.9542</code>.</p>\n         <note>\n            <p>\n               <code>FilterBBox</code> and <code>BiasPosition</code> are mutually exclusive. Specifying both options results in an error.\n         </p>\n         </note>"
                     }
                 },
                 "FilterCountries": {
                     "target": "com.amazonaws.location#CountryCodeList",
                     "traits": {
-                        "smithy.api#documentation": "<p>Limits the search to the given a list of countries/regions. An optional\n         parameter.</p>\n         <ul>\n            <li>\n               <p>Use the <a href=\"https://www.iso.org/iso-3166-country-codes.html\">ISO 3166</a> 3-digit\n            country code. For example, Australia uses three upper-case characters:\n            <code>AUS</code>.</p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>An optional parameter that limits the search results by returning only places that are in a specified list of countries.</p>\n         <ul>\n            <li>\n               <p>Valid values include <a href=\"https://www.iso.org/iso-3166-country-codes.html\">ISO 3166</a> 3-digit\n            country codes. For example, Australia uses three upper-case characters:\n            <code>AUS</code>.</p>\n            </li>\n         </ul>"
                     }
                 },
                 "MaxResults": {
                     "target": "com.amazonaws.location#PlaceIndexSearchResultLimit",
                     "traits": {
                         "smithy.api#documentation": "<p>An optional parameter. The maximum number of results returned per request. </p>\n         <p>The default: <code>50</code>\n         </p>"
+                    }
+                },
+                "Language": {
+                    "target": "com.amazonaws.location#LanguageTag",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The preferred language used to return results. The value must be a valid <a href=\"https://tools.ietf.org/search/bcp47\">BCP 47</a> language tag, for example,\n         <code>en</code> for English.</p> \n         <p>This setting affects the languages used in the results. It does not change which \n         results are returned. If the language is not specified, or not supported for a \n         particular result, the partner automatically chooses a language for the result.</p>"
                     }
                 }
             }
@@ -5402,14 +6119,14 @@
                 "Summary": {
                     "target": "com.amazonaws.location#SearchPlaceIndexForTextSummary",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains a summary of the request. Contains the <code>BiasPosition</code>,\n         <code>DataSource</code>, <code>FilterBBox</code>, <code>FilterCountries</code>,\n         <code>MaxResults</code>, <code>ResultBBox</code>, and <code>Text</code>.</p>",
+                        "smithy.api#documentation": "<p>Contains a summary of the request. Echoes the input values for <code>BiasPosition</code>,\n         <code>FilterBBox</code>, <code>FilterCountries</code>, <code>Language</code>, <code>MaxResults</code>,\n         and <code>Text</code>. Also includes the <code>DataSource</code> of the place index and\n         the bounding box, <code>ResultBBox</code>, which surrounds the search results.\n      </p>",
                         "smithy.api#required": {}
                     }
                 },
                 "Results": {
                     "target": "com.amazonaws.location#SearchForTextResultList",
                     "traits": {
-                        "smithy.api#documentation": "<p>A list of Places closest to the specified position. Each result contains additional\n         information about the specific point of interest. </p>",
+                        "smithy.api#documentation": "<p>A list of Places matching the input text. Each result contains additional\n         information about the specific point of interest. </p>",
                         "smithy.api#required": {}
                     }
                 }
@@ -5421,7 +6138,7 @@
                 "Text": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The address, name, city or region to be used in the geocoding request. In free-form text\n         format. For example, <code>Vancouver</code>.</p>",
+                        "smithy.api#documentation": "<p>The search text specified in the request.</p>",
                         "smithy.api#required": {},
                         "smithy.api#sensitive": {}
                     }
@@ -5429,43 +6146,49 @@
                 "BiasPosition": {
                     "target": "com.amazonaws.location#Position",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains the coordinates for the bias position entered in the geocoding request.</p>"
+                        "smithy.api#documentation": "<p>Contains the coordinates for the optional bias position specified in the request.</p>\n         <p>This parameter contains a pair of numbers. The first number represents the X \n         coordinate, or longitude; the second number represents the Y coordinate, or latitude.</p>\n         <p>For example, <code>[-123.1174, 49.2847]</code> represents the position with\n         longitude <code>-123.1174</code> and latitude <code>49.2847</code>.</p>"
                     }
                 },
                 "FilterBBox": {
                     "target": "com.amazonaws.location#BoundingBox",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains the coordinates for the optional bounding box coordinated entered in the\n         geocoding request.</p>"
+                        "smithy.api#documentation": "<p>Contains the coordinates for the optional bounding box specified in the request.</p>"
                     }
                 },
                 "FilterCountries": {
                     "target": "com.amazonaws.location#CountryCodeList",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains the country filter entered in the geocoding request.</p>"
+                        "smithy.api#documentation": "<p>Contains the optional country filter specified in the request.</p>"
                     }
                 },
                 "MaxResults": {
                     "target": "com.amazonaws.location#PlaceIndexSearchResultLimit",
                     "traits": {
-                        "smithy.api#documentation": "<p>Contains the maximum number of results indicated for the request.</p>"
+                        "smithy.api#documentation": "<p>Contains the optional result count limit specified in the request.</p>"
                     }
                 },
                 "ResultBBox": {
                     "target": "com.amazonaws.location#BoundingBox",
                     "traits": {
-                        "smithy.api#documentation": "<p>A bounding box that contains the search results within the specified area indicated by\n            <code>FilterBBox</code>. A subset of bounding box specified using\n            <code>FilterBBox</code>.</p>"
+                        "smithy.api#documentation": "<p>The bounding box that fully contains all search results.</p>\n         <note>\n            <p>If you specified the optional <code>FilterBBox</code> parameter in the request, <code>ResultBBox</code> \n            is contained within <code>FilterBBox</code>.</p>\n         </note>"
                     }
                 },
                 "DataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>The data provider of geospatial data. Indicates one of the available providers:</p>\n         <ul>\n            <li>\n               <p>Esri</p>\n            </li>\n            <li>\n               <p>HERE</p>\n            </li>\n         </ul>\n         <p>For additional details on data providers, see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Amazon Location Service data providers</a>.</p>",
+                        "smithy.api#documentation": "<p>The geospatial data provider attached to the place index resource specified in the request.\n         Values can be one of the following:</p>\n         <ul>\n            <li>\n               <p>Esri</p>\n            </li>\n            <li>\n               <p>Here</p>\n            </li>\n         </ul>\n         <p>For more information about data providers, see <a href=\"https://docs.aws.amazon.com/location/latest/developerguide/what-is-data-provider.html\">Amazon Location Service data providers</a>.</p>",
                         "smithy.api#required": {}
+                    }
+                },
+                "Language": {
+                    "target": "com.amazonaws.location#LanguageTag",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The preferred language used to return results. Matches the language in the request. \n         The value is a valid <a href=\"https://tools.ietf.org/search/bcp47\">BCP 47</a> language tag, for example,\n         <code>en</code> for English.</p>"
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>A summary of the geocoding request sent using <code>SearchPlaceIndexForText</code>.</p>"
+                "smithy.api#documentation": "<p>A summary of the request sent by using <code>SearchPlaceIndexForText</code>.</p>"
             }
         },
         "com.amazonaws.location#ServiceQuotaExceededException": {
@@ -5550,7 +6273,7 @@
                     "min": 1,
                     "max": 128
                 },
-                "smithy.api#pattern": "^(?!aws:)[a-zA-Z+-=._:/]+$"
+                "smithy.api#pattern": "^[a-zA-Z+-=._:/]+$"
             }
         },
         "com.amazonaws.location#TagKeys": {
@@ -5630,7 +6353,7 @@
                 "Tags": {
                     "target": "com.amazonaws.location#TagMap",
                     "traits": {
-                        "smithy.api#documentation": "<p>Tags that have been applied to the specified resource. Tags are mapped from the tag key to the tag value: <code>\"TagKey\" : \"TagValue\"</code>.</p>\n\t        <ul>\n            <li>\n               <p>Format example: <code>{\"tag1\" : \"value1\", \"tag2\" : \"value2\"} </code>\n               </p>\n            </li>\n         </ul>",
+                        "smithy.api#documentation": "<p>Applies one or more tags to specific resource. A tag is a key-value pair that helps you\n            manage, identify, search, and filter your resources.</p>\n        <p>Format: <code>\"key\" : \"value\"</code>\n         </p>\n        <p>Restrictions:</p>\n        <ul>\n            <li>\n                <p>Maximum 50 tags per resource.</p>\n            </li>\n            <li>\n                <p>Each tag key must be unique and must have exactly one associated value.</p>\n            </li>\n            <li>\n                <p>Maximum key length: 128 Unicode characters in UTF-8.</p>\n            </li>\n            <li>\n                <p>Maximum value length: 256 Unicode characters in UTF-8.</p>\n            </li>\n            <li>\n                <p>Can use alphanumeric characters (A–Z, a–z, 0–9), and the following characters: + -\n                    = . _ : / @</p>\n            </li>\n            <li>\n                <p>Cannot use \"aws:\" as a prefix for a key.</p>\n            </li>\n         </ul>",
                         "smithy.api#required": {}
                     }
                 }
@@ -5666,6 +6389,27 @@
                 "smithy.api#error": "client",
                 "smithy.api#httpError": 429,
                 "smithy.api#retryable": {}
+            }
+        },
+        "com.amazonaws.location#TimeZone": {
+            "type": "structure",
+            "members": {
+                "Name": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The name of the time zone, following the <a href=\"https://www.iana.org/time-zones\">\n         IANA time zone standard</a>. For example, <code>America/Los_Angeles</code>.</p>",
+                        "smithy.api#required": {}
+                    }
+                },
+                "Offset": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The time zone's offset, in seconds, from UTC.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Information about a time zone. Includes the name of the time zone and the offset\n         from UTC in seconds.</p>"
             }
         },
         "com.amazonaws.location#Timestamp": {
@@ -5942,13 +6686,21 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>Updates the pricing plan for the geofence collection.</p>\n        <p>For more information about each pricing plan option restrictions, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service\n                pricing</a>.</p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. If included, the only allowed value is RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. If included, the only allowed value is \n            <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "PricingPlanDataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>Updates the data provider for the geofence collection. </p>\n        <p>A required value for the following pricing plans: <code>MobileAssetTracking</code>|\n                <code>MobileAssetManagement</code>\n        </p>\n        <p>For more information about <a href=\"https://aws.amazon.com/location/data-providers/\">data providers</a> and\n                <a href=\"https://aws.amazon.com/location/pricing/\">pricing plans</a>, see the\n            Amazon Location Service product page.</p>\n        <note>\n            <p>This can only be updated when updating the <code>PricingPlan</code> in the same\n                request.</p>\n            <p>Amazon Location Service uses <code>PricingPlanDataSource</code> to calculate\n                billing for your geofence collection. Your data won't be shared with the data\n                provider, and will remain in your AWS account and Region unless you move it.</p>\n        </note>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. No longer allowed."
+                        },
+                        "smithy.api#documentation": "<p>This parameter is no longer used.</p>"
                     }
                 },
                 "Description": {
@@ -6037,7 +6789,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>Updates the pricing plan for the map resource.</p>\n        <p>For more information about each pricing plan option restrictions, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. If included, the only allowed value is RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. If included, the only allowed value is \n            <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "Description": {
@@ -6126,7 +6882,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>Updates the pricing plan for the place index resource.</p>\n         <p>For more information about each pricing plan option restrictions, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service pricing</a>.</p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. If included, the only allowed value is RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. If included, the only allowed value is \n         <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "Description": {
@@ -6221,7 +6981,11 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>Updates the pricing plan for the route calculator resource.</p>\n        <p>For more information about each pricing plan option restrictions, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location\n            Service pricing</a>.</p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. If included, the only allowed value is RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. If included, the only allowed value is \n            <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "Description": {
@@ -6310,13 +7074,21 @@
                 "PricingPlan": {
                     "target": "com.amazonaws.location#PricingPlan",
                     "traits": {
-                        "smithy.api#documentation": "<p>Updates the pricing plan for the tracker resource.</p>\n        <p>For more information about each pricing plan option restrictions, see <a href=\"https://aws.amazon.com/location/pricing/\">Amazon Location Service\n                pricing</a>.</p>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. If included, the only allowed value is RequestBasedUsage."
+                        },
+                        "smithy.api#documentation": "<p>No longer used. If included, the only allowed value is \n            <code>RequestBasedUsage</code>.</p>"
                     }
                 },
                 "PricingPlanDataSource": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "<p>Updates the data provider for the tracker resource. </p>\n        <p>A required value for the following pricing plans: <code>MobileAssetTracking</code>| <code>MobileAssetManagement</code>\n            </p>\n        <p>For more information about <a href=\"https://aws.amazon.com/location/data-providers/\">data providers</a> and <a href=\"https://aws.amazon.com/location/pricing/\">pricing plans</a>, see the Amazon Location Service product\n            page</p>\n        <note>\n            <p>This can only be updated when updating the <code>PricingPlan</code> in the same\n                request.</p>\n            <p>Amazon Location Service uses <code>PricingPlanDataSource</code> to calculate\n                billing for your tracker resource. Your data won't be shared with the data provider,\n                and will remain in your AWS account and Region unless you move it.</p>\n        </note>"
+                        "smithy.api#deprecated": {
+                            "since": "2022-02-01",
+                            "message": "Deprecated. No longer allowed."
+                        },
+                        "smithy.api#documentation": "<p>This parameter is no longer used.</p>"
                     }
                 },
                 "Description": {
@@ -6328,7 +7100,7 @@
                 "PositionFiltering": {
                     "target": "com.amazonaws.location#PositionFiltering",
                     "traits": {
-                        "smithy.api#documentation": "<p>Updates the position filtering for the tracker resource.</p>\n        <p>Valid values:</p>\n        <ul>\n            <li>\n                <p>\n                    <code>TimeBased</code> - Location updates are evaluated against linked geofence collections, \n                    but not every location update is stored. If your update frequency is more often than 30 seconds, \n                    only one update per 30 seconds is stored for each unique device ID.\n                </p>\n            </li>\n            <li>\n                <p>\n                    <code>DistanceBased</code> - If the device has moved less than 30 m (98.4 ft), location updates are \n                    ignored. Location updates within this distance are neither evaluated against linked geofence collections, nor stored. \n                    This helps control costs by reducing the number of geofence evaluations and device positions to retrieve. \n                    Distance-based filtering can also reduce the jitter effect when displaying device trajectory on a map.\n                </p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>Updates the position filtering for the tracker resource.</p>\n        <p>Valid values:</p>\n        <ul>\n            <li>\n                <p>\n                    <code>TimeBased</code> - Location updates are evaluated against linked geofence collections, \n                    but not every location update is stored. If your update frequency is more often than 30 seconds, \n                    only one update per 30 seconds is stored for each unique device ID.\n                </p>\n            </li>\n            <li>\n                <p>\n                    <code>DistanceBased</code> - If the device has moved less than 30 m (98.4 ft), location updates are \n                    ignored. Location updates within this distance are neither evaluated against linked geofence collections, nor stored.\n                    This helps control costs by reducing the number of geofence evaluations and historical device positions to paginate through.\n                    Distance-based filtering can also reduce the effects of GPS noise when displaying device trajectories on a map.\n                </p>\n            </li>\n            <li>\n                <p>\n                    <code>AccuracyBased</code> - If the device has moved less than the measured accuracy,\n                    location updates are ignored. For example, if two consecutive updates from a device\n                    have a horizontal accuracy of 5 m and 10 m, the second update is ignored if the device\n                    has moved less than 15 m. Ignored location updates are neither evaluated against\n                    linked geofence collections, nor stored. This helps educe the effects of GPS noise \n                    when displaying device trajectories on a map, and can help control costs by reducing the\n                    number of geofence evaluations.\n                </p>\n            </li>\n         </ul>"
                     }
                 }
             }

@@ -24,6 +24,7 @@ apply NotFound @httpResponseTests([
     }
 ])
 
+
 apply GetBucketLocation @httpResponseTests([
     {
         id: "GetBucketLocation",
@@ -111,17 +112,17 @@ apply PutBucketLifecycleConfiguration @httpRequestTests([
         headers: {
             // we can assert this, but when this test is promoted, it can't assert
             // on the exact contents
-            "content-md5": "sUu+uAZPkTtAxJdaA+9uSg==",
+            "content-md5": "JP8DTuCSH6yDC8wNGg4+mA==",
         },
         bodyMediaType: "application/xml",
         body: """
         <LifecycleConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">
-            <Rule xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">
-                <Expiration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">
-                    <Days xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">1</Days>
+            <Rule>
+                <Expiration>
+                    <Days>1</Days>
                 </Expiration>
-                <ID xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">Expire</ID>
-                <Status xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">Enabled</Status>
+                <ID>Expire</ID>
+                <Status>Enabled</Status>
             </Rule>
         </LifecycleConfiguration>
         """,
@@ -180,6 +181,21 @@ apply PutObject @httpRequestTests([
             Key: "test-key",
             ContentLength: 2,
             Body: "ab"
+        }
+    }
+])
+
+apply HeadObject @httpRequestTests([
+    {
+        id: "HeadObjectUriEncoding",
+        documentation: "https://github.com/awslabs/aws-sdk-rust/issues/331",
+
+        method: "HEAD",
+        protocol: "aws.protocols#restXml",
+        uri: "/test-bucket/%3C%3E%20%60%3F%F0%9F%90%B1",
+        params: {
+            Bucket: "test-bucket",
+            Key: "<> `?🐱",
         }
     }
 ])

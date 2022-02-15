@@ -18,10 +18,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustom
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
 /**
- * Adds functionality for constructing <service>::Config objects from aws_types::Config (SharedConfig)
+ * Adds functionality for constructing <service>::Config objects from aws_types::config::Config (SharedConfig)
  *
- * - `From<&aws_types::Config> for <service>::config::Builder`: Enabling customization
- * - `pub fn new(&aws_types::Config) -> <service>::Config`: Direct construction without customization
+ * - `From<&aws_types::config::Config> for <service>::config::Builder`: Enabling customization
+ * - `pub fn new(&aws_types::config::Config) -> <service>::Config`: Direct construction without customization
  */
 class SharedConfigDecorator : RustCodegenDecorator {
     override val name: String = "SharedConfig"
@@ -39,14 +39,18 @@ class SharedConfigDecorator : RustCodegenDecorator {
             "Config" to awsTypes(runtimeConfig = codegenContext.runtimeConfig).asType().member("config::Config")
         )
         rustCrate.withModule(RustModule.Config) {
-            // TODO(sharedconfig): As more items are added to aws_types::Config, use them here to configure the config builder
+            // !!NOTE!! As more items are added to aws_types::config::Config, use them here to configure the config builder
             it.rustTemplate(
                 """
                 impl From<&#{Config}> for Builder {
                     fn from(input: &#{Config}) -> Self {
                         let mut builder = Builder::default();
                         builder = builder.region(input.region().cloned());
+                        builder.set_retry_config(input.retry_config().cloned());
+                        builder.set_timeout_config(input.timeout_config().cloned());
+                        builder.set_sleep_impl(input.sleep_impl().clone());
                         builder.set_credentials_provider(input.credentials_provider().cloned());
+                        builder.set_app_name(input.app_name().cloned());
                         builder
                     }
                 }
@@ -56,7 +60,7 @@ class SharedConfigDecorator : RustCodegenDecorator {
                         Builder::from(config).build()
                     }
                 }
-            """,
+                """,
                 *codegenScope
             )
         }
@@ -72,10 +76,11 @@ class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
             ServiceConfig.ConfigImpl -> writable {
                 rustTemplate(
                     """
+                    /// Creates a new [service config](crate::Config) from a [shared `config`](aws_types::config::Config).
                     pub fn new(config: &#{Config}) -> Self {
                         Builder::from(config).build()
                     }
-                """,
+                    """,
                     *codegenScope
                 )
             }

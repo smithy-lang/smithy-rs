@@ -3,6 +3,8 @@ $version: "1.0"
 namespace com.amazonaws.simple
 
 use aws.protocols#restJson1
+use smithy.test#httpRequestTests
+use smithy.test#httpResponseTests
 
 @restJson1
 @title("SimpleService")
@@ -14,11 +16,15 @@ service SimpleService {
     ],
     operations: [
         Healthcheck,
+        StoreServiceBlob,
     ],
 }
 
 @documentation("Id of the service that will be registered")
 string ServiceId
+
+@documentation("Name of the service that will be registered")
+string ServiceName
 
 @error("client")
 @documentation(
@@ -40,39 +46,86 @@ resource Service {
 @idempotent
 @http(method: "PUT", uri: "/service/{id}")
 @documentation("Service register operation")
+@httpRequestTests([
+    {
+        id: "RegisterServiceRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/service/1",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        params: { id: "1", name: "TestService" },
+        body: "{\"name\":\"TestService\"}",
+        method: "PUT",
+    }
+])
+@httpResponseTests([
+    {
+        id: "RegisterServiceResponseTest",
+        protocol: "aws.protocols#restJson1",
+        params: { id: "1", name: "TestService" },
+        body: "{\"id\":\"1\",\"name\":\"TestService\"}",
+        code: 200,
+    }
+])
 operation RegisterService {
-    input: RegisterServiceInput,
-    output: RegisterServiceOutput,
+    input: RegisterServiceInputRequest,
+    output: RegisterServiceOutputResponse,
     errors: [ResourceAlreadyExists]
 }
 
 @documentation("Service register input structure")
-structure RegisterServiceInput {
+structure RegisterServiceInputRequest {
     @required
     @httpLabel
     id: ServiceId,
+    name: ServiceName,
 }
 
 @documentation("Service register output structure")
-structure RegisterServiceOutput {
+structure RegisterServiceOutputResponse {
     @required
-    id: ServiceId
+    id: ServiceId,
+    name: ServiceName,
 }
 
 @readonly
 @http(uri: "/healthcheck", method: "GET")
 @documentation("Read-only healthcheck operation")
 operation Healthcheck {
-    input: HealthcheckInput,
-    output: HealthcheckOutput
+    input: HealthcheckInputRequest,
+    output: HealthcheckOutputResponse
 }
 
 @documentation("Service healthcheck output structure")
-structure HealthcheckInput {
+structure HealthcheckInputRequest {
 
 }
 
 @documentation("Service healthcheck input structure")
-structure HealthcheckOutput {
+structure HealthcheckOutputResponse {
+
+}
+
+@readonly
+@http(method: "GET", uri: "/service/{id}/blob")
+@documentation("Stores a blob for a service id")
+operation StoreServiceBlob {
+    input: StoreServiceBlobInput,
+    output: StoreServiceBlobOutput
+}
+
+@documentation("Store a blob for a service id input structure")
+structure StoreServiceBlobInput {
+    @required
+    @httpLabel
+    id: ServiceId,
+    @required
+    @httpPayload
+    content: Blob,
+}
+
+@documentation("Store a blob for a service id output structure")
+structure StoreServiceBlobOutput {
 
 }

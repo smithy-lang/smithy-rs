@@ -7,8 +7,6 @@
 //! - Reading environment variables
 //! - Reading from the file system
 
-use crate::os_shim_internal::fs::Fake;
-use crate::os_shim_internal::time_source::Inner;
 use std::collections::HashMap;
 use std::env::VarError;
 use std::ffi::OsString;
@@ -17,6 +15,9 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
+
+use crate::os_shim_internal::fs::Fake;
+use crate::os_shim_internal::time_source::Inner;
 
 /// File system abstraction
 ///
@@ -93,11 +94,36 @@ impl Fs {
         })))
     }
 
+    /// Create a fake process environment from a slice of tuples.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # async fn example() {
+    /// use aws_types::os_shim_internal::Fs;
+    /// let mock_fs = Fs::from_slice(&[
+    ///     ("config", "[default]\nretry_mode = \"standard\""),
+    /// ]);
+    /// assert_eq!(mock_fs.read_to_end("config").await.unwrap(), b"[default]\nretry_mode = \"standard\"");
+    /// # }
+    /// ```
+    pub fn from_slice<'a>(files: &[(&'a str, &'a str)]) -> Self {
+        let fs: HashMap<String, Vec<u8>> = files
+            .iter()
+            .map(|(k, v)| {
+                let k = (*k).to_owned();
+                let v = v.as_bytes().to_vec();
+                (k, v)
+            })
+            .collect();
+
+        Self::from_map(fs)
+    }
+
     /// Read the entire contents of a file
     ///
-    /// **Note**: This function is currently `async` primarily for forward compatibility. Currently,
+    /// _Note: This function is currently `async` primarily for forward compatibility. Currently,
     /// this function does not use Tokio (or any other runtime) to perform IO, the IO is performed
-    /// directly within the function.
+    /// directly within the function._
     pub async fn read_to_end(&self, path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
         use fs::Inner;
         let path = path.as_ref();
@@ -129,13 +155,13 @@ mod fs {
     use std::sync::Arc;
 
     #[derive(Clone, Debug)]
-    pub enum Inner {
+    pub(super) enum Inner {
         Real,
         Fake(Arc<Fake>),
     }
 
     #[derive(Debug)]
-    pub enum Fake {
+    pub(super) enum Fake {
         MapFs(HashMap<OsString, Vec<u8>>),
         NamespacedFs {
             real_path: PathBuf,
@@ -209,7 +235,7 @@ mod env {
     use std::sync::Arc;
 
     #[derive(Clone, Debug)]
-    pub enum Inner {
+    pub(super) enum Inner {
         Real,
         Fake(Arc<HashMap<String, String>>),
     }
@@ -302,7 +328,7 @@ mod time_source {
     // in the future, if needed we can add a time source trait, however, the manual time source
     // should cover most test use cases.
     #[derive(Debug, Clone)]
-    pub enum Inner {
+    pub(super) enum Inner {
         Real,
         Manual(ManualTimeSource),
     }
@@ -310,10 +336,12 @@ mod time_source {
 
 #[cfg(test)]
 mod test {
-    use crate::os_shim_internal::{Env, Fs, ManualTimeSource, TimeSource};
-    use futures_util::FutureExt;
     use std::env::VarError;
     use std::time::{Duration, UNIX_EPOCH};
+
+    use futures_util::FutureExt;
+
+    use crate::os_shim_internal::{Env, Fs, ManualTimeSource, TimeSource};
 
     #[test]
     fn env_works() {

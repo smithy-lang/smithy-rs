@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.rustlang
 
 import org.intellij.lang.annotations.Language
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.writer.CodegenWriter
@@ -23,6 +25,34 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.utils.CodeWriter
 import java.util.function.BiFunction
+
+/**
+ * # RustWriter (and Friends)
+ *
+ * RustWriter contains a set of features to make generating Rust code much more ergonomic ontop of the Smithy CodeWriter
+ * interface.
+ *
+ * ## Recommended Patterns
+ * For templating large blocks of Rust code, the preferred method is [rustTemplate]. This enables sharing a set of template
+ * variables by creating a "codegenScope."
+ *
+ * ```kotlin
+ * fun requestHeaders(): Writeable { ... }
+ * let codegenScope = arrayOf("http" to CargoDependency.http)
+ * let writer = RustWriter() // in normal code, you would normally get a RustWriter passed to you
+ * writer.rustTemplate("""
+ *  // regular types can be rendered directly
+ *  let request = #{http}::Request::builder().uri("http://example.com");
+ *  // writeables can be rendered with `:W`
+ *  let request_headers = #{request_headers:W};
+ * """, *codegenScope, "request_headers" to requestHeaders())
+ * ```
+ *
+ * For short snippets of code [rust] can be used. This is equivalent but only positional arguments can be used.
+ *
+ * For formatting blocks where the block content generation requires looping, [rustBlock] and the equivalent [rustBlockTemplate]
+ * are the recommended approach.
+ */
 
 fun <T : CodeWriter> T.withBlock(
     textBeforeNewLine: String,
@@ -67,7 +97,7 @@ private fun <T : CodeWriter, U> T.withTemplate(
  * Write a block to the writer.
  * If [conditional] is true, the [textBeforeNewLine], followed by [block], followed by [textAfterNewLine]
  * If [conditional] is false, only [block] is written.
- * This enables conditionally wrapping a block in a prefix/suffix, eg.
+ * This enables conditionally wrapping a block in a prefix/suffix, e.g.
  *
  * ```
  * writer.withBlock("Some(", ")", conditional = symbol.isOptional()) {
@@ -103,6 +133,7 @@ fun <T : CodeWriter> T.rust(
     this.write(contents.trim(), *args)
 }
 
+/* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
     check(scope.distinctBy { it.first.toLowerCase() }.size == scope.size) { "Duplicate cased keys not supported" }
     return template.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult ->
@@ -177,15 +208,34 @@ fun <T : CodeWriter> T.rustBlock(
 /**
  * Generate a RustDoc comment for [shape]
  */
-fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
-    // TODO: support additional Smithy documentation traits like @example
+fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMissingDocs: Boolean = true, note: String? = null): T {
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
-    docTrait?.value?.also {
-        this.docs(escape(it))
+    when (docTrait?.value?.isNotBlank()) {
+        // If docs are modeled, then place them on the code generated shape
+        true -> {
+            this.docs(normalizeHtml(escape(docTrait.value)))
+            note?.also {
+                // Add a blank line between the docs and the note to visually differentiate
+                write("///")
+                docs("_Note: ${it}_")
+            }
+        }
+        // Otherwise, suppress the missing docs lint for this shape since
+        // the lack of documentation is a modeling issue rather than a codegen issue.
+        else -> if (autoSuppressMissingDocs) {
+            rust("##[allow(missing_docs)] // documentation missing in model")
+        }
     }
 
     return this
+}
+
+/** Document the containing entity (e.g. module, crate, etc.)
+ * Instead of prefixing lines with `///` lines are prefixed with `//!`
+ */
+fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
+    return docs(text, newlinePrefix = "//! ", args = args)
 }
 
 /**
@@ -199,11 +249,7 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model): T {
 fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: String = "/// "): T {
     pushState()
     setNewlinePrefix(newlinePrefix)
-    // TODO: Smithy updates should remove the need for a number of these changes
     val cleaned = text.lines()
-        // We need to filter out blank lines—an empty line causes the markdown parser to interpret the subsequent
-        // docs as a code block because they are indented.
-        .filter { it.isNotBlank() }
         .joinToString("\n") {
             // Rustdoc warns on tabs in documentation
             it.trimStart().replace("\t", "  ")
@@ -215,6 +261,29 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: Strin
 
 /** Escape the [expressionStart] character to avoid problems during formatting */
 fun CodeWriter.escape(text: String): String = text.replace("$expressionStart", "$expressionStart$expressionStart")
+
+/** Parse input as HTML and normalize it */
+fun normalizeHtml(input: String): String {
+    val doc = Jsoup.parse(input)
+    doc.body().apply {
+        normalizeAnchors() // Convert anchor tags missing href attribute into pre tags
+    }
+
+    return doc.body().html()
+}
+
+private fun Element.normalizeAnchors() {
+    getElementsByTag("a").forEach {
+        val link = it.attr("href")
+        if (link.isBlank()) {
+            it.changeInto("code")
+        }
+    }
+}
+
+private fun Element.changeInto(tagName: String) {
+    replaceWith(Element(tagName).also { elem -> elem.appendChildren(childNodesCopy()) })
+}
 
 /**
  * Write _exactly_ the text as written into the code writer without newlines or formatting
@@ -229,6 +298,18 @@ typealias Writable = RustWriter.() -> Unit
 fun writable(w: Writable): Writable = w
 
 fun writable(w: String): Writable = writable { rust(w) }
+
+fun Writable.isEmpty(): Boolean {
+    val writer = RustWriter.root()
+    this(writer)
+    return writer.toString() == RustWriter.root().toString()
+}
+
+/**
+ * Rustdoc doesn't support `r#` for raw identifiers.
+ * This function adjusts doc links to refer to raw identifiers directly.
+ */
+fun docLink(docLink: String): String = docLink.replace("::r##", "::").replace("::r#", "::")
 
 class RustWriter private constructor(
     private val filename: String,
@@ -246,18 +327,17 @@ class RustWriter private constructor(
         }
 
         val Factory: CodegenWriterFactory<RustWriter> =
-            CodegenWriterFactory<RustWriter> { filename, namespace ->
+            CodegenWriterFactory<RustWriter> { fileName, namespace ->
                 when {
-                    filename.endsWith(".toml") -> RustWriter(filename, namespace, "#")
-                    filename == "LICENSE" -> RustWriter(
-                        filename,
-                        namespace = "ignore",
-                        commentCharacter = "ignore",
-                        printWarning = false
-                    )
-                    else -> RustWriter(filename, namespace)
+                    fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#")
+                    fileName.endsWith(".md") -> rawWriter(fileName)
+                    fileName == "LICENSE" -> rawWriter(fileName)
+                    else -> RustWriter(fileName, namespace)
                 }
             }
+
+        private fun rawWriter(fileName: String): RustWriter =
+            RustWriter(fileName, namespace = "ignore", commentCharacter = "ignore", printWarning = false)
     }
 
     private val preamble = mutableListOf<Writable>()
@@ -267,13 +347,14 @@ class RustWriter private constructor(
     init {
         expressionStart = '#'
         if (filename.endsWith(".rs")) {
-            require(namespace.startsWith("crate")) { "We can only write into files in the crate (got $namespace)" }
+            require(namespace.startsWith("crate") || filename.startsWith("tests/")) { "We can only write into files in the crate (got $namespace)" }
         }
         putFormatter('T', formatter)
         putFormatter('D', RustDocLinker())
+        putFormatter('W', RustWriteableInjector())
     }
 
-    fun module(): String? = if (filename.endsWith(".rs")) {
+    fun module(): String? = if (filename.startsWith("src") && filename.endsWith(".rs")) {
         filename.removeSuffix(".rs").split('/').last()
     } else null
 
@@ -282,8 +363,8 @@ class RustWriter private constructor(
         return "${prefix}_$n"
     }
 
-    fun first(prewriter: RustWriter.() -> Unit) {
-        preamble.add(prewriter)
+    fun first(preWriter: RustWriter.() -> Unit) {
+        preamble.add(preWriter)
     }
 
     /**
@@ -326,7 +407,6 @@ class RustWriter private constructor(
      *
      */
     fun ifSet(shape: Shape, member: Symbol, outerField: String, block: RustWriter.(field: String) -> Unit) {
-        // TODO: this API should be refactored so that we don't need to strip `&` to get reference comparisons to work.
         when {
             member.isOptional() -> {
                 val derefName = safeName("inner")
@@ -367,8 +447,7 @@ class RustWriter private constructor(
             prewriter.toString()
         } else null
 
-        // Hack to support TOML
-        // TODO: consider creating a TOML writer
+        // Hack to support TOML: the [commentCharacter] is overridden to support writing TOML.
         val header = if (printWarning) {
             "$commentCharacter Code generated by software.amazon.smithy.rust.codegen.smithy-rs. DO NOT EDIT."
         } else null
@@ -389,14 +468,28 @@ class RustWriter private constructor(
     }
 
     /**
-     * Generate RustDoc links, eg. [`Abc`](crate::module::Abc)
+     * Generate RustDoc links, e.g. [`Abc`](crate::module::Abc)
      */
     inner class RustDocLinker : BiFunction<Any, String, String> {
         override fun apply(t: Any, u: String): String {
             return when (t) {
-                is Symbol -> "[`${t.name}`](${t.fullName})"
+                is Symbol -> "[`${t.name}`](${docLink(t.rustType().qualifiedName())})"
                 else -> throw CodegenException("Invalid type provided to RustDocLinker ($t) expected Symbol")
             }
+        }
+    }
+
+    /**
+     * Formatter to enable formatting any [writable] with the #W formatter.
+     */
+    inner class RustWriteableInjector : BiFunction<Any, String, String> {
+        @Suppress("UNCHECKED_CAST")
+        override fun apply(t: Any, u: String): String {
+            val func = t as RustWriter.() -> Unit
+            val innerWriter = RustWriter(filename, namespace, printWarning = false)
+            func(innerWriter)
+            innerWriter.dependencies.forEach { addDependency(it) }
+            return innerWriter.toString().trimEnd()
         }
     }
 

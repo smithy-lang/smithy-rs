@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
@@ -19,12 +20,12 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.orNull
 
 sealed class AwsJsonVersion {
     abstract val value: String
@@ -48,10 +49,16 @@ class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFac
     override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport = ProtocolSupport(
+        /* Client support */
         requestSerialization = true,
         requestBodySerialization = true,
         responseDeserialization = true,
-        errorDeserialization = true
+        errorDeserialization = true,
+        /* Server support */
+        requestDeserialization = false,
+        requestBodyDeserialization = false,
+        responseSerialization = false,
+        errorSerialization = false
     )
 }
 
@@ -65,19 +72,18 @@ class AwsJsonHttpBindingResolver(
         .uri(UriPattern.parse("/"))
         .build()
 
-    private fun bindings(shape: ToShapeId?) =
-        shape?.let { model.expectShape(it.toShapeId()) }?.members()
-            ?.map { HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document") }
-            ?.toList()
-            ?: emptyList()
+    private fun bindings(shape: ToShapeId) =
+        shape.let { model.expectShape(it.toShapeId()) }.members()
+            .map { HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document") }
+            .toList()
 
     override fun httpTrait(operationShape: OperationShape): HttpTrait = httpTrait
 
     override fun requestBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
-        bindings(operationShape.input.orNull())
+        bindings(operationShape.inputShape)
 
     override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
-        bindings(operationShape.output.orNull())
+        bindings(operationShape.outputShape)
 
     override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
         bindings(errorShape)
@@ -96,11 +102,11 @@ class AwsJsonSerializerGenerator(
     private val codegenContext: CodegenContext,
     httpBindingResolver: HttpBindingResolver,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
-        JsonSerializerGenerator(codegenContext, httpBindingResolver)
+        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
-        "Error" to CargoDependency.SmithyTypes(runtimeConfig).asType().member("Error"),
+        "Error" to runtimeConfig.serializationError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
 
@@ -142,11 +148,11 @@ class AwsJson(
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
-    override fun additionalHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+    override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        JsonParserGenerator(codegenContext, httpBindingResolver)
+        JsonParserGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
@@ -175,4 +181,8 @@ class AwsJson(
                 *errorScope
             )
         }
+}
+
+private fun awsJsonFieldName(member: MemberShape): String {
+    return member.memberName
 }

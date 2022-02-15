@@ -23,25 +23,25 @@ class RecursiveShapesIntegrationTest {
     @Test
     fun `recursive shapes are properly boxed`() {
         val model = """
-       namespace com.example
-       structure Expr {
-            left: Atom,
-            right: Atom
-       }
+            namespace com.example
+            structure Expr {
+                 left: Atom,
+                 right: Atom
+            }
 
-       union Atom {
-            add: Expr,
-            sub: Expr,
-            literal: Integer,
-            more: SecondTree
-       }
+            union Atom {
+                 add: Expr,
+                 sub: Expr,
+                 literal: Integer,
+                 more: SecondTree
+            }
 
-       structure SecondTree {
-            member: Expr,
-            otherMember: Atom,
-            third: SecondTree
-       }
-       """.asSmithyModel()
+            structure SecondTree {
+                 member: Expr,
+                 otherMember: Atom,
+                 third: SecondTree
+            }
+        """.asSmithyModel()
         val check = { input: Model ->
             val structures = listOf("Expr", "SecondTree").map { input.lookup<StructureShape>("com.example#$it") }
             val writer = RustWriter.forModule("model")

@@ -12,8 +12,6 @@ import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.traits.DocumentationTrait
-import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 import java.util.Optional
 import java.util.logging.Logger
@@ -24,9 +22,11 @@ private const val MODULE_NAME = "module"
 private const val MODULE_DESCRIPTION = "moduleDescription"
 private const val MODULE_VERSION = "moduleVersion"
 private const val MODULE_AUTHORS = "moduleAuthors"
+private const val MODULE_REPOSITORY = "moduleRepository"
 private const val RUNTIME_CONFIG = "runtimeConfig"
-private const val CODEGEN_SETTINGS = "codegen"
 private const val LICENSE = "license"
+private const val EXAMPLES = "examples"
+const val CODEGEN_SETTINGS = "codegen"
 
 /**
  * Configuration of codegen settings
@@ -73,9 +73,12 @@ class RustSettings(
     val moduleName: String,
     val moduleVersion: String,
     val moduleAuthors: List<String>,
+    val moduleDescription: String?,
+    val moduleRepository: String?,
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
     val license: String?,
+    val examplesUri: String? = null,
     private val model: Model
 ) {
 
@@ -92,9 +95,6 @@ class RustSettings(
             .orElseThrow { CodegenException("Shape is not a service: $service") }
     }
 
-    val moduleDescription: String
-        get() = getService(model).getTrait<DocumentationTrait>()?.value ?: moduleName
-
     companion object {
         private val LOGGER: Logger = Logger.getLogger(RustSettings::class.java.name)
 
@@ -107,6 +107,21 @@ class RustSettings(
          * @return Returns the extracted settings
          */
         fun from(model: Model, config: ObjectNode): RustSettings {
+            val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
+            val codegenConfig = CodegenConfig.fromNode(codegenSettings)
+            return fromCodegenConfig(model, config, codegenConfig)
+        }
+
+        /**
+         * Create settings from a configuration object node and CodegenConfig.
+         *
+         * @param model Model to infer the service from (if not explicitly set in config)
+         * @param config Config object to load
+         * @param codegenConfig CodegenConfig object to use
+         * @throws software.amazon.smithy.model.node.ExpectationNotMetException
+         * @return Returns the extracted settings
+         */
+        fun fromCodegenConfig(model: Model, config: ObjectNode, codegenConfig: CodegenConfig): RustSettings {
             config.warnIfAdditionalProperties(
                 arrayListOf(
                     SERVICE,
@@ -114,8 +129,10 @@ class RustSettings(
                     MODULE_DESCRIPTION,
                     MODULE_AUTHORS,
                     MODULE_VERSION,
+                    MODULE_REPOSITORY,
                     RUNTIME_CONFIG,
                     CODEGEN_SETTINGS,
+                    EXAMPLES,
                     LICENSE
                 )
             )
@@ -124,20 +141,18 @@ class RustSettings(
                 .map(StringNode::expectShapeId)
                 .orElseGet { inferService(model) }
 
-            val moduleName = config.expectStringMember(MODULE_NAME).value
-            val version = config.expectStringMember(MODULE_VERSION).value
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
-            val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
-            val moduleAuthors = config.expectArrayMember(MODULE_AUTHORS).map { it.expectStringNode().value }
-            val license = config.getStringMember(LICENSE).orNull()?.value
             return RustSettings(
                 service = service,
-                moduleName = moduleName,
-                moduleVersion = version,
-                moduleAuthors = moduleAuthors,
+                moduleName = config.expectStringMember(MODULE_NAME).value,
+                moduleVersion = config.expectStringMember(MODULE_VERSION).value,
+                moduleAuthors = config.expectArrayMember(MODULE_AUTHORS).map { it.expectStringNode().value },
+                moduleDescription = config.getStringMember(MODULE_DESCRIPTION).orNull()?.value,
+                moduleRepository = config.getStringMember(MODULE_REPOSITORY).orNull()?.value,
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
-                codegenConfig = CodegenConfig.fromNode(codegenSettings),
-                license = license,
+                codegenConfig,
+                license = config.getStringMember(LICENSE).orNull()?.value,
+                examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
                 model = model
             )
         }

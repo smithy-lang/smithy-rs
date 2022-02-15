@@ -1,14 +1,17 @@
 [workspace]
 
 members = [
-    "smithy-async",
-    "smithy-http",
-    "smithy-client",
-    "smithy-eventstream",
-    "smithy-http-tower",
-    "smithy-json",
-    "smithy-query",
-    "smithy-types",
-    "smithy-xml",
-    "inlineable"
+    "inlineable",
+    "aws-smithy-async",
+    "aws-smithy-client",
+    "aws-smithy-eventstream",
+    "aws-smithy-http",
+    "aws-smithy-http-tower",
+    "aws-smithy-json",
+    "aws-smithy-protocol-test",
+    "aws-smithy-query",
+    "aws-smithy-types",
+    "aws-smithy-types-convert",
+    "aws-smithy-xml",
+    "aws-smithy-http-server"
 ]

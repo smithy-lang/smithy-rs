@@ -6,51 +6,22 @@
 //! Credential provider augmentation through the AWS Security Token Service (STS).
 
 mod assume_role;
+
+pub(crate) mod util;
+
+use crate::connector::expect_connector;
 pub use assume_role::{AssumeRoleProvider, AssumeRoleProviderBuilder};
 
-pub(crate) mod util {
-    use aws_sdk_sts::model::Credentials as StsCredentials;
-    use aws_types::credentials::{self, CredentialsError};
-    use aws_types::Credentials as AwsCredentials;
-    use std::time::{SystemTime, UNIX_EPOCH};
+use aws_sdk_sts::middleware::DefaultMiddleware;
+use aws_smithy_client::erase::DynConnector;
+use aws_smithy_client::http_connector::HttpSettings;
+use aws_smithy_client::{Builder, Client};
 
-    /// Convert STS credentials to aws_auth::Credentials
-    pub(crate) fn into_credentials(
-        sts_credentials: Option<StsCredentials>,
-        provider_name: &'static str,
-    ) -> credentials::Result {
-        let sts_credentials = sts_credentials
-            .ok_or_else(|| CredentialsError::Unhandled("STS credentials must be defined".into()))?;
-        let expiration = sts_credentials
-            .expiration
-            .ok_or_else(|| CredentialsError::Unhandled("missing expiration".into()))?;
-        let expiration = expiration.to_system_time().ok_or_else(|| {
-            CredentialsError::Unhandled(
-                format!("expiration is before unix epoch: {:?}", &expiration).into(),
-            )
-        })?;
-        Ok(AwsCredentials::new(
-            sts_credentials.access_key_id.ok_or_else(|| {
-                CredentialsError::Unhandled("access key id missing from result".into())
-            })?,
-            sts_credentials
-                .secret_access_key
-                .ok_or_else(|| CredentialsError::Unhandled("secret access token missing".into()))?,
-            sts_credentials.session_token,
-            Some(expiration),
-            provider_name,
-        ))
-    }
-
-    /// Create a default STS session name
-    ///
-    /// STS Assume Role providers MUST assign a name to their generated session. When a user does not
-    /// provide a name for the session, the provider will choose a name composed of a base + a timestamp,
-    /// eg. `profile-file-provider-123456789`
-    pub(crate) fn default_session_name(base: &str) -> String {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("post epoch");
-        format!("{}-{}", base, now.as_millis())
+impl crate::provider_config::ProviderConfig {
+    pub(crate) fn sts_client(&self) -> Client<DynConnector, DefaultMiddleware> {
+        Builder::<(), DefaultMiddleware>::new()
+            .connector(expect_connector(self.connector(&HttpSettings::default())))
+            .sleep_impl(self.sleep())
+            .build()
     }
 }

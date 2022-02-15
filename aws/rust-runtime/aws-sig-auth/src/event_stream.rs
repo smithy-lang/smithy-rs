@@ -6,11 +6,11 @@
 use crate::middleware::Signature;
 use aws_sigv4::event_stream::{sign_empty_message, sign_message};
 use aws_sigv4::SigningParams;
+use aws_smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
+use aws_smithy_http::property_bag::{PropertyBag, SharedPropertyBag};
 use aws_types::region::SigningRegion;
 use aws_types::Credentials;
 use aws_types::SigningService;
-use smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
-use smithy_http::property_bag::{PropertyBag, SharedPropertyBag};
 use std::time::SystemTime;
 
 /// Event Stream SigV4 signing implementation.
@@ -43,7 +43,7 @@ impl SigV4Signer {
             .secret_key(credentials.secret_access_key())
             .region(region.as_ref())
             .service_name(signing_service.as_ref())
-            .date_time(time.into())
+            .time(time)
             .settings(());
         builder.set_security_token(credentials.session_token());
         builder.build().unwrap()
@@ -91,12 +91,12 @@ impl SignMessage for SigV4Signer {
 mod tests {
     use crate::event_stream::SigV4Signer;
     use crate::middleware::Signature;
+    use aws_smithy_eventstream::frame::{HeaderValue, Message, SignMessage};
+    use aws_smithy_http::property_bag::PropertyBag;
     use aws_types::region::Region;
     use aws_types::region::SigningRegion;
     use aws_types::Credentials;
     use aws_types::SigningService;
-    use smithy_eventstream::frame::{HeaderValue, Message, SignMessage};
-    use smithy_http::property_bag::PropertyBag;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
@@ -106,7 +106,7 @@ mod tests {
         properties.insert(region.clone());
         properties.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
         properties.insert(SigningService::from_static("transcribe"));
-        properties.insert(Credentials::from_keys("AKIAfoo", "bar", None));
+        properties.insert(Credentials::new("AKIAfoo", "bar", None, None, "test"));
         properties.insert(SigningRegion::from(region));
         properties.insert(Signature::new("initial-signature".into()));
 

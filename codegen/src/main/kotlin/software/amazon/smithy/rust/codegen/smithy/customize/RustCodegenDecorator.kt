@@ -13,10 +13,12 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
+import software.amazon.smithy.rust.codegen.util.deepMergeWith
 import java.util.ServiceLoader
 import java.util.logging.Logger
 
@@ -54,6 +56,13 @@ interface RustCodegenDecorator {
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> = baseCustomizations
 
+    /**
+     * Returns a map of Cargo.toml properties to change. For example, if a `homepage` needs to be
+     * added to the Cargo.toml `[package]` section, a `mapOf("package" to mapOf("homepage", "https://example.com"))`
+     * could be returned. Properties here overwrite the default properties.
+     */
+    fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations = emptyMap()
+
     fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {}
 
     fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap = currentProtocols
@@ -74,6 +83,8 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         get() = "MetaDecorator"
     override val order: Byte
         get() = 0
+
+    fun withDecorator(decorator: RustCodegenDecorator) = CombinedCodegenDecorator(orderedDecorators + decorator)
 
     override fun configCustomizations(
         codegenContext: CodegenContext,
@@ -118,6 +129,12 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         }
     }
 
+    override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations {
+        return orderedDecorators.foldRight(emptyMap()) { decorator, customizations ->
+            customizations.deepMergeWith(decorator.crateManifestCustomizations(codegenContext))
+        }
+    }
+
     override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
         return orderedDecorators.forEach { it.extras(codegenContext, rustCrate) }
     }
@@ -130,7 +147,7 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
 
     companion object {
         private val logger = Logger.getLogger("RustCodegenSPILoader")
-        fun fromClasspath(context: PluginContext): RustCodegenDecorator {
+        fun fromClasspath(context: PluginContext, vararg extras: RustCodegenDecorator): CombinedCodegenDecorator {
             val decorators = ServiceLoader.load(
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader)
@@ -138,7 +155,7 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
                 .onEach {
                     logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                 }.toList()
-            return CombinedCodegenDecorator(decorators + RequiredCustomizations() + FluentClientDecorator())
+            return CombinedCodegenDecorator(decorators + RequiredCustomizations() + FluentClientDecorator() + extras)
         }
     }
 }

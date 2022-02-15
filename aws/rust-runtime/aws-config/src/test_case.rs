@@ -3,22 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::collections::HashMap;
-use std::error::Error;
-use std::path::{Path, PathBuf};
+use crate::provider_config::ProviderConfig;
 
-use std::time::{Duration, UNIX_EPOCH};
-
-use crate::provider_config::{HttpSettings, ProviderConfig};
+use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
+use aws_smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
+use aws_smithy_client::erase::DynConnector;
+use aws_smithy_client::http_connector::HttpSettings;
 use aws_types::credentials::{self, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
+
 use serde::Deserialize;
-use smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
 
-use smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
-use smithy_client::erase::DynConnector;
-
+use crate::connector::default_connector;
+use std::collections::HashMap;
+use std::error::Error;
+use std::fmt::Debug;
 use std::future::Future;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, UNIX_EPOCH};
 
 /// Test case credentials
 ///
@@ -49,12 +51,18 @@ impl From<&aws_types::Credentials> for Credentials {
     }
 }
 
+impl From<aws_types::Credentials> for Credentials {
+    fn from(credentials: aws_types::Credentials) -> Self {
+        (&credentials).into()
+    }
+}
+
 /// Credentials test environment
 ///
 /// A credentials test environment is a directory containing:
 /// - an `fs` directory. This is loaded into the test as if it was mounted at `/`
 /// - an `env.json` file containing environment variables
-/// - an  `http-traffic.json` file containing an http traffic log from [`dvr`](smithy_client::dvr)
+/// - an  `http-traffic.json` file containing an http traffic log from [`dvr`](aws_smithy_client::dvr)
 /// - a `test-case.json` file defining the expected output of the test
 pub struct TestEnvironment {
     env: Env,
@@ -78,10 +86,42 @@ impl AsyncSleep for InstantSleep {
 }
 
 #[derive(Deserialize)]
-enum TestResult {
-    Ok(Credentials),
+pub enum GenericTestResult<T> {
+    Ok(T),
     ErrorContains(String),
 }
+
+impl<T> GenericTestResult<T>
+where
+    T: PartialEq + Debug,
+{
+    pub fn assert_matches(&self, result: Result<impl Into<T>, impl Error>) {
+        match (result, &self) {
+            (Ok(actual), GenericTestResult::Ok(expected)) => {
+                assert_eq!(expected, &actual.into(), "incorrect result was returned")
+            }
+            (Err(err), GenericTestResult::ErrorContains(substr)) => {
+                assert!(
+                    format!("{}", err).contains(substr),
+                    "`{}` did not contain `{}`",
+                    err,
+                    substr
+                )
+            }
+            (Err(actual_error), GenericTestResult::Ok(expected_creds)) => panic!(
+                "expected credentials ({:?}) but an error was returned: {}",
+                expected_creds, actual_error
+            ),
+            (Ok(creds), GenericTestResult::ErrorContains(substr)) => panic!(
+                "expected an error containing: `{}`, but a result was returned: {:?}",
+                substr,
+                creds.into()
+            ),
+        }
+    }
+}
+
+type TestResult = GenericTestResult<Credentials>;
 
 #[derive(Deserialize)]
 pub struct Metadata {
@@ -123,7 +163,7 @@ impl TestEnvironment {
             ProviderConfig::empty()
                 .with_fs(self.fs.clone())
                 .with_env(self.env.clone())
-                .with_connector(DynConnector::new(connector.clone()))
+                .with_http_connector(DynConnector::new(connector.clone()))
                 .with_sleep(TokioSleep::new())
                 .load_default_region()
                 .await,
@@ -142,10 +182,9 @@ impl TestEnvironment {
         // swap out the connector generated from `http-traffic.json` for a real connector:
         let settings = HttpSettings::default();
         let (_test_connector, config) = self.provider_config().await;
-        let live_connector =
-            crate::connector::default_connector(&settings, config.sleep()).unwrap();
+        let live_connector = default_connector(&settings, config.sleep()).unwrap();
         let live_connector = RecordingConnection::new(live_connector);
-        let config = config.with_connector(DynConnector::new(live_connector.clone()));
+        let config = config.with_http_connector(DynConnector::new(live_connector.clone()));
         let provider = make_provider(config).await;
         let result = provider.provide_credentials().await;
         std::fs::write(
@@ -153,7 +192,7 @@ impl TestEnvironment {
             serde_json::to_string(&live_connector.network_traffic()).unwrap(),
         )
         .unwrap();
-        self.check_results(&result);
+        self.check_results(result);
     }
 
     #[allow(dead_code)]
@@ -168,7 +207,7 @@ impl TestEnvironment {
     {
         let (connector, config) = self.provider_config().await;
         let recording_connector = RecordingConnection::new(connector);
-        let config = config.with_connector(DynConnector::new(recording_connector.clone()));
+        let config = config.with_http_connector(DynConnector::new(recording_connector.clone()));
         let provider = make_provider(config).await;
         let result = provider.provide_credentials().await;
         std::fs::write(
@@ -176,7 +215,7 @@ impl TestEnvironment {
             serde_json::to_string(&recording_connector.network_traffic()).unwrap(),
         )
         .unwrap();
-        self.check_results(&result);
+        self.check_results(result);
     }
 
     fn log_info(&self) {
@@ -192,8 +231,9 @@ impl TestEnvironment {
         let (connector, conf) = self.provider_config().await;
         let provider = make_provider(conf).await;
         let result = provider.provide_credentials().await;
+        tokio::time::pause();
         self.log_info();
-        self.check_results(&result);
+        self.check_results(result);
         // todo: validate bodies
         match connector
             .validate(
@@ -207,31 +247,7 @@ impl TestEnvironment {
         }
     }
 
-    fn check_results(&self, result: &credentials::Result) {
-        match (&result, &self.metadata.result) {
-            (Ok(actual), TestResult::Ok(expected)) => {
-                assert_eq!(
-                    expected,
-                    &Credentials::from(actual),
-                    "incorrect credentials were returned"
-                )
-            }
-            (Err(err), TestResult::ErrorContains(substr)) => {
-                assert!(
-                    format!("{}", err).contains(substr),
-                    "`{}` did not contain `{}`",
-                    err,
-                    substr
-                )
-            }
-            (Err(actual_error), TestResult::Ok(expected_creds)) => panic!(
-                "expected credentials ({:?}) but an error was returned: {}",
-                expected_creds, actual_error
-            ),
-            (Ok(creds), TestResult::ErrorContains(substr)) => panic!(
-                "expected an error containing: `{}`, but credentials were returned: {:?}",
-                substr, creds
-            ),
-        }
+    fn check_results(&self, result: credentials::Result) {
+        self.metadata.result.assert_matches(result);
     }
 }

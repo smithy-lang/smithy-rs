@@ -261,6 +261,18 @@
                     "traits": {
                         "smithy.api#documentation": "<p>Describes the SAML application configured for a domain.</p>"
                     }
+                },
+                "AnonymousAuthDisableDate": {
+                    "target": "com.amazonaws.elasticsearchservice#DisableTimestamp",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Specifies the Anonymous Auth Disable Date when Anonymous Auth is enabled.</p>"
+                    }
+                },
+                "AnonymousAuthEnabled": {
+                    "target": "com.amazonaws.elasticsearchservice#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>True if Anonymous auth is enabled. Anonymous auth can be enabled only when AdvancedSecurity is enabled on existing domains.</p>"
+                    }
                 }
             },
             "traits": {
@@ -293,6 +305,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>Specifies the SAML application configuration for the domain.</p>"
                     }
+                },
+                "AnonymousAuthEnabled": {
+                    "target": "com.amazonaws.elasticsearchservice#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>True if Anonymous auth is enabled. Anonymous auth can be enabled only when AdvancedSecurity is enabled on existing domains.</p>"
+                    }
                 }
             },
             "traits": {
@@ -323,6 +341,24 @@
         },
         "com.amazonaws.elasticsearchservice#AmazonElasticsearchService2015": {
             "type": "service",
+            "traits": {
+                "aws.api#service": {
+                    "sdkId": "Elasticsearch Service",
+                    "arnNamespace": "es",
+                    "cloudFormationName": "Elasticsearch",
+                    "cloudTrailEventSource": "elasticsearchservice.amazonaws.com",
+                    "endpointPrefix": "es"
+                },
+                "aws.auth#sigv4": {
+                    "name": "es"
+                },
+                "aws.protocols#restJson1": {},
+                "smithy.api#documentation": "<fullname>Amazon Elasticsearch Configuration Service</fullname>\n      <p>Use the Amazon Elasticsearch Configuration API to create, configure, and manage Elasticsearch domains.</p>\n      <p>For sample code that uses the Configuration API, see the <a href=\"https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-configuration-samples.html\">Amazon Elasticsearch Service Developer Guide</a>.\n      The guide also contains <a href=\"https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-request-signing.html\">sample code for sending signed HTTP requests to the Elasticsearch APIs</a>.</p>\n      <p>The endpoint for configuration service requests is region-specific: es.<i>region</i>.amazonaws.com.\n         For example, es.us-east-1.amazonaws.com. For a current list of supported regions and endpoints,\n         see <a href=\"http://docs.aws.amazon.com/general/latest/gr/rande.html#elasticsearch-service-regions\" target=\"_blank\">Regions and Endpoints</a>.</p>",
+                "smithy.api#title": "Amazon Elasticsearch Service",
+                "smithy.api#xmlNamespace": {
+                    "uri": "http://es.amazonaws.com/doc/2015-01-01/"
+                }
+            },
             "version": "2015-01-01",
             "operations": [
                 {
@@ -445,25 +481,7 @@
                 {
                     "target": "com.amazonaws.elasticsearchservice#UpgradeElasticsearchDomain"
                 }
-            ],
-            "traits": {
-                "aws.api#service": {
-                    "sdkId": "Elasticsearch Service",
-                    "arnNamespace": "es",
-                    "cloudFormationName": "Elasticsearch",
-                    "cloudTrailEventSource": "elasticsearchservice.amazonaws.com",
-                    "endpointPrefix": "es"
-                },
-                "aws.auth#sigv4": {
-                    "name": "es"
-                },
-                "aws.protocols#restJson1": {},
-                "smithy.api#documentation": "<fullname>Amazon Elasticsearch Configuration Service</fullname>\n      <p>Use the Amazon Elasticsearch Configuration API to create, configure, and manage Elasticsearch domains.</p>\n      <p>For sample code that uses the Configuration API, see the <a href=\"https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-configuration-samples.html\">Amazon Elasticsearch Service Developer Guide</a>.\n      The guide also contains <a href=\"https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-request-signing.html\">sample code for sending signed HTTP requests to the Elasticsearch APIs</a>.</p>\n      <p>The endpoint for configuration service requests is region-specific: es.<i>region</i>.amazonaws.com.\n         For example, es.us-east-1.amazonaws.com. For a current list of supported regions and endpoints,\n         see <a href=\"http://docs.aws.amazon.com/general/latest/gr/rande.html#elasticsearch-service-regions\" target=\"_blank\">Regions and Endpoints</a>.</p>",
-                "smithy.api#title": "Amazon Elasticsearch Service",
-                "smithy.api#xmlNamespace": {
-                    "uri": "http://es.amazonaws.com/doc/2015-01-01/"
-                }
-            }
+            ]
         },
         "com.amazonaws.elasticsearchservice#AssociatePackage": {
             "type": "operation",
@@ -1690,6 +1708,15 @@
                 ]
             }
         },
+        "com.amazonaws.elasticsearchservice#DeploymentType": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 2,
+                    "max": 128
+                }
+            }
+        },
         "com.amazonaws.elasticsearchservice#DescribeDomainAutoTunes": {
             "type": "operation",
             "input": {
@@ -2499,6 +2526,9 @@
                 "smithy.api#documentation": "<p>Container for results from <code>DescribeReservedElasticsearchInstances</code></p>"
             }
         },
+        "com.amazonaws.elasticsearchservice#DisableTimestamp": {
+            "type": "timestamp"
+        },
         "com.amazonaws.elasticsearchservice#DisabledOperationException": {
             "type": "structure",
             "members": {
@@ -2829,6 +2859,29 @@
             "type": "double",
             "traits": {
                 "smithy.api#box": {}
+            }
+        },
+        "com.amazonaws.elasticsearchservice#DryRun": {
+            "type": "boolean",
+            "traits": {
+                "smithy.api#box": {}
+            }
+        },
+        "com.amazonaws.elasticsearchservice#DryRunResults": {
+            "type": "structure",
+            "members": {
+                "DeploymentType": {
+                    "target": "com.amazonaws.elasticsearchservice#DeploymentType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n            Specifies the deployment mechanism through which the update shall be applied on the domain.\n            Possible responses are\n            <code>Blue/Green</code> (The update will require a blue/green deployment.)\n            <code>DynamicUpdate</code> (The update can be applied in-place without a Blue/Green deployment required.)\n            <code>Undetermined</code> (The domain is undergoing an update which needs to complete before the deployment type can be predicted.)\n            <code>None</code> (The configuration change matches the current configuration and will not result in any update.)\n        </p>"
+                    }
+                },
+                "Message": {
+                    "target": "com.amazonaws.elasticsearchservice#Message",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains an optional message associated with the DryRunResults.</p>"
+                    }
+                }
             }
         },
         "com.amazonaws.elasticsearchservice#Duration": {
@@ -4834,6 +4887,15 @@
                 "smithy.api#documentation": "<p>\n      Maximum number of Instances that can be instantiated for given InstanceType.\n    </p>"
             }
         },
+        "com.amazonaws.elasticsearchservice#Message": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 0,
+                    "max": 1024
+                }
+            }
+        },
         "com.amazonaws.elasticsearchservice#MinimumInstanceCount": {
             "type": "integer",
             "traits": {
@@ -6393,6 +6455,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>Specifies Auto-Tune options.</p>"
                     }
+                },
+                "DryRun": {
+                    "target": "com.amazonaws.elasticsearchservice#DryRun",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n           This flag, when set to True, specifies whether the <code>UpdateElasticsearchDomain</code> request should return the results of validation checks without actually applying the change.\n           This flag, when set to True, specifies the deployment mechanism through which the update shall be applied on the domain.\n           This will not actually perform the Update.\n       </p>"
+                    }
                 }
             },
             "traits": {
@@ -6407,6 +6475,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The status of the updated Elasticsearch domain. </p>",
                         "smithy.api#required": {}
+                    }
+                },
+                "DryRunResults": {
+                    "target": "com.amazonaws.elasticsearchservice#DryRunResults",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains result of DryRun. </p>"
                     }
                 }
             },

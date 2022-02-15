@@ -13,7 +13,15 @@ plugins {
 }
 
 val smithyVersion: String by project
+val defaultRustFlags: String by project
+val defaultRustDocFlags: String by project
 
+buildscript {
+    val smithyVersion: String by project
+    dependencies {
+        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
+    }
+}
 
 dependencies {
     implementation(project(":codegen"))
@@ -62,13 +70,15 @@ val CodegenTests = listOf(
     ),
     CodegenTest(
         "crate#Config",
-        "naming_test_ops", """
+        "naming_test_ops",
+        """
             , "codegen": { "renameErrors": false }
         """.trimIndent()
     ),
     CodegenTest(
         "naming_obs_structs#NamingObstacleCourseStructs",
-        "naming_test_structs", """
+        "naming_test_structs",
+        """
             , "codegen": { "renameErrors": false }
         """.trimIndent()
     )
@@ -86,6 +96,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
                       "service": "${it.service}",
                       "module": "${it.module}",
                       "moduleVersion": "0.0.1",
+                      "moduleDescription": "test",
                       "moduleAuthors": ["protocoltest@example.com"]
                       ${it.extraConfig ?: ""}
                  }
@@ -126,35 +137,31 @@ task("generateCargoWorkspace") {
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
-
 tasks.register<Exec>("cargoCheck") {
     workingDir("build/smithyprojections/codegen-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "check")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoTest") {
     workingDir("build/smithyprojections/codegen-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "test")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoDocs") {
     workingDir("build/smithyprojections/codegen-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+    environment("RUSTDOCFLAGS", defaultRustDocFlags)
     commandLine("cargo", "doc", "--no-deps")
     dependsOn("assemble")
 }
 
 tasks.register<Exec>("cargoClippy") {
     workingDir("build/smithyprojections/codegen-test/")
-    // disallow warnings
-    commandLine("cargo", "clippy", "--", "-D", "warnings")
+    environment("RUSTFLAGS", defaultRustFlags)
+    commandLine("cargo", "clippy")
     dependsOn("assemble")
 }
 

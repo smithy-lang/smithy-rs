@@ -12,7 +12,7 @@
 
 #![warn(
     missing_docs,
-    missing_crate_level_docs,
+    rustdoc::missing_crate_level_docs,
     missing_debug_implementations,
     rust_2018_idioms,
     unreachable_pub
@@ -26,3 +26,12 @@ pub mod presigning;
 
 /// Special logic for handling S3's error responses.
 pub mod s3_errors;
+
+/// Glacier-specific checksumming behavior
+pub mod glacier_checksums;
+
+/// Default middleware stack for AWS services
+pub mod middleware;
+
+/// Strip `hostedzone/` from hosted zone ids
+pub mod hosted_zone_preprocessor;

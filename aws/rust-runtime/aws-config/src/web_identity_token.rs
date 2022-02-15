@@ -10,10 +10,10 @@
 //! 2. [AWS profile](#aws-profile-configuration) defined in `~/.aws/config`
 //! 3. Static configuration via [`static_configuration`](Builder::static_configuration)
 //!
-//! **Note:** [WebIdentityTokenCredentialsProvider] is part of the [default provider chain](crate::default_provider).
+//! _Note: [WebIdentityTokenCredentialsProvider] is part of the [default provider chain](crate::default_provider).
 //! Unless you need specific behavior or configuration overrides, it is recommended to use the
 //! default chain instead of using this provider directly. This client should be considered a "low level"
-//! client as it does not include caching or profile-file resolution when used in isolation.
+//! client as it does not include caching or profile-file resolution when used in isolation._
 //!
 //! ## Environment Variable Configuration
 //! WebIdentityTokenCredentialProvider will load the following environment variables:
@@ -22,8 +22,8 @@
 //! - `AWS_IAM_ROLE_SESSION_NAME`: **optional**: Session name to use when assuming the role
 //!
 //! ## AWS Profile Configuration
-//! **Note:** Configuration of the web identity token provider via a shared profile is only supported
-//! when using the [`ProfileFileCredentialsProvider`](crate::profile::credentials).
+//! _Note: Configuration of the web identity token provider via a shared profile is only supported
+//! when using the [`ProfileFileCredentialsProvider`](crate::profile::credentials)._
 //!
 //! Web identity token credentials can be loaded from `~/.aws/config` in two ways:
 //! 1. Directly:
@@ -51,7 +51,7 @@
 //! Unless overridden with [`static_configuration`](Builder::static_configuration), the provider will
 //! load configuration from environment variables.
 //!
-//! ```rust
+//! ```no_run
 //! # async fn test() {
 //! use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
 //! use aws_config::provider_config::ProviderConfig;
@@ -60,12 +60,14 @@
 //!     .build();
 //! # }
 //! ```
+
 use aws_sdk_sts::Region;
 use aws_types::os_shim_internal::{Env, Fs};
 
-use crate::connector::expect_connector;
 use crate::provider_config::ProviderConfig;
 use crate::sts;
+use aws_sdk_sts::middleware::DefaultMiddleware;
+use aws_smithy_client::erase::DynConnector;
 use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
@@ -82,7 +84,7 @@ const ENV_VAR_SESSION_NAME: &str = "AWS_ROLE_SESSION_NAME";
 pub struct WebIdentityTokenCredentialsProvider {
     source: Source,
     fs: Fs,
-    client: aws_hyper::StandardClient,
+    client: aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
     region: Option<Region>,
 }
 
@@ -125,12 +127,12 @@ impl WebIdentityTokenCredentialsProvider {
     fn source(&self) -> Result<Cow<StaticConfiguration>, CredentialsError> {
         match &self.source {
             Source::Env(env) => {
-                let token_file = env
-                    .get(ENV_VAR_TOKEN_FILE)
-                    .map_err(|_| CredentialsError::CredentialsNotLoaded)?;
+                let token_file = env.get(ENV_VAR_TOKEN_FILE).map_err(|_| {
+                    CredentialsError::not_loaded(format!("${} was not set", ENV_VAR_TOKEN_FILE))
+                })?;
                 let role_arn = env.get(ENV_VAR_ROLE_ARN).map_err(|_| {
-                    CredentialsError::InvalidConfiguration(
-                        "AWS_ROLE_ARN environment variable must be set".into(),
+                    CredentialsError::invalid_configuration(
+                        "AWS_ROLE_ARN environment variable must be set",
                     )
                 })?;
                 let session_name = env
@@ -151,15 +153,15 @@ impl WebIdentityTokenCredentialsProvider {
             &self.fs,
             &self.client,
             &self.region.as_ref().cloned().ok_or_else(|| {
-                CredentialsError::InvalidConfiguration(
-                    "region is required for WebIdentityTokenProvider".into(),
+                CredentialsError::invalid_configuration(
+                    "region is required for WebIdentityTokenProvider",
                 )
             })?,
             &conf.web_identity_token_file,
             &conf.role_arn,
             &conf.session_name,
         )
-        .instrument(tracing::info_span!(
+        .instrument(tracing::debug_span!(
             "load_credentials",
             provider = "WebIdentityToken"
         ))
@@ -178,7 +180,7 @@ impl Builder {
     /// Configure generic options of the [WebIdentityTokenCredentialsProvider]
     ///
     /// # Examples
-    /// ```rust
+    /// ```no_run
     /// # async fn test() {
     /// use aws_config::web_identity_token::WebIdentityTokenCredentialsProvider;
     /// use aws_config::provider_config::ProviderConfig;
@@ -209,8 +211,7 @@ impl Builder {
     /// builder, this function will panic.
     pub fn build(self) -> WebIdentityTokenCredentialsProvider {
         let conf = self.config.unwrap_or_default();
-        let connector = expect_connector(conf.default_connector());
-        let client = aws_hyper::Client::new(connector);
+        let client = conf.sts_client();
         let source = self.source.unwrap_or_else(|| Source::Env(conf.env()));
         WebIdentityTokenCredentialsProvider {
             source,
@@ -223,7 +224,7 @@ impl Builder {
 
 async fn load_credentials(
     fs: &Fs,
-    client: &aws_hyper::StandardClient,
+    client: &aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
     region: &Region,
     token_file: impl AsRef<Path>,
     role_arn: &str,
@@ -232,9 +233,9 @@ async fn load_credentials(
     let token = fs
         .read_to_end(token_file)
         .await
-        .map_err(|err| CredentialsError::ProviderError(err.into()))?;
+        .map_err(CredentialsError::provider_error)?;
     let token = String::from_utf8(token).map_err(|_utf_8_error| {
-        CredentialsError::Unhandled("WebIdentityToken was not valid UTF-8".into())
+        CredentialsError::unhandled("WebIdentityToken was not valid UTF-8")
     })?;
     let conf = aws_sdk_sts::Config::builder()
         .region(region.clone())
@@ -247,10 +248,11 @@ async fn load_credentials(
         .build()
         .expect("valid operation")
         .make_operation(&conf)
+        .await
         .expect("valid operation");
     let resp = client.call(operation).await.map_err(|sdk_error| {
         tracing::warn!(error = ?sdk_error, "sts returned an error assuming web identity role");
-        CredentialsError::ProviderError(sdk_error.into())
+        CredentialsError::provider_error(sdk_error)
     })?;
     sts::util::into_credentials(resp.credentials, "WebIdentityToken")
 }
@@ -274,7 +276,7 @@ mod test {
         // empty environment
         let conf = ProviderConfig::empty()
             .with_env(Env::from_slice(&[]))
-            .with_connector(no_traffic_connector())
+            .with_http_connector(no_traffic_connector())
             .with_region(Some(Region::from_static("us-east-1")));
 
         let provider = Builder::default().configure(&conf).build();
@@ -283,7 +285,7 @@ mod test {
             .await
             .expect_err("should fail, provider not loaded");
         match err {
-            CredentialsError::CredentialsNotLoaded => { /* ok */ }
+            CredentialsError::CredentialsNotLoaded { .. } => { /* ok */ }
             _ => panic!("incorrect error variant"),
         }
     }
@@ -297,7 +299,7 @@ mod test {
                 &ProviderConfig::empty()
                     .with_region(region)
                     .with_env(env)
-                    .with_connector(no_traffic_connector()),
+                    .with_http_connector(no_traffic_connector()),
             )
             .build();
         let err = provider
@@ -310,7 +312,7 @@ mod test {
             err
         );
         match err {
-            CredentialsError::InvalidConfiguration(_) => { /* ok */ }
+            CredentialsError::InvalidConfiguration { .. } => { /* ok */ }
             _ => panic!("incorrect error variant"),
         }
     }
@@ -326,7 +328,7 @@ mod test {
         let provider = Builder::default()
             .configure(
                 &ProviderConfig::empty()
-                    .with_connector(no_traffic_connector())
+                    .with_http_connector(no_traffic_connector())
                     .with_region(Some(Region::new("us-east-1")))
                     .with_env(env)
                     .with_fs(fs),
@@ -334,7 +336,7 @@ mod test {
             .build();
         let err = provider.credentials().await.expect_err("no JWT token");
         match err {
-            CredentialsError::ProviderError(_) => { /* ok */ }
+            CredentialsError::ProviderError { .. } => { /* ok */ }
             _ => panic!("incorrect error variant"),
         }
     }

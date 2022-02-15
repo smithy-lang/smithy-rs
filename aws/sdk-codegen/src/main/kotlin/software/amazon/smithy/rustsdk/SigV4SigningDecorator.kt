@@ -91,7 +91,7 @@ class SigV4SigningConfig(
         "SharedPropertyBag" to RuntimeType(
             "SharedPropertyBag",
             CargoDependency.SmithyHttp(runtimeConfig),
-            "smithy_http::property_bag"
+            "aws_smithy_http::property_bag"
         )
     )
 
@@ -130,13 +130,14 @@ class SigV4SigningConfig(
     }
 }
 
-fun needsAmzSha256(service: ServiceShape) = when {
-    service.id == ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+fun needsAmzSha256(service: ServiceShape) = when (service.id) {
+    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+    ShapeId.from("com.amazonaws.s3control#AWSS3ControlServiceV20180820") -> true
     else -> false
 }
 
-fun disableDoubleEncode(service: ServiceShape) = when {
-    service.id == ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+fun disableDoubleEncode(service: ServiceShape) = when (service.id) {
+    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
     else -> false
 }
 

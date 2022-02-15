@@ -1,0 +1,47 @@
+[package]
+name = "aws-smithy-http-server"
+version = "0.0.0-smithy-rs-head"
+authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
+edition = "2018"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+keywords = ["smithy", "framework", "web", "api", "aws"]
+categories = ["asynchronous", "web-programming", "api-bindings"]
+description = """
+Server runtime for Smithy Rust Server Framework.
+
+NOTE: THIS IS HIGHLY EXPERIMENTAL AND SHOULD NOT BE USED YET.
+"""
+# until this is not stable, it is not publishable.
+publish = false
+
+[dependencies]
+aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
+aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-json = { path = "../aws-smithy-json" }
+aws-smithy-xml = { path = "../aws-smithy-xml" }
+async-trait = "0.1"
+axum-core = "0.1"
+bytes = "1.1"
+futures-util = { version = "0.3", default-features = false }
+http = "0.2"
+http-body = "0.4"
+hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp", "stream"] }
+mime = "0.3"
+nom = "7"
+pin-project-lite = "0.2"
+regex = "1.0"
+serde_urlencoded = "0.7"
+thiserror = "1"
+tokio = { version = "1.0", features = ["full"] }
+tower = { version = "0.4.11", features = ["util", "make"], default-features = false }
+tower-http = { version = "0.2.1", features = ["add-extension", "map-response-body"] }
+
+[dev-dependencies]
+pretty_assertions = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

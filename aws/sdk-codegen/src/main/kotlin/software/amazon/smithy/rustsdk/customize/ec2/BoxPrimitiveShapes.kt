@@ -20,6 +20,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.traits.BoxTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.utils.ToSmithyBuilder
 
 object BoxPrimitiveShapes {
@@ -40,7 +41,7 @@ object BoxPrimitiveShapes {
                     is BigDecimalShape -> box(shape)
                     is BigIntegerShape -> box(shape)
                     is IntegerShape -> box(shape)
-                    else -> TODO("unhandled numeric shape: $shape")
+                    else -> UNREACHABLE("unhandled numeric shape: $shape")
                 }
             }
             is BooleanShape -> box(shape)

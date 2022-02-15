@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
+import software.amazon.smithy.rust.codegen.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -103,7 +104,8 @@ class JsonSerializerGeneratorTest {
         val symbolProvider = testSymbolProvider(model)
         val parserSerializer = JsonSerializerGenerator(
             testCodegenContext(model),
-            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json"))
+            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
+            ::restJsonFieldName
         )
         val operationGenerator = parserSerializer.operationSerializer(model.lookup("test#Op"))
         val documentGenerator = parserSerializer.documentSerializer()
@@ -111,8 +113,9 @@ class JsonSerializerGeneratorTest {
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
+                "json_serializers",
                 """
-                use model::Top;
+                use model::{Top, Choice};
 
                 // Generate the document serializer even though it's not tested directly
                 // ${writer.format(documentGenerator)}
@@ -127,6 +130,13 @@ class JsonSerializerGeneratorTest {
                 let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
                 assert_eq!(output, r#"{"top":{"field":"hello!","extra":45,"rec":[{"extra":55}]}}"#);
+
+                let input = crate::input::OpInput::builder().top(
+                    Top::builder()
+                        .choice(Choice::Unknown)
+                        .build()
+                ).build().unwrap();
+                let serialized = ${writer.format(operationGenerator)}(&input).expect_err("cannot serialize unknown variant");
                 """
             )
         }
@@ -140,10 +150,6 @@ class JsonSerializerGeneratorTest {
         project.withModule(RustModule.public("input")) {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/json_ser.rs")
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/operation_ser.rs")
         project.compileAndTest()
     }
 }

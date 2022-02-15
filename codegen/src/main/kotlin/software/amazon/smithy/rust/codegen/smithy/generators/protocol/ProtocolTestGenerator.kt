@@ -21,8 +21,6 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.CratesIo
-import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -35,6 +33,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -47,10 +46,16 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 
 data class ProtocolSupport(
+    /* Client support */
     val requestSerialization: Boolean,
     val requestBodySerialization: Boolean,
     val responseDeserialization: Boolean,
-    val errorDeserialization: Boolean
+    val errorDeserialization: Boolean,
+    /* Server support */
+    val requestDeserialization: Boolean,
+    val requestBodyDeserialization: Boolean,
+    val responseSerialization: Boolean,
+    val errorSerialization: Boolean
 )
 
 /**
@@ -73,6 +78,12 @@ class ProtocolTestGenerator(
         Instantiator(symbolProvider, model, runtimeConfig)
     }
 
+    private val codegenScope = arrayOf(
+        "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
+        "Http" to CargoDependency.Http.asType(),
+        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!")
+    )
+
     sealed class TestCase {
         abstract val testCase: HttpMessageTestCase
 
@@ -86,9 +97,9 @@ class ProtocolTestGenerator(
             ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
         val responseTests = operationShape.getTrait<HttpResponseTestsTrait>()
             ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
-
         val errorTests = operationIndex.getErrors(operationShape).flatMap { error ->
-            val testCases = error.getTrait<HttpResponseTestsTrait>()?.testCases.orEmpty()
+            val testCases = error.getTrait<HttpResponseTestsTrait>()
+                ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty()
             testCases.map { TestCase.ResponseTest(it, error) }
         }
         val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching()
@@ -144,14 +155,7 @@ class ProtocolTestGenerator(
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.setNewlinePrefix("")
-        testModuleWriter.writeWithNoFormatting("#[tokio::test]")
-        val Tokio = CargoDependency(
-            "tokio",
-            CratesIo("1"),
-            features = setOf("macros", "test-util", "rt"),
-            scope = DependencyScope.Dev
-        )
-        testModuleWriter.addDependency(Tokio)
+        TokioTest.render(testModuleWriter)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
             is HttpRequestTestCase -> Action.Request
@@ -186,36 +190,37 @@ class ProtocolTestGenerator(
         writeInline("let input =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
 
-        rust(""".make_operation(&config).expect("operation failed to build");""")
+        rust(""".make_operation(&config).await.expect("operation failed to build");""")
         rust("let (http_request, parts) = input.into_request_response().0.into_parts();")
         with(httpRequestTestCase) {
             host.orNull()?.also { host ->
                 val withScheme = "http://$host"
-                rust(
+                rustTemplate(
                     """
                     let mut http_request = http_request;
-                    let ep = #T::endpoint::Endpoint::mutable(#T::Uri::from_static(${withScheme.dq()}));
+                    let ep = #{SmithyHttp}::endpoint::Endpoint::mutable(#{Http}::Uri::from_static(${withScheme.dq()}));
                     ep.set_endpoint(http_request.uri_mut(), parts.acquire().get());
-                """,
-                    CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(), CargoDependency.Http.asType()
+                    """,
+                    *codegenScope
                 )
             }
-            rust(
+            rustTemplate(
                 """
-                    assert_eq!(http_request.method(), ${method.dq()});
-                    assert_eq!(http_request.uri().path(), ${uri.dq()});
-                """
+                #{AssertEq}(http_request.method(), ${method.dq()});
+                #{AssertEq}(http_request.uri().path(), ${uri.dq()});
+                """,
+                *codegenScope
             )
             resolvedHost.orNull()?.also { host ->
-                rust("""assert_eq!(http_request.uri().host().expect("host should be set"), ${host.dq()});""")
+                rustTemplate("""#{AssertEq}(http_request.uri().host().expect("host should be set"), ${host.dq()});""", *codegenScope)
             }
         }
         checkQueryParams(this, httpRequestTestCase.queryParams)
         checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
         checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
-        checkHeaders(this, httpRequestTestCase.headers)
-        checkForbidHeaders(this, httpRequestTestCase.forbidHeaders)
-        checkRequiredHeaders(this, httpRequestTestCase.requireHeaders)
+        checkHeaders(this, "&http_request.headers()", httpRequestTestCase.headers)
+        checkForbidHeaders(this, "&http_request.headers()", httpRequestTestCase.forbidHeaders)
+        checkRequiredHeaders(this, "&http_request.headers()", httpRequestTestCase.requireHeaders)
         if (protocolSupport.requestBodySerialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
@@ -266,9 +271,9 @@ class ProtocolTestGenerator(
         }
         rust(
             """
-                .status(${testCase.code})
-                .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
-                .unwrap();
+            .status(${testCase.code})
+            .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
+            .unwrap();
             """,
             RuntimeType.sdkBody(runtimeConfig = codegenContext.runtimeConfig)
         )
@@ -286,7 +291,7 @@ class ProtocolTestGenerator(
                 let http_response = http_response.map(|body|#{bytes}::copy_from_slice(body.bytes().unwrap()));
                 <#{op} as #{parse_http_response}>::parse_loaded(&parser, &http_response)
             });
-        """,
+            """,
             "op" to operationSymbol,
             "bytes" to RuntimeType.Bytes,
             "parse_http_response" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType()
@@ -297,7 +302,7 @@ class ProtocolTestGenerator(
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
             rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {
-                rust("assert_eq!(expected_output, actual_error);")
+                rustTemplate("#{AssertEq}(expected_output, actual_error);", *codegenScope)
             }
             rustBlock("else") {
                 rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
@@ -307,11 +312,14 @@ class ProtocolTestGenerator(
             outputShape.members().forEach { member ->
                 val memberName = codegenContext.symbolProvider.toMemberName(member)
                 if (member.isStreaming(codegenContext.model)) {
-                    rust(
-                        """assert_eq!(
-                                        parsed.$memberName.collect().await.unwrap().into_bytes(),
-                                        expected_output.$memberName.collect().await.unwrap().into_bytes()
-                                    );"""
+                    rustTemplate(
+                        """
+                        #{AssertEq}(
+                            parsed.$memberName.collect().await.unwrap().into_bytes(),
+                            expected_output.$memberName.collect().await.unwrap().into_bytes()
+                        );
+                        """,
+                        *codegenScope
                     )
                 } else {
                     when (codegenContext.model.expectShape(member.target)) {
@@ -327,26 +335,23 @@ class ProtocolTestGenerator(
                             )
                         }
                         else ->
-                            rust("""assert_eq!(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""")
+                            rustTemplate("""#{AssertEq}(parsed.$memberName, expected_output.$memberName, "Unexpected value for `$memberName`");""", *codegenScope)
                     }
                 }
             }
         }
     }
 
-    private fun checkRequiredHeaders(rustWriter: RustWriter, requireHeaders: List<String>) {
-        basicCheck(requireHeaders, rustWriter, "required_headers", "require_headers")
-    }
-
-    private fun checkForbidHeaders(rustWriter: RustWriter, forbidHeaders: List<String>) {
-        basicCheck(forbidHeaders, rustWriter, "forbidden_headers", "forbid_headers")
-    }
-
     private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
         rustWriter.write("""let body = http_request.body().bytes().expect("body should be strict");""")
         if (body == "") {
-            rustWriter.write("// No body")
-            rustWriter.write("assert_eq!(std::str::from_utf8(body).unwrap(), ${"".dq()});")
+            rustWriter.rustTemplate(
+                """
+                // No body
+                #{AssertEq}(std::str::from_utf8(body).unwrap(), "");
+                """,
+                *codegenScope
+            )
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
@@ -361,13 +366,33 @@ class ProtocolTestGenerator(
         }
     }
 
-    private fun checkHeaders(rustWriter: RustWriter, headers: Map<String, String>) {
+    private fun checkRequiredHeaders(rustWriter: RustWriter, actualExpression: String, requireHeaders: List<String>) {
+        basicCheck(
+            requireHeaders,
+            rustWriter,
+            "required_headers",
+            actualExpression,
+            "require_headers"
+        )
+    }
+
+    private fun checkForbidHeaders(rustWriter: RustWriter, actualExpression: String, forbidHeaders: List<String>) {
+        basicCheck(
+            forbidHeaders,
+            rustWriter,
+            "forbidden_headers",
+            actualExpression,
+            "forbid_headers"
+        )
+    }
+
+    private fun checkHeaders(rustWriter: RustWriter, actualExpression: String, headers: Map<String, String>) {
         if (headers.isEmpty()) {
             return
         }
         val variableName = "expected_headers"
-        rustWriter.withBlock("let $variableName = &[", "];") {
-            write(
+        rustWriter.withBlock("let $variableName = [", "];") {
+            writeWithNoFormatting(
                 headers.entries.joinToString(",") {
                     "(${it.key.dq()}, ${it.value.dq()})"
                 }
@@ -375,7 +400,7 @@ class ProtocolTestGenerator(
         }
         assertOk(rustWriter) {
             write(
-                "#T(&http_request, $variableName)",
+                "#T($actualExpression, $variableName)",
                 RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "validate_headers")
             )
         }
@@ -384,40 +409,59 @@ class ProtocolTestGenerator(
     private fun checkRequiredQueryParams(
         rustWriter: RustWriter,
         requiredParams: List<String>
-    ) = basicCheck(requiredParams, rustWriter, "required_params", "require_query_params")
+    ) = basicCheck(
+        requiredParams,
+        rustWriter,
+        "required_params",
+        "&http_request",
+        "require_query_params"
+    )
 
     private fun checkForbidQueryParams(
         rustWriter: RustWriter,
         forbidParams: List<String>
-    ) = basicCheck(forbidParams, rustWriter, "forbid_params", "forbid_query_params")
+    ) = basicCheck(
+        forbidParams,
+        rustWriter,
+        "forbid_params",
+        "&http_request",
+        "forbid_query_params"
+    )
 
     private fun checkQueryParams(
         rustWriter: RustWriter,
         queryParams: List<String>
-    ) = basicCheck(queryParams, rustWriter, "expected_query_params", "validate_query_string")
+    ) = basicCheck(
+        queryParams,
+        rustWriter,
+        "expected_query_params",
+        "&http_request",
+        "validate_query_string"
+    )
 
     private fun basicCheck(
         params: List<String>,
         rustWriter: RustWriter,
-        variableName: String,
+        expectedVariableName: String,
+        actualExpression: String,
         checkFunction: String
     ) {
         if (params.isEmpty()) {
             return
         }
-        rustWriter.withBlock("let $variableName = ", ";") {
+        rustWriter.withBlock("let $expectedVariableName = ", ";") {
             strSlice(this, params)
         }
         assertOk(rustWriter) {
             write(
-                "#T(&http_request, $variableName)",
+                "#T($actualExpression, $expectedVariableName)",
                 RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, checkFunction)
             )
         }
     }
 
     /**
-     * wraps `inner` in a call to `protocol_test_helpers::assert_ok`, a convenience wrapper
+     * wraps `inner` in a call to `aws_smithy_protocol_test::assert_ok`, a convenience wrapper
      * for pretty prettying protocol test helper results
      */
     private fun assertOk(rustWriter: RustWriter, inner: RustWriter.() -> Unit) {
@@ -450,7 +494,13 @@ class ProtocolTestGenerator(
         private val RestXml = "aws.protocoltests.restxml#RestXml"
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
-        private val ExpectFail = setOf<FailingTest>()
+        private val ExpectFail = setOf<FailingTest>(
+            // TODO(https://github.com/awslabs/smithy/pull/1049): Remove this once the test case in Smithy is fixed
+            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
+            // TODO(https://github.com/awslabs/smithy/pull/1042): Remove this once the test case in Smithy is fixed
+            FailingTest(RestJson, "RestJsonInputUnionWithUnitMember", Action.Request),
+            FailingTest("${RestJson}Extras", "RestJsonInputUnionWithUnitMember", Action.Request),
+        )
         private val RunOnly: Set<String>? = null
 
         // These tests are not even attempted to be generated, either because they will not compile

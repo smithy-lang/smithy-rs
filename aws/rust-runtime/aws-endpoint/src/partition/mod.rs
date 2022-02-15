@@ -51,7 +51,7 @@ impl ResolveAwsEndpoint for PartitionResolver {
 
 #[derive(Debug)]
 pub struct Partition {
-    id: &'static str,
+    _id: &'static str,
     region_regex: Regex,
     partition_endpoint: Option<Region>,
     regionalized: Regionalized,
@@ -114,7 +114,7 @@ impl Builder {
         let default_endpoint = self.default_endpoint?;
         let endpoints = self.endpoints.into_iter().collect();
         Some(Partition {
-            id: self.id?,
+            _id: self.id?,
             region_regex: self.region_regex?,
             partition_endpoint: self.partition_endpoint,
             regionalized: self.regionalized.unwrap_or_default(),
@@ -156,7 +156,7 @@ impl ResolveAwsEndpoint for Partition {
             Regionalized::Regionalized => Some(region),
         };
         let endpoint_for_region = resolved_region
-            .and_then(|region| self.endpoints.get(&region))
+            .and_then(|region| self.endpoints.get(region))
             .unwrap_or(&self.default_endpoint);
         endpoint_for_region.resolve_endpoint(region)
     }

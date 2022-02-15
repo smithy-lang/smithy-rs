@@ -71,7 +71,7 @@ class AwsEndpointDecorator : RustCodegenDecorator {
 class EndpointConfigCustomization(private val codegenContext: CodegenContext, private val endpointData: ObjectNode) :
     ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val resolveAwsEndpoint = runtimeConfig.awsEndpointDependency().asType().copy(name = "ResolveAwsEndpoint")
+    private val resolveAwsEndpoint = runtimeConfig.awsEndpoint().asType().copy(name = "ResolveAwsEndpoint")
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rust(
@@ -84,6 +84,8 @@ class EndpointConfigCustomization(private val codegenContext: CodegenContext, pr
             ServiceConfig.BuilderImpl ->
                 rust(
                     """
+                    // TODO(docs): include an example of using a static endpoint
+                    /// Sets the endpoint resolver to use when making requests.
                     pub fn endpoint_resolver(mut self, endpoint_resolver: impl #T + 'static) -> Self {
                         self.endpoint_resolver = Some(::std::sync::Arc::new(endpoint_resolver));
                         self
@@ -94,11 +96,11 @@ class EndpointConfigCustomization(private val codegenContext: CodegenContext, pr
             ServiceConfig.BuilderBuild -> {
                 val resolverGenerator = EndpointResolverGenerator(codegenContext, endpointData)
                 rust(
-                    """endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
-                                ::std::sync::Arc::new(
-                                    #T()
-                                )
-                         ),""",
+                    """
+                    endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
+                        ::std::sync::Arc::new(#T())
+                    ),
+                    """,
                     resolverGenerator.resolver(),
                 )
             }
@@ -107,7 +109,6 @@ class EndpointConfigCustomization(private val codegenContext: CodegenContext, pr
 }
 
 // This is an experiment in a slightly different way to create runtime types. All code MAY be refactored to use this pattern
-fun RuntimeConfig.awsEndpointDependency() = awsRuntimeDependency("aws-endpoint")
 
 class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private val operationShape: OperationShape) :
     OperationCustomization() {
@@ -116,9 +117,9 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
             is OperationSection.MutateRequest -> writable {
                 rust(
                     """
-                #T::set_endpoint_resolver(&mut ${section.request}.properties_mut(), ${section.config}.endpoint_resolver.clone());
-                """,
-                    runtimeConfig.awsEndpointDependency().asType()
+                    #T::set_endpoint_resolver(&mut ${section.request}.properties_mut(), ${section.config}.endpoint_resolver.clone());
+                    """,
+                    runtimeConfig.awsEndpoint().asType()
                 )
             }
             else -> emptySection
@@ -143,7 +144,7 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
 class EndpointResolverGenerator(codegenContext: CodegenContext, private val endpointData: ObjectNode) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val endpointPrefix = codegenContext.serviceShape.expectTrait<ServiceTrait>().endpointPrefix
-    private val awsEndpoint = runtimeConfig.awsEndpointDependency().asType()
+    private val awsEndpoint = runtimeConfig.awsEndpoint().asType()
     private val codegenScope =
         arrayOf(
             "Partition" to awsEndpoint.member("Partition"),
@@ -256,7 +257,7 @@ class EndpointResolverGenerator(codegenContext: CodegenContext, private val endp
 
         private fun signatureVersion(): String {
             val signatureVersions = endpoint.expectArrayMember("signatureVersions").map { it.expectStringNode().value }
-            // TODO: we can use this to change the signing options instead of customizing S3 specifically
+            // TODO(https://github.com/awslabs/smithy-rs/issues/977): we can use this to change the signing options instead of customizing S3 specifically
             if (!(signatureVersions.contains("v4") || signatureVersions.contains("s3v4"))) {
                 throw CodegenException("endpoint does not support sigv4, unsupported: $signatureVersions")
             }
@@ -333,7 +334,7 @@ class EndpointResolverGenerator(codegenContext: CodegenContext, private val endp
             rustTemplate(
                 """
                 #{CredentialScope}::builder()
-            """,
+                """,
                 *codegenScope
             )
             objectNode.getStringMember("service").map {

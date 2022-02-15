@@ -1,0 +1,18 @@
+[package]
+name = "smithy-rs-tool-common"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+edition = "2018"
+license = "Apache-2.0"
+publish = false
+
+[workspace]
+
+[features]
+async-shell = ["tokio"]
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt", "macros"], optional = true }
+tracing = "0.1"

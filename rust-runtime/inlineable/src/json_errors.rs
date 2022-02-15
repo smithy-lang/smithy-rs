@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use aws_smithy_json::deserialize::token::skip_value;
+use aws_smithy_json::deserialize::{json_token_iter, Error as DeserializeError, Token};
+use aws_smithy_types::Error as SmithyError;
 use bytes::Bytes;
 use http::header::ToStrError;
 use http::{HeaderMap, HeaderValue};
-use smithy_json::deserialize::token::skip_value;
-use smithy_json::deserialize::{json_token_iter, Error as DeserializeError, Token};
-use smithy_types::Error as SmithyError;
 use std::borrow::Cow;
 
 // currently only used by AwsJson
@@ -21,13 +21,13 @@ fn sanitize_error_code(error_code: &str) -> &str {
     // Trim a trailing URL from the error code, beginning with a `:`
     let error_code = match error_code.find(':') {
         Some(idx) => &error_code[..idx],
-        None => &error_code,
+        None => error_code,
     };
 
     // Trim a prefixing namespace from the error code, beginning with a `#`
     match error_code.find('#') {
         Some(idx) => &error_code[idx + 1..],
-        None => &error_code,
+        None => error_code,
     }
 }
 
@@ -114,8 +114,8 @@ pub fn parse_generic_error(
 #[cfg(test)]
 mod test {
     use crate::json_errors::{parse_error_body, parse_generic_error, sanitize_error_code};
+    use aws_smithy_types::Error;
     use bytes::Bytes;
-    use smithy_types::Error;
     use std::borrow::Cow;
 
     #[test]

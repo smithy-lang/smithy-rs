@@ -1,7 +1,7 @@
 RFC: Supporting multiple HTTP versions for SDKs that use Event Stream
 =====================================================================
 
-> Status: Merged.
+> Status: Accepted
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
@@ -28,11 +28,11 @@ the following terms will be used:
 
 - **Connector**: An implementor of Tower's `Service` trait that converts a request into a response. This is typically
   a thin wrapper around a Hyper client.
-- **Smithy Client**: A `smithy_client::Client<C, M, R>` struct that is responsible for gluing together
+- **Smithy Client**: A `aws_smithy_client::Client<C, M, R>` struct that is responsible for gluing together
   the connector, middleware, and retry policy. This isn't intended to be used directly.
 - **Fluent Client**: A code generated `Client<C, M, R>` that has methods for each service operation on it.
   A fluent builder is generated alongside it to make construction easier.
-- **AWS Client**: A specialized Fluent Client that defaults to using a `DynConnector`, `AwsMiddleware`,
+- **AWS Client**: A specialized Fluent Client that uses a `DynConnector`, `DefaultMiddleware`,
   and `Standard` retry policy.
 
 All of these are just called `Client` in code today. This is something that could be clarified in a separate refactor.
@@ -47,7 +47,7 @@ given to the new builder instances so that their `send()` calls can initiate a r
 The generated fluent client code ends up looking like this:
 ```rust
 struct Handle<C, M, R> {
-    client: smithy_client::Client<C, M, R>,
+    client: aws_smithy_client::Client<C, M, R>,
     conf: crate::Config,
 }
 
@@ -178,7 +178,7 @@ struct ConnectorKey {
 }
 
 struct Handle<C, M, R> {
-    clients: RwLock<HashMap<HttpRequirements<'static>, smithy_client::Client<C, M, R>>>,
+    clients: RwLock<HashMap<HttpRequirements<'static>, aws_smithy_client::Client<C, M, R>>>,
     conf: crate::Config,
 }
 
@@ -251,10 +251,10 @@ indicating the error.
 Changes Checklist
 -----------------
 
-- [ ] Create `HttpVersion` in `smithy-http` with `Http1_1` and `Http2`
+- [ ] Create `HttpVersion` in `aws-smithy-http` with `Http1_1` and `Http2`
 - [ ] Refactor existing `https()` connector creation functions to take `HttpVersion`
 - [ ] Add `make_connector` to `SharedConfig`, and wire up the `https()` functions as a default
-- [ ] Create `HttpRequirements` in `smithy-http`
+- [ ] Create `HttpRequirements` in `aws-smithy-http`
 - [ ] Implement the connector cache on `Handle`
 - [ ] Implement function to calculate a minimum required set of HTTP versions from a Smithy model in the code generator
 - [ ] Update the `make_operation` code gen to put an `HttpVersionList` into the operation property bag

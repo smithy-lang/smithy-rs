@@ -24,10 +24,10 @@ fun autoDeref(input: String) = if (input.startsWith("&")) {
  */
 sealed class RustType {
 
-    // TODO: when Kotlin supports, sealed interfaces, seal Container
+    // TODO(kotlin): when Kotlin supports, sealed interfaces, seal Container
     /**
      * A Rust type that contains [member], another RustType. Used to generically operate over
-     * shapes that contain other shapes, eg. [stripOuter] and [contains].
+     * shapes that contain other shapes, e.g. [stripOuter] and [contains].
      */
     interface Container {
         val member: RustType
@@ -64,7 +64,8 @@ sealed class RustType {
     }
 
     data class HashMap(val key: RustType, override val member: RustType) : RustType(), Container {
-        // TODO: assert that underneath, the member is a String
+        // validating that `key` is a string occurs in the constructor in SymbolVisitor
+
         override val name: kotlin.String = "HashMap"
         override val namespace = "std::collections"
 
@@ -74,11 +75,15 @@ sealed class RustType {
     }
 
     data class HashSet(override val member: RustType) : RustType(), Container {
-        // TODO: assert that underneath, the member is a String
-        override val name: kotlin.String = Type
+        override val name = Type
         override val namespace = Namespace
 
         companion object {
+            // This is Vec intentionally. Note the following passage from the Smithy spec:
+            //    Sets MUST be insertion ordered. Not all programming languages that support sets
+            //    support ordered sets, requiring them may be overly burdensome for users, or conflict with language
+            //    idioms. Such languages SHOULD store the values of sets in a list and rely on validation to ensure uniqueness.
+            // It's possible that we could provide our own wrapper type in the future.
             const val Type = "Vec"
             const val Namespace = "std::vec"
             val RuntimeType = RuntimeType(name = Type, namespace = Namespace, dependency = null)
@@ -92,6 +97,11 @@ sealed class RustType {
     data class Option(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = "Option"
         override val namespace = "std::option"
+
+        /** Convert `Option<T>` to `Option<&T>` **/
+        fun referenced(lifetime: kotlin.String?): Option {
+            return Option(Reference(lifetime, this.member))
+        }
     }
 
     data class Box(override val member: RustType) : RustType(), Container {
@@ -112,6 +122,57 @@ sealed class RustType {
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
 }
 
+/**
+ * Return the fully qualified name of this type NOT including generic type parameters, references, etc.
+ *
+ * - To generate something like `std::collections::HashMap`, use this function.
+ * - To generate something like `std::collections::HashMap<String, String>`, use [render]
+ */
+fun RustType.qualifiedName(): String {
+    val namespace = this.namespace?.let { "$it::" } ?: ""
+    return "$namespace$name"
+}
+
+/** Format this Rust type as an `impl Into<T>` */
+fun RustType.implInto(fullyQualified: Boolean = true): String {
+    return "impl Into<${this.render(fullyQualified)}>"
+}
+
+/** Format this Rust type so that it may be used as an argument type in a function definition */
+fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
+    return when (this) {
+        is RustType.String,
+        is RustType.Box -> this.implInto(fullyQualified)
+        else -> this.render(fullyQualified)
+    }
+}
+
+/** Format this Rust type so that it may be used as an argument type in a function definition */
+fun RustType.asArgumentValue(name: String): String {
+    return when (this) {
+        is RustType.String,
+        is RustType.Box -> "$name.into()"
+        else -> name
+    }
+}
+
+/**
+ * For a given name, generate an `Argument` data class containing pre-formatted strings for using this type when
+ * writing a Rust function
+ */
+fun RustType.asArgument(name: String): Argument {
+    return Argument(
+        "$name: ${this.asArgumentType()}",
+        this.asArgumentValue(name),
+        this.render(),
+    )
+}
+
+/**
+ * Render this type, including references and generic parameters.
+ * - To generate something like `std::collections::HashMap<String, String>`, use this function
+ * - To generate something like `std::collections::HashMap`, use [qualifiedName]
+ */
 fun RustType.render(fullyQualified: Boolean = true): String {
     val namespace = if (fullyQualified) {
         this.namespace?.let { "$it::" } ?: ""
@@ -135,9 +196,9 @@ fun RustType.render(fullyQualified: Boolean = true): String {
 }
 
 /**
- * Returns true if [this] contains [t] anywhere within it's tree. For example,
- * Option<Instant>.contains(Instant) would return true.
- * Option<Instant>.contains(Blob) would return false.
+ * Returns true if [this] contains [t] anywhere within its tree. For example,
+ * Option<DateTime>.contains(DateTime) would return true.
+ * Option<DateTime>.contains(Blob) would return false.
  */
 fun <T : RustType> RustType.contains(t: T): Boolean = when (this) {
     t -> true
@@ -154,6 +215,58 @@ inline fun <reified T : RustType.Container> RustType.stripOuter(): RustType = wh
 fun RustType.asOptional(): RustType = when (this) {
     is RustType.Option -> this
     else -> RustType.Option(this)
+}
+
+/**
+ * Converts type to a reference
+ *
+ * For example:
+ * - `String` -> `&String`
+ * - `Option<T>` -> `Option<&T>`
+ */
+fun RustType.asRef(): RustType = when (this) {
+    is RustType.Reference -> this
+    is RustType.Option -> RustType.Option(member.asRef())
+    else -> RustType.Reference(null, this)
+}
+
+/**
+ * Converts type to its Deref target
+ *
+ * For example:
+ * - `String` -> `str`
+ * - `Option<String>` -> `Option<&str>`
+ * - `Box<Something>` -> `&Something`
+ */
+fun RustType.asDeref(): RustType = when (this) {
+    is RustType.Option -> if (member.isDeref()) {
+        RustType.Option(member.asDeref().asRef())
+    } else {
+        this
+    }
+    is RustType.Box -> RustType.Reference(null, member)
+    is RustType.String -> RustType.Opaque("str")
+    is RustType.Vec -> RustType.Slice(member)
+    else -> this
+}
+
+/** Returns true if the type implements Deref */
+fun RustType.isDeref(): Boolean = when (this) {
+    is RustType.Box -> true
+    is RustType.String -> true
+    is RustType.Vec -> true
+    else -> false
+}
+
+/** Returns true if the type implements Copy */
+fun RustType.isCopy(): Boolean = when (this) {
+    is RustType.Float -> true
+    is RustType.Integer -> true
+    is RustType.Reference -> true
+    is RustType.Bool -> true
+    is RustType.Slice -> true
+    is RustType.Option -> this.member.isCopy()
+    else -> false
 }
 
 /**
@@ -214,8 +327,8 @@ sealed class Attribute {
          * indicates that more fields may be added in the future
          */
         val NonExhaustive = Custom("non_exhaustive")
-        val AllowUnused = Custom("allow(dead_code)")
         val AllowUnusedMut = Custom("allow(unused_mut)")
+        val DocInline = Custom("doc(inline)")
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {
@@ -238,7 +351,7 @@ sealed class Attribute {
     /**
      * A custom Attribute
      *
-     * [annotation] represents the body of the attribute, eg. `cfg(foo)` in `#[cfg(foo)]`
+     * [annotation] represents the body of the attribute, e.g. `cfg(foo)` in `#[cfg(foo)]`
      * If [container] is set, this attribute refers to its container rather than its successor. This generates `#![cfg(foo)]`
      *
      * Finally, any symbols listed will be imported when this attribute is rendered. This enables using attributes like
@@ -250,7 +363,6 @@ sealed class Attribute {
         val container: Boolean = false
     ) : Attribute() {
         override fun render(writer: RustWriter) {
-
             val bang = if (container) "!" else ""
             writer.raw("#$bang[$annotation]")
             symbols.forEach {
@@ -269,3 +381,5 @@ sealed class Attribute {
         }
     }
 }
+
+data class Argument(val argument: String, val value: String, val type: String)

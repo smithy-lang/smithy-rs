@@ -8,8 +8,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use smithy_async::future::timeout::Timeout;
-use smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::future::timeout::Timeout;
+use aws_smithy_async::rt::sleep::AsyncSleep;
 use tracing::{trace_span, Instrument};
 
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
@@ -77,6 +77,7 @@ impl ProvideCredentials for LazyCachingCredentialsProvider {
         future::ProvideCredentials::new(async move {
             // Attempt to get cached credentials, or clear the cache if they're expired
             if let Some(credentials) = cache.yield_or_clear_if_expired(now).await {
+                tracing::debug!("loaded credentials from cache");
                 Ok(credentials)
             } else {
                 // If we didn't get credentials from the cache, then we need to try and load.
@@ -89,7 +90,7 @@ impl ProvideCredentials for LazyCachingCredentialsProvider {
                     .get_or_load(|| {
                         async move {
                             let credentials = future.await.map_err(|_err| {
-                                CredentialsError::ProviderTimedOut(load_timeout)
+                                CredentialsError::provider_timed_out(load_timeout)
                             })??;
                             // If the credentials don't have an expiration time, then create a default one
                             let expiry = credentials
@@ -114,8 +115,8 @@ mod builder {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_types::credentials::ProvideCredentials;
-    use smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 
     use super::{
         LazyCachingCredentialsProvider, DEFAULT_BUFFER_TIME, DEFAULT_CREDENTIAL_EXPIRATION,
@@ -128,7 +129,7 @@ mod builder {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// use aws_types::Credentials;
     /// use aws_config::meta::credentials::provide_credentials_fn;
     /// use aws_config::meta::credentials::LazyCachingCredentialsProvider;
@@ -136,7 +137,7 @@ mod builder {
     /// let provider = LazyCachingCredentialsProvider::builder()
     ///     .load(provide_credentials_fn(|| async {
     ///         // An async process to retrieve credentials would go here:
-    ///         Ok(Credentials::from_keys("example", "example", None))
+    ///         Ok(Credentials::new("example", "example", None, None, "my_provider_name"))
     ///     }))
     ///     .build();
     /// ```
@@ -173,7 +174,7 @@ mod builder {
         /// Implementation of [`AsyncSleep`] to use for timeouts. This enables use of
         /// the `LazyCachingCredentialsProvider` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
-        /// [`TokioSleep`](smithy_async::rt::sleep::TokioSleep).
+        /// [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep).
         pub fn sleep(mut self, sleep: impl AsyncSleep + 'static) -> Self {
             self.sleep = Some(Arc::new(sleep));
             self
@@ -206,9 +207,9 @@ mod builder {
 
         /// Creates the [`LazyCachingCredentialsProvider`].
         ///
-        /// ## Note:
+        /// # Panics
         /// This will panic if no `sleep` implementation is given and if no default crate features
-        /// are used. By default, the [`TokioSleep`](smithy_async::rt::sleep::TokioSleep)
+        /// are used. By default, the [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep)
         /// implementation will be set automatically.
         pub fn build(self) -> LazyCachingCredentialsProvider {
             let default_credential_expiration = self
@@ -225,8 +226,8 @@ mod builder {
                 }),
                 self.load.expect("load implementation is required"),
                 self.load_timeout.unwrap_or(DEFAULT_LOAD_TIMEOUT),
-                self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
                 default_credential_expiration,
+                self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
             )
         }
     }
@@ -237,9 +238,9 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+    use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
     use aws_types::Credentials;
-    use smithy_async::rt::sleep::TokioSleep;
     use tracing::info;
     use tracing_test::traced_test;
 
@@ -347,7 +348,7 @@ mod tests {
             TimeSource::manual(&time),
             vec![
                 Ok(credentials(1000)),
-                Err(CredentialsError::CredentialsNotLoaded),
+                Err(CredentialsError::not_loaded("failed")),
             ],
         );
 
@@ -411,7 +412,7 @@ mod tests {
             TimeSource::manual(&time),
             Arc::new(TokioSleep::new()),
             Arc::new(provide_credentials_fn(|| async {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                aws_smithy_async::future::never::Never::new().await;
                 Ok(credentials(1000))
             })),
             Duration::from_millis(5),
@@ -421,7 +422,7 @@ mod tests {
 
         assert!(matches!(
             provider.provide_credentials().await,
-            Err(CredentialsError::ProviderTimedOut(_))
+            Err(CredentialsError::ProviderTimedOut { .. })
         ));
     }
 }

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+//! Presigned request types and configuration.
+
 /// Presigning config and builder
 pub mod config {
     use std::fmt;
@@ -19,11 +21,10 @@ pub mod config {
     }
 
     impl PresigningConfig {
-        /// Creates a `PresigningConfig` with the given `expires_in` duration as the total
-        /// amount of time the presigned request should be valid for. Other config values are
-        /// defaulted.
+        /// Creates a `PresigningConfig` with the given `expires_in` duration.
         ///
-        /// # Note
+        /// The `expires_in` duration is the total amount of time the presigned request should
+        /// be valid for. Other config values are defaulted.
         ///
         /// Credential expiration time takes priority over the `expires_in` value.
         /// If the credentials used to sign the request expire before the presigned request is
@@ -108,13 +109,11 @@ pub mod config {
         /// Sets how long the request should be valid after the `start_time` (which defaults
         /// to the current time).
         ///
-        /// Required.
-        ///
-        /// # Note
-        ///
         /// Credential expiration time takes priority over the `expires_in` value.
         /// If the credentials used to sign the request expire before the presigned request is
         /// set to expire, then the presigned request will become invalid.
+        ///
+        /// Required.
         pub fn expires_in(mut self, expires_in: Duration) -> Self {
             self.set_expires_in(Some(expires_in));
             self
@@ -123,13 +122,11 @@ pub mod config {
         /// Sets how long the request should be valid after the `start_time` (which defaults
         /// to the current time).
         ///
-        /// Required.
-        ///
-        /// # Note
-        ///
         /// Credential expiration time takes priority over the `expires_in` value.
         /// If the credentials used to sign the request expire before the presigned request is
         /// set to expire, then the presigned request will become invalid.
+        ///
+        /// Required.
         pub fn set_expires_in(&mut self, expires_in: Option<Duration>) {
             self.expires_in = expires_in;
         }
@@ -154,6 +151,11 @@ pub mod request {
     use std::fmt::{Debug, Formatter};
 
     /// Represents a presigned request. This only includes the HTTP request method, URI, and headers.
+    ///
+    /// **This struct has conversion convenience functions:**
+    ///
+    /// - [`PresignedRequest::to_http_request<B>`][Self::to_http_request] returns an [`http::Request<B>`](https://docs.rs/http/0.2.6/http/request/struct.Request.html)
+    /// - [`PresignedRequest::into`](#impl-From<PresignedRequest>) returns an [`http::request::Builder`](https://docs.rs/http/0.2.6/http/request/struct.Builder.html)
     #[non_exhaustive]
     pub struct PresignedRequest(http::Request<()>);
 
@@ -178,6 +180,13 @@ pub mod request {
         pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
             self.0.headers()
         }
+
+        /// Given a body, convert this `PresignedRequest` into an `http::Request`
+        pub fn to_http_request<B>(self, body: B) -> Result<http::Request<B>, http::Error> {
+            let builder: http::request::Builder = self.into();
+
+            builder.body(body)
+        }
     }
 
     impl Debug for PresignedRequest {
@@ -189,14 +198,28 @@ pub mod request {
                 .finish()
         }
     }
+
+    impl From<PresignedRequest> for http::request::Builder {
+        fn from(req: PresignedRequest) -> Self {
+            let mut builder = http::request::Builder::new()
+                .uri(req.uri())
+                .method(req.method());
+
+            if let Some(headers) = builder.headers_mut() {
+                *headers = req.headers().clone();
+            }
+
+            builder
+        }
+    }
 }
 
 /// Tower middleware service for creating presigned requests
 #[allow(dead_code)]
 pub(crate) mod service {
     use crate::presigning::request::PresignedRequest;
+    use aws_smithy_http::operation;
     use http::header::{CONTENT_LENGTH, CONTENT_TYPE, USER_AGENT};
-    use smithy_http::operation;
     use std::future::{ready, Ready};
     use std::marker::PhantomData;
     use std::task::{Context, Poll};

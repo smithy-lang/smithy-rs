@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators.error
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RetryableTrait
@@ -19,6 +18,8 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdError
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.stdfmt
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
 import software.amazon.smithy.rust.codegen.util.dq
@@ -60,33 +61,52 @@ fun StructureShape.modeledRetryKind(errorTrait: ErrorTrait): ErrorKind? {
 }
 
 class ErrorGenerator(
-    val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
     private val error: ErrorTrait
 ) {
-    fun render() {
-        renderError()
-    }
-
-    private fun renderError() {
+    fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         val symbol = symbolProvider.toSymbol(shape)
         val messageShape = shape.errorMessageMember()
-        val message = messageShape?.let { "self.${symbolProvider.toMemberName(it)}.as_deref()" } ?: "None"
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
+        val (returnType, message) = messageShape?.let {
+            if (symbolProvider.toSymbol(messageShape).isOptional()) {
+                "Option<&str>" to "self.${symbolProvider.toMemberName(it)}.as_deref()"
+            } else {
+                "&str" to "self.${symbolProvider.toMemberName(it)}.as_ref()"
+            }
+        } ?: "Option<&str>" to "None"
         writer.rustBlock("impl ${symbol.name}") {
             val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)
             if (retryKindWriteable != null) {
+                rust("/// Returns `Some(${errorKindT.name})` if the error is retryable. Otherwise, returns `None`.")
                 rustBlock("pub fn retryable_error_kind(&self) -> #T", errorKindT) {
                     retryKindWriteable(this)
                 }
             }
             rust(
                 """
-            pub fn message(&self) -> Option<&str> { $message }
+                /// Returns the error message.
+                pub fn message(&self) -> $returnType { $message }
                 """
             )
+
+            /*
+             * If we're generating for a server, the `name` method is added to enable
+             * recording encountered error types inside `http::Extensions`s.
+             */
+            if (forWhom == CodegenTarget.SERVER) {
+                rust(
+                    """
+                    ##[doc(hidden)]
+                    /// Returns the error name.
+                    pub fn name(&self) -> &'static str {
+                        ${shape.id.name.dq()}
+                    }
+                    """
+                )
+            }
         }
 
         writer.rustBlock("impl #T for ${symbol.name}", stdfmt.member("Display")) {

@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
@@ -25,7 +24,7 @@ class EventStreamMarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(EventStreamTestModels.MarshallTestCasesProvider::class)
     fun test(testCase: EventStreamTestModels.TestCase) {
-        val test = EventStreamTestTools.generateTestProject(testCase.model)
+        val test = EventStreamTestTools.generateTestProject(testCase)
 
         val codegenContext = CodegenContext(
             test.model,
@@ -33,12 +32,13 @@ class EventStreamMarshallerGeneratorTest {
             TestRuntimeConfig,
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
-            "test",
-            testRustSettings(test.model)
+            testRustSettings(test.model),
+            mode = testCase.mode
         )
         val protocol = testCase.protocolBuilder(codegenContext)
         val generator = EventStreamMarshallerGenerator(
             test.model,
+            testCase.mode,
             TestRuntimeConfig,
             test.symbolProvider,
             test.streamShape,
@@ -47,13 +47,13 @@ class EventStreamMarshallerGeneratorTest {
         )
 
         test.project.lib { writer ->
-            val protocolTestHelpers = CargoDependency.ProtocolTestHelpers(TestRuntimeConfig)
+            val protocolTestHelpers = CargoDependency.SmithyProtocolTestHelpers(TestRuntimeConfig)
                 .copy(scope = DependencyScope.Compile)
             writer.rustTemplate(
                 """
-                use smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
+                use aws_smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
                 use std::collections::HashMap;
-                use smithy_types::{Blob, Instant};
+                use aws_smithy_types::{Blob, DateTime};
                 use crate::error::*;
                 use crate::model::*;
 
@@ -72,11 +72,12 @@ class EventStreamMarshallerGeneratorTest {
                     HeaderValue::String(value.into())
                 }
                 """,
-                "validate_body" to RuntimeType("validate_body", protocolTestHelpers, "protocol_test_helpers"),
-                "MediaType" to RuntimeType("MediaType", protocolTestHelpers, "protocol_test_helpers"),
+                "validate_body" to protocolTestHelpers.rustName("validate_body"),
+                "MediaType" to protocolTestHelpers.rustName("MediaType"),
             )
 
             writer.unitTest(
+                "message_with_blob",
                 """
                 let event = TestStream::MessageWithBlob(
                     MessageWithBlob::builder().data(Blob::new(&b"hello, world!"[..])).build()
@@ -90,10 +91,10 @@ class EventStreamMarshallerGeneratorTest {
                 assert_eq!(&str_header("application/octet-stream"), *headers.get(":content-type").unwrap());
                 assert_eq!(&b"hello, world!"[..], message.payload());
                 """,
-                "message_with_blob",
             )
 
             writer.unitTest(
+                "message_with_string",
                 """
                 let event = TestStream::MessageWithString(
                     MessageWithString::builder().data("hello, world!").build()
@@ -107,10 +108,10 @@ class EventStreamMarshallerGeneratorTest {
                 assert_eq!(&str_header("text/plain"), *headers.get(":content-type").unwrap());
                 assert_eq!(&b"hello, world!"[..], message.payload());
                 """,
-                "message_with_string",
             )
 
             writer.unitTest(
+                "message_with_struct",
                 """
                 let event = TestStream::MessageWithStruct(
                     MessageWithStruct::builder().some_struct(
@@ -134,10 +135,10 @@ class EventStreamMarshallerGeneratorTest {
                     MediaType::from(${testCase.requestContentType.dq()})
                 ).unwrap();
                 """,
-                "message_with_struct",
             )
 
             writer.unitTest(
+                "message_with_union",
                 """
                 let event = TestStream::MessageWithUnion(MessageWithUnion::builder().some_union(
                     TestUnion::Foo("hello".into())
@@ -156,10 +157,10 @@ class EventStreamMarshallerGeneratorTest {
                     MediaType::from(${testCase.requestContentType.dq()})
                 ).unwrap();
                 """,
-                "message_with_union",
             )
 
             writer.unitTest(
+                "message_with_headers",
                 """
                 let event = TestStream::MessageWithHeaders(MessageWithHeaders::builder()
                     .blob(Blob::new(&b"test"[..]))
@@ -169,7 +170,7 @@ class EventStreamMarshallerGeneratorTest {
                     .long(9_000_000_000i64)
                     .short(16_000i16)
                     .string("test")
-                    .timestamp(Instant::from_epoch_seconds(5))
+                    .timestamp(DateTime::from_secs(5))
                     .build()
                 );
                 let result = ${writer.format(generator.render())}().marshall(event);
@@ -185,13 +186,13 @@ class EventStreamMarshallerGeneratorTest {
                     .add_header(Header::new("long", HeaderValue::Int64(9_000_000_000i64)))
                     .add_header(Header::new("short", HeaderValue::Int16(16_000i16)))
                     .add_header(Header::new("string", HeaderValue::String("test".into())))
-                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(Instant::from_epoch_seconds(5))));
+                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(DateTime::from_secs(5))));
                 assert_eq!(expected_message, actual_message);
                 """,
-                "message_with_headers",
             )
 
             writer.unitTest(
+                "message_with_header_and_payload",
                 """
                 let event = TestStream::MessageWithHeaderAndPayload(MessageWithHeaderAndPayload::builder()
                     .header("header")
@@ -208,10 +209,10 @@ class EventStreamMarshallerGeneratorTest {
                     .add_header(Header::new(":content-type", HeaderValue::String("application/octet-stream".into())));
                 assert_eq!(expected_message, actual_message);
                 """,
-                "message_with_header_and_payload",
             )
 
             writer.unitTest(
+                "message_with_no_header_payload_traits",
                 """
                 let event = TestStream::MessageWithNoHeaderPayloadTraits(MessageWithNoHeaderPayloadTraits::builder()
                     .some_int(5)
@@ -232,7 +233,6 @@ class EventStreamMarshallerGeneratorTest {
                     MediaType::from(${testCase.requestContentType.dq()})
                 ).unwrap();
                 """,
-                "message_with_no_header_payload_traits",
             )
         }
         test.project.compileAndTest()

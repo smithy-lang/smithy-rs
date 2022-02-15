@@ -1,7 +1,252 @@
-vNext (Month Day, Year)
+<!-- Do not manually edit this file, use `update-changelogs` -->
+0.36.0 (January 26, 2022)
+=========================
+**New this release:**
+- ([smithy-rs#1087](https://github.com/awslabs/smithy-rs/issues/1087)) Improve docs on `Endpoint::{mutable, immutable}`
+- ([smithy-rs#1118](https://github.com/awslabs/smithy-rs/issues/1118)) SDK examples now come from [`awsdocs/aws-doc-sdk-examples`](https://github.com/awsdocs/aws-doc-sdk-examples) rather than from `smithy-rs`
+- ([smithy-rs#1114](https://github.com/awslabs/smithy-rs/issues/1114), @mchoicpe-amazon) Provide SigningService creation via owned String
+
+**Contributors**
+Thank you for your contributions! ❤
+- @mchoicpe-amazon ([smithy-rs#1114](https://github.com/awslabs/smithy-rs/issues/1114))
+
+
+0.35.2 (January 20th, 2022)
+===========================
+_Changes only impact generated AWS SDK_
+
+v0.35.1 (January 19th, 2022)
+============================
+_Changes only impact generated AWS SDK_
+
+
+0.35.0 (January 19, 2022)
+=========================
+**New this release:**
+- ([smithy-rs#1053](https://github.com/awslabs/smithy-rs/issues/1053)) Upgraded Smithy to 1.16.1
+- 🐛 ([smithy-rs#1069](https://github.com/awslabs/smithy-rs/issues/1069)) Fix broken link to `RetryMode` in client docs
+- 🐛 ([smithy-rs#1069](https://github.com/awslabs/smithy-rs/issues/1069)) Fix several doc links to raw identifiers (identifiers excaped with `r#`)
+- 🐛 ([smithy-rs#1069](https://github.com/awslabs/smithy-rs/issues/1069)) Reduce dependency recompilation in local dev
+- 🐛 ([aws-sdk-rust#405](https://github.com/awslabs/aws-sdk-rust/issues/405), [smithy-rs#1083](https://github.com/awslabs/smithy-rs/issues/1083)) Fixed paginator bug impacting EC2 describe VPCs (and others)
+
+
+
+v0.34.1 (January 10, 2022)
+==========================
+**New this release:**
+- 🐛 (smithy-rs#1054, aws-sdk-rust#391) Fix critical paginator bug where an empty outputToken lead to a never ending stream.
+
+
+
+0.34.0 (January 6th, 2022)
+==========================
+**Breaking Changes:**
+- ⚠ (smithy-rs#990) Codegen will no longer produce builders and clients with methods that take `impl Into<T>` except for strings and boxed types.
+- ⚠ (smithy-rs#1003) The signature of `aws_smithy_protocol_test::validate_headers` was made more flexible but may require adjusting invocations slightly.
+
+**New this release:**
+- 🎉 (aws-sdk-rust#47, smithy-rs#1006) Add support for paginators! Paginated APIs now include `.into_paginator()` and (when supported) `.into_paginator().items()` to enable paginating responses automatically. The paginator API should be considered in preview and is subject to change pending customer feedback.
+- 🐛 (aws-sdk-rust#357) Generated docs will convert `<a>` tags with no `href` attribute to `<pre>` tags
+- (aws-sdk-rust#254, @jacco) Made fluent operation structs cloneable
+
+**Contributors**
+Thank you for your contributions! ❤
+- @jacco (aws-sdk-rust#254)
+
+
+v0.33.1 (December 15th, 2021)
+=============================
+**New this release:**
+- 🐛 (smithy-rs#979) Make `aws-smithy-client` a required dependency in generated services.
+
+
+
+v0.33.0 (December 15th, 2021)
+=============================
+**Breaking Changes:**
+- ⚠ (smithy-rs#930) Runtime crates no longer have default features. You must now specify the features that you want when you add a dependency to your `Cargo.toml`.
+
+    **Upgrade guide**
+
+    | before                          | after |
+    |---------------------------------|-------|
+    | `aws-smithy-async = "VERSION"`  | `aws-smithy-async = { version = "VERSION", features = ["rt-tokio"] }` |
+    | `aws-smithy-client = "VERSION"` | `aws-smithy-client = { version = "VERSION", features = ["client-hyper", "rustls", "rt-tokio"] }` |
+    | `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["rt-tokio"] }` |
+- ⚠ (smithy-rs#940) `aws_smithy_client::Client::https()` has been renamed to `dyn_https()`.
+    This is to clearly distinguish it from `rustls` and `native_tls` which do not use a boxed connector.
+
+**New this release:**
+- 🐛 (smithy-rs#957) Include non-service-specific examples in the generated root Cargo workspace
+- 🎉 (smithy-rs#922, smithy-rs#914) Add changelog automation to sdk-lints
+- 🐛 (aws-sdk-rust#317, smithy-rs#907) Removed spamming log message when a client was used without a sleep implementation, and
+    improved context and call to action in logged messages around missing sleep implementations.
+- (smithy-rs#923) Use provided `sleep_impl` for retries instead of using Tokio directly.
+- (smithy-rs#920) Fix typos in module documentation for generated crates
+- 🐛 (aws-sdk-rust#301, smithy-rs#892) Avoid serializing repetitive `xmlns` attributes in generated XML serializers.
+- 🐛 (smithy-rs#953, aws-sdk-rust#331) Fixed a bug where certain characters caused a panic during URI encoding.
+
+
+
+v0.32.0 (December 2nd, 2021)
 =======================
 
+- This release was a version bump to fix a version number conflict in crates.io
+
+v0.31.0 (December 2nd, 2021)
+=======================
+**New this week**
+- Add docs.rs metadata section to all crates to document all features
+
+
+v0.30.0-alpha (November 23rd, 2021)
+===================================
+
+**New this week**
+- Improve docs on `aws-smithy-client` (smithy-rs#855)
+- Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
+- `SdkError` now includes a variant `TimeoutError` for when a request times out (smithy-rs#885)
+- Timeouts for requests are now configurable. You can set separate timeouts for each individual request attempt and all attempts made for a request. (smithy-rs#831)
+
+**Breaking Changes**
+- (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
+
+
+v0.29.0-alpha (November 11th, 2021)
+===================================
+
+**Breaking Changes**
+
+Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
+- `aws_smithy_types::Instant` from was renamed to `DateTime` to avoid confusion with the standard library's monotonically non-decreasing `Instant` type.
+- `DateParseError` in `aws_smithy_types` has been renamed to `DateTimeParseError` to match the type that's being parsed.
+- The `chrono-conversions` feature and associated functions have been moved to the `aws-smithy-types-convert` crate.
+  - Calls to `Instant::from_chrono` should be changed to:
+    ```rust
+    use aws_smithy_types::DateTime;
+    use aws_smithy_types_convert::date_time::DateTimeExt;
+
+    // For chrono::DateTime<Utc>
+    let date_time = DateTime::from_chrono_utc(chrono_date_time);
+    // For chrono::DateTime<FixedOffset>
+    let date_time = DateTime::from_chrono_offset(chrono_date_time);
+    ```
+  - Calls to `instant.to_chrono()` should be changed to:
+    ```rust
+    use aws_smithy_types_convert::date_time::DateTimeExt;
+
+    date_time.to_chrono_utc();
+    ```
+- `Instant::from_system_time` and `Instant::to_system_time` have been changed to `From` trait implementations.
+  - Calls to `from_system_time` should be changed to:
+    ```rust
+    DateTime::from(system_time);
+    // or
+    let date_time: DateTime = system_time.into();
+    ```
+  - Calls to `to_system_time` should be changed to:
+    ```rust
+    SystemTime::from(date_time);
+    // or
+    let system_time: SystemTime = date_time.into();
+    ```
+- Several functions in `Instant`/`DateTime` were renamed:
+  - `Instant::from_f64` -> `DateTime::from_secs_f64`
+  - `Instant::from_fractional_seconds` -> `DateTime::from_fractional_secs`
+  - `Instant::from_epoch_seconds` -> `DateTime::from_secs`
+  - `Instant::from_epoch_millis` -> `DateTime::from_millis`
+  - `Instant::epoch_fractional_seconds` -> `DateTime::as_secs_f64`
+  - `Instant::has_nanos` -> `DateTime::has_subsec_nanos`
+  - `Instant::epoch_seconds` -> `DateTime::secs`
+  - `Instant::epoch_subsecond_nanos` -> `DateTime::subsec_nanos`
+  - `Instant::to_epoch_millis` -> `DateTime::to_millis`
+- The `DateTime::fmt` method is now fallible and fails when a `DateTime`'s value is outside what can be represented by the desired date format.
+- In `aws-sigv4`, the `SigningParams` builder's `date_time` setter was renamed to `time` and changed to take a `std::time::SystemTime` instead of a chrono's `DateTime<Utc>`.
+
+**New this week**
+
+- :warning: MSRV increased from 1.53.0 to 1.54.0 per our 3-behind MSRV policy.
+- Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
+- Fixed links to Usage Examples (smithy-rs#862, @floric)
+
+v0.28.0-alpha (November 11th, 2021)
+===================================
+
+No changes since last release except for version bumping since older versions
+of the AWS SDK were failing to compile with the `0.27.0-alpha.2` version chosen
+for the previous release.
+
+v0.27.0-alpha.2 (November 9th, 2021)
+=======================
+**Breaking Changes**
+
+- Members named `builder` on model structs were renamed to `builder_value` so that their accessors don't conflict with the existing `builder()` methods (smithy-rs#842)
+
+**New this week**
+
+- Fix epoch seconds date-time parsing bug in `aws-smithy-types` (smithy-rs#834)
+- Omit trailing zeros from fraction when formatting HTTP dates in `aws-smithy-types` (smithy-rs#834)
+- Generated structs now have accessor methods for their members (smithy-rs#842)
+
+v0.27.0-alpha.1 (November 3rd, 2021)
+====================================
+**Breaking Changes**
+- `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)
+
+**New this week**
+- SDK code generation now includes a version in addition to path parameters when the `version` parameter is included in smithy-build.json
+- `moduleDescription` in `smithy-build.json` settings is now optional
+- Upgrade to Smithy 1.12
+- `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
+- Unions will optionally generate an `Unknown` variant to support parsing variants that don't exist on the client. These variants will fail to serialize if they are ever included in requests.
+- Fix generated docs on unions. (smithy-rs#826)
+
+v0.27 (October 20th, 2021)
+==========================
+
+**Breaking Changes**
+
+- :warning: All Smithy runtime crates have been renamed to have an `aws-` prefix. This may require code changes:
+  - _Cargo.toml_ changes:
+    - `smithy-async` -> `aws-smithy-async`
+    - `smithy-client` -> `aws-smithy-client`
+    - `smithy-eventstream` -> `aws-smithy-eventstream`
+    - `smithy-http` -> `aws-smithy-http`
+    - `smithy-http-tower` -> `aws-smithy-http-tower`
+    - `smithy-json` -> `aws-smithy-json`
+    - `smithy-protocol-test` -> `aws-smithy-protocol-test`
+    - `smithy-query` -> `aws-smithy-query`
+    - `smithy-types` -> `aws-smithy-types`
+    - `smithy-xml` -> `aws-smithy-xml`
+  - Rust `use` statement changes:
+    - `smithy_async` -> `aws_smithy_async`
+    - `smithy_client` -> `aws_smithy_client`
+    - `smithy_eventstream` -> `aws_smithy_eventstream`
+    - `smithy_http` -> `aws_smithy_http`
+    - `smithy_http_tower` -> `aws_smithy_http_tower`
+    - `smithy_json` -> `aws_smithy_json`
+    - `smithy_protocol_test` -> `aws_smithy_protocol_test`
+    - `smithy_query` -> `aws_smithy_query`
+    - `smithy_types` -> `aws_smithy_types`
+    - `smithy_xml` -> `aws_smithy_xml`
+
+**New this week**
+
+- Filled in missing docs for services in the rustdoc documentation (smithy-rs#779)
+
+v0.26 (October 15th, 2021)
+=======================
+
+**Breaking Changes**
+
+- :warning: The `rust-codegen` plugin now requires a `moduleDescription` in the *smithy-build.json* file. This
+  property goes into the generated *Cargo.toml* file as the package description. (smithy-rs#766)
+
+**New this week**
+
 - Add `RustSettings` to `CodegenContext` (smithy-rs#616, smithy-rs#752)
+- Prepare crate manifests for publishing to crates.io (smithy-rs#755)
+- Generated *Cargo.toml* files can now be customized (smithy-rs#766)
 
 v0.25.1 (October 11th, 2021)
 =========================
@@ -12,6 +257,11 @@ v0.25 (October 7th, 2021)
 =========================
 **Breaking changes**
 - :warning: MSRV increased from 1.52.1 to 1.53.0 per our 3-behind MSRV policy.
+- :warning: `smithy_client::retry::Config` field `max_retries` is renamed to `max_attempts`
+  - This also brings a change to the semantics of the field. In the old version, setting `max_retries` to 3 would mean
+    that up to 4 requests could occur (1 initial request and 3 retries). In the new version, setting `max_attempts` to 3
+    would mean that up to 3 requests could occur (1 initial request and 2 retries).
+- :warning: `smithy_client::retry::Config::with_max_retries` method is renamed to `with_max_attempts`
 - :warning: Several classes in the codegen module were renamed and/or refactored (smithy-rs#735):
   - `ProtocolConfig` became `CodegenContext` and moved to `software.amazon.smithy.rust.codegen.smithy`
   - `HttpProtocolGenerator` became `ProtocolGenerator` and was refactored
@@ -22,7 +272,9 @@ v0.25 (October 7th, 2021)
 - The `DispatchError` variant of `SdkError` now contains `ConnectorError` instead of `Box<dyn Error>` (#744).
 
 **New this week**
+
 - :bug: Fix an issue where `smithy-xml` may have generated invalid XML (smithy-rs#719)
+- Add `RetryConfig` struct for configuring retry behavior (smithy-rs#725)
 - :bug: Fix error when receiving empty event stream messages (smithy-rs#736)
 - :bug: Fix bug in event stream receiver that could cause the last events in the response stream to be lost (smithy-rs#736)
 - Add connect & HTTP read timeouts to IMDS, defaulting to 1 second

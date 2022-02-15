@@ -1,0 +1,26 @@
+[package]
+name = "aws-smithy-async"
+version = "0.0.0-smithy-rs-head"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
+description = "Async runtime agnostic abstractions for smithy-rs."
+edition = "2018"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+
+[features]
+rt-tokio = ["tokio/time"]
+
+[dependencies]
+pin-project-lite = "0.2"
+tokio = { version = "1.6", features = ["sync"] }
+tokio-stream = "0.1.8"
+futures-util = "0.3.16"
+
+[dev-dependencies]
+tokio = { version = "1.6", features = ["rt", "macros", "test-util"] }
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

@@ -8,10 +8,10 @@ use aws_sigv4::http_request::{
     sign, PayloadChecksumKind, PercentEncodingMode, SignableRequest, SignatureLocation,
     SigningParams, SigningSettings,
 };
+use aws_smithy_http::body::SdkBody;
 use aws_types::region::SigningRegion;
 use aws_types::Credentials;
 use aws_types::SigningService;
-use smithy_http::body::SdkBody;
 use std::error::Error;
 use std::fmt;
 use std::time::{Duration, SystemTime};
@@ -167,7 +167,7 @@ impl SigV4Signer {
             .secret_key(credentials.secret_access_key())
             .region(request_config.region.as_ref())
             .service_name(request_config.service.as_ref())
-            .date_time(request_config.request_ts.into())
+            .time(request_config.request_ts)
             .settings(settings);
         builder.set_security_token(credentials.session_token());
         builder.build().expect("all required fields set")

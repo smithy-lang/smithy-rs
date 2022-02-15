@@ -19,13 +19,16 @@ use tracing::Instrument;
 /// * Finally, if a provider returns any other error condition, an error will be returned immediately.
 ///
 /// # Examples
-/// ```rust
+///
+/// ```no_run
+/// # fn example() {
 /// use aws_config::meta::credentials::CredentialsProviderChain;
-/// use aws_types::Credentials;
-/// use aws_config::environment;
 /// use aws_config::environment::credentials::EnvironmentVariableCredentialsProvider;
+/// use aws_config::profile::ProfileFileCredentialsProvider;
+///
 /// let provider = CredentialsProviderChain::first_try("Environment", EnvironmentVariableCredentialsProvider::new())
-///     .or_else("Static", Credentials::from_keys("someacceskeyid", "somesecret", None));
+///     .or_else("Profile", ProfileFileCredentialsProvider::builder().build());
+/// # }
 /// ```
 #[derive(Debug)]
 pub struct CredentialsProviderChain {
@@ -54,7 +57,6 @@ impl CredentialsProviderChain {
     }
 
     /// Add a fallback to the default provider chain
-    #[cfg(feature = "default-provider")]
     #[cfg(any(feature = "rustls", feature = "native-tls"))]
     pub async fn or_default_provider(self) -> Self {
         self.or_else(
@@ -64,7 +66,6 @@ impl CredentialsProviderChain {
     }
 
     /// Creates a credential provider chain that starts with the default provider
-    #[cfg(feature = "default-provider")]
     #[cfg(any(feature = "rustls", feature = "native-tls"))]
     pub async fn default_provider() -> Self {
         Self::first_try(
@@ -75,14 +76,14 @@ impl CredentialsProviderChain {
 
     async fn credentials(&self) -> credentials::Result {
         for (name, provider) in &self.providers {
-            let span = tracing::info_span!("load_credentials", provider = %name);
+            let span = tracing::debug_span!("load_credentials", provider = %name);
             match provider.provide_credentials().instrument(span).await {
                 Ok(credentials) => {
                     tracing::info!(provider = %name, "loaded credentials");
                     return Ok(credentials);
                 }
-                Err(CredentialsError::CredentialsNotLoaded) => {
-                    tracing::info!(provider = %name, "provider in chain did not provide credentials");
+                Err(CredentialsError::CredentialsNotLoaded { context, .. }) => {
+                    tracing::info!(provider = %name, context = %context, "provider in chain did not provide credentials");
                 }
                 Err(e) => {
                     tracing::warn!(provider = %name, error = %e, "provider failed to provide credentials");
@@ -90,7 +91,9 @@ impl CredentialsProviderChain {
                 }
             }
         }
-        Err(CredentialsError::CredentialsNotLoaded)
+        Err(CredentialsError::not_loaded(
+            "no providers in chain provided credentials",
+        ))
     }
 }
 

@@ -153,6 +153,7 @@ pub fn sign<'a>(
     request: SignableRequest<'a>,
     params: &'a SigningParams<'a>,
 ) -> Result<SigningOutput<SigningInstructions>, Error> {
+    tracing::trace!(request = ?request, params = ?params, "signing request");
     match params.settings.signature_location {
         SignatureLocation::Headers => {
             let (signing_headers, signature) =
@@ -183,18 +184,18 @@ fn calculate_signing_params<'a>(
 
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
     let sts = StringToSign::new(
-        params.date_time,
-        &params.region,
-        &params.service_name,
+        params.time,
+        params.region,
+        params.service_name,
         encoded_creq,
     );
     let signing_key = generate_signing_key(
-        &params.secret_key,
-        params.date_time.date(),
-        &params.region,
-        &params.service_name,
+        params.secret_key,
+        params.time,
+        params.region,
+        params.service_name,
     );
-    let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
+    let signature = calculate_signature(signing_key, sts.to_string().as_bytes());
 
     let values = creq.values.into_query_params().expect("signing with query");
     let mut signing_params = vec![
@@ -234,7 +235,7 @@ fn calculate_signing_headers<'a>(
     // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
     let sts = StringToSign::new(
-        params.date_time,
+        params.time,
         params.region,
         params.service_name,
         encoded_creq,
@@ -243,11 +244,11 @@ fn calculate_signing_headers<'a>(
     // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
     let signing_key = generate_signing_key(
         params.secret_key,
-        params.date_time.date(),
+        params.time,
         params.region,
         params.service_name,
     );
-    let signature = calculate_signature(signing_key, &sts.to_string().as_bytes());
+    let signature = calculate_signature(signing_key, sts.to_string().as_bytes());
 
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
     let values = creq.values.as_headers().expect("signing with headers");
@@ -298,7 +299,7 @@ fn build_authorization_header(
 #[cfg(test)]
 mod tests {
     use super::{sign, SigningInstructions};
-    use crate::date_fmt::parse_date_time;
+    use crate::date_time::test_parsers::parse_date_time;
     use crate::http_request::sign::SignableRequest;
     use crate::http_request::test::{
         make_headers_comparable, test_request, test_signed_request,
@@ -327,7 +328,7 @@ mod tests {
             security_token: None,
             region: "us-east-1",
             service_name: "service",
-            date_time: parse_date_time("20150830T123600Z").unwrap(),
+            time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
 
@@ -347,6 +348,35 @@ mod tests {
     }
 
     #[test]
+    fn test_sign_url_escape() {
+        let test = "double-encode-path";
+        let settings = SigningSettings::default();
+        let params = SigningParams {
+            access_key: "AKIDEXAMPLE",
+            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+            security_token: None,
+            region: "us-east-1",
+            service_name: "service",
+            time: parse_date_time("20150830T123600Z").unwrap(),
+            settings,
+        };
+
+        let original = test_request(test);
+        let signable = SignableRequest::from(&original);
+        let out = sign(signable, &params).unwrap();
+        assert_eq!(
+            "6f871eb157f326fa5f7439eb88ca200048635950ce7d6037deda56f0c95d4364",
+            out.signature
+        );
+
+        let mut signed = original;
+        out.output.apply_to_request(&mut signed);
+
+        let mut expected = test_signed_request(test);
+        assert_req_eq!(expected, signed);
+    }
+
+    #[test]
     fn test_sign_vanilla_with_query_params() {
         let mut settings = SigningSettings::default();
         settings.signature_location = SignatureLocation::QueryParams;
@@ -357,7 +387,7 @@ mod tests {
             security_token: None,
             region: "us-east-1",
             service_name: "service",
-            date_time: parse_date_time("20150830T123600Z").unwrap(),
+            time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
 
@@ -385,7 +415,7 @@ mod tests {
             security_token: None,
             region: "us-east-1",
             service_name: "service",
-            date_time: parse_date_time("20150830T123600Z").unwrap(),
+            time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
 
@@ -418,6 +448,62 @@ mod tests {
                         Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
                         SignedHeaders=host;some-header;x-amz-date, \
                         Signature=4596b207a7fc6bdf18725369bc0cd7022cf20efbd2c19730549f42d1a403648e",
+                )
+                .unwrap(),
+            )
+            .body("")
+            .unwrap();
+        assert_req_eq!(expected, signed);
+    }
+
+    #[test]
+    fn test_sign_headers_space_trimming() {
+        let settings = SigningSettings::default();
+        let params = SigningParams {
+            access_key: "AKIDEXAMPLE",
+            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+            security_token: None,
+            region: "us-east-1",
+            service_name: "service",
+            time: parse_date_time("20150830T123600Z").unwrap(),
+            settings,
+        };
+
+        let original = http::Request::builder()
+            .uri("https://some-endpoint.some-region.amazonaws.com")
+            .header(
+                "some-header",
+                HeaderValue::from_str("  test  test   ").unwrap(),
+            )
+            .body("")
+            .unwrap();
+        let signable = SignableRequest::from(&original);
+        let out = sign(signable, &params).unwrap();
+        assert_eq!(
+            "0bd74dbf6f21161f61a1a3a1c313b6a4bc67ec57bf5ea9ae956a63753ca1d7f7",
+            out.signature
+        );
+
+        let mut signed = original;
+        out.output.apply_to_request(&mut signed);
+
+        let mut expected = http::Request::builder()
+            .uri("https://some-endpoint.some-region.amazonaws.com")
+            .header(
+                "some-header",
+                HeaderValue::from_str("  test  test   ").unwrap(),
+            )
+            .header(
+                "x-amz-date",
+                HeaderValue::from_str("20150830T123600Z").unwrap(),
+            )
+            .header(
+                "authorization",
+                HeaderValue::from_str(
+                    "AWS4-HMAC-SHA256 \
+                        Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
+                        SignedHeaders=host;some-header;x-amz-date, \
+                        Signature=0bd74dbf6f21161f61a1a3a1c313b6a4bc67ec57bf5ea9ae956a63753ca1d7f7",
                 )
                 .unwrap(),
             )

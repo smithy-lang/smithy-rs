@@ -35,14 +35,14 @@ impl<'a> ProfileChain<'a> {
     }
 
     pub fn chain(&self) -> &[RoleArn<'a>] {
-        &self.chain.as_slice()
+        self.chain.as_slice()
     }
 }
 
 /// A base member of the profile chain
 ///
 /// Base providers do not require input credentials to provide their own credentials,
-/// eg. IMDS, ECS, Environment variables
+/// e.g. IMDS, ECS, Environment variables
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum BaseProvider<'a> {
@@ -73,16 +73,15 @@ pub enum BaseProvider<'a> {
         role_arn: &'a str,
         web_identity_token_file: &'a str,
         session_name: Option<&'a str>,
-    }, // TODO: add SSO support
-       /*
-       /// An SSO Provider
-       Sso {
-           sso_account_id: &'a str,
-           sso_region: &'a str,
-           sso_role_name: &'a str,
-           sso_start_url: &'a str,
-       },
-        */
+    },
+
+    /// An SSO Provider
+    Sso {
+        sso_account_id: &'a str,
+        sso_region: &'a str,
+        sso_role_name: &'a str,
+        sso_start_url: &'a str,
+    },
 }
 
 /// A profile that specifies a role to assume
@@ -113,6 +112,7 @@ pub fn resolve_chain<'a>(
     let mut visited_profiles = vec![];
     let mut chain = vec![];
     let base = loop {
+        // Get the next profile in the chain
         let profile = profile_set.get_profile(source_profile_name).ok_or(
             ProfileFileError::MissingProfile {
                 profile: source_profile_name.into(),
@@ -124,6 +124,8 @@ pub fn resolve_chain<'a>(
                 .into(),
             },
         )?;
+        // If the profile we just got is one we've already seen, we're in a loop and
+        // need to break out with a CredentialLoop error
         if visited_profiles.contains(&source_profile_name) {
             return Err(ProfileFileError::CredentialLoop {
                 profiles: visited_profiles
@@ -133,30 +135,41 @@ pub fn resolve_chain<'a>(
                 next: source_profile_name.to_string(),
             });
         }
-        visited_profiles.push(&source_profile_name);
+        // otherwise, store the name of the profile in case we see it again later
+        visited_profiles.push(source_profile_name);
         // After the first item in the chain, we will prioritize static credentials if they exist
         if visited_profiles.len() > 1 {
-            let try_static = static_creds_from_profile(&profile);
+            let try_static = static_creds_from_profile(profile);
             if let Ok(static_credentials) = try_static {
                 break BaseProvider::AccessKey(static_credentials);
             }
         }
-        let next_profile = match chain_provider(&profile) {
-            // this provider wasn't a chain provider, reload it as a base provider
-            None => {
+
+        let next_profile = {
+            // The existence of a `role_arn` is the only signal that multiple profiles will be chained.
+            // We check for one here and then process the profile accordingly as either a "chain provider"
+            // or a "base provider"
+            if let Some(role_provider) = role_arn_from_profile(profile) {
+                let next = chain_provider(profile)?;
+                chain.push(role_provider);
+                next
+            } else {
                 break base_provider(profile).map_err(|err| {
-                    ProfileFileError::InvalidCredentialSource {
-                        profile: profile.name().into(),
-                        message: format!("could not load source profile: {}", err).into(),
+                    // It's possible for base_provider to return a `ProfileFileError::ProfileDidNotContainCredentials`
+                    // if we're still looking at the first provider we want to surface it. However,
+                    // if we're looking at any provider after the first we want to instead return a `ProfileFileError::InvalidCredentialSource`
+                    if visited_profiles.len() == 1 {
+                        err
+                    } else {
+                        ProfileFileError::InvalidCredentialSource {
+                            profile: profile.name().into(),
+                            message: format!("could not load source profile: {}", err).into(),
+                        }
                     }
                 })?;
             }
-            Some(result) => {
-                let (chain_profile, next) = result?;
-                chain.push(chain_profile);
-                next
-            }
         };
+
         match next_profile {
             NextProfile::SelfReference => {
                 // self referential profile, don't go through the loop because it will error
@@ -180,6 +193,13 @@ mod role {
     pub const SOURCE_PROFILE: &str = "source_profile";
 }
 
+mod sso {
+    pub const ACCOUNT_ID: &str = "sso_account_id";
+    pub const REGION: &str = "sso_region";
+    pub const ROLE_NAME: &str = "sso_role_name";
+    pub const START_URL: &str = "sso_start_url";
+}
+
 mod web_identity_token {
     pub const TOKEN_FILE: &str = "web_identity_token_file";
 }
@@ -196,6 +216,7 @@ fn base_provider(profile: &Profile) -> Result<BaseProvider, ProfileFileError> {
     match profile.get(role::CREDENTIAL_SOURCE) {
         Some(source) => Ok(BaseProvider::NamedSource(source)),
         None => web_identity_token_from_profile(profile)
+            .or_else(|| sso_from_profile(profile))
             .unwrap_or_else(|| Ok(BaseProvider::AccessKey(static_creds_from_profile(profile)?))),
     }
 }
@@ -205,13 +226,12 @@ enum NextProfile<'a> {
     Named(&'a str),
 }
 
-fn chain_provider(profile: &Profile) -> Option<Result<(RoleArn, NextProfile), ProfileFileError>> {
-    let role_provider = role_arn_from_profile(&profile)?;
+fn chain_provider(profile: &Profile) -> Result<NextProfile, ProfileFileError> {
     let (source_profile, credential_source) = (
         profile.get(role::SOURCE_PROFILE),
         profile.get(role::CREDENTIAL_SOURCE),
     );
-    let profile = match (source_profile, credential_source) {
+    match (source_profile, credential_source) {
         (Some(_), Some(_)) => Err(ProfileFileError::InvalidCredentialSource {
             profile: profile.name().to_string(),
             message: "profile contained both source_profile and credential_source. \
@@ -225,14 +245,12 @@ fn chain_provider(profile: &Profile) -> Option<Result<(RoleArn, NextProfile), Pr
                     .into(),
         }),
         (Some(source_profile), None) if source_profile == profile.name() => {
-            Ok((role_provider, NextProfile::SelfReference))
+            Ok(NextProfile::SelfReference)
         }
-
-        (Some(source_profile), None) => Ok((role_provider, NextProfile::Named(source_profile))),
+        (Some(source_profile), None) => Ok(NextProfile::Named(source_profile)),
         // we want to loop back into this profile and pick up the credential source
-        (None, Some(_credential_source)) => Ok((role_provider, NextProfile::SelfReference)),
-    };
-    Some(profile)
+        (None, Some(_credential_source)) => Ok(NextProfile::SelfReference),
+    }
 }
 
 fn role_arn_from_profile(profile: &Profile) -> Option<RoleArn> {
@@ -248,6 +266,41 @@ fn role_arn_from_profile(profile: &Profile) -> Option<RoleArn> {
         external_id,
         session_name,
     })
+}
+
+fn sso_from_profile(profile: &Profile) -> Option<Result<BaseProvider, ProfileFileError>> {
+    /*
+    Sample:
+    [profile sample-profile]
+    sso_account_id = 012345678901
+    sso_region = us-east-1
+    sso_role_name = SampleRole
+    sso_start_url = https://d-abc123.awsapps.com/start-beta
+    */
+    let account_id = profile.get(sso::ACCOUNT_ID);
+    let region = profile.get(sso::REGION);
+    let role_name = profile.get(sso::ROLE_NAME);
+    let start_url = profile.get(sso::START_URL);
+    if [account_id, region, role_name, start_url]
+        .iter()
+        .all(|field| field.is_none())
+    {
+        return None;
+    }
+    let missing_field = |s| move || ProfileFileError::missing_field(profile, s);
+    let parse_profile = || {
+        let sso_account_id = account_id.ok_or_else(missing_field(sso::ACCOUNT_ID))?;
+        let sso_region = region.ok_or_else(missing_field(sso::REGION))?;
+        let sso_role_name = role_name.ok_or_else(missing_field(sso::ROLE_NAME))?;
+        let sso_start_url = start_url.ok_or_else(missing_field(sso::START_URL))?;
+        Ok(BaseProvider::Sso {
+            sso_account_id,
+            sso_region,
+            sso_role_name,
+            sso_start_url,
+        })
+    };
+    Some(parse_profile())
 }
 
 fn web_identity_token_from_profile(
@@ -285,11 +338,13 @@ fn static_creds_from_profile(profile: &Profile) -> Result<Credentials, ProfileFi
     let access_key = profile.get(AWS_ACCESS_KEY_ID);
     let secret_key = profile.get(AWS_SECRET_ACCESS_KEY);
     let session_token = profile.get(AWS_SESSION_TOKEN);
+    // If all three fields are missing return a `ProfileFileError::ProfileDidNotContainCredentials`
     if let (None, None, None) = (access_key, secret_key, session_token) {
         return Err(ProfileFileError::ProfileDidNotContainCredentials {
             profile: profile.name().to_string(),
         });
     }
+    // Otherwise, check to make sure the access and secret keys are defined
     let access_key = access_key.ok_or_else(|| ProfileFileError::InvalidCredentialSource {
         profile: profile.name().to_string(),
         message: "profile missing aws_access_key_id".into(),
@@ -298,6 +353,7 @@ fn static_creds_from_profile(profile: &Profile) -> Result<Credentials, ProfileFi
         profile: profile.name().to_string(),
         message: "profile missing aws_secret_access_key".into(),
     })?;
+    // There might not be an active session token so we don't error out if it's missing
     Ok(Credentials::new(
         access_key,
         secret_key,
@@ -335,7 +391,7 @@ mod tests {
         match (expected, actual) {
             (TestOutput::Error(s), Err(e)) => assert!(
                 format!("{}", e).contains(&s),
-                "expected {} to contain `{}`",
+                "expected\n{}\nto contain\n{}\n",
                 e,
                 s
             ),
@@ -380,6 +436,17 @@ mod tests {
                 web_identity_token_file: web_identity_token_file.into(),
                 role_session_name: session_name.map(|sess| sess.to_string()),
             }),
+            BaseProvider::Sso {
+                sso_account_id,
+                sso_region,
+                sso_role_name,
+                sso_start_url,
+            } => output.push(Provider::Sso {
+                sso_account_id: sso_account_id.into(),
+                sso_region: sso_region.into(),
+                sso_role_name: sso_role_name.into(),
+                sso_start_url: sso_start_url.into(),
+            }),
         };
         for role in profile_chain.chain {
             output.push(Provider::AssumeRole {
@@ -414,6 +481,12 @@ mod tests {
             role_arn: String,
             web_identity_token_file: String,
             role_session_name: Option<String>,
+        },
+        Sso {
+            sso_account_id: String,
+            sso_region: String,
+            sso_role_name: String,
+            sso_start_url: String,
         },
     }
 }

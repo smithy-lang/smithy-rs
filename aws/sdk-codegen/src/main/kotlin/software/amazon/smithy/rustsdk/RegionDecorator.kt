@@ -24,26 +24,48 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 /* Example Generated Code */
 /*
 pub struct Config {
-    pub region: Option<::aws_types::region::Region>,
+    pub(crate) region: Option<aws_types::region::Region>,
 }
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut config = f.debug_struct("Config");
+        config.finish()
+    }
+}
+
+impl Config {
+    pub fn builder() -> Builder {
+        Builder::default()
+    }
+}
+
 #[derive(Default)]
 pub struct Builder {
-    region: Option<::aws_types::region::Region>,
+    region: Option<aws_types::region::Region>,
 }
+
 impl Builder {
-    pub fn region(mut self, region_provider: impl ::aws_types::region::ProvideRegion) -> Self {
-        self.region = region_provider.region();
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn region(mut self, region: impl Into<Option<aws_types::region::Region>>) -> Self {
+        self.region = region.into();
         self
     }
 
     pub fn build(self) -> Config {
         Config {
-            region: {
-                use ::aws_types::region::ProvideRegion;
-                self.region
-                    .or_else(|| ::aws_types::region::default_provider().region())
-            },
+            region: self.region,
+        }
     }
+}
+
+#[test]
+fn test_1() {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Config>();
 }
  */
 
@@ -55,7 +77,7 @@ class RegionDecorator : RustCodegenDecorator {
         codegenContext: CodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + RegionProviderConfig(codegenContext.runtimeConfig)
+        return baseCustomizations + RegionProviderConfig(codegenContext)
     }
 
     override fun operationCustomizations(
@@ -74,8 +96,9 @@ class RegionDecorator : RustCodegenDecorator {
     }
 }
 
-class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val region = region(runtimeConfig)
+class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
+    private val region = region(codegenContext.runtimeConfig)
+    private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf("Region" to region.member("Region"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
@@ -86,11 +109,22 @@ class RegionProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization()
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
-            pub fn region(mut self, region: impl Into<Option<#{Region}>>) -> Self {
-                self.region = region.into();
-                self
-            }
-            """,
+                    /// Sets the AWS region to use when making requests.
+                    ///
+                    /// ## Examples
+                    /// ```no_run
+                    /// use aws_types::region::Region;
+                    /// use $moduleUseName::config::{Builder, Config};
+                    ///
+                    /// let config = $moduleUseName::Config::builder()
+                    ///     .region(Region::new("us-east-1"))
+                    ///     .build();
+                    /// ```
+                    pub fn region(mut self, region: impl Into<Option<#{Region}>>) -> Self {
+                        self.region = region.into();
+                        self
+                    }
+                    """,
                     *codegenScope
                 )
             ServiceConfig.BuilderBuild -> rustTemplate(
@@ -108,10 +142,10 @@ class RegionConfigPlugin : OperationCustomization() {
                 // Allow the region to be late-inserted via another method
                 rust(
                     """
-                if let Some(region) = &${section.config}.region {
-                    ${section.request}.properties_mut().insert(region.clone());
-                }
-                """
+                    if let Some(region) = &${section.config}.region {
+                        ${section.request}.properties_mut().insert(region.clone());
+                    }
+                    """
                 )
             }
             else -> emptySection

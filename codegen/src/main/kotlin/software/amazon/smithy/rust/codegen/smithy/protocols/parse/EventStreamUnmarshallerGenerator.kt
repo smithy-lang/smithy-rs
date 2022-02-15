@@ -31,10 +31,13 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.util.dq
@@ -49,23 +52,24 @@ class EventStreamUnmarshallerGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
+    private val mode: CodegenMode,
 ) {
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
     private val operationErrorSymbol = operationShape.errorSymbol(symbolProvider)
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
     private val codegenScope = arrayOf(
-        "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
-        "Error" to RuntimeType("Error", smithyEventStream, "smithy_eventstream::error"),
-        "expect_fns" to RuntimeType("smithy", smithyEventStream, "smithy_eventstream"),
-        "Header" to RuntimeType("Header", smithyEventStream, "smithy_eventstream::frame"),
-        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "smithy_eventstream::frame"),
-        "Message" to RuntimeType("Message", smithyEventStream, "smithy_eventstream::frame"),
+        "Blob" to RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "aws_smithy_types"),
+        "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
+        "expect_fns" to RuntimeType("smithy", smithyEventStream, "aws_smithy_eventstream"),
+        "Header" to RuntimeType("Header", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "HeaderValue" to RuntimeType("HeaderValue", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "Message" to RuntimeType("Message", smithyEventStream, "aws_smithy_eventstream::frame"),
         "OpError" to operationErrorSymbol,
-        "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "smithy_types"),
+        "SmithyError" to RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "aws_smithy_types"),
         "tracing" to CargoDependency.Tracing.asType(),
-        "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "smithy_eventstream::frame"),
-        "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "smithy_eventstream::frame"),
+        "UnmarshalledMessage" to RuntimeType("UnmarshalledMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
+        "UnmarshallMessage" to RuntimeType("UnmarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
     )
 
     fun render(): RuntimeType {
@@ -106,7 +110,7 @@ class EventStreamUnmarshallerGenerator(
                 """,
                 *codegenScope
             ) {
-                rustTemplate("let response_headers = #{expect_fns}::parse_response_headers(&message)?;", *codegenScope)
+                rustTemplate("let response_headers = #{expect_fns}::parse_response_headers(message)?;", *codegenScope)
                 rustBlock("match response_headers.message_type.as_str()") {
                     rustBlock("\"event\" => ") {
                         renderUnmarshallEvent()
@@ -139,18 +143,24 @@ class EventStreamUnmarshallerGenerator(
                     renderUnmarshallUnionMember(member, target)
                 }
             }
-            rustBlock("smithy_type => ") {
-                // TODO: Handle this better once unions support unknown variants
-                rustTemplate(
-                    "return Err(#{Error}::Unmarshalling(format!(\"unrecognized :event-type: {}\", smithy_type)));",
-                    *codegenScope
-                )
+            rustBlock("_unknown_variant => ") {
+                when (mode.renderUnknownVariant()) {
+                    true -> rustTemplate(
+                        "Ok(#{UnmarshalledMessage}::Event(#{Output}::${UnionGenerator.UnknownVariantName}))",
+                        "Output" to unionSymbol,
+                        *codegenScope
+                    )
+                    false -> rustTemplate(
+                        "return Err(#{Error}::Unmarshalling(format!(\"unrecognized :event-type: {}\", _unknown_variant)));",
+                        *codegenScope
+                    )
+                }
             }
         }
     }
 
     private fun RustWriter.renderUnmarshallUnionMember(unionMember: MemberShape, unionStruct: StructureShape) {
-        val unionMemberName = unionMember.memberName.toPascalCase()
+        val unionMemberName = symbolProvider.toMemberName(unionMember)
         val empty = unionStruct.members().isEmpty()
         val payloadOnly =
             unionStruct.members().none { it.hasTrait<EventPayloadTrait>() || it.hasTrait<EventHeaderTrait>() }
@@ -268,7 +278,7 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderParseProtocolPayload(member: MemberShape) {
         val parser = protocol.structuredDataParser(operationShape).payloadParser(member)
-        val memberName = member.memberName.toPascalCase()
+        val memberName = symbolProvider.toMemberName(member)
         rustTemplate(
             """
             #{parser}(&message.payload()[..])
@@ -312,7 +322,7 @@ class EventStreamUnmarshallerGenerator(
                                     })?;
                                 return Ok(#{UnmarshalledMessage}::Error(
                                     #{OpError}::new(
-                                        #{OpError}Kind::${member.memberName.toPascalCase()}(builder.build()),
+                                        #{OpError}Kind::${symbolProvider.toMemberName(member)}(builder.build()),
                                         generic,
                                     )
                                 ))

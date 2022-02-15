@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.stubConfigProject
@@ -19,21 +20,21 @@ import software.amazon.smithy.rust.codegen.util.lookup
 internal class EndpointConfigCustomizationTest {
 
     private val model = """
-    namespace test
-    @aws.api#service(sdkId: "Test", endpointPrefix: "service-with-prefix")
-    service TestService {
-        version: "123"
-    }
+        namespace test
+        @aws.api#service(sdkId: "Test", endpointPrefix: "service-with-prefix")
+        service TestService {
+            version: "123"
+        }
 
-    @aws.api#service(sdkId: "Test", endpointPrefix: "iam")
-    service NoRegions {
-        version: "123"
-    }
+        @aws.api#service(sdkId: "Test", endpointPrefix: "iam")
+        service NoRegions {
+            version: "123"
+        }
 
-    @aws.api#service(sdkId: "Test")
-    service NoEndpointPrefix {
-        version: "123"
-    }
+        @aws.api#service(sdkId: "Test")
+        service NoEndpointPrefix {
+            version: "123"
+        }
     """.asSmithyModel()
 
     private val endpointConfig = """
@@ -93,7 +94,7 @@ internal class EndpointConfigCustomizationTest {
               }
             }
         }]
-    }
+        }
     """.let { ObjectNode.parse(it).expectObjectNode() }
 
     fun endpointCustomization(service: String) =
@@ -116,13 +117,14 @@ internal class EndpointConfigCustomizationTest {
     }
 
     @Test
-    fun `support region-based endpoint overrides`() {
+    fun `support region-specific endpoint overrides`() {
         val project =
-            stubConfigProject(endpointCustomization("test#TestService"))
+            stubConfigProject(endpointCustomization("test#TestService"), TestWorkspace.testProject())
         project.lib {
             it.addDependency(awsTypes(AwsTestRuntimeConfig))
             it.addDependency(CargoDependency.Http)
             it.unitTest(
+                "region_override",
                 """
                 use aws_types::region::Region;
                 use http::Uri;
@@ -132,20 +134,21 @@ internal class EndpointConfigCustomizationTest {
                 let mut uri = Uri::from_static("/?k=v");
                 endpoint.set_endpoint(&mut uri, None);
                 assert_eq!(uri, Uri::from_static("https://access-analyzer-fips.ca-central-1.amazonaws.com/?k=v"));
-            """
+                """
             )
         }
         project.compileAndTest()
     }
 
     @Test
-    fun `support non-regionalized services`() {
+    fun `support region-agnostic services`() {
         val project =
-            stubConfigProject(endpointCustomization("test#NoRegions"))
+            stubConfigProject(endpointCustomization("test#NoRegions"), TestWorkspace.testProject())
         project.lib {
             it.addDependency(awsTypes(AwsTestRuntimeConfig))
             it.addDependency(CargoDependency.Http)
             it.unitTest(
+                "global_services",
                 """
                 use aws_types::region::Region;
                 use http::Uri;
@@ -161,10 +164,9 @@ internal class EndpointConfigCustomizationTest {
                 let mut uri = Uri::from_static("/?k=v");
                 endpoint.set_endpoint(&mut uri, None);
                 assert_eq!(uri, Uri::from_static("https://iam-fips.amazonaws.com/?k=v"));
-            """
+                """
             )
         }
-        println("file:///" + project.baseDir + "/src/aws_endpoint.rs")
         project.compileAndTest()
     }
 }

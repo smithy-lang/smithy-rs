@@ -29,6 +29,8 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.Structured
 
 /**
  * Describes a protocol to the [HttpBoundProtocolGenerator].
+ *
+ * Each protocol (e.g. RestXml, RestJson, etc.) will provide its own implementation of the [Protocol] interface.
  */
 interface Protocol {
     /** Resolves HTTP bindings (which part of a request fields are mapped to) */
@@ -37,8 +39,8 @@ interface Protocol {
     /** The timestamp format that should be used if no override is specified in the model */
     val defaultTimestampFormat: TimestampFormatTrait.Format
 
-    /** Returns additional HTTP headers that should be included for the given operation for this protocol */
-    fun additionalHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
+    /** Returns additional HTTP headers that should be included in HTTP requests for the given operation for this protocol. */
+    fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
 
     /** Returns a deserialization code generator for this protocol */
     fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator
@@ -49,7 +51,7 @@ interface Protocol {
     /**
      * Generates a function signature like the following:
      * ```rust
-     * fn parse_http_generic_error(response: &Response<Bytes>) -> smithy_types::error::Error
+     * fn parse_http_generic_error(response: &Response<Bytes>) -> aws_smithy_types::error::Error
      * ```
      */
     fun parseHttpGenericError(operationShape: OperationShape): RuntimeType
@@ -57,7 +59,7 @@ interface Protocol {
     /**
      * Generates a function signature like the following:
      * ```rust
-     * fn parse_event_stream_generic_error(payload: &Bytes) -> smithy_types::error::Error
+     * fn parse_event_stream_generic_error(payload: &Bytes) -> aws_smithy_types::error::Error
      * ```
      *
      * Event Stream generic errors are almost identical to HTTP generic errors, except that

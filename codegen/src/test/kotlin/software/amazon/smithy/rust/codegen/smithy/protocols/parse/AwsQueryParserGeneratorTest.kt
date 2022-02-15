@@ -55,16 +55,16 @@ class AwsQueryParserGeneratorTest {
             writer.unitTest(
                 name = "valid_input",
                 test = """
-                let xml = br#"
-                <SomeOperationResponse>
-                    <SomeOperationResult someAttribute="5">
-                        <someVal>Some value</someVal>
-                    </SomeOperationResult>
-                </someOperationResponse>
-                "#;
-                let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
-                assert_eq!(output.some_attribute, Some(5));
-                assert_eq!(output.some_val, Some("Some value".to_string()));
+                    let xml = br#"
+                    <SomeOperationResponse>
+                        <SomeOperationResult someAttribute="5">
+                            <someVal>Some value</someVal>
+                        </SomeOperationResult>
+                    </someOperationResponse>
+                    "#;
+                    let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
+                    assert_eq!(output.some_attribute, Some(5));
+                    assert_eq!(output.some_val, Some("Some value".to_string()));
                 """
             )
         }
@@ -77,10 +77,6 @@ class AwsQueryParserGeneratorTest {
             model.lookup<OperationShape>("test#SomeOperation").outputShape(model)
                 .renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/output.rs")
-        println("file:///${project.baseDir}/src/xml_deser.rs")
         project.compileAndTest()
     }
 }
