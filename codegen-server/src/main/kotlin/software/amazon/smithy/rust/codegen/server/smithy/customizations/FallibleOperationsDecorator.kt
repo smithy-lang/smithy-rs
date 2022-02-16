@@ -16,7 +16,7 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 
 /**
- * Force all operations in the model to be fallible.
+ * Add at least one error to all operations in the model.
  *
  * When this decorator is applied, operations that do not have a Smithy error attatched,
  * will return `Result<OperationOutput, InternalServerError>`.
