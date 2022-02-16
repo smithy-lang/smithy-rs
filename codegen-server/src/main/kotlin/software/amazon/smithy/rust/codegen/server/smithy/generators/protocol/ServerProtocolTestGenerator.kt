@@ -223,7 +223,7 @@ class ServerProtocolTestGenerator(
         }
         rustTemplate(
             """
-            .body(#{SmithyHttpServer}::Body::from(#{Bytes}::from_static(b${httpRequestTestCase.body.orNull()?.dq()})))
+            .body(#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static(b${httpRequestTestCase.body.orNull()?.dq()})))
             .unwrap();
             """,
             *codegenScope
@@ -508,8 +508,6 @@ class ServerProtocolTestGenerator(
 
             FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", Action.Request),
-            FailingTest(RestJson, "DocumentTypeAsPayloadOutput", Action.Response),
-            FailingTest(RestJson, "DocumentTypeAsPayloadOutputString", Action.Response),
             FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
             FailingTest(RestJson, "RestJsonInvalidGreetingError", Action.Response),
@@ -520,13 +518,8 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonFooErrorWithDunderType", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeAndNamespace", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeUriAndNamespace", Action.Response),
-            FailingTest(RestJson, "EnumPayloadResponse", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithBlob", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithNoBlobBody", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadWithStructure", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatLabels", Action.Request),
-            FailingTest(RestJson, "StringPayloadResponse", Action.Response),
+            FailingTest(RestJson, "RestJsonHttpResponseCode", Action.Response),
             FailingTest(RestJson, "RestJsonNoInputAndNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Request),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", Action.Response),
