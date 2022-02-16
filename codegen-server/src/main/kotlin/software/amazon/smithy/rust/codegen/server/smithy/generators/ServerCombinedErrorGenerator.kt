@@ -83,6 +83,15 @@ class ServerCombinedErrorGenerator(
                 }
             }
         }
+
+        for (error in errors) {
+            val errorSymbol = symbolProvider.toSymbol(error)
+            writer.rustBlock("impl From<#T> for #T", errorSymbol, symbol) {
+                rustBlock("fn from(variant: #T) -> #T", errorSymbol, symbol) {
+                    rust("Self::${errorSymbol.name}(variant)")
+                }
+            }
+        }
     }
 
     /**
