@@ -1,0 +1,12 @@
+flowchart TD
+    A[Check runtime crate] --> B{A. Crate has changed?}
+    B -- Yes --> C{B. Minor bumped?}
+    B -- No --> H{C. Version changed?}
+    C -- Yes --> K[Pass]
+    C -- No --> E{D. Patch bumped?}
+    E -- Yes --> F{E. Semverver passes?}
+    E -- No --> L[Fail]
+    F -- Yes --> D[Pass]
+    F -- No --> G[Fail]
+    H -- Yes --> I[Fail]
+    H -- No --> J[Pass]

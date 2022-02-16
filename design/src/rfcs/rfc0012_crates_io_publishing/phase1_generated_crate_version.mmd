@@ -1,0 +1,6 @@
+flowchart TD
+    start[Generate crate version] --> smithyrschanged{A. smithy-rs changed?}
+    smithyrschanged -- Yes --> minor1[Minor version bump]
+    smithyrschanged -- No --> modelchanged{B. model changed?}
+    modelchanged -- Yes --> minor2[Minor version bump]
+    modelchanged -- No --> keep[Keep current version]
