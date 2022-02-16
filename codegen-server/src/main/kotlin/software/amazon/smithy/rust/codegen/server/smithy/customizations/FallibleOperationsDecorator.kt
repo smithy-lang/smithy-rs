@@ -28,12 +28,20 @@ class FallibleOperationsDecorator : RustCodegenDecorator {
     override val name: String = "FallibleOperations"
     override val order: Byte = 0
 
+    private fun internalServerError(namespace: String): StructureShape {
+        return StructureShape.builder().id("$namespace#InternalServerError")
+            .addTrait(ErrorTrait("server"))
+            .addMember(
+                MemberShape.builder()
+                    .id("$namespace#InternalServerError\$message")
+                    .target("smithy.api#String")
+                    .addTrait(RequiredTrait())
+                    .build()
+            ).build()
+    }
+
     override fun transformModel(service: ServiceShape, model: Model): Model {
-        val namespace = service.id.getNamespace()
-        val message = MemberShape.builder().id("$namespace#InternalServerError\$message")
-            .target("smithy.api#String").addTrait(RequiredTrait()).build()
-        val errorShape = StructureShape.builder().id("$namespace#InternalServerError")
-            .addTrait(ErrorTrait("server")).addMember(message).build()
+        val errorShape = internalServerError(service.id.getNamespace())
         val modelShapes = model.toBuilder().addShapes(listOf(errorShape)).build()
         return ModelTransformer.create().mapShapes(modelShapes) { shape ->
             if (shape is OperationShape && shape.errors.isEmpty()) {
