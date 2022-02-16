@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.util.lookup
-/* import software.amazon.smithy.rust.codegen.server.smithy.generators */
 
 internal class CombinedErrorGeneratorTest {
     @Test
