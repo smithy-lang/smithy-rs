@@ -125,8 +125,9 @@ where
         &self,
         response: Result<&SdkSuccess<DescribeTableOutput>, &SdkError<DescribeTableError>>,
     ) -> RetryKind {
-        match self.inner.classify(response.clone()) {
+        match self.inner.classify(response) {
             RetryKind::NotRetryable => (),
+            RetryKind::Unnecessary => (),
             other => return other,
         };
         match response {
@@ -142,7 +143,7 @@ where
                 {
                     RetryKind::Explicit(Duration::from_secs(1))
                 } else {
-                    RetryKind::NotRetryable
+                    RetryKind::Unnecessary
                 }
             }
             _ => RetryKind::NotRetryable,

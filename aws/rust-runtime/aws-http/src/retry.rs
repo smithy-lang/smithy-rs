@@ -58,7 +58,7 @@ where
 {
     fn classify(&self, err: Result<&T, &SdkError<E>>) -> RetryKind {
         let (err, response) = match err {
-            Ok(_) => return RetryKind::NotRetryable,
+            Ok(_) => return RetryKind::Unnecessary,
             Err(SdkError::ServiceError { err, raw }) => (err, raw),
             Err(SdkError::DispatchFailure(err)) => {
                 return if err.is_timeout() || err.is_io() {
