@@ -94,6 +94,12 @@ define_rejection! {
     pub struct MissingExtension(Error);
 }
 
+define_rejection! {
+    #[status = BAD_REQUEST]
+    #[body = "Constraint violation"]
+    pub struct ConstraintViolation(Error);
+}
+
 composite_rejection! {
     /// Rejection used for `Content-Type` errors such as missing `Content-Type`
     /// header, MIME parse issues, etc.
