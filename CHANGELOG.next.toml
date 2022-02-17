@@ -256,3 +256,21 @@ message = "Fixed example showing how to use hardcoded credentials in `aws-types`
 references = ["smithy-rs#1180"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Fixed a bug that caused clients to eventually stop retrying. The cross-request retry allowance wasn't being reimbursed upon receiving a successful response, so once this allowance reached zero, no further retries would ever be attempted."
+references = ["smithy-rs#1197"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fixed a bug that caused clients to eventually stop retrying. The cross-request retry allowance wasn't being reimbursed upon receiving a successful response, so once this allowance reached zero, no further retries would ever be attempted."
+references = ["smithy-rs#1197"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`aws_smithy_types::retry::RetryKind` had its `NotRetryable` variant split into `NotRetryable` and `Unnecessary`. If you implement the `ClassifyResponse`, then successful responses need to return `Unnecessary` rather than `NotRetryable`."
+references = ["smithy-rs#1197"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
