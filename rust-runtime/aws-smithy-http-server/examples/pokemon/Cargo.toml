@@ -6,6 +6,13 @@ publish = false
 build = "build.rs"
 
 [dependencies]
+hyper = {version = "0.14", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.2", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "std", "env-filter"] }
+
 aws-smithy-http-server = { path = "../../" }
 pokemon-sdk = { path = "./pokemon-sdk/" }
 
@@ -17,5 +24,6 @@ fs_extra = "1"
 [workspace]
 members = [
     ".",
-    "pokemon-sdk"
+    "pokemon-sdk",
+    "pokemon-client"
 ]

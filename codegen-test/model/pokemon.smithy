@@ -1,0 +1,1 @@
+../../codegen-server-test/model/pokemon.smithy

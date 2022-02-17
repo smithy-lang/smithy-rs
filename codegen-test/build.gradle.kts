@@ -83,7 +83,8 @@ val allCodegenTests = listOf(
         """
             , "codegen": { "renameErrors": false }
         """.trimIndent()
-    )
+    ),
+    CodegenTest("com.aws.example#PokemonService", "pokemon-client")
 )
 
 task("generateSmithyBuild") {
