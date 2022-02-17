@@ -1,0 +1,21 @@
+[package]
+name = "pokemon"
+version = "0.1.0"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+[dependencies]
+aws-smithy-http-server = { path = "../../" }
+pokemon-sdk = { path = "./pokemon-sdk/" }
+
+[build-dependencies]
+fs_extra = "1"
+
+# Without this empty workspace configuration, the workspace would be read from `rust-runtime`,
+# causing the build to fail.
+[workspace]
+members = [
+    ".",
+    "pokemon-sdk"
+]
