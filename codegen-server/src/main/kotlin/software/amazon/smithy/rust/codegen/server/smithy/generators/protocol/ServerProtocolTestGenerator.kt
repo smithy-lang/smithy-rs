@@ -510,8 +510,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", Action.Request),
             FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
-            FailingTest(RestJson, "RestJsonInvalidGreetingError", Action.Response),
-            FailingTest(RestJson, "RestJsonComplexErrorWithNoMessage", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorUsingCode", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorUsingCodeAndNamespace", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorUsingCodeUriAndNamespace", Action.Response),
@@ -652,15 +650,26 @@ class ServerProtocolTestGenerator(
                     """.trimMargin()
                 ).asObjectNode().get()
             ).build()
-        // This test assumes that errors in responses are identified by an `X-Amzn-Errortype` header with the error shape name.
+        // The following tests assume that errors in responses are identified by an `X-Amzn-Errortype` header with
+        // the error shape name.
         // However, Smithy specifications for AWS protocols that serialize to JSON recommend that new server implementations
         // serialize error types using a `__type` field in the body.
-        // Our implementation follows this recommendation, so we fix the test by removing the header and instead expecting
+        // Our implementation follows this recommendation, so we fix the tests by removing the header and instead expecting
         // the error type to be in the body.
         private fun fixRestJsonEmptyComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
             testCase.toBuilder()
                 .headers(emptyMap())
                 .body("""{"__type":"ComplexError"}""")
+                .build()
+        private fun fixRestJsonInvalidGreetingError(testCase: HttpResponseTestCase): HttpResponseTestCase =
+            testCase.toBuilder()
+                .headers(emptyMap())
+                .body("""{"Message":"Hi","__type":"InvalidGreeting"}""")
+                .build()
+        private fun fixRestJsonComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
+            testCase.toBuilder()
+                .headers(emptyMap())
+                .body("""{"Nested":{"Fooooo":"bar"},"TopLevel":"Top level","__type":"ComplexError"}""")
                 .build()
 
         // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
@@ -677,6 +686,8 @@ class ServerProtocolTestGenerator(
 
         private val BrokenResponseTests = mapOf(
             Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage,
+            Pair(RestJson, "RestJsonInvalidGreetingError") to ::fixRestJsonInvalidGreetingError,
+            Pair(RestJson, "RestJsonComplexErrorWithNoMessage") to ::fixRestJsonComplexErrorWithNoMessage,
         )
     }
 }
