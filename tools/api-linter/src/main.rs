@@ -47,7 +47,10 @@ impl FromStr for OutputFormat {
         match s {
             "errors" => Ok(OutputFormat::Errors),
             "markdown-table" => Ok(OutputFormat::MarkdownTable),
-            _ => Err(anyhow!("invalid output format: {}", s)),
+            _ => Err(anyhow!(
+                "invalid output format: {}. Expected `errors` or `markdown-table`.",
+                s
+            )),
         }
     }
 }
