@@ -142,10 +142,6 @@ class AwsQuerySerializerGeneratorTest {
         project.withModule(RustModule.public("input")) {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/operation_ser.rs")
-        println("file:///${project.baseDir}/src/query_ser.rs")
         project.compileAndTest()
     }
 }

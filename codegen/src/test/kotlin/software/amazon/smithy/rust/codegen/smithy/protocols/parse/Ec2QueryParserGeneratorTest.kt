@@ -75,10 +75,6 @@ class Ec2QueryParserGeneratorTest {
             model.lookup<OperationShape>("test#SomeOperation").outputShape(model)
                 .renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/output.rs")
-        println("file:///${project.baseDir}/src/xml_deser.rs")
         project.compileAndTest()
     }
 }

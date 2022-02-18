@@ -73,7 +73,7 @@ class ServerOperationHandlerGenerator(
                 let error = aws_smithy_http_server::ExtensionRejection::new(r.to_string());
                 let mut response = r.into_response();
                 response.extensions_mut().insert(error);
-                return response.map($serverCrate::boxed);
+                return response.map($serverCrate::body::boxed);
                 }
             """.trimIndent()
             writer.rustBlockTemplate(
@@ -99,7 +99,7 @@ class ServerOperationHandlerGenerator(
                 rustTemplate(
                     """
                     type Sealed = #{ServerOperationHandler}::sealed::Hidden;
-                    async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::BoxBody> {
+                    async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::body::BoxBody> {
                         let mut req = #{AxumCore}::extract::RequestParts::new(req);
                         use #{AxumCore}::extract::FromRequest;
                         use #{AxumCore}::response::IntoResponse;
@@ -109,7 +109,7 @@ class ServerOperationHandlerGenerator(
                         };
                         $callImpl
                         let output_wrapper: $outputWrapperName = output_inner.into();
-                        output_wrapper.into_response().map(#{SmithyHttpServer}::boxed)
+                        output_wrapper.into_response().map(#{SmithyHttpServer}::body::boxed)
                     }
                     """,
                     *codegenScope
@@ -143,10 +143,10 @@ class ServerOperationHandlerGenerator(
         return """
             $inputFn
             Fut: std::future::Future<Output = $outputType> + Send,
-            B: $serverCrate::HttpBody + Send + 'static, $streamingBodyTraitBounds
+            B: $serverCrate::body::HttpBody + Send + 'static, $streamingBodyTraitBounds
             B::Data: Send,
             B::Error: Into<$serverCrate::BoxError>,
-            $serverCrate::rejection::SmithyRejection: From<<B as $serverCrate::HttpBody>::Error>
+            $serverCrate::rejection::SmithyRejection: From<<B as $serverCrate::body::HttpBody>::Error>
         """.trimIndent()
     }
 }
