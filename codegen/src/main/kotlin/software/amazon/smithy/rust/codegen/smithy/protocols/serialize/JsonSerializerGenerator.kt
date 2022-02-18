@@ -45,7 +45,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionNam
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
