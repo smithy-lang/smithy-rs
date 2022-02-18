@@ -506,7 +506,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonSupportsNaNFloatHeaderInputs", Action.Request),
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
 
-            FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", Action.Request),
             FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
@@ -520,7 +519,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeUriAndNamespace", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatLabels", Action.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCode", Action.Response),
-            FailingTest(RestJson, "RestJsonNoInputAndNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", Action.Request),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", Action.Response),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", Action.Request),

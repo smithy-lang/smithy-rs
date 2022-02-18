@@ -124,7 +124,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         TODO("AwsQuery doesn't support payload serialization")
     }
 
-    override fun operationSerializer(operationShape: OperationShape): RuntimeType? {
+    override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
         val fnName = symbolProvider.serializeFunctionName(operationShape)
         val inputShape = operationShape.inputShape(model)
         return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->

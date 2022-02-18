@@ -110,8 +110,8 @@ class AwsJsonSerializerGenerator(
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
 
-    override fun operationSerializer(operationShape: OperationShape): RuntimeType {
-        var serializer = jsonSerializerGenerator.operationSerializer(operationShape)
+    override fun operationInputSerializer(operationShape: OperationShape): RuntimeType {
+        var serializer = jsonSerializerGenerator.operationInputSerializer(operationShape)
         if (serializer == null) {
             val inputShape = operationShape.inputShape(codegenContext.model)
             val fnName = codegenContext.symbolProvider.serializeFunctionName(operationShape)

@@ -43,7 +43,10 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.expectTrait
+import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -231,8 +234,8 @@ class JsonSerializerGenerator(
         }
     }
 
-    override fun operationSerializer(operationShape: OperationShape): RuntimeType? {
-        // Don't generate an operation JSON serializer if there is no JSON body
+    override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
+        // Don't generate an operation JSON serializer if there is no JSON body.
         val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
         if (httpDocumentMembers.isEmpty()) {
             return null
@@ -270,11 +273,26 @@ class JsonSerializerGenerator(
         }
     }
 
-    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
+    override fun operationOutputSerializer(operationShape: OperationShape): RuntimeType? {
+        // Don't generate an operation JSON serializer if there was no operation output shape in the
+        // original (untransformed) model.
+        val syntheticOutputTrait = operationShape.outputShape(model).getTrait<SyntheticOutputTrait>()
+        if (syntheticOutputTrait != null && syntheticOutputTrait.originalId == null) {
+            return null
+        }
+
+        // Note that, unlike the client, we serialize an empty JSON document `"{}"` if the operation output shape is
+        // empty (has no members).
+        // The client instead serializes an empty payload `""` in _both_ these scenarios:
+        //     1. there is no operation input shape; and
+        //     2. the operation input shape is empty (has no members).
+        // The first case gets reduced to the second, because all operations get a synthetic input shape with
+        // the [OperationNormalizer] transformation.
+        val httpDocumentMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
+
         val outputShape = operationShape.outputShape(model)
-        val includedMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
         val fnName = symbolProvider.serializeFunctionName(outputShape)
-        return serverStructureSerializer(fnName, outputShape, includedMembers)
+        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers)
     }
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {

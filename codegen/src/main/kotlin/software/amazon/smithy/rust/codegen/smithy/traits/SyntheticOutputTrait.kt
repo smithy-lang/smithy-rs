@@ -19,12 +19,3 @@ class SyntheticOutputTrait constructor(val operation: ShapeId, val originalId: S
         val ID = ShapeId.from("smithy.api.internal#syntheticOutput")
     }
 }
-
-/**
- * Indicates that a shape is a synthetic input body
- */
-class OutputBodyTrait(objectNode: ObjectNode = ObjectNode.objectNode()) : AnnotationTrait(ID, objectNode) {
-    companion object {
-        val ID = ShapeId.from("smithy.api.internal#syntheticOutputBody")
-    }
-}

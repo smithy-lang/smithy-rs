@@ -107,7 +107,7 @@ class JsonSerializerGeneratorTest {
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
             ::restJsonFieldName
         )
-        val operationGenerator = parserSerializer.operationSerializer(model.lookup("test#Op"))
+        val operationGenerator = parserSerializer.operationInputSerializer(model.lookup("test#Op"))
         val documentGenerator = parserSerializer.documentSerializer()
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))

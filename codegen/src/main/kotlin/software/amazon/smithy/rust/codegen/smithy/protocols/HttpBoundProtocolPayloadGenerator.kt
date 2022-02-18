@@ -106,7 +106,7 @@ class HttpBoundProtocolPayloadGenerator(
 
         if (payloadMemberName == null) {
             val serializerGenerator = protocol.structuredDataSerializer(operationShape)
-            generateStructureSerializer(writer, self, serializerGenerator.operationSerializer(operationShape))
+            generateStructureSerializer(writer, self, serializerGenerator.operationInputSerializer(operationShape))
         } else {
             val payloadMember = operationShape.inputShape(model).expectMember(payloadMemberName)
             generatePayloadMemberSerializer(writer, self, operationShape, payloadMember)
@@ -118,7 +118,7 @@ class HttpBoundProtocolPayloadGenerator(
 
         if (payloadMemberName == null) {
             val serializerGenerator = protocol.structuredDataSerializer(operationShape)
-            generateStructureSerializer(writer, self, serializerGenerator.serverOutputSerializer(operationShape))
+            generateStructureSerializer(writer, self, serializerGenerator.operationOutputSerializer(operationShape))
         } else {
             val payloadMember = operationShape.outputShape(model).expectMember(payloadMemberName)
             generatePayloadMemberSerializer(writer, self, operationShape, payloadMember)

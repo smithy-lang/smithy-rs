@@ -96,7 +96,7 @@ class AwsQuerySerializerGeneratorTest {
             false -> CodegenMode.Server
         }
         val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model).copy(mode = mode))
-        val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))
+        val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
