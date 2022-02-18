@@ -270,7 +270,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = "`aws_smithy_types::retry::RetryKind` had its `NotRetryable` variant split into `NotRetryable` and `Unnecessary`. If you implement the `ClassifyResponse`, then successful responses need to return `Unnecessary` rather than `NotRetryable`."
+message = "`aws_smithy_types::retry::RetryKind` had its `NotRetryable` variant split into `UnretryableFailure` and `Unnecessary`. If you implement the `ClassifyResponse`, then successful responses need to return `Unnecessary`, and failures that shouldn't be retried need to return `UnretryableFailure`."
 references = ["smithy-rs#1197"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"

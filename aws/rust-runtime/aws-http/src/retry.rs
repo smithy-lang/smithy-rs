@@ -66,10 +66,10 @@ where
                 } else if let Some(ek) = err.is_other() {
                     RetryKind::Error(ek)
                 } else {
-                    RetryKind::NotRetryable
+                    RetryKind::UnretryableFailure
                 }
             }
-            Err(_) => return RetryKind::NotRetryable,
+            Err(_) => return RetryKind::UnretryableFailure,
         };
         if let Some(retry_after_delay) = response
             .http()
@@ -95,7 +95,7 @@ where
             return RetryKind::Error(ErrorKind::TransientError);
         };
         // TODO(https://github.com/awslabs/smithy-rs/issues/966): IDPCommuncation error needs to be retried
-        RetryKind::NotRetryable
+        RetryKind::UnretryableFailure
     }
 }
 
@@ -151,7 +151,7 @@ mod test {
         let test_response = http::Response::new("OK");
         assert_eq!(
             policy.classify(make_err(UnmodeledError, test_response).as_ref()),
-            RetryKind::NotRetryable
+            RetryKind::UnretryableFailure
         );
     }
 
@@ -177,7 +177,7 @@ mod test {
             .unwrap();
         assert_eq!(
             policy.classify(make_err(UnmodeledError, test_resp).as_ref()),
-            RetryKind::NotRetryable
+            RetryKind::UnretryableFailure
         );
     }
 

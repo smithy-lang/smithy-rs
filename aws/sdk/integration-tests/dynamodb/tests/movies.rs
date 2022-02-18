@@ -126,8 +126,7 @@ where
         response: Result<&SdkSuccess<DescribeTableOutput>, &SdkError<DescribeTableError>>,
     ) -> RetryKind {
         match self.inner.classify(response) {
-            RetryKind::NotRetryable => (),
-            RetryKind::Unnecessary => (),
+            RetryKind::UnretryableFailure | RetryKind::Unnecessary => (),
             other => return other,
         };
         match response {
@@ -146,7 +145,7 @@ where
                     RetryKind::Unnecessary
                 }
             }
-            _ => RetryKind::NotRetryable,
+            _ => RetryKind::UnretryableFailure,
         }
     }
 }

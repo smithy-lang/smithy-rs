@@ -290,7 +290,7 @@ impl RetryHandler {
     fn should_retry(&self, retry_kind: &RetryKind) -> Option<(Self, Duration)> {
         match retry_kind {
             RetryKind::Explicit(dur) => Some((self.clone(), *dur)),
-            RetryKind::NotRetryable => None,
+            RetryKind::UnretryableFailure => None,
             RetryKind::Unnecessary => {
                 self.shared
                     .quota_release(self.local.last_quota_usage, &self.config);
@@ -307,7 +307,7 @@ impl RetryHandler {
         let sleep = match &self.sleep_impl {
             Some(sleep) => sleep,
             None => {
-                if retry_kind != RetryKind::NotRetryable {
+                if retry_kind != RetryKind::UnretryableFailure {
                     tracing::debug!("cannot retry because no sleep implementation exists");
                 }
                 return None;
