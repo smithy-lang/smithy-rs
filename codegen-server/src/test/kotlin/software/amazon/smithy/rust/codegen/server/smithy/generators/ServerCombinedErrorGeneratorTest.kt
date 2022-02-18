@@ -78,6 +78,14 @@ class ServerCombinedErrorGeneratorTest {
                 """
             )
 
+            writer.unitTest(
+                name = "generates_converters_into_combined_error_enums",
+                test = """
+                    let variant = InvalidGreeting { message: String::from("an error") };
+                    let error: GreetingError = variant.into();
+                """
+            )
+
             println("file:///${project.baseDir}/src/lib.rs")
             println("file:///${project.baseDir}/src/error.rs")
             project.compileAndTest()
