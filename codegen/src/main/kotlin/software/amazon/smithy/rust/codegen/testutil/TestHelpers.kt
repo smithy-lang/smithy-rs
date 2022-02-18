@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -96,8 +97,8 @@ fun String.asSmithyModel(sourceLocation: String? = null): Model {
 /**
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder
  */
-fun StructureShape.renderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter) {
-    StructureGenerator(model, symbolProvider, writer, this).render()
+fun StructureShape.renderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter, forWhom: CodegenTarget = CodegenTarget.CLIENT) {
+    StructureGenerator(model, symbolProvider, writer, this).render(forWhom)
     val modelBuilder = BuilderGenerator(model, symbolProvider, this)
     modelBuilder.render(writer)
     writer.implBlock(this, symbolProvider) {

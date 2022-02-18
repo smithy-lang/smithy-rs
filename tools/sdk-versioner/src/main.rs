@@ -124,6 +124,8 @@ fn update_dependency_value(crate_name: &str, value: &mut Table, opt: &Opt) {
     );
 
     // Remove keys that will be replaced
+    value.remove("git");
+    value.remove("branch");
     value.remove("version");
     value.remove("path");
 

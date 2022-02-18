@@ -9,9 +9,6 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use tracing::warn;
 
-mod checkout_revision;
-pub use checkout_revision::CheckoutRevision;
-
 mod get_current_tag;
 pub use get_current_tag::GetCurrentTag;
 
@@ -20,6 +17,9 @@ pub use get_last_commit::GetLastCommit;
 
 mod get_repo_root;
 pub use get_repo_root::GetRepoRoot;
+
+mod reset;
+pub use reset::Reset;
 
 /// Attempts to find git repository root from the given location.
 pub fn find_git_repository_root(repo_name: &str, location: impl AsRef<Path>) -> Result<PathBuf> {
