@@ -102,6 +102,10 @@ jobs:
         if [[ ! -f ~/.cargo/bin/cargo-hack ]]; then
           cargo install cargo-hack
         fi
+        # Install the api-linter tool for finding external types in public APIs
+        pushd tools/api-linter &>/dev/null
+        cargo install --debug --path .
+        popd &>/dev/null
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
