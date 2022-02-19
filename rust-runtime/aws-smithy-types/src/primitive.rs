@@ -94,6 +94,18 @@ impl Parse for f64 {
     }
 }
 
+/// This type exists to hide `itoa::Buffer` implementation detail from the public API
+#[allow(missing_debug_implementations)]
+#[doc(hidden)]
+#[derive(Default)]
+pub struct IntegerEncoder(itoa::Buffer);
+
+/// This type exists to hide `ryu::Buffer` implementation detail from the public API
+#[allow(missing_debug_implementations)]
+#[doc(hidden)]
+#[derive(Default)]
+pub struct FloatingEncoder(ryu::Buffer);
+
 /// Primitive Type Encoder
 ///
 /// Encodes primitive types in Smithy's specified format. For floating-point numbers,
@@ -107,25 +119,25 @@ pub enum Encoder {
     Bool(bool),
     /// 8-bit signed integer
     #[non_exhaustive]
-    I8(i8, itoa::Buffer),
+    I8(i8, IntegerEncoder),
     /// 16-bit signed integer
     #[non_exhaustive]
-    I16(i16, itoa::Buffer),
+    I16(i16, IntegerEncoder),
     /// 32-bit signed integer
     #[non_exhaustive]
-    I32(i32, itoa::Buffer),
+    I32(i32, IntegerEncoder),
     /// 64-bit signed integer
     #[non_exhaustive]
-    I64(i64, itoa::Buffer),
+    I64(i64, IntegerEncoder),
     /// 64-bit unsigned integer
     #[non_exhaustive]
-    U64(u64, itoa::Buffer),
+    U64(u64, IntegerEncoder),
     #[non_exhaustive]
     /// 32-bit IEEE 754 single-precision floating-point number
-    F32(f32, ryu::Buffer),
+    F32(f32, FloatingEncoder),
     /// 64-bit IEEE 754 double-precision floating-point number
     #[non_exhaustive]
-    F64(f64, ryu::Buffer),
+    F64(f64, FloatingEncoder),
 }
 
 impl Debug for Encoder {
@@ -149,12 +161,12 @@ impl Encoder {
         match self {
             Encoder::Bool(true) => "true",
             Encoder::Bool(false) => "false",
-            Encoder::I8(v, buf) => buf.format(*v),
-            Encoder::I16(v, buf) => buf.format(*v),
-            Encoder::I32(v, buf) => buf.format(*v),
-            Encoder::I64(v, buf) => buf.format(*v),
-            Encoder::U64(v, buf) => buf.format(*v),
-            Encoder::F32(v, buf) => {
+            Encoder::I8(v, IntegerEncoder(buf)) => buf.format(*v),
+            Encoder::I16(v, IntegerEncoder(buf)) => buf.format(*v),
+            Encoder::I32(v, IntegerEncoder(buf)) => buf.format(*v),
+            Encoder::I64(v, IntegerEncoder(buf)) => buf.format(*v),
+            Encoder::U64(v, IntegerEncoder(buf)) => buf.format(*v),
+            Encoder::F32(v, FloatingEncoder(buf)) => {
                 if v.is_nan() {
                     float::NAN
                 } else if *v == f32::INFINITY {
@@ -165,7 +177,7 @@ impl Encoder {
                     buf.format_finite(*v)
                 }
             }
-            Encoder::F64(v, buf) => {
+            Encoder::F64(v, FloatingEncoder(buf)) => {
                 if v.is_nan() {
                     float::NAN
                 } else if *v == f64::INFINITY {
@@ -188,43 +200,43 @@ impl From<bool> for Encoder {
 
 impl From<i8> for Encoder {
     fn from(input: i8) -> Self {
-        Self::I8(input, itoa::Buffer::new())
+        Self::I8(input, Default::default())
     }
 }
 
 impl From<i16> for Encoder {
     fn from(input: i16) -> Self {
-        Self::I16(input, itoa::Buffer::new())
+        Self::I16(input, Default::default())
     }
 }
 
 impl From<i32> for Encoder {
     fn from(input: i32) -> Self {
-        Self::I32(input, itoa::Buffer::new())
+        Self::I32(input, Default::default())
     }
 }
 
 impl From<i64> for Encoder {
     fn from(input: i64) -> Self {
-        Self::I64(input, itoa::Buffer::new())
+        Self::I64(input, Default::default())
     }
 }
 
 impl From<u64> for Encoder {
     fn from(input: u64) -> Self {
-        Self::U64(input, itoa::Buffer::new())
+        Self::U64(input, Default::default())
     }
 }
 
 impl From<f32> for Encoder {
     fn from(input: f32) -> Self {
-        Self::F32(input, ryu::Buffer::new())
+        Self::F32(input, Default::default())
     }
 }
 
 impl From<f64> for Encoder {
     fn from(input: f64) -> Self {
-        Self::F64(input, ryu::Buffer::new())
+        Self::F64(input, Default::default())
     }
 }
 
