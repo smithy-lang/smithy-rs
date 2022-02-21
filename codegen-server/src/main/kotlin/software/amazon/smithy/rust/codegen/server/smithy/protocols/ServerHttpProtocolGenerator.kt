@@ -154,6 +154,7 @@ private class ServerHttpProtocolImplGenerator(
         // Implement Axum `FromRequest` trait for input types.
         rustTemplate(
             """
+            ##[derive(Debug)]
             pub struct $inputName(pub #{I});
             ##[#{AsyncTrait}::async_trait]
             impl<B> #{AxumCore}::extract::FromRequest<B> for $inputName
