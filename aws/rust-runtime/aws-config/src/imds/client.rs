@@ -987,28 +987,27 @@ pub(crate) mod test {
     fn successful_response_properly_classified() {
         use aws_smithy_http::retry::ClassifyResponse;
 
-        struct GenericAppeaser; // Need a type to appease the generics; don't care what it is
         let policy = ImdsErrorPolicy;
         fn response_200() -> operation::Response {
             operation::Response::new(imds_response("").map(|_| SdkBody::empty()))
         }
         let success = SdkSuccess {
             raw: response_200(),
-            parsed: GenericAppeaser,
+            parsed: (),
         };
         assert_eq!(
             RetryKind::Unnecessary,
-            policy.classify(Ok::<_, &SdkError<GenericAppeaser>>(&success))
+            policy.classify(Ok::<_, &SdkError<()>>(&success))
         );
 
         // Emulate a failure to parse the response body (using an io error since it's easy to construct in a test)
-        let failure = SdkError::<GenericAppeaser>::ResponseError {
+        let failure = SdkError::<()>::ResponseError {
             err: Box::new(io::Error::new(io::ErrorKind::BrokenPipe, "fail to parse")),
             raw: response_200(),
         };
         assert_eq!(
             RetryKind::UnretryableFailure,
-            policy.classify(Err::<&SdkSuccess<GenericAppeaser>, _>(&failure))
+            policy.classify(Err::<&SdkSuccess<()>, _>(&failure))
         );
     }
 
