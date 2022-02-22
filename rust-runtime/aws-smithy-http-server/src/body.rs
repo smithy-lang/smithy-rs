@@ -4,21 +4,23 @@
  */
 
 //! HTTP body utilities.
-#[doc(no_inline)]
+#[doc(hidden)]
 pub use http_body::Body as HttpBody;
 
-#[doc(no_inline)]
+#[doc(hidden)]
 pub use hyper::body::Body;
 
-#[doc(no_inline)]
+// `boxed` is used in the codegen of the implementation of the operation `Handler` trait.
+#[doc(hidden)]
 pub use axum_core::body::{boxed, BoxBody};
 
 pub(crate) fn empty() -> BoxBody {
     boxed(http_body::Empty::new())
 }
 
-/// Convert a generic [`Body`] into a [`BoxBody`]. This is used by the codegen to
-/// simplify the generation logic.
+/// Convert anything that can be converted into a [`hyper::body::Body`] into a [`BoxBody`].
+/// This simplifies codegen a little bit.
+#[doc(hidden)]
 pub fn to_boxed<B>(body: B) -> BoxBody
 where
     Body: From<B>,

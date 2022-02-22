@@ -225,7 +225,7 @@ class ServerProtocolTestGenerator(
         }
         rustTemplate(
             """
-            .body(#{SmithyHttpServer}::Body::from(#{Bytes}::from_static(b${httpRequestTestCase.body.orNull()?.dq()})))
+            .body(#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static(b${httpRequestTestCase.body.orNull()?.dq()})))
             .unwrap();
             """,
             *codegenScope
@@ -541,24 +541,14 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
 
             FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
-            FailingTest(RestJson, "DocumentTypeAsPayloadOutput", Action.Response),
-            FailingTest(RestJson, "DocumentTypeAsPayloadOutputString", Action.Response),
             FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
-            FailingTest(RestJson, "RestJsonInvalidGreetingError", Action.Response),
-            FailingTest(RestJson, "RestJsonComplexErrorWithNoMessage", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorUsingCode", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorUsingCodeAndNamespace", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorUsingCodeUriAndNamespace", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorWithDunderType", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeAndNamespace", Action.Response),
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeUriAndNamespace", Action.Response),
-            FailingTest(RestJson, "EnumPayloadResponse", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithBlob", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithNoBlobBody", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpPayloadWithStructure", Action.Response),
-            FailingTest(RestJson, "StringPayloadResponse", Action.Response),
             FailingTest(RestJson, "RestJsonNoInputAndNoOutput", Action.Response),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", Action.Response),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", Action.Request),
@@ -685,15 +675,26 @@ class ServerProtocolTestGenerator(
                     """.trimMargin()
                 ).asObjectNode().get()
             ).build()
-        // This test assumes that errors in responses are identified by an `X-Amzn-Errortype` header with the error shape name.
+        // The following tests assume that errors in responses are identified by an `X-Amzn-Errortype` header with
+        // the error shape name.
         // However, Smithy specifications for AWS protocols that serialize to JSON recommend that new server implementations
         // serialize error types using a `__type` field in the body.
-        // Our implementation follows this recommendation, so we fix the test by removing the header and instead expecting
+        // Our implementation follows this recommendation, so we fix the tests by removing the header and instead expecting
         // the error type to be in the body.
         private fun fixRestJsonEmptyComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
             testCase.toBuilder()
                 .headers(emptyMap())
                 .body("""{"__type":"ComplexError"}""")
+                .build()
+        private fun fixRestJsonInvalidGreetingError(testCase: HttpResponseTestCase): HttpResponseTestCase =
+            testCase.toBuilder()
+                .headers(emptyMap())
+                .body("""{"Message":"Hi","__type":"InvalidGreeting"}""")
+                .build()
+        private fun fixRestJsonComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
+            testCase.toBuilder()
+                .headers(emptyMap())
+                .body("""{"Nested":{"Fooooo":"bar"},"TopLevel":"Top level","__type":"ComplexError"}""")
                 .build()
 
         // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
@@ -710,6 +711,8 @@ class ServerProtocolTestGenerator(
 
         private val BrokenResponseTests = mapOf(
             Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage,
+            Pair(RestJson, "RestJsonInvalidGreetingError") to ::fixRestJsonInvalidGreetingError,
+            Pair(RestJson, "RestJsonComplexErrorWithNoMessage") to ::fixRestJsonComplexErrorWithNoMessage,
         )
     }
 }
