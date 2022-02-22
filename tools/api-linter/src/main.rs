@@ -15,6 +15,7 @@ use smithy_rs_tool_common::shell::ShellOperation;
 use std::fmt;
 use std::fs;
 use std::path::PathBuf;
+use std::process;
 use std::str::FromStr;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -64,7 +65,7 @@ struct ApiLinterArgs {
     #[clap(long)]
     no_default_features: bool,
     /// Comma delimited list of features to enable in the crate
-    #[clap(long, use_delimiter = true)]
+    #[clap(long, use_value_delimiter = true)]
     features: Option<Vec<String>>,
     /// Path to the Cargo manifest
     manifest_path: Option<PathBuf>,
@@ -86,7 +87,29 @@ enum Args {
     ApiLinter(ApiLinterArgs),
 }
 
-fn main() -> Result<()> {
+enum Error {
+    ValidationErrors,
+    Failure(anyhow::Error),
+}
+
+impl From<anyhow::Error> for Error {
+    fn from(err: anyhow::Error) -> Self {
+        Error::Failure(err)
+    }
+}
+
+fn main() {
+    process::exit(match run_main() {
+        Ok(_) => 0,
+        Err(Error::ValidationErrors) => 1,
+        Err(Error::Failure(err)) => {
+            println!("{:#}", dbg!(err));
+            2
+        }
+    })
+}
+
+fn run_main() -> Result<(), Error> {
     let Args::ApiLinter(args) = Args::parse();
     if args.verbose {
         let filter_layer = EnvFilter::try_from_default_env()
@@ -124,14 +147,15 @@ fn main() -> Result<()> {
     let crate_path = if let Some(manifest_path) = args.manifest_path {
         cargo_metadata_cmd.manifest_path(&manifest_path);
         manifest_path
-            .canonicalize()?
+            .canonicalize()
+            .context(here!())?
             .parent()
             .expect("parent path")
             .to_path_buf()
     } else {
-        std::env::current_dir()?
+        std::env::current_dir().context(here!())?
     };
-    let cargo_metadata = cargo_metadata_cmd.exec()?;
+    let cargo_metadata = cargo_metadata_cmd.exec().context(here!())?;
     let cargo_features = resolve_features(&cargo_metadata)?;
 
     eprintln!("Running rustdoc to produce json doc output...");
@@ -162,6 +186,7 @@ fn main() -> Result<()> {
                     errors.len(),
                     "errors".if_supports_color(Stream::Stdout, |text| text.red())
                 );
+                return Err(Error::ValidationErrors);
             }
         }
         OutputFormat::MarkdownTable => {

@@ -28,3 +28,9 @@ message = "`aws_smithy_types::retry::RetryKind` had its `NotRetryable` variant s
 references = ["smithy-rs#1197"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "`aws_smithy_types::primitive::Encoder` is now a struct rather than an enum, but its usage remains the same."
+references = ["smithy-rs#1209"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
