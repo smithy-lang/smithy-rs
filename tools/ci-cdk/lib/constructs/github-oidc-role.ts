@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-import { FederatedPrincipal, OpenIdConnectProvider, Role } from "@aws-cdk/aws-iam";
-import { Construct, Tags } from "@aws-cdk/core";
+import { FederatedPrincipal, OpenIdConnectProvider, Role } from "aws-cdk-lib/aws-iam";
+import { Construct } from "constructs";
+import { Tags } from "aws-cdk-lib";
 
 export interface Properties {
     name: string;

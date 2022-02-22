@@ -9,9 +9,10 @@ import {
     PolicyStatement,
     Role,
     ServicePrincipal,
-} from "@aws-cdk/aws-iam";
-import { BlockPublicAccess, Bucket, BucketEncryption } from "@aws-cdk/aws-s3";
-import { Construct, StackProps, Stack, Tags, RemovalPolicy, Duration } from "@aws-cdk/core";
+} from "aws-cdk-lib/aws-iam";
+import { BlockPublicAccess, Bucket, BucketEncryption } from "aws-cdk-lib/aws-s3";
+import { StackProps, Stack, Tags, RemovalPolicy, Duration } from "aws-cdk-lib";
+import { Construct } from "constructs";
 import { GitHubOidcRole } from "../constructs/github-oidc-role";
 
 export interface Properties extends StackProps {
