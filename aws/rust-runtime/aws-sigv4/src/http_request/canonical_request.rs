@@ -10,7 +10,7 @@ use crate::http_request::sign::SignableRequest;
 use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::PercentEncodingMode;
 use crate::sign::sha256_hex_string;
-use http::header::{HeaderName, CONTENT_LENGTH, CONTENT_TYPE, HOST, USER_AGENT};
+use http::header::{HeaderName, HOST, USER_AGENT};
 use http::{HeaderMap, HeaderValue, Method, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -223,11 +223,6 @@ impl<'a> CanonicalRequest<'a> {
                 continue;
             }
             if params.settings.signature_location == SignatureLocation::QueryParams {
-                // Exclude content-length and content-type for query param signatures since the
-                // body is unsigned for these use-cases, and the size is not known up-front.
-                if name == CONTENT_LENGTH || name == CONTENT_TYPE {
-                    continue;
-                }
                 // The X-Amz-User-Agent header should not be signed if this is for a presigned URL
                 if name == HeaderName::from_static(header::X_AMZ_USER_AGENT) {
                     continue;

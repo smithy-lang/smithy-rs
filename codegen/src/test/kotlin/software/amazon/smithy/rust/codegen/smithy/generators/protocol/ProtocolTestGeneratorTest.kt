@@ -14,8 +14,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.escape
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.nio.file.Path
@@ -73,12 +72,9 @@ private class TestProtocolMakeOperationGenerator(
     body: String,
     private val httpRequestBuilder: String
 ) : MakeOperationGenerator(codegenContext, protocol, TestProtocolPayloadGenerator(body)) {
-    override fun generateRequestBuilderBaseFn(writer: RustWriter, operationShape: OperationShape) {
-        writer.inRequestBuilderBaseFn(operationShape.inputShape(model)) {
-            withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
-                writeWithNoFormatting(httpRequestBuilder)
-            }
-        }
+    override fun createHttpRequest(writer: RustWriter, operationShape: OperationShape) {
+        writer.rust("#T::new()", RuntimeType.HttpRequestBuilder)
+        writer.writeWithNoFormatting(httpRequestBuilder)
     }
 }
 
