@@ -5,12 +5,12 @@
  */
 
 import "source-map-support/register";
-import * as cdk from "@aws-cdk/core";
+import { App } from "aws-cdk-lib";
 import { PullRequestCdnStack } from "../lib/smithy-rs/pull-request-cdn-stack";
 import { CanaryStack } from "../lib/aws-sdk-rust/canary-stack";
 import { OidcProviderStack } from "../lib/oidc-provider-stack";
 
-const app = new cdk.App();
+const app = new App();
 
 const oidcProviderStack = new OidcProviderStack(app, "oidc-provider-stack", {});
 
