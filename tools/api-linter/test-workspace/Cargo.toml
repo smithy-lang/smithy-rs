@@ -1,0 +1,2 @@
+[workspace]
+members = ["external-lib", "test-crate"]
