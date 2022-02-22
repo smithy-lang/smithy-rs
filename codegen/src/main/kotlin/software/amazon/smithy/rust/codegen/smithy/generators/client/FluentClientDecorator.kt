@@ -268,6 +268,13 @@ class FluentClientGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
+    private val dynConnector = RuntimeType("DynConnector", clientDep, "aws_smithy_client::erase")
+    private val dynMiddleware = RuntimeType("DynMiddleware", clientDep, "aws_smithy_client::erase")
+    private val makeConnectorSettings = RuntimeType("MakeConnectorSettings", clientDep, "aws_smithy_client::http_connector")
+    private val connectorKey = RuntimeType("ConnectorKey", clientDep, "aws_smithy_client::http_connector")
+    private val httpVersionList = RuntimeType("HttpVersionList", clientDep, "aws_smithy_client::http_connector")
+    private val tokioDep = CargoDependency.Tokio.withFeature("sync")
+    private val rwLock = RuntimeType("RwLock", tokioDep, "tokio::sync")
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
@@ -282,8 +289,84 @@ class FluentClientGenerator(
             """
             ##[derive(Debug)]
             pub(crate) struct Handle#{generics_decl:W} {
-                pub(crate) client: #{client}::Client#{smithy_inst:W},
+                pub(crate) clients: #{RwLock}<
+                    std::collections::HashMap<
+                        #{ConnectorKey},
+                        #{client}::Client#{smithy_inst:W}
+                    >
+                >,
                 pub(crate) conf: crate::Config,
+            }
+
+            impl Handle#{generics_decl:W} {
+                pub fn from_conf(conf: crate::Config) -> Self {
+                    use std::collections::HashMap;
+
+                    let clients: HashMap<#{ConnectorKey}, #{client}::Client#{smithy_inst:W}> = HashMap::new();
+                    let clients = #{RwLock}::new(clients);
+
+                    Self { clients, conf }
+                }
+
+                pub async fn get_or_create_client(
+                    &mut self,
+                    make_connector_settings: #{MakeConnectorSettings},
+                    http_versions: #{HttpVersionList},
+                    middleware: #{DynMiddleware}<#DynConnector>,
+                ) -> Result<#{client}::Client#{smithy_inst:W}, SdkError> {
+                    let connector_key = #{ConnectorKey} {
+                        make_connector_settings,
+                        http_version,
+                    };
+
+                    // Try to fetch an existing client and return early if we find one
+                    if let Some(client) = self.fetch_existing_client(connector_key) {
+                        return Ok(client);
+                    }
+
+                    // Otherwise, create the new client, store a copy of it in the client cache, and then return it
+                    self.initialize_and_store_new_client(connector_key, middleware)
+                }
+
+                async fn fetch_existing_client(
+                    &self,
+                    connector_key: #{ConnectorKey}
+                ) -> Option<#{client}::Client#{smithy_inst:W}> {
+                    let mut clients = self.clients.read().await;
+                    clients.get(connector_key)
+                }
+
+                async fn initialize_and_store_new_client(
+                    &mut self,
+                    connector_key: #{ConnectorKey},
+                    middleware: #{DynMiddleware}<#DynConnector>,
+                ) -> Result<#{client}::Client#{smithy_inst:W}, SdkError> {
+                    let sleep_impl = self.conf.sleep_impl.clone();
+
+                    let connector = self.conf.http_connector.load(
+                        connector_key.make_connector_settings,
+                        sleep_impl,
+                    )?;
+
+                    let mut builder = #{client}::Builder::dyn_https()
+                        .middleware(middleware);
+
+                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
+                    builder.set_retry_config(retry_config.into());
+                    builder.set_timeout_config(timeout_config);
+                    // the builder maintains a try-state. To avoid suppressing the warning when sleep is unset,
+                    // only set it if we actually have a sleep impl.
+                    if let Some(sleep_impl) = sleep_impl {
+                        builder.set_sleep_impl(Some(sleep_impl));
+                    }
+                    let client = builder.build();
+
+                    let mut clients = self.clients.write().await;
+                    clients.insert(connector_key, client.clone());
+
+                    Ok(client)
+                }
             }
 
             #{client_docs:W}
@@ -307,26 +390,67 @@ class FluentClientGenerator(
                 }
             }
 
+            impl Into<#{ConnectorKey}> for &crate::Config {
+                fn into(self) -> #{ConnectorKey} {
+                    use http::version::Version as HttpVersion;
+
+                    let mut make_connector_settings = #{MakeConnectorSettings}::default();
+
+                    if let Some(timeout_config) = self.timeout_config.as_ref() {
+                        make_connector_settings = make_connector_settings
+                            .with_read_timeout(timeout_config.read_timeout())
+                            .with_connect_timeout(timeout_config.connect_timeout());
+                    }
+
+                    #{ConnectorKey} {
+                        http_version: HttpVersion::HTTP_11,
+                        make_connector_settings,
+                    }
+                }
+            }
+
             impl${generics.inst} Client${generics.inst} {
                 /// Creates a client with the given service configuration.
                 pub fn with_config(client: #{client}::Client#{smithy_inst:W}, conf: crate::Config) -> Self {
+                    use std::sync::Arc;
+                    use std::collections::HashMap;
+                    use http::version::Version as HttpVersion;
+
+                    let mut make_connector_settings = #{MakeConnectorSettings}::default();
+
+                    if let Some(timeout_config) = conf.timeout_config.as_ref() {
+                        make_connector_settings = make_connector_settings
+                            .with_read_timeout(timeout_config.read_timeout())
+                            .with_connect_timeout(timeout_config.connect_timeout());
+                    }
+
+                    let connector_key = #{ConnectorKey} {
+                        http_version: HttpVersion::HTTP_11,
+                        make_connector_settings,
+                    };
+
+                    let mut clients = HashMap::new();
+                    clients.insert(connector_key, client);
+                    let clients = #{RwLock}::new(clients);
+
                     Self {
-                        handle: std::sync::Arc::new(Handle {
-                            client,
-                            conf,
-                        })
+                        handle: Arc::new(Handle { clients, conf }),
                     }
                 }
 
                 /// Returns the client's configuration.
-                pub fn conf(&self) -> &crate::Config {
-                    &self.handle.conf
-                }
+                pub fn conf(&self) -> &crate::Config { &self.handle.conf }
             }
             """,
             "generics_decl" to generics.decl,
             "smithy_inst" to generics.smithyInst,
             "client" to clientDep.asType(),
+            "DynMiddleware" to dynMiddleware,
+            "DynConnector" to dynConnector,
+            "MakeConnectorSettings" to makeConnectorSettings,
+            "ConnectorKey" to connectorKey,
+            "HttpVersionList" to httpVersionList,
+            "RwLock" to rwLock,
             "client_docs" to writable
             {
                 customizations.forEach {
@@ -415,6 +539,7 @@ class FluentClientGenerator(
                 val input = operation.inputShape(model)
                 val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
                 val derives = baseDerives.derives.intersect(setOf(RuntimeType.Clone)) + RuntimeType.Debug
+
                 rust(
                     """
                     /// Fluent builder constructing a request to `${operationSymbol.name}`.
@@ -428,13 +553,14 @@ class FluentClientGenerator(
                     """
                     pub struct ${operationSymbol.name}#{generics:W} {
                         handle: std::sync::Arc<super::Handle${generics.inst}>,
-                        inner: #{Inner}
+                        inner: #{Inner},
+                        middleware: #{DynMiddleware}<#{DynConnector}>
                     }
                     """,
                     "Inner" to input.builderSymbol(symbolProvider),
                     "client" to clientDep.asType(),
                     "generics" to generics.decl,
-                    "operation" to operationSymbol
+                    "operation" to operationSymbol,
                 )
 
                 rustBlockTemplate(
@@ -445,11 +571,12 @@ class FluentClientGenerator(
                     val inputType = symbolProvider.toSymbol(operation.inputShape(model))
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
                     val errorType = operation.errorSymbol(symbolProvider)
+
                     rustTemplate(
                         """
                         /// Creates a new `${operationSymbol.name}`.
-                        pub(crate) fn new(handle: std::sync::Arc<super::Handle${generics.inst}>) -> Self {
-                            Self { handle, inner: Default::default() }
+                        pub(crate) fn new(handle: std::sync::Arc<super::Handle${generics.inst}>, middleware: #{DynMiddleware}) -> Self {
+                            Self { handle, middleware, inner: Default::default() }
                         }
 
                         /// Sends the request and returns the response.
@@ -462,18 +589,30 @@ class FluentClientGenerator(
                         /// set when configuring the client.
                         pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
                         #{send_bounds:W} {
-                            let op = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?
+                            let op = self.inner.build().map_err(|err| #{sdk_err}::ConstructionFailure(err.into()))?
                                 .make_operation(&self.handle.conf)
+                                .await?;
+
+                            // Acquire the prioritized HttpVersion list
+                            let http_versions = op.properties().get::<#{HttpVersionList}>();
+
+                            let make_connector_settings = self.;
+
+                            let client = self.handle
+                                .get_or_create_client(&make_connector_settings, &http_versions, self.middleware)
                                 .await
-                                .map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
-                            self.handle.client.call(op).await
+                                .map_err(|err| #{sdk_err}::ConstructionFailure(err.into()))?;
+
+                            client.call(op).await
                         }
                         """,
                         "ok" to outputType,
                         "operation_err" to errorType,
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType()
                             .copy(name = "result::SdkError"),
-                        "send_bounds" to generics.sendBounds(inputType, outputType, errorType)
+                        "send_bounds" to generics.sendBounds(inputType, outputType, errorType),
+                        "DynMiddleware" to dynMiddleware,
+                        "HttpVersionList" to httpVersionList,
                     )
                     PaginatorGenerator.paginatorType(codegenContext, generics, operation)?.also { paginatorType ->
                         rustTemplate(

@@ -167,7 +167,7 @@ class PaginatorGenerator private constructor(
                                     return;
                                 }
                             };
-                            let resp = handle.client.call(op).await;
+                            let resp = handle.client().call(op).await;
                             // If the input member is None or it was an error
                             let done = match resp {
                                 Ok(ref resp) => {

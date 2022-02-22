@@ -128,51 +128,15 @@ private class AwsFluentClientExtensions(types: Types) {
         writer.rustBlockTemplate("impl Client", *codegenScope) {
             rustTemplate(
                 """
-                /// Creates a client with the given service config and connector override.
-                pub fn from_conf_conn<C, E>(conf: crate::Config, conn: C) -> Self
-                where
-                    C: #{SmithyConnector}<Error = E> + Send + 'static,
-                    E: Into<#{ConnectorError}>,
-                {
-                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
-                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
-                    let sleep_impl = conf.sleep_impl.clone();
-                    let mut builder = #{aws_smithy_client}::Builder::new()
-                        .connector(#{DynConnector}::new(conn))
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
-                    builder.set_retry_config(retry_config.into());
-                    builder.set_timeout_config(timeout_config);
-                    if let Some(sleep_impl) = sleep_impl {
-                        builder.set_sleep_impl(Some(sleep_impl));
-                    }
-                    let client = builder.build();
-                    Self { handle: std::sync::Arc::new(Handle { client, conf }) }
+                /// Creates a new client from the service [`Config`](crate::Config).
+                pub fn from_conf(conf: crate::Config) -> Self {
+                    Self { handle: std::sync::Arc::new(Handle::from_conf(conf)), default_middleware: #{Middleware} }
                 }
 
                 /// Creates a new client from a shared config.
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn new(config: &#{aws_types}::config::Config) -> Self {
                     Self::from_conf(config.into())
-                }
-
-                /// Creates a new client from the service [`Config`](crate::Config).
-                ##[cfg(any(feature = "rustls", feature = "native-tls"))]
-                pub fn from_conf(conf: crate::Config) -> Self {
-                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
-                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
-                    let sleep_impl = conf.sleep_impl.clone();
-                    let mut builder = #{aws_smithy_client}::Builder::dyn_https()
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
-                    builder.set_retry_config(retry_config.into());
-                    builder.set_timeout_config(timeout_config);
-                    // the builder maintains a try-state. To avoid suppressing the warning when sleep is unset,
-                    // only set it if we actually have a sleep impl.
-                    if let Some(sleep_impl) = sleep_impl {
-                        builder.set_sleep_impl(Some(sleep_impl));
-                    }
-                    let client = builder.build();
-
-                    Self { handle: std::sync::Arc::new(Handle { client, conf }) }
                 }
                 """,
                 *codegenScope,

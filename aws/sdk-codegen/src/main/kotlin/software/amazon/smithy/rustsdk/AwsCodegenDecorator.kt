@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataDecorator
 import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataSettings
+import software.amazon.smithy.rust.codegen.smithy.customizations.HttpConnectorDecorator
 import software.amazon.smithy.rust.codegen.smithy.customizations.RetryConfigDecorator
 import software.amazon.smithy.rust.codegen.smithy.customizations.SleepImplDecorator
 import software.amazon.smithy.rust.codegen.smithy.customizations.TimeoutConfigDecorator
@@ -38,6 +39,7 @@ val DECORATORS = listOf(
     RetryConfigDecorator(),
     SleepImplDecorator(),
     TimeoutConfigDecorator(),
+    HttpConnectorDecorator(),
 
     // Service specific decorators
     DisabledAuthDecorator(),
