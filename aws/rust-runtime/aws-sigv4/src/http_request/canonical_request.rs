@@ -670,7 +670,7 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
-    // It should exclude user-agent, content-type, content-length, and x-amz-user-agent headers from presigning
+    // It should exclude user-agent and x-amz-user-agent headers from presigning
     #[test]
     fn presigning_header_exclusion() {
         let request = http::Request::builder()
@@ -683,15 +683,20 @@ mod tests {
             .unwrap();
         let request = SignableRequest::from(&request);
 
-        let mut settings = SigningSettings::default();
-        settings.signature_location = SignatureLocation::QueryParams;
-        settings.expires_in = Some(Duration::from_secs(30));
+        let settings = SigningSettings {
+            signature_location: SignatureLocation::QueryParams,
+            expires_in: Some(Duration::from_secs(30)),
+            ..Default::default()
+        };
 
         let signing_params = signing_params(settings);
         let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
 
         let values = canonical.values.into_query_params().unwrap();
-        assert_eq!("host", values.signed_headers.as_str());
+        assert_eq!(
+            "content-length;content-type;host",
+            values.signed_headers.as_str()
+        );
     }
 
     #[test]
