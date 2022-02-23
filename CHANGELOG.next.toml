@@ -34,3 +34,15 @@ message = "`aws_smithy_types::primitive::Encoder` is now a struct rather than an
 references = ["smithy-rs#1209"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "`ClientBuilder` helpers `rustls()` and `native_tls()` now return `DynConnector` and use dynamic dispatch rather than returning their concrete connector type that would allow static dispatch. If static dispatch is desired, then manually construct a connector to give to the builder. For example, for rustls: `builder.connector(Adapter::builder().build(aws_smithy_client::conns::https()))` (where `Adapter` is in `aws_smithy_client::hyper_ext`)."
+references = ["smithy-rs#1217"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`ClientBuilder` helpers `rustls()` and `native_tls()` now return `DynConnector` so that they once again work when constructing clients with custom middleware in the SDK."
+references = ["smithy-rs#1217", "aws-sdk-rust#467"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
