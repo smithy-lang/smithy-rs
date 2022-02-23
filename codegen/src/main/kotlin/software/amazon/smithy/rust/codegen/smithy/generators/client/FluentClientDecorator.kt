@@ -312,7 +312,7 @@ class FluentClientGenerator(
                     &mut self,
                     make_connector_settings: #{MakeConnectorSettings},
                     http_versions: #{HttpVersionList},
-                    middleware: #{DynMiddleware}<#DynConnector>,
+                    middleware: #{DynMiddleware}<#{DynConnector}>,
                 ) -> Result<#{client}::Client#{smithy_inst:W}, SdkError> {
                     let connector_key = #{ConnectorKey} {
                         make_connector_settings,
@@ -339,7 +339,7 @@ class FluentClientGenerator(
                 async fn initialize_and_store_new_client(
                     &mut self,
                     connector_key: #{ConnectorKey},
-                    middleware: #{DynMiddleware}<#DynConnector>,
+                    middleware: #{DynMiddleware}<#{DynConnector}>,
                 ) -> Result<#{client}::Client#{smithy_inst:W}, SdkError> {
                     let sleep_impl = self.conf.sleep_impl.clone();
 
@@ -502,12 +502,12 @@ class FluentClientGenerator(
                     /// Constructs a fluent builder for the [`$name`]($fullPath) operation.$maybePaginated
                     ///
                     /// - $inputFieldsHead
-                    $inputFieldsBody
-                    /// - $outputFieldsHead
-                    $outputFieldsBody
-                    /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
-                    """
+                    """.trimIndent()
                 )
+                rustTemplate(inputFieldsBody)
+                rustTemplate("/// - $outputFieldsHead")
+                rustTemplate(outputFieldsBody)
+                rustTemplate("/// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)")
 
                 rust(
                     """
@@ -561,6 +561,8 @@ class FluentClientGenerator(
                     "client" to clientDep.asType(),
                     "generics" to generics.decl,
                     "operation" to operationSymbol,
+                    "DynMiddleware" to dynMiddleware,
+                    "DynConnector" to dynConnector,
                 )
 
                 rustBlockTemplate(
