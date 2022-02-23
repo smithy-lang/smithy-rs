@@ -410,14 +410,14 @@ class HttpBindingGenerator(
         shape: Shape,
         httpMessageType: HttpMessageType = HttpMessageType.REQUEST
     ): RuntimeType? {
-        val headerBindings = when (httpMessageType) {
-            HttpMessageType.REQUEST -> index.getRequestBindings(shape, HttpLocation.HEADER)
-            HttpMessageType.RESPONSE -> index.getResponseBindings(shape, HttpLocation.HEADER)
+        val (headerBindings, prefixHeaderBinding) = when (httpMessageType) {
+            // Only a single structure member can be bound by `httpPrefixHeaders`, hence the `getOrNull(0)`.
+            HttpMessageType.REQUEST -> index.getRequestBindings(shape, HttpLocation.HEADER) to
+                    index.getRequestBindings(shape, HttpLocation.PREFIX_HEADERS).getOrNull(0)
+            HttpMessageType.RESPONSE -> index.getResponseBindings(shape, HttpLocation.HEADER) to
+                    index.getRequestBindings(shape, HttpLocation.PREFIX_HEADERS).getOrNull(0)
         }
-        val prefixHeaderBinding = when (httpMessageType) {
-            HttpMessageType.REQUEST -> index.getRequestBindings(shape, HttpLocation.PREFIX_HEADERS)
-            HttpMessageType.RESPONSE -> index.getResponseBindings(shape, HttpLocation.PREFIX_HEADERS)
-        }.getOrNull(0) // Only a single structure member can be bound to `httpPrefixHeaders`.
+
         if (headerBindings.isEmpty() && prefixHeaderBinding == null) {
             return null
         }

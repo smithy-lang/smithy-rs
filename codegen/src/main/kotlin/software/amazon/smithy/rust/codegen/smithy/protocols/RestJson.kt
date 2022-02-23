@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.protocols
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -60,7 +61,7 @@ class RestJsonHttpBindingResolver(
 ) : HttpTraitHttpBindingResolver(model, contentTypes) {
     /**
      * In the RestJson1 protocol, HTTP responses have a default `Content-Type: application/json` header if it is not
-     * overridden by a specific mechanism (e.g. an output shape member is targeted with `httpPayload` or `mediaType` traits.
+     * overridden by a specific mechanism e.g. an output shape member is targeted with `httpPayload` or `mediaType` traits.
      */
     override fun responseContentType(operationShape: OperationShape): String =
         super.responseContentType(operationShape) ?: "application/json"
@@ -82,6 +83,13 @@ class RestJson(private val codegenContext: CodegenContext) : Protocol {
         RestJsonHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
+
+    /**
+     * RestJson1 implementations can denote errors in responses in several ways.
+     * New server-side protocol implementations MUST use a header field named `X-Amzn-Errortype`.
+     */
+    override fun additionalErrorResponseHeaders(errorShape: StructureShape): List<Pair<String, String>> =
+        listOf("x-amzn-errortype" to errorShape.id.name)
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
         JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
