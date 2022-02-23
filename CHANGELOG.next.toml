@@ -34,3 +34,15 @@ message = "`aws_smithy_types::primitive::Encoder` is now a struct rather than an
 references = ["smithy-rs#1209"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`aws-sigv4` no longer skips the `content-length` and `content-type` headers when signing with `SignatureLocation::QueryParams`"
+references = ["smithy-rs#1216"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Fixed a bug in S3 that prevented the `content-length` and `content-type` inputs from being included in a presigned request signature"
+references = ["smithy-rs#1216", "aws-sdk-rust#466"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
