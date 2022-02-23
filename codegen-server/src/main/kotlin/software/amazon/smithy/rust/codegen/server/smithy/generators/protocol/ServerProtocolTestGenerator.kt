@@ -48,6 +48,7 @@ import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
+import kotlin.reflect.KFunction1
 
 /**
  * Generate protocol tests for an operation
@@ -1381,27 +1382,6 @@ class ServerProtocolTestGenerator(
                     """.trimMargin()
                 ).asObjectNode().get()
             ).build()
-        // The following tests assume that errors in responses are identified by an `X-Amzn-Errortype` header with
-        // the error shape name.
-        // However, Smithy specifications for AWS protocols that serialize to JSON recommend that new server implementations
-        // serialize error types using a `__type` field in the body.
-        // Our implementation follows this recommendation, so we fix the tests by removing the header and instead expecting
-        // the error type to be in the body.
-        private fun fixRestJsonEmptyComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
-            testCase.toBuilder()
-                .headers(emptyMap())
-                .body("""{"__type":"ComplexError"}""")
-                .build()
-        private fun fixRestJsonInvalidGreetingError(testCase: HttpResponseTestCase): HttpResponseTestCase =
-            testCase.toBuilder()
-                .headers(emptyMap())
-                .body("""{"Message":"Hi","__type":"InvalidGreeting"}""")
-                .build()
-        private fun fixRestJsonComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
-            testCase.toBuilder()
-                .headers(emptyMap())
-                .body("""{"Nested":{"Fooooo":"bar"},"TopLevel":"Top level","__type":"ComplexError"}""")
-                .build()
 
         // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
         // This is because they have not been written from a server perspective, and as such the expected `params` field is incomplete.
@@ -1415,10 +1395,6 @@ class ServerProtocolTestGenerator(
             Pair(RestJson, "RestJsonQueryStringEscaping") to ::fixRestJsonQueryStringEscaping,
         )
 
-        private val BrokenResponseTests = mapOf(
-            Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage,
-            Pair(RestJson, "RestJsonInvalidGreetingError") to ::fixRestJsonInvalidGreetingError,
-            Pair(RestJson, "RestJsonComplexErrorWithNoMessage") to ::fixRestJsonComplexErrorWithNoMessage,
-        )
+        private val BrokenResponseTests: Map<Pair<String, String>, KFunction1<HttpResponseTestCase, HttpResponseTestCase>> = mapOf()
     }
 }
