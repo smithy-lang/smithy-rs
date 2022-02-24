@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use aws_types::credentials;
 use std::borrow::Cow;
+use std::time::Duration;
 
-use aws_types::credentials::{future, ProvideCredentials};
+use aws_types::credentials::{self, future, ProvideCredentials};
 use tracing::Instrument;
 
 use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
@@ -91,7 +91,7 @@ pub struct Builder {
     web_identity_builder: crate::web_identity_token::Builder,
     imds_builder: crate::imds::credentials::Builder,
     ecs_builder: crate::ecs::Builder,
-    credential_cache: Option<crate::meta::credentials::lazy_caching::Builder>,
+    credential_cache: crate::meta::credentials::lazy_caching::Builder,
     region_override: Option<Box<dyn ProvideRegion>>,
     region_chain: crate::default_provider::region::Builder,
     conf: Option<ProviderConfig>,
@@ -114,29 +114,68 @@ impl Builder {
         self
     }
 
-    /// Sets the credential cache builder that will be used to create the default credential
-    /// provider's cache.
+    /// Timeout for the given [`ProvideCredentials`] implementation.
     ///
-    /// This allows for customizing settings on the cache, such as the credential load timeout,
-    /// or the buffer time before credential expiration.
-    pub fn credential_cache(
-        mut self,
-        credential_cache: crate::meta::credentials::lazy_caching::Builder,
-    ) -> Self {
-        self.set_credential_cache(Some(credential_cache));
+    /// Defaults to 5 seconds.
+    pub fn load_timeout(mut self, timeout: Duration) -> Self {
+        self.set_load_timeout(Some(timeout));
         self
     }
 
-    /// Sets the credential cache builder that will be used to create the default credential
-    /// provider's cache.
+    /// Timeout for the given [`ProvideCredentials`] implementation.
     ///
-    /// This allows for customizing settings on the cache, such as the credential load timeout,
-    /// or the buffer time before credential expiration.
-    pub fn set_credential_cache(
-        &mut self,
-        credential_cache: Option<crate::meta::credentials::lazy_caching::Builder>,
-    ) -> &mut Self {
-        self.credential_cache = credential_cache;
+    /// Defaults to 5 seconds.
+    pub fn set_load_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
+        self.credential_cache.set_load_timeout(timeout);
+        self
+    }
+
+    /// Amount of time before the actual credential expiration time
+    /// where credentials are considered expired.
+    ///
+    /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
+    /// then any requests made after 14 minutes and 50 seconds will load new credentials.
+    ///
+    /// Defaults to 10 seconds.
+    pub fn buffer_time(mut self, buffer_time: Duration) -> Self {
+        self.set_buffer_time(Some(buffer_time));
+        self
+    }
+
+    /// Amount of time before the actual credential expiration time
+    /// where credentials are considered expired.
+    ///
+    /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
+    /// then any requests made after 14 minutes and 50 seconds will load new credentials.
+    ///
+    /// Defaults to 10 seconds.
+    pub fn set_buffer_time(&mut self, buffer_time: Option<Duration>) -> &mut Self {
+        self.credential_cache.set_buffer_time(buffer_time);
+        self
+    }
+
+    /// Default expiration time to set on credentials if they don't have an expiration time.
+    ///
+    /// This is only used if the given [`ProvideCredentials`] returns
+    /// [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
+    /// This must be at least 15 minutes.
+    ///
+    /// Defaults to 15 minutes.
+    pub fn default_credential_expiration(mut self, duration: Duration) -> Self {
+        self.set_default_credential_expiration(Some(duration));
+        self
+    }
+
+    /// Default expiration time to set on credentials if they don't have an expiration time.
+    ///
+    /// This is only used if the given [`ProvideCredentials`] returns
+    /// [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
+    /// This must be at least 15 minutes.
+    ///
+    /// Defaults to 15 minutes.
+    pub fn set_default_credential_expiration(&mut self, duration: Option<Duration>) -> &mut Self {
+        self.credential_cache
+            .set_default_credential_expiration(duration);
         self
     }
 
@@ -204,11 +243,7 @@ impl Builder {
             .or_else("WebIdentityToken", web_identity_token_provider)
             .or_else("EcsContainer", ecs_provider)
             .or_else("Ec2InstanceMetadata", imds_provider);
-        let cached_provider = self
-            .credential_cache
-            .unwrap_or_default()
-            .configure(&conf)
-            .load(provider_chain);
+        let cached_provider = self.credential_cache.configure(&conf).load(provider_chain);
 
         DefaultCredentialsChain(cached_provider.build())
     }
