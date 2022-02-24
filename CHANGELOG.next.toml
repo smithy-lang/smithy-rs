@@ -46,3 +46,15 @@ message = "`ClientBuilder` helpers `rustls()` and `native_tls()` now return `Dyn
 references = ["smithy-rs#1217", "aws-sdk-rust#467"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`aws-sigv4` no longer skips the `content-length` and `content-type` headers when signing with `SignatureLocation::QueryParams`"
+references = ["smithy-rs#1216"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Fixed a bug in S3 that prevented the `content-length` and `content-type` inputs from being included in a presigned request signature. With this fix, customers can generate presigned URLs that enforce `content-length` and `content-type` for requests to S3."
+references = ["smithy-rs#1216", "aws-sdk-rust#466"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"

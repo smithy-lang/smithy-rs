@@ -76,7 +76,13 @@ class ServerHttpProtocolGenerator(
 ) : ProtocolGenerator(
     codegenContext,
     protocol,
-    MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolPayloadGenerator(codegenContext, protocol)),
+    MakeOperationGenerator(
+        codegenContext,
+        protocol,
+        HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+        public = true,
+        includeDefaultPayloadHeaders = true
+    ),
     ServerHttpProtocolImplGenerator(codegenContext, protocol),
 ) {
     // Define suffixes for operation input / output / error wrappers
@@ -469,7 +475,7 @@ private class ServerHttpProtocolImplGenerator(
                 """,
                 *codegenScope,
             )
-        } ?:run {
+        } ?: run {
             val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
             withBlockTemplate("let body = #{SmithyHttpServer}::body::to_boxed(", ");", *codegenScope) {
                 payloadGenerator.generatePayload(this, "output", operationShape)
