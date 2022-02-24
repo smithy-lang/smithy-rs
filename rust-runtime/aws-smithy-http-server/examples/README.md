@@ -12,11 +12,13 @@ Once the example has been built successfully the first time, idiomatic `cargo` c
 
 ## Run
 
-TBD.
+`cargo run` can be used to start the Pokémon service on `http://localhost:13734`.
 
 ## Test
 
-TBD.
+`cargo test` can be used to spawn the service and run some simple integration tests against it.
+
+More info can be found in the `tests` folder of `pokemon-service` package.
 
 ## Benchmarks
 

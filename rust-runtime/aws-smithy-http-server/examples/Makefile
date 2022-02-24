@@ -22,6 +22,6 @@ clean:
 	cargo clean || echo "Unable to run cargo clean"
 
 dist-clean: clean
-	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST)
+	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) Cargo.lock
 
 .PHONY: all
