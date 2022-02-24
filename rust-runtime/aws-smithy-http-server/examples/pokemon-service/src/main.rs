@@ -35,9 +35,8 @@ pub async fn main() {
             .layer(AddExtensionLayer::new(shared_state)),
     );
 
-    // Start the [`axum server`]. Note that also an [`hyper` server`] can be used.
+    // Start the [`hyper server`].
     //
-    // [`axum server`]: [`axum::Server`]
     // [`hyper server`]: [`hyper::Server`]
     let server = hyper::Server::bind(&"0.0.0.0:13734".parse().unwrap()).serve(app.into_make_service());
 
