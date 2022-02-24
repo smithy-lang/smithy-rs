@@ -91,7 +91,7 @@ pub struct Builder {
     web_identity_builder: crate::web_identity_token::Builder,
     imds_builder: crate::imds::credentials::Builder,
     ecs_builder: crate::ecs::Builder,
-    credential_cache: crate::meta::credentials::lazy_caching::Builder,
+    credential_cache: Option<crate::meta::credentials::lazy_caching::Builder>,
     region_override: Option<Box<dyn ProvideRegion>>,
     region_chain: crate::default_provider::region::Builder,
     conf: Option<ProviderConfig>,
@@ -111,6 +111,32 @@ impl Builder {
     /// When unset, the default region resolver chain will be used.
     pub fn set_region(&mut self, region: Option<impl ProvideRegion + 'static>) -> &mut Self {
         self.region_override = region.map(|provider| Box::new(provider) as _);
+        self
+    }
+
+    /// Sets the credential cache builder that will be used to create the default credential
+    /// provider's cache.
+    ///
+    /// This allows for customizing settings on the cache, such as the credential load timeout,
+    /// or the buffer time before credential expiration.
+    pub fn credential_cache(
+        mut self,
+        credential_cache: crate::meta::credentials::lazy_caching::Builder,
+    ) -> Self {
+        self.set_credential_cache(Some(credential_cache));
+        self
+    }
+
+    /// Sets the credential cache builder that will be used to create the default credential
+    /// provider's cache.
+    ///
+    /// This allows for customizing settings on the cache, such as the credential load timeout,
+    /// or the buffer time before credential expiration.
+    pub fn set_credential_cache(
+        &mut self,
+        credential_cache: Option<crate::meta::credentials::lazy_caching::Builder>,
+    ) -> &mut Self {
+        self.credential_cache = credential_cache;
         self
     }
 
@@ -178,7 +204,11 @@ impl Builder {
             .or_else("WebIdentityToken", web_identity_token_provider)
             .or_else("EcsContainer", ecs_provider)
             .or_else("Ec2InstanceMetadata", imds_provider);
-        let cached_provider = self.credential_cache.configure(&conf).load(provider_chain);
+        let cached_provider = self
+            .credential_cache
+            .unwrap_or_default()
+            .configure(&conf)
+            .load(provider_chain);
 
         DefaultCredentialsChain(cached_provider.build())
     }
