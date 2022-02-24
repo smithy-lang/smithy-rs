@@ -1,8 +1,6 @@
 SRC_DIR := $(shell git rev-parse --show-toplevel)
 CUR_DIR := $(shell pwd)
 GRADLE := $(SRC_DIR)/gradlew
-SERVER_SDK := pokemon-service-sdk
-CLIENT_SDK := pokemon-service-client
 SERVER_SDK_DST := $(CUR_DIR)/pokemon-service-sdk
 CLIENT_SDK_DST := $(CUR_DIR)/pokemon-service-client
 SERVER_SDK_SRC := $(SRC_DIR)/codegen-server-test/build/smithyprojections/codegen-server-test/pokemon-service-sdk/rust-server-codegen
@@ -19,9 +17,6 @@ codegen:
 
 build: codegen
 	cargo build
-
-release: codegen
-	cargo build --release
 
 clean:
 	cargo clean || echo "Unable to run cargo clean"
