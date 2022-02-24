@@ -1,4 +1,11 @@
-use amzn_pokemon_service_client::{Builder, Client, Config};
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
+use assert_cmd::prelude::*;
+use pokemon_service_client::{Builder, Client, Config};
+use std::process::{Child, Command};
 
 pub(crate) struct PokemonService {
     child_process: std::process::Child,
@@ -6,9 +13,7 @@ pub(crate) struct PokemonService {
 
 impl PokemonService {
     pub(crate) fn run() -> Self {
-        use assert_cmd::prelude::*;
-        use std::process::Command;
-        let process = Command::cargo_bin("amzn-pokemon-service").unwrap().spawn().unwrap();
+        let process = Command::cargo_bin("pokemon-service").unwrap().spawn().unwrap();
 
         Self { child_process: process }
     }

@@ -4,7 +4,7 @@
  */
 
 use fs_extra::{copy_items, dir::CopyOptions};
-use std::{fs, path::Path, process::Command};
+use std::{path::Path, process::Command};
 
 fn main() {
     let src_dir = Path::new("../../../../");
@@ -30,20 +30,22 @@ fn main() {
     );
     let mut options = CopyOptions::new();
     options.overwrite = true;
-    let dest_dir = Path::new("pokemon-sdk");
+    let dest_dir = Path::new("pokemon-service-sdk");
     copy_items(
         &[
-            src_dir.join("codegen-server-test/build/smithyprojections/codegen-server-test/pokemon-sdk/rust-server-codegen/src"),
-            src_dir.join("codegen-server-test/build/smithyprojections/codegen-server-test/pokemon-sdk/rust-server-codegen/Cargo.toml"),
+            src_dir.join("codegen-server-test/build/smithyprojections/codegen-server-test/pokemon-service-sdk/rust-server-codegen/src"),
+            src_dir.join("codegen-server-test/build/smithyprojections/codegen-server-test/pokemon-service-sdk/rust-server-codegen/Cargo.toml"),
         ],
         dest_dir,
         &options,
     ).unwrap_or_else(|e| panic!("Unable to copy codegenerated Pokémon service: {}", e));
-    let dest_dir = Path::new("pokemon-client");
+    let dest_dir = Path::new("pokemon-service-client");
     copy_items(
         &[
-            src_dir.join("codegen-test/build/smithyprojections/codegen-test/pokemon-client/rust-codegen/src"),
-            src_dir.join("codegen-test/build/smithyprojections/codegen-test/pokemon-client/rust-codegen/Cargo.toml"),
+            src_dir.join("codegen-test/build/smithyprojections/codegen-test/pokemon-service-client/rust-codegen/src"),
+            src_dir.join(
+                "codegen-test/build/smithyprojections/codegen-test/pokemon-service-client/rust-codegen/Cargo.toml",
+            ),
         ],
         dest_dir,
         &options,

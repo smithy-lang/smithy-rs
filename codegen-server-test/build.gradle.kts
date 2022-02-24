@@ -37,7 +37,7 @@ val allCodegenTests = listOf(
     CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
     CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
-    CodegenTest("com.aws.example#PokemonService", "pokemon-sdk")
+    CodegenTest("com.aws.example#PokemonService", "pokemon-service-sdk")
 )
 
 task("generateSmithyBuild") {

@@ -1,13 +1,22 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 //! Pokémon Service
 //!
 //! This crate implements the Pokémon Service.
 #![warn(missing_docs, missing_debug_implementations, rust_2018_idioms)]
-use std::{convert::TryInto, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryInto,
+    sync::{atomic::AtomicU64, Arc},
+};
 
 use aws_smithy_http_server::Extension;
-use pokemon_sdk::{error, input, model, output};
+use pokemon_service_sdk::{error, input, model, output};
 use tokio::sync::RwLock;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
@@ -27,6 +36,23 @@ pub fn setup_tracing() {
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
     tracing_subscriber::registry().with(format).with(filter).init();
+}
+
+#[derive(Debug)]
+pub struct PokemonTranslation {
+    en: String,
+    es: String,
+    it: String,
+}
+
+impl PokemonTranslation {
+    pub fn new(en: &str, es: &str, it: &str) -> Self {
+        Self {
+            en: String::from(en),
+            es: String::from(es),
+            it: String::from(it),
+        }
+    }
 }
 
 /// PokémonService shared state.
@@ -86,68 +112,70 @@ pub fn setup_tracing() {
 /// the shared state.
 ///
 /// [`middleware`]: [`aws_smithy_http_server::AddExtensionLayer`]
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct State {
-    calls_count: RwLock<u64>,
+    pokemons_translations: HashMap<String, PokemonTranslation>,
+    call_count: AtomicU64,
 }
 
-// Did you know your documentation will get rendered to build/brazil-documentation?
-// You can find the docs by clicking the "docs" link on the "releases" tab in code.amazon.com.
-//
-// For packages released to live, the docs are also available at:
-//
-//   https://devcentral.amazon.com/ac/brazil/package-master/package/go/documentation?name=SmithyRsServerSdkPokemonService&interface=0.1&versionSet=live
-//
-// There are lots of good tips on writing good documentation at
-//
-//   https://doc.rust-lang.org/book/ch14-02-publishing-to-crates-io.html#making-useful-documentation-comments
-//
-// You can also add links to types, functions, and the like with [`hello`].
-// This is a key part of making your documentation easier to navigate. See
-//
-//   https://doc.rust-lang.org/nightly/rustdoc/linking-to-items-by-name.html
-//
-// for more advanced linking syntax.
+impl State {
+    pub fn new() -> Self {
+        let mut pokemons_translations = HashMap::new();
+        pokemons_translations.insert(
+            String::from("pikachu"),
+            PokemonTranslation::new(
+                PIKACHU_ENGLISH_FLAVOR_TEXT,
+                PIKACHU_SPANISH_FLAVOR_TEXT,
+                PIKACHU_ITALIAN_FLAVOR_TEXT,
+            ),
+        );
+        Self {
+            pokemons_translations,
+            call_count: Default::default(),
+        }
+    }
+}
 
 /// Retrieves information about a Pokémon species.
 pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
     state: Extension<Arc<State>>,
 ) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
+    state.0.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     // We only support retrieving information about Pikachu.
-    if input.name != "pikachu" {
-        error!("Requested Pokémon {:?} not available", input.name);
-        return Err(error::GetPokemonSpeciesError::ResourceNotFoundException(
-            error::ResourceNotFoundException::builder()
-                .message("Requested Pokémon not available")
-                .build(),
-        ));
+    let pokemon = state.0.pokemons_translations.get(&input.name);
+    match pokemon.as_ref() {
+        Some(pokemon) => {
+            debug!("Requested Pokémon is {}", input.name);
+            let english_flavor_text = model::FlavorText::builder()
+                .flavor_text(&pokemon.en)
+                .language("en")
+                .build();
+            let spanish_flavor_text = model::FlavorText::builder()
+                .flavor_text(&pokemon.es)
+                .language("es")
+                .build();
+            let italian_flavor_text = model::FlavorText::builder()
+                .flavor_text(&pokemon.it)
+                .language("it")
+                .build();
+            let output = output::GetPokemonSpeciesOutput::builder()
+                .name("pikachu")
+                .flavor_text_entries(english_flavor_text)
+                .flavor_text_entries(spanish_flavor_text)
+                .flavor_text_entries(italian_flavor_text)
+                .build();
+            Ok(output)
+        }
+        None => {
+            error!("Requested Pokémon {} not available", input.name);
+            Err(error::GetPokemonSpeciesError::ResourceNotFoundException(
+                error::ResourceNotFoundException::builder()
+                    .message("Requested Pokémon not available")
+                    .build(),
+            ))
+        }
     }
-    // Increase the calls count by 1.
-    let mut c = state.0.calls_count.write().await;
-    *c += 1;
-
-    info!("Requested Pokémon is pikacu, counter is {}", c);
-    let english_flavor_text = model::FlavorText::builder()
-        .flavor_text(PIKACHU_ENGLISH_FLAVOR_TEXT)
-        .language("en")
-        .build();
-    let spanish_flavor_text = model::FlavorText::builder()
-        .flavor_text(PIKACHU_SPANISH_FLAVOR_TEXT)
-        .language("es")
-        .build();
-    let italian_flavor_text = model::FlavorText::builder()
-        .flavor_text(PIKACHU_ITALIAN_FLAVOR_TEXT)
-        .language("it")
-        .build();
-    let output = output::GetPokemonSpeciesOutput::builder()
-        .name("pikachu")
-        .flavor_text_entries(english_flavor_text)
-        .flavor_text_entries(spanish_flavor_text)
-        .flavor_text_entries(italian_flavor_text)
-        .build();
-
-    Ok(output)
 }
 
 /// Calculates and reports metrics about this server instance.
@@ -156,13 +184,14 @@ pub async fn get_server_statistics(
     state: Extension<Arc<State>>,
 ) -> output::GetServerStatisticsOutput {
     // Read the current calls count.
-    let counter = state.0.calls_count.read().await;
-    let counter = (*counter)
+    let counter = state.0.call_count.load(std::sync::atomic::Ordering::SeqCst);
+    let counter = counter
         .try_into()
         .map_err(|e| {
             error!("Unable to convert u64 to i64: {}", e);
         })
         .unwrap_or(0);
+    debug!("This instance served {} requests", counter);
     output::GetServerStatisticsOutput::builder()
         .calls_count(counter)
         .build()
@@ -179,7 +208,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let state = Arc::new(State::default());
+        let state = Arc::new(State::new());
 
         let actual_spanish_flavor_text = get_pokemon_species(input, Extension(state.clone()))
             .await

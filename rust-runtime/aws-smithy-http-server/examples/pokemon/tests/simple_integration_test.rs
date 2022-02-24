@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 // Files here are for running integration tests.
 // These tests only have access to your crate's public API.
 // See: https://doc.rust-lang.org/book/ch11-03-test-organization.html#integration-tests
@@ -6,6 +11,9 @@ use std::time::Duration;
 
 use crate::helpers::{client, PokemonService};
 use tokio::time;
+
+#[macro_use]
+mod helpers;
 
 #[tokio::test]
 async fn simple_integration_test() {
@@ -29,7 +37,7 @@ async fn simple_integration_test() {
         .await
         .unwrap_err();
     assert_eq!(
-        r#"Error { message: "Requested PokÃ©mon not available" }"#,
+        r#"ResourceNotFoundError [ResourceNotFoundException]: Requested Pokémon not available"#,
         pokemon_species_error.to_string()
     );
 
