@@ -46,3 +46,9 @@ message = "`ClientBuilder` helpers `rustls()` and `native_tls()` now return `Dyn
 references = ["smithy-rs#1217", "aws-sdk-rust#467"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Made it possible to change settings, such as load timeout, on the credential cache used by the `DefaultCredentialsChain`."
+references = ["smithy-rs#1220", "aws-sdk-rust#462"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
