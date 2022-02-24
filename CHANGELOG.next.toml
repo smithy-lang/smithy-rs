@@ -58,3 +58,9 @@ message = "Fixed a bug in S3 that prevented the `content-length` and `content-ty
 references = ["smithy-rs#1216", "aws-sdk-rust#466"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Made it possible to change settings, such as load timeout, on the credential cache used by the `DefaultCredentialsChain`."
+references = ["smithy-rs#1220", "aws-sdk-rust#462"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
