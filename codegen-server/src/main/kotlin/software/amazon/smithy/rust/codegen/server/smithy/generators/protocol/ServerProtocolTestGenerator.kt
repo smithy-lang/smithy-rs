@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -410,7 +412,40 @@ class ServerProtocolTestGenerator(
                 }
             }
         } else {
-            rustWriter.rustTemplate("#{AssertEq}(parsed, expected);", *codegenScope)
+            val hasFloatingPointMembers = inputShape.members().any {
+                val target = model.expectShape(it.target)
+                (target is DoubleShape) || (target is FloatShape)
+            }
+
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1147) Handle the case of nested floating point members.
+            if (hasFloatingPointMembers) {
+                for (member in inputShape.members()) {
+                    val memberName = codegenContext.symbolProvider.toMemberName(member)
+                    when (codegenContext.model.expectShape(member.target)) {
+                        is DoubleShape, is FloatShape -> {
+                            rustWriter.addUseImports(
+                                RuntimeType.ProtocolTestHelper(codegenContext.runtimeConfig, "FloatEquals").toSymbol()
+                            )
+                            rustWriter.rust(
+                                """
+                                assert!(parsed.$memberName.float_equals(&expected.$memberName),
+                                    "Unexpected value for `$memberName` {:?} vs. {:?}", expected.$memberName, parsed.$memberName);
+                                """
+                            )
+                        }
+                        else -> {
+                            rustWriter.rustTemplate(
+                                """
+                                    #{AssertEq}(parsed.$memberName, expected.$memberName, "Unexpected value for `$memberName`");
+                                    """,
+                                *codegenScope
+                            )
+                        }
+                    }
+                }
+            } else {
+                rustWriter.rustTemplate("#{AssertEq}(parsed, expected);", *codegenScope)
+            }
         }
     }
 
@@ -604,11 +639,9 @@ class ServerProtocolTestGenerator(
         private val ExpectFail = setOf<FailingTest>(
             // Headers.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
-            FailingTest(RestJson, "RestJsonSupportsNaNFloatHeaderInputs", TestType.Request),
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", TestType.Response),
 
             FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", TestType.Response),
-            FailingTest(RestJson, "RestJsonSupportsNaNFloatQueryValues", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
             FailingTest(RestJson, "RestJsonFooErrorUsingCode", TestType.Response),
@@ -617,10 +650,8 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonFooErrorWithDunderType", TestType.Response),
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeAndNamespace", TestType.Response),
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeUriAndNamespace", TestType.Response),
-            FailingTest(RestJson, "RestJsonSupportsNaNFloatLabels", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCode", TestType.Response),
             FailingTest(RestJson, "RestJsonNoInputAndNoOutput", TestType.Response),
-            FailingTest(RestJson, "RestJsonSupportsNaNFloatInputs", TestType.Request),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", TestType.Response),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
@@ -1252,11 +1283,6 @@ class ServerProtocolTestGenerator(
         private val DisableTests = setOf<String>()
 
         private fun fixRestJsonSupportsNaNFloatQueryValues(testCase: HttpRequestTestCase): HttpRequestTestCase {
-            // TODO This test does not pass, even after fixing it with this function, because, in IEEE 754 floating
-            // point numbers, `NaN` is not equal to any other floating point number, even itself! So we can't compare it
-            // to any "expected" value.
-            // Reference: https://doc.rust-lang.org/std/primitive.f32.html
-            // Request for guidance about this test to Smithy team: https://github.com/awslabs/smithy/pull/1040#discussion_r780418707
             val params = Node.parse(
                 """
                 {
