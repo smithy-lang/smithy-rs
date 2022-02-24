@@ -8,15 +8,14 @@
 //! This crate implements the Pokémon Service.
 #![warn(missing_docs, missing_debug_implementations, rust_2018_idioms)]
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     convert::TryInto,
     sync::{atomic::AtomicU64, Arc},
 };
 
 use aws_smithy_http_server::Extension;
 use pokemon_service_sdk::{error, input, model, output};
-use tokio::sync::RwLock;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
@@ -38,14 +37,16 @@ pub fn setup_tracing() {
     tracing_subscriber::registry().with(format).with(filter).init();
 }
 
+/// Structure holding the translations for a Pokémon description.
 #[derive(Debug)]
-pub struct PokemonTranslation {
+struct PokemonTranslations {
     en: String,
     es: String,
     it: String,
 }
 
-impl PokemonTranslation {
+impl PokemonTranslations {
+    /// Create a new translations entry for a Pokémon.
     pub fn new(en: &str, es: &str, it: &str) -> Self {
         Self {
             en: String::from(en),
@@ -114,16 +115,16 @@ impl PokemonTranslation {
 /// [`middleware`]: [`aws_smithy_http_server::AddExtensionLayer`]
 #[derive(Debug)]
 pub struct State {
-    pokemons_translations: HashMap<String, PokemonTranslation>,
+    pokemons_translations: HashMap<String, PokemonTranslations>,
     call_count: AtomicU64,
 }
 
-impl State {
-    pub fn new() -> Self {
+impl Default for State {
+    fn default() -> Self {
         let mut pokemons_translations = HashMap::new();
         pokemons_translations.insert(
             String::from("pikachu"),
-            PokemonTranslation::new(
+            PokemonTranslations::new(
                 PIKACHU_ENGLISH_FLAVOR_TEXT,
                 PIKACHU_SPANISH_FLAVOR_TEXT,
                 PIKACHU_ITALIAN_FLAVOR_TEXT,
@@ -208,7 +209,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let state = Arc::new(State::new());
+        let state = Arc::new(State::default());
 
         let actual_spanish_flavor_text = get_pokemon_species(input, Extension(state.clone()))
             .await

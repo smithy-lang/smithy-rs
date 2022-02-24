@@ -4,20 +4,13 @@
  */
 
 // This program is exported as a binary named pokemon-service
-use std::{env, sync::Arc};
+use std::sync::Arc;
 
 use aws_smithy_http_server::{AddExtensionLayer, Router};
 use pokemon_service::{get_pokemon_species, get_server_statistics, setup_tracing, State};
 use pokemon_service_sdk::operation_registry::OperationRegistryBuilder;
 use tower::ServiceBuilder;
-use tower_http::{
-    trace::{
-        DefaultMakeSpan, DefaultOnBodyChunk, DefaultOnEos, DefaultOnFailure, DefaultOnRequest, DefaultOnResponse,
-        TraceLayer,
-    },
-    LatencyUnit,
-};
-use tracing::Level;
+use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 pub async fn main() {
@@ -34,29 +27,11 @@ pub async fn main() {
         // implementation.
         .into();
 
-    let log_level = env::var("RUST_LOG")
-        .map(|x| if x.contains("debug") { Level::DEBUG } else { Level::INFO })
-        .unwrap_or(Level::INFO);
-    let shared_state = Arc::new(State::new());
+    // Setup shared state and middlewares.
+    let shared_state = Arc::new(State::default());
     let app = app.layer(
         ServiceBuilder::new()
-            .layer(
-                TraceLayer::new_for_http()
-                    .make_span_with(DefaultMakeSpan::new().level(log_level).include_headers(true))
-                    .on_request(DefaultOnRequest::new().level(log_level))
-                    .on_response(
-                        DefaultOnResponse::new()
-                            .level(log_level)
-                            .latency_unit(LatencyUnit::Millis),
-                    )
-                    .on_body_chunk(DefaultOnBodyChunk::new())
-                    .on_eos(DefaultOnEos::new().level(log_level).latency_unit(LatencyUnit::Millis))
-                    .on_failure(
-                        DefaultOnFailure::new()
-                            .level(log_level)
-                            .latency_unit(LatencyUnit::Millis),
-                    ),
-            )
+            .layer(TraceLayer::new_for_http())
             .layer(AddExtensionLayer::new(shared_state)),
     );
 

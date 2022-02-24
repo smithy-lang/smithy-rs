@@ -5,7 +5,7 @@
 
 use assert_cmd::prelude::*;
 use pokemon_service_client::{Builder, Client, Config};
-use std::process::{Child, Command};
+use std::process::Command;
 
 pub(crate) struct PokemonService {
     child_process: std::process::Child,
