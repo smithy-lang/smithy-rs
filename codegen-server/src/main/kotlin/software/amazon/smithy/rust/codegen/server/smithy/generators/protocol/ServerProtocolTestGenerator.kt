@@ -5,16 +5,18 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
-import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
+import software.amazon.smithy.protocoltests.traits.HttpMalformedRequestTestCase
+import software.amazon.smithy.protocoltests.traits.HttpMalformedRequestTestsTrait
+import software.amazon.smithy.protocoltests.traits.HttpMalformedResponseDefinition
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
@@ -82,17 +84,36 @@ class ServerProtocolTestGenerator(
     )
 
     sealed class TestCase {
-        abstract val testCase: HttpMessageTestCase
+        abstract val id: String
+        abstract val documentation: String?
+        abstract val protocol: ShapeId
+        abstract val testType: TestType
 
-        data class RequestTest(override val testCase: HttpRequestTestCase, val targetShape: StructureShape) :
-            TestCase()
-        data class ResponseTest(override val testCase: HttpResponseTestCase, val targetShape: StructureShape) :
-            TestCase()
+        data class RequestTest(val testCase: HttpRequestTestCase): TestCase() {
+            override val id: String = testCase.id
+            override val documentation: String? = testCase.documentation.orNull()
+            override val protocol: ShapeId = testCase.protocol
+            override val testType: TestType = TestType.Request
+        }
+
+        data class ResponseTest(val testCase: HttpResponseTestCase, val targetShape: StructureShape): TestCase() {
+            override val id: String = testCase.id
+            override val documentation: String? = testCase.documentation.orNull()
+            override val protocol: ShapeId = testCase.protocol
+            override val testType: TestType = TestType.Response
+        }
+
+        data class MalformedRequestTest(val testCase: HttpMalformedRequestTestCase): TestCase() {
+            override val id: String = testCase.id
+            override val documentation: String? = testCase.documentation.orNull()
+            override val protocol: ShapeId = testCase.protocol
+            override val testType: TestType = TestType.MalformedRequest
+        }
     }
 
     fun render() {
         val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()
-            ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.RequestTest(it, inputShape) }
+            ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.RequestTest(it) }
         val responseTests = operationShape.getTrait<HttpResponseTestsTrait>()
             ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
         val errorTests = operationIndex.getErrors(operationShape).flatMap { error ->
@@ -100,7 +121,11 @@ class ServerProtocolTestGenerator(
                 ?.getTestCasesFor(AppliesTo.SERVER).orEmpty()
             testCases.map { TestCase.ResponseTest(it, error) }
         }
-        val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching().fixBroken()
+        val malformedRequestTests = operationShape.getTrait<HttpMalformedRequestTestsTrait>()
+            ?.testCases.orEmpty().map { TestCase.MalformedRequestTest(it) }
+        val allTests: List<TestCase> = (requestTests + responseTests + errorTests + malformedRequestTests)
+            .filterMatching()
+            .fixBroken()
 
         if (allTests.isNotEmpty()) {
             val operationName = operationSymbol.name
@@ -120,10 +145,11 @@ class ServerProtocolTestGenerator(
 
     private fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
         allTests.forEach {
-            renderTestCaseBlock(it.testCase, this) {
+            renderTestCaseBlock(it, this) {
                 when (it) {
                     is TestCase.RequestTest -> this.renderHttpRequestTestCase(it.testCase)
                     is TestCase.ResponseTest -> this.renderHttpResponseTestCase(it.testCase, it.targetShape)
+                    is TestCase.MalformedRequestTest -> this.renderHttpMalformedRequestTestCase(it.testCase)
                 }
             }
         }
@@ -135,11 +161,11 @@ class ServerProtocolTestGenerator(
     private fun List<TestCase>.filterMatching(): List<TestCase> {
         return if (RunOnly.isNullOrEmpty()) {
             this.filter { testCase ->
-                testCase.testCase.protocol == codegenContext.protocol &&
-                    !DisableTests.contains(testCase.testCase.id)
+                testCase.protocol == codegenContext.protocol &&
+                    !DisableTests.contains(testCase.id)
             }
         } else {
-            this.filter { RunOnly.contains(it.testCase.id) }
+            this.filter { RunOnly.contains(it.id) }
         }
     }
 
@@ -149,16 +175,16 @@ class ServerProtocolTestGenerator(
     private fun List<TestCase>.fixBroken(): List<TestCase> = this.map {
         when (it) {
             is TestCase.RequestTest -> {
-                val howToFixIt = BrokenRequestTests[Pair(codegenContext.serviceShape.id.toString(), it.testCase.id)]
+                val howToFixIt = BrokenRequestTests[Pair(codegenContext.serviceShape.id.toString(), it.id)]
                 if (howToFixIt == null) {
                     it
                 } else {
                     val fixed = howToFixIt(it.testCase)
-                    TestCase.RequestTest(fixed, it.targetShape)
+                    TestCase.RequestTest(fixed)
                 }
             }
             is TestCase.ResponseTest -> {
-                val howToFixIt = BrokenResponseTests[Pair(codegenContext.serviceShape.id.toString(), it.testCase.id)]
+                val howToFixIt = BrokenResponseTests[Pair(codegenContext.serviceShape.id.toString(), it.id)]
                 if (howToFixIt == null) {
                     it
                 } else {
@@ -166,36 +192,36 @@ class ServerProtocolTestGenerator(
                     TestCase.ResponseTest(fixed, it.targetShape)
                 }
             }
+            is TestCase.MalformedRequestTest -> {
+                // We haven't found any broken `HttpMalformedRequestTest`s yet.
+                it
+            }
         }
     }
 
     private fun renderTestCaseBlock(
-        testCase: HttpMessageTestCase,
+        testCase: TestCase,
         testModuleWriter: RustWriter,
         block: RustWriter.() -> Unit
     ) {
         testModuleWriter.setNewlinePrefix("/// ")
-        testCase.documentation.map {
-            testModuleWriter.writeWithNoFormatting(it)
+        if (testCase.documentation != null) {
+            testModuleWriter.writeWithNoFormatting(testCase.documentation)
         }
 
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.setNewlinePrefix("")
         TokioTest.render(testModuleWriter)
 
-        val action = when (testCase) {
-            is HttpResponseTestCase -> Action.Response
-            is HttpRequestTestCase -> Action.Request
-            else -> throw CodegenException("unknown test case type")
-        }
         if (expectFail(testCase)) {
             testModuleWriter.writeWithNoFormatting("#[should_panic]")
         }
-        val fnName = when (action) {
-            is Action.Response -> "_response"
-            is Action.Request -> "_request"
+        val fnNameSuffix = when (testCase.testType) {
+            is TestType.Response -> "_response"
+            is TestType.Request -> "_request"
+            is TestType.MalformedRequest -> "_malformed_request"
         }
-        testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnName()") {
+        testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnNameSuffix()") {
             block(this)
         }
     }
@@ -212,30 +238,8 @@ class ServerProtocolTestGenerator(
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
-
-        rustTemplate(
-            """
-            ##[allow(unused_mut)] let mut http_request = http::Request::builder()
-                .uri("${httpRequestTestCase.uri}")
-            """,
-            *codegenScope
-        )
-        for (header in httpRequestTestCase.headers) {
-            rust(".header(${header.key.dq()}, ${header.value.dq()})")
-        }
-        rustTemplate(
-            """
-            .body(#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static(b${httpRequestTestCase.body.orNull()?.dq()})))
-            .unwrap();
-            """,
-            *codegenScope
-        )
-        if (httpRequestTestCase.queryParams.isNotEmpty()) {
-            val queryParams = httpRequestTestCase.queryParams.joinToString(separator = "&")
-            rust("""*http_request.uri_mut() = "${httpRequestTestCase.uri}?$queryParams".parse().unwrap();""")
-        }
-        httpRequestTestCase.host.orNull()?.also {
-            rust("""todo!("endpoint trait not supported yet");""")
+        with (httpRequestTestCase) {
+            renderHttpRequest(uri, headers, body.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
             checkParams(httpRequestTestCase, this)
@@ -252,14 +256,8 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    private fun HttpMessageTestCase.action(): Action = when (this) {
-        is HttpRequestTestCase -> Action.Request
-        is HttpResponseTestCase -> Action.Response
-        else -> throw CodegenException("Unknown test case type")
-    }
-
-    private fun expectFail(testCase: HttpMessageTestCase): Boolean = ExpectFail.find {
-        it.id == testCase.id && it.action == testCase.action() && it.service == codegenContext.serviceShape.id.toString()
+    private fun expectFail(testCase: TestCase): Boolean = ExpectFail.find {
+        it.id == testCase.id && it.testType == testCase.testType && it.service == codegenContext.serviceShape.id.toString()
     } != null
 
     /**
@@ -300,22 +298,77 @@ class ServerProtocolTestGenerator(
             """,
             *codegenScope,
         )
+        checkResponse(this, testCase)
+    }
+
+    /**
+     * Renders an HTTP malformed request test case.
+     * We are given a request definition and a response definition, and we have to assert that the request is rejected
+     * with the given response.
+     */
+    private fun RustWriter.renderHttpMalformedRequestTestCase(testCase: HttpMalformedRequestTestCase) {
+        with (testCase.request) {
+            // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
+            renderHttpRequest(uri.get(), headers, body.orNull(), queryParams, host.orNull())
+        }
+
+        val operationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustTemplate(
             """
-            #{AssertEq}(
-                http::StatusCode::from_u16(${testCase.code}).expect("invalid expected HTTP status code"),
-                http_response.status()
-            );
+            use #{AxumCore}::extract::FromRequest;
+            let mut http_request = #{AxumCore}::extract::RequestParts::new(http_request);
+            let rejection = super::$operationName::from_request(&mut http_request).await.expect_err("request was accepted but we expected it to be rejected");
+            use #{AxumCore}::response::IntoResponse;
+            let http_response = rejection.into_response();
+            """,
+            *codegenScope,
+        )
+        checkResponse(this, testCase.response)
+    }
+
+    private fun RustWriter.renderHttpRequest(
+        uri: String,
+        headers: Map<String, String>,
+        body: String?,
+        queryParams: List<String>,
+        host: String?
+    ) {
+        rustTemplate(
+            """
+            ##[allow(unused_mut)]
+            let mut http_request = http::Request::builder()
+                .uri("$uri")
             """,
             *codegenScope
         )
-        checkHeaders(this, "&http_response.headers()", testCase.headers)
-        checkForbidHeaders(this, "&http_response.headers()", testCase.forbidHeaders)
-        checkRequiredHeaders(this, "&http_response.headers()", testCase.requireHeaders)
-        checkHttpResponseExtensions(this)
-        // "If no request body is defined, then no assertions are made about the body of the message."
-        if (testCase.body.isPresent) {
-            checkBody(this, testCase.body.get(), testCase.bodyMediaType.orNull())
+        for (header in headers) {
+            rust(".header(${header.key.dq()}, ${header.value.dq()})")
+        }
+        rustTemplate(
+            """
+            .body(${
+                if (body != null) {
+                    // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
+                    // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
+                    //
+                    // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
+                    // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
+                    // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
+                    // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
+                    "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static(b${body.replace("\u000c", "\\u{000c}").dq()}))"
+                } else {
+                    "#{SmithyHttpServer}::body::Body::empty()"
+                }
+            }).unwrap();
+            """,
+            *codegenScope
+        )
+        if (queryParams.isNotEmpty()) {
+            val queryParamsString = queryParams.joinToString(separator = "&")
+            rust("""*http_request.uri_mut() = "$uri?$queryParamsString".parse().unwrap();""")
+        }
+        if (host != null) {
+            rust("""todo!("endpoint trait not supported yet");""")
         }
     }
 
@@ -396,6 +449,40 @@ class ServerProtocolTestGenerator(
         }
     }
 
+    private fun checkResponse(rustWriter: RustWriter, testCase: HttpResponseTestCase) {
+        checkStatusCode(rustWriter, testCase.code)
+        checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
+        checkForbidHeaders(rustWriter, "&http_response.headers()", testCase.forbidHeaders)
+        checkRequiredHeaders(rustWriter, "&http_response.headers()", testCase.requireHeaders)
+        checkHttpResponseExtensions(rustWriter)
+        // If no request body is defined, then no assertions are made about the body of the message.
+        if (testCase.body.isPresent) {
+            checkBody(rustWriter, testCase.body.get(), testCase.bodyMediaType.orNull())
+        }
+    }
+
+    private fun checkResponse(rustWriter: RustWriter, testCase: HttpMalformedResponseDefinition) {
+        checkStatusCode(rustWriter, testCase.code)
+        checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
+        checkHttpResponseExtensions(rustWriter)
+        // If no request body is defined, then no assertions are made about the body of the message.
+        if (testCase.body.isEmpty) return
+
+        val httpMalformedResponseBodyDefinition = testCase.body.get()
+        // From https://awslabs.github.io/smithy/1.0/spec/http-protocol-compliance-tests.html?highlight=httpresponsetest#httpmalformedresponsebodyassertion
+        //
+        //     A union describing the assertion to run against the response body. As it is a union, exactly one
+        //     member must be set.
+        //
+        if (httpMalformedResponseBodyDefinition.contents.isPresent) {
+            checkBody(rustWriter, httpMalformedResponseBodyDefinition.contents.get(), httpMalformedResponseBodyDefinition.mediaType)
+        } else {
+            check(httpMalformedResponseBodyDefinition.messageRegex.isPresent)
+            // There aren't any restJson1 protocol tests that make use of `messageRegex`.
+            TODO("`messageRegex` handling not yet implemented")
+        }
+    }
+
     private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
         rustWriter.rustTemplate(
             """
@@ -406,7 +493,7 @@ class ServerProtocolTestGenerator(
         if (body == "") {
             rustWriter.rustTemplate(
                 """
-                // No body
+                // No body.
                 #{AssertEq}(std::str::from_utf8(&body).unwrap(), "");
                 """,
                 *codegenScope
@@ -437,6 +524,18 @@ class ServerProtocolTestGenerator(
             """
             assert_eq!(response_extensions.operation(), format!("{}#{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
             """.trimIndent()
+        )
+    }
+
+    private fun checkStatusCode(rustWriter: RustWriter, statusCode: Int) {
+        rustWriter.rustTemplate(
+            """
+            #{AssertEq}(
+                http::StatusCode::from_u16($statusCode).expect("invalid expected HTTP status code"),
+                http_response.status()
+            );
+            """,
+            *codegenScope
         )
     }
 
@@ -518,12 +617,13 @@ class ServerProtocolTestGenerator(
     }
 
     companion object {
-        sealed class Action {
-            object Request : Action()
-            object Response : Action()
+        sealed class TestType {
+            object Request : TestType()
+            object Response : TestType()
+            object MalformedRequest : TestType()
         }
 
-        data class FailingTest(val service: String, val id: String, val action: Action)
+        data class FailingTest(val service: String, val id: String, val testType: TestType)
 
         // These tests fail due to shortcomings in our implementation.
         // These could be configured via runtime configuration, but since this won't be long-lasting,
@@ -532,37 +632,649 @@ class ServerProtocolTestGenerator(
         private val JsonRpc10 = "aws.protocoltests.json10#JsonRpc10"
         private val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         private val RestJson = "aws.protocoltests.restjson#RestJson"
+        private val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
         private val RestXml = "aws.protocoltests.restxml#RestXml"
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
         private val ExpectFail = setOf<FailingTest>(
             // Headers.
-            FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", Action.Request),
-            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
+            FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
+            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", TestType.Response),
 
-            FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", Action.Response),
-            FailingTest(RestJson, "RestJsonEndpointTrait", Action.Request),
-            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", Action.Request),
-            FailingTest(RestJson, "RestJsonFooErrorUsingCode", Action.Response),
-            FailingTest(RestJson, "RestJsonFooErrorUsingCodeAndNamespace", Action.Response),
-            FailingTest(RestJson, "RestJsonFooErrorUsingCodeUriAndNamespace", Action.Response),
-            FailingTest(RestJson, "RestJsonFooErrorWithDunderType", Action.Response),
-            FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeAndNamespace", Action.Response),
-            FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeUriAndNamespace", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpResponseCode", Action.Response),
-            FailingTest(RestJson, "RestJsonNoInputAndNoOutput", Action.Response),
-            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", Action.Response),
-            FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", Action.Request),
-            FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", Action.Request),
+            FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", TestType.Response),
+            FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
+            FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
+            FailingTest(RestJson, "RestJsonFooErrorUsingCode", TestType.Response),
+            FailingTest(RestJson, "RestJsonFooErrorUsingCodeAndNamespace", TestType.Response),
+            FailingTest(RestJson, "RestJsonFooErrorUsingCodeUriAndNamespace", TestType.Response),
+            FailingTest(RestJson, "RestJsonFooErrorWithDunderType", TestType.Response),
+            FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeAndNamespace", TestType.Response),
+            FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeUriAndNamespace", TestType.Response),
+            FailingTest(RestJson, "RestJsonHttpResponseCode", TestType.Response),
+            FailingTest(RestJson, "RestJsonNoInputAndNoOutput", TestType.Response),
+            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", TestType.Response),
+            FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
+            FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
 
-            FailingTest("com.amazonaws.s3#AmazonS3", "GetBucketLocationUnwrappedOutput", Action.Response),
-            FailingTest("com.amazonaws.s3#AmazonS3", "S3DefaultAddressing", Action.Request),
-            FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostAddressing", Action.Request),
-            FailingTest("com.amazonaws.s3#AmazonS3", "S3PathAddressing", Action.Request),
-            FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostDualstackAddressing", Action.Request),
-            FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostAccelerateAddressing", Action.Request),
-            FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostDualstackAccelerateAddressing", Action.Request),
-            FailingTest("com.amazonaws.s3#AmazonS3", "S3OperationAddressingPreferred", Action.Request),
+            FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonAccept", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedAccept", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonWithPayloadExpectsModeledAccept", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case11", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case12", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case13", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case14", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case15", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case16", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case17", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case18", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case19", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case20", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case21", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanBadLiteral_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case11", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case12", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case13", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case14", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case15", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case16", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case17", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case18", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case19", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case20", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case21", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case22", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case23", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyBooleanStringCoercion_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case11", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case12", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case13", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case14", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case15", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case16", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case17", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case18", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case19", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case20", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case21", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderBooleanStringCoercion_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case11", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case12", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case13", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case14", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case15", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case16", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case17", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case18", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case19", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case20", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case21", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathBooleanStringCoercion_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case11", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case12", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case13", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case14", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case15", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case16", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case17", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case18", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case19", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case20", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case21", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryBooleanStringCoercion_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteUnderflowOverflow_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyByteUnderflowOverflow_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteUnderflowOverflow_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderByteUnderflowOverflow_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteUnderflowOverflow_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathByteUnderflowOverflow_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteUnderflowOverflow_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryByteUnderflowOverflow_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonContentType", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedContentType", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonWithPayloadExpectsModeledContentType", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonWithoutBodyExpectsEmptyContentType", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyDoubleMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyDoubleMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyDoubleMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyDoubleMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyDoubleMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyDoubleMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyDoubleMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderDoubleMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderDoubleMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderDoubleMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathDoubleMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathDoubleMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathDoubleMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryDoubleMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryDoubleMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryDoubleMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyFloatMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyFloatMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyFloatMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyFloatMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyFloatMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyFloatMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyFloatMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderFloatMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderFloatMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderFloatMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathFloatMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathFloatMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathFloatMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryFloatMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryFloatMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryFloatMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerMalformedValueRejected_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyIntegerUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderIntegerMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderIntegerMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderIntegerMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderIntegerMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderIntegerMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderIntegerMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderIntegerMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderIntegerUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderIntegerUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderIntegerUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathIntegerMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathIntegerMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathIntegerMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathIntegerMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathIntegerMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathIntegerMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathIntegerMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathIntegerUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathIntegerUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathIntegerUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryIntegerMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryIntegerMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryIntegerMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryIntegerMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryIntegerMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryIntegerMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryIntegerMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryIntegerUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryIntegerUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryIntegerUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedListNullItem", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedListUnclosed", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedMapNullKey", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyMalformedMapNullValue", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyLongUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderLongMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderLongMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderLongMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderLongMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderLongMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderLongMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderLongMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderLongUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderLongUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderLongUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathLongMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathLongMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathLongMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathLongMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathLongMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathLongMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathLongMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathLongUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathLongUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathLongUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryLongMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryLongMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryLongMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryLongMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryLongMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryLongMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryLongMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryLongUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryLongUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryLongUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonInvalidJsonBody_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonInvalidJsonBody_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonInvalidJsonBody_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonInvalidJsonBody_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonInvalidJsonBody_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonInvalidJsonBody_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonInvalidJsonBody_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonInvalidJsonBody_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonTechnicallyValidJsonBody_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonTechnicallyValidJsonBody_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonTechnicallyValidJsonBody_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonMalformedSetDuplicateItems", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonMalformedSetNullItem", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortUnderflowOverflow_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyShortUnderflowOverflow_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortUnderflowOverflow_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderShortUnderflowOverflow_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortUnderflowOverflow_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathShortUnderflowOverflow_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortMalformedValueRejected_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortMalformedValueRejected_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortMalformedValueRejected_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortMalformedValueRejected_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortMalformedValueRejected_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortMalformedValueRejected_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortMalformedValueRejected_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortUnderflowOverflow_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortUnderflowOverflow_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortUnderflowOverflow_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortUnderflowOverflow_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryShortUnderflowOverflow_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderMalformedStringInvalidBase64MediaType_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderMalformedStringInvalidBase64MediaType_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderMalformedStringInvalidBase64MediaType_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderMalformedStringInvalidBase64MediaType_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case11", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case12", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case13", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case14", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsDifferent8601Formats_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsEpochSeconds_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsEpochSeconds_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsHttpDate_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsHttpDate_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsUTCOffsets_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsDateTime_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsDateTime_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsDateTime_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsHttpDate_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsHttpDate_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsStringifiedEpochSeconds_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsStringifiedEpochSeconds_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampHttpDateRejectsDateTime_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampHttpDateRejectsDateTime_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampHttpDateRejectsDateTime_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampHttpDateRejectsEpoch_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonBodyTimestampHttpDateRejectsEpoch_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case11", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case12", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case13", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case14", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsDifferent8601Formats_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsEpochSeconds_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsEpochSeconds_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsHttpDate_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDateTimeRejectsHttpDate_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDefaultRejectsDateTime_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDefaultRejectsDateTime_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDefaultRejectsDateTime_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDefaultRejectsEpochSeconds_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampDefaultRejectsEpochSeconds_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsDateTime_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsDateTime_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsDateTime_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsHttpDate_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsHttpDate_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsMalformedValues_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsMalformedValues_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsMalformedValues_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsMalformedValues_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsMalformedValues_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsMalformedValues_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonHeaderTimestampEpochRejectsMalformedValues_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case11", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case12", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case13", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case14", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsEpochSeconds_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsEpochSeconds_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsHttpDate_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsHttpDate_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsUTCOffsets", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsDateTime_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsDateTime_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsDateTime_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsHttpDate_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsHttpDate_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsMalformedValues_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsMalformedValues_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsMalformedValues_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsMalformedValues_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsMalformedValues_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsMalformedValues_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampEpochRejectsMalformedValues_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampHttpDateRejectsDateTime_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampHttpDateRejectsDateTime_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampHttpDateRejectsDateTime_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampHttpDateRejectsEpochSeconds_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonPathTimestampHttpDateRejectsEpochSeconds_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case10", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case11", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case12", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case13", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case14", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case7", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case8", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case9", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsEpochSeconds_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsEpochSeconds_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsHttpDate_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsHttpDate_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsUTCOffsets", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsDateTime_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsDateTime_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsDateTime_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsHttpDate_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsHttpDate_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsMalformedValues_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsMalformedValues_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsMalformedValues_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsMalformedValues_case3", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsMalformedValues_case4", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsMalformedValues_case5", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampEpochRejectsMalformedValues_case6", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampHttpDateRejectsDateTime_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampHttpDateRejectsDateTime_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampHttpDateRejectsDateTime_case2", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampHttpDateRejectsEpochSeconds_case0", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonQueryTimestampHttpDateRejectsEpochSeconds_case1", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonMalformedUnionKnownAndUnknownFieldsSet", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonMalformedUnionMultipleFieldsSet", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonMalformedUnionValueIsArray", TestType.MalformedRequest),
+
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapValue_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapValue_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumString_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumString_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumUnion_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedEnumUnion_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlobOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlobOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthListOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthListOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthStringOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthStringOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlob_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlob_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthList_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthList_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthListValue_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthListValue_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMap_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMap_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapKey_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapKey_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapValue_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapValue_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthString_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthString_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternListOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternListOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKeyOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKeyOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapValueOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapValueOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternStringOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternStringOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternUnionOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternUnionOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternList_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternList_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKey_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKey_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapValue_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapValue_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternReDOSString", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternString_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternString_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternUnion_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternUnion_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeByteOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeByteOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeByte_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeByte_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMaxStringOverride", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMinStringOverride", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthQueryStringNoValue", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMaxString", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthMinString", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxByteOverride", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloatOverride", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinByteOverride", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloatOverride", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxByte", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloat", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinByte", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloat", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRequiredBodyExplicitNull", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRequiredBodyUnset", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRequiredHeaderUnset", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedRecursiveStructures", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedPatternSensitiveString", TestType.MalformedRequest),
+
+            // Some tests for the S3 service (restXml).
+            FailingTest("com.amazonaws.s3#AmazonS3", "GetBucketLocationUnwrappedOutput", TestType.Response),
+            FailingTest("com.amazonaws.s3#AmazonS3", "S3DefaultAddressing", TestType.Request),
+            FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostAddressing", TestType.Request),
+            FailingTest("com.amazonaws.s3#AmazonS3", "S3PathAddressing", TestType.Request),
+            FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostDualstackAddressing", TestType.Request),
+            FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostAccelerateAddressing", TestType.Request),
+            FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostDualstackAccelerateAddressing", TestType.Request),
+            FailingTest("com.amazonaws.s3#AmazonS3", "S3OperationAddressingPreferred", TestType.Request),
         )
         private val RunOnly: Set<String>? = null
 
