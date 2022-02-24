@@ -114,7 +114,7 @@ impl Builder {
         self
     }
 
-    /// Timeout for the given [`ProvideCredentials`] implementation.
+    /// Timeout for the entire credential loading chain.
     ///
     /// Defaults to 5 seconds.
     pub fn load_timeout(mut self, timeout: Duration) -> Self {
@@ -122,7 +122,7 @@ impl Builder {
         self
     }
 
-    /// Timeout for the given [`ProvideCredentials`] implementation.
+    /// Timeout for the entire credential loading chain.
     ///
     /// Defaults to 5 seconds.
     pub fn set_load_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
