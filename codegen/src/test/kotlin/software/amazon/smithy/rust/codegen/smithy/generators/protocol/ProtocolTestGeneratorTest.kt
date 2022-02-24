@@ -71,7 +71,13 @@ private class TestProtocolMakeOperationGenerator(
     protocol: Protocol,
     body: String,
     private val httpRequestBuilder: String
-) : MakeOperationGenerator(codegenContext, protocol, TestProtocolPayloadGenerator(body)) {
+) : MakeOperationGenerator(
+    codegenContext,
+    protocol,
+    TestProtocolPayloadGenerator(body),
+    public = true,
+    includeDefaultPayloadHeaders = true
+) {
     override fun createHttpRequest(writer: RustWriter, operationShape: OperationShape) {
         writer.rust("#T::new()", RuntimeType.HttpRequestBuilder)
         writer.writeWithNoFormatting(httpRequestBuilder)

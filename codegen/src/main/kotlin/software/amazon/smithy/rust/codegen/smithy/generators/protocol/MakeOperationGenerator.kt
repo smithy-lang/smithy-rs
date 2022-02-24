@@ -38,10 +38,10 @@ open class MakeOperationGenerator(
     protected val codegenContext: CodegenContext,
     private val protocol: Protocol,
     private val bodyGenerator: ProtocolPayloadGenerator,
-    private val functionName: String = "make_operation",
-    private val public: Boolean = true,
+    private val public: Boolean,
     /** Whether or not to include default values for content-length and content-type */
-    private val includeDefaultPayloadHeaders: Boolean = true,
+    private val includeDefaultPayloadHeaders: Boolean,
+    private val functionName: String = "make_operation",
 ) {
     protected val model = codegenContext.model
     protected val runtimeConfig = codegenContext.runtimeConfig
@@ -79,7 +79,7 @@ open class MakeOperationGenerator(
         val fnType = if (public) "pub async fn" else "async fn"
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
-        Attribute.Custom("allow(unused_mut)").render(implBlockWriter) // For codegen simplicity
+        Attribute.AllowUnusedMut.render(implBlockWriter) // For codegen simplicity
         Attribute.Custom("allow(clippy::let_and_return)").render(implBlockWriter) // For codegen simplicity, allow `let x = ...; x`
         Attribute.Custom("allow(clippy::needless_borrow)").render(implBlockWriter) // Allows builders that don’t consume the input borrow
         implBlockWriter.rustBlockTemplate(

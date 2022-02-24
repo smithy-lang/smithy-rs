@@ -11,6 +11,8 @@ use s3::presigning::config::PresigningConfig;
 use std::error::Error;
 use std::time::{Duration, SystemTime};
 
+/// Generates a `PresignedRequest` from the given input.
+/// Assumes that that input has a `presigned` method on it.
 macro_rules! presign_input {
     ($input:expr) => {{
         let creds = s3::Credentials::new(
