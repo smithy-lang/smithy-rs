@@ -1,5 +1,4 @@
-# Without this empty workspace configuration, the workspace would be read from `rust-runtime`,
-# causing the build to fail.
+# Without this configuration, the workspace will be read from `rust-runtime`, causing the build to fail.
 [workspace]
 members = [
     "pokemon-service",
