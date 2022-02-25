@@ -68,7 +68,7 @@ jobs:
         - name: Clippy
           run: cargo clippy --all-features
         - name: Unused Dependencies
-          run: cargo +nightly-2022-02-08 udeps
+          run: cargo +nightly-2022-02-22 udeps
         - name: Additional per-crate checks
           run: ../tools/additional-per-crate-checks.sh ./sdk/ ../tools/ci-cdk/
     env:
@@ -87,7 +87,7 @@ jobs:
         default: true
     - uses: actions-rs/toolchain@v1
       with:
-        toolchain: nightly-2022-02-08
+        toolchain: nightly-2022-02-22
         default: false
     - name: Cache cargo bin
       uses: actions/cache@v2
@@ -97,11 +97,15 @@ jobs:
     - name: Install additional cargo binaries
       run: |
         if [[ ! -f ~/.cargo/bin/cargo-udeps ]]; then
-          cargo +nightly-2022-02-08 install cargo-udeps
+          cargo +nightly-2022-02-22 install cargo-udeps
         fi
         if [[ ! -f ~/.cargo/bin/cargo-hack ]]; then
           cargo install cargo-hack
         fi
+        # Install the api-linter tool for finding external types in public APIs
+        pushd tools/api-linter &>/dev/null
+        cargo install --debug --path .
+        popd &>/dev/null
     - name: Generate a name for the SDK
       id: gen-name
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
