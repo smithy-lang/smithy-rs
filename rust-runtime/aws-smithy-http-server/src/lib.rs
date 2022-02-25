@@ -16,7 +16,10 @@ mod extension;
 pub mod routing;
 
 #[doc(hidden)]
+pub mod exception;
+#[doc(hidden)]
 pub mod protocols;
+#[doc(hidden)]
 pub mod rejection;
 
 #[doc(inline)]

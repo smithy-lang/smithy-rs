@@ -1,0 +1,103 @@
+diff --git a/src/operation.rs b/src/operation.rs
+index 4d9d840..8dd142d 100644
+--- a/src/operation.rs
++++ b/src/operation.rs
+@@ -6,17 +6,40 @@ impl<B> axum_core::extract::FromRequest<B> for AnOperationOperationInputWrapper
+ where
+     B: aws_smithy_http_server::body::HttpBody + Send,
+     B::Data: Send,
+-    B::Error: Into<aws_smithy_http_server::BoxError>,
+-    aws_smithy_http_server::rejection::SmithyRejection:
++    aws_smithy_http_server::exception::FromRequest:
+         From<<B as aws_smithy_http_server::body::HttpBody>::Error>,
+ {
+-    type Rejection = aws_smithy_http_server::rejection::SmithyRejection;
++    type Rejection = aws_smithy_http_server::exception::SmithyFrameworkException;
+     async fn from_request(
+         req: &mut axum_core::extract::RequestParts<B>,
+     ) -> Result<Self, Self::Rejection> {
+-        Ok(AnOperationOperationInputWrapper(
+-            crate::operation_deser::parse_an_operation_request(req).await?,
+-        ))
++        crate::operation_deser::parse_an_operation_request(req)
++            .await
++            .map(|input| AnOperationOperationInputWrapper(input))
++            .map_err(
++                |err| aws_smithy_http_server::exception::SmithyFrameworkException {
++                    protocol: aws_smithy_http_server::protocols::Protocol::RestJson1,
++                    exception_type:
++                        aws_smithy_http_server::exception::SmithyFrameworkExceptionType::from(err),
++                },
++            )
++        // match res {
++        //     Ok(inner) => Ok(AnOperationOperationInputWrapper(inner)),
++        //     Err(err) => {
++        //         let exception_type =
++        //             aws_smithy_http_server::exception::SmithyFrameworkExceptionType::from(err);
++        //         Err(
++        //             aws_smithy_http_server::exception::SmithyFrameworkException {
++        //                 protocol: aws_smithy_http_server::protocols::Protocol::RestJson1,
++        //                 exception_type,
++        //             },
++        //         )
++        //     }
++        // }
++
++        // Ok(AnOperationOperationInputWrapper(
++        //     crate::operation_deser::parse_an_operation_request(req).await?,
++        // ))
+     }
+ }
+ pub enum AnOperationOperationOutputWrapper {
+diff --git a/src/operation_deser.rs b/src/operation_deser.rs
+index 78b08de..48906b4 100644
+--- a/src/operation_deser.rs
++++ b/src/operation_deser.rs
+@@ -9,8 +9,8 @@ pub async fn parse_an_operation_request<B>(
+ where
+     B: aws_smithy_http_server::body::HttpBody + Send,
+     B::Data: Send,
+-    B::Error: Into<aws_smithy_http_server::BoxError>,
+-    aws_smithy_http_server::rejection::SmithyRejection:
++    // This is needed by the `hyper::body::to_bytes(body).await?` statement.
++    aws_smithy_http_server::exception::FromRequest:
+         From<<B as aws_smithy_http_server::body::HttpBody>::Error>,
+ {
+     Ok({
+@@ -18,7 +18,13 @@ where
+         let mut input = crate::input::an_operation_input::Builder::default();
+         let body = request
+             .take_body()
+-            .ok_or(aws_smithy_http_server::exception::BodyAlreadyExtracted)?;
++            .ok_or(aws_smithy_http_server::exception::FromRequest::BodyAlreadyExtracted)?;
++
++        // let bytes = hyper::body::to_bytes(body).await.map_err(|err| {
++        //     aws_smithy_http_server::exception::FromRequest::HttpBody(
++        //         aws_smithy_http_server::Error::new(err),
++        //     )
++        // })?;
+         let bytes = hyper::body::to_bytes(body).await?;
+         if !bytes.is_empty() {
+             aws_smithy_http_server::protocols::check_json_content_type(request)?;
+diff --git a/src/operation_handler.rs b/src/operation_handler.rs
+index 9ac58a1..a7e203f 100644
+--- a/src/operation_handler.rs
++++ b/src/operation_handler.rs
+@@ -10,7 +10,7 @@ where
+     B: aws_smithy_http_server::body::HttpBody + Send + 'static,
+     B::Data: Send,
+     B::Error: Into<aws_smithy_http_server::BoxError>,
+-    aws_smithy_http_server::rejection::SmithyRejection:
++    aws_smithy_http_server::exception::FromRequest:
+         From<<B as aws_smithy_http_server::body::HttpBody>::Error>,
+ {
+     type Sealed = crate::server_operation_handler_trait::sealed::Hidden;
+@@ -62,7 +62,7 @@ where
+     B: aws_smithy_http_server::body::HttpBody + Send + 'static,
+     B::Data: Send,
+     B::Error: Into<aws_smithy_http_server::BoxError>,
+-    aws_smithy_http_server::rejection::SmithyRejection:
++    aws_smithy_http_server::exception::FromRequest:
+         From<<B as aws_smithy_http_server::body::HttpBody>::Error>,
+ {
+     type Sealed = crate::server_operation_handler_trait::sealed::Hidden;

@@ -57,64 +57,6 @@ define_rejection! {
     pub struct HeadersParse(Error);
 }
 
-define_rejection! {
-    #[status = BAD_REQUEST]
-    #[body = "Expected `Content-Type: application/json`"]
-    /// Rejection type used if the JSON `Content-Type` header is missing.
-    pub struct MissingJsonContentType;
-}
-
-define_rejection! {
-    #[status = BAD_REQUEST]
-    #[body = "Expected `Content-Type: application/xml`"]
-    /// Rejection type used if the XML `Content-Type` header is missing.
-    pub struct MissingXmlContentType;
-}
-
-define_rejection! {
-    #[status = BAD_REQUEST]
-    #[body = "Failed to parse request MIME type"]
-    /// Rejection type used if the MIME type parsing failed.
-    pub struct MimeParsingFailed;
-}
-
-define_rejection! {
-    #[status = INTERNAL_SERVER_ERROR]
-    #[body = "Extensions taken by other extractor"]
-    /// Rejection used if the request extension has been taken by another
-    /// extractor.
-    pub struct ExtensionsAlreadyExtracted;
-}
-
-define_rejection! {
-    #[status = INTERNAL_SERVER_ERROR]
-    #[body = "Missing request extension"]
-    /// Rejection type for [`Extension`](super::Extension) if an expected
-    /// request extension was not found.
-    pub struct MissingExtension(Error);
-}
-
-composite_rejection! {
-    /// Rejection used for `Content-Type` errors such as missing `Content-Type`
-    /// header, MIME parse issues, etc.
-    pub enum ContentTypeRejection {
-        MissingJsonContentType,
-        MissingXmlContentType,
-        MimeParsingFailed,
-    }
-}
-
-composite_rejection! {
-    /// Rejection used for [`Extension`](super::Extension).
-    ///
-    /// Contains one variant for each way the [`Extension`](super::Extension) extractor
-    /// can fail.
-    pub enum ExtensionHandlingRejection {
-        MissingExtension,
-        ExtensionsAlreadyExtracted,
-    }
-}
-
 composite_rejection! {
     /// General rejection type used by `smithy-rs` auto-generated extractors and responders.
     ///
@@ -229,5 +171,67 @@ impl From<serde_urlencoded::de::Error> for SmithyRejection {
 impl From<nom::Err<nom::error::Error<&str>>> for SmithyRejection {
     fn from(err: nom::Err<nom::error::Error<&str>>) -> Self {
         SmithyRejection::Deserialize(Deserialize::from_err(err.to_owned()))
+    }
+}
+
+/////////////////////////////////////////////////////////
+// These are the ones remaining used in FromRequest impls
+/////////////////////////////////////////////////////////
+
+define_rejection! {
+    #[status = BAD_REQUEST]
+    #[body = "Expected `Content-Type: application/json`"]
+    /// Rejection type used if the JSON `Content-Type` header is missing.
+    pub struct MissingJsonContentType;
+}
+
+define_rejection! {
+    #[status = BAD_REQUEST]
+    #[body = "Expected `Content-Type: application/xml`"]
+    /// Rejection type used if the XML `Content-Type` header is missing.
+    pub struct MissingXmlContentType;
+}
+
+define_rejection! {
+    #[status = BAD_REQUEST]
+    #[body = "Failed to parse request MIME type"]
+    /// Rejection type used if the MIME type parsing failed.
+    pub struct MimeParsingFailed;
+}
+
+define_rejection! {
+    #[status = INTERNAL_SERVER_ERROR]
+    #[body = "Extensions taken by other extractor"]
+    /// Rejection used if the request extension has been taken by another
+    /// extractor.
+    pub struct ExtensionsAlreadyExtracted;
+}
+
+define_rejection! {
+    #[status = INTERNAL_SERVER_ERROR]
+    #[body = "Missing request extension"]
+    /// Rejection type for [`Extension`](super::Extension) if an expected
+    /// request extension was not found.
+    pub struct MissingExtension(Error);
+}
+
+composite_rejection! {
+    /// Rejection used for `Content-Type` errors such as missing `Content-Type`
+    /// header, MIME parse issues, etc.
+    pub enum ContentTypeRejection {
+        MissingJsonContentType,
+        MissingXmlContentType,
+        MimeParsingFailed,
+    }
+}
+
+composite_rejection! {
+    /// Rejection used for [`Extension`](super::Extension).
+    ///
+    /// Contains one variant for each way the [`Extension`](super::Extension) extractor
+    /// can fail.
+    pub enum ExtensionHandlingRejection {
+        MissingExtension,
+        ExtensionsAlreadyExtracted,
     }
 }

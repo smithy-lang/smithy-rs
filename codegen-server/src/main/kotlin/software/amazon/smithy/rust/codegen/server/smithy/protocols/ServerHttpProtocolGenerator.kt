@@ -95,6 +95,12 @@ class ServerHttpProtocolGenerator(
             dependency = CargoDependency.SmithyHttpServer(runtimeConfig),
             namespace = "aws_smithy_http_server::rejection"
         )
+
+        fun smithyFrameworkException(runtimeConfig: RuntimeConfig) = RuntimeType(
+            "SmithyFrameworkException",
+            dependency = CargoDependency.SmithyHttpServer(runtimeConfig),
+            namespace = "aws_smithy_http_server::exception"
+        )
     }
 }
 
@@ -130,6 +136,7 @@ private class ServerHttpProtocolImplGenerator(
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
+        "SmithyFrameworkException" to ServerHttpProtocolGenerator.smithyFrameworkException(runtimeConfig),
         "http" to RuntimeType.http
     )
 
@@ -158,6 +165,7 @@ private class ServerHttpProtocolImplGenerator(
         val inputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
 
         // Implement Axum `FromRequest` trait for input types.
+        // TODO RestJson1 hardcoded
         rustTemplate(
             """
             ##[derive(Debug)]
@@ -167,12 +175,19 @@ private class ServerHttpProtocolImplGenerator(
             where
                 B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
                 B::Data: Send,
-                B::Error: Into<#{SmithyHttpServer}::BoxError>,
-                #{SmithyRejection}: From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                #{SmithyHttpServer}::exception::FromRequest : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
             {
-                type Rejection = #{SmithyRejection};
+                type Rejection = #{SmithyHttpServer}::exception::SmithyFrameworkException;
                 async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
-                    Ok($inputName(#{parse_request}(req).await?))
+                    #{parse_request}(req)
+                        .await
+                        .map(|input| $inputName(input))
+                        .map_err(
+                            |err| #{SmithyHttpServer}::exception::SmithyFrameworkException {
+                                protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
+                                exception_type: err.into()
+                            }
+                        )
                 }
             }
             """.trimIndent(),
@@ -325,19 +340,19 @@ private class ServerHttpProtocolImplGenerator(
 
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
+            // The last conversion trait bound is needed by the `hyper::body::to_bytes(body).await?` call.
             it.rustBlockTemplate(
                 """
                 pub async fn $fnName<B>(
                     ##[allow(unused_variables)] request: &mut #{AxumCore}::extract::RequestParts<B>
                 ) -> std::result::Result<
                     #{I},
-                    #{SmithyRejection}
+                    #{SmithyHttpServer}::exception::FromRequest
                 >
                 where
                     B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
                     B::Data: Send,
-                    B::Error: Into<#{SmithyHttpServer}::BoxError>,
-                    #{SmithyRejection}: From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                    #{SmithyHttpServer}::exception::FromRequest: From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
                 """.trimIndent(),
                 *codegenScope,
                 "I" to inputSymbol,
@@ -581,7 +596,7 @@ private class ServerHttpProtocolImplGenerator(
             val contentTypeCheck = getContentTypeCheck()
             rustTemplate(
                 """
-                let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
+                let body = request.take_body().ok_or(#{SmithyHttpServer}::exception::FromRequest::BodyAlreadyExtracted)?;
                 let bytes = #{Hyper}::body::to_bytes(body).await?;
                 if !bytes.is_empty() {
                     #{SmithyHttpServer}::protocols::$contentTypeCheck(request)?;
@@ -616,7 +631,6 @@ private class ServerHttpProtocolImplGenerator(
         httpBindingGenerator: ServerRequestBindingGenerator,
         structuredDataParser: StructuredDataParserGenerator,
     ): Writable? {
-        val errorSymbol = getDeserializeErrorSymbol(binding)
         return when (binding.location) {
             HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
             HttpLocation.PREFIX_HEADERS -> writable { serverRenderPrefixHeadersParser(this, binding, operationShape) }
@@ -626,7 +640,7 @@ private class ServerHttpProtocolImplGenerator(
                         rustTemplate(
                             """
                             {
-                                let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
+                                let body = request.take_body().ok_or(#{SmithyHttpServer}::exception::FromRequest::BodyAlreadyExtracted)?;
                                 Some(body.into())
                             }
                             """.trimIndent(),
@@ -637,6 +651,7 @@ private class ServerHttpProtocolImplGenerator(
                     val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
                         rust("#T($body)", structuredDataParser.payloadParser(binding.member))
                     }
+                    val errorSymbol = getDeserializeErrorSymbol(binding)
                     val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
                         operationShape,
                         binding,
@@ -647,7 +662,7 @@ private class ServerHttpProtocolImplGenerator(
                         rustTemplate(
                             """
                             {
-                                let body = request.take_body().ok_or(#{SmithyHttpServer}::rejection::BodyAlreadyExtracted)?;
+                                let body = request.take_body().ok_or(#{SmithyHttpServer}::exception::FromRequest::BodyAlreadyExtracted)?;
                                 let bytes = #{Hyper}::body::to_bytes(body).await?;
                                 #{Deserializer}(&bytes)?
                             }
@@ -941,7 +956,7 @@ private class ServerHttpProtocolImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
-            #{deserializer}(request.headers().ok_or(#{SmithyHttpServer}::rejection::HeadersAlreadyExtracted)?)?
+            #{deserializer}(request.headers().ok_or(#{SmithyHttpServer}::exception::FromRequest::HeadersAlreadyExtracted)?)?
             """.trimIndent(),
             "deserializer" to deserializer,
             *codegenScope
@@ -960,7 +975,7 @@ private class ServerHttpProtocolImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
         writer.rustTemplate(
             """
-            #{deserializer}(request.headers().ok_or(#{SmithyHttpServer}::rejection::HeadersAlreadyExtracted)?)?
+            #{deserializer}(request.headers().ok_or(#{SmithyHttpServer}::exception::FromRequest::HeadersAlreadyExtracted)?)?
             """.trimIndent(),
             "deserializer" to deserializer,
             *codegenScope
@@ -984,7 +999,7 @@ private class ServerHttpProtocolImplGenerator(
         val fnName = generateParseStrFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
-                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyRejection}>",
+                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyHttpServer}::exception::FromRequest>",
                 *codegenScope,
                 "O" to output,
             ) {
@@ -1015,10 +1030,11 @@ private class ServerHttpProtocolImplGenerator(
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
-                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyRejection}>",
+                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyHttpServer}::exception::FromRequest>",
                 *codegenScope,
                 "O" to output,
             ) {
+                // TODO Do we really need percent decoding here? We've just serde_urlencoded.
                 rustTemplate(
                     """
                     let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
@@ -1032,13 +1048,16 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
+    // TODO Why are we not using percent_decode?
     // TODO These functions can be replaced with the ones in https://docs.rs/aws-smithy-types/latest/aws_smithy_types/primitive/trait.Parse.html
+    // TODO I think this is used when O is integer and boolean too.
+    // Used in path and query deserializing.
     private fun generateParseStrAsPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
-                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyRejection}>",
+                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{SmithyHttpServer}::exception::FromRequest>",
                 *codegenScope,
                 "O" to output,
             ) {
@@ -1073,9 +1092,10 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
+    // TODO Wth is this. It's only used once
     private fun getDeserializeErrorSymbol(binding: HttpBindingDescriptor): RuntimeType {
         if (model.expectShape(binding.member.target) is StringShape) {
-            return CargoDependency.SmithyHttpServer(runtimeConfig).asType().member("rejection").member("SmithyRejection")
+            return CargoDependency.SmithyHttpServer(runtimeConfig).asType().member("exception").member("FromRequest")
         }
         when (codegenContext.protocol) {
             RestJson1Trait.ID -> {

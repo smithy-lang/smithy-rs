@@ -7,6 +7,11 @@
 use crate::rejection::{ContentTypeRejection, MimeParsingFailed, MissingJsonContentType, MissingXmlContentType};
 use axum_core::extract::RequestParts;
 
+#[derive(Debug)]
+pub enum Protocol {
+    RestJson1,
+}
+
 /// Validate that the request had the standard JSON content-type header.
 pub fn check_json_content_type<B>(req: &RequestParts<B>) -> Result<(), ContentTypeRejection> {
     let mime = req

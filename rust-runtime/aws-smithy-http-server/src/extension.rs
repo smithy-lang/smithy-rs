@@ -69,6 +69,7 @@ impl ResponseExtensions {
 pub struct ExtensionModeledError(&'static str);
 impl_extension_new_and_deref!(ExtensionModeledError);
 
+// TODO Docs.
 /// Extension type used to store the type of framework error caught during execution.
 /// These are unmodeled error, or rejection, defined in the runtime crates.
 #[derive(Debug, Clone)]

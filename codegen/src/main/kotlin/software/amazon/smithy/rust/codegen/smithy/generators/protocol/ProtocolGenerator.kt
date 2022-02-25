@@ -98,21 +98,8 @@ open class ProtocolGenerator(
      */
     private val traitGenerator: ProtocolTraitImplGenerator,
 ) {
-    private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
-
-    private val codegenScope = arrayOf(
-        "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
-        "OpBuildError" to codegenContext.runtimeConfig.operationBuildError(),
-        "Request" to RuntimeType.Http("request::Request"),
-        "RequestBuilder" to RuntimeType.HttpRequestBuilder,
-        "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-        "config" to RuntimeType.Config,
-        "header_util" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType().member("header"),
-        "http" to RuntimeType.http,
-        "operation" to RuntimeType.operationModule(runtimeConfig),
-    )
 
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
