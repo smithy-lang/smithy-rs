@@ -650,7 +650,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonFooErrorWithDunderType", TestType.Response),
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeAndNamespace", TestType.Response),
             FailingTest(RestJson, "RestJsonFooErrorWithDunderTypeUriAndNamespace", TestType.Response),
-            FailingTest(RestJson, "RestJsonHttpResponseCode", TestType.Response),
             FailingTest(RestJson, "RestJsonNoInputAndNoOutput", TestType.Response),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", TestType.Response),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
