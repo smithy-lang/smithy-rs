@@ -92,8 +92,7 @@ struct PokemonTranslations {
 ///     .into();
 /// let shared_state = Arc::new(State::default());
 /// let app = app.layer(ServiceBuilder::new().layer(AddExtensionLayer::new(shared_state)));
-/// let server =
-///     axum::Server::bind(&"0.0.0.0:13734".parse().unwrap()).serve(app.into_make_service());
+/// let server = hyper::Server::bind(&"0.0.0.0:13734".parse().unwrap()).serve(app.into_make_service());
 /// ...
 /// ```
 ///
