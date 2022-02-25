@@ -29,6 +29,11 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
+    # Install Rust
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        default: true
     - name: Run integration tests
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
