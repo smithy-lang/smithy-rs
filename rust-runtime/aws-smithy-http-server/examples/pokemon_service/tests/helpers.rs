@@ -13,7 +13,7 @@ pub(crate) struct PokemonService {
 
 impl PokemonService {
     pub(crate) fn run() -> Self {
-        let process = Command::cargo_bin("pokemon-service").unwrap().spawn().unwrap();
+        let process = Command::cargo_bin("pokemon_service").unwrap().spawn().unwrap();
 
         Self { child_process: process }
     }

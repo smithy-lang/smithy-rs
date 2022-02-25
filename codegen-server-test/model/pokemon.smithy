@@ -26,24 +26,26 @@ resource PokemonSpecies {
 @readonly
 @http(uri: "/pokemon-species/{name}", method: "GET")
 operation GetPokemonSpecies {
-    input: GetPokemonInput,
-    output: GetPokemonOutput,
+    input: GetPokemonSpeciesInput,
+    output: GetPokemonSpeciesOutput,
     errors: [ResourceNotFoundException],
 }
 
 @input
-structure GetPokemonInput {
+structure GetPokemonSpeciesInput {
     @required
     @httpLabel
     name: String
 }
 
 @output
-structure GetPokemonOutput {
+structure GetPokemonSpeciesOutput {
     /// The name for this resource.
+    @required
     name: String,
 
     /// A list of flavor text entries for this Pokémon species.
+    @required
     flavorTextEntries: FlavorTextEntries
 }
 
@@ -61,6 +63,7 @@ structure GetServerStatisticsInput { }
 @output
 structure GetServerStatisticsOutput {
     /// The number of calls executed by the server.
+    @required
     calls_count: Long,
 }
 
@@ -70,28 +73,30 @@ list FlavorTextEntries {
 
 structure FlavorText {
     /// The localized flavor text for an API resource in a specific language.
+    @required
     flavorText: String,
 
     /// The language this name is in.
+    @required
     language: Language,
 }
 
 /// Supported languages for FlavorText entries.
 @enum([
     {
+        name: "ENGLISH",
         value: "en",
-        name: "en",
-        documentation: "English.",
+        documentation: "American English.",
     },
     {
+        name: "SPANISH",
         value: "es",
-        name: "es",
-        documentation: "Español",
+        documentation: "Español.",
     },
     {
+        name: "ITALIAN",
         value: "it",
-        name: "it",
-        documentation: "Italiano",
+        documentation: "Italiano.",
     },
 ])
 string Language
@@ -99,5 +104,6 @@ string Language
 @error("client")
 @httpError(404)
 structure ResourceNotFoundException {
+    @required
     message: String,
 }

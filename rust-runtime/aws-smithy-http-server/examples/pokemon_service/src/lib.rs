@@ -15,7 +15,6 @@ use std::{
 
 use aws_smithy_http_server::Extension;
 use pokemon_service_sdk::{error, input, model, output};
-use tracing::{debug, error};
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
@@ -43,17 +42,6 @@ struct PokemonTranslations {
     en: String,
     es: String,
     it: String,
-}
-
-impl PokemonTranslations {
-    /// Create a new translations entry for a Pokémon.
-    pub fn new(en: String, es: String, it: String) -> Self {
-        Self {
-            en: String::from(en),
-            es: String::from(es),
-            it: String::from(it),
-        }
-    }
 }
 
 /// PokémonService shared state.
@@ -115,7 +103,7 @@ impl PokemonTranslations {
 /// [`middleware`]: [`aws_smithy_http_server::AddExtensionLayer`]
 #[derive(Debug)]
 pub struct State {
-    pokemon_translations: HashMap<String, PokemonTranslations>,
+    pokemons_translations: HashMap<String, PokemonTranslations>,
     call_count: AtomicU64,
 }
 
@@ -124,11 +112,11 @@ impl Default for State {
         let mut pokemons_translations = HashMap::new();
         pokemons_translations.insert(
             String::from("pikachu"),
-            PokemonTranslations::new(
-                PIKACHU_ENGLISH_FLAVOR_TEXT,
-                PIKACHU_SPANISH_FLAVOR_TEXT,
-                PIKACHU_ITALIAN_FLAVOR_TEXT,
-            ),
+            PokemonTranslations {
+                en: String::from(PIKACHU_ENGLISH_FLAVOR_TEXT),
+                es: String::from(PIKACHU_SPANISH_FLAVOR_TEXT),
+                it: String::from(PIKACHU_ITALIAN_FLAVOR_TEXT),
+            },
         );
         Self {
             pokemons_translations,
@@ -147,33 +135,33 @@ pub async fn get_pokemon_species(
     let pokemon = state.0.pokemons_translations.get(&input.name);
     match pokemon.as_ref() {
         Some(pokemon) => {
-            debug!("Requested Pokémon is {}", input.name);
-            let english_flavor_text = model::FlavorText::builder()
-                .flavor_text(&pokemon.en)
-                .language("en")
-                .build();
-            let spanish_flavor_text = model::FlavorText::builder()
-                .flavor_text(&pokemon.es)
-                .language("es")
-                .build();
-            let italian_flavor_text = model::FlavorText::builder()
-                .flavor_text(&pokemon.it)
-                .language("it")
-                .build();
-            let output = output::GetPokemonSpeciesOutput::builder()
-                .name("pikachu")
-                .flavor_text_entries(english_flavor_text)
-                .flavor_text_entries(spanish_flavor_text)
-                .flavor_text_entries(italian_flavor_text)
-                .build();
+            tracing::debug!("Requested Pokémon is {}", input.name);
+            let flavor_text_entries = vec![
+                model::FlavorText {
+                    flavor_text: pokemon.en.to_owned(),
+                    language: model::Language::English,
+                },
+                model::FlavorText {
+                    flavor_text: pokemon.es.to_owned(),
+                    language: model::Language::Spanish,
+                },
+                model::FlavorText {
+                    flavor_text: pokemon.it.to_owned(),
+                    language: model::Language::Italian,
+                },
+            ];
+            let output = output::GetPokemonSpeciesOutput {
+                name: String::from("pikachu"),
+                flavor_text_entries,
+            };
             Ok(output)
         }
         None => {
-            error!("Requested Pokémon {} not available", input.name);
+            tracing::error!("Requested Pokémon {} not available", input.name);
             Err(error::GetPokemonSpeciesError::ResourceNotFoundException(
-                error::ResourceNotFoundException::builder()
-                    .message("Requested Pokémon not available")
-                    .build(),
+                error::ResourceNotFoundException {
+                    message: String::from("Requested Pokémon not available"),
+                },
             ))
         }
     }
@@ -186,16 +174,14 @@ pub async fn get_server_statistics(
 ) -> output::GetServerStatisticsOutput {
     // Read the current calls count.
     let counter = state.0.call_count.load(std::sync::atomic::Ordering::SeqCst);
-    let counter = counter
+    let calls_count = counter
         .try_into()
         .map_err(|e| {
-            error!("Unable to convert u64 to i64: {}", e);
+            tracing::error!("Unable to convert u64 to i64: {}", e);
         })
         .unwrap_or(0);
-    debug!("This instance served {} requests", counter);
-    output::GetServerStatisticsOutput::builder()
-        .calls_count(counter)
-        .build()
+    tracing::debug!("This instance served {} requests", counter);
+    output::GetServerStatisticsOutput { calls_count }
 }
 
 #[cfg(test)]
@@ -204,10 +190,9 @@ mod tests {
 
     #[tokio::test]
     async fn get_pokemon_species_pikachu_spanish_flavor_text() {
-        let input = input::GetPokemonSpeciesInput::builder()
-            .name("pikachu")
-            .build()
-            .unwrap();
+        let input = input::GetPokemonSpeciesInput {
+            name: String::from("pikachu"),
+        };
 
         let state = Arc::new(State::default());
 
@@ -215,18 +200,14 @@ mod tests {
             .await
             .unwrap()
             .flavor_text_entries
-            .unwrap()
             .into_iter()
-            .find(|flavor_text| flavor_text.language == Some(String::from("es")))
+            .find(|flavor_text| flavor_text.language == model::Language::Spanish)
             .unwrap();
 
-        assert_eq!(
-            PIKACHU_SPANISH_FLAVOR_TEXT,
-            actual_spanish_flavor_text.flavor_text().unwrap()
-        );
+        assert_eq!(PIKACHU_SPANISH_FLAVOR_TEXT, actual_spanish_flavor_text.flavor_text());
 
-        let input = input::GetServerStatisticsInput::builder().build().unwrap();
+        let input = input::GetServerStatisticsInput {};
         let stats = get_server_statistics(input, Extension(state.clone())).await;
-        assert_eq!(1, stats.calls_count.unwrap());
+        assert_eq!(1, stats.calls_count);
     }
 }
