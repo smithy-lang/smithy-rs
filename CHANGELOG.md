@@ -1,4 +1,15 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+0.38.0 (Februrary 24, 2022)
+===========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#1197](https://github.com/awslabs/smithy-rs/issues/1197)) `aws_smithy_types::retry::RetryKind` had its `NotRetryable` variant split into `UnretryableFailure` and `Unnecessary`. If you implement the `ClassifyResponse`, then successful responses need to return `Unnecessary`, and failures that shouldn't be retried need to return `UnretryableFailure`.
+- ⚠ ([smithy-rs#1209](https://github.com/awslabs/smithy-rs/issues/1209)) `aws_smithy_types::primitive::Encoder` is now a struct rather than an enum, but its usage remains the same.
+- ⚠ ([smithy-rs#1217](https://github.com/awslabs/smithy-rs/issues/1217)) `ClientBuilder` helpers `rustls()` and `native_tls()` now return `DynConnector` and use dynamic dispatch rather than returning their concrete connector type that would allow static dispatch. If static dispatch is desired, then manually construct a connector to give to the builder. For example, for rustls: `builder.connector(Adapter::builder().build(aws_smithy_client::conns::https()))` (where `Adapter` is in `aws_smithy_client::hyper_ext`).
+
+**New this release:**
+- 🐛 ([smithy-rs#1197](https://github.com/awslabs/smithy-rs/issues/1197)) Fixed a bug that caused clients to eventually stop retrying. The cross-request retry allowance wasn't being reimbursed upon receiving a successful response, so once this allowance reached zero, no further retries would ever be attempted.
+
+
 0.37.0 (February 18th, 2022)
 ============================
 **Breaking Changes:**

@@ -68,7 +68,7 @@ jobs:
         - name: Clippy
           run: cargo clippy --all-features
         - name: Unused Dependencies
-          run: cargo +nightly udeps
+          run: cargo +nightly-2022-02-22 udeps
         - name: Additional per-crate checks
           run: ../tools/additional-per-crate-checks.sh ./sdk/ ../tools/ci-cdk/
     env:
@@ -87,7 +87,7 @@ jobs:
         default: true
     - uses: actions-rs/toolchain@v1
       with:
-        toolchain: nightly
+        toolchain: nightly-2022-02-22
         default: false
     - name: Cache cargo bin
       uses: actions/cache@v2
@@ -97,7 +97,7 @@ jobs:
     - name: Install additional cargo binaries
       run: |
         if [[ ! -f ~/.cargo/bin/cargo-udeps ]]; then
-          cargo +nightly install cargo-udeps
+          cargo +nightly-2022-02-22 install cargo-udeps
         fi
         if [[ ! -f ~/.cargo/bin/cargo-hack ]]; then
           cargo install cargo-hack

@@ -88,6 +88,9 @@
                     "target": "com.amazonaws.budgets#DescribeBudgetActionsForBudget"
                 },
                 {
+                    "target": "com.amazonaws.budgets#DescribeBudgetNotificationsForAccount"
+                },
+                {
                     "target": "com.amazonaws.budgets#DescribeBudgetPerformanceHistory"
                 },
                 {
@@ -559,6 +562,32 @@
                     "max": 100
                 },
                 "smithy.api#pattern": "^[^:\\\\]+$"
+            }
+        },
+        "com.amazonaws.budgets#BudgetNotificationsForAccount": {
+            "type": "structure",
+            "members": {
+                "Notifications": {
+                    "target": "com.amazonaws.budgets#Notifications"
+                },
+                "BudgetName": {
+                    "target": "com.amazonaws.budgets#BudgetName"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>\n         The budget name and associated notifications for an account.\n      </p>"
+            }
+        },
+        "com.amazonaws.budgets#BudgetNotificationsForAccountList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.budgets#BudgetNotificationsForAccount"
+            },
+            "traits": {
+                "smithy.api#length": {
+                    "min": 0,
+                    "max": 50
+                }
             }
         },
         "com.amazonaws.budgets#BudgetPerformanceHistory": {
@@ -1749,6 +1778,78 @@
                 }
             }
         },
+        "com.amazonaws.budgets#DescribeBudgetNotificationsForAccount": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.budgets#DescribeBudgetNotificationsForAccountRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.budgets#DescribeBudgetNotificationsForAccountResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.budgets#AccessDeniedException"
+                },
+                {
+                    "target": "com.amazonaws.budgets#ExpiredNextTokenException"
+                },
+                {
+                    "target": "com.amazonaws.budgets#InternalErrorException"
+                },
+                {
+                    "target": "com.amazonaws.budgets#InvalidNextTokenException"
+                },
+                {
+                    "target": "com.amazonaws.budgets#InvalidParameterException"
+                },
+                {
+                    "target": "com.amazonaws.budgets#NotFoundException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>\n\t\t\tLists the budget names and notifications that are associated with an account.\n\t\t</p>",
+                "smithy.api#paginated": {
+                    "inputToken": "NextToken",
+                    "outputToken": "NextToken",
+                    "items": "BudgetNotificationsForAccount",
+                    "pageSize": "MaxResults"
+                }
+            }
+        },
+        "com.amazonaws.budgets#DescribeBudgetNotificationsForAccountRequest": {
+            "type": "structure",
+            "members": {
+                "AccountId": {
+                    "target": "com.amazonaws.budgets#AccountId",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "MaxResults": {
+                    "target": "com.amazonaws.budgets#MaxResultsBudgetNotifications",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n\t\t\tAn integer that shows how many budget name entries a paginated response contains.\n\t\t</p>"
+                    }
+                },
+                "NextToken": {
+                    "target": "com.amazonaws.budgets#GenericString"
+                }
+            }
+        },
+        "com.amazonaws.budgets#DescribeBudgetNotificationsForAccountResponse": {
+            "type": "structure",
+            "members": {
+                "BudgetNotificationsForAccount": {
+                    "target": "com.amazonaws.budgets#BudgetNotificationsForAccountList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>\n\t\t\tA list of budget names and associated notifications for an account.\n\t\t</p>"
+                    }
+                },
+                "NextToken": {
+                    "target": "com.amazonaws.budgets#GenericString"
+                }
+            }
+        },
         "com.amazonaws.budgets#DescribeBudgetPerformanceHistory": {
             "type": "operation",
             "input": {
@@ -2479,6 +2580,16 @@
                 }
             }
         },
+        "com.amazonaws.budgets#MaxResultsBudgetNotifications": {
+            "type": "integer",
+            "traits": {
+                "smithy.api#box": {},
+                "smithy.api#range": {
+                    "min": 1,
+                    "max": 50
+                }
+            }
+        },
         "com.amazonaws.budgets#NotFoundException": {
             "type": "structure",
             "members": {
@@ -2554,7 +2665,7 @@
                 "smithy.api#documentation": "<p> The threshold of a notification.</p>",
                 "smithy.api#range": {
                     "min": 0,
-                    "max": 40000000000
+                    "max": 15000000000000
                 }
             }
         },
