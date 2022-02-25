@@ -18,7 +18,7 @@ mod helpers;
 #[tokio::test]
 async fn simple_integration_test() {
     let _program = PokemonService::run();
-    // Give PokemonService the time to start up.
+    // Give PokemonSérvice some time to start up.
     time::sleep(Duration::from_millis(50)).await;
 
     let service_statistics_out = client().get_server_statistics().send().await.unwrap();
@@ -32,7 +32,7 @@ async fn simple_integration_test() {
 
     let pokemon_species_error = client()
         .get_pokemon_species()
-        .name("some_pokÃ©mon")
+        .name("some_pokémon")
         .send()
         .await
         .unwrap_err();

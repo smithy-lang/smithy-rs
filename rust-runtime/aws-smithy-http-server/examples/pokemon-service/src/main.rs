@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-// This program is exported as a binary named pokemon-service
+// This program is exported as a binary named `pokemon-service`.
 use std::sync::Arc;
 
 use aws_smithy_http_server::{AddExtensionLayer, Router};
@@ -35,9 +35,7 @@ pub async fn main() {
             .layer(AddExtensionLayer::new(shared_state)),
     );
 
-    // Start the [`hyper server`].
-    //
-    // [`hyper server`]: [`hyper::Server`]
+    // Start the [`hyper::Server`].
     let server = hyper::Server::bind(&"0.0.0.0:13734".parse().unwrap()).serve(app.into_make_service());
 
     // Run forever-ish...

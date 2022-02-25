@@ -11,7 +11,7 @@ all: build
 codegen:
 	# We need to cd to the top-level git dir otherwise gradle won't run.
 	cd $(SRC_DIR); $(GRADLE) :codegen-test:assemble; $(GRADLE) :codegen-server-test:assemble
-	mkdir	-p $(SERVER_SDK_DST) $(CLIENT_SDK_DST)
+	mkdir -p $(SERVER_SDK_DST) $(CLIENT_SDK_DST)
 	cp -av $(SERVER_SDK_SRC)/* $(SERVER_SDK_DST)/
 	cp -av $(CLIENT_SDK_SRC)/* $(CLIENT_SDK_DST)/
 
@@ -21,7 +21,7 @@ build: codegen
 clean:
 	cargo clean || echo "Unable to run cargo clean"
 
-dist-clean: clean
+distclean: clean
 	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) Cargo.lock
 
 .PHONY: all

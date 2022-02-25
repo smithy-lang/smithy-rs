@@ -47,7 +47,7 @@ struct PokemonTranslations {
 
 impl PokemonTranslations {
     /// Create a new translations entry for a Pokémon.
-    pub fn new(en: &str, es: &str, it: &str) -> Self {
+    pub fn new(en: String, es: String, it: String) -> Self {
         Self {
             en: String::from(en),
             es: String::from(es),
@@ -58,7 +58,7 @@ impl PokemonTranslations {
 
 /// PokémonService shared state.
 ///
-/// Some application may want to manage state between handlers. Imagine having a database connection pool
+/// Some applications may want to manage state between handlers. Imagine having a database connection pool
 /// that can be shared between different handlers and operation implementations.
 /// State management can be expressed in a struct where the attributes hold the shared entities.
 ///
@@ -115,7 +115,7 @@ impl PokemonTranslations {
 /// [`middleware`]: [`aws_smithy_http_server::AddExtensionLayer`]
 #[derive(Debug)]
 pub struct State {
-    pokemons_translations: HashMap<String, PokemonTranslations>,
+    pokemon_translations: HashMap<String, PokemonTranslations>,
     call_count: AtomicU64,
 }
 
