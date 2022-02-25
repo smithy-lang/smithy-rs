@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 //! This module defines the `TriState` struct: a struct for tracking whether something is
 //! set, unset, or explicitly disabled
 

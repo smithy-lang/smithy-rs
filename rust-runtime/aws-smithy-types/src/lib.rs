@@ -16,6 +16,7 @@
 use std::collections::HashMap;
 
 pub mod base64;
+pub mod box_error;
 pub mod date_time;
 pub mod primitive;
 pub mod retry;

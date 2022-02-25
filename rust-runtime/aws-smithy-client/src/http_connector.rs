@@ -7,18 +7,18 @@
 //! that enable passing HTTP connectors around.
 
 use crate::erase::DynConnector;
+
 use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_types::box_error::BoxError;
 use http::version::Version as HttpVersion;
-use std::collections::HashSet;
+
 use std::error::Error;
+use std::fmt::{Display, Formatter};
 use std::time::Duration;
 use std::{fmt::Debug, sync::Arc};
 
 /// Type alias for a Connector factory function.
-pub type MakeConnectorFn = dyn Fn(
-        &MakeConnectorSettings,
-        Option<Arc<dyn AsyncSleep>>,
-    ) -> Result<DynConnector, Box<dyn Error + Send + Sync>>
+pub type MakeConnectorFn = dyn Fn(&MakeConnectorSettings, Option<Arc<dyn AsyncSleep>>) -> Result<DynConnector, BoxError>
     + Send
     + Sync;
 
@@ -66,7 +66,43 @@ impl HttpConnector {
             HttpConnector::ConnectorFn(func) => func(settings, sleep),
         }
     }
+
+    pub fn try_default() -> Result<Self, HttpConnectorError> {
+        if cfg!(feature = rustls) {
+            todo!("How do I actually create this?");
+            // Ok(HttpConnector::ConnectorFn(Arc::new(
+            //     |settings: &MakeConnectorSettings, sleep_impl: Option<Arc<dyn AsyncSleep>>| {
+            //         Ok(DynConnector::new(crate::conns::https()))
+            //     },
+            // )))
+        } else {
+            Err(HttpConnectorError::NoAvailableDefault)
+        }
+    }
 }
+
+#[non_exhaustive]
+#[derive(Debug)]
+pub enum HttpConnectorError {
+    NoAvailableDefault,
+    NoConnectorDefined,
+}
+
+impl Display for HttpConnectorError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HttpConnectorError::NoAvailableDefault => {
+                // TODO Update this error message with a link to an example demonstrating how to fix it
+                write!(
+                    f,
+                    "When default features are disabled, an HttpConnector must be set manually."
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for HttpConnectorError {}
 
 /// HttpSettings for HTTP Connectors
 #[non_exhaustive]
