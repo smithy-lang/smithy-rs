@@ -31,12 +31,14 @@ operation GetPokemonSpecies {
     errors: [ResourceNotFoundException],
 }
 
+@input
 structure GetPokemonInput {
     @required
     @httpLabel
     name: String
 }
 
+@output
 structure GetPokemonOutput {
     /// The name for this resource.
     name: String,
@@ -53,8 +55,10 @@ operation GetServerStatistics {
     output: GetServerStatisticsOutput,
 }
 
+@input
 structure GetServerStatisticsInput { }
 
+@output
 structure GetServerStatisticsOutput {
     /// The number of calls executed by the server.
     calls_count: Long,
@@ -69,8 +73,28 @@ structure FlavorText {
     flavorText: String,
 
     /// The language this name is in.
-    language: String,
+    language: Language,
 }
+
+/// Supported languages for FlavorText entries.
+@enum([
+    {
+        value: "en",
+        name: "en",
+        documentation: "English.",
+    },
+    {
+        value: "es",
+        name: "es",
+        documentation: "Español",
+    },
+    {
+        value: "it",
+        name: "it",
+        documentation: "Italiano",
+    },
+])
+string Language
 
 @error("client")
 @httpError(404)

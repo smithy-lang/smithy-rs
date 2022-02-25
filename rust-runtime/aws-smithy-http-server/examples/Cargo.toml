@@ -1,7 +1,7 @@
 # Without this configuration, the workspace will be read from `rust-runtime`, causing the build to fail.
 [workspace]
 members = [
-    "pokemon-service",
-    "pokemon-service-sdk",
-    "pokemon-service-client"
+    "pokemon_service",
+    "pokemon_service_sdk",
+    "pokemon_service_client"
 ]
