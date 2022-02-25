@@ -413,9 +413,9 @@ class HttpBindingGenerator(
         val (headerBindings, prefixHeaderBinding) = when (httpMessageType) {
             // Only a single structure member can be bound by `httpPrefixHeaders`, hence the `getOrNull(0)`.
             HttpMessageType.REQUEST -> index.getRequestBindings(shape, HttpLocation.HEADER) to
-                    index.getRequestBindings(shape, HttpLocation.PREFIX_HEADERS).getOrNull(0)
+                index.getRequestBindings(shape, HttpLocation.PREFIX_HEADERS).getOrNull(0)
             HttpMessageType.RESPONSE -> index.getResponseBindings(shape, HttpLocation.HEADER) to
-                    index.getRequestBindings(shape, HttpLocation.PREFIX_HEADERS).getOrNull(0)
+                index.getRequestBindings(shape, HttpLocation.PREFIX_HEADERS).getOrNull(0)
         }
 
         if (headerBindings.isEmpty() && prefixHeaderBinding == null) {
