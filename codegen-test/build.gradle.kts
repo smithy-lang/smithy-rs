@@ -83,17 +83,20 @@ val allCodegenTests = listOf(
         """
             , "codegen": { "renameErrors": false }
         """.trimIndent()
-    )
+    ),
+    CodegenTest("com.aws.example#PokemonService", "pokemon_service_client")
 )
 
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
         projectDir.resolve("smithy-build.json")
-            .writeText(generateSmithyBuild(
-                rootProject.projectDir.absolutePath,
-                pluginName,
-                codegenTests(properties, allCodegenTests))
+            .writeText(
+                generateSmithyBuild(
+                    rootProject.projectDir.absolutePath,
+                    pluginName,
+                    codegenTests(properties, allCodegenTests)
+                )
             )
     }
 }

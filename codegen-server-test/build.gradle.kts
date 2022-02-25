@@ -37,17 +37,20 @@ val allCodegenTests = listOf(
     CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
     CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation"),
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
-    CodegenTest("com.amazonaws.s3#AmazonS3", "s3")
+    CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
+    CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
 )
 
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
         projectDir.resolve("smithy-build.json")
-            .writeText(generateSmithyBuild(
-                rootProject.projectDir.absolutePath,
-                pluginName,
-                codegenTests(properties, allCodegenTests))
+            .writeText(
+                generateSmithyBuild(
+                    rootProject.projectDir.absolutePath,
+                    pluginName,
+                    codegenTests(properties, allCodegenTests)
+                )
             )
     }
 }
