@@ -20,7 +20,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
