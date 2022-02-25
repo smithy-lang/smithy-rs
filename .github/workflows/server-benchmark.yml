@@ -1,0 +1,35 @@
+name: Server SDK tests and benchmarks
+# This job will run the server SDK integration tests amd benchmarks using the Pokémon service model.
+on:
+  pull_request:
+    types:
+    - opened
+    - reopened
+    - synchronize
+env:
+  java_version: 11
+  rust_version: 1.56.1
+
+jobs:
+  run-end-to-end-integration-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    # JDK is needed to generate code
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: Run integration tests
+      run: |
+        cd rust-runtime/aws-smithy-http-server/examples && \
+          make && cargo test
