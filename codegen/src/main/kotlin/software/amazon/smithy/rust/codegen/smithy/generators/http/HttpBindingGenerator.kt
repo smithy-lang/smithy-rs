@@ -415,7 +415,7 @@ class HttpBindingGenerator(
             HttpMessageType.REQUEST -> index.getRequestBindings(shape, HttpLocation.HEADER) to
                 index.getRequestBindings(shape, HttpLocation.PREFIX_HEADERS).getOrNull(0)
             HttpMessageType.RESPONSE -> index.getResponseBindings(shape, HttpLocation.HEADER) to
-                index.getRequestBindings(shape, HttpLocation.PREFIX_HEADERS).getOrNull(0)
+                index.getResponseBindings(shape, HttpLocation.PREFIX_HEADERS).getOrNull(0)
         }
 
         if (headerBindings.isEmpty() && prefixHeaderBinding == null) {
