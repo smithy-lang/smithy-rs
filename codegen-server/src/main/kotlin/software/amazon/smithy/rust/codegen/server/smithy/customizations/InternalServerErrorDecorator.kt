@@ -14,19 +14,36 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
+import java.util.logging.Logger
 
 /**
- * Add at least one error to all operations in the model.
+ * Add an internal server error to all operations in the model.
  *
- * When this decorator is applied, operations that do not have a Smithy error attatched,
+ * When this decorator is applied, even operations that do not have a Smithy error attatched,
  * will return `Result<OperationOutput, InternalServerError>`.
  *
- * To enable this decorator, create a file called `META-INF/services/software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator`
- * containing `codegen-server/src/main/resources/META-INF/services/software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator`.
+ * To enable this decorator, create a file called 
+ * `src/main/resources/META-INF/services/software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator`
+ * containing the decorator class name -
+ * `software.amazon.smithy.rust.codegen.server.smithy.customizations.InternalServerErrorDecorator`.
  */
-class FallibleOperationsDecorator : RustCodegenDecorator {
+class InternalServerErrorDecorator : RustCodegenDecorator {
+    private val logger = Logger.getLogger(javaClass.name)
     override val name: String = "FallibleOperations"
     override val order: Byte = 0
+
+    override fun transformModel(service: ServiceShape, model: Model): Model {
+        logger.info("Applying InternalServerErrorDecorator for ${service.id}")
+        val errorShape = internalServerError(service.id.getNamespace())
+        val modelShapes = model.toBuilder().addShapes(listOf(errorShape)).build()
+        return ModelTransformer.create().mapShapes(modelShapes) { shape ->
+            if (shape is OperationShape) {
+                shape.toBuilder().addError(errorShape).build()
+            } else {
+                shape
+            }
+        }
+    }
 
     private fun internalServerError(namespace: String): StructureShape {
         return StructureShape.builder().id("$namespace#InternalServerError")
@@ -38,17 +55,5 @@ class FallibleOperationsDecorator : RustCodegenDecorator {
                     .addTrait(RequiredTrait())
                     .build()
             ).build()
-    }
-
-    override fun transformModel(service: ServiceShape, model: Model): Model {
-        val errorShape = internalServerError(service.id.getNamespace())
-        val modelShapes = model.toBuilder().addShapes(listOf(errorShape)).build()
-        return ModelTransformer.create().mapShapes(modelShapes) { shape ->
-            if (shape is OperationShape && shape.errors.isEmpty()) {
-                shape.toBuilder().addError(errorShape).build()
-            } else {
-                shape
-            }
-        }
     }
 }
