@@ -465,7 +465,7 @@ private class ServerHttpProtocolImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
-        bindings.find { it.location == HttpLocation.RESPONSE_CODE }?.let { serverRenderResponseCodeBinding(it) }
+        bindings.find { it.location == HttpLocation.RESPONSE_CODE }?.let { serverRenderResponseCodeBinding(it)(this) }
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
             val memberName = symbolProvider.toMemberName(it)
