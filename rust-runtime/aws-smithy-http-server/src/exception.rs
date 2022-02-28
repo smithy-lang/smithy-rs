@@ -126,6 +126,9 @@ impl From<http::Error> for IntoResponse {
 
 // Deserialization functions return this as error.
 // TODO Document precisely when all of these are created.
+// TODO Sort them by the order in which you would encounter them.
+// Note these are rejections that occur when constructing first argument. For state, there is the
+// `ExtensionHandlingRejection`.
 #[derive(Debug)]
 pub enum FromRequest {
     /// Used when percent decoding query string.
@@ -155,7 +158,11 @@ pub enum FromRequest {
     // TODO when hyper.to_bytes() fails
     HttpBody(crate::Error),
     // TODO We need to handwrite `ContentTypeRejection`.
-    ContentType(crate::Error),
+
+    // Related to checking the `Content-Type` header.
+    MissingJsonContentType,
+    MissingXmlContentType,
+    MimeParse,
 }
 
 impl std::fmt::Display for FromRequest {
@@ -264,11 +271,5 @@ impl From<serde_urlencoded::de::Error> for FromRequest {
 impl From<hyper::Error> for FromRequest {
     fn from(err: hyper::Error) -> Self {
         Self::HttpBody(crate::Error::new(err))
-    }
-}
-
-impl From<crate::rejection::ContentTypeRejection> for FromRequest {
-    fn from(err: crate::rejection::ContentTypeRejection) -> Self {
-        Self::ContentType(crate::Error::new(err))
     }
 }
