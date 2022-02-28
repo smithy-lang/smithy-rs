@@ -23,13 +23,13 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
  *
  * To enable this decorator write its class name to a resource file like this:
  * ```
- * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.FallibleOperationsDecorator"
+ * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToInfallibleOpsDecorator"
  * F="software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator"
  * D="codegen-server/src/main/resources/META-INF/services"
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class FallibleOperationsDecorator : RustCodegenDecorator {
+class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator {
     override val name: String = "FallibleOperations"
     override val order: Byte = 0
 
@@ -49,13 +49,13 @@ class FallibleOperationsDecorator : RustCodegenDecorator {
  *
  * To enable this decorator write its class name to a resource file like this:
  * ```
- * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.InternalServerErrorDecorator"
+ * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOpsDecorator"
  * F="software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator"
  * D="codegen-server/src/main/resources/META-INF/services"
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class InternalServerErrorDecorator : RustCodegenDecorator {
+class AddInternalServerErrorToAllOpsDecorator : RustCodegenDecorator {
     override val name: String = "InternalServerErrors"
     override val order: Byte = 0
 

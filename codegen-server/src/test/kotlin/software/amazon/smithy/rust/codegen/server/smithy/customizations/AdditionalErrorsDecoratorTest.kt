@@ -56,7 +56,7 @@ class AdditionalErrorsDecoratorTest {
         val fallibleId = ShapeId.from("smithy.test#Fallible")
         model.expectShape(infallibleId, OperationShape::class.java).errors.isEmpty() shouldBe true
         model.expectShape(fallibleId, OperationShape::class.java).errors.size shouldBe 1
-        val model = FallibleOperationsDecorator().transformModel(service, model)
+        val model = AddInternalServerErrorToInfallibleOpsDecorator().transformModel(service, model)
         model.expectShape(infallibleId, OperationShape::class.java).errors.isEmpty() shouldBe false
         model.expectShape(infallibleId, OperationShape::class.java).errors.size shouldBe 1
         model.expectShape(fallibleId, OperationShape::class.java).errors.size shouldBe 1
@@ -69,7 +69,7 @@ class AdditionalErrorsDecoratorTest {
         val fallibleId = ShapeId.from("smithy.test#Fallible")
         model.expectShape(infallibleId, OperationShape::class.java).errors.isEmpty() shouldBe true
         model.expectShape(fallibleId, OperationShape::class.java).errors.size shouldBe 1
-        val model = InternalServerErrorDecorator().transformModel(service, model)
+        val model = AddInternalServerErrorToAllOpsDecorator().transformModel(service, model)
         model.expectShape(infallibleId, OperationShape::class.java).errors.isEmpty() shouldBe false
         model.expectShape(infallibleId, OperationShape::class.java).errors.size shouldBe 1
         model.expectShape(fallibleId, OperationShape::class.java).errors.size shouldBe 2
