@@ -206,13 +206,17 @@ private class ServerHttpProtocolImplGenerator(
             // The output of fallible operations is a `Result` which we convert into an
             // isomorphic `enum` type we control that can in turn be converted into a response.
             val intoResponseImpl =
+                // TODO Hardcoded RestJson1
                 """
                 let mut response = match self {
                     Self::Output(o) => {
                         match #{serialize_response}(o) {
                             Ok(response) => response,
                             Err(e) => {
-                                e.into_response()
+                                #{SmithyHttpServer}::exception::SmithyFrameworkException {
+                                    protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
+                                    exception_type: e.into()
+                                }.into_response()
                             }
                         }
                     },
@@ -223,7 +227,10 @@ private class ServerHttpProtocolImplGenerator(
                                 response
                             },
                             Err(e) => {
-                                e.into_response()
+                                #{SmithyHttpServer}::exception::SmithyFrameworkException {
+                                    protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
+                                    exception_type: e.into()
+                                }.into_response()
                             }
                         }
                     }
@@ -255,10 +262,16 @@ private class ServerHttpProtocolImplGenerator(
             // The output of non-fallible operations is a model type which we convert into
             // a "wrapper" unit `struct` type we control that can in turn be converted into a response.
             val intoResponseImpl =
+                // TODO RestJson1 hardcoded
                 """
                 let mut response = match #{serialize_response}(self.0) {
                     Ok(response) => response,
-                    Err(e) => e.into_response()
+                    Err(e) => {
+                        #{SmithyHttpServer}::exception::SmithyFrameworkException {
+                            protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
+                            exception_type: e.into()
+                        }.into_response()
+                    }
                 };
                 $httpExtensions
                 response
@@ -385,7 +398,7 @@ private class ServerHttpProtocolImplGenerator(
                     ##[allow(unused_variables)] output: #{O}
                 ) -> std::result::Result<
                     #{AxumCore}::response::Response,
-                    #{SmithyRejection}
+                    #{SmithyHttpServer}::exception::IntoResponse
                 >
                 """.trimIndent(),
                 *codegenScope,
@@ -407,7 +420,7 @@ private class ServerHttpProtocolImplGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(error: &#{E}) -> std::result::Result<#{AxumCore}::response::Response, #{SmithyRejection}>",
+                "pub fn $fnName(error: &#{E}) -> std::result::Result<#{AxumCore}::response::Response, #{SmithyHttpServer}::exception::IntoResponse>",
                 *codegenScope,
                 "E" to errorSymbol
             ) {

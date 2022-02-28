@@ -77,6 +77,53 @@ impl axum_core::response::IntoResponse for SmithyFrameworkException {
 // rejections
 //
 
+/// These are errors that can occur when transforming the operation output into an HTTP response.
+#[derive(Debug)]
+pub enum IntoResponse {
+    /// Used when adding HTTP headers (e.g. a value cannot be used as a `HeaderValue`).
+    Build(crate::Error),
+    /// Used when serializing struct into HTTP response bodies.
+    Serialization(crate::Error),
+    /// Used when converting the HTTP response builder into an HTTP response.
+    /// TODO I think this could be removed if we didn't use HTTP response builder and instead used
+    /// `*_mut` methods.
+    Http(crate::Error),
+}
+
+impl From<IntoResponse> for SmithyFrameworkExceptionType {
+    fn from(err: IntoResponse) -> Self {
+        SmithyFrameworkExceptionType::Serialization(crate::Error::new(err))
+    }
+}
+
+impl std::fmt::Display for IntoResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO Fill out.
+        // TODO Consider deriving it with `enum_display_derive` or `thiserror`.
+        write!(f, "{}", self)
+    }
+}
+
+impl std::error::Error for IntoResponse {}
+
+impl From<aws_smithy_http::operation::BuildError> for IntoResponse {
+    fn from(err: aws_smithy_http::operation::BuildError) -> Self {
+        Self::Build(crate::Error::new(err))
+    }
+}
+
+impl From<aws_smithy_http::operation::SerializationError> for IntoResponse {
+    fn from(err: aws_smithy_http::operation::SerializationError) -> Self {
+        Self::Serialization(crate::Error::new(err))
+    }
+}
+
+impl From<http::Error> for IntoResponse {
+    fn from(err: http::Error) -> Self {
+        Self::Http(crate::Error::new(err))
+    }
+}
+
 // Deserialization functions return this as error.
 // TODO Document precisely when all of these are created.
 #[derive(Debug)]
