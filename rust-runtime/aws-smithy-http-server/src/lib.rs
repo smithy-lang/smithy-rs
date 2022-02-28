@@ -11,7 +11,7 @@
 pub(crate) mod macros;
 
 pub mod body;
-pub mod error;
+pub(crate) mod error;
 mod extension;
 pub mod routing;
 
@@ -23,7 +23,7 @@ pub mod protocols;
 pub mod rejection;
 
 #[doc(inline)]
-pub use self::error::Error;
+pub(crate) use self::error::Error;
 #[doc(inline)]
 pub use self::extension::{Extension, ExtensionModeledError, ExtensionRejection, ResponseExtensions};
 #[doc(inline)]
@@ -32,7 +32,7 @@ pub use self::routing::Router;
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 /// Alias for a type-erased error type.
-pub use axum_core::BoxError;
+pub(crate) use axum_core::BoxError;
 
 #[cfg(test)]
 mod test_helpers;

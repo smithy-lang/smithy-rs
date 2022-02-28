@@ -43,7 +43,6 @@ class ServerOperationHandlerGenerator(
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
         "Phantom" to ServerRuntimeType.Phantom,
         "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
         "http" to RuntimeType.http,

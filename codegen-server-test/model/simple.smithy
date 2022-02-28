@@ -12,7 +12,7 @@ service SimpleService {
     ],
 }
 
-@http(uri: "/operation", method: "GET")
+@http(uri: "/foo/{greedy+}/suffix", method: "GET")
 operation AnOperation {
     input: AnOperationInput,
     output: AnOperationOutput,
@@ -21,7 +21,11 @@ operation AnOperation {
 
 structure AnOperationInput {
     @httpResponseCode
-    responseCode: Integer
+    responseCode: Integer,
+
+    @required
+    @httpLabel
+    greedy: String
 }
 
 structure AnOperationOutput {

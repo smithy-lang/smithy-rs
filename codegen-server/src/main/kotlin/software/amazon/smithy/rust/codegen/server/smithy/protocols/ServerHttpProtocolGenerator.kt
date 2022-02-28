@@ -90,12 +90,7 @@ class ServerHttpProtocolGenerator(
         const val OPERATION_INPUT_WRAPPER_SUFFIX = "OperationInputWrapper"
         const val OPERATION_OUTPUT_WRAPPER_SUFFIX = "OperationOutputWrapper"
 
-        fun smithyRejection(runtimeConfig: RuntimeConfig) = RuntimeType(
-            "SmithyRejection",
-            dependency = CargoDependency.SmithyHttpServer(runtimeConfig),
-            namespace = "aws_smithy_http_server::rejection"
-        )
-
+        // TODO This is currently not used but we could
         fun smithyFrameworkException(runtimeConfig: RuntimeConfig) = RuntimeType(
             "SmithyFrameworkException",
             dependency = CargoDependency.SmithyHttpServer(runtimeConfig),
@@ -135,7 +130,6 @@ private class ServerHttpProtocolImplGenerator(
         "SerdeUrlEncoded" to ServerCargoDependency.SerdeUrlEncoded.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
         "SmithyFrameworkException" to ServerHttpProtocolGenerator.smithyFrameworkException(runtimeConfig),
         "http" to RuntimeType.http
     )
@@ -747,11 +741,10 @@ private class ServerHttpProtocolImplGenerator(
             if (greedyLabelIndex >= 0 && greedyLabelIndex + 1 < httpTrait.uri.segments.size) {
                 rustTemplate(
                     """
-                    if !input_string.ends_with(${restAfterGreedyLabel.dq()}) {
-                        return std::result::Result::Err(#{SmithyRejection}::Deserialize(
-                            aws_smithy_http_server::rejection::Deserialize::from_err(format!("Postfix not found: {}", ${restAfterGreedyLabel.dq()}))));
+                    if !input_string.ends_with("$restAfterGreedyLabel") {
+                        return Err(#{SmithyHttpServer}::exception::FromRequest::UriPatternGreedyLabelPostfixNotFound);
                     }
-                    let input_string = &input_string[..(input_string.len() - ${restAfterGreedyLabel.dq()}.len())];
+                    let input_string = &input_string[..(input_string.len() - "$restAfterGreedyLabel".len())];
                     """.trimIndent(),
                     *codegenScope
                 )

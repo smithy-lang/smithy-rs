@@ -154,6 +154,10 @@ pub enum FromRequest {
 
     /// When the nom parser's input does not match the URI pattern.
     UriPatternMismatch(crate::Error),
+    /// This is also returned when the URI pattern has a suffix after the greedy label, and we
+    /// special-case that check in the generated code.
+    UriPatternGreedyLabelPostfixNotFound,
+
     Build(crate::Error),
     // TODO when hyper.to_bytes() fails
     HttpBody(crate::Error),
