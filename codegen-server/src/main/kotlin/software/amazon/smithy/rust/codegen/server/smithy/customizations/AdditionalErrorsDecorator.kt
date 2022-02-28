@@ -30,7 +30,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
  * ```
  */
 class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator {
-    override val name: String = "FallibleOperations"
+    override val name: String = "AddInternalServerErrorToInfallibleOps"
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
@@ -56,7 +56,7 @@ class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator {
  * ```
  */
 class AddInternalServerErrorToAllOpsDecorator : RustCodegenDecorator {
-    override val name: String = "InternalServerErrors"
+    override val name: String = "AddInternalServerErrorToAllOps"
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
