@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymb
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 
-class FallibleOperationsDecoratorTest {
+class AdditionalErrorsDecoratorTest {
     private val baseModel = """
         namespace smithy.test
         use aws.protocols#restJson1
@@ -56,9 +56,22 @@ class FallibleOperationsDecoratorTest {
         val fallibleId = ShapeId.from("smithy.test#Fallible")
         model.expectShape(infallibleId, OperationShape::class.java).errors.isEmpty() shouldBe true
         model.expectShape(fallibleId, OperationShape::class.java).errors.size shouldBe 1
-        val model = FallibleOperationsDecorator().transformModel(service, model)
+        val model = AddInternalServerErrorToInfallibleOpsDecorator().transformModel(service, model)
         model.expectShape(infallibleId, OperationShape::class.java).errors.isEmpty() shouldBe false
         model.expectShape(infallibleId, OperationShape::class.java).errors.size shouldBe 1
         model.expectShape(fallibleId, OperationShape::class.java).errors.size shouldBe 1
+    }
+
+    @Test
+    fun `add InternalServerError to all model operations`() {
+        val service = ServiceShape.builder().id("smithy.test#Test").build()
+        val infallibleId = ShapeId.from("smithy.test#Infallible")
+        val fallibleId = ShapeId.from("smithy.test#Fallible")
+        model.expectShape(infallibleId, OperationShape::class.java).errors.isEmpty() shouldBe true
+        model.expectShape(fallibleId, OperationShape::class.java).errors.size shouldBe 1
+        val model = AddInternalServerErrorToAllOpsDecorator().transformModel(service, model)
+        model.expectShape(infallibleId, OperationShape::class.java).errors.isEmpty() shouldBe false
+        model.expectShape(infallibleId, OperationShape::class.java).errors.size shouldBe 1
+        model.expectShape(fallibleId, OperationShape::class.java).errors.size shouldBe 2
     }
 }
