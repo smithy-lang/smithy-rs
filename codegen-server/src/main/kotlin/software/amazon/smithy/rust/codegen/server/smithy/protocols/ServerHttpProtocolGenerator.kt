@@ -50,6 +50,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescripto
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.toOptional
 import software.amazon.smithy.rust.codegen.smithy.wrapOptional
@@ -61,6 +62,7 @@ import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
+import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import java.util.logging.Logger
 
@@ -153,7 +155,6 @@ private class ServerHttpProtocolImplGenerator(
         val inputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
 
         // Implement Axum `FromRequest` trait for input types.
-        // TODO RestJson1 hardcoded
         rustTemplate(
             """
             ##[derive(Debug)]
@@ -172,7 +173,7 @@ private class ServerHttpProtocolImplGenerator(
                         .map(|input| $inputName(input))
                         .map_err(
                             |err| #{SmithyFrameworkException} {
-                                protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
+                                protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
                                 exception_type: err.into()
                             }
                         )
@@ -194,7 +195,6 @@ private class ServerHttpProtocolImplGenerator(
             // The output of fallible operations is a `Result` which we convert into an
             // isomorphic `enum` type we control that can in turn be converted into a response.
             val intoResponseImpl =
-                // TODO Hardcoded RestJson1
                 """
                 let mut response = match self {
                     Self::Output(o) => {
@@ -202,7 +202,7 @@ private class ServerHttpProtocolImplGenerator(
                             Ok(response) => response,
                             Err(e) => {
                                 #{SmithyFrameworkException} {
-                                    protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
+                                    protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
                                     exception_type: e.into()
                                 }.into_response()
                             }
@@ -250,13 +250,12 @@ private class ServerHttpProtocolImplGenerator(
             // The output of non-fallible operations is a model type which we convert into
             // a "wrapper" unit `struct` type we control that can in turn be converted into a response.
             val intoResponseImpl =
-                // TODO RestJson1 hardcoded
                 """
                 let mut response = match #{serialize_response}(self.0) {
                     Ok(response) => response,
                     Err(e) => {
                         #{SmithyFrameworkException} {
-                            protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
+                            protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
                             exception_type: e.into()
                         }.into_response()
                     }
