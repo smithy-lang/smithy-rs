@@ -14,14 +14,13 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.escape
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolBodyGenerator.BodyMetadata
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
@@ -30,16 +29,15 @@ import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.nio.file.Path
 
-private class TestProtocolBodyGenerator(private val body: String) : ProtocolBodyGenerator {
-    override fun bodyMetadata(operationShape: OperationShape): BodyMetadata =
-        BodyMetadata(takesOwnership = false)
+private class TestProtocolPayloadGenerator(private val body: String) : ProtocolPayloadGenerator {
+    override fun payloadMetadata(operationShape: OperationShape) =
+        ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = false)
 
-    override fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape) {
+    override fun generatePayload(writer: RustWriter, self: String, operationShape: OperationShape) {
         writer.writeWithNoFormatting(body)
     }
 }
@@ -73,13 +71,16 @@ private class TestProtocolMakeOperationGenerator(
     protocol: Protocol,
     body: String,
     private val httpRequestBuilder: String
-) : MakeOperationGenerator(codegenContext, protocol, TestProtocolBodyGenerator(body)) {
-    override fun generateRequestBuilderBaseFn(writer: RustWriter, operationShape: OperationShape) {
-        writer.inRequestBuilderBaseFn(operationShape.inputShape(codegenContext.model)) {
-            withBlock("Ok(#T::new()", ")", RuntimeType.HttpRequestBuilder) {
-                writeWithNoFormatting(httpRequestBuilder)
-            }
-        }
+) : MakeOperationGenerator(
+    codegenContext,
+    protocol,
+    TestProtocolPayloadGenerator(body),
+    public = true,
+    includeDefaultPayloadHeaders = true
+) {
+    override fun createHttpRequest(writer: RustWriter, operationShape: OperationShape) {
+        writer.rust("#T::new()", RuntimeType.HttpRequestBuilder)
+        writer.writeWithNoFormatting(httpRequestBuilder)
     }
 }
 
@@ -207,7 +208,7 @@ class ProtocolTestGeneratorTest {
      */
     private fun generateService(
         httpRequestBuilder: String,
-        body: String = "${correctBody.dq()}.to_string().into()",
+        body: String = "${correctBody.dq()}.to_string()",
         correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())"""
     ): Path {
         val (pluginContext, testDir) = generatePluginContext(model)
@@ -267,7 +268,7 @@ class ProtocolTestGeneratorTest {
             .header("X-Greeting", "Hi")
             .method("POST")
             """,
-            """"{}".to_string().into()"""
+            """"{}".to_string()"""
         )
 
         val err = assertThrows<CommandFailed> {

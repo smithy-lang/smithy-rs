@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-import { OpenIdConnectProvider } from "@aws-cdk/aws-iam";
-import { Construct, StackProps, Stack, Tags } from "@aws-cdk/core";
+import { OpenIdConnectProvider } from "aws-cdk-lib/aws-iam";
+import { StackProps, Stack, Tags } from "aws-cdk-lib";
+import { Construct } from "constructs";
 
 /// This thumbprint is used to validate GitHub's identity to AWS. This is
 /// just a SHA-1 hash of the top intermediate certificate authority's certificate.
@@ -16,7 +17,7 @@ import { Construct, StackProps, Stack, Tags } from "@aws-cdk/core";
 ///
 /// This was done with the initial Idp URL of:
 /// https://token.actions.githubusercontent.com/.well-known/openid-configuration
-const GITHUB_CERTIFICATE_THUMBPRINT = "6938FD4D98BAB03FAADB97B34396831E3780AEA1";
+export const GITHUB_CERTIFICATE_THUMBPRINT = "6938FD4D98BAB03FAADB97B34396831E3780AEA1";
 
 // There can only be one OIDC provider for a given URL per AWS account,
 // so put these in their own stack to be shared with other stacks.

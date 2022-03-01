@@ -36,7 +36,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClient
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolBodyGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.util.cloneOperation
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -154,22 +154,23 @@ class AwsInputPresignedMethod(
         val operationError = operationShape.errorSymbol(symbolProvider)
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
 
-        var makeOperationFn = "make_operation"
-        if (presignableOp.hasModelTransforms()) {
-            makeOperationFn = "_make_presigned_operation"
-
-            val syntheticOp =
-                codegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
-            val protocol = section.protocol
-            MakeOperationGenerator(
-                codegenContext,
-                protocol,
-                HttpBoundProtocolBodyGenerator(codegenContext, protocol),
-                // Prefixed with underscore to avoid colliding with modeled functions
-                functionName = makeOperationFn,
-                public = false,
-            ).generateMakeOperation(this, syntheticOp, section.customizations)
+        val makeOperationOp = if (presignableOp.hasModelTransforms()) {
+            codegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
+        } else {
+            section.operationShape
         }
+        val makeOperationFn = "_make_presigned_operation"
+
+        val protocol = section.protocol
+        MakeOperationGenerator(
+            codegenContext,
+            protocol,
+            HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+            // Prefixed with underscore to avoid colliding with modeled functions
+            functionName = makeOperationFn,
+            public = false,
+            includeDefaultPayloadHeaders = false
+        ).generateMakeOperation(this, makeOperationOp, section.customizations)
 
         documentPresignedMethod(hasConfigArg = true)
         rustBlockTemplate(

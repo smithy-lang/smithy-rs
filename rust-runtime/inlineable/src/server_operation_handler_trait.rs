@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 use async_trait::async_trait;
-use aws_smithy_http_server::{opaque_future, BoxBody};
+use aws_smithy_http_server::{body::BoxBody, opaque_future};
 use futures_util::{
     future::{BoxFuture, Map},
     FutureExt,

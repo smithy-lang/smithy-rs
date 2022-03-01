@@ -10,6 +10,9 @@
 //
 // Also consider using the `AWS_PROFILE` and `AWS_REGION` environment variables
 // when running this locally.
+//
+// CAUTION: This subcommand will `git reset --hard` in some cases. Don't ever run
+// it against a smithy-rs repo that you're actively working in.
 
 use anyhow::{bail, Context, Result};
 use aws_sdk_cloudwatch as cloudwatch;
@@ -191,7 +194,9 @@ async fn use_correct_revision(opt: &RunOpt) -> Result<()> {
             version, commit_hash
         );
         let smithy_rs_root = git::find_git_repository_root("smithy-rs", ".").context(here!())?;
-        git::CheckoutRevision::new(smithy_rs_root, *commit_hash)
+        // Reset to the revision rather than checkout since the very act of running the
+        // canary-runner can make the working tree dirty by modifying the Cargo.lock file
+        git::Reset::new(smithy_rs_root, &["--hard", *commit_hash])
             .spawn()
             .await
             .context(here!())?;
