@@ -144,7 +144,7 @@ class ServerOperationHandlerGenerator(
             Fut: std::future::Future<Output = $outputType> + Send,
             B: $serverCrate::body::HttpBody + Send + 'static, $streamingBodyTraitBounds
             B::Data: Send,
-            $serverCrate::exception::FromRequest: From<<B as $serverCrate::body::HttpBody>::Error>
+            $serverCrate::rejection::RequestRejection: From<<B as $serverCrate::body::HttpBody>::Error>
         """.trimIndent()
     }
 }

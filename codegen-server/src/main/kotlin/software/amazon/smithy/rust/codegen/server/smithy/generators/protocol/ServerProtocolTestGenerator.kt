@@ -466,7 +466,7 @@ class ServerProtocolTestGenerator(
         checkStatusCode(rustWriter, testCase.code)
         checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
         // TODO Enable.
-//        checkHttpResponseExtensions(rustWriter)
+        // checkHttpResponseExtensions(rustWriter)
         // If no request body is defined, then no assertions are made about the body of the message.
         if (testCase.body.isEmpty) return
 
