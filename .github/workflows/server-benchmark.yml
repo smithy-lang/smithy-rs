@@ -9,7 +9,7 @@ on:
 env:
   java_version: 11
   rust_version: 1.56.1
-  dependencies: wrk gnuplot
+  dependencies: libssl-dev git gnuplot
 
 jobs:
   run-e2e-integration-test:
@@ -41,12 +41,6 @@ jobs:
 
   run-benchmark:
     runs-on: ubuntu-latest
-    # Ubuntu 20.04 doesn't have wrk packaged, hence we need to
-    # run this build inside a container with ubuntu 21.04 🤦
-    container:
-      image: ubuntu:21.04
-      env:
-        DEBIAN_FRONTEND: noninteractive
     steps:
     - uses: actions/checkout@v2
     - uses: actions/cache@v2
@@ -74,6 +68,11 @@ jobs:
         default: true
     - name: Install benchmarks dependencies
       run: sudo apt-get update && sudo apt-get install -y ${{ env.dependencies }}
+    # Ubuntu 20.04 doesn't have wrk packaged, hence we need to build it 🤦
+    - name: Install wrk
+      run: |
+        git clone https://github.com/wg/wrk.git /tmp/wrk-build && \
+          cd /tmp/wrk-build && make -j8 && sudo cp wrk /usr/local/bin
     - name: Run integration tests
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
