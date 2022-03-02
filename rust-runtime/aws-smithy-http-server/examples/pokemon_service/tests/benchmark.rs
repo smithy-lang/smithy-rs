@@ -34,9 +34,12 @@ async fn banchmark() {
         .build()
         .unwrap();
     let benches = vec![BenchmarkBuilder::default()
-        .duration(Duration::from_secs(5))
+        .duration(Duration::from_secs(30))
         .build()
         .unwrap()];
+    // Run benchmark twice to ensure we are not getting false results
+    // because the underlying hardware changed between runs.
+    wrk.bench(&benches).unwrap();
     wrk.bench(&benches).unwrap();
     let mut variance = wrk.variance(HistoryPeriod::Last).unwrap();
     let mut file = OpenOptions::new()
