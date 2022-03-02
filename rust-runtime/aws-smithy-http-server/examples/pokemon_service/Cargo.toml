@@ -18,7 +18,12 @@ pokemon_service_sdk = { path = "../pokemon_service_sdk/" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
+home = "0.5"
+wrk-api-bench = "0.0.2"
 
 # Local paths
 aws-smithy-client  = { path = "../../../aws-smithy-client/", features = ["rustls"] }
 pokemon_service_client = { path = "../pokemon_service_client/" }
+
+[features]
+benchmarks = []

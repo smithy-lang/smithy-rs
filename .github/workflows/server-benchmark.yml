@@ -10,7 +10,7 @@ env:
   java_version: 11
   rust_version: 1.56.1
   rust_toolchain_components: clippy,rustfmt
-  apt_dependencies: libssl-dev git gnuplot
+  apt_dependencies: libssl-dev git gnuplot jq
 
 jobs:
   run-e2e-integration-test:
@@ -79,4 +79,8 @@ jobs:
     - name: Run benchmark
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
-          make && wrk --help
+          make && cargo test --release --features benchmarks && \
+          for x in ~/.wrk-api-bench/*; do
+            echo $x
+            cat $x |jq .
+          done
