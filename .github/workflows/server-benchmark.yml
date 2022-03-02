@@ -75,7 +75,7 @@ jobs:
     - name: Install wrk
       run: |
         git clone https://github.com/wg/wrk.git /tmp/wrk-build && \
-          cd /tmp/wrk-build && make -j8 && sudo cp wrk /usr/local/bin
+          cd /tmp/wrk-build && make -j8 wrk && sudo cp wrk /usr/local/bin
     - name: Run benchmark
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
