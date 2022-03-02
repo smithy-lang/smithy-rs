@@ -39,6 +39,15 @@ pub enum ResponseRejection {
     Build(crate::Error),
     /// Used when serializing struct into HTTP response bodies.
     Serialization(crate::Error),
+
+    /// Used when `httpResponseCode` targets an optional member, and the service implementer sets
+    /// it to `None`.
+    MissingHttpStatusCode,
+
+    /// Used when the service implementer provides an integer outside the 100-999 range for a
+    /// member targetted by `httpResponseCode`.
+    InvalidHttpStatusCode,
+
     /// Used when converting the HTTP response builder into an HTTP response.
     /// TODO I think this could be removed if we didn't use HTTP response builder and instead used
     /// `*_mut` methods.

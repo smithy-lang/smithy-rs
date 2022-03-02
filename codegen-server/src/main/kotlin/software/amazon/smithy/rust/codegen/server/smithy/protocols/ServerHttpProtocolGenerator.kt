@@ -569,13 +569,15 @@ private class ServerHttpProtocolImplGenerator(
         check(binding.location == HttpLocation.RESPONSE_CODE)
         return writable {
             val memberName = symbolProvider.toMemberName(binding.member)
-            // TODO Rejection
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1229): This code is problematic for two reasons:
+            // 1. We're not falling back to the `http` trait if no `output.$memberName` is `None`.
+            // 2. It only works when `output.$memberName` is of type `Option<i32>`.
             rustTemplate(
                 """
                 let status = output.$memberName
-                    .ok_or_else(|| #{SmithyHttpServer}::rejection::Serialize::from("$memberName missing or empty"))?;
+                    .ok_or_else(|| #{ResponseRejection}::MissingHttpStatusCode)?;
                 let http_status: u16 = std::convert::TryFrom::<i32>::try_from(status)
-                    .map_err(|_| #{SmithyHttpServer}::rejection::Serialize::from("invalid status code"))?;
+                    .map_err(|_| #{ResponseRejection}::InvalidHttpStatusCode)?;
                 """.trimIndent(),
                 *codegenScope,
             )
