@@ -12,8 +12,41 @@ env:
   dependencies: wrk gnuplot
 
 jobs:
-  run-end-to-end-integration-test:
+  run-e2e-integration-test:
     runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.java_version }}
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        default: true
+    - name: Run integration tests
+      run: |
+        cd rust-runtime/aws-smithy-http-server/examples && \
+          make && cargo test
+
+  run-benchmark:
+    runs-on: ubuntu-latest
+    # Ubuntu 20.04 doesn't have wrk packaged, hence we need to
+    # run this build inside a container with ubuntu 21.04 🤦
+    container:
+      image: ubuntu:21.04
+      env:
+        DEBIAN_FRONTEND: noninteractive
     steps:
     - uses: actions/checkout@v2
     - uses: actions/cache@v2
@@ -44,4 +77,4 @@ jobs:
     - name: Run integration tests
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
-          make && cargo test
+          make && wrk --help
