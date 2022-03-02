@@ -9,7 +9,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -68,13 +67,6 @@ class ServerOperationHandlerGenerator(
             } else {
                 "impl<B, Fun, Fut> #{ServerOperationHandler}::Handler<B, (), $inputName> for Fun"
             }
-            val storeErrorInExtensions = """{
-                let error = aws_smithy_http_server::ExtensionRejection::new(r.to_string());
-                let mut response = r.into_response();
-                response.extensions_mut().insert(error);
-                return response.map($serverCrate::body::boxed);
-                }
-            """.trimIndent()
             writer.rustBlockTemplate(
                 """
                 ##[#{AsyncTrait}::async_trait]
@@ -85,15 +77,24 @@ class ServerOperationHandlerGenerator(
                 *codegenScope
             ) {
                 val callImpl = if (state) {
-                    """let state = match $serverCrate::Extension::<S>::from_request(&mut req).await {
-                    Ok(v) => v,
-                    Err(r) => $storeErrorInExtensions
+                    """
+                    let state = match $serverCrate::Extension::<S>::from_request(&mut req).await {
+                        Ok(v) => v,
+                        Err(extension_handling_rejection) => {
+                            let extension = aws_smithy_http_server::ExtensionRejection::new(extension_handling_rejection.to_string());
+                            let mut response = extension_handling_rejection.into_response();
+                            response.extensions_mut().insert(extension);
+                            return response.map($serverCrate::body::boxed);
+                        }
                     };
                     let input_inner = input_wrapper.into();
-                    let output_inner = self(input_inner, state).await;"""
+                    let output_inner = self(input_inner, state).await;
+                    """.trimIndent()
                 } else {
-                    """let input_inner = input_wrapper.into();
-                        let output_inner = self(input_inner).await;"""
+                    """
+                    let input_inner = input_wrapper.into();
+                    let output_inner = self(input_inner).await;
+                    """.trimIndent()
                 }
                 rustTemplate(
                     """
@@ -104,7 +105,12 @@ class ServerOperationHandlerGenerator(
                         use #{AxumCore}::response::IntoResponse;
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
-                            Err(r) => $storeErrorInExtensions
+                            Err(exception) => {
+                                let extension = aws_smithy_http_server::ExtensionRejection::new(String::from(exception.exception_type.name()));
+                                let mut response = exception.into_response();
+                                response.extensions_mut().insert(extension);
+                                return response.map($serverCrate::body::boxed);
+                            }
                         };
                         $callImpl
                         let output_wrapper: $outputWrapperName = output_inner.into();

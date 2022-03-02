@@ -8,8 +8,11 @@ pub enum SmithyFrameworkExceptionType {
     // NotAcceptable,
 }
 
+/// String representation of the exception type.
+/// Used as the value of the `X-Amzn-Errortype` header in RestJson1.
+/// Used as the value passed to construct an [`crate::ExtensionRejection`].
 impl SmithyFrameworkExceptionType {
-    fn name(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         match self {
             SmithyFrameworkExceptionType::Serialization(_) => "SerializationException",
         }
@@ -23,14 +26,6 @@ impl SmithyFrameworkExceptionType {
 pub struct SmithyFrameworkException {
     pub protocol: Protocol,
     pub exception_type: SmithyFrameworkExceptionType,
-}
-
-// TODO Better implement Display and get ToString for free.
-impl ToString for SmithyFrameworkException {
-    fn to_string(&self) -> String {
-        // TODO
-        todo!()
-    }
 }
 
 impl axum_core::response::IntoResponse for SmithyFrameworkException {

@@ -32,12 +32,18 @@ composite_rejection! {
     }
 }
 
-/// These are errors that can occur when transforming the operation output into an HTTP response.
+/// Errors that can occur when serializing the operation output provided by the service implementer
+/// into an HTTP response.
 #[derive(Debug)]
 pub enum ResponseRejection {
-    /// Used when adding HTTP headers (e.g. a value cannot be used as a `HeaderValue`).
+    /// Used when an invalid HTTP header value (a value that cannot be parsed as an
+    /// `[http::header::HeaderValue]`) is provided for a shape member bound to an HTTP header with
+    /// `httpHeader` or `httpPrefixHeaders`.
+    /// Used when failing to serialize an `httpPayload`-bound struct into an HTTP response body.
     Build(crate::Error),
-    /// Used when serializing struct into HTTP response bodies.
+
+    // TODO
+    /// Used when failing to serialize a struct into an HTTP response body.
     Serialization(crate::Error),
 
     /// Used when `httpResponseCode` targets an optional member, and the service implementer sets
@@ -48,9 +54,12 @@ pub enum ResponseRejection {
     /// member targeted by `httpResponseCode`.
     InvalidHttpStatusCode,
 
-    /// Used when converting the HTTP response builder into an HTTP response.
-    /// TODO I think this could be removed if we didn't use HTTP response builder and instead used
-    /// `*_mut` methods.
+    /// Used when consuming an [`http::Response::Builder`] into the constructed [`http::Response`]
+    /// when calling [`http::Response::builder::body`].
+    /// This error can happen if an invalid HTTP header value (a value that cannot be parsed as an
+    /// `[http::header::HeaderValue]`) is used for the protocol-specific response `Content-Type`
+    /// header and or for additional protocol- specific headers (like `X-Amzn-Errortype` to signal
+    /// errors in RestJson1).
     Http(crate::Error),
 }
 
@@ -82,49 +91,89 @@ impl From<http::Error> for ResponseRejection {
     }
 }
 
-// Deserialization functions return this as error.
-// TODO Document precisely when all of these are created.
-// TODO Sort them by the order in which you would encounter them.
-// Note these are rejections that occur when constructing first argument. For state, there is the
-// `ExtensionHandlingRejection`.
+/// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
+/// that is passed as the first argument to operation handlers. To deserialize into the service's
+/// registered state, a different rejection type is used, [`self::ExtensionHandlingRejection`].
+///
+/// This type allows us to easily keep track of all the possible errors that can occur in the
+/// lifecycle of an incoming HTTP request.
+///
+/// Many inner code-generated and runtime deserialization functions use this as their error type, when they can
+/// only instantiate a subset of the variants (most likely a single one). For example, the
+/// functions that check the `Content-Type` header in `[crate::protocols]` can only return three of
+/// the variants: `MissingJsonContentType`, `MissingXmlContentType`, and `MimeParse`.
+/// This is a deliberate design choice to keep code generation simple. After all, this type is an
+/// inner detail of the framework the service implementer does not interact with. It allows us to
+/// easily keep track of all the possible errors that can occur in the lifecycle of an incoming
+/// HTTP request.
+///
+/// If a variant takes in a value, it represents the underlying cause of the error. This inner
+/// value should be of the type-erased boxed error type `[crate::Error]`. In practice, some of the
+/// variants that take in a value are only instantiated with errors of a single type in the
+/// generated code. For example, `UriPatternMismatch` is only instantiated with an error coming
+/// from a `nom` parser, `nom::Err<nom::error::Error<String>>`. This is reflected in the converters
+/// below that convert from one of these very specific error types into one of the variants. For
+/// example, the `RequestRejection` implements `From<hyper::Error>` to construct the `HttpBody`
+/// variant. This is a deliberate design choice to make the code simpler and less prone to changes.
+///
+// The variants are _roughly_ sorted in the order in which the HTTP request is processed.
 #[derive(Debug)]
 pub enum RequestRejection {
-    /// Used when percent decoding query string.
-    InvalidUtf8(crate::Error),
-    JsonDeserialize(crate::Error),
-    XmlDeserialize(crate::Error),
+    /// Used when attempting to take the request's body, and it has already been taken (presumably
+    /// by an outer `Service` that handled the request before us).
     BodyAlreadyExtracted,
+
+    // Used when failing to convert non-streaming requests into a byte slab with
+    // `hyper::body::to_bytes`.
+    HttpBody(crate::Error),
+
+    /// These are used when checking the `Content-Type` header.
+    MissingJsonContentType,
+    MissingXmlContentType,
+    MimeParse,
+
+    /// Used when failing to deserialize the HTTP body's bytes into a JSON document conforming to
+    /// the modeled input it should represent.
+    JsonDeserialize(crate::Error),
+    /// Used when failing to deserialize the HTTP body's bytes into a XML conforming to the modeled
+    /// input it should represent.
+    XmlDeserialize(crate::Error),
+
+    /// Used when attempting to take the request's headers, and they have already been taken (presumably
+    /// by an outer `Service` that handled the request before us).
     HeadersAlreadyExtracted,
+
     /// Used when parsing HTTP headers that are bound to input members (httpHeader,
     /// httpPrefixHeaders).
     HeaderParse(crate::Error),
 
+    /// Used when the URI pattern has a literal after the greedy label, and it is not found in the
+    /// request's URL.
+    UriPatternGreedyLabelPostfixNotFound,
+    /// Used when the `nom` parser's input does not match the URI pattern.
+    UriPatternMismatch(crate::Error),
+
+    /// Used when percent decoding query string.
+    InvalidUtf8(crate::Error),
+
     DateTimeParse(crate::Error),
 
-    /// TODO This one should replace the below 3 when we refactor parsing code to use aws_smithy_types
-    /// parse.
+    /// Used when deserializing strings from a URL query string and from URI path labels into
+    /// primitive types.
     PrimitiveParse(crate::Error),
 
-    /// Maybe these 3 is too much detail. Maybe not.
+    /// The following three variants are used when deserializing strings from a URL query string
+    /// and URI path labels into primitive types.
+    /// TODO(https://github.com/awslabs/smithy-rs/issues/1232): They should be removed and
+    /// conflated into the `PrimitiveParse` variant above after this issue is resolved.
     IntParse(crate::Error),
     FloatParse(crate::Error),
     BoolParse(crate::Error),
 
-    /// When the nom parser's input does not match the URI pattern.
-    UriPatternMismatch(crate::Error),
-    /// This is also returned when the URI pattern has a suffix after the greedy label, and we
-    /// special-case that check in the generated code.
-    UriPatternGreedyLabelPostfixNotFound,
-
+    /// Used when consuming the input struct builder.
+    /// TODO Can we make builders non-fallible in the server? Or just don't use them at all in
+    /// request deserialization?
     Build(crate::Error),
-    // TODO when hyper.to_bytes() fails
-    HttpBody(crate::Error),
-    // TODO We need to handwrite `ContentTypeRejection`.
-
-    // Related to checking the `Content-Type` header.
-    MissingJsonContentType,
-    MissingXmlContentType,
-    MimeParse,
 }
 
 impl std::fmt::Display for RequestRejection {
@@ -136,6 +185,12 @@ impl std::fmt::Display for RequestRejection {
 }
 
 impl std::error::Error for RequestRejection {}
+
+/// These converters are solely to make code-generation simpler. They convert from a specific error
+/// type (from a runtime/third-party crate or the standard library) into a variant of the
+/// [`crate::rejection::RequestRejection`] enum holding the type-erased boxed [`crate::Error`]
+/// type. Generated functions that use [crate::rejection::RequestRejection] can thus use `?` to
+/// bubble up instead of having to sprinkle things like [`Result::map_err`] everywhere.
 
 // TODO These could be generated with a macro
 
@@ -215,15 +270,10 @@ impl From<serde_urlencoded::de::Error> for RequestRejection {
     }
 }
 
-// impl From<http::Error> for FromRequest {
-//     fn from(err: http::Error) -> Self {
-//         Self::HttpBody(crate::Error::new(err))
-//     }
-// }
-
 /// `[crate::body::Body]` is `[hyper::Body]`, whose associated `Error` type is `[hyper::Error]`. We
 /// need this converter for when we convert the body into bytes in the framework, since protocol
-/// tests use `[crate::body::Body]` as their body type when constructing requests.
+/// tests use `[crate::body::Body]` as their body type when constructing requests (and almost
+/// everyone will run a Hyper-based server in their services).
 impl From<hyper::Error> for RequestRejection {
     fn from(err: hyper::Error) -> Self {
         Self::HttpBody(crate::Error::new(err))
