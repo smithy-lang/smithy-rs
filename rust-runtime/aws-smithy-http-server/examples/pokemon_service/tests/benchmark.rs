@@ -34,7 +34,7 @@ async fn banchmark() {
         .build()
         .unwrap();
     let benches = vec![BenchmarkBuilder::default()
-        .duration(Duration::from_secs(5))
+        .duration(Duration::from_secs(60))
         .build()
         .unwrap()];
     wrk.bench(&benches).unwrap();
