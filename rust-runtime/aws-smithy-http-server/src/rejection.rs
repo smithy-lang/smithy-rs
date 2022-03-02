@@ -3,7 +3,45 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! Rejection response types.
+//! Rejection types.
+//!
+//! This module contains types that are commonly used as the `E` error type in functions that
+//! handle requests and responses that return `Result<T, E>` throughout the framework. These
+//! include functions to deserialize incoming requests and serialize outgoing responses.
+//!
+//! There are three main types:
+//!
+//! 1. [`RequestRejection`]s are used when the framework fails to deserialize the request into the
+//!    corresponding operation input.
+//! 1. [`ExtensionHandlingRejection`]s are used when the framework fails to deserialize the request
+//!    into a [`super::Extension`] registered by the service.
+//! 1. [`ResponseRejection`]s are used when the framework fails to serialize the operation
+//!    output into a response.
+//!
+//! They are called _rejection_ types and not _error_ types to signal that the input was _rejected_
+//! (as opposed to it causing a recoverable error that would need to be handled, or an
+//! unrecoverable error). For example, a [`RequestRejection`] simply means that the request was
+//! rejected; there isn't really anything wrong with the service itself that the service
+//! implementer would need to handle.
+//!
+//! Rejection types are an _internal_ detail about the framework, they can be added, removed, and
+//! modified at any time without causing breaking changes. They are not surfaced to clients or the
+//! service implementer in any way (including this documentation): indeed, they can't be converted
+//! into responses. They serve as a mechanism to keep track of all the possible errors that can
+//! occur when processing a request or a response, in far more detail than what AWS protocols need
+//! to. This is why they are so granular: other (possibly protocol-specific) error types (like
+//! [`crate::exception::SmithyFrameworkException`]) can "group" them when exposing errors to
+//! clients while the framework does not need to sacrifice fidelity in private error handling
+//! routines, and future-proofing itself at the same time (for example, we might want to record
+//! metrics about rejection types).
+//!
+//! Rejection types implement [`std::error::Error`], and some take in type-erased boxed errors
+//! ([`crate::Error`]) to represent their underlying causes, so they can be composed with other
+//! types that take in (possibly type-erased) [`std::error::Error`]s, like
+//! `crate::exception::SmithyFrameworkExceptionType`, thus allowing us to represent the full error
+//! chain.
+
+use strum_macros::Display;
 
 define_rejection! {
     #[status = INTERNAL_SERVER_ERROR]
@@ -34,18 +72,8 @@ composite_rejection! {
 
 /// Errors that can occur when serializing the operation output provided by the service implementer
 /// into an HTTP response.
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub enum ResponseRejection {
-    /// Used when an invalid HTTP header value (a value that cannot be parsed as an
-    /// `[http::header::HeaderValue]`) is provided for a shape member bound to an HTTP header with
-    /// `httpHeader` or `httpPrefixHeaders`.
-    /// Used when failing to serialize an `httpPayload`-bound struct into an HTTP response body.
-    Build(crate::Error),
-
-    // TODO
-    /// Used when failing to serialize a struct into an HTTP response body.
-    Serialization(crate::Error),
-
     /// Used when `httpResponseCode` targets an optional member, and the service implementer sets
     /// it to `None`.
     MissingHttpStatusCode,
@@ -54,21 +82,23 @@ pub enum ResponseRejection {
     /// member targeted by `httpResponseCode`.
     InvalidHttpStatusCode,
 
+    /// Used when an invalid HTTP header value (a value that cannot be parsed as an
+    /// `[http::header::HeaderValue]`) is provided for a shape member bound to an HTTP header with
+    /// `httpHeader` or `httpPrefixHeaders`.
+    /// Used when failing to serialize an `httpPayload`-bound struct into an HTTP response body.
+    Build(crate::Error),
+
+    /// Used when failing to serialize a struct into a `String` for the HTTP response body (for
+    /// example, converting a struct into a JSON-encoded `String`).
+    Serialization(crate::Error),
+
     /// Used when consuming an [`http::Response::Builder`] into the constructed [`http::Response`]
     /// when calling [`http::Response::builder::body`].
     /// This error can happen if an invalid HTTP header value (a value that cannot be parsed as an
     /// `[http::header::HeaderValue]`) is used for the protocol-specific response `Content-Type`
-    /// header and or for additional protocol- specific headers (like `X-Amzn-Errortype` to signal
+    /// header, or for additional protocol-specific headers (like `X-Amzn-Errortype` to signal
     /// errors in RestJson1).
     Http(crate::Error),
-}
-
-impl std::fmt::Display for ResponseRejection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO Fill out.
-        // TODO Consider deriving it with `enum_display_derive` or `thiserror`.
-        write!(f, "{}", self)
-    }
 }
 
 impl std::error::Error for ResponseRejection {}
@@ -111,13 +141,13 @@ impl From<http::Error> for ResponseRejection {
 /// value should be of the type-erased boxed error type `[crate::Error]`. In practice, some of the
 /// variants that take in a value are only instantiated with errors of a single type in the
 /// generated code. For example, `UriPatternMismatch` is only instantiated with an error coming
-/// from a `nom` parser, `nom::Err<nom::error::Error<String>>`. This is reflected in the converters
+/// from a `nom` parser, `nom::Err<nom::error::Error<&str>>`. This is reflected in the converters
 /// below that convert from one of these very specific error types into one of the variants. For
 /// example, the `RequestRejection` implements `From<hyper::Error>` to construct the `HttpBody`
 /// variant. This is a deliberate design choice to make the code simpler and less prone to changes.
 ///
 // The variants are _roughly_ sorted in the order in which the HTTP request is processed.
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub enum RequestRejection {
     /// Used when attempting to take the request's body, and it has already been taken (presumably
     /// by an outer `Service` that handled the request before us).
@@ -143,8 +173,8 @@ pub enum RequestRejection {
     /// by an outer `Service` that handled the request before us).
     HeadersAlreadyExtracted,
 
-    /// Used when parsing HTTP headers that are bound to input members (httpHeader,
-    /// httpPrefixHeaders).
+    /// Used when failing to parse HTTP headers that are bound to input members with the `httpHeader`
+    /// or the `httpPrefixHeaders` traits.
     HeaderParse(crate::Error),
 
     /// Used when the URI pattern has a literal after the greedy label, and it is not found in the
@@ -153,17 +183,20 @@ pub enum RequestRejection {
     /// Used when the `nom` parser's input does not match the URI pattern.
     UriPatternMismatch(crate::Error),
 
-    /// Used when percent decoding query string.
+    /// Used when percent-decoding URL query string.
+    /// Used when percent-decoding URI path label.
     InvalidUtf8(crate::Error),
 
+    /// Used when failing to deserialize strings from a URL query string and from URI path labels
+    /// into an [`aws_smithy_types::DateTime`].
     DateTimeParse(crate::Error),
 
-    /// Used when deserializing strings from a URL query string and from URI path labels into
-    /// primitive types.
+    /// Used when failing to deserialize strings from a URL query string and from URI path labels
+    /// into "primitive" types.
     PrimitiveParse(crate::Error),
 
-    /// The following three variants are used when deserializing strings from a URL query string
-    /// and URI path labels into primitive types.
+    /// The following three variants are used when failing to deserialize strings from a URL query
+    /// string and URI path labels into "primitive" types.
     /// TODO(https://github.com/awslabs/smithy-rs/issues/1232): They should be removed and
     /// conflated into the `PrimitiveParse` variant above after this issue is resolved.
     IntParse(crate::Error),
@@ -174,14 +207,6 @@ pub enum RequestRejection {
     /// TODO Can we make builders non-fallible in the server? Or just don't use them at all in
     /// request deserialization?
     Build(crate::Error),
-}
-
-impl std::fmt::Display for RequestRejection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO Fill out.
-        // TODO Consider deriving it with `enum_display_derive` or `thiserror`.
-        write!(f, "{}", self)
-    }
 }
 
 impl std::error::Error for RequestRejection {}
@@ -249,15 +274,13 @@ impl From<std::num::ParseIntError> for RequestRejection {
 }
 
 impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
-    // TODO Can't we make the parser return `Error<String>`?
     fn from(err: nom::Err<nom::error::Error<&str>>) -> Self {
         Self::UriPatternMismatch(crate::Error::new(err.to_owned()))
     }
 }
 
-// TODO I'm not sure we need this one. Because serde_urlencoded would have already failed if it's
-// not UTF-8.
-// i.e. do we really need `percent_encoding::percent_decode_str(value)?
+/// Used when calling [`percent_encoding::percent_decode_str`](https://docs.rs/percent-encoding/latest/percent_encoding/fn.percent_decode_str.html) and bubbling up.
+/// TODO(https://github.com/servo/rust-url/issues/758): Unless I'm missing something, percent-decoding can't fail, so we could just `.expect()`.
 impl From<std::str::Utf8Error> for RequestRejection {
     fn from(err: std::str::Utf8Error) -> Self {
         Self::InvalidUtf8(crate::Error::new(err))
