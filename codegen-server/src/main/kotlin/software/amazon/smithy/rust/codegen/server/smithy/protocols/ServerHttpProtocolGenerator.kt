@@ -50,7 +50,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescripto
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.toOptional
 import software.amazon.smithy.rust.codegen.smithy.wrapOptional
@@ -654,7 +653,7 @@ private class ServerHttpProtocolImplGenerator(
                     val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
                         rust("#T($body)", structuredDataParser.payloadParser(binding.member))
                     }
-                    val errorSymbol = getDeserializeErrorSymbol(binding)
+                    val errorSymbol = getDeserializePayloadErrorSymbol(binding)
                     val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
                         operationShape,
                         binding,
@@ -984,6 +983,8 @@ private class ServerHttpProtocolImplGenerator(
         )
     }
 
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1231): If this function was called to parse a query string
+    // key value pair, we don't need to percent-decode it _again_.
     private fun generateParsePercentEncodedStrFn(binding: HttpBindingDescriptor): RuntimeType {
         // HTTP bindings we support that contain percent-encoded data.
         check(binding.location == HttpLocation.LABEL || binding.location == HttpLocation.QUERY)
@@ -1036,7 +1037,6 @@ private class ServerHttpProtocolImplGenerator(
                 *codegenScope,
                 "O" to output,
             ) {
-                // TODO Do we really need percent decoding here? We've just serde_urlencoded.
                 rustTemplate(
                     """
                     let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
@@ -1050,10 +1050,8 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
-    // TODO Why are we not using percent_decode?
-    // TODO These functions can be replaced with the ones in https://docs.rs/aws-smithy-types/latest/aws_smithy_types/primitive/trait.Parse.html
-    // TODO I think this is used when O is integer and boolean too.
-    // Used in path and query deserializing.
+    // Function to parse a string as the data type generated for boolean, byte, short, integer, long, float, or double shapes.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1232): This function can be replaced by https://docs.rs/aws-smithy-types/latest/aws_smithy_types/primitive/trait.Parse.html
     private fun generateParseStrAsPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
@@ -1094,8 +1092,13 @@ private class ServerHttpProtocolImplGenerator(
         }
     }
 
-    // TODO Wth is this. It's only used once
-    private fun getDeserializeErrorSymbol(binding: HttpBindingDescriptor): RuntimeType {
+    /**
+     * Returns the error type of the function that deserializes a non-streaming HTTP payload (a byte slab) into the
+     * shape targeted by the `httpPayload` trait.
+     */
+    private fun getDeserializePayloadErrorSymbol(binding: HttpBindingDescriptor): RuntimeType {
+        check(binding.location == HttpLocation.PAYLOAD)
+
         if (model.expectShape(binding.member.target) is StringShape) {
             return ServerRuntimeType.RequestRejection(runtimeConfig)
         }

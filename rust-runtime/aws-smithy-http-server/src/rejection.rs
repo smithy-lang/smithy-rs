@@ -45,7 +45,7 @@ pub enum ResponseRejection {
     MissingHttpStatusCode,
 
     /// Used when the service implementer provides an integer outside the 100-999 range for a
-    /// member targetted by `httpResponseCode`.
+    /// member targeted by `httpResponseCode`.
     InvalidHttpStatusCode,
 
     /// Used when converting the HTTP response builder into an HTTP response.
