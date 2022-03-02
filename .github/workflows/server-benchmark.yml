@@ -26,6 +26,11 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        target-dir: ./target
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
@@ -59,6 +64,11 @@ jobs:
       with:
         path: ~/.wrk-api-bench
         key: ${{ runner.os }}-wrk-api-bench
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        target-dir: ./target
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
