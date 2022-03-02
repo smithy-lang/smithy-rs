@@ -65,7 +65,8 @@ jobs:
         path: ~/.wrk-api-bench
         key: ${{ runner.os }}-wrk-api-bench
       # Pinned to the commit hash of v1.3.0
-    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
       with:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         target-dir: ./target
@@ -91,8 +92,9 @@ jobs:
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
           make && cargo test --release --features benchmarks
-        echo "::set-output name=bot-message::$(cat tmp-variance/current_variance.txt)"
-    - uses: actions/github-script@v5
+        echo "::set-output name=bot-message::$(cat /tmp/current_variance.txt)"
+    - name: Post variance on PR
+      uses: actions/github-script@v5
       # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"
       if: ${{ github.head_ref != null }}
       with:

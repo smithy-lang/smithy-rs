@@ -42,7 +42,7 @@ async fn banchmark() {
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
-        .open(Path::new("tmp-variance/current_variance.txt"))
+        .open(Path::new("/tmp/current_variance.txt"))
         .unwrap();
     file.write_all(variance.to_string().as_bytes()).unwrap();
 }
