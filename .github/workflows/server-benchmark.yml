@@ -9,6 +9,7 @@ on:
 env:
   java_version: 11
   rust_version: 1.56.1
+  dependencies: wrk gnuplot
 
 jobs:
   run-end-to-end-integration-test:
@@ -24,16 +25,22 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
-    # JDK is needed to generate code
+    - uses: actions/cache@v2
+      name: Benchmarks Cache
+      with:
+        path: ~/.wrk-api-bench
+        key: ${{ runner.os }}-wrk-api-bench
     - name: Set up JDK
       uses: actions/setup-java@v1
       with:
         java-version: ${{ env.java_version }}
-    # Install Rust
-    - uses: actions-rs/toolchain@v1
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
         default: true
+    - name: Install benchmarks dependencies
+      run: sudo apt-get update && sudo apt-get install -y ${{ env.dependencies }}
     - name: Run integration tests
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
