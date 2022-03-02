@@ -9,7 +9,8 @@ on:
 env:
   java_version: 11
   rust_version: 1.56.1
-  dependencies: libssl-dev git gnuplot
+  rust_toolchain_components: clippy,rustfmt
+  apt_dependencies: libssl-dev git gnuplot
 
 jobs:
   run-e2e-integration-test:
@@ -33,6 +34,7 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
         default: true
     - name: Run integration tests
       run: |
@@ -65,15 +67,16 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
         default: true
     - name: Install benchmarks dependencies
-      run: sudo apt-get update && sudo apt-get install -y ${{ env.dependencies }}
+      run: sudo apt-get update && sudo apt-get install -y ${{ env.apt_dependencies }}
     # Ubuntu 20.04 doesn't have wrk packaged, hence we need to build it 🤦
     - name: Install wrk
       run: |
         git clone https://github.com/wg/wrk.git /tmp/wrk-build && \
           cd /tmp/wrk-build && make -j8 && sudo cp wrk /usr/local/bin
-    - name: Run integration tests
+    - name: Run benchmark
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
           make && wrk --help
