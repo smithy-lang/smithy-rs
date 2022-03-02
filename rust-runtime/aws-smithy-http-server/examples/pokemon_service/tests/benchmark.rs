@@ -45,5 +45,5 @@ async fn banchmark() {
         .truncate(true)
         .open(Path::new("/tmp/current_variance.txt"))
         .unwrap();
-    file.write_all(variance.to_markdown().as_bytes()).unwrap();
+    file.write_all(variance.to_github_markdown().as_bytes()).unwrap();
 }
