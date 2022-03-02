@@ -6,7 +6,7 @@ CLIENT_SDK_DST := $(CUR_DIR)/pokemon_service_client
 SERVER_SDK_SRC := $(SRC_DIR)/codegen-server-test/build/smithyprojections/codegen-server-test/pokemon_service_sdk/rust-server-codegen
 CLIENT_SDK_SRC := $(SRC_DIR)/codegen-test/build/smithyprojections/codegen-test/pokemon_service_client/rust-codegen
 
-all: build
+all: codegen
 
 codegen:
 	$(GRADLE) --project-dir $(SRC_DIR) :codegen-test:assemble
