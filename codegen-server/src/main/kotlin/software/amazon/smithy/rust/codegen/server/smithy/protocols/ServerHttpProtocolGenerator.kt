@@ -76,7 +76,13 @@ class ServerHttpProtocolGenerator(
 ) : ProtocolGenerator(
     codegenContext,
     protocol,
-    MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolPayloadGenerator(codegenContext, protocol)),
+    MakeOperationGenerator(
+        codegenContext,
+        protocol,
+        HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+        public = true,
+        includeDefaultPayloadHeaders = true
+    ),
     ServerHttpProtocolImplGenerator(codegenContext, protocol),
 ) {
     // Define suffixes for operation input / output / error wrappers
@@ -154,6 +160,7 @@ private class ServerHttpProtocolImplGenerator(
         // Implement Axum `FromRequest` trait for input types.
         rustTemplate(
             """
+            ##[derive(Debug)]
             pub struct $inputName(pub #{I});
             ##[#{AsyncTrait}::async_trait]
             impl<B> #{AxumCore}::extract::FromRequest<B> for $inputName
@@ -458,7 +465,7 @@ private class ServerHttpProtocolImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
-        bindings.find { it.location == HttpLocation.RESPONSE_CODE }?.let { serverRenderResponseCodeBinding(it) }
+        bindings.find { it.location == HttpLocation.RESPONSE_CODE }?.let { serverRenderResponseCodeBinding(it)(this) }
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
             val memberName = symbolProvider.toMemberName(it)
@@ -468,7 +475,7 @@ private class ServerHttpProtocolImplGenerator(
                 """,
                 *codegenScope,
             )
-        } ?:run {
+        } ?: run {
             val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
             withBlockTemplate("let body = #{SmithyHttpServer}::body::to_boxed(", ");", *codegenScope) {
                 payloadGenerator.generatePayload(this, "output", operationShape)

@@ -1,4 +1,55 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+0.38.0 (Februrary 24, 2022)
+===========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#1197](https://github.com/awslabs/smithy-rs/issues/1197)) `aws_smithy_types::retry::RetryKind` had its `NotRetryable` variant split into `UnretryableFailure` and `Unnecessary`. If you implement the `ClassifyResponse`, then successful responses need to return `Unnecessary`, and failures that shouldn't be retried need to return `UnretryableFailure`.
+- ⚠ ([smithy-rs#1209](https://github.com/awslabs/smithy-rs/issues/1209)) `aws_smithy_types::primitive::Encoder` is now a struct rather than an enum, but its usage remains the same.
+- ⚠ ([smithy-rs#1217](https://github.com/awslabs/smithy-rs/issues/1217)) `ClientBuilder` helpers `rustls()` and `native_tls()` now return `DynConnector` and use dynamic dispatch rather than returning their concrete connector type that would allow static dispatch. If static dispatch is desired, then manually construct a connector to give to the builder. For example, for rustls: `builder.connector(Adapter::builder().build(aws_smithy_client::conns::https()))` (where `Adapter` is in `aws_smithy_client::hyper_ext`).
+
+**New this release:**
+- 🐛 ([smithy-rs#1197](https://github.com/awslabs/smithy-rs/issues/1197)) Fixed a bug that caused clients to eventually stop retrying. The cross-request retry allowance wasn't being reimbursed upon receiving a successful response, so once this allowance reached zero, no further retries would ever be attempted.
+
+
+0.37.0 (February 18th, 2022)
+============================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#1144](https://github.com/awslabs/smithy-rs/issues/1144)) Some APIs required that timeout configuration be specified with an `aws_smithy_client::timeout::Settings` struct while
+    others required an `aws_smithy_types::timeout::TimeoutConfig` struct. Both were equivalent. Now `aws_smithy_types::timeout::TimeoutConfig`
+    is used everywhere and `aws_smithy_client::timeout::Settings` has been removed. Here's how to migrate code your code that
+    depended on `timeout::Settings`:
+
+    The old way:
+    ```rust
+    let timeout = timeout::Settings::new()
+        .with_connect_timeout(Duration::from_secs(1))
+        .with_read_timeout(Duration::from_secs(2));
+    ```
+
+    The new way:
+    ```rust
+    // This example is passing values, so they're wrapped in `Option::Some`. You can disable a timeout by passing `None`.
+    let timeout = TimeoutConfig::new()
+        .with_connect_timeout(Some(Duration::from_secs(1)))
+        .with_read_timeout(Some(Duration::from_secs(2)));
+    ```
+- ⚠ ([smithy-rs#1085](https://github.com/awslabs/smithy-rs/issues/1085)) Moved the following re-exports into a `types` module for all services:
+    - `<service>::AggregatedBytes` -> `<service>::types::AggregatedBytes`
+    - `<service>::Blob` -> `<service>::types::Blob`
+    - `<service>::ByteStream` -> `<service>::types::ByteStream`
+    - `<service>::DateTime` -> `<service>::types::DateTime`
+    - `<service>::SdkError` -> `<service>::types::SdkError`
+- ⚠ ([smithy-rs#1085](https://github.com/awslabs/smithy-rs/issues/1085)) `AggregatedBytes` and `ByteStream` are now only re-exported if the service has streaming operations,
+    and `Blob`/`DateTime` are only re-exported if the service uses them.
+- ⚠ ([smithy-rs#1130](https://github.com/awslabs/smithy-rs/issues/1130)) MSRV increased from `1.54` to `1.56.1` per our 2-behind MSRV policy.
+
+**New this release:**
+- ([smithy-rs#1144](https://github.com/awslabs/smithy-rs/issues/1144)) `MakeConnectorFn`, `HttpConnector`, and `HttpSettings` have been moved from `aws_config::provider_config` to
+    `aws_smithy_client::http_connector`. This is in preparation for a later update that will change how connectors are
+    created and configured.
+- ([smithy-rs#1123](https://github.com/awslabs/smithy-rs/issues/1123)) Refactor `Document` shape parser generation
+- ([smithy-rs#1085](https://github.com/awslabs/smithy-rs/issues/1085)) The `Client` and `Config` re-exports now have their documentation inlined in the service docs
+
+
 0.36.0 (January 26, 2022)
 =========================
 **New this release:**
