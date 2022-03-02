@@ -80,17 +80,26 @@ jobs:
         components: ${{ env.rust_toolchain_components }}
         default: true
     - name: Install benchmarks dependencies
-      run: sudo apt-get update && sudo apt-get install -y ${{ env.apt_dependencies }}
+      run: sudo apt-get install -y ${{ env.apt_dependencies }}
     # Ubuntu 20.04 doesn't have wrk packaged, hence we need to build it 🤦
     - name: Install wrk
       run: |
         git clone https://github.com/wg/wrk.git /tmp/wrk-build && \
           cd /tmp/wrk-build && make -j8 wrk && sudo cp wrk /usr/local/bin
     - name: Run benchmark
+      id: run-benchmark
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
-          make && cargo test --release --features benchmarks && \
-          for x in ~/.wrk-api-bench/*; do
-            echo $x
-            cat $x |jq .
-          done
+          make && cargo test --release --features benchmarks
+        echo "::set-output name=bot-message::$(cat tmp-variance/current_variance.txt)"
+    - uses: actions/github-script@v5
+      # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"
+      if: ${{ github.head_ref != null }}
+      with:
+        script: |
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '${{ steps.run-benchmark.outputs.bot-message }}'
+          })

@@ -7,6 +7,8 @@
 // These tests only have access to your crate's public API.
 // See: https://doc.rust-lang.org/book/ch11-03-test-organization.html#integration-tests
 
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
 
@@ -19,7 +21,7 @@ mod helpers;
 #[cfg(feature = "benchmarks")]
 #[tokio::test]
 async fn banchmark() {
-    use wrk_api_bench::{BenchmarkBuilder, WrkBuilder};
+    use wrk_api_bench::{BenchmarkBuilder, HistoryPeriod, WrkBuilder};
     let _program = PokemonService::run();
     // Give PokemonSérvice some time to start up.
 
@@ -35,5 +37,12 @@ async fn banchmark() {
         .duration(Duration::from_secs(5))
         .build()
         .unwrap()];
-    wrk.bench(&benches).unwrap()
+    wrk.bench(&benches).unwrap();
+    let mut variance = wrk.variance(HistoryPeriod::Last).unwrap();
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(Path::new("tmp-variance/current_variance.txt"))
+        .unwrap();
+    file.write_all(variance.to_string().as_bytes()).unwrap();
 }
