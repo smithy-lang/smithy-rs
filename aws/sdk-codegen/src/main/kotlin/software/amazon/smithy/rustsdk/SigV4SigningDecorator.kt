@@ -157,10 +157,7 @@ class SigV4SigningFeature(
         return when (section) {
             is OperationSection.MutateRequest -> writable {
                 rustTemplate(
-                    """
-                    ##[allow(unused_mut)]
-                    let mut signing_config = #{sig_auth}::signer::OperationSigningConfig::default_config();
-                    """,
+                    "let mut signing_config = #{sig_auth}::signer::OperationSigningConfig::default_config();",
                     *codegenScope
                 )
                 if (needsAmzSha256(service)) {
