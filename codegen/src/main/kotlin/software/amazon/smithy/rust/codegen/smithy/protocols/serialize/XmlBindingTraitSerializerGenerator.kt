@@ -103,7 +103,7 @@ class XmlBindingTraitSerializerGenerator(
     private fun Ctx.Scope.scopedTo(member: MemberShape) =
         this.copy(input = "$input.${symbolProvider.toMemberName(member)}")
 
-    override fun operationSerializer(operationShape: OperationShape): RuntimeType? {
+    override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
         val fnName = symbolProvider.serializeFunctionName(operationShape)
         val inputShape = operationShape.inputShape(model)
         val xmlMembers = operationShape.requestBodyMembers()
@@ -192,7 +192,7 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
-    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType? {
+    override fun operationOutputSerializer(operationShape: OperationShape): RuntimeType? {
         val fnName = symbolProvider.serializeFunctionName(operationShape)
         val outputShape = operationShape.outputShape(model)
         val xmlMembers = operationShape.responseBodyMembers()
