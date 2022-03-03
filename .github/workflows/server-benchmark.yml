@@ -96,7 +96,7 @@ jobs:
           make && RUN_BENCHMARKS=1 cargo test --release
         for x in ~/.wrk-api-bench/*; do
           echo "Benchmark $x"
-          cat $x | jq .
+          cat $x
           echo
         done
         echo "::set-output name=bot-message::$(cat ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt)"
