@@ -63,7 +63,9 @@ jobs:
       name: Benchmarks Cache
       with:
         path: ~/.wrk-api-bench
-        key: ${{ runner.os }}-wrk-api-bench
+        key: ${{ runner.os }}-wrk-api-bench-${{ hashFiles('~/.wrk-api-bench/*.json') }}
+        restore-keys: |
+          ${{ runner.os }}-wrk-api-bench-
       # Pinned to the commit hash of v1.3.0
     - name: Rust Cache
       uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
@@ -94,7 +96,7 @@ jobs:
           make && RUN_BENCHMARKS=1 cargo test --release
         for x in ~/.wrk-api-bench/*; do
           echo "Benchmark $x"
-          cat $x
+          cat $x | jq .
           echo
         done
         echo "::set-output name=bot-message::$(cat ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt)"
