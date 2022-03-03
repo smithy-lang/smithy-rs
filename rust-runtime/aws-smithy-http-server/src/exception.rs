@@ -11,8 +11,7 @@
 //! the framework, exceptions are surfaced to clients in HTTP responses: indeed, they implement
 //! [`axum_core::response::IntoResponse`]. Rejections can be "grouped" and converted into an
 //! exception type: for example, all request rejections due to serialization issues can be
-//! conflated under the [`SmithyFrameworkExceptionType::Serialization`] exception type enum
-//! variant.
+//! conflated under the [`SmithyFrameworkExceptionType::Serialization`] enum variant.
 //!
 //! The HTTP response representation of an exception can be protocol-specific: for example,
 //! exceptions in the RestJson1 protocol set the `X-Amzn-Errortype` header.
@@ -23,11 +22,10 @@
 //! [`SmithyFrameworkExceptionType::Serialization`] renders an `X-Amzn-Errortype` header with the
 //! value `SerializationException` when using the RestJson1 protocol.
 //!
-//! The way generated code works is it always works with [`crate::rejection`] types when
-//! deserializing requests and serializing response. Just before a response needs to be sent, the
-//! generated code looks up and converts into the corresponding exception type, and then it uses
-//! the exception's [`axum_core::response::IntoResponse`] implementation to render and send a
-//! response.
+//! Generated code works always works with [`crate::rejection`] types when deserializing requests
+//! and serializing response. Just before a response needs to be sent, the generated code looks up
+//! and converts into the corresponding exception type, and then it uses the exception's
+//! [`axum_core::response::IntoResponse`] implementation to render and send a response.
 
 use crate::protocols::Protocol;
 

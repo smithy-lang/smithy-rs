@@ -215,7 +215,7 @@ private class ServerHttpProtocolImplGenerator(
                             },
                             Err(e) => {
                                 #{SmithyFrameworkException} {
-                                    protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
+                                    protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
                                     exception_type: e.into()
                                 }.into_response()
                             }
@@ -574,7 +574,7 @@ private class ServerHttpProtocolImplGenerator(
             rustTemplate(
                 """
                 let status = output.$memberName
-                    .ok_or_else(|| #{ResponseRejection}::MissingHttpStatusCode)?;
+                    .ok_or(#{ResponseRejection}::MissingHttpStatusCode)?;
                 let http_status: u16 = std::convert::TryFrom::<i32>::try_from(status)
                     .map_err(|_| #{ResponseRejection}::InvalidHttpStatusCode)?;
                 """.trimIndent(),
