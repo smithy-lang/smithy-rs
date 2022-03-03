@@ -36,8 +36,8 @@
 //! metrics about rejection types).
 //!
 //! Rejection types implement [`std::error::Error`], and some take in type-erased boxed errors
-//! ([`crate::Error`]) to represent their underlying causes, so they can be composed with other
-//! types that take in (possibly type-erased) [`std::error::Error`]s, like
+//! (`crate::Error`) to represent their underlying causes, so they can be composed with other types
+//! that take in (possibly type-erased) [`std::error::Error`]s, like
 //! [`crate::exception::SmithyFrameworkExceptionType`], thus allowing us to represent the full
 //! error chain.
 

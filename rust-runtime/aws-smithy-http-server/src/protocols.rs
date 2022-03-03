@@ -10,6 +10,7 @@ use axum_core::extract::RequestParts;
 #[derive(Debug)]
 pub enum Protocol {
     RestJson1,
+    RestXml,
 }
 
 /// Validate that the request had the standard JSON content-type header.

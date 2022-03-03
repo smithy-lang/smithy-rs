@@ -62,21 +62,23 @@ impl axum_core::response::IntoResponse for SmithyFrameworkException {
             SmithyFrameworkExceptionType::Serialization(_) => http::StatusCode::BAD_REQUEST,
         };
 
-        let headers = match self.protocol {
-            Protocol::RestJson1 => [
-                ("Content-Type", "application/json"),
-                ("X-Amzn-Errortype", self.exception_type.name()),
-            ],
-        };
-
         let body = crate::body::to_boxed(match self.protocol {
             Protocol::RestJson1 => "{}",
+            Protocol::RestXml => "",
         });
 
         let mut builder = http::Response::builder();
         builder = builder.status(status_code);
-        for (header_name, header_value) in headers {
-            builder = builder.header(header_name, header_value);
+
+        match self.protocol {
+            Protocol::RestJson1 => {
+                builder = builder
+                    .header("Content-Type", "application/json")
+                    .header("X-Amzn-Errortype", self.exception_type.name());
+            }
+            Protocol::RestXml => {
+                builder = builder.header("Content-Type", "application/xml");
+            }
         }
 
         // TODO What extension type should we use here?

@@ -169,7 +169,7 @@ private class ServerHttpProtocolImplGenerator(
                 async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
                     #{parse_request}(req)
                         .await
-                        .map(|input| $inputName(input))
+                        .map($inputName)
                         .map_err(
                             |err| #{SmithyFrameworkException} {
                                 protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
