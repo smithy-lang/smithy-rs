@@ -91,8 +91,10 @@ jobs:
       id: run-benchmark
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
-          make && cargo test --release --features benchmarks
-        echo "::set-output name=bot-message::$(cat /tmp/current_variance.txt)"
+          make && RUN_BENCHMARKS=1 cargo test --release
+        echo "::set-output name=bot-message::$(cat ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt)"
+        # remove the variance file to ensure we do not cache it.
+        rm -f ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt
     - name: Post variance on PR
       uses: actions/github-script@v5
       # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"

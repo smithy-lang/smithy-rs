@@ -12,10 +12,8 @@ use std::time::Duration;
 use crate::helpers::{client, PokemonService};
 use tokio::time;
 
-#[macro_use]
 mod helpers;
 
-#[cfg(not(feature = "benchmarks"))]
 #[tokio::test]
 async fn simple_integration_test() {
     let _program = PokemonService::run();

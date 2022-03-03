@@ -24,6 +24,3 @@ wrk-api-bench = "0.0.5"
 # Local paths
 aws-smithy-client  = { path = "../../../aws-smithy-client/", features = ["rustls"] }
 pokemon_service_client = { path = "../pokemon_service_client/" }
-
-[features]
-benchmarks = []

@@ -3,47 +3,56 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-// Files here are for running integration tests.
-// These tests only have access to your crate's public API.
-// See: https://doc.rust-lang.org/book/ch11-03-test-organization.html#integration-tests
+use std::{env, fs::OpenOptions, io::Write, path::Path, time::Duration};
 
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::path::Path;
-use std::time::Duration;
-
-use crate::helpers::{client, PokemonService};
 use tokio::time;
+use wrk_api_bench::{BenchmarkBuilder, HistoryPeriod, WrkBuilder};
 
-#[macro_use]
+use crate::helpers::PokemonService;
+
 mod helpers;
 
-#[cfg(feature = "benchmarks")]
 #[tokio::test]
-async fn banchmark() {
-    use wrk_api_bench::{BenchmarkBuilder, HistoryPeriod, WrkBuilder};
-    let _program = PokemonService::run();
-    // Give PokemonSérvice some time to start up.
+async fn banchmark() -> Result<(), Box<dyn std::error::Error>> {
+    // Benchmarks are expensive, so they run only if the environment
+    // variable RUN_BENCHMARKS is present.
+    if env::var_os("RUN_BENCHMARKS").is_some() {
+        let _program = PokemonService::run();
+        // Give PokemonSérvice some time to start up.
+        time::sleep(Duration::from_millis(50)).await;
 
-    time::sleep(Duration::from_millis(50)).await;
+        // The history directory is cached inside GitHub actions under
+        // the running use home directory to allow us to recover historical
+        // data between runs.
+        let history_dir = if env::var_os("GITHUB_ACTIONS").is_some() {
+            home::home_dir().unwrap().join(".wrk-api-bench")
+        } else {
+            Path::new(".").join(".wrk-api-bench")
+        };
+        let variance_file = history_dir.join("smithy_rs_benchmark_variance.txt");
 
-    let history_dir = home::home_dir().unwrap().join(".wrk-api-bench");
-    let mut wrk = WrkBuilder::default()
-        .url(String::from("http://localhost:13734/pokemon-species/pikachu"))
-        .history_dir(history_dir)
-        .build()
-        .unwrap();
-    let benches = vec![BenchmarkBuilder::default()
-        .duration(Duration::from_secs(60))
-        .build()
-        .unwrap()];
-    wrk.bench(&benches).unwrap();
-    let mut variance = wrk.variance(HistoryPeriod::Last).unwrap();
-    let mut file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(Path::new("/tmp/current_variance.txt"))
-        .unwrap();
-    file.write_all(variance.to_github_markdown().as_bytes()).unwrap();
+        let mut wrk = WrkBuilder::default()
+            .url(String::from("http://localhost:13734/pokemon-species/pikachu"))
+            .history_dir(history_dir)
+            .build()?;
+
+        // Run a single benchmark with 8 threads and 64 connections for 60 seconds.
+        let benches = vec![BenchmarkBuilder::default()
+            .duration(Duration::from_secs(60))
+            .threads(8)
+            .connections(64)
+            .build()?];
+        wrk.bench(&benches)?;
+
+        // Calculate variance from last run and write it to disk.
+        let variance = wrk.variance(HistoryPeriod::Last)?;
+        let mut variance_file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(variance_file)
+            .unwrap();
+        variance_file.write_all(variance.to_github_markdown().as_bytes())?;
+    }
+    Ok(())
 }
