@@ -92,7 +92,7 @@ jobs:
     - name: Run benchmark
       id: run-benchmark
       run: |
-        touch ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt
+        mkdir -p ~/.wrk-api-bench && touch ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt
         cd rust-runtime/aws-smithy-http-server/examples && \
           make && RUN_BENCHMARKS=1 cargo test --release
         for x in ~/.wrk-api-bench/*; do
