@@ -24,7 +24,7 @@
 //! rejected; there isn't really anything wrong with the service itself that the service
 //! implementer would need to handle.
 //!
-//! Rejection types are an _internal_ detail about the framework, they can be added, removed, and
+//! Rejection types are an _internal_ detail about the framework: they can be added, removed, and
 //! modified at any time without causing breaking changes. They are not surfaced to clients or the
 //! service implementer in any way (including this documentation): indeed, they can't be converted
 //! into responses. They serve as a mechanism to keep track of all the possible errors that can
@@ -38,8 +38,8 @@
 //! Rejection types implement [`std::error::Error`], and some take in type-erased boxed errors
 //! ([`crate::Error`]) to represent their underlying causes, so they can be composed with other
 //! types that take in (possibly type-erased) [`std::error::Error`]s, like
-//! `crate::exception::SmithyFrameworkExceptionType`, thus allowing us to represent the full error
-//! chain.
+//! [`crate::exception::SmithyFrameworkExceptionType`], thus allowing us to represent the full
+//! error chain.
 
 use strum_macros::Display;
 
@@ -92,8 +92,8 @@ pub enum ResponseRejection {
     /// example, converting a struct into a JSON-encoded `String`).
     Serialization(crate::Error),
 
-    /// Used when consuming an [`http::Response::Builder`] into the constructed [`http::Response`]
-    /// when calling [`http::Response::builder::body`].
+    /// Used when consuming an [`http::response::Builder`] into the constructed [`http::Response`]
+    /// when calling [`http::response::Builder::body`].
     /// This error can happen if an invalid HTTP header value (a value that cannot be parsed as an
     /// `[http::header::HeaderValue]`) is used for the protocol-specific response `Content-Type`
     /// header, or for additional protocol-specific headers (like `X-Amzn-Errortype` to signal
