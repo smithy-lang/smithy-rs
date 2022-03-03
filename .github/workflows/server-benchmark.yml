@@ -92,6 +92,11 @@ jobs:
       run: |
         cd rust-runtime/aws-smithy-http-server/examples && \
           make && RUN_BENCHMARKS=1 cargo test --release
+        for x in ~/.wrk-api-bench/*; do
+          echo "Benchmark $x"
+          cat $x
+          echo
+        done
         echo "::set-output name=bot-message::$(cat ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt)"
         # remove the variance file to ensure we do not cache it.
         rm -f ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt
