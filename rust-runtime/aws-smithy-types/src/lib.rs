@@ -100,19 +100,33 @@ macro_rules! to_num_fn {
     };
 }
 
+macro_rules! to_num_fn_not_from_float {
+    ($name:ident, $typ:ident) => {
+        /// Converts to a `$typ`. This conversion may be lossy.
+        pub fn $name(self) -> $typ {
+            match self {
+                Number::PosInt(val) => val as $typ,
+                Number::NegInt(val) => val as $typ,
+                Number::Float(_val) => panic!("Lossy conversion not allowed"),
+                // Number::Float(val) => val as $typ,
+            }
+        }
+    };
+}
+
 impl Number {
     to_num_fn!(to_f32, f32);
     to_num_fn!(to_f64, f64);
 
-    to_num_fn!(to_i8, i8);
-    to_num_fn!(to_i16, i16);
-    to_num_fn!(to_i32, i32);
-    to_num_fn!(to_i64, i64);
+    to_num_fn_not_from_float!(to_i8, i8);
+    to_num_fn_not_from_float!(to_i16, i16);
+    to_num_fn_not_from_float!(to_i32, i32);
+    to_num_fn_not_from_float!(to_i64, i64);
 
-    to_num_fn!(to_u8, u8);
-    to_num_fn!(to_u16, u16);
-    to_num_fn!(to_u32, u32);
-    to_num_fn!(to_u64, u64);
+    to_num_fn_not_from_float!(to_u8, u8);
+    to_num_fn_not_from_float!(to_u16, u16);
+    to_num_fn_not_from_float!(to_u32, u32);
+    to_num_fn_not_from_float!(to_u64, u64);
 }
 
 /* ANCHOR_END: document */
@@ -259,4 +273,16 @@ pub mod error {
     }
 
     impl std::error::Error for Error {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hello() {
+        let num = Number::Float(f64::NAN);
+        let int = num.to_i32();
+        dbg!(&int); // With lossy conversion, NaN gets converted to 0.
+    }
 }
