@@ -54,7 +54,7 @@ object OperationNormalizer {
         val operations = model.shapes(OperationShape::class.java).toList()
         val newShapes = operations.flatMap { operation ->
             // Generate or modify the input and output of the given `Operation` to be a unique shape
-            listOf(syntheticInputShapes(model, operation), syntheticOutputShape(model, operation))
+            listOf(syntheticInputShape(model, operation), syntheticOutputShape(model, operation))
         }
         val shapeConflict = newShapes.firstOrNull() { shape -> model.getShape(shape.id).isPresent }
         check(
@@ -99,7 +99,7 @@ object OperationNormalizer {
      *
      * If the input operation does not have an input, an empty shape is generated
      */
-    private fun syntheticInputShapes(model: Model, operation: OperationShape): StructureShape {
+    private fun syntheticInputShape(model: Model, operation: OperationShape): StructureShape {
         val inputId = operation.syntheticInputId()
         val inputShapeBuilder = operation.input.map { shapeId ->
             model.expectShape(shapeId, StructureShape::class.java).toBuilder().rename(inputId)
