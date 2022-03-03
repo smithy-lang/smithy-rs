@@ -259,3 +259,23 @@ macro_rules! impl_extension_new_and_deref {
         impl_deref!($name);
     };
 }
+
+macro_rules! convert_to_request_rejection {
+    ($from:ty, $to:ident) => {
+        impl From<$from> for RequestRejection {
+            fn from(err: $from) -> Self {
+                Self::$to(crate::Error::new(err))
+            }
+        }
+    };
+}
+
+macro_rules! convert_to_response_rejection {
+    ($from:ty, $to:ident) => {
+        impl From<$from> for ResponseRejection {
+            fn from(err: $from) -> Self {
+                Self::$to(crate::Error::new(err))
+            }
+        }
+    };
+}

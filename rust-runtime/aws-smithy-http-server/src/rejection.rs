@@ -103,23 +103,9 @@ pub enum ResponseRejection {
 
 impl std::error::Error for ResponseRejection {}
 
-impl From<aws_smithy_http::operation::BuildError> for ResponseRejection {
-    fn from(err: aws_smithy_http::operation::BuildError) -> Self {
-        Self::Build(crate::Error::new(err))
-    }
-}
-
-impl From<aws_smithy_http::operation::SerializationError> for ResponseRejection {
-    fn from(err: aws_smithy_http::operation::SerializationError) -> Self {
-        Self::Serialization(crate::Error::new(err))
-    }
-}
-
-impl From<http::Error> for ResponseRejection {
-    fn from(err: http::Error) -> Self {
-        Self::Http(crate::Error::new(err))
-    }
-}
+convert_to_response_rejection!(aws_smithy_http::operation::BuildError, Build);
+convert_to_response_rejection!(aws_smithy_http::operation::SerializationError, Serialization);
+convert_to_response_rejection!(http::Error, Http);
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
 /// that is passed as the first argument to operation handlers. To deserialize into the service's
@@ -153,11 +139,11 @@ pub enum RequestRejection {
     /// by an outer `Service` that handled the request before us).
     BodyAlreadyExtracted,
 
-    // Used when failing to convert non-streaming requests into a byte slab with
-    // `hyper::body::to_bytes`.
+    /// Used when failing to convert non-streaming requests into a byte slab with
+    /// `hyper::body::to_bytes`.
     HttpBody(crate::Error),
 
-    /// These are used when checking the `Content-Type` header.
+    // These are used when checking the `Content-Type` header.
     MissingJsonContentType,
     MissingXmlContentType,
     MimeParse,
@@ -195,83 +181,38 @@ pub enum RequestRejection {
     /// into "primitive" types.
     PrimitiveParse(crate::Error),
 
-    /// The following three variants are used when failing to deserialize strings from a URL query
-    /// string and URI path labels into "primitive" types.
-    /// TODO(https://github.com/awslabs/smithy-rs/issues/1232): They should be removed and
-    /// conflated into the `PrimitiveParse` variant above after this issue is resolved.
+    // The following three variants are used when failing to deserialize strings from a URL query
+    // string and URI path labels into "primitive" types.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1232): They should be removed and
+    // conflated into the `PrimitiveParse` variant above after this issue is resolved.
     IntParse(crate::Error),
     FloatParse(crate::Error),
     BoolParse(crate::Error),
 
+    // TODO Can we make builders non-fallible in the server? Or just don't use them at all in
+    // request deserialization?
     /// Used when consuming the input struct builder.
-    /// TODO Can we make builders non-fallible in the server? Or just don't use them at all in
-    /// request deserialization?
     Build(crate::Error),
 }
 
 impl std::error::Error for RequestRejection {}
 
-/// These converters are solely to make code-generation simpler. They convert from a specific error
-/// type (from a runtime/third-party crate or the standard library) into a variant of the
-/// [`crate::rejection::RequestRejection`] enum holding the type-erased boxed [`crate::Error`]
-/// type. Generated functions that use [crate::rejection::RequestRejection] can thus use `?` to
-/// bubble up instead of having to sprinkle things like [`Result::map_err`] everywhere.
+// These converters are solely to make code-generation simpler. They convert from a specific error
+// type (from a runtime/third-party crate or the standard library) into a variant of the
+// [`crate::rejection::RequestRejection`] enum holding the type-erased boxed [`crate::Error`]
+// type. Generated functions that use [crate::rejection::RequestRejection] can thus use `?` to
+// bubble up instead of having to sprinkle things like [`Result::map_err`] everywhere.
 
-// TODO These could be generated with a macro
-
-impl From<aws_smithy_json::deserialize::Error> for RequestRejection {
-    fn from(err: aws_smithy_json::deserialize::Error) -> Self {
-        Self::JsonDeserialize(crate::Error::new(err))
-    }
-}
-
-impl From<aws_smithy_xml::decode::XmlError> for RequestRejection {
-    fn from(err: aws_smithy_xml::decode::XmlError) -> Self {
-        Self::XmlDeserialize(crate::Error::new(err))
-    }
-}
-
-impl From<aws_smithy_http::operation::BuildError> for RequestRejection {
-    fn from(err: aws_smithy_http::operation::BuildError) -> Self {
-        Self::Build(crate::Error::new(err))
-    }
-}
-
-impl From<aws_smithy_http::header::ParseError> for RequestRejection {
-    fn from(err: aws_smithy_http::header::ParseError) -> Self {
-        Self::HeaderParse(crate::Error::new(err))
-    }
-}
-
-impl From<aws_smithy_types::date_time::DateTimeParseError> for RequestRejection {
-    fn from(err: aws_smithy_types::date_time::DateTimeParseError) -> Self {
-        Self::DateTimeParse(crate::Error::new(err))
-    }
-}
-
-impl From<aws_smithy_types::primitive::PrimitiveParseError> for RequestRejection {
-    fn from(err: aws_smithy_types::primitive::PrimitiveParseError) -> Self {
-        Self::PrimitiveParse(crate::Error::new(err))
-    }
-}
-
-impl From<std::str::ParseBoolError> for RequestRejection {
-    fn from(err: std::str::ParseBoolError) -> Self {
-        Self::BoolParse(crate::Error::new(err))
-    }
-}
-
-impl From<std::num::ParseFloatError> for RequestRejection {
-    fn from(err: std::num::ParseFloatError) -> Self {
-        Self::FloatParse(crate::Error::new(err))
-    }
-}
-
-impl From<std::num::ParseIntError> for RequestRejection {
-    fn from(err: std::num::ParseIntError) -> Self {
-        Self::IntParse(crate::Error::new(err))
-    }
-}
+convert_to_request_rejection!(aws_smithy_json::deserialize::Error, JsonDeserialize);
+convert_to_request_rejection!(aws_smithy_xml::decode::XmlError, XmlDeserialize);
+convert_to_request_rejection!(aws_smithy_http::operation::BuildError, Build);
+convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
+convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
+convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);
+convert_to_request_rejection!(std::str::ParseBoolError, BoolParse);
+convert_to_request_rejection!(std::num::ParseFloatError, FloatParse);
+convert_to_request_rejection!(std::num::ParseIntError, IntParse);
+convert_to_request_rejection!(serde_urlencoded::de::Error, InvalidUtf8);
 
 impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
     fn from(err: nom::Err<nom::error::Error<&str>>) -> Self {
@@ -279,26 +220,15 @@ impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
     }
 }
 
-/// Used when calling [`percent_encoding::percent_decode_str`](https://docs.rs/percent-encoding/latest/percent_encoding/fn.percent_decode_str.html) and bubbling up.
-/// TODO(https://github.com/servo/rust-url/issues/758): Unless I'm missing something, percent-decoding can't fail, so we could just `.expect()`.
-impl From<std::str::Utf8Error> for RequestRejection {
-    fn from(err: std::str::Utf8Error) -> Self {
-        Self::InvalidUtf8(crate::Error::new(err))
-    }
-}
+// Used when calling
+// [`percent_encoding::percent_decode_str`](https://docs.rs/percent-encoding/latest/percent_encoding/fn.percent_decode_str.html)
+// and bubbling up.
+// TODO(https://github.com/servo/rust-url/issues/758): Unless I'm missing something,
+// percent-decoding can't fail, so we could just `.expect()`.
+convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
 
-impl From<serde_urlencoded::de::Error> for RequestRejection {
-    fn from(err: serde_urlencoded::de::Error) -> Self {
-        Self::InvalidUtf8(crate::Error::new(err))
-    }
-}
-
-/// `[crate::body::Body]` is `[hyper::Body]`, whose associated `Error` type is `[hyper::Error]`. We
-/// need this converter for when we convert the body into bytes in the framework, since protocol
-/// tests use `[crate::body::Body]` as their body type when constructing requests (and almost
-/// everyone will run a Hyper-based server in their services).
-impl From<hyper::Error> for RequestRejection {
-    fn from(err: hyper::Error) -> Self {
-        Self::HttpBody(crate::Error::new(err))
-    }
-}
+// `[crate::body::Body]` is `[hyper::Body]`, whose associated `Error` type is `[hyper::Error]`. We
+// need this converter for when we convert the body into bytes in the framework, since protocol
+// tests use `[crate::body::Body]` as their body type when constructing requests (and almost
+// everyone will run a Hyper-based server in their services).
+convert_to_request_rejection!(hyper::Error, HttpBody);
