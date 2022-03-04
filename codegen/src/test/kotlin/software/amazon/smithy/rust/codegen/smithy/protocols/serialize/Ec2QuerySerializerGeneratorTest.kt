@@ -88,7 +88,7 @@ class Ec2QuerySerializerGeneratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = Ec2QuerySerializerGenerator(testCodegenContext(model))
-        val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))
+        val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
