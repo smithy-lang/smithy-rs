@@ -13,12 +13,12 @@ use crate::helpers::PokemonService;
 mod helpers;
 
 #[tokio::test]
-async fn banchmark() -> Result<(), Box<dyn std::error::Error>> {
+async fn benchmark() -> Result<(), Box<dyn std::error::Error>> {
     // Benchmarks are expensive, so they run only if the environment
-    // variable RUN_BENCHMARKS is present.
+    // variable `RUN_BENCHMARKS` is present.
     if env::var_os("RUN_BENCHMARKS").is_some() {
         let _program = PokemonService::run();
-        // Give PokemonSérvice some time to start up.
+        // Give PokémonService some time to start up.
         time::sleep(Duration::from_millis(50)).await;
 
         // The history directory is cached inside GitHub actions under

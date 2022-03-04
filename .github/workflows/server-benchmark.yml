@@ -85,7 +85,7 @@ jobs:
     - name: Install benchmarks dependencies
       run: sudo apt-get install -y ${{ env.apt_dependencies }}
     # Ubuntu 20.04 doesn't have wrk packaged, hence we need to build it 🤦
-    # This will go away as soon as github supports Ubuntu 21.04.
+    # This will go away as soon as GitHub supports Ubuntu 21.04.
     - name: Install wrk
       run: |
         git clone https://github.com/wg/wrk.git /tmp/wrk-build && \
@@ -97,10 +97,10 @@ jobs:
         cd rust-runtime/aws-smithy-http-server/examples && \
           make && RUN_BENCHMARKS=1 cargo test --release
 
-        # uncomment this for debugging purpose. it will print out the
+        # Uncomment this for debugging purposes. It will print out the
         # content of all the benchmarks found in the cache + the last one
         # produced by the current run.
-        # for x in ~/.wrk-api-bench/*; do echo "Benchmark $x content:"; cat $x | jq .; echo; done
+        # for x in ~/.wrk-api-bench/*; do echo "Benchmark $x content:"; jq . "$x"; echo; done
 
         # Ensure the output is available for the PR bot.
         echo "::set-output name=bot-message::$(cat /tmp/smithy_rs_benchmark_variance.txt)"
