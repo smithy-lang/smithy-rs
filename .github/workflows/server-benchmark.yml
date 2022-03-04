@@ -96,14 +96,12 @@ jobs:
         # run the benchmark.
         cd rust-runtime/aws-smithy-http-server/examples && \
           make && RUN_BENCHMARKS=1 cargo test --release
+
         # uncomment this for debugging purpose. it will print out the
         # content of all the benchmarks found in the cache + the last one
         # produced by the current run.
-        for x in ~/.wrk-api-bench/*; do
-          echo "Benchmark $x content:"
-          cat $x | jq .
-          echo
-        done
+        # for x in ~/.wrk-api-bench/*; do echo "Benchmark $x content:"; cat $x | jq .; echo; done
+
         # Ensure the output is available for the PR bot.
         echo "::set-output name=bot-message::$(cat /tmp/smithy_rs_benchmark_variance.txt)"
     - name: Post variance on PR
