@@ -24,19 +24,22 @@ use tokio_util::io::ReaderStream;
 pub struct PathBody {
     state: State,
     len: u64,
+    buffer_size: usize,
 }
 
 impl PathBody {
-    pub fn from_path(path: &Path, len: u64) -> Self {
+    pub fn from_path(path: &Path, len: u64, buffer_size: usize) -> Self {
         PathBody {
             state: State::Unloaded(path.to_path_buf()),
             len,
+            buffer_size,
         }
     }
-    pub fn from_file(file: File, len: u64) -> Self {
+    pub fn from_file(file: File, len: u64, buffer_size: usize) -> Self {
         PathBody {
-            state: State::Loaded(ReaderStream::new(file)),
+            state: State::Loaded(ReaderStream::with_capacity(file, buffer_size)),
             len,
+            buffer_size,
         }
     }
 }
@@ -67,7 +70,8 @@ impl Body for PathBody {
                 State::Loading(ref mut future) => {
                     match ready!(Pin::new(future).poll(cx)) {
                         Ok(file) => {
-                            self.state = State::Loaded(ReaderStream::new(file));
+                            self.state =
+                                State::Loaded(ReaderStream::with_capacity(file, self.buffer_size));
                         }
                         Err(e) => return Poll::Ready(Some(Err(e.into()))),
                     };
