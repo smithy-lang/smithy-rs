@@ -92,7 +92,10 @@ jobs:
     - name: Run benchmark
       id: run-benchmark
       run: |
-        mkdir -p ~/.wrk-api-bench && echo test > ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt
+        # create the benchmark history folder and add a default message in case the benchmark fails.
+        mkdir -p ~/.wrk-api-bench && \
+          echo "### Unable to calculate server benchmark variance" > ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt
+        # run the benchmark.
         cd rust-runtime/aws-smithy-http-server/examples && \
           make && RUN_BENCHMARKS=1 cargo test --release
         for x in ~/.wrk-api-bench/*; do
@@ -100,6 +103,7 @@ jobs:
           cat $x
           echo
         done
+        # Ensure the output is available for the PR bot.
         echo "::set-output name=bot-message::$(cat ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt)"
         # remove the variance file to ensure we do not cache it.
         rm -f ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt
