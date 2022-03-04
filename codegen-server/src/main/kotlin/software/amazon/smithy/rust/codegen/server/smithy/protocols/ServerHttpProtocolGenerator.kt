@@ -495,26 +495,29 @@ private class ServerHttpProtocolImplGenerator(
      * It will generate response headers for the operation's output shape, unless [errorShape] is non-null, in which
      * case it will generate response headers for the given error shape.
      *
-     * It serializes as HTTP headers shape members that are bound with `httpHeader` and `httpPrefixHeader`.
-     *
-     * The `Content-Type` header is also set according to the protocol and the contents of the shape to be serialized.
+     * It sets three groups of headers in order. Headers from one group take precedence over headers in a later group.
+     *     1. Headers bound by the `httpHeader` and `httpPrefixHeader` traits.
+     *     2. The protocol-specific `Content-Type` header for the operation.
+     *     3. Additional protocol-specific headers for errors, if [errorShape] is non-null.
      */
     private fun RustWriter.serverRenderResponseHeaders(operationShape: OperationShape, errorShape: StructureShape? = null) {
         val bindingGenerator = ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
         val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
         if (addHeadersFn != null) {
-            // notice that we need to borrow the output only for output shapes but not for error shapes
-            val outputOwnedOrBorrow = if (errorShape == null) "&output" else "output"
+            // Notice that we need to borrow the output only for output shapes but not for error shapes.
+            val outputOwnedOrBorrowed = if (errorShape == null) "&output" else "output"
             rust(
                 """
-                builder = #{T}($outputOwnedOrBorrow, builder)?;
+                builder = #{T}($outputOwnedOrBorrowed, builder)?;
                 """.trimIndent(),
                 addHeadersFn
             )
         }
 
-        // set the content type header *after* the response bindings headers have been set
-        // to allow operations that bind a member to content-type to take precedence
+        // Set the `Content-Type` header *after* the response bindings headers have been set,
+        // to allow operations that bind a member to `Content-Type` (which we set earlier) to take precedence (this is
+        // because we always use `set_response_header_if_absent`, so the _first_ header value we set for a given
+        // header name is the one that takes precedence).
         val contentType = httpBindingResolver.responseContentType(operationShape)
         if (contentType != null) {
             rustTemplate(
@@ -527,6 +530,21 @@ private class ServerHttpProtocolImplGenerator(
                 """,
                 *codegenScope
             )
+        }
+
+        if (errorShape != null) {
+            for ((headerName, headerValue) in protocol.additionalErrorResponseHeaders(errorShape)) {
+                rustTemplate(
+                    """
+                    builder = #{header_util}::set_response_header_if_absent(
+                        builder,
+                        http::header::HeaderName::from_static("$headerName"),
+                        "$headerValue"
+                    );
+                    """,
+                    *codegenScope
+                )
+            }
         }
     }
 
