@@ -85,6 +85,7 @@ jobs:
     - name: Install benchmarks dependencies
       run: sudo apt-get install -y ${{ env.apt_dependencies }}
     # Ubuntu 20.04 doesn't have wrk packaged, hence we need to build it 🤦
+    # This will go away as soon as github supports Ubuntu 21.04.
     - name: Install wrk
       run: |
         git clone https://github.com/wg/wrk.git /tmp/wrk-build && \
@@ -92,9 +93,6 @@ jobs:
     - name: Run benchmark
       id: run-benchmark
       run: |
-        # create the benchmark history folder and add a default message in case the benchmark fails.
-        mkdir -p ~/.wrk-api-bench && \
-          echo "### Unable to calculate server benchmark variance" > ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt
         # run the benchmark.
         cd rust-runtime/aws-smithy-http-server/examples && \
           make && RUN_BENCHMARKS=1 cargo test --release
@@ -104,9 +102,7 @@ jobs:
           echo
         done
         # Ensure the output is available for the PR bot.
-        echo "::set-output name=bot-message::$(cat ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt)"
-        # remove the variance file to ensure we do not cache it.
-        rm -f ~/.wrk-api-bench/smithy_rs_benchmark_variance.txt
+        echo "::set-output name=bot-message::$(cat /tmp/smithy_rs_benchmark_variance.txt)"
     - name: Post variance on PR
       uses: actions/github-script@v5
       # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"

@@ -29,7 +29,6 @@ async fn banchmark() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             Path::new(".").join(".wrk-api-bench")
         };
-        let variance_file = history_dir.join("smithy_rs_benchmark_variance.txt");
 
         let mut wrk = WrkBuilder::default()
             .url(String::from("http://localhost:13734/pokemon-species/pikachu"))
@@ -45,21 +44,14 @@ async fn banchmark() -> Result<(), Box<dyn std::error::Error>> {
         wrk.bench(&benches)?;
 
         // Calculate variance from last run and write it to disk.
-        match wrk.variance(HistoryPeriod::Last) {
-            Ok(variance) => {
-                println!("Here is the variance: {}", variance);
-                let mut variance_file = OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(variance_file)
-                    .unwrap();
-                variance_file.write_all(variance.to_github_markdown().as_bytes())?;
-            }
-            Err(e) => {
-                panic!("Variance failed: {}", e);
-            }
-        }
+        let variance = wrk.variance(HistoryPeriod::Last)?;
+        let mut variance_file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open("/tmp/smithy_rs_benchmark_variance.txt")
+            .unwrap();
+        variance_file.write_all(variance.to_github_markdown().as_bytes())?;
     }
     Ok(())
 }
