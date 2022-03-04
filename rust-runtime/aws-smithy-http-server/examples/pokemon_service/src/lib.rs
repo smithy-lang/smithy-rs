@@ -129,7 +129,7 @@ pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
     state: Extension<Arc<State>>,
 ) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
-    state.0.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    // state.0.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     // We only support retrieving information about Pikachu.
     let pokemon = state.0.pokemons_translations.get(&input.name);
     match pokemon.as_ref() {
@@ -181,6 +181,11 @@ pub async fn get_server_statistics(
         .unwrap_or(0);
     tracing::debug!("This instance served {} requests", counter);
     output::GetServerStatisticsOutput { calls_count }
+}
+
+/// Empty operation used to benchmark the service.
+pub async fn empty_operation(_input: input::EmptyOperationInput) -> output::EmptyOperationOutput {
+    output::EmptyOperationOutput {}
 }
 
 #[cfg(test)]
