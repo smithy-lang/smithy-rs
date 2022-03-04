@@ -63,7 +63,7 @@ jobs:
       name: Benchmarks Cache
       with:
         path: ~/.wrk-api-bench
-        key: ${{ runner.os }}-wrk-api-bench-${{ hashFiles('~/.wrk-api-bench/*.json') }}
+        key: ${{ runner.os }}-wrk-api-bench-${{ hashFiles('**/*.json') }}
         restore-keys: |
           ${{ runner.os }}-wrk-api-bench-
       # Pinned to the commit hash of v1.3.0
