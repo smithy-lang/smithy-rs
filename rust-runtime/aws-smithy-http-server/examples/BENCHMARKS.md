@@ -15,10 +15,8 @@ using [wrk](https://github.com/wg/wrk).
 
 ## 2022-03-04
 
-The benchmark run against the `get_pokemon_species()` operation, which is
-reading the Pokémon specie translation from an in memory hashmap and increasing
-an atomic counter. This operation performs both deserialization of input and
-serialization of output.
+The benchmark run against the `empty_operation()` operation, which is just
+returning an empty output and can be used to stress test the framework overhead.
 
 ### c6i.8xlarge
 
@@ -26,29 +24,30 @@ serialization of output.
 * 64 Gb memory
 * Benchmark:
     - Duration: 10 minutes
-    - Connections: 512
-    * Threads: 64
+    - Connections: 1024
+    * Threads: 16
 * Result:
-    - Request/sec: 1068053
-    * RSS memory: 39900 bytes
+    - Request/sec: 1_608_742
+    * RSS memory: 72200 bytes
 
 #### Full result
 
 ```
-❯❯❯ wrk -d 10m -c 512 -t 64 --latency http://localhost:13734/pokemon-species/pikachu
-Running 10m test @ http://localhost:13734/pokemon-species/pikachu
-  64 threads and 512 connections
+❯❯❯ wrk -t16 -c1024 -d10m --latency http://localhost:13734/empty-operation
+Running 10m test @ http://localhost:13734/empty-operation
+  16 threads and 1024 connections
   Thread Stats   Avg      Stdev     Max   +/- Stdev
-    Latency   485.78us  237.79us  33.22ms   78.98%
-    Req/Sec    16.77k   272.59    62.96k    79.93%
+    Latency     1.03ms    1.84ms 208.10ms   92.16%
+    Req/Sec   101.11k    17.59k  164.78k    70.99%
   Latency Distribution
-     50%  459.00us
-     75%  590.00us
-     90%  738.00us
-     99%    1.13ms
-  640938431 requests in 10.00m, 313.98GB read
-Requests/sec: 1068053.32
-Transfer/sec:    535.77MB
+     50%  475.00us
+     75%  784.00us
+     90%    2.12ms
+     99%    9.74ms
+  965396910 requests in 10.00m, 98.00GB read
+  Socket errors: connect 19, read 0, write 0, timeout 0
+Requests/sec: 1608742.65
+Transfer/sec:    167.23MB
 ```
 
 ### c6g.8xlarge
@@ -57,28 +56,29 @@ Transfer/sec:    535.77MB
 * 64 Gb memory
 * Benchmark:
     - Duration: 10 minutes
-    - Connections: 512
-    * Threads: 64
+    - Connections: 1024
+    * Threads: 16
 * Result:
-    - Request/sec: 791008
-    * RSS memory: 41540 bytes
+    - Request/sec: 1_379_942
+    * RSS memory: 70264 bytes
 
 
 #### Full result
 
 ```
-❯❯❯ wrk -d 10m -c 512 -t 64 --latency http://localhost:13734/pokemon-species/pikachu
-Running 10m test @ http://localhost:13734/pokemon-species/pikachu
-  64 threads and 512 connections
+❯❯❯ wrk -t16 -c1024 -d10m --latency http://localhost:13734/empty-operation
+Running 10m test @ http://localhost:13734/empty-operation
+  16 threads and 1024 connections
   Thread Stats   Avg      Stdev     Max   +/- Stdev
-    Latency   656.05us  324.72us  23.38ms   77.51%
-    Req/Sec    12.42k   297.47    48.07k    74.52%
+    Latency     1.26ms    2.22ms 210.68ms   91.99%
+    Req/Sec    86.76k    16.46k  141.30k    68.81%
   Latency Distribution
-     50%  618.00us
-     75%  805.00us
-     90%    1.01ms
-     99%    1.55ms
-  474684091 requests in 10.00m, 232.54GB read
-Requests/sec: 791008.58
-Transfer/sec:    396.80MB
+     50%  560.00us
+     75%    0.93ms
+     90%    2.53ms
+     99%   11.95ms
+  828097344 requests in 10.00m, 84.06GB read
+  Socket errors: connect 19, read 0, write 0, timeout 0
+Requests/sec: 1379942.45
+Transfer/sec:    143.45MB
 ```
