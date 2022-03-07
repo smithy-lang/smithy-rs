@@ -51,11 +51,13 @@ jobs:
     steps:
     - name: Checkout PR
       uses: actions/checkout@v3
+      with:
+        path: pull-request
     - name: Checkout origin/main
       uses: actions/checkout@v3
       with:
         repository: awslabs/smithy-rs
-        path: /~/smithy-rs-main
+        path: origin-main
         ref: main
     - uses: actions/cache@v2
       name: Gradle Cache
@@ -95,12 +97,12 @@ jobs:
       run: |
         mkdir -p ~/.wrk-api-bench
         # run the benchmark on origin/main
-        pushd ~/smithy-rs-main/rust-runtime/aws-smithy-http-server/examples
+        pushd origin-main/rust-runtime/aws-smithy-http-server/examples
         make && RUN_BENCHMARKS=1 cargo test --release
         popd
 
         # run the benchmark on current ref
-        pushd rust-runtime/aws-smithy-http-server/examples
+        pushd pull-request/rust-runtime/aws-smithy-http-server/examples
         make && RUN_BENCHMARKS=1 cargo test --release
         popd
         # Uncomment this for debugging purposes. It will print out the
