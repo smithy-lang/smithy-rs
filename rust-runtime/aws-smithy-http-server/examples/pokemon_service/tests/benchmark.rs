@@ -44,14 +44,15 @@ async fn benchmark() -> Result<(), Box<dyn std::error::Error>> {
         wrk.bench(&benches)?;
 
         // Calculate variance from last run and write it to disk.
-        let variance = wrk.variance(HistoryPeriod::Last)?;
-        let mut variance_file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open("/tmp/smithy_rs_benchmark_variance.txt")
-            .unwrap();
-        variance_file.write_all(variance.to_github_markdown().as_bytes())?;
+        if let Ok(variance) = wrk.variance(HistoryPeriod::Last) {
+            let mut variance_file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open("/tmp/smithy_rs_benchmark_variance.txt")
+                .unwrap();
+            variance_file.write_all(variance.to_github_markdown().as_bytes())?;
+        }
     }
     Ok(())
 }

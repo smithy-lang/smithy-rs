@@ -59,13 +59,6 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
-    - uses: actions/cache@v2
-      name: Benchmarks Cache
-      with:
-        path: ~/.wrk-api-bench
-        key: ${{ runner.os }}-wrk-api-bench-${{ hashFiles('**/*.json') }}
-        restore-keys: |
-          ${{ runner.os }}-wrk-api-bench-
       # Pinned to the commit hash of v1.3.0
     - name: Rust Cache
       uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
@@ -93,10 +86,15 @@ jobs:
     - name: Run benchmark
       id: run-benchmark
       run: |
-        # run the benchmark.
-        cd rust-runtime/aws-smithy-http-server/examples && \
-          make && RUN_BENCHMARKS=1 cargo test --release
+        mkdir -p ~/.wrk-api-bench
+        pushd rust-runtime/aws-smithy-http-server/examples
+        # run the benchmark on origin/main
+        git checkout main
+        make && RUN_BENCHMARKS=1 cargo test --release && make distclean
 
+        # run the benchmark on current ref
+        git checkout ${{ github.event.pull_request.head.sha }}
+        make && RUN_BENCHMARKS=1 cargo test --release
         # Uncomment this for debugging purposes. It will print out the
         # content of all the benchmarks found in the cache + the last one
         # produced by the current run.
