@@ -18,6 +18,8 @@ using [wrk](https://github.com/wg/wrk).
 The benchmark runs against the `empty_operation()` operation, which is just
 returning an empty output and can be used to stress test the framework overhead.
 
+The benchmark has been run against commit [d823f61156577ab42590709627906d1dc35a5f49](https://github.com/awslabs/smithy-rs/commit/d823f61156577ab42590709627906d1dc35a5f49).
+
 ### c6i.8xlarge
 
 * 32 cores Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz
@@ -28,7 +30,7 @@ returning an empty output and can be used to stress test the framework overhead.
     - Threads: 16
 * Result:
     - Request/sec: 1_608_742
-    * RSS memory: 72200 bytes
+    * RSS[^1] memory: 72200 bytes
 
 #### Full result
 
@@ -60,7 +62,7 @@ Transfer/sec:    167.23MB
     - Threads: 16
 * Result:
     - Request/sec: 1_379_942
-    - RSS memory: 70264 bytes
+    - RSS[^1] memory: 70264 bytes
 
 
 #### Full result
@@ -82,3 +84,5 @@ Running 10m test @ http://localhost:13734/empty-operation
 Requests/sec: 1379942.45
 Transfer/sec:    143.45MB
 ```
+
+[^1]: https://en.wikipedia.org/wiki/Resident_set_size

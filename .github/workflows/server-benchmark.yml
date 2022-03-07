@@ -10,7 +10,7 @@ env:
   java_version: 11
   rust_version: 1.56.1
   rust_toolchain_components: clippy,rustfmt
-  apt_dependencies: libssl-dev git gnuplot jq
+  apt_dependencies: libssl-dev gnuplot jq
 
 jobs:
   run-e2e-integration-test:
@@ -60,6 +60,12 @@ jobs:
         path: origin-main
         # ref: main
         ref: ${{ github.event.pull_request.head.sha }}
+    - name: Checkout wrk
+      uses: actions/checkout@v3
+      with:
+        repository: wg/wrk
+        path: wrk-build
+        ref: 4.2.0
     - uses: actions/cache@v2
       name: Gradle Cache
       with:
@@ -88,11 +94,9 @@ jobs:
     - name: Install benchmarks dependencies
       run: sudo apt-get install -y ${{ env.apt_dependencies }}
     # Ubuntu 20.04 doesn't have wrk packaged, hence we need to build it 🤦
-    # This will go away as soon as GitHub supports Ubuntu 22.04.
+    # This will go away as soon as GitHub supports Ubuntu 21.10.
     - name: Install wrk
-      run: |
-        git clone https://github.com/wg/wrk.git /tmp/wrk-build && \
-          cd /tmp/wrk-build && make -j8 wrk && sudo cp wrk /usr/local/bin
+      run: cd wrk-build && make -j8 wrk && sudo cp wrk /usr/local/bin
     - name: Run benchmark
       id: run-benchmark
       run: |
