@@ -7,13 +7,15 @@
 
 use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
-use aws_smithy_types::timeout::{parse_str_as_timeout, TimeoutConfig, TimeoutConfigError};
+use aws_smithy_types::timeout::{
+    parse_str_as_timeout, SharedTimeoutConfig, SharedTimeoutConfigError,
+};
 use aws_types::os_shim_internal::{Env, Fs};
 use std::time::Duration;
 
-const PROFILE_VAR_CONNECT_TIMEOUT: &str = "connect_timeout";
-const PROFILE_VAR_TLS_NEGOTIATION_TIMEOUT: &str = "tls_negotiation_timeout";
-const PROFILE_VAR_READ_TIMEOUT: &str = "read_timeout";
+// const PROFILE_VAR_CONNECT_TIMEOUT: &str = "connect_timeout";
+// const PROFILE_VAR_TLS_NEGOTIATION_TIMEOUT: &str = "tls_negotiation_timeout";
+// const PROFILE_VAR_READ_TIMEOUT: &str = "read_timeout";
 const PROFILE_VAR_API_CALL_ATTEMPT_TIMEOUT: &str = "api_call_attempt_timeout";
 const PROFILE_VAR_API_CALL_TIMEOUT: &str = "api_call_timeout";
 
@@ -29,29 +31,26 @@ const PROFILE_VAR_API_CALL_TIMEOUT: &str = "api_call_timeout";
 /// **Sets timeouts for the `default` profile**
 /// ```ini
 /// [default]
-/// connect_timeout = 1.0
-/// read_timeout = 1.0
-/// tls_negotiation_timeout = 0.5
 /// api_call_attempt_timeout = 2
 /// api_call_timeout = 3
 /// ```
 ///
-/// **Sets the `connect_timeout` to 0.5 seconds _if and only if_ the `other` profile is selected.**
+/// **Sets the `api_call_attempt_timeout` to 0.5 seconds _if and only if_ the `other` profile is selected.**
 ///
 /// ```ini
 /// [profile other]
-/// connect_timeout = 0.5
+/// api_call_attempt_timeout = 0.5
 /// ```
 ///
 /// This provider is part of the [default timeout config provider chain](crate::default_provider::timeout_config).
 #[derive(Debug, Default)]
-pub struct ProfileFileTimeoutConfigProvider {
+pub struct ProfileFileSharedTimeoutConfigProvider {
     fs: Fs,
     env: Env,
     profile_override: Option<String>,
 }
 
-/// Builder for [`ProfileFileTimeoutConfigProvider`]
+/// Builder for [`ProfileFileSharedTimeoutConfigProvider`]
 #[derive(Default)]
 pub struct Builder {
     config: Option<ProviderConfig>,
@@ -72,9 +71,9 @@ impl Builder {
     }
 
     /// Build a [`ProfileFileTimeoutConfigProvider`] from this builder
-    pub fn build(self) -> ProfileFileTimeoutConfigProvider {
+    pub fn build(self) -> ProfileFileSharedTimeoutConfigProvider {
         let conf = self.config.unwrap_or_default();
-        ProfileFileTimeoutConfigProvider {
+        ProfileFileSharedTimeoutConfigProvider {
             env: conf.env(),
             fs: conf.fs(),
             profile_override: self.profile_override,
@@ -82,7 +81,7 @@ impl Builder {
     }
 }
 
-impl ProfileFileTimeoutConfigProvider {
+impl ProfileFileSharedTimeoutConfigProvider {
     /// Create a new [`ProfileFileTimeoutConfigProvider`]
     ///
     /// To override the selected profile, set the `AWS_PROFILE` environment variable or use the [`Builder`].
@@ -100,7 +99,7 @@ impl ProfileFileTimeoutConfigProvider {
     }
 
     /// Attempt to create a new [`TimeoutConfig`] from a profile file.
-    pub async fn timeout_config(&self) -> Result<TimeoutConfig, TimeoutConfigError> {
+    pub async fn timeout_config(&self) -> Result<SharedTimeoutConfig, SharedTimeoutConfigError> {
         let profile = match super::parser::load(&self.fs, &self.env).await {
             Ok(profile) => profile,
             Err(err) => {
@@ -125,18 +124,18 @@ impl ProfileFileTimeoutConfigProvider {
                     );
                 }
                 // return an empty config
-                return Ok(TimeoutConfig::new());
+                return Ok(SharedTimeoutConfig::new());
             }
         };
 
-        let connect_timeout =
-            construct_timeout_from_profile_var(selected_profile, PROFILE_VAR_CONNECT_TIMEOUT)?;
-        let tls_negotiation_timeout = construct_timeout_from_profile_var(
-            selected_profile,
-            PROFILE_VAR_TLS_NEGOTIATION_TIMEOUT,
-        )?;
-        let read_timeout =
-            construct_timeout_from_profile_var(selected_profile, PROFILE_VAR_READ_TIMEOUT)?;
+        // let connect_timeout =
+        //     construct_timeout_from_profile_var(selected_profile, PROFILE_VAR_CONNECT_TIMEOUT)?;
+        // let tls_negotiation_timeout = construct_timeout_from_profile_var(
+        //     selected_profile,
+        //     PROFILE_VAR_TLS_NEGOTIATION_TIMEOUT,
+        // )?;
+        // let read_timeout =
+        //     construct_timeout_from_profile_var(selected_profile, PROFILE_VAR_READ_TIMEOUT)?;
         let api_call_attempt_timeout = construct_timeout_from_profile_var(
             selected_profile,
             PROFILE_VAR_API_CALL_ATTEMPT_TIMEOUT,
@@ -144,10 +143,10 @@ impl ProfileFileTimeoutConfigProvider {
         let api_call_timeout =
             construct_timeout_from_profile_var(selected_profile, PROFILE_VAR_API_CALL_TIMEOUT)?;
 
-        Ok(TimeoutConfig::new()
-            .with_connect_timeout(connect_timeout)
-            .with_tls_negotiation_timeout(tls_negotiation_timeout)
-            .with_read_timeout(read_timeout)
+        Ok(SharedTimeoutConfig::new()
+            // .with_connect_timeout(connect_timeout)
+            // .with_tls_negotiation_timeout(tls_negotiation_timeout)
+            // .with_read_timeout(read_timeout)
             .with_api_call_attempt_timeout(api_call_attempt_timeout)
             .with_api_call_timeout(api_call_timeout))
     }
@@ -156,7 +155,7 @@ impl ProfileFileTimeoutConfigProvider {
 fn construct_timeout_from_profile_var(
     profile: &Profile,
     var: &'static str,
-) -> Result<Option<Duration>, TimeoutConfigError> {
+) -> Result<Option<Duration>, SharedTimeoutConfigError> {
     let profile_name = format!("aws profile [{}]", profile.name());
     match profile.get(var) {
         Some(timeout) => parse_str_as_timeout(timeout, var.into(), profile_name.into()).map(Some),

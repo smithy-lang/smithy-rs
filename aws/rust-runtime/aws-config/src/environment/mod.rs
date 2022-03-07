@@ -20,5 +20,5 @@ pub mod retry_config;
 pub use retry_config::EnvironmentVariableRetryConfigProvider;
 
 /// Load timeout configuration from the environment
-pub mod timeout_config;
-pub use timeout_config::EnvironmentVariableTimeoutConfigProvider;
+pub mod shared_timeout_config;
+pub use shared_timeout_config::EnvironmentVariableSharedTimeoutConfigProvider;

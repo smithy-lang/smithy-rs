@@ -7,14 +7,13 @@
 //! that enable passing HTTP connectors around.
 
 use crate::erase::DynConnector;
+use crate::timeout::HttpConnectorTimeoutConfig;
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_types::timeout::TimeoutConfig;
 use std::{fmt::Debug, sync::Arc};
 
 /// Type alias for a Connector factory function.
 pub type MakeConnectorFn =
     dyn Fn(&HttpSettings, Option<Arc<dyn AsyncSleep>>) -> Option<DynConnector> + Send + Sync;
-
 /// Enum for describing the two "kinds" of HTTP Connectors in smithy-rs.
 #[derive(Clone)]
 pub enum HttpConnector {
@@ -60,12 +59,12 @@ impl HttpConnector {
 #[derive(Default, Debug)]
 pub struct HttpSettings {
     /// Timeout configuration used when sending out requests
-    pub timeout_config: TimeoutConfig,
+    pub timeout_config: HttpConnectorTimeoutConfig,
 }
 
 impl HttpSettings {
     /// Set the Timeout Config to be used when making HTTP requests
-    pub fn with_timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
+    pub fn with_timeout_config(mut self, timeout_config: HttpConnectorTimeoutConfig) -> Self {
         self.timeout_config = timeout_config;
         self
     }

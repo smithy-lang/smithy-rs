@@ -10,13 +10,13 @@
 
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::HttpSettings;
+use aws_smithy_client::timeout::HttpConnectorTimeoutConfig;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::{Operation, Request};
 use aws_smithy_http::response::ParseStrictResponse;
 use aws_smithy_http::result::{SdkError, SdkSuccess};
 use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
-use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::credentials::CredentialsError;
 use aws_types::{credentials, Credentials};
 
@@ -27,8 +27,9 @@ use crate::provider_config::ProviderConfig;
 use bytes::Bytes;
 use http::header::{ACCEPT, AUTHORIZATION};
 use http::{HeaderValue, Response, Uri};
-use std::time::Duration;
 use tower::layer::util::Identity;
+
+use std::time::Duration;
 
 const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -79,7 +80,7 @@ impl HttpCredentialProvider {
 #[derive(Default)]
 pub(crate) struct Builder {
     provider_config: Option<ProviderConfig>,
-    timeout_config: TimeoutConfig,
+    timeout_config: HttpConnectorTimeoutConfig,
 }
 
 impl Builder {
@@ -102,11 +103,11 @@ impl Builder {
 
     pub(crate) fn build(self, provider_name: &'static str, uri: Uri) -> HttpCredentialProvider {
         let provider_config = self.provider_config.unwrap_or_default();
-        let default_timeout_config = TimeoutConfig::new()
+        let default_timeout_config = HttpConnectorTimeoutConfig::new()
             .with_connect_timeout(Some(DEFAULT_CONNECT_TIMEOUT))
             .with_read_timeout(Some(DEFAULT_READ_TIMEOUT));
         let timeout_config = self.timeout_config.take_unset_from(default_timeout_config);
-        let http_settings = HttpSettings::default().with_timeout_config(timeout_config);
+        let http_settings = HttpSettings::default().with_timeout_config(timeout_config.into());
         let connector = expect_connector(provider_config.connector(&http_settings));
         let client = aws_smithy_client::Builder::new()
             .connector(connector)
