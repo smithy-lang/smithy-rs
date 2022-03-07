@@ -58,7 +58,8 @@ jobs:
       with:
         repository: awslabs/smithy-rs
         path: origin-main
-        ref: main
+        # ref: main
+        ref: ${{ github.event.pull_request.head.sha }}
     - uses: actions/cache@v2
       name: Gradle Cache
       with:
@@ -111,8 +112,8 @@ jobs:
         # for x in ~/.wrk-api-bench/*; do echo "Benchmark $x content:"; jq . "$x"; echo; done
 
         # Ensure the output is available for the PR bot.
-        echo "::set-output name=bot-message::$(cat /tmp/smithy_rs_benchmark_variance.txt)"
-    - name: Post variance on PR
+        echo "::set-output name=bot-message::$(cat /tmp/smithy_rs_benchmark_deviation.txt)"
+    - name: Post deviation on PR
       uses: actions/github-script@v5
       # NOTE: if comments on each commit become bothersome, add a check that github.event.pull_request.action == "opened"
       if: ${{ github.head_ref != null }}
