@@ -15,7 +15,7 @@ using [wrk](https://github.com/wg/wrk).
 
 ## 2022-03-04
 
-The benchmark run against the `empty_operation()` operation, which is just
+The benchmark runs against the `empty_operation()` operation, which is just
 returning an empty output and can be used to stress test the framework overhead.
 
 ### c6i.8xlarge
@@ -25,7 +25,7 @@ returning an empty output and can be used to stress test the framework overhead.
 * Benchmark:
     - Duration: 10 minutes
     - Connections: 1024
-    * Threads: 16
+    - Threads: 16
 * Result:
     - Request/sec: 1_608_742
     * RSS memory: 72200 bytes
@@ -57,10 +57,10 @@ Transfer/sec:    167.23MB
 * Benchmark:
     - Duration: 10 minutes
     - Connections: 1024
-    * Threads: 16
+    - Threads: 16
 * Result:
     - Request/sec: 1_379_942
-    * RSS memory: 70264 bytes
+    - RSS memory: 70264 bytes
 
 
 #### Full result
