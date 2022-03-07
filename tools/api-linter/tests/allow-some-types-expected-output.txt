@@ -1,0 +1,21 @@
+error: Unapproved external type `external_lib::AssociatedGenericTrait` referenced in public API
+   --> test-crate/src/lib.rs:107:1
+    |
+107 | pub fn fn_with_external_trait_bounds<I, O, E, T>(_thing: T)␊
+    | ...
+114 | }␊
+    | ^
+    |
+    = in trait bound of `test_crate::fn_with_external_trait_bounds`
+
+error: Unapproved external type `external_lib::AssociatedGenericTrait` referenced in public API
+   --> test-crate/src/lib.rs:118:5
+    |
+118 |     type OtherThing: AssociatedGenericTrait<␊
+    | ...
+122 |     >;␊
+    |     ^^
+    |
+    = in trait bound of `test_crate::SomeTraitWithExternalDefaultTypes::OtherThing`
+
+2 errors emitted
