@@ -88,7 +88,7 @@ jobs:
     - name: Install benchmarks dependencies
       run: sudo apt-get install -y ${{ env.apt_dependencies }}
     # Ubuntu 20.04 doesn't have wrk packaged, hence we need to build it 🤦
-    # This will go away as soon as GitHub supports Ubuntu 21.04.
+    # This will go away as soon as GitHub supports Ubuntu 22.04.
     - name: Install wrk
       run: |
         git clone https://github.com/wg/wrk.git /tmp/wrk-build && \
