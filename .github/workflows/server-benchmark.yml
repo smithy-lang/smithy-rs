@@ -16,7 +16,7 @@ jobs:
   run-e2e-integration-test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: actions/cache@v2
       name: Gradle Cache
       with:
@@ -49,7 +49,14 @@ jobs:
   run-benchmark:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout PR
+      uses: actions/checkout@v3
+    - name: Checkout origin/main
+      uses: actions/checkout@v3
+      with:
+        repository: awslabs/smithy-rs
+        path: ~/smithy-rs-main
+        ref: main
     - uses: actions/cache@v2
       name: Gradle Cache
       with:
@@ -87,14 +94,15 @@ jobs:
       id: run-benchmark
       run: |
         mkdir -p ~/.wrk-api-bench
-        pushd rust-runtime/aws-smithy-http-server/examples
         # run the benchmark on origin/main
-        git checkout main
-        make && RUN_BENCHMARKS=1 cargo test --release && make distclean
+        pushd ~/smithy-rs-main/rust-runtime/aws-smithy-http-server/examples
+        make && RUN_BENCHMARKS=1 cargo test --release
+        popd
 
         # run the benchmark on current ref
-        git checkout ${{ github.event.pull_request.head.sha }}
+        pushd rust-runtime/aws-smithy-http-server/examples
         make && RUN_BENCHMARKS=1 cargo test --release
+        popd
         # Uncomment this for debugging purposes. It will print out the
         # content of all the benchmarks found in the cache + the last one
         # produced by the current run.
