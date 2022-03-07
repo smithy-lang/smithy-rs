@@ -31,7 +31,7 @@ async fn benchmark() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let mut wrk = WrkBuilder::default()
-            .url(String::from("http://localhost:13734/pokemon-species/pikachu"))
+            .url(String::from("http://localhost:13734/empty-operation"))
             .history_dir(history_dir)
             .build()?;
 
