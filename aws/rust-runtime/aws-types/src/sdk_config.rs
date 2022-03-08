@@ -22,7 +22,7 @@ use crate::region::Region;
 
 /// AWS Shared Configuration
 #[derive(Debug, Clone)]
-pub struct Config {
+pub struct SdkConfig {
     app_name: Option<AppName>,
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
@@ -49,9 +49,9 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::config::Config;
+    /// use aws_types::sdk_config::SdkConfig;
     /// use aws_types::region::Region;
-    /// let config = Config::builder().region(Region::new("us-east-1")).build();
+    /// let config = SdkConfig::builder().region(Region::new("us-east-1")).build();
     /// ```
     pub fn region(mut self, region: impl Into<Option<Region>>) -> Self {
         self.set_region(region);
@@ -66,9 +66,9 @@ impl Builder {
     ///     // ...
     ///     # None
     /// }
-    /// use aws_types::config::Config;
+    /// use aws_types::sdk_config::SdkConfig;
     /// use aws_types::region::Region;
-    /// let mut builder = Config::builder();
+    /// let mut builder = SdkConfig::builder();
     /// if let Some(region) = region_override() {
     ///     builder.set_region(region);
     /// }
@@ -83,11 +83,11 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::config::Config;
+    /// use aws_types::sdk_config::SdkConfig;
     /// use aws_smithy_types::retry::RetryConfig;
     ///
     /// let retry_config = RetryConfig::new().with_max_attempts(5);
-    /// let config = Config::builder().retry_config(retry_config).build();
+    /// let config = SdkConfig::builder().retry_config(retry_config).build();
     /// ```
     pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
         self.set_retry_config(Some(retry_config));
@@ -98,7 +98,7 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::config::{Config, Builder};
+    /// use aws_types::sdk_config::{SdkConfig, Builder};
     /// use aws_smithy_types::retry::RetryConfig;
     ///
     /// fn disable_retries(builder: &mut Builder) {
@@ -106,7 +106,7 @@ impl Builder {
     ///     builder.set_retry_config(Some(retry_config));
     /// }
     ///
-    /// let mut builder = Config::builder();
+    /// let mut builder = SdkConfig::builder();
     /// disable_retries(&mut builder);
     /// let config = builder.build();
     /// ```
@@ -121,12 +121,12 @@ impl Builder {
     ///
     /// ```rust
     /// # use std::time::Duration;
-    /// use aws_types::config::Config;
+    /// use aws_types::sdk_config::SdkConfig;
     /// use aws_smithy_types::timeout::TimeoutConfig;
     ///
     /// let timeout_config = TimeoutConfig::new()
     ///     .with_api_call_attempt_timeout(Some(Duration::from_secs(1)));
-    /// let config = Config::builder().timeout_config(timeout_config).build();
+    /// let config = SdkConfig::builder().timeout_config(timeout_config).build();
     /// ```
     pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
         self.set_timeout_config(Some(timeout_config));
@@ -138,7 +138,7 @@ impl Builder {
     /// # Examples
     /// ```rust
     /// # use std::time::Duration;
-    /// use aws_types::config::{Config, Builder};
+    /// use aws_types::sdk_config::{SdkConfig, Builder};
     /// use aws_smithy_types::timeout::TimeoutConfig;
     ///
     /// fn set_preferred_timeouts(builder: &mut Builder) {
@@ -148,7 +148,7 @@ impl Builder {
     ///     builder.set_timeout_config(Some(timeout_config));
     /// }
     ///
-    /// let mut builder = Config::builder();
+    /// let mut builder = SdkConfig::builder();
     /// set_preferred_timeouts(&mut builder);
     /// let config = builder.build();
     /// ```
@@ -166,7 +166,7 @@ impl Builder {
     /// ```rust
     /// use std::sync::Arc;
     /// use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
-    /// use aws_types::config::Config;
+    /// use aws_types::sdk_config::SdkConfig;
     ///
     /// ##[derive(Debug)]
     /// pub struct ForeverSleep;
@@ -178,7 +178,7 @@ impl Builder {
     /// }
     ///
     /// let sleep_impl = Arc::new(ForeverSleep);
-    /// let config = Config::builder().sleep_impl(sleep_impl).build();
+    /// let config = SdkConfig::builder().sleep_impl(sleep_impl).build();
     /// ```
     pub fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
         self.set_sleep_impl(Some(sleep_impl));
@@ -192,7 +192,7 @@ impl Builder {
     /// # Examples
     /// ```rust
     /// # use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
-    /// # use aws_types::config::{Builder, Config};
+    /// # use aws_types::sdk_config::{Builder, SdkConfig};
     /// #[derive(Debug)]
     /// pub struct ForeverSleep;
     ///
@@ -207,7 +207,7 @@ impl Builder {
     ///     builder.set_sleep_impl(Some(sleep_impl));
     /// }
     ///
-    /// let mut builder = Config::builder();
+    /// let mut builder = SdkConfig::builder();
     /// set_never_ending_sleep_impl(&mut builder);
     /// let config = builder.build();
     /// ```
@@ -221,14 +221,14 @@ impl Builder {
     /// # Examples
     /// ```rust
     /// use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
-    /// use aws_types::config::Config;
+    /// use aws_types::sdk_config::SdkConfig;
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
     ///   # use aws_types::Credentials;
     ///   # Credentials::new("test", "test", None, None, "example")
     /// }
     ///
-    /// let config = Config::builder()
+    /// let config = SdkConfig::builder()
     ///     .credentials_provider(SharedCredentialsProvider::new(make_provider()))
     ///     .build();
     /// ```
@@ -242,7 +242,7 @@ impl Builder {
     /// # Examples
     /// ```rust
     /// use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
-    /// use aws_types::config::Config;
+    /// use aws_types::sdk_config::SdkConfig;
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
     ///   # use aws_types::Credentials;
@@ -254,7 +254,7 @@ impl Builder {
     ///   # true
     /// }
     ///
-    /// let mut builder = Config::builder();
+    /// let mut builder = SdkConfig::builder();
     /// if override_provider() {
     ///     builder.set_credentials_provider(Some(SharedCredentialsProvider::new(make_provider())));
     /// }
@@ -298,9 +298,9 @@ impl Builder {
         self
     }
 
-    /// Build a [`Config`](Config) from this builder
-    pub fn build(self) -> Config {
-        Config {
+    /// Build a [`SdkConfig`](SdkConfig) from this builder
+    pub fn build(self) -> SdkConfig {
+        SdkConfig {
             app_name: self.app_name,
             credentials_provider: self.credentials_provider,
             region: self.region,
@@ -312,7 +312,7 @@ impl Builder {
     }
 }
 
-impl Config {
+impl SdkConfig {
     /// Configured region
     pub fn region(&self) -> Option<&Region> {
         self.region.as_ref()
