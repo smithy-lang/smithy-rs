@@ -5,3 +5,6 @@ members = [
     "pokemon_service_sdk",
     "pokemon_service_client"
 ]
+
+[profile.release]
+lto = true

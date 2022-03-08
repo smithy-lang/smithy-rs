@@ -12,7 +12,6 @@ use std::time::Duration;
 use crate::helpers::{client, PokemonService};
 use tokio::time;
 
-#[macro_use]
 mod helpers;
 
 #[tokio::test]

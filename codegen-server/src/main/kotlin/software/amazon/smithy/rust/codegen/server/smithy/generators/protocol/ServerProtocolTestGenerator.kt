@@ -643,10 +643,8 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", TestType.Response),
 
-            FailingTest(RestJson, "RestJsonUnitInputAndOutputNoOutput", TestType.Response),
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
-            FailingTest(RestJson, "RestJsonNoInputAndNoOutput", TestType.Response),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", TestType.Response),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
