@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use aws_smithy_http_server::{AddExtensionLayer, Router};
-use pokemon_service::{get_pokemon_species, get_server_statistics, setup_tracing, State};
+use pokemon_service::{empty_operation, get_pokemon_species, get_server_statistics, setup_tracing, State};
 use pokemon_service_sdk::operation_registry::OperationRegistryBuilder;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -21,6 +21,7 @@ pub async fn main() {
         // return the operation's output.
         .get_pokemon_species(get_pokemon_species)
         .get_server_statistics(get_server_statistics)
+        .empty_operation(empty_operation)
         .build()
         .expect("Unable to build operation registry")
         // Convert it into a router that will route requests to the matching operation
