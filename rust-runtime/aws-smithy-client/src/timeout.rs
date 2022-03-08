@@ -85,9 +85,9 @@ impl HttpConnectorTimeoutConfig {
     ///     .with_connect_timeout(Some(Duration::from_secs(3)));
     /// let timeout_config = a.take_unset_from(b);
     /// // A's value take precedence over B's value
-    /// assert_eq!(timeout_config.read_timeout(), Some(Duration::from_secs(2)));
+    /// assert_eq!(timeout_config.read(), Some(Duration::from_secs(2)));
     /// // A never set a connect timeout so B's value was used
-    /// assert_eq!(timeout_config.connect_timeout(), Some(Duration::from_secs(3)));
+    /// assert_eq!(timeout_config.connect(), Some(Duration::from_secs(3)));
     /// ```
     pub fn take_unset_from(self, other: Self) -> Self {
         Self {

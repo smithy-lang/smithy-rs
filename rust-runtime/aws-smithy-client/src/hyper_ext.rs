@@ -29,9 +29,9 @@
 //! use std::time::Duration;
 //! use aws_smithy_client::{Client, conns, hyper_ext};
 //! use aws_smithy_client::erase::DynConnector;
-//! use aws_smithy_types::timeout::SharedTimeoutConfig;
+//! use aws_smithy_client::timeout::HttpConnectorTimeoutConfig;
 //!
-//! let timeout = SharedTimeoutConfig::new().with_connect_timeout(Some(Duration::from_secs(1)));
+//! let timeout = HttpConnectorTimeoutConfig::new().with_connect_timeout(Some(Duration::from_secs(1)));
 //! let connector = hyper_ext::Adapter::builder().timeout(&timeout).build(conns::https());
 //! // Replace this with your middleware
 //! type MyMiddleware = tower::layer::util::Identity;

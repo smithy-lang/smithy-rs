@@ -107,7 +107,7 @@ impl Builder {
             .with_connect_timeout(Some(DEFAULT_CONNECT_TIMEOUT))
             .with_read_timeout(Some(DEFAULT_READ_TIMEOUT));
         let timeout_config = self.timeout_config.take_unset_from(default_timeout_config);
-        let http_settings = HttpSettings::default().with_timeout_config(timeout_config.into());
+        let http_settings = HttpSettings::default().with_timeout_config(timeout_config);
         let connector = expect_connector(provider_config.connector(&http_settings));
         let client = aws_smithy_client::Builder::new()
             .connector(connector)

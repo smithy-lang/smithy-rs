@@ -92,8 +92,6 @@ impl Builder {
             Err(err) => panic!("{}", err),
         };
 
-        let conf = builder_from_env.take_unset_from(builder_from_profile);
-
-        conf
+        builder_from_env.take_unset_from(builder_from_profile)
     }
 }
