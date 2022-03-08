@@ -58,8 +58,7 @@ jobs:
       with:
         repository: awslabs/smithy-rs
         path: origin-main
-        # ref: main
-        ref: ${{ github.event.pull_request.head.sha }}
+        ref: main
     - name: Checkout wrk
       uses: actions/checkout@v3
       with:
