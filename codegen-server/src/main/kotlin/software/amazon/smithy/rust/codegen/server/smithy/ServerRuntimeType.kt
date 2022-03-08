@@ -31,8 +31,8 @@ object ServerRuntimeType {
     fun serverOperationHandler(runtimeConfig: RuntimeConfig) =
         forInlineDependency(ServerInlineDependency.serverOperationHandler(runtimeConfig))
 
-    fun SmithyFrameworkException(runtimeConfig: RuntimeConfig) =
-        RuntimeType("SmithyFrameworkException", CargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::exception")
+    fun RuntimeError(runtimeConfig: RuntimeConfig) =
+        RuntimeType("RuntimeError", CargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::runtime_error")
 
     fun RequestRejection(runtimeConfig: RuntimeConfig) =
         RuntimeType("RequestRejection", CargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::rejection")

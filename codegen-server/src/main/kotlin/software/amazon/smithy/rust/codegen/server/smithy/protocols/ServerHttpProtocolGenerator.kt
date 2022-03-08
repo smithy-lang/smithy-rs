@@ -123,7 +123,7 @@ private class ServerHttpProtocolImplGenerator(
         "SerdeUrlEncoded" to ServerCargoDependency.SerdeUrlEncoded.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "SmithyFrameworkException" to ServerRuntimeType.SmithyFrameworkException(runtimeConfig),
+        "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
         "http" to RuntimeType.http
@@ -165,15 +165,15 @@ private class ServerHttpProtocolImplGenerator(
                 B::Data: Send,
                 #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
             {
-                type Rejection = #{SmithyFrameworkException};
+                type Rejection = #{RuntimeError};
                 async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
                     #{parse_request}(req)
                         .await
                         .map($inputName)
                         .map_err(
-                            |err| #{SmithyFrameworkException} {
+                            |err| #{RuntimeError} {
                                 protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                                exception_type: err.into()
+                                kind: err.into()
                             }
                         )
                 }
@@ -200,9 +200,9 @@ private class ServerHttpProtocolImplGenerator(
                         match #{serialize_response}(o) {
                             Ok(response) => response,
                             Err(e) => {
-                                #{SmithyFrameworkException} {
+                                #{RuntimeError} {
                                     protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                                    exception_type: e.into()
+                                    kind: e.into()
                                 }.into_response()
                             }
                         }
@@ -214,9 +214,9 @@ private class ServerHttpProtocolImplGenerator(
                                 response
                             },
                             Err(e) => {
-                                #{SmithyFrameworkException} {
+                                #{RuntimeError} {
                                     protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                                    exception_type: e.into()
+                                    kind: e.into()
                                 }.into_response()
                             }
                         }
@@ -253,9 +253,9 @@ private class ServerHttpProtocolImplGenerator(
                 let mut response = match #{serialize_response}(self.0) {
                     Ok(response) => response,
                     Err(e) => {
-                        #{SmithyFrameworkException} {
+                        #{RuntimeError} {
                             protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                            exception_type: e.into()
+                            kind: e.into()
                         }.into_response()
                     }
                 };
