@@ -72,9 +72,9 @@ service version number (this requirement has already been implemented).
 
 ### Yanking
 
-It must be possible to yank an entire release with a single command-line. The publisher tool must
+It must be possible to yank an entire release with a single action. The publisher tool must
 be updated to understand which crate versions were released with a given release tag, and be able to
-yank that entire tag worth of crates.
+yank all the crates published from that tag.
 
 Phase 1: New Versioning Strategy
 --------------------------------
@@ -91,6 +91,9 @@ A new manifest file will be introduced in the root of [aws-sdk-rust] named `vers
 all versioning information for any given commit in the repository. In the main branch, the `versions.toml`
 in tagged commits will become the source of truth for which crate versions belong to that release, as well
 as additional metadata that's required for maintaining version process in the future.
+
+The special `0.0.0-smithy-rs-head` version that is used prior to Phase 1 for maintaining the runtime crate
+versions will no longer be used (as detailed in [Versioning for Runtime Crates](#versioning-for-runtime-crates)).
 
 This format will look as follows:
 ```toml
@@ -113,7 +116,7 @@ The auto-sync tool is responsible for maintaining this file. When it generates a
 the version numbers from runtime crates directly, and it will use the rules from the next section to determine
 the version numbers for the generated crates.
 
-### Versioning for Code Generated Crates
+### Versioning for Code Generated (SDK Service) Crates
 
 Code generated crates will have their `minor` version bumped when the version of [smithy-rs] used to generate
 them changes, or when model updates with API changes are made. Three pieces of information are required to
@@ -162,6 +165,11 @@ The following checks need to be run for runtime crates:
   - If semverver results in errors, fail CI indicating a minor version bump is required.
   - If semverver passes, then pass CI.
 
+When running semverver, the path dependencies of the crate under examination should be updated to be crates.io
+references if there were no changes in those crates since the last public to crates.io. Otherwise, the types
+referenced from those crates in the public API will always result in breaking changes since, as far as the Rust
+compiler is concerned, they are different types originating from separate path-dependency crates.
+
 For CI, the `aws-sdk-rust/main` branch's `versions.toml` file is the source of truth for the previous release's
 crate versions and source code.
 
@@ -170,13 +178,14 @@ crate versions and source code.
 The publisher tool will be updated to read the `versions.toml` to yank all versions published in a release.
 This process will look as follows:
 1. Take a path to a local clone of the [aws-sdk-rust] repository
-2. Confirm the branch is `main` and that HEAD is tagged as a release
+2. Confirm the working tree is currently unmodified and on a release tag.
 3. Read `versions.toml` and print out summary of crates to yank
 4. Confirm with user before proceeding
 5. Yank crates
 
 ### Changes Checklist
 
+- [ ] Update `rust-semverver` to a newer nightly that can compile `aws-smithy-client`
 - [ ] Establish initial `versions.toml` in `aws-sdk-rust/main`
 - [ ] Set version numbers in runtime crates in [smithy-rs]
 - [ ] Update the auto-sync tool to generate `versions.toml`
