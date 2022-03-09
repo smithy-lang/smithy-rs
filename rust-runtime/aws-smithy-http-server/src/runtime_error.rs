@@ -83,8 +83,8 @@ impl axum_core::response::IntoResponse for RuntimeError {
     }
 }
 
-impl From<crate::rejection::ExtensionNotFoundRejection> for RuntimeErrorKind {
-    fn from(err: crate::rejection::ExtensionNotFoundRejection) -> Self {
+impl From<crate::rejection::RequestExtensionNotFoundRejection> for RuntimeErrorKind {
+    fn from(err: crate::rejection::RequestExtensionNotFoundRejection) -> Self {
         RuntimeErrorKind::InternalFailure(crate::Error::new(err))
     }
 }

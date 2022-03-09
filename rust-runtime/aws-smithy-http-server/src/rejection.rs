@@ -9,7 +9,7 @@
 //! handle requests and responses that return `Result<T, E>` throughout the framework. These
 //! include functions to deserialize incoming requests and serialize outgoing responses.
 //!
-//! There are three main types:
+//! All types end with `Rejection`. There are three types:
 //!
 //! 1. [`RequestRejection`]s are used when the framework fails to deserialize the request into the
 //!    corresponding operation input.
@@ -48,7 +48,7 @@ use strum_macros::Display;
 ///
 /// [request's extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
 #[derive(Debug, Display)]
-pub enum ExtensionNotFoundRejection {
+pub enum RequestExtensionNotFoundRejection {
     /// Used when a particular [`crate::Extension`] was expected to be found in the request but we
     /// did not find it.
     /// This most likely means the service implementer simply forgot to add a [`tower::Layer`] that
@@ -58,7 +58,7 @@ pub enum ExtensionNotFoundRejection {
     ExtensionsAlreadyExtracted,
 }
 
-impl std::error::Error for ExtensionNotFoundRejection {}
+impl std::error::Error for RequestExtensionNotFoundRejection {}
 
 /// Errors that can occur when serializing the operation output provided by the service implementer
 /// into an HTTP response.

@@ -111,7 +111,7 @@ impl<T> Deref for Extension<T> {
 
 pub async fn extract_extension<T, B>(
     req: &mut RequestParts<B>,
-) -> Result<Extension<T>, crate::rejection::ExtensionNotFoundRejection>
+) -> Result<Extension<T>, crate::rejection::RequestExtensionNotFoundRejection>
 where
     // TODO Does T need to be `Sync`?
     T: Clone + Send + Sync + 'static,
@@ -119,10 +119,10 @@ where
 {
     let value = req
         .extensions()
-        .ok_or(crate::rejection::ExtensionNotFoundRejection::ExtensionsAlreadyExtracted)?
+        .ok_or(crate::rejection::RequestExtensionNotFoundRejection::ExtensionsAlreadyExtracted)?
         .get::<T>()
         .ok_or_else(|| {
-            crate::rejection::ExtensionNotFoundRejection::MissingExtension(format!(
+            crate::rejection::RequestExtensionNotFoundRejection::MissingExtension(format!(
                 "Extension of type `{}` was not found. Perhaps you forgot to add it?",
                 std::any::type_name::<T>()
             ))
