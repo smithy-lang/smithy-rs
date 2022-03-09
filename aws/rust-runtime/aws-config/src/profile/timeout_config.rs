@@ -7,9 +7,7 @@
 
 use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
-use aws_smithy_types::timeout::{
-    parse_str_as_timeout, SharedTimeoutConfig, SharedTimeoutConfigError,
-};
+use aws_smithy_types::timeout::{parse_str_as_timeout, TimeoutConfig, TimeoutConfigError};
 use aws_types::os_shim_internal::{Env, Fs};
 use std::time::Duration;
 
@@ -44,13 +42,13 @@ const PROFILE_VAR_API_CALL_TIMEOUT: &str = "api_call_timeout";
 ///
 /// This provider is part of the [default timeout config provider chain](crate::default_provider::timeout_config).
 #[derive(Debug, Default)]
-pub struct ProfileFileSharedTimeoutConfigProvider {
+pub struct ProfileFileTimeoutConfigProvider {
     fs: Fs,
     env: Env,
     profile_override: Option<String>,
 }
 
-/// Builder for [`ProfileFileSharedTimeoutConfigProvider`]
+/// Builder for [`ProfileFileTimeoutConfigProvider`]
 #[derive(Default)]
 pub struct Builder {
     config: Option<ProviderConfig>,
@@ -71,9 +69,9 @@ impl Builder {
     }
 
     /// Build a [`ProfileFileTimeoutConfigProvider`] from this builder
-    pub fn build(self) -> ProfileFileSharedTimeoutConfigProvider {
+    pub fn build(self) -> ProfileFileTimeoutConfigProvider {
         let conf = self.config.unwrap_or_default();
-        ProfileFileSharedTimeoutConfigProvider {
+        ProfileFileTimeoutConfigProvider {
             env: conf.env(),
             fs: conf.fs(),
             profile_override: self.profile_override,
@@ -81,7 +79,7 @@ impl Builder {
     }
 }
 
-impl ProfileFileSharedTimeoutConfigProvider {
+impl ProfileFileTimeoutConfigProvider {
     /// Create a new [`ProfileFileTimeoutConfigProvider`]
     ///
     /// To override the selected profile, set the `AWS_PROFILE` environment variable or use the [`Builder`].
@@ -99,7 +97,7 @@ impl ProfileFileSharedTimeoutConfigProvider {
     }
 
     /// Attempt to create a new [`TimeoutConfig`] from a profile file.
-    pub async fn timeout_config(&self) -> Result<SharedTimeoutConfig, SharedTimeoutConfigError> {
+    pub async fn timeout_config(&self) -> Result<TimeoutConfig, TimeoutConfigError> {
         let profile = match super::parser::load(&self.fs, &self.env).await {
             Ok(profile) => profile,
             Err(err) => {
@@ -124,7 +122,7 @@ impl ProfileFileSharedTimeoutConfigProvider {
                     );
                 }
                 // return an empty config
-                return Ok(SharedTimeoutConfig::new());
+                return Ok(TimeoutConfig::new());
             }
         };
 
@@ -143,7 +141,7 @@ impl ProfileFileSharedTimeoutConfigProvider {
         let api_call_timeout =
             construct_timeout_from_profile_var(selected_profile, PROFILE_VAR_API_CALL_TIMEOUT)?;
 
-        Ok(SharedTimeoutConfig::new()
+        Ok(TimeoutConfig::new()
             // .with_connect_timeout(connect_timeout)
             // .with_tls_negotiation_timeout(tls_negotiation_timeout)
             // .with_read_timeout(read_timeout)
@@ -155,7 +153,7 @@ impl ProfileFileSharedTimeoutConfigProvider {
 fn construct_timeout_from_profile_var(
     profile: &Profile,
     var: &'static str,
-) -> Result<Option<Duration>, SharedTimeoutConfigError> {
+) -> Result<Option<Duration>, TimeoutConfigError> {
     let profile_name = format!("aws profile [{}]", profile.name());
     match profile.get(var) {
         Some(timeout) => parse_str_as_timeout(timeout, var.into(), profile_name.into()).map(Some),

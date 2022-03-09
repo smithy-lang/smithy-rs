@@ -9,7 +9,7 @@ use crate::{bounds, erase, retry, Client, TriState, MISSING_SLEEP_IMPL_RECOMMEND
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
-use aws_smithy_types::timeout::SharedTimeoutConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 
 /// A builder that provides more customization options when constructing a [`Client`].
 ///
@@ -21,7 +21,7 @@ pub struct Builder<C = (), M = (), R = retry::Standard> {
     connector: C,
     middleware: M,
     retry_policy: R,
-    shared_timeout_config: SharedTimeoutConfig,
+    timeout_config: TimeoutConfig,
     sleep_impl: TriState<Arc<dyn AsyncSleep>>,
 }
 
@@ -60,7 +60,7 @@ impl<M, R> Builder<(), M, R> {
             connector,
             retry_policy: self.retry_policy,
             middleware: self.middleware,
-            shared_timeout_config: self.shared_timeout_config,
+            timeout_config: self.timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -115,7 +115,7 @@ impl<C, R> Builder<C, (), R> {
         Builder {
             connector: self.connector,
             retry_policy: self.retry_policy,
-            shared_timeout_config: self.shared_timeout_config,
+            timeout_config: self.timeout_config,
             middleware,
             sleep_impl: self.sleep_impl,
         }
@@ -166,7 +166,7 @@ impl<C, M> Builder<C, M, retry::Standard> {
         Builder {
             connector: self.connector,
             retry_policy,
-            shared_timeout_config: self.shared_timeout_config,
+            timeout_config: self.timeout_config,
             middleware: self.middleware,
             sleep_impl: self.sleep_impl,
         }
@@ -180,8 +180,8 @@ impl<C, M> Builder<C, M> {
     }
 
     /// Set a timeout config for the builder
-    pub fn set_timeout_config(&mut self, timeout_config: SharedTimeoutConfig) {
-        self.shared_timeout_config = timeout_config;
+    pub fn set_timeout_config(&mut self, timeout_config: TimeoutConfig) {
+        self.timeout_config = timeout_config;
     }
 
     /// Set the [`AsyncSleep`] function that the [`Client`] will use to create things like timeout futures.
@@ -212,7 +212,7 @@ impl<C, M, R> Builder<C, M, R> {
             connector: map(self.connector),
             middleware: self.middleware,
             retry_policy: self.retry_policy,
-            shared_timeout_config: self.shared_timeout_config,
+            timeout_config: self.timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -226,7 +226,7 @@ impl<C, M, R> Builder<C, M, R> {
             connector: self.connector,
             middleware: map(self.middleware),
             retry_policy: self.retry_policy,
-            shared_timeout_config: self.shared_timeout_config,
+            timeout_config: self.timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -234,7 +234,7 @@ impl<C, M, R> Builder<C, M, R> {
     /// Build a Smithy service [`Client`].
     pub fn build(self) -> Client<C, M, R> {
         if matches!(self.sleep_impl, TriState::Unset) {
-            if self.shared_timeout_config.has_timeouts() {
+            if self.timeout_config.has_timeouts() {
                 tracing::warn!(
                     "One or more timeouts were set, but no `sleep_impl` was passed into the \
                     builder. Timeouts and retry both require a sleep implementation. No timeouts \
@@ -254,7 +254,7 @@ impl<C, M, R> Builder<C, M, R> {
             connector: self.connector,
             retry_policy: self.retry_policy,
             middleware: self.middleware,
-            timeout_config: self.shared_timeout_config,
+            timeout_config: self.timeout_config,
             sleep_impl: self.sleep_impl,
         }
     }
@@ -334,7 +334,7 @@ mod tests {
             .connector(NeverConnector::new())
             .middleware(tower::layer::util::Identity::new());
         builder.set_timeout_config(
-            SharedTimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs(1))),
+            TimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs(1))),
         );
         builder.build();
 

@@ -3,20 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::environment::shared_timeout_config::EnvironmentVariableSharedTimeoutConfigProvider;
+use crate::environment::timeout_config::EnvironmentVariableTimeoutConfigProvider;
 use crate::profile;
 use crate::provider_config::ProviderConfig;
 
-use aws_smithy_types::timeout::SharedTimeoutConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 
-/// Default [`SharedTimeoutConfig`] Provider chain
+/// Default [`TimeoutConfig`] Provider chain
 ///
-/// Unlike other credentials and region, [`SharedTimeoutConfig`] has no related `SharedTimeoutConfigProvider` trait. Instead,
+/// Unlike other credentials and region, [`TimeoutConfig`] has no related `TimeoutConfigProvider` trait. Instead,
 /// a builder struct is returned which has a similar API.
 ///
 /// This provider will check the following sources in order:
-/// 1. [Environment variables](EnvironmentVariableSharedTimeoutConfigProvider)
-/// 2. [Profile file](crate::profile::timeout_config::ProfileFileSharedTimeoutConfigProvider) (`~/.aws/config`)
+/// 1. [Environment variables](EnvironmentVariableTimeoutConfigProvider)
+/// 2. [Profile file](crate::profile::timeout_config::ProfileFileTimeoutConfigProvider) (`~/.aws/config`)
 ///
 /// # Example
 ///
@@ -24,10 +24,10 @@ use aws_smithy_types::timeout::SharedTimeoutConfig;
 /// # use std::error::Error;
 /// # #[tokio::main]
 /// # async fn main() {
-/// use aws_config::default_provider::shared_timeout_config;
+/// use aws_config::default_provider::timeout_config;
 ///
 /// // Load a timeout config from a specific profile
-/// let timeout_config = shared_timeout_config::default_provider()
+/// let timeout_config = timeout_config::default_provider()
 ///     .profile_name("other_profile")
 ///     .timeout_config()
 ///     .await;
@@ -47,8 +47,8 @@ pub fn default_provider() -> Builder {
 /// Builder for [`TimeoutConfig`] that checks the environment variables and AWS profile files for configuration
 #[derive(Default)]
 pub struct Builder {
-    env_provider: EnvironmentVariableSharedTimeoutConfigProvider,
-    profile_file: profile::shared_timeout_config::Builder,
+    env_provider: EnvironmentVariableTimeoutConfigProvider,
+    profile_file: profile::timeout_config::Builder,
 }
 
 impl Builder {
@@ -57,7 +57,7 @@ impl Builder {
     /// Exposed for overriding the environment when unit-testing providers
     pub fn configure(mut self, configuration: &ProviderConfig) -> Self {
         self.env_provider =
-            EnvironmentVariableSharedTimeoutConfigProvider::new_with_env(configuration.env());
+            EnvironmentVariableTimeoutConfigProvider::new_with_env(configuration.env());
         self.profile_file = self.profile_file.configure(configuration);
         self
     }
@@ -79,7 +79,7 @@ impl Builder {
     /// This will panic if:
     /// - a timeout is set to `NaN`, a negative number, or infinity
     /// - a timeout can't be parsed as a floating point number
-    pub async fn timeout_config(self) -> SharedTimeoutConfig {
+    pub async fn timeout_config(self) -> TimeoutConfig {
         // Both of these can return errors due to invalid config settings and we want to surface those as early as possible
         // hence, we'll panic if any config values are invalid (missing values are OK though)
         // We match this instead of unwrapping so we can print the error with the `Display` impl instead of the `Debug` impl that unwrap uses

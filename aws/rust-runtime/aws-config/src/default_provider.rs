@@ -31,7 +31,7 @@ pub mod app_name;
 ///
 /// Typically, this module is used via [`load_from_env`](crate::load_from_env) or [`from_env`](crate::from_env). It should only be used directly
 /// if you need to set custom configuration options to override the default resolution chain.
-pub mod shared_timeout_config;
+pub mod timeout_config;
 
 /// Default credentials provider chain
 ///

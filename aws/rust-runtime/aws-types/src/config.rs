@@ -14,7 +14,7 @@ use std::sync::Arc;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_types::retry::RetryConfig;
-use aws_smithy_types::timeout::SharedTimeoutConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 
 use crate::app_name::AppName;
 use crate::credentials::SharedCredentialsProvider;
@@ -28,7 +28,7 @@ pub struct Config {
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
-    timeout_config: Option<SharedTimeoutConfig>,
+    timeout_config: Option<TimeoutConfig>,
     http_connector: Option<HttpConnector>,
 }
 
@@ -40,7 +40,7 @@ pub struct Builder {
     region: Option<Region>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<Arc<dyn AsyncSleep>>,
-    timeout_config: Option<SharedTimeoutConfig>,
+    timeout_config: Option<TimeoutConfig>,
     http_connector: Option<HttpConnector>,
 }
 
@@ -115,34 +115,34 @@ impl Builder {
         self
     }
 
-    /// Set the [`SharedTimeoutConfig`] for the builder
+    /// Set the [`TimeoutConfig`] for the builder
     ///
     /// # Examples
     ///
     /// ```rust
     /// # use std::time::Duration;
     /// use aws_types::config::Config;
-    /// use aws_smithy_types::timeout::SharedTimeoutConfig;
+    /// use aws_smithy_types::timeout::TimeoutConfig;
     ///
-    /// let timeout_config = SharedTimeoutConfig::new()
+    /// let timeout_config = TimeoutConfig::new()
     ///     .with_api_call_attempt_timeout(Some(Duration::from_secs(1)));
     /// let config = Config::builder().timeout_config(timeout_config).build();
     /// ```
-    pub fn timeout_config(mut self, timeout_config: SharedTimeoutConfig) -> Self {
+    pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
         self.set_timeout_config(Some(timeout_config));
         self
     }
 
-    /// Set the [`SharedTimeoutConfig`] for the builder
+    /// Set the [`TimeoutConfig`] for the builder
     ///
     /// # Examples
     /// ```rust
     /// # use std::time::Duration;
     /// use aws_types::config::{Config, Builder};
-    /// use aws_smithy_types::timeout::SharedTimeoutConfig;
+    /// use aws_smithy_types::timeout::TimeoutConfig;
     ///
     /// fn set_preferred_timeouts(builder: &mut Builder) {
-    ///     let timeout_config = SharedTimeoutConfig::new()
+    ///     let timeout_config = TimeoutConfig::new()
     ///         .with_api_call_attempt_timeout(Some(Duration::from_secs(2)))
     ///         .with_api_call_timeout(Some(Duration::from_secs(5)));
     ///     builder.set_timeout_config(Some(timeout_config));
@@ -152,7 +152,7 @@ impl Builder {
     /// set_preferred_timeouts(&mut builder);
     /// let config = builder.build();
     /// ```
-    pub fn set_timeout_config(&mut self, timeout_config: Option<SharedTimeoutConfig>) -> &mut Self {
+    pub fn set_timeout_config(&mut self, timeout_config: Option<TimeoutConfig>) -> &mut Self {
         self.timeout_config = timeout_config;
         self
     }
@@ -324,7 +324,7 @@ impl Config {
     }
 
     /// Configured timeout config
-    pub fn timeout_config(&self) -> Option<&SharedTimeoutConfig> {
+    pub fn timeout_config(&self) -> Option<&TimeoutConfig> {
         self.timeout_config.as_ref()
     }
 

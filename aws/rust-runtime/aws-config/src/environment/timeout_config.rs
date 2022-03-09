@@ -5,9 +5,7 @@
 
 //! Load timeout configuration properties from environment variables
 
-use aws_smithy_types::timeout::{
-    parse_str_as_timeout, SharedTimeoutConfig, SharedTimeoutConfigError,
-};
+use aws_smithy_types::timeout::{parse_str_as_timeout, TimeoutConfig, TimeoutConfigError};
 use aws_types::os_shim_internal::Env;
 use std::time::Duration;
 
@@ -19,7 +17,7 @@ const ENV_VAR_API_CALL_TIMEOUT: &str = "AWS_API_CALL_TIMEOUT";
 
 /// Load a timeout_config from environment variables
 ///
-/// This provider will check the values of the following variables in order to build a `SharedTimeoutConfig`
+/// This provider will check the values of the following variables in order to build a `TimeoutConfig`
 ///
 /// - `AWS_API_CALL_ATTEMPT_TIMEOUT`
 /// - `AWS_API_CALL_TIMEOUT`
@@ -27,14 +25,14 @@ const ENV_VAR_API_CALL_TIMEOUT: &str = "AWS_API_CALL_TIMEOUT";
 /// Timeout values represent the number of seconds before timing out and must be non-negative floats
 /// or integers. NaN and infinity are also invalid.
 #[derive(Debug, Default)]
-pub struct EnvironmentVariableSharedTimeoutConfigProvider {
+pub struct EnvironmentVariableTimeoutConfigProvider {
     env: Env,
 }
 
-impl EnvironmentVariableSharedTimeoutConfigProvider {
-    /// Create a new [`EnvironmentVariableSharedTimeoutConfigProvider`]
+impl EnvironmentVariableTimeoutConfigProvider {
+    /// Create a new [`EnvironmentVariableTimeoutConfigProvider`]
     pub fn new() -> Self {
-        EnvironmentVariableSharedTimeoutConfigProvider { env: Env::real() }
+        EnvironmentVariableTimeoutConfigProvider { env: Env::real() }
     }
 
     #[doc(hidden)]
@@ -42,11 +40,11 @@ impl EnvironmentVariableSharedTimeoutConfigProvider {
     ///
     /// This method is used for tests that need to override environment variables.
     pub fn new_with_env(env: Env) -> Self {
-        EnvironmentVariableSharedTimeoutConfigProvider { env }
+        EnvironmentVariableTimeoutConfigProvider { env }
     }
 
-    /// Attempt to create a new [`SharedTimeoutConfig`] from environment variables
-    pub fn timeout_config(&self) -> Result<SharedTimeoutConfig, SharedTimeoutConfigError> {
+    /// Attempt to create a new [`TimeoutConfig`] from environment variables
+    pub fn timeout_config(&self) -> Result<TimeoutConfig, TimeoutConfigError> {
         // let connect_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_CONNECT_TIMEOUT)?;
         // let tls_negotiation_timeout =
         //     construct_timeout_from_env_var(&self.env, ENV_VAR_TLS_NEGOTIATION_TIMEOUT)?;
@@ -55,7 +53,7 @@ impl EnvironmentVariableSharedTimeoutConfigProvider {
             construct_timeout_from_env_var(&self.env, ENV_VAR_API_CALL_ATTEMPT_TIMEOUT)?;
         let api_call_timeout = construct_timeout_from_env_var(&self.env, ENV_VAR_API_CALL_TIMEOUT)?;
 
-        Ok(SharedTimeoutConfig::new()
+        Ok(TimeoutConfig::new()
             // .with_connect_timeout(connect_timeout)
             // .with_tls_negotiation_timeout(tls_negotiation_timeout)
             // .with_read_timeout(read_timeout)
@@ -67,7 +65,7 @@ impl EnvironmentVariableSharedTimeoutConfigProvider {
 fn construct_timeout_from_env_var(
     env: &Env,
     var: &'static str,
-) -> Result<Option<Duration>, SharedTimeoutConfigError> {
+) -> Result<Option<Duration>, TimeoutConfigError> {
     match env.get(var).ok() {
         Some(timeout) => {
             parse_str_as_timeout(&timeout, var.into(), "environment variable".into()).map(Some)
@@ -79,15 +77,15 @@ fn construct_timeout_from_env_var(
 #[cfg(test)]
 mod test {
     use super::{
-        EnvironmentVariableSharedTimeoutConfigProvider, ENV_VAR_API_CALL_ATTEMPT_TIMEOUT,
+        EnvironmentVariableTimeoutConfigProvider, ENV_VAR_API_CALL_ATTEMPT_TIMEOUT,
         ENV_VAR_API_CALL_TIMEOUT,
     };
-    use aws_smithy_types::timeout::SharedTimeoutConfig;
+    use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::os_shim_internal::Env;
     use std::time::Duration;
 
-    fn test_provider(vars: &[(&str, &str)]) -> EnvironmentVariableSharedTimeoutConfigProvider {
-        EnvironmentVariableSharedTimeoutConfigProvider::new_with_env(Env::from_slice(vars))
+    fn test_provider(vars: &[(&str, &str)]) -> EnvironmentVariableTimeoutConfigProvider {
+        EnvironmentVariableTimeoutConfigProvider::new_with_env(Env::from_slice(vars))
     }
 
     #[test]
@@ -113,7 +111,7 @@ mod test {
             ])
             .timeout_config()
             .unwrap(),
-            SharedTimeoutConfig::new()
+            TimeoutConfig::new()
                 // .with_read_timeout(Some(Duration::from_secs_f32(1.0)))
                 // .with_connect_timeout(Some(Duration::from_secs_f32(2.0)))
                 // .with_tls_negotiation_timeout(Some(Duration::from_secs_f32(3.0)))

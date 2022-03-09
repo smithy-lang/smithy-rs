@@ -17,8 +17,8 @@ use std::time::Duration;
 /// # use std::time::Duration;
 ///
 /// # fn main() {
-/// use aws_smithy_types::timeout::SharedTimeoutConfig;
-/// let timeout_config = SharedTimeoutConfig::new()
+/// use aws_smithy_types::timeout::TimeoutConfig;
+/// let timeout_config = TimeoutConfig::new()
 ///     .with_api_call_timeout(Some(Duration::from_secs(2)))
 ///     .with_api_call_attempt_timeout(Some(Duration::from_secs_f32(0.5)));
 ///
@@ -34,7 +34,7 @@ use std::time::Duration;
 /// # }
 /// ```
 #[derive(Clone, PartialEq, Default)]
-pub struct SharedTimeoutConfig {
+pub struct TimeoutConfig {
     // connect_timeout: Option<Duration>,
     // tls_negotiation_timeout: Option<Duration>,
     // read_timeout: Option<Duration>,
@@ -42,7 +42,7 @@ pub struct SharedTimeoutConfig {
     api_call_timeout: Option<Duration>,
 }
 
-impl Debug for SharedTimeoutConfig {
+impl Debug for TimeoutConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -82,25 +82,25 @@ pub fn parse_str_as_timeout(
     timeout: &str,
     name: Cow<'static, str>,
     set_by: Cow<'static, str>,
-) -> Result<Duration, SharedTimeoutConfigError> {
+) -> Result<Duration, TimeoutConfigError> {
     match timeout.parse::<f32>() {
-        Ok(timeout) if timeout <= 0.0 => Err(SharedTimeoutConfigError::InvalidTimeout {
+        Ok(timeout) if timeout <= 0.0 => Err(TimeoutConfigError::InvalidTimeout {
             set_by,
             name,
             reason: "timeout must not be less than or equal to zero".into(),
         }),
-        Ok(timeout) if timeout.is_nan() => Err(SharedTimeoutConfigError::InvalidTimeout {
+        Ok(timeout) if timeout.is_nan() => Err(TimeoutConfigError::InvalidTimeout {
             set_by,
             name,
             reason: "timeout must not be NaN".into(),
         }),
-        Ok(timeout) if timeout.is_infinite() => Err(SharedTimeoutConfigError::InvalidTimeout {
+        Ok(timeout) if timeout.is_infinite() => Err(TimeoutConfigError::InvalidTimeout {
             set_by,
             name,
             reason: "timeout must not be infinite".into(),
         }),
         Ok(timeout) => Ok(Duration::from_secs_f32(timeout)),
-        Err(err) => Err(SharedTimeoutConfigError::ParseError {
+        Err(err) => Err(TimeoutConfigError::ParseError {
             set_by,
             name,
             source: Box::new(err),
@@ -108,8 +108,8 @@ pub fn parse_str_as_timeout(
     }
 }
 
-impl SharedTimeoutConfig {
-    /// Create a new `SharedTimeoutConfig` with no timeouts set
+impl TimeoutConfig {
+    /// Create a new `TimeoutConfig` with no timeouts set
     pub fn new() -> Self {
         Default::default()
     }
@@ -135,43 +135,43 @@ impl SharedTimeoutConfig {
     /// A limit on the amount of time it takes for the first byte to be sent over an established,
     /// open connection and when the last byte is received from the service for a single attempt.
     /// If you want to set a timeout for an entire request including retry attempts,
-    /// use [`SharedTimeoutConfig::api_call_timeout`] instead.
+    /// use [`TimeoutConfig::api_call_timeout`] instead.
     pub fn api_call_attempt_timeout(&self) -> Option<Duration> {
         self.api_call_attempt_timeout
     }
 
     /// A limit on the amount of time it takes for request to complete. A single request may be
     /// comprised of several attemps depending on an app's [`RetryConfig`](super::retry::RetryConfig). If you want
-    /// to control timeouts for a single attempt, use [`SharedTimeoutConfig::api_call_attempt_timeout`].
+    /// to control timeouts for a single attempt, use [`TimeoutConfig::api_call_attempt_timeout`].
     pub fn api_call_timeout(&self) -> Option<Duration> {
         self.api_call_timeout
     }
 
-    // /// Consume a `SharedTimeoutConfig` to create a new one, setting the connect timeout
+    // /// Consume a `TimeoutConfig` to create a new one, setting the connect timeout
     // pub fn with_connect_timeout(mut self, timeout: Option<Duration>) -> Self {
     //     self.connect_timeout = timeout;
     //     self
     // }
     //
-    // /// Consume a `SharedTimeoutConfig` to create a new one, setting the TLS negotiation timeout
+    // /// Consume a `TimeoutConfig` to create a new one, setting the TLS negotiation timeout
     // pub fn with_tls_negotiation_timeout(mut self, timeout: Option<Duration>) -> Self {
     //     self.tls_negotiation_timeout = timeout;
     //     self
     // }
     //
-    // /// Consume a `SharedTimeoutConfig` to create a new one, setting the read timeout
+    // /// Consume a `TimeoutConfig` to create a new one, setting the read timeout
     // pub fn with_read_timeout(mut self, timeout: Option<Duration>) -> Self {
     //     self.read_timeout = timeout;
     //     self
     // }
 
-    /// Consume a `SharedTimeoutConfig` to create a new one, setting the API call attempt timeout
+    /// Consume a `TimeoutConfig` to create a new one, setting the API call attempt timeout
     pub fn with_api_call_attempt_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.api_call_attempt_timeout = timeout;
         self
     }
 
-    /// Consume a `SharedTimeoutConfig` to create a new one, setting the API call timeout
+    /// Consume a `TimeoutConfig` to create a new one, setting the API call timeout
     pub fn with_api_call_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.api_call_timeout = timeout;
         self
@@ -187,9 +187,9 @@ impl SharedTimeoutConfig {
     ///
     /// ```rust
     /// # use std::time::Duration;
-    /// # use aws_smithy_types::timeout::SharedTimeoutConfig;
-    /// let a = SharedTimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs(2)));
-    /// let b = SharedTimeoutConfig::new()
+    /// # use aws_smithy_types::timeout::TimeoutConfig;
+    /// let a = TimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs(2)));
+    /// let b = TimeoutConfig::new()
     ///     .with_api_call_timeout(Some(Duration::from_secs(10)))
     ///     .with_api_call_attempt_timeout(Some(Duration::from_secs(3)));
     /// let timeout_config = a.take_unset_from(b);
@@ -223,8 +223,8 @@ impl SharedTimeoutConfig {
 
 #[non_exhaustive]
 #[derive(Debug)]
-/// An error that occurs during construction of a `SharedTimeoutConfig`
-pub enum SharedTimeoutConfigError {
+/// An error that occurs during construction of a `TimeoutConfig`
+pub enum TimeoutConfigError {
     /// A timeout value was set to an invalid value:
     /// - Any number less than 0
     /// - Infinity or negative infinity
@@ -248,9 +248,9 @@ pub enum SharedTimeoutConfigError {
     },
 }
 
-impl Display for SharedTimeoutConfigError {
+impl Display for TimeoutConfigError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        use SharedTimeoutConfigError::*;
+        use TimeoutConfigError::*;
         match self {
             InvalidTimeout {
                 name,
@@ -280,7 +280,7 @@ impl Display for SharedTimeoutConfigError {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_str_as_timeout, SharedTimeoutConfig};
+    use super::{parse_str_as_timeout, TimeoutConfig};
     use std::time::Duration;
 
     #[test]
@@ -288,13 +288,13 @@ mod tests {
         let one_second = Some(Duration::from_secs(1));
         let two_seconds = Some(Duration::from_secs(2));
 
-        let self_config = SharedTimeoutConfig::new()
+        let self_config = TimeoutConfig::new()
             // .with_connect_timeout(one_second)
             // .with_read_timeout(one_second)
             // .with_tls_negotiation_timeout(one_second)
             .with_api_call_timeout(one_second)
             .with_api_call_attempt_timeout(one_second);
-        let other_config = SharedTimeoutConfig::new()
+        let other_config = TimeoutConfig::new()
             // .with_connect_timeout(two_seconds)
             // .with_read_timeout(two_seconds)
             // .with_tls_negotiation_timeout(two_seconds)

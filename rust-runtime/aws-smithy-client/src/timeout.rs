@@ -19,7 +19,7 @@ use crate::SdkError;
 use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_http::operation::Operation;
-use aws_smithy_types::timeout::SharedTimeoutConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 use pin_project_lite::pin_project;
 use tower::Layer;
 
@@ -141,28 +141,28 @@ pub struct ServiceClientTimeoutConfig {
     pub(crate) api_call_attempt: Option<TimeoutServiceParams>,
 }
 
-/// Convert a [`SharedTimeoutConfig`] into an [`ServiceClientTimeoutConfig`] in order to create the set of
+/// Convert a [`TimeoutConfig`] into an [`ServiceClientTimeoutConfig`] in order to create the set of
 /// [`TimeoutService`]s needed by a [`crate::Client`]
-pub fn service_client_timeout_config_from_shared_timeout_config(
-    shared_timeout_config: &SharedTimeoutConfig,
+pub fn service_client_timeout_config_from_timeout_config(
+    timeout_config: &TimeoutConfig,
     async_sleep: Option<Arc<dyn AsyncSleep>>,
 ) -> ServiceClientTimeoutConfig {
     if let Some(async_sleep) = async_sleep {
         ServiceClientTimeoutConfig {
-            api_call: shared_timeout_config.api_call_timeout().map(|duration| {
-                TimeoutServiceParams {
+            api_call: timeout_config
+                .api_call_timeout()
+                .map(|duration| TimeoutServiceParams {
                     duration,
                     kind: "API call (all attempts including retries)",
                     async_sleep: async_sleep.clone(),
-                }
-            }),
-            api_call_attempt: shared_timeout_config
-                .api_call_attempt_timeout()
-                .map(|duration| TimeoutServiceParams {
+                }),
+            api_call_attempt: timeout_config.api_call_attempt_timeout().map(|duration| {
+                TimeoutServiceParams {
                     duration,
                     kind: "API call (single attempt)",
                     async_sleep: async_sleep.clone(),
-                }),
+                }
+            }),
         }
     } else {
         Default::default()
@@ -315,13 +315,13 @@ mod test {
     use std::time::Duration;
 
     use crate::never::NeverService;
-    use crate::timeout::service_client_timeout_config_from_shared_timeout_config;
+    use crate::timeout::service_client_timeout_config_from_timeout_config;
     use crate::{SdkError, TimeoutLayer};
     use aws_smithy_async::assert_elapsed;
     use aws_smithy_async::rt::sleep::{AsyncSleep, TokioSleep};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::operation::{Operation, Request};
-    use aws_smithy_types::timeout::SharedTimeoutConfig;
+    use aws_smithy_types::timeout::TimeoutConfig;
     use tower::{Service, ServiceBuilder, ServiceExt};
 
     #[tokio::test]
@@ -330,10 +330,10 @@ mod test {
         let op = Operation::new(req, ());
         let never_service: NeverService<_, (), _> = NeverService::new();
         let timeout_config =
-            SharedTimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs_f32(0.25)));
+            TimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs_f32(0.25)));
         let sleep_impl: Option<Arc<dyn AsyncSleep>> = Some(Arc::new(TokioSleep::new()));
         let timeout_service_params =
-            service_client_timeout_config_from_shared_timeout_config(&timeout_config, sleep_impl);
+            service_client_timeout_config_from_timeout_config(&timeout_config, sleep_impl);
         let mut svc = ServiceBuilder::new()
             .layer(TimeoutLayer::new(timeout_service_params.api_call))
             .service(never_service);

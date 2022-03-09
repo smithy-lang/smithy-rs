@@ -86,7 +86,7 @@ pub mod connector;
 
 // Re-export types from smithy-types
 pub use aws_smithy_types::retry::RetryConfig;
-pub use aws_smithy_types::timeout::SharedTimeoutConfig;
+pub use aws_smithy_types::timeout::TimeoutConfig;
 
 // Re-export types from aws-types
 pub use aws_types::app_name::{AppName, InvalidAppName};
@@ -123,14 +123,12 @@ mod loader {
     use aws_smithy_client::http_connector::{HttpConnector, HttpSettings};
     use aws_smithy_client::timeout::HttpConnectorTimeoutConfig;
     use aws_smithy_types::retry::RetryConfig;
-    use aws_smithy_types::timeout::SharedTimeoutConfig;
+    use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
     use aws_types::config::Config;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
 
-    use crate::default_provider::{
-        app_name, credentials, region, retry_config, shared_timeout_config,
-    };
+    use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
     use crate::provider_config::ProviderConfig;
 
@@ -147,7 +145,7 @@ mod loader {
         region: Option<Box<dyn ProvideRegion>>,
         retry_config: Option<RetryConfig>,
         sleep: Option<Arc<dyn AsyncSleep>>,
-        timeout_config: Option<SharedTimeoutConfig>,
+        timeout_config: Option<TimeoutConfig>,
         provider_config: Option<ProviderConfig>,
         http_connector: Option<HttpConnector>,
     }
@@ -192,16 +190,16 @@ mod loader {
         /// # Examples
         /// ```no_run
         /// # use std::time::Duration;
-        /// # use aws_smithy_types::timeout::SharedTimeoutConfig;
+        /// # use aws_smithy_types::timeout::TimeoutConfig;
         /// # async fn create_config() {
-        ///  let timeout_config = SharedTimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs(1)));
+        ///  let timeout_config = TimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs(1)));
         ///  let config = aws_config::from_env()
         ///     .timeout_config(timeout_config)
         ///     .load()
         ///     .await;
         /// # }
         /// ```
-        pub fn timeout_config(mut self, timeout_config: SharedTimeoutConfig) -> Self {
+        pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
             self.timeout_config = Some(timeout_config);
             self
         }
@@ -310,7 +308,7 @@ mod loader {
             let timeout_config = if let Some(timeout_config) = self.timeout_config {
                 timeout_config
             } else {
-                shared_timeout_config::default_provider()
+                timeout_config::default_provider()
                     .configure(&conf)
                     .timeout_config()
                     .await

@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 /* Example Generated Code */
 /*
 pub struct Config {
-    pub(crate) timeout_config: Option<aws_smithy_types::timeout::SharedTimeoutConfig>,
+    pub(crate) timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
 }
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -32,19 +32,19 @@ impl Config {
 }
 #[derive(Default)]
 pub struct Builder {
-    timeout_config: Option<aws_smithy_types::timeout::SharedTimeoutConfig>,
+    timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
 }
 impl Builder {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn timeout_config(mut self, timeout_config: aws_smithy_types::timeout::SharedTimeoutConfig) -> Self {
+    pub fn timeout_config(mut self, timeout_config: aws_smithy_types::timeout::TimeoutConfig) -> Self {
         self.set_timeout_config(Some(timeout_config));
         self
     }
     pub fn set_timeout_config(
         &mut self,
-        timeout_config: Option<aws_smithy_types::timeout::SharedTimeoutConfig>,
+        timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
     ) -> &mut Self {
         self.timeout_config = timeout_config;
         self
@@ -64,7 +64,7 @@ fn test_1() {
  */
 
 class TimeoutConfigDecorator : RustCodegenDecorator {
-    override val name: String = "SharedTimeoutConfig"
+    override val name: String = "TimeoutConfig"
     override val order: Byte = 0
 
     override fun configCustomizations(
@@ -78,16 +78,16 @@ class TimeoutConfigDecorator : RustCodegenDecorator {
 class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
     private val timeoutConfig = smithyTypesTimeout(codegenContext.runtimeConfig)
     private val moduleUseName = codegenContext.moduleUseName()
-    private val codegenScope = arrayOf("SharedTimeoutConfig" to timeoutConfig.member("SharedTimeoutConfig"))
+    private val codegenScope = arrayOf("TimeoutConfig" to timeoutConfig.member("TimeoutConfig"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
-                "pub(crate) timeout_config: Option<#{SharedTimeoutConfig}>,",
+                "pub(crate) timeout_config: Option<#{TimeoutConfig}>,",
                 *codegenScope
             )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
-                rustTemplate("timeout_config: Option<#{SharedTimeoutConfig}>,", *codegenScope)
+                rustTemplate("timeout_config: Option<#{TimeoutConfig}>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
@@ -98,13 +98,13 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     /// ```no_run
                     /// ## use std::time::Duration;
                     /// use $moduleUseName::config::Config;
-                    /// use #{SharedTimeoutConfig};
+                    /// use #{TimeoutConfig};
                     ///
-                    /// let timeout_config = SharedTimeoutConfig::new()
+                    /// let timeout_config = TimeoutConfig::new()
                     ///     .with_api_call_attempt_timeout(Some(Duration::from_secs(1)));
                     /// let config = Config::builder().timeout_config(timeout_config).build();
                     /// ```
-                    pub fn timeout_config(mut self, timeout_config: #{SharedTimeoutConfig}) -> Self {
+                    pub fn timeout_config(mut self, timeout_config: #{TimeoutConfig}) -> Self {
                         self.set_timeout_config(Some(timeout_config));
                         self
                     }
@@ -116,10 +116,10 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     /// ```no_run
                     /// ## use std::time::Duration;
                     /// use $moduleUseName::config::{Builder, Config};
-                    /// use #{SharedTimeoutConfig};
+                    /// use #{TimeoutConfig};
                     ///
                     /// fn set_request_timeout(builder: &mut Builder) {
-                    ///     let timeout_config = SharedTimeoutConfig::new()
+                    ///     let timeout_config = TimeoutConfig::new()
                     ///         .with_api_call_timeout(Some(Duration::from_secs(3)));
                     ///     builder.set_timeout_config(Some(timeout_config));
                     /// }
@@ -128,7 +128,7 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     /// set_request_timeout(&mut builder);
                     /// let config = builder.build();
                     /// ```
-                    pub fn set_timeout_config(&mut self, timeout_config: Option<#{SharedTimeoutConfig}>) -> &mut Self {
+                    pub fn set_timeout_config(&mut self, timeout_config: Option<#{TimeoutConfig}>) -> &mut Self {
                         self.timeout_config = timeout_config;
                         self
                     }

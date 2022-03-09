@@ -88,7 +88,7 @@ use std::error::Error;
 use std::sync::Arc;
 use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 
-use crate::timeout::service_client_timeout_config_from_shared_timeout_config;
+use crate::timeout::service_client_timeout_config_from_timeout_config;
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
@@ -99,7 +99,7 @@ use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::retry::ProvideErrorKind;
-use aws_smithy_types::timeout::SharedTimeoutConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 
 /// Smithy service client.
 ///
@@ -129,7 +129,7 @@ pub struct Client<
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
-    timeout_config: SharedTimeoutConfig,
+    timeout_config: TimeoutConfig,
     sleep_impl: TriState<Arc<dyn AsyncSleep>>,
 }
 
@@ -165,12 +165,12 @@ impl<C, M> Client<C, M> {
 
 impl<C, M, R> Client<C, M, R> {
     /// Set the client's timeout configuration.
-    pub fn set_timeout_config(&mut self, timeout_config: SharedTimeoutConfig) {
+    pub fn set_timeout_config(&mut self, timeout_config: TimeoutConfig) {
         self.timeout_config = timeout_config;
     }
 
     /// Set the client's timeout configuration.
-    pub fn with_timeout_config(mut self, timeout_config: SharedTimeoutConfig) -> Self {
+    pub fn with_timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
         self.set_timeout_config(timeout_config);
         self
     }
@@ -245,11 +245,10 @@ where
         }
         let connector = self.connector.clone();
 
-        let service_client_timeout_config =
-            service_client_timeout_config_from_shared_timeout_config(
-                &self.timeout_config,
-                self.sleep_impl.clone().into(),
-            );
+        let service_client_timeout_config = service_client_timeout_config_from_timeout_config(
+            &self.timeout_config,
+            self.sleep_impl.clone().into(),
+        );
 
         let svc = ServiceBuilder::new()
             .layer(TimeoutLayer::new(service_client_timeout_config.api_call))
