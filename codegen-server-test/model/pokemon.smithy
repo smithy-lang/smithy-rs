@@ -10,7 +10,7 @@ use aws.protocols#restJson1
 service PokemonService {
     version: "2021-12-01",
     resources: [PokemonSpecies],
-    operations: [GetServerStatistics],
+    operations: [GetServerStatistics, EmptyOperation],
 }
 
 /// A Pokémon species forms the basis for at least one Pokémon.
@@ -100,6 +100,20 @@ structure FlavorText {
     },
 ])
 string Language
+
+/// Empty operation, used to stress test the framework.
+@readonly
+@http(uri: "/empty-operation", method: "GET")
+operation EmptyOperation {
+    input: EmptyOperationInput,
+    output: EmptyOperationOutput,
+}
+
+@input
+structure EmptyOperationInput { }
+
+@output
+structure EmptyOperationOutput { }
 
 @error("client")
 @httpError(404)

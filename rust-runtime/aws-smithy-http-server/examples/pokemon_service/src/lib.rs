@@ -183,6 +183,11 @@ pub async fn get_server_statistics(
     output::GetServerStatisticsOutput { calls_count }
 }
 
+/// Empty operation used to benchmark the service.
+pub async fn empty_operation(_input: input::EmptyOperationInput) -> output::EmptyOperationOutput {
+    output::EmptyOperationOutput {}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
