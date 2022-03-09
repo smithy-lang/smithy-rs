@@ -49,7 +49,7 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::sdk_config::SdkConfig;
+    /// use aws_types::SdkConfig;
     /// use aws_types::region::Region;
     /// let config = SdkConfig::builder().region(Region::new("us-east-1")).build();
     /// ```
@@ -66,7 +66,7 @@ impl Builder {
     ///     // ...
     ///     # None
     /// }
-    /// use aws_types::sdk_config::SdkConfig;
+    /// use aws_types::SdkConfig;
     /// use aws_types::region::Region;
     /// let mut builder = SdkConfig::builder();
     /// if let Some(region) = region_override() {
@@ -83,7 +83,7 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::sdk_config::SdkConfig;
+    /// use aws_types::SdkConfig;
     /// use aws_smithy_types::retry::RetryConfig;
     ///
     /// let retry_config = RetryConfig::new().with_max_attempts(5);
@@ -121,7 +121,7 @@ impl Builder {
     ///
     /// ```rust
     /// # use std::time::Duration;
-    /// use aws_types::sdk_config::SdkConfig;
+    /// use aws_types::SdkConfig;
     /// use aws_smithy_types::timeout::TimeoutConfig;
     ///
     /// let timeout_config = TimeoutConfig::new()
@@ -166,7 +166,7 @@ impl Builder {
     /// ```rust
     /// use std::sync::Arc;
     /// use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
-    /// use aws_types::sdk_config::SdkConfig;
+    /// use aws_types::SdkConfig;
     ///
     /// ##[derive(Debug)]
     /// pub struct ForeverSleep;
@@ -221,7 +221,7 @@ impl Builder {
     /// # Examples
     /// ```rust
     /// use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
-    /// use aws_types::sdk_config::SdkConfig;
+    /// use aws_types::SdkConfig;
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
     ///   # use aws_types::Credentials;
@@ -242,7 +242,7 @@ impl Builder {
     /// # Examples
     /// ```rust
     /// use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
-    /// use aws_types::sdk_config::SdkConfig;
+    /// use aws_types::SdkConfig;
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
     ///   # use aws_types::Credentials;

@@ -10,7 +10,7 @@
 //! [`from_env`]/[`ConfigLoader`] or ad-hoc individual credential and region providers.
 //!
 //! [`ConfigLoader`](ConfigLoader) can combine different configuration sources into an AWS shared-config:
-//! [`SdkConfig`](aws_types::sdk_config::SdkConfig). [`SdkConfig`](aws_types::sdk_config::SdkConfig) can be used configure
+//! [`SdkConfig`](aws_types::SdkConfig). [`SdkConfig`](aws_types::SdkConfig) can be used configure
 //! an AWS service client.
 //!
 //! # Examples
@@ -20,7 +20,7 @@
 //! # mod aws_sdk_dynamodb {
 //! #   pub struct Client;
 //! #   impl Client {
-//! #     pub fn new(config: &aws_types::sdk_config::SdkConfig) -> Self { Client }
+//! #     pub fn new(config: &aws_types::SdkConfig) -> Self { Client }
 //! #   }
 //! # }
 //! # async fn docs() {
@@ -34,7 +34,7 @@
 //! # mod aws_sdk_dynamodb {
 //! #   pub struct Client;
 //! #   impl Client {
-//! #     pub fn new(config: &aws_types::sdk_config::SdkConfig) -> Self { Client }
+//! #     pub fn new(config: &aws_types::SdkConfig) -> Self { Client }
 //! #   }
 //! # }
 //! # async fn docs() {
@@ -107,7 +107,7 @@ pub fn from_env() -> ConfigLoader {
 /// Load a default configuration from the environment
 ///
 /// Convenience wrapper equivalent to `aws_config::from_env().load().await`
-pub async fn load_from_env() -> aws_types::sdk_config::SdkConfig {
+pub async fn load_from_env() -> aws_types::SdkConfig {
     from_env().load().await
 }
 
@@ -115,6 +115,7 @@ pub async fn load_from_env() -> aws_types::sdk_config::SdkConfig {
 pub use loader::ConfigLoader;
 
 mod loader {
+    use hyper::client::HttpConnector;
     use std::sync::Arc;
 
     use crate::connector::default_connector;
@@ -124,13 +125,13 @@ mod loader {
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
-    use aws_types::sdk_config::SdkConfig;
+    use aws_types::SdkConfig;
 
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
     use crate::provider_config::ProviderConfig;
 
-    /// Load a cross-service [`SdkConfig`](aws_types::sdk_config::SdkConfig) from the environment
+    /// Load a cross-service [`SdkConfig`](aws_types::SdkConfig) from the environment
     ///
     /// This builder supports overriding individual components of the generated config. Overriding a component
     /// will skip the standard resolution chain from **for that component**. For example,
@@ -149,7 +150,7 @@ mod loader {
     }
 
     impl ConfigLoader {
-        /// Override the region used to build [`SdkConfig`](aws_types::sdk_config::SdkConfig).
+        /// Override the region used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
         /// ```no_run
@@ -165,7 +166,7 @@ mod loader {
             self
         }
 
-        /// Override the retry_config used to build [`SdkConfig`](aws_types::sdk_config::SdkConfig).
+        /// Override the retry_config used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
         /// ```no_run
@@ -181,7 +182,7 @@ mod loader {
             self
         }
 
-        /// Override the timeout config used to build [`SdkConfig`](aws_types::sdk_config::SdkConfig).
+        /// Override the timeout config used to build [`SdkConfig`](aws_types::SdkConfig).
         /// **Note: This only sets timeouts for calls to AWS services.** Timeouts for the credentials
         /// provider chain are configured separately.
         ///
@@ -210,13 +211,13 @@ mod loader {
             self
         }
 
-        /// Override the [`HttpConnector`] used to build [`SdkConfig`](aws_types::sdk_config::SdkConfig).
+        /// Override the [`HttpConnector`] used to build [`SdkConfig`](aws_types::SdkConfig).
         pub fn http_connector(mut self, http_connector: HttpConnector) -> Self {
             self.http_connector = Some(http_connector);
             self
         }
 
-        /// Override the credentials provider used to build [`SdkConfig`](aws_types::sdk_config::SdkConfig).
+        /// Override the credentials provider used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
         ///
@@ -272,7 +273,7 @@ mod loader {
         ///
         /// NOTE: When an override is provided, the default implementation is **not** used as a fallback.
         /// This means that if you provide a region provider that does not return a region, no region will
-        /// be set in the resulting [`SdkConfig`](aws_types::sdk_config::SdkConfig)
+        /// be set in the resulting [`SdkConfig`](aws_types::SdkConfig)
         pub async fn load(self) -> SdkConfig {
             let conf = self.provider_config.unwrap_or_default();
             let region = if let Some(provider) = self.region {

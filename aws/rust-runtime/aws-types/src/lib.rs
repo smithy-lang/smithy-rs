@@ -23,6 +23,7 @@ pub mod sdk_config;
 
 pub use aws_smithy_client::http_connector;
 pub use credentials::Credentials;
+pub use sdk_config::SdkConfig;
 
 use std::borrow::Cow;
 
