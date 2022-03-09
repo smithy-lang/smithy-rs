@@ -32,12 +32,26 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-//! Extension extraction to share state across handlers.
+//! Extension types.
+//!
+//! Extension types are types that are stored in and extracted from _both_ requests and
+//! responses.
+//!
+//! There is only one _generic_ extension type _for requests_, [`Extension`].
+//!
+//! On the other hand, the server SDK uses multiple concrete extension types for responses in order
+//! to store a variety of information, like the operation that was executed, the operation error
+//! that got returned, or the runtime error that happened, among others. The information stored in
+//! these types may be useful to [`tower::Layer`]s that post-process the response: for instance, a
+//! particular metrics layer implementation might want to emit metrics about the number of times an
+//! an operation got executed.
+//!
+//! [extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
 
 use axum_core::extract::RequestParts;
 use std::ops::Deref;
 
-/// Extension type used to store the information about Smithy operations in HTTP responses.
+/// Extension type used to store information about Smithy operations in HTTP responses.
 #[derive(Debug, Clone)]
 pub struct OperationExtension {
     /// Smithy model namespace.
@@ -87,7 +101,7 @@ impl Deref for RuntimeErrorExtension {
     }
 }
 
-/// Generic extension type stored to and extracted from [request extensions].
+/// Generic extension type stored in and extracted from [request extensions].
 ///
 /// This is commonly used to share state across handlers.
 ///

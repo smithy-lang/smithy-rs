@@ -76,6 +76,9 @@ impl axum_core::response::IntoResponse for RuntimeError {
             }
         }
 
+        builder = builder.extension(crate::extension::RuntimeErrorExtension::new(String::from(
+            self.kind.name(),
+        )));
         // TODO What extension type should we use here?
         builder = builder.extension(crate::extension::OperationExtension::new("TODO", "TODO"));
 

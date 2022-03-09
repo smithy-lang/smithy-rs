@@ -113,10 +113,7 @@ class ServerOperationHandlerGenerator(
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
                             Err(runtime_error) => {
-                                let extension = aws_smithy_http_server::extension::RuntimeErrorExtension::new(String::from(runtime_error.kind.name()));
-                                let mut response = runtime_error.into_response();
-                                response.extensions_mut().insert(extension);
-                                return response.map($serverCrate::body::boxed);
+                                return runtime_error.into_response().map($serverCrate::body::boxed);
                             }
                         };
                         $callImpl
