@@ -32,6 +32,7 @@ class ServerOperationHandlerGenerator(
     private val serverCrate = "aws_smithy_http_server"
     private val service = codegenContext.serviceShape
     private val model = codegenContext.model
+    private val protocol = codegenContext.protocol
     private val symbolProvider = codegenContext.symbolProvider
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name }
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -77,7 +78,6 @@ class ServerOperationHandlerGenerator(
                 """.trimIndent(),
                 *codegenScope
             ) {
-                // TODO Protocol
                 val callImpl = if (state) {
                     """
                     let state = match $serverCrate::extension::extract_extension(&mut req).await {
@@ -85,8 +85,7 @@ class ServerOperationHandlerGenerator(
                         Err(extension_not_found_rejection) => {
                             let extension = $serverCrate::extension::RuntimeErrorExtension::new(extension_not_found_rejection.to_string());
                             let runtime_error = $serverCrate::runtime_error::RuntimeError {
-                                // protocol: #{SmithyHttpServer}::protocols::Protocol::{codegenContext.protocol.name.toPascalCase()},
-                                protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
+                                protocol: #{SmithyHttpServer}::protocols::Protocol::${protocol.name.toPascalCase()},
                                 kind: extension_not_found_rejection.into(),
                             };
                             let mut response = runtime_error.into_response();
@@ -118,7 +117,11 @@ class ServerOperationHandlerGenerator(
                         };
                         $callImpl
                         let output_wrapper: $outputWrapperName = output_inner.into();
-                        output_wrapper.into_response().map(#{SmithyHttpServer}::body::boxed)
+                        let mut response = output_wrapper.into_response();
+                        response.extensions_mut().insert(
+                            #{SmithyHttpServer}::extension::OperationExtension::new("${operation.id.namespace}", "$operationName")
+                        );
+                        response.map(#{SmithyHttpServer}::body::boxed)
                     }
                     """,
                     *codegenScope

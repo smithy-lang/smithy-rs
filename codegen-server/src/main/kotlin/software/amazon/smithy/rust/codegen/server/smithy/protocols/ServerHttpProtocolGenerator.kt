@@ -188,14 +188,13 @@ private class ServerHttpProtocolImplGenerator(
 
         val outputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
-        val httpExtensions = setHttpExtensions(operationShape)
 
         if (operationShape.errors.isNotEmpty()) {
             // The output of fallible operations is a `Result` which we convert into an
             // isomorphic `enum` type we control that can in turn be converted into a response.
             val intoResponseImpl =
                 """
-                let mut response = match self {
+                let response = match self {
                     Self::Output(o) => {
                         match #{serialize_response}(o) {
                             Ok(response) => response,
@@ -222,7 +221,6 @@ private class ServerHttpProtocolImplGenerator(
                         }
                     }
                 };
-                $httpExtensions
                 response
                 """.trimIndent()
 
@@ -250,7 +248,7 @@ private class ServerHttpProtocolImplGenerator(
             // a "wrapper" unit `struct` type we control that can in turn be converted into a response.
             val intoResponseImpl =
                 """
-                let mut response = match #{serialize_response}(self.0) {
+                let response = match #{serialize_response}(self.0) {
                     Ok(response) => response,
                     Err(e) => {
                         #{RuntimeError} {
@@ -259,7 +257,6 @@ private class ServerHttpProtocolImplGenerator(
                         }.into_response()
                     }
                 };
-                $httpExtensions
                 response
                 """.trimIndent()
 
@@ -319,17 +316,6 @@ private class ServerHttpProtocolImplGenerator(
             """.trimIndent(),
             "I" to inputSymbol
         )
-    }
-
-    /*
-     * Set `http::Extensions` for the current request. They can be used later for things like metrics, logging...
-     */
-    private fun setHttpExtensions(operationShape: OperationShape): String {
-        val namespace = operationShape.id.namespace
-        val operationName = symbolProvider.toSymbol(operationShape).name
-        return """
-            response.extensions_mut().insert(#{SmithyHttpServer}::extension::OperationExtension::new("$namespace", "$operationName"));
-        """.trimIndent()
     }
 
     private fun serverParseRequest(operationShape: OperationShape): RuntimeType {

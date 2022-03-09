@@ -179,8 +179,8 @@ pub enum RequestRejection {
     FloatParse(crate::Error),
     BoolParse(crate::Error),
 
-    // TODO Can we make builders non-fallible in the server? Or just don't use them at all in
-    // request deserialization?
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1243): In theory, we could get rid of this
+    // error, but it would be a lot of effort for comparatively low benefit.
     /// Used when consuming the input struct builder.
     Build(crate::Error),
 }

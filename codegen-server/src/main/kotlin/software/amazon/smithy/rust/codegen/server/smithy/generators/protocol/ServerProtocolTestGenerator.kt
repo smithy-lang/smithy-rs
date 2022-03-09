@@ -455,7 +455,12 @@ class ServerProtocolTestGenerator(
         checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
         checkForbidHeaders(rustWriter, "&http_response.headers()", testCase.forbidHeaders)
         checkRequiredHeaders(rustWriter, "&http_response.headers()", testCase.requireHeaders)
-        checkHttpOperationExtension(rustWriter)
+
+        // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
+        // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
+        // invoke it with (like in the case of an `httpResponseTest` test case).
+        // checkHttpOperationExtension(rustWriter)
+
         // If no request body is defined, then no assertions are made about the body of the message.
         if (testCase.body.isPresent) {
             checkBody(rustWriter, testCase.body.get(), testCase.bodyMediaType.orNull())
@@ -465,8 +470,14 @@ class ServerProtocolTestGenerator(
     private fun checkResponse(rustWriter: RustWriter, testCase: HttpMalformedResponseDefinition) {
         checkStatusCode(rustWriter, testCase.code)
         checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
-        // TODO Enable.
+
+        // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
+        // of the operation `Handler` trait, a code path that does not get exercised by `httpRequestTest` test cases.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1212): We could change test case generation so as to `call()`
+        // the operation handler trait implementation instead of directly calling `from_request()`, or we could run an
+        // actual service.
         // checkHttpOperationExtension(rustWriter)
+
         // If no request body is defined, then no assertions are made about the body of the message.
         if (testCase.body.isEmpty) return
 

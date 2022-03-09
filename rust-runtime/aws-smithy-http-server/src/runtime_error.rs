@@ -26,7 +26,10 @@ use crate::protocols::Protocol;
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
     // UnknownOperation,
+    /// Request failed to deserialize or response failed to serialize.
     Serialization(crate::Error),
+    /// As of writing, this variant can only occur upon failure to extract an
+    /// [`crate::extension::Extension`] from the request.
     InternalFailure(crate::Error),
     // UnsupportedMediaType,
     // NotAcceptable,
@@ -79,8 +82,6 @@ impl axum_core::response::IntoResponse for RuntimeError {
         builder = builder.extension(crate::extension::RuntimeErrorExtension::new(String::from(
             self.kind.name(),
         )));
-        // TODO What extension type should we use here?
-        builder = builder.extension(crate::extension::OperationExtension::new("TODO", "TODO"));
 
         builder.body(body).expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
     }

@@ -52,6 +52,9 @@ use axum_core::extract::RequestParts;
 use std::ops::Deref;
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
+/// This extension type is set when it has been correctly determined that the request should be
+/// routed to a particular operation. The operation handler might not even get invoked because the
+/// request fails to deserialize into the modeled operation input.
 #[derive(Debug, Clone)]
 pub struct OperationExtension {
     /// Smithy model namespace.
@@ -75,14 +78,15 @@ impl OperationExtension {
     }
 }
 
-/// Extension type used to store the type of user defined error returned by an operation.
+/// Extension type used to store the type of user-modeled error returned by an operation handler.
 /// These are modeled errors, defined in the Smithy model.
 #[derive(Debug, Clone)]
 pub struct ModeledErrorExtension(&'static str);
 impl_extension_new_and_deref!(ModeledErrorExtension);
 
 /// Extension type used to store the _name_ of the [`crate::runtime_error::RuntimeError`] that
-/// occurred during execution (see [`crate::runtime_error::RuntimeErrorKind::name`]).
+/// occurred during request handling (see [`crate::runtime_error::RuntimeErrorKind::name`]).
+/// These are _unmodeled_ errors; the operation handler was not invoked.
 #[derive(Debug, Clone)]
 pub struct RuntimeErrorExtension(String);
 
