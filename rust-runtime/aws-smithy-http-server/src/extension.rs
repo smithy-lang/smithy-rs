@@ -39,17 +39,17 @@ use async_trait::async_trait;
 use axum_core::extract::{FromRequest, RequestParts};
 use std::ops::Deref;
 
-/// Extension type used to store information in HTTP responses.
+/// Extension type used to store the information about Smithy operations in HTTP responses.
 #[derive(Debug, Clone)]
-pub struct ResponseExtensions {
+pub struct OperationExtension {
     /// Smithy model namespace.
     namespace: &'static str,
     /// Smithy operation name.
     operation_name: &'static str,
 }
 
-impl ResponseExtensions {
-    /// Creates a new `ResponseExtensions`.
+impl OperationExtension {
+    /// Creates a new `OperationExtension`.
     pub fn new(namespace: &'static str, operation_name: &'static str) -> Self {
         Self {
             namespace,

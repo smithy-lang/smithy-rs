@@ -74,10 +74,7 @@ impl axum_core::response::IntoResponse for RuntimeError {
         }
 
         // TODO What extension type should we use here?
-        // TODO `ResponseExtensions` should probably be renamed, as it's something
-        // operation-specific. `RuntimeError` might not have reached an operation
-        // (think `UnknownOperationException`).
-        builder = builder.extension(crate::ResponseExtensions::new("TODO", "TODO"));
+        builder = builder.extension(crate::OperationExtension::new("TODO", "TODO"));
 
         builder.body(body).expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
     }

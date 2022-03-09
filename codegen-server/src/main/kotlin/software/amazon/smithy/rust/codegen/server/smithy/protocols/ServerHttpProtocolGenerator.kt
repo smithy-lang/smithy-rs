@@ -328,7 +328,7 @@ private class ServerHttpProtocolImplGenerator(
         val namespace = operationShape.id.namespace
         val operationName = symbolProvider.toSymbol(operationShape).name
         return """
-            response.extensions_mut().insert(#{SmithyHttpServer}::ResponseExtensions::new("$namespace", "$operationName"));
+            response.extensions_mut().insert(#{SmithyHttpServer}::OperationExtension::new("$namespace", "$operationName"));
         """.trimIndent()
     }
 

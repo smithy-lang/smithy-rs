@@ -455,7 +455,7 @@ class ServerProtocolTestGenerator(
         checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
         checkForbidHeaders(rustWriter, "&http_response.headers()", testCase.forbidHeaders)
         checkRequiredHeaders(rustWriter, "&http_response.headers()", testCase.requireHeaders)
-        checkHttpResponseExtensions(rustWriter)
+        checkHttpOperationExtension(rustWriter)
         // If no request body is defined, then no assertions are made about the body of the message.
         if (testCase.body.isPresent) {
             checkBody(rustWriter, testCase.body.get(), testCase.bodyMediaType.orNull())
@@ -466,7 +466,7 @@ class ServerProtocolTestGenerator(
         checkStatusCode(rustWriter, testCase.code)
         checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
         // TODO Enable.
-        // checkHttpResponseExtensions(rustWriter)
+        // checkHttpOperationExtension(rustWriter)
         // If no request body is defined, then no assertions are made about the body of the message.
         if (testCase.body.isEmpty) return
 
@@ -513,18 +513,18 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    private fun checkHttpResponseExtensions(rustWriter: RustWriter) {
+    private fun checkHttpOperationExtension(rustWriter: RustWriter) {
         rustWriter.rustTemplate(
             """
-            let response_extensions = http_response.extensions()
-                .get::<#{SmithyHttpServer}::ResponseExtensions>()
-                .expect("extension `ResponseExtensions` not found");
+            let operation_extension = http_response.extensions()
+                .get::<#{SmithyHttpServer}::OperationExtension>()
+                .expect("extension `OperationExtension` not found");
             """.trimIndent(),
             *codegenScope
         )
         rustWriter.writeWithNoFormatting(
             """
-            assert_eq!(response_extensions.operation(), format!("{}#{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
+            assert_eq!(operation_extension.operation(), format!("{}#{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
             """.trimIndent()
         )
     }

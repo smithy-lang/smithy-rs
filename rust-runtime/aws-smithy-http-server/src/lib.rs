@@ -25,7 +25,7 @@ pub mod runtime_error;
 #[doc(inline)]
 pub(crate) use self::error::Error;
 #[doc(inline)]
-pub use self::extension::{Extension, ExtensionModeledError, ExtensionRejection, ResponseExtensions};
+pub use self::extension::{Extension, ExtensionModeledError, ExtensionRejection, OperationExtension};
 #[doc(inline)]
 pub use self::routing::Router;
 #[doc(inline)]
