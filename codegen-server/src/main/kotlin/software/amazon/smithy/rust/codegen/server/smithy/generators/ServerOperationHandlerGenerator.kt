@@ -83,7 +83,7 @@ class ServerOperationHandlerGenerator(
                     let state = match $serverCrate::extension::extract_extension(&mut req).await {
                         Ok(v) => v,
                         Err(extension_not_found_rejection) => {
-                            let extension = $serverCrate::extension::ExtensionRejection::new(extension_not_found_rejection.to_string());
+                            let extension = $serverCrate::extension::RuntimeErrorExtension::new(extension_not_found_rejection.to_string());
                             let runtime_error = $serverCrate::runtime_error::RuntimeError {
                                 // protocol: #{SmithyHttpServer}::protocols::Protocol::{codegenContext.protocol.name.toPascalCase()},
                                 protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
@@ -113,7 +113,7 @@ class ServerOperationHandlerGenerator(
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
                             Err(runtime_error) => {
-                                let extension = aws_smithy_http_server::extension::ExtensionRejection::new(String::from(runtime_error.kind.name()));
+                                let extension = aws_smithy_http_server::extension::RuntimeErrorExtension::new(String::from(runtime_error.kind.name()));
                                 let mut response = runtime_error.into_response();
                                 response.extensions_mut().insert(extension);
                                 return response.map($serverCrate::body::boxed);

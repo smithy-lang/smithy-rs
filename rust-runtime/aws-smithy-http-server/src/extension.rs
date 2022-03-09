@@ -67,22 +67,19 @@ impl OperationExtension {
 pub struct ModeledErrorExtension(&'static str);
 impl_extension_new_and_deref!(ModeledErrorExtension);
 
-// TODO This should probably be renamed to `ExtensionException`, since we now surface exceptions.
-// Although I prefer to put `Extension` at the end for these, like we do for the types in
-// `rejection.rs`, so, `ExceptionExtension`.
-/// Extension type used to store the type of framework error caught during execution.
-/// These are unmodeled exceptions.
+/// Extension type used to store the _name_ of the [`crate::runtime_error::RuntimeError`] that
+/// occurred during execution (see [`crate::runtime_error::RuntimeErrorKind::name`]).
 #[derive(Debug, Clone)]
-pub struct ExtensionRejection(String);
+pub struct RuntimeErrorExtension(String);
 
-impl ExtensionRejection {
-    /// Returns a new `ExtensionRejection`.
-    pub fn new(value: String) -> ExtensionRejection {
-        ExtensionRejection(value)
+impl RuntimeErrorExtension {
+    /// Creates a new `RuntimeErrorExtension`.
+    pub fn new(value: String) -> RuntimeErrorExtension {
+        RuntimeErrorExtension(value)
     }
 }
 
-impl Deref for ExtensionRejection {
+impl Deref for RuntimeErrorExtension {
     type Target = String;
 
     fn deref(&self) -> &Self::Target {
@@ -113,7 +110,6 @@ pub async fn extract_extension<T, B>(
     req: &mut RequestParts<B>,
 ) -> Result<Extension<T>, crate::rejection::RequestExtensionNotFoundRejection>
 where
-    // TODO Does T need to be `Sync`?
     T: Clone + Send + Sync + 'static,
     B: Send,
 {

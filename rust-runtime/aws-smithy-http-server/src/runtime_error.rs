@@ -34,7 +34,7 @@ pub enum RuntimeErrorKind {
 
 /// String representation of the runtime error type.
 /// Used as the value of the `X-Amzn-Errortype` header in RestJson1.
-/// Used as the value passed to construct an [`crate::ExtensionRejection`].
+/// Used as the value passed to construct an [`crate::extension::RuntimeErrorExtension`].
 impl RuntimeErrorKind {
     pub fn name(&self) -> &'static str {
         match self {
