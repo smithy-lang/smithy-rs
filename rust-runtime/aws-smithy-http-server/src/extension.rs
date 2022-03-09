@@ -64,8 +64,8 @@ impl OperationExtension {
 /// Extension type used to store the type of user defined error returned by an operation.
 /// These are modeled errors, defined in the Smithy model.
 #[derive(Debug, Clone)]
-pub struct ExtensionModeledError(&'static str);
-impl_extension_new_and_deref!(ExtensionModeledError);
+pub struct ModeledErrorExtension(&'static str);
+impl_extension_new_and_deref!(ModeledErrorExtension);
 
 // TODO This should probably be renamed to `ExtensionException`, since we now surface exceptions.
 // Although I prefer to put `Extension` at the end for these, like we do for the types in
