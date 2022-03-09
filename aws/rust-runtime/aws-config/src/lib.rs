@@ -115,7 +115,6 @@ pub async fn load_from_env() -> aws_types::SdkConfig {
 pub use loader::ConfigLoader;
 
 mod loader {
-    use hyper::client::HttpConnector;
     use std::sync::Arc;
 
     use crate::connector::default_connector;
