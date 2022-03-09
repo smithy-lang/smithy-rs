@@ -86,3 +86,9 @@ fn main() {
 references = ["aws-sdk-rust#406"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Enable presigning for S3 operations UploadPart and DeleteObject"
+references = ["aws-sdk-rust#475", "aws-sdk-rust#473"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
