@@ -210,7 +210,7 @@ private class ServerHttpProtocolImplGenerator(
                     Self::Error(err) => {
                         match #{serialize_error}(&err) {
                             Ok(mut response) => {
-                                response.extensions_mut().insert(aws_smithy_http_server::ExtensionModeledError::new(err.name()));
+                                response.extensions_mut().insert(aws_smithy_http_server::extension::ExtensionModeledError::new(err.name()));
                                 response
                             },
                             Err(e) => {
@@ -328,7 +328,7 @@ private class ServerHttpProtocolImplGenerator(
         val namespace = operationShape.id.namespace
         val operationName = symbolProvider.toSymbol(operationShape).name
         return """
-            response.extensions_mut().insert(#{SmithyHttpServer}::OperationExtension::new("$namespace", "$operationName"));
+            response.extensions_mut().insert(#{SmithyHttpServer}::extension::OperationExtension::new("$namespace", "$operationName"));
         """.trimIndent()
     }
 

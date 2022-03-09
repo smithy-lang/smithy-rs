@@ -27,6 +27,7 @@ use crate::protocols::Protocol;
 pub enum RuntimeErrorKind {
     // UnknownOperation,
     Serialization(crate::Error),
+    InternalFailure(crate::Error),
     // UnsupportedMediaType,
     // NotAcceptable,
 }
@@ -38,6 +39,7 @@ impl RuntimeErrorKind {
     pub fn name(&self) -> &'static str {
         match self {
             RuntimeErrorKind::Serialization(_) => "SerializationException",
+            RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
         }
     }
 }
@@ -52,6 +54,7 @@ impl axum_core::response::IntoResponse for RuntimeError {
     fn into_response(self) -> axum_core::response::Response {
         let status_code = match self.kind {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
+            RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         let body = crate::body::to_boxed(match self.protocol {
@@ -74,20 +77,26 @@ impl axum_core::response::IntoResponse for RuntimeError {
         }
 
         // TODO What extension type should we use here?
-        builder = builder.extension(crate::OperationExtension::new("TODO", "TODO"));
+        builder = builder.extension(crate::extension::OperationExtension::new("TODO", "TODO"));
 
         builder.body(body).expect("invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
     }
 }
 
-impl From<crate::rejection::RequestRejection> for RuntimeErrorKind {
-    fn from(err: crate::rejection::RequestRejection) -> Self {
-        RuntimeErrorKind::Serialization(crate::Error::new(err))
+impl From<crate::rejection::ExtensionNotFoundRejection> for RuntimeErrorKind {
+    fn from(err: crate::rejection::ExtensionNotFoundRejection) -> Self {
+        RuntimeErrorKind::InternalFailure(crate::Error::new(err))
     }
 }
 
 impl From<crate::rejection::ResponseRejection> for RuntimeErrorKind {
     fn from(err: crate::rejection::ResponseRejection) -> Self {
+        RuntimeErrorKind::Serialization(crate::Error::new(err))
+    }
+}
+
+impl From<crate::rejection::RequestRejection> for RuntimeErrorKind {
+    fn from(err: crate::rejection::RequestRejection) -> Self {
         RuntimeErrorKind::Serialization(crate::Error::new(err))
     }
 }

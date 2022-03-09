@@ -34,9 +34,7 @@
 
 //! Extension extraction to share state across handlers.
 
-use super::rejection::{ExtensionHandlingRejection, ExtensionsAlreadyExtracted, MissingExtension};
-use async_trait::async_trait;
-use axum_core::extract::{FromRequest, RequestParts};
+use axum_core::extract::RequestParts;
 use std::ops::Deref;
 
 /// Extension type used to store the information about Smithy operations in HTTP responses.
@@ -92,7 +90,7 @@ impl Deref for ExtensionRejection {
     }
 }
 
-/// Extractor that gets a value from [request extensions].
+/// Generic extension type stored to and extracted from [request extensions].
 ///
 /// This is commonly used to share state across handlers.
 ///
@@ -100,33 +98,8 @@ impl Deref for ExtensionRejection {
 /// Server Error` response.
 ///
 /// [request extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Extension<T>(pub T);
-
-#[async_trait]
-impl<T, B> FromRequest<B> for Extension<T>
-where
-    T: Clone + Send + Sync + 'static,
-    B: Send,
-{
-    type Rejection = ExtensionHandlingRejection;
-
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let value = req
-            .extensions()
-            .ok_or(ExtensionsAlreadyExtracted)?
-            .get::<T>()
-            .ok_or_else(|| {
-                MissingExtension::from_err(format!(
-                    "Extension of type `{}` was not found. Perhaps you forgot to add it?",
-                    std::any::type_name::<T>()
-                ))
-            })
-            .map(|x| x.clone())?;
-
-        Ok(Extension(value))
-    }
-}
 
 impl<T> Deref for Extension<T> {
     type Target = T;
@@ -134,4 +107,27 @@ impl<T> Deref for Extension<T> {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+pub async fn extract_extension<T, B>(
+    req: &mut RequestParts<B>,
+) -> Result<Extension<T>, crate::rejection::ExtensionNotFoundRejection>
+where
+    // TODO Does T need to be `Sync`?
+    T: Clone + Send + Sync + 'static,
+    B: Send,
+{
+    let value = req
+        .extensions()
+        .ok_or(crate::rejection::ExtensionNotFoundRejection::ExtensionsAlreadyExtracted)?
+        .get::<T>()
+        .ok_or_else(|| {
+            crate::rejection::ExtensionNotFoundRejection::MissingExtension(format!(
+                "Extension of type `{}` was not found. Perhaps you forgot to add it?",
+                std::any::type_name::<T>()
+            ))
+        })
+        .map(|x| x.clone())?;
+
+    Ok(Extension(value))
 }

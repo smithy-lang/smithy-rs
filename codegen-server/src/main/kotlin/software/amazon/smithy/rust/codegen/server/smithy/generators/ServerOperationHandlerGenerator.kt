@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
+import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 /**
  * ServerOperationHandlerGenerator
@@ -76,13 +77,19 @@ class ServerOperationHandlerGenerator(
                 """.trimIndent(),
                 *codegenScope
             ) {
+                // TODO Protocol
                 val callImpl = if (state) {
                     """
-                    let state = match $serverCrate::Extension::<S>::from_request(&mut req).await {
+                    let state = match $serverCrate::extension::extract_extension(&mut req).await {
                         Ok(v) => v,
-                        Err(extension_handling_rejection) => {
-                            let extension = aws_smithy_http_server::ExtensionRejection::new(extension_handling_rejection.to_string());
-                            let mut response = extension_handling_rejection.into_response();
+                        Err(extension_not_found_rejection) => {
+                            let extension = $serverCrate::extension::ExtensionRejection::new(extension_not_found_rejection.to_string());
+                            let runtime_error = $serverCrate::runtime_error::RuntimeError {
+                                // protocol: #{SmithyHttpServer}::protocols::Protocol::{codegenContext.protocol.name.toPascalCase()},
+                                protocol: #{SmithyHttpServer}::protocols::Protocol::RestJson1,
+                                kind: extension_not_found_rejection.into(),
+                            };
+                            let mut response = runtime_error.into_response();
                             response.extensions_mut().insert(extension);
                             return response.map($serverCrate::body::boxed);
                         }
@@ -106,7 +113,7 @@ class ServerOperationHandlerGenerator(
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
                             Err(runtime_error) => {
-                                let extension = aws_smithy_http_server::ExtensionRejection::new(String::from(runtime_error.kind.name()));
+                                let extension = aws_smithy_http_server::extension::ExtensionRejection::new(String::from(runtime_error.kind.name()));
                                 let mut response = runtime_error.into_response();
                                 response.extensions_mut().insert(extension);
                                 return response.map($serverCrate::body::boxed);

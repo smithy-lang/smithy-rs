@@ -517,7 +517,7 @@ class ServerProtocolTestGenerator(
         rustWriter.rustTemplate(
             """
             let operation_extension = http_response.extensions()
-                .get::<#{SmithyHttpServer}::OperationExtension>()
+                .get::<#{SmithyHttpServer}::extension::OperationExtension>()
                 .expect("extension `OperationExtension` not found");
             """.trimIndent(),
             *codegenScope

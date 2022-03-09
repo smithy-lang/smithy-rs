@@ -13,8 +13,8 @@
 //!
 //! 1. [`RequestRejection`]s are used when the framework fails to deserialize the request into the
 //!    corresponding operation input.
-//! 1. [`ExtensionHandlingRejection`]s are used when the framework fails to deserialize the request
-//!    into a [`super::Extension`] registered by the service.
+//! 1. [`ExtensionNotFoundRejection`]s are used when the framework fails to deserialize from the
+//!    request's extensions a particular [`crate::Extension`] that was expected to be found.
 //! 1. [`ResponseRejection`]s are used when the framework fails to serialize the operation
 //!    output into a response.
 //!
@@ -43,32 +43,22 @@
 
 use strum_macros::Display;
 
-define_rejection! {
-    #[status = INTERNAL_SERVER_ERROR]
-    #[body = "Extensions taken by other extractor"]
-    /// Rejection used if the request extension has been taken by another
-    /// extractor.
-    pub struct ExtensionsAlreadyExtracted;
+/// Rejection used for when failing to extract an [`crate::Extension`] from an incoming [request's
+/// extensions]. Contains one variant for each way the extractor can fail.
+///
+/// [request's extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
+#[derive(Debug, Display)]
+pub enum ExtensionNotFoundRejection {
+    /// Used when a particular [`crate::Extension`] was expected to be found in the request but we
+    /// did not find it.
+    /// This most likely means the service implementer simply forgot to add a [`tower::Layer`] that
+    /// registers the particular extension in their service to incoming requests.
+    MissingExtension(String),
+    // Used when the request extensions have already been taken by another extractor.
+    ExtensionsAlreadyExtracted,
 }
 
-define_rejection! {
-    #[status = INTERNAL_SERVER_ERROR]
-    #[body = "Missing request extension"]
-    /// Rejection type for [`Extension`](super::Extension) if an expected
-    /// request extension was not found.
-    pub struct MissingExtension(Error);
-}
-
-composite_rejection! {
-    /// Rejection used for [`Extension`](super::Extension).
-    ///
-    /// Contains one variant for each way the [`Extension`](super::Extension) extractor
-    /// can fail.
-    pub enum ExtensionHandlingRejection {
-        MissingExtension,
-        ExtensionsAlreadyExtracted,
-    }
-}
+impl std::error::Error for ExtensionNotFoundRejection {}
 
 /// Errors that can occur when serializing the operation output provided by the service implementer
 /// into an HTTP response.
@@ -223,8 +213,8 @@ impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
 // Used when calling
 // [`percent_encoding::percent_decode_str`](https://docs.rs/percent-encoding/latest/percent_encoding/fn.percent_decode_str.html)
 // and bubbling up.
-// TODO(https://github.com/servo/rust-url/issues/758): Unless I'm missing something,
-// percent-decoding can't fail, so we could just `.expect()`.
+// This can happen when the percent-encoded data in e.g. a query string decodes to bytes that are
+// not a well-formed UTF-8 string.
 convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
 
 // `[crate::body::Body]` is `[hyper::Body]`, whose associated `Error` type is `[hyper::Error]`. We

@@ -12,9 +12,10 @@ pub(crate) mod macros;
 
 pub mod body;
 pub(crate) mod error;
-mod extension;
 pub mod routing;
 
+#[doc(hidden)]
+pub mod extension;
 #[doc(hidden)]
 pub mod protocols;
 #[doc(hidden)]
@@ -24,8 +25,7 @@ pub mod runtime_error;
 
 #[doc(inline)]
 pub(crate) use self::error::Error;
-#[doc(inline)]
-pub use self::extension::{Extension, ExtensionModeledError, ExtensionRejection, OperationExtension};
+pub use self::extension::Extension;
 #[doc(inline)]
 pub use self::routing::Router;
 #[doc(inline)]
