@@ -194,7 +194,7 @@ private class ServerHttpProtocolImplGenerator(
             // isomorphic `enum` type we control that can in turn be converted into a response.
             val intoResponseImpl =
                 """
-                let response = match self {
+                match self {
                     Self::Output(o) => {
                         match #{serialize_response}(o) {
                             Ok(response) => response,
@@ -220,8 +220,7 @@ private class ServerHttpProtocolImplGenerator(
                             }
                         }
                     }
-                };
-                response
+                }
                 """.trimIndent()
 
             rustTemplate(
@@ -248,7 +247,7 @@ private class ServerHttpProtocolImplGenerator(
             // a "wrapper" unit `struct` type we control that can in turn be converted into a response.
             val intoResponseImpl =
                 """
-                let response = match #{serialize_response}(self.0) {
+                match #{serialize_response}(self.0) {
                     Ok(response) => response,
                     Err(e) => {
                         #{RuntimeError} {
@@ -256,8 +255,7 @@ private class ServerHttpProtocolImplGenerator(
                             kind: e.into()
                         }.into_response()
                     }
-                };
-                response
+                }
                 """.trimIndent()
 
             rustTemplate(
