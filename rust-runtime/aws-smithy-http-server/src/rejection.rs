@@ -13,8 +13,8 @@
 //!
 //! 1. [`RequestRejection`]s are used when the framework fails to deserialize the request into the
 //!    corresponding operation input.
-//! 1. [`ExtensionNotFoundRejection`]s are used when the framework fails to deserialize from the
-//!    request's extensions a particular [`crate::Extension`] that was expected to be found.
+//! 1. [`RequestExtensionNotFoundRejection`]s are used when the framework fails to deserialize from
+//!    the request's extensions a particular [`crate::Extension`] that was expected to be found.
 //! 1. [`ResponseRejection`]s are used when the framework fails to serialize the operation
 //!    output into a response.
 //!
@@ -30,7 +30,7 @@
 //! into responses. They serve as a mechanism to keep track of all the possible errors that can
 //! occur when processing a request or a response, in far more detail than what AWS protocols need
 //! to. This is why they are so granular: other (possibly protocol-specific) error types (like
-//! [`crate::exception::SmithyFrameworkException`]) can "group" them when exposing errors to
+//! [`crate::runtime_error::RuntimeError`]) can "group" them when exposing errors to
 //! clients while the framework does not need to sacrifice fidelity in private error handling
 //! routines, and future-proofing itself at the same time (for example, we might want to record
 //! metrics about rejection types).
@@ -38,7 +38,7 @@
 //! Rejection types implement [`std::error::Error`], and some take in type-erased boxed errors
 //! (`crate::Error`) to represent their underlying causes, so they can be composed with other types
 //! that take in (possibly type-erased) [`std::error::Error`]s, like
-//! [`crate::exception::SmithyFrameworkExceptionType`], thus allowing us to represent the full
+//! [`crate::runtime_error::RuntimeError`], thus allowing us to represent the full
 //! error chain.
 
 use strum_macros::Display;
@@ -99,7 +99,7 @@ convert_to_response_rejection!(http::Error, Http);
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
 /// that is passed as the first argument to operation handlers. To deserialize into the service's
-/// registered state, a different rejection type is used, [`self::ExtensionHandlingRejection`].
+/// registered state, a different rejection type is used, [`RequestExtensionNotFoundRejection`].
 ///
 /// This type allows us to easily keep track of all the possible errors that can occur in the
 /// lifecycle of an incoming HTTP request.
