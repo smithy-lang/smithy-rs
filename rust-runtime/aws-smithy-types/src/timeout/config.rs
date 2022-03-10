@@ -105,16 +105,19 @@ impl Config {
     ///
     /// ```rust
     /// # use std::time::Duration;
-    /// # use aws_smithy_types::timeout::Config;
-    /// let a = Config::new().with_read_timeout(Some(Duration::from_secs(2)));
-    /// let b = Config::new()
-    ///     .with_read_timeout(Some(Duration::from_secs(10)))
-    ///     .with_connect_timeout(Some(Duration::from_secs(3)));
+    /// # use aws_smithy_types::timeout;
+    /// # use aws_smithy_types::tristate::TriState;
+    /// let a = timeout::Config::new().with_api_timeouts(
+    ///     timeout::Api::new().with_call_timeout(TriState::Set(Duration::from_secs(2)))
+    /// );
+    /// let b = timeout::Config::new().with_api_timeouts(
+    ///     timeout::Api::new().with_call_attempt_timeout(TriState::Set(Duration::from_secs(3)))
+    /// );
     /// let timeout_config = a.take_unset_from(b);
     /// // A's value take precedence over B's value
-    /// assert_eq!(timeout_config.read_timeout(), Some(Duration::from_secs(2)));
+    /// assert_eq!(timeout_config.api.call_timeout(), TriState::Set(Duration::from_secs(2)));
     /// // A never set a connect timeout so B's value was used
-    /// assert_eq!(timeout_config.connect_timeout(), Some(Duration::from_secs(3)));
+    /// assert_eq!(timeout_config.api.call_attempt_timeout(), TriState::Set(Duration::from_secs(3)));
     /// ```
     pub fn take_unset_from(self, other: Self) -> Self {
         Self {

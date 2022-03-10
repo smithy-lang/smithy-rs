@@ -38,16 +38,19 @@ impl<T> TriState<T> {
     /// # Examples
     ///
     /// ```
-    /// use std::time::Duration;
-    /// use aws_smithy_types::tristate::TriState;
-    ///
-    /// let unset_timeout: TriState<Duration> = TriState::Unset;
+    /// # use std::time::Duration;
+    /// # use aws_smithy_types::tristate::TriState;
     /// let disabled_timeout: TriState<Duration> = TriState::Disabled;
     /// let timeout: TriState<Duration> = TriState::Set(Duration::from_secs(1));
-    ///
     /// assert_eq!(timeout.or(disabled_timeout), TriState::Set(Duration::from_secs(1)));
+    ///
+    /// let disabled_timeout: TriState<Duration> = TriState::Disabled;
+    /// let timeout: TriState<Duration> = TriState::Set(Duration::from_secs(2));
     /// assert_eq!(disabled_timeout.or(timeout), TriState::Disabled);
-    /// assert_eq!(unset_timeout.or(timeout), TriState::Set(Duration::from_secs(1)));
+    ///
+    /// let unset_timeout: TriState<Duration> = TriState::Unset;
+    /// let timeout: TriState<Duration> = TriState::Set(Duration::from_secs(3));
+    /// assert_eq!(unset_timeout.or(timeout), TriState::Set(Duration::from_secs(3)));
     /// ```
     pub fn or(self, other: TriState<T>) -> TriState<T> {
         use TriState::*;
