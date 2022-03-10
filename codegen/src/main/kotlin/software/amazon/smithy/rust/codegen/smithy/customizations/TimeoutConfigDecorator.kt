@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 /* Example Generated Code */
 /*
 pub struct Config {
-    pub(crate) timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
+    pub(crate) timeout_config: Option<aws_smithy_types::timeout::Config>,
 }
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -32,19 +32,19 @@ impl Config {
 }
 #[derive(Default)]
 pub struct Builder {
-    timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
+    timeout_config: Option<aws_smithy_types::timeout::Config>,
 }
 impl Builder {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn timeout_config(mut self, timeout_config: aws_smithy_types::timeout::TimeoutConfig) -> Self {
+    pub fn timeout_config(mut self, timeout_config: aws_smithy_types::timeout::Config) -> Self {
         self.set_timeout_config(Some(timeout_config));
         self
     }
     pub fn set_timeout_config(
         &mut self,
-        timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
+        timeout_config: Option<aws_smithy_types::timeout::Config>,
     ) -> &mut Self {
         self.timeout_config = timeout_config;
         self
@@ -76,9 +76,9 @@ class TimeoutConfigDecorator : RustCodegenDecorator {
 }
 
 class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val timeoutConfig = smithyTypesTimeout(codegenContext.runtimeConfig)
+    private val timeoutModule = smithyTypesTimeout(codegenContext.runtimeConfig)
     private val moduleUseName = codegenContext.moduleUseName()
-    private val codegenScope = arrayOf("TimeoutConfig" to timeoutConfig.member("TimeoutConfig"))
+    private val codegenScope = arrayOf("TimeoutConfig" to timeoutModule.member("Config"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(

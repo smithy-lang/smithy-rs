@@ -467,8 +467,8 @@ mod tests {
     struct TestCase {
         canonical_seconds: String,
         canonical_nanos: u32,
-        iso8601: String,
-        error: bool,
+        _iso8601: String,
+        _error: bool,
         smithy_format_value: Option<String>,
     }
     impl TestCase {
