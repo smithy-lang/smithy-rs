@@ -18,13 +18,13 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustom
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
 /**
- * Adds functionality for constructing <service>::Config objects from aws_types::config::Config (SharedConfig)
+ * Adds functionality for constructing `<service>::Config` objects from `aws_types::SdkConfig`s
  *
- * - `From<&aws_types::config::Config> for <service>::config::Builder`: Enabling customization
- * - `pub fn new(&aws_types::config::Config) -> <service>::Config`: Direct construction without customization
+ * - `From<&aws_types::SdkConfig> for <service>::config::Builder`: Enabling customization
+ * - `pub fn new(&aws_types::SdkConfig) -> <service>::Config`: Direct construction without customization
  */
-class SharedConfigDecorator : RustCodegenDecorator {
-    override val name: String = "SharedConfig"
+class SdkConfigDecorator : RustCodegenDecorator {
+    override val name: String = "SdkConfig"
     override val order: Byte = 0
 
     override fun configCustomizations(
@@ -36,14 +36,14 @@ class SharedConfigDecorator : RustCodegenDecorator {
 
     override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
         val codegenScope = arrayOf(
-            "Config" to awsTypes(runtimeConfig = codegenContext.runtimeConfig).asType().member("config::Config")
+            "SdkConfig" to awsTypes(runtimeConfig = codegenContext.runtimeConfig).asType().member("sdk_config::SdkConfig")
         )
         rustCrate.withModule(RustModule.Config) {
-            // !!NOTE!! As more items are added to aws_types::config::Config, use them here to configure the config builder
+            // !!NOTE!! As more items are added to aws_types::SdkConfig, use them here to configure the config builder
             it.rustTemplate(
                 """
-                impl From<&#{Config}> for Builder {
-                    fn from(input: &#{Config}) -> Self {
+                impl From<&#{SdkConfig}> for Builder {
+                    fn from(input: &#{SdkConfig}) -> Self {
                         let mut builder = Builder::default();
                         builder = builder.region(input.region().cloned());
                         builder.set_retry_config(input.retry_config().cloned());
@@ -55,9 +55,9 @@ class SharedConfigDecorator : RustCodegenDecorator {
                     }
                 }
 
-                impl From<&#{Config}> for Config {
-                    fn from(config: &#{Config}) -> Self {
-                        Builder::from(config).build()
+                impl From<&#{SdkConfig}> for Config {
+                    fn from(sdk_config: &#{SdkConfig}) -> Self {
+                        Builder::from(sdk_config).build()
                     }
                 }
                 """,
@@ -69,15 +69,15 @@ class SharedConfigDecorator : RustCodegenDecorator {
 
 class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
     private val codegenScope = arrayOf(
-        "Config" to awsTypes(runtimeConfig = runtimeConfig).asType().member("config::Config")
+        "SdkConfig" to awsTypes(runtimeConfig = runtimeConfig).asType().member("sdk_config::SdkConfig")
     )
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             ServiceConfig.ConfigImpl -> writable {
                 rustTemplate(
                     """
-                    /// Creates a new [service config](crate::Config) from a [shared `config`](aws_types::config::Config).
-                    pub fn new(config: &#{Config}) -> Self {
+                    /// Creates a new [service config](crate::Config) from a [shared `config`](#{SdkConfig}).
+                    pub fn new(config: &#{SdkConfig}) -> Self {
                         Builder::from(config).build()
                     }
                     """,
