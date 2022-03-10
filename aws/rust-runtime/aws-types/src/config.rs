@@ -5,7 +5,7 @@
 
 #![deny(missing_docs)]
 
-//! AWS Shared Config (deprecated, replaced with [`crate::SdkConfig`](crate::SdkConfig))
+//! AWS Shared Config _(deprecated, replaced with [`sdk_config`](crate::sdk_config))_
 //!
 //! This module contains an shared configuration representation that is agnostic from a specific service.
 
