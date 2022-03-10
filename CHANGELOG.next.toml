@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "`DynMiddleware` is now `clone`able"
+references = ["smithy-rs#1225"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Enable presigning for S3 operations UploadPart and DeleteObject"
+references = ["aws-sdk-rust#475", "aws-sdk-rust#473"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"

@@ -17,7 +17,10 @@ fn run_with_args(in_path: impl AsRef<Path>, args: &[&str]) -> String {
         cmd.arg(arg);
     }
     let output = cmd.output().expect("failed to start cargo-api-linter");
-    handle_failure("cargo-api-linter", &output).unwrap();
+    match output.status.code() {
+        Some(1) => { /* expected */ }
+        _ => handle_failure("cargo-api-linter", &output).unwrap(),
+    }
     let (stdout, _) = output_text(&output);
     stdout
 }

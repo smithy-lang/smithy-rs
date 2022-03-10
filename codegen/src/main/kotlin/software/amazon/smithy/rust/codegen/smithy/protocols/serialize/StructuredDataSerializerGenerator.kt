@@ -34,8 +34,10 @@ interface StructuredDataSerializerGenerator {
     fun unsetStructure(structure: StructureShape): RuntimeType
 
     /**
-     * Generate a serializer for an operation input.
-     * This serializer is only used by Smithy clients.
+     * Generate a serializer for an operation input structure.
+     * This serializer is only used by clients.
+     * The serialized data is returned in an `SdkBody` that is used in HTTP requests.
+     * Returns `null` if there's nothing to serialize.
      *
      * ```rust
      * fn serialize_some_operation(input: &SomeSmithyType) -> Result<SdkBody, Error> {
@@ -43,7 +45,7 @@ interface StructuredDataSerializerGenerator {
      * }
      * ```
      */
-    fun operationSerializer(operationShape: OperationShape): RuntimeType?
+    fun operationInputSerializer(operationShape: OperationShape): RuntimeType?
 
     /**
      * Generate a serializer for a document.
@@ -57,7 +59,10 @@ interface StructuredDataSerializerGenerator {
     fun documentSerializer(): RuntimeType
 
     /**
-     * Generate a serializer for a server operation output structure.
+     * Generate a serializer for an operation output structure.
+     * This serializer is only used by servers.
+     * The serialized data is returned in a `String` that is used in HTTP response bodies.
+     * Returns `null` if there's nothing to serialize.
      *
      * ```rust
      * fn serialize_structure_crate_output_my_output_structure(value: &SomeSmithyType) -> Result<String, Error> {
@@ -65,7 +70,7 @@ interface StructuredDataSerializerGenerator {
      * }
      * ```
      */
-    fun serverOutputSerializer(operationShape: OperationShape): RuntimeType?
+    fun operationOutputSerializer(operationShape: OperationShape): RuntimeType?
 
     /**
      * Generate a serializer for a server operation error structure.

@@ -63,8 +63,11 @@ private val SYNTHESIZE_SPEECH_OP = ShapeId.from("com.amazonaws.polly#SynthesizeS
 internal val PRESIGNABLE_OPERATIONS by lazy {
     mapOf(
         // S3
+        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/488) Technically, all S3 operations support presigning
         ShapeId.from("com.amazonaws.s3#GetObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#PutObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
+        ShapeId.from("com.amazonaws.s3#UploadPart") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
+        ShapeId.from("com.amazonaws.s3#DeleteObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
 
         // Polly
         SYNTHESIZE_SPEECH_OP to PresignableOperation(
@@ -154,22 +157,23 @@ class AwsInputPresignedMethod(
         val operationError = operationShape.errorSymbol(symbolProvider)
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
 
-        var makeOperationFn = "make_operation"
-        if (presignableOp.hasModelTransforms()) {
-            makeOperationFn = "_make_presigned_operation"
-
-            val syntheticOp =
-                codegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
-            val protocol = section.protocol
-            MakeOperationGenerator(
-                codegenContext,
-                protocol,
-                HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
-                // Prefixed with underscore to avoid colliding with modeled functions
-                functionName = makeOperationFn,
-                public = false,
-            ).generateMakeOperation(this, syntheticOp, section.customizations)
+        val makeOperationOp = if (presignableOp.hasModelTransforms()) {
+            codegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
+        } else {
+            section.operationShape
         }
+        val makeOperationFn = "_make_presigned_operation"
+
+        val protocol = section.protocol
+        MakeOperationGenerator(
+            codegenContext,
+            protocol,
+            HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+            // Prefixed with underscore to avoid colliding with modeled functions
+            functionName = makeOperationFn,
+            public = false,
+            includeDefaultPayloadHeaders = false
+        ).generateMakeOperation(this, makeOperationOp, section.customizations)
 
         documentPresignedMethod(hasConfigArg = true)
         rustBlockTemplate(

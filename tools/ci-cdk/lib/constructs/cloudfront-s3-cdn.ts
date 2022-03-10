@@ -10,10 +10,11 @@ import {
     OriginAccessIdentity,
     PriceClass,
     ViewerProtocolPolicy,
-} from "@aws-cdk/aws-cloudfront";
-import { S3Origin } from "@aws-cdk/aws-cloudfront-origins";
-import { BlockPublicAccess, Bucket, BucketEncryption, LifecycleRule } from "@aws-cdk/aws-s3";
-import { Construct, RemovalPolicy, Tags } from "@aws-cdk/core";
+} from "aws-cdk-lib/aws-cloudfront";
+import { S3Origin } from "aws-cdk-lib/aws-cloudfront-origins";
+import { BlockPublicAccess, Bucket, BucketEncryption, LifecycleRule } from "aws-cdk-lib/aws-s3";
+import { RemovalPolicy, Tags } from "aws-cdk-lib";
+import { Construct } from "constructs";
 
 export interface Properties {
     name: string;
