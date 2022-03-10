@@ -129,21 +129,3 @@ impl Config {
         self.api.has_timeouts() || self.http.has_timeouts() || self.tcp.has_timeouts()
     }
 }
-
-impl Into<super::Api> for Config {
-    fn into(self) -> super::Api {
-        self.api
-    }
-}
-
-impl Into<super::Tcp> for Config {
-    fn into(self) -> super::Tcp {
-        self.tcp
-    }
-}
-
-impl Into<super::Http> for Config {
-    fn into(self) -> super::Http {
-        self.http
-    }
-}

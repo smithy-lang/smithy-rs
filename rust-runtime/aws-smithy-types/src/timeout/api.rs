@@ -67,3 +67,9 @@ impl Api {
         }
     }
 }
+
+impl From<super::Config> for Api {
+    fn from(config: super::Config) -> Self {
+        config.api
+    }
+}

@@ -44,3 +44,9 @@ impl Tcp {
         }
     }
 }
+
+impl From<super::Config> for Tcp {
+    fn from(config: super::Config) -> Self {
+        config.tcp
+    }
+}

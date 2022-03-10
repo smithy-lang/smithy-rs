@@ -84,7 +84,7 @@ fn construct_timeout_from_env_var(
 }
 
 fn warn_if_unsupported_timeout_is_set(env: &Env, var: &'static str) {
-    if let Some(_) = env.get(var).ok() {
+    if env.get(var).is_ok() {
         tracing::warn!(
                 "Environment variable for '{}' timeout was set but that feature is currently unimplemented so the setting will be ignored. \
                 To help us prioritize support for this feature, please upvote aws-sdk-rust#151 (https://github.com/awslabs/aws-sdk-rust/issues/151)",

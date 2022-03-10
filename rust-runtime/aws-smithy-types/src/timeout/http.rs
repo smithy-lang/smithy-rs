@@ -73,3 +73,9 @@ impl Http {
         }
     }
 }
+
+impl From<super::Config> for Http {
+    fn from(config: super::Config) -> Self {
+        config.http
+    }
+}

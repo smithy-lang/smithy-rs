@@ -171,7 +171,7 @@ fn construct_timeout_from_profile_var(
 }
 
 fn warn_if_unsupported_timeout_is_set(profile: &Profile, var: &'static str) {
-    if let Some(_) = profile.get(var) {
+    if profile.get(var).is_some() {
         tracing::warn!(
                 "Profile '{}' set {} timeout but that feature is currently unimplemented so the setting will be ignored. \
                 To help us prioritize support for this feature, please upvote aws-sdk-rust#151 (https://github.com/awslabs/aws-sdk-rust/issues/151)",
