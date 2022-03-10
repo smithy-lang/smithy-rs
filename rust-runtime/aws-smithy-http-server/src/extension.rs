@@ -124,6 +124,10 @@ impl<T> Deref for Extension<T> {
     }
 }
 
+/// Extract an [`Extension`] from a request.
+/// This is essentially the implementation of `FromRequest` for `Extension`, but with a
+/// protocol-agnostic rejection type. The actual code-generated implementation simply delegates to
+/// this function and converts the rejection type into a [`crate::runtime_error::RuntimeError`].
 pub async fn extract_extension<T, B>(
     req: &mut RequestParts<B>,
 ) -> Result<Extension<T>, crate::rejection::RequestExtensionNotFoundRejection>
