@@ -129,7 +129,7 @@ impl Builder {
     ///     .with_call_timeout(TriState::Set(Duration::from_secs(5)));
     /// let timeout_config = timeout::Config::new()
     ///     .with_api_timeouts(api_timeout_config);
-    /// let config = Config::builder().timeout_config(timeout_config).build();
+    /// let config = SdkConfig::builder().timeout_config(timeout_config).build();
     /// ```
     pub fn timeout_config(mut self, timeout_config: timeout::Config) -> Self {
         self.set_timeout_config(Some(timeout_config));
@@ -153,7 +153,7 @@ impl Builder {
     ///     builder.set_timeout_config(Some(timeout_config));
     /// }
     ///
-    /// let mut builder = Config::builder();
+    /// let mut builder = SdkConfig::builder();
     /// set_preferred_timeouts(&mut builder);
     /// let config = builder.build();
     /// ```
