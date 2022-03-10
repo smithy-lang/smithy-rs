@@ -20,7 +20,7 @@ author = "Velfi"
 [[aws-sdk-rust]]
 message = """
 `aws_types::config::Config` has been renamed to `aws_types::sdk_config::SdkConfig`. This is to better differentiate it
-from service-specific configs like `aws_s3_sdk::Config`. If you were creating shared configs with
+from service-specific configs like `aws_sdk_s3::Config`. If you were creating shared configs with
 `aws_config::load_from_env()`, then you don't have to do anything. If you were directly referring to a shared config,
 update your `use` statements and `struct` names.
 
