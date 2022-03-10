@@ -91,7 +91,7 @@ jobs:
         components: ${{ env.rust_toolchain_components }}
         default: true
     - name: Install benchmarks dependencies
-      run: sudo apt-get install -y ${{ env.apt_dependencies }}
+      run: sudo apt-get update && sudo apt-get install -y ${{ env.apt_dependencies }}
     # Ubuntu 20.04 doesn't have wrk packaged, hence we need to build it 🤦
     # This will go away as soon as GitHub supports Ubuntu 21.10.
     - name: Install wrk
