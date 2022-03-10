@@ -16,7 +16,7 @@ pub struct Api {
     /// use [`Api::call_attempt`] instead.
     call: TriState<Duration>,
     /// A limit on the amount of time it takes for request to complete. A single request may be
-    /// comprised of several attemps depending on an app's [`RetryConfig`](super::retry::RetryConfig). If you want
+    /// comprised of several attempts depending on an app's [`RetryConfig`](crate::retry::RetryConfig). If you want
     /// to control timeouts for a single attempt, use [`Api::call`].
     call_attempt: TriState<Duration>,
 }
