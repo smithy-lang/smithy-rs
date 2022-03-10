@@ -15,6 +15,7 @@
 
 pub mod app_name;
 pub mod build_metadata;
+pub mod config;
 pub mod credentials;
 #[doc(hidden)]
 pub mod os_shim_internal;

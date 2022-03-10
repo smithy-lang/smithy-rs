@@ -18,10 +18,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustom
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
 /**
- * Adds functionality for constructing `<service>::Config` objects from `aws_types::sdk_config::SdkConfig`s
+ * Adds functionality for constructing `<service>::Config` objects from `aws_types::SdkConfig`s
  *
- * - `From<&aws_types::sdk_config::SdkConfig> for <service>::config::Builder`: Enabling customization
- * - `pub fn new(&aws_types::sdk_config::SdkConfig) -> <service>::Config`: Direct construction without customization
+ * - `From<&aws_types::SdkConfig> for <service>::config::Builder`: Enabling customization
+ * - `pub fn new(&aws_types::SdkConfig) -> <service>::Config`: Direct construction without customization
  */
 class SdkConfigDecorator : RustCodegenDecorator {
     override val name: String = "SdkConfig"
@@ -39,7 +39,7 @@ class SdkConfigDecorator : RustCodegenDecorator {
             "SdkConfig" to awsTypes(runtimeConfig = codegenContext.runtimeConfig).asType().member("sdk_config::SdkConfig")
         )
         rustCrate.withModule(RustModule.Config) {
-            // !!NOTE!! As more items are added to aws_types::sdk_config::SdkConfig, use them here to configure the config builder
+            // !!NOTE!! As more items are added to aws_types::SdkConfig, use them here to configure the config builder
             it.rustTemplate(
                 """
                 impl From<&#{SdkConfig}> for Builder {
@@ -76,7 +76,7 @@ class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
             ServiceConfig.ConfigImpl -> writable {
                 rustTemplate(
                     """
-                    /// Creates a new [service config](crate::Config) from a [shared `config`](aws_types::sdk_config::SdkConfig).
+                    /// Creates a new [service config](crate::Config) from a [shared `config`](#{SdkConfig}).
                     pub fn new(config: &#{SdkConfig}) -> Self {
                         Builder::from(config).build()
                     }

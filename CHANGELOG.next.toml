@@ -38,7 +38,8 @@ fn main() {
 
 _After:_
 ```rust
-use aws_types::sdk_config::SdkConfig;
+// We re-export this type from the root module so it's easier to reference
+use aws_types::SdkConfig;
 
 fn main() {
     let config = SdkConfig::builder()
@@ -73,7 +74,7 @@ fn main() {
 
 _After:_
 ```rust
-use aws_types::sdk_config::SdkConfig;
+use aws_types::SdkConfig;
 
 fn main() {
     let config = SdkConfig::builder()
