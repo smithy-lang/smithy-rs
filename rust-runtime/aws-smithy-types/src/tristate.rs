@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
 //! Contains [`TriState`](TriState) definition and impls
 
 /// Utility for tracking set vs. unset vs explicitly disabled
