@@ -29,4 +29,4 @@ More info can be found in the `tests` folder of `pokemon_service` package.
 
 ## Benchmarks
 
-Please see [BENCHMARKS.md](/rust-runtime/aws-smithy-http-server/example/BENCHMARKS.md).
+Please see [BENCHMARKS.md](/rust-runtime/aws-smithy-http-server/examples/BENCHMARKS.md).
