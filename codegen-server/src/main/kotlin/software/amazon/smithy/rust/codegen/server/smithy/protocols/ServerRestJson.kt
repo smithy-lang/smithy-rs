@@ -16,11 +16,11 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
  * RestJson1 server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
  * with RestJson1 specific configurations.
  */
-class ServerRestJsonFactory : ProtocolGeneratorFactory<ServerHttpProtocolGenerator> {
+class ServerRestJsonFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator> {
     override fun protocol(codegenContext: CodegenContext): Protocol = RestJson(codegenContext)
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpProtocolGenerator =
-        ServerHttpProtocolGenerator(codegenContext, RestJson(codegenContext))
+    override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpBoundProtocolGenerator =
+        ServerHttpBoundProtocolGenerator(codegenContext, RestJson(codegenContext))
 
     override fun transformModel(model: Model): Model = model
 

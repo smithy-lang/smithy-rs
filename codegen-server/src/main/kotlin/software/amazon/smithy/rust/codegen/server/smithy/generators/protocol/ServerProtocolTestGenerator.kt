@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
@@ -67,7 +67,7 @@ class ServerProtocolTestGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val operationSymbol = symbolProvider.toSymbol(operationShape)
     private val operationIndex = OperationIndex.of(codegenContext.model)
-    private val operationImplementationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+    private val operationImplementationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
     private val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
     private val instantiator = with(codegenContext) {
@@ -313,7 +313,7 @@ class ServerProtocolTestGenerator(
             renderHttpRequest(uri.get(), headers, body.orNull(), queryParams, host.orNull())
         }
 
-        val operationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
+        val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustTemplate(
             """
             use #{AxumCore}::extract::FromRequest;
@@ -378,7 +378,7 @@ class ServerProtocolTestGenerator(
         instantiator.render(rustWriter, inputShape, httpRequestTestCase.params)
         rustWriter.write(";")
 
-        val operationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
+        val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustWriter.rustTemplate(
             """
             use #{AxumCore}::extract::FromRequest;
