@@ -23,22 +23,22 @@ use tokio_util::io::ReaderStream;
 /// 3. Provide size hint
 pub struct PathBody {
     state: State,
-    len: u64,
+    file_size: u64,
     buffer_size: usize,
 }
 
 impl PathBody {
-    pub fn from_path(path: &Path, len: u64, buffer_size: usize) -> Self {
+    pub fn from_path(path: &Path, file_size: u64, buffer_size: usize) -> Self {
         PathBody {
             state: State::Unloaded(path.to_path_buf()),
-            len,
+            file_size,
             buffer_size,
         }
     }
-    pub fn from_file(file: File, len: u64, buffer_size: usize) -> Self {
+    pub fn from_file(file: File, file_size: u64, buffer_size: usize) -> Self {
         PathBody {
             state: State::Loaded(ReaderStream::with_capacity(file, buffer_size)),
-            len,
+            file_size,
             buffer_size,
         }
     }
@@ -96,10 +96,10 @@ impl Body for PathBody {
 
     fn is_end_stream(&self) -> bool {
         // fast path end-stream for empty files
-        self.len == 0
+        self.file_size == 0
     }
 
     fn size_hint(&self) -> SizeHint {
-        SizeHint::with_exact(self.len)
+        SizeHint::with_exact(self.file_size)
     }
 }
