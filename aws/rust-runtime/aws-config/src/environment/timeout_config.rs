@@ -5,9 +5,12 @@
 
 //! Load timeout configuration properties from environment variables
 
-use aws_smithy_types::timeout::{self, parse_str_as_timeout};
+use crate::parsing::parse_str_as_timeout;
+
+use aws_smithy_types::timeout;
 use aws_smithy_types::tristate::TriState;
 use aws_types::os_shim_internal::Env;
+
 use std::time::Duration;
 
 // Currently unsupported timeouts
@@ -24,8 +27,8 @@ const ENV_VAR_API_CALL_TIMEOUT: &str = "AWS_API_CALL_TIMEOUT";
 /// This provider will check the values of the following variables in order to build a
 /// [`timeout::Config`](aws_smithy_types::timeout::Config)
 ///
-/// - `ENV_VAR_API_CALL_ATTEMPT_TIMEOUT`
-/// - `ENV_VAR_API_CALL_TIMEOUT`
+/// - `AWS_API_CALL_ATTEMPT_TIMEOUT`
+/// - `AWS_API_CALL_TIMEOUT`
 ///
 /// Timeout values represent the number of seconds before timing out and must be non-negative floats
 /// or integers. NaN and infinity are also invalid.

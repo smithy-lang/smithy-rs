@@ -10,12 +10,8 @@ use std::time::Duration;
 #[non_exhaustive]
 #[derive(Clone, PartialEq, Default, Debug)]
 pub struct Tcp {
-    /// A limit on the amount of time after making an initial connect attempt on a socket to complete the connect-handshake.
     connect: TriState<Duration>,
     write: TriState<Duration>,
-    /// A limit on the amount of time an application takes to attempt to read the first byte over an
-    /// established, open connection after write request. This is also known as the
-    /// "time to first byte" timeout.
     read: TriState<Duration>,
 }
 

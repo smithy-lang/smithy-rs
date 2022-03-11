@@ -10,15 +10,9 @@ use std::time::Duration;
 #[non_exhaustive]
 #[derive(Clone, PartialEq, Default, Debug)]
 pub struct Http {
-    /// A limit on the amount of time after making an initial connect attempt on a socket to complete the connect-handshake.
     connect: TriState<Duration>,
     write: TriState<Duration>,
-    /// A limit on the amount of time an application takes to attempt to read the first byte over an
-    /// established, open connection after write request. This is also known as the
-    /// "time to first byte" timeout.
     read: TriState<Duration>,
-    /// A limit on the amount of time a TLS handshake takes from when the `CLIENT HELLO` message is
-    /// sent to the time the client and server have fully negotiated ciphers and exchanged keys.
     tls_negotiation: TriState<Duration>,
 }
 
@@ -28,7 +22,11 @@ impl Http {
         Default::default()
     }
 
-    /// Return this config's read timeout
+    /// Return this config's read timeout.
+    ///
+    /// A limit on the amount of time an application takes to attempt to read the first byte over an
+    /// established, open connection after write request. This is also known as the
+    /// "time to first byte" timeout.
     pub fn read_timeout(&self) -> TriState<Duration> {
         self.read.clone()
     }
@@ -40,6 +38,9 @@ impl Http {
     }
 
     /// Return this config's read timeout
+    ///
+    /// A limit on the amount of time after making an initial connect attempt on a socket to
+    /// complete the connect-handshake.
     pub fn connect_timeout(&self) -> TriState<Duration> {
         self.connect.clone()
     }

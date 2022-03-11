@@ -5,10 +5,11 @@
 
 //! Load timeout configuration properties from an AWS profile
 
+use crate::parsing::parse_str_as_timeout;
 use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
 
-use aws_smithy_types::timeout::{self, parse_str_as_timeout};
+use aws_smithy_types::timeout;
 use aws_smithy_types::tristate::TriState;
 use aws_types::os_shim_internal::{Env, Fs};
 

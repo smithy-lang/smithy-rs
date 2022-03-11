@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use std::fmt::{Debug, Formatter};
-
 /// Top-level configuration for timeouts
 ///
 /// # Example
@@ -32,7 +30,7 @@ use std::fmt::{Debug, Formatter};
 /// );
 /// # }
 /// ```
-#[derive(Clone, PartialEq, Default)]
+#[derive(Clone, PartialEq, Default, Debug)]
 pub struct Config {
     /// API timeouts used by Smithy `Client`s
     pub api: super::Api,
@@ -40,20 +38,6 @@ pub struct Config {
     pub http: super::Http,
     /// TCP timeouts used by lower-level `DynConnector`s
     pub tcp: super::Tcp,
-}
-
-impl Debug for Config {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            r#"Timeouts:
-{:?}
-{:?}
-{:?}
-"#,
-            self.api, self.http, self.tcp,
-        )
-    }
 }
 
 impl Config {

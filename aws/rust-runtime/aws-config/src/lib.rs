@@ -84,6 +84,8 @@ pub mod sso;
 
 pub mod connector;
 
+pub(crate) mod parsing;
+
 // Re-export types from smithy-types
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout;
