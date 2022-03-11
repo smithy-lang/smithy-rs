@@ -83,13 +83,13 @@ impl Config {
         self
     }
 
-    /// Consume an `Config` to create a new one, setting HTTP-related timeouts
+    /// Consume a `Config` to create a new one, setting HTTP-related timeouts
     pub fn with_http_timeouts(mut self, timeouts: super::Http) -> Self {
         self.http = timeouts;
         self
     }
 
-    /// Consume an `Config` to create a new one, setting TCP-related timeouts
+    /// Consume a `Config` to create a new one, setting TCP-related timeouts
     pub fn with_tcp_timeouts(mut self, timeouts: super::Tcp) -> Self {
         self.tcp = timeouts;
         self
