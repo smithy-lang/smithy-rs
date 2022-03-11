@@ -3,231 +3,222 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! Rejection response types.
-define_rejection! {
-    #[status = INTERNAL_SERVER_ERROR]
-    #[body = "Cannot have two request body extractors for a single request"]
-    /// Rejection type used if you try and extract the request body more than
-    /// once.
-    pub struct BodyAlreadyExtracted;
+//! Rejection types.
+//!
+//! This module contains types that are commonly used as the `E` error type in functions that
+//! handle requests and responses that return `Result<T, E>` throughout the framework. These
+//! include functions to deserialize incoming requests and serialize outgoing responses.
+//!
+//! All types end with `Rejection`. There are three types:
+//!
+//! 1. [`RequestRejection`]s are used when the framework fails to deserialize the request into the
+//!    corresponding operation input.
+//! 1. [`RequestExtensionNotFoundRejection`]s are used when the framework fails to deserialize from
+//!    the request's extensions a particular [`crate::Extension`] that was expected to be found.
+//! 1. [`ResponseRejection`]s are used when the framework fails to serialize the operation
+//!    output into a response.
+//!
+//! They are called _rejection_ types and not _error_ types to signal that the input was _rejected_
+//! (as opposed to it causing a recoverable error that would need to be handled, or an
+//! unrecoverable error). For example, a [`RequestRejection`] simply means that the request was
+//! rejected; there isn't really anything wrong with the service itself that the service
+//! implementer would need to handle.
+//!
+//! Rejection types are an _internal_ detail about the framework: they can be added, removed, and
+//! modified at any time without causing breaking changes. They are not surfaced to clients or the
+//! service implementer in any way (including this documentation): indeed, they can't be converted
+//! into responses. They serve as a mechanism to keep track of all the possible errors that can
+//! occur when processing a request or a response, in far more detail than what AWS protocols need
+//! to. This is why they are so granular: other (possibly protocol-specific) error types (like
+//! [`crate::runtime_error::RuntimeError`]) can "group" them when exposing errors to
+//! clients while the framework does not need to sacrifice fidelity in private error handling
+//! routines, and future-proofing itself at the same time (for example, we might want to record
+//! metrics about rejection types).
+//!
+//! Rejection types implement [`std::error::Error`], and some take in type-erased boxed errors
+//! (`crate::Error`) to represent their underlying causes, so they can be composed with other types
+//! that take in (possibly type-erased) [`std::error::Error`]s, like
+//! [`crate::runtime_error::RuntimeError`], thus allowing us to represent the full
+//! error chain.
+
+use strum_macros::Display;
+
+/// Rejection used for when failing to extract an [`crate::Extension`] from an incoming [request's
+/// extensions]. Contains one variant for each way the extractor can fail.
+///
+/// [request's extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
+#[derive(Debug, Display)]
+pub enum RequestExtensionNotFoundRejection {
+    /// Used when a particular [`crate::Extension`] was expected to be found in the request but we
+    /// did not find it.
+    /// This most likely means the service implementer simply forgot to add a [`tower::Layer`] that
+    /// registers the particular extension in their service to incoming requests.
+    MissingExtension(String),
+    // Used when the request extensions have already been taken by another extractor.
+    ExtensionsAlreadyExtracted,
 }
 
-define_rejection! {
-    #[status = INTERNAL_SERVER_ERROR]
-    #[body = "Headers taken by other extractor"]
-    /// Rejection type used if the headers have been taken by another extractor.
-    pub struct HeadersAlreadyExtracted;
+impl std::error::Error for RequestExtensionNotFoundRejection {}
+
+/// Errors that can occur when serializing the operation output provided by the service implementer
+/// into an HTTP response.
+#[derive(Debug, Display)]
+pub enum ResponseRejection {
+    /// Used when `httpResponseCode` targets an optional member, and the service implementer sets
+    /// it to `None`.
+    MissingHttpStatusCode,
+
+    /// Used when the service implementer provides an integer outside the 100-999 range for a
+    /// member targeted by `httpResponseCode`.
+    InvalidHttpStatusCode,
+
+    /// Used when an invalid HTTP header value (a value that cannot be parsed as an
+    /// `[http::header::HeaderValue]`) is provided for a shape member bound to an HTTP header with
+    /// `httpHeader` or `httpPrefixHeaders`.
+    /// Used when failing to serialize an `httpPayload`-bound struct into an HTTP response body.
+    Build(crate::Error),
+
+    /// Used when failing to serialize a struct into a `String` for the HTTP response body (for
+    /// example, converting a struct into a JSON-encoded `String`).
+    Serialization(crate::Error),
+
+    /// Used when consuming an [`http::response::Builder`] into the constructed [`http::Response`]
+    /// when calling [`http::response::Builder::body`].
+    /// This error can happen if an invalid HTTP header value (a value that cannot be parsed as an
+    /// `[http::header::HeaderValue]`) is used for the protocol-specific response `Content-Type`
+    /// header, or for additional protocol-specific headers (like `X-Amzn-Errortype` to signal
+    /// errors in RestJson1).
+    Http(crate::Error),
 }
 
-define_rejection! {
-    #[status = BAD_REQUEST]
-    #[body = "Request deserialize failed"]
-    /// Rejection type used if the request deserialization encountered errors.
-    pub struct Deserialize(Error);
+impl std::error::Error for ResponseRejection {}
+
+convert_to_response_rejection!(aws_smithy_http::operation::BuildError, Build);
+convert_to_response_rejection!(aws_smithy_http::operation::SerializationError, Serialization);
+convert_to_response_rejection!(http::Error, Http);
+
+/// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
+/// that is passed as the first argument to operation handlers. To deserialize into the service's
+/// registered state, a different rejection type is used, [`RequestExtensionNotFoundRejection`].
+///
+/// This type allows us to easily keep track of all the possible errors that can occur in the
+/// lifecycle of an incoming HTTP request.
+///
+/// Many inner code-generated and runtime deserialization functions use this as their error type, when they can
+/// only instantiate a subset of the variants (most likely a single one). For example, the
+/// functions that check the `Content-Type` header in `[crate::protocols]` can only return three of
+/// the variants: `MissingJsonContentType`, `MissingXmlContentType`, and `MimeParse`.
+/// This is a deliberate design choice to keep code generation simple. After all, this type is an
+/// inner detail of the framework the service implementer does not interact with. It allows us to
+/// easily keep track of all the possible errors that can occur in the lifecycle of an incoming
+/// HTTP request.
+///
+/// If a variant takes in a value, it represents the underlying cause of the error. This inner
+/// value should be of the type-erased boxed error type `[crate::Error]`. In practice, some of the
+/// variants that take in a value are only instantiated with errors of a single type in the
+/// generated code. For example, `UriPatternMismatch` is only instantiated with an error coming
+/// from a `nom` parser, `nom::Err<nom::error::Error<&str>>`. This is reflected in the converters
+/// below that convert from one of these very specific error types into one of the variants. For
+/// example, the `RequestRejection` implements `From<hyper::Error>` to construct the `HttpBody`
+/// variant. This is a deliberate design choice to make the code simpler and less prone to changes.
+///
+// The variants are _roughly_ sorted in the order in which the HTTP request is processed.
+#[derive(Debug, Display)]
+pub enum RequestRejection {
+    /// Used when attempting to take the request's body, and it has already been taken (presumably
+    /// by an outer `Service` that handled the request before us).
+    BodyAlreadyExtracted,
+
+    /// Used when failing to convert non-streaming requests into a byte slab with
+    /// `hyper::body::to_bytes`.
+    HttpBody(crate::Error),
+
+    // These are used when checking the `Content-Type` header.
+    MissingJsonContentType,
+    MissingXmlContentType,
+    MimeParse,
+
+    /// Used when failing to deserialize the HTTP body's bytes into a JSON document conforming to
+    /// the modeled input it should represent.
+    JsonDeserialize(crate::Error),
+    /// Used when failing to deserialize the HTTP body's bytes into a XML conforming to the modeled
+    /// input it should represent.
+    XmlDeserialize(crate::Error),
+
+    /// Used when attempting to take the request's headers, and they have already been taken (presumably
+    /// by an outer `Service` that handled the request before us).
+    HeadersAlreadyExtracted,
+
+    /// Used when failing to parse HTTP headers that are bound to input members with the `httpHeader`
+    /// or the `httpPrefixHeaders` traits.
+    HeaderParse(crate::Error),
+
+    /// Used when the URI pattern has a literal after the greedy label, and it is not found in the
+    /// request's URL.
+    UriPatternGreedyLabelPostfixNotFound,
+    /// Used when the `nom` parser's input does not match the URI pattern.
+    UriPatternMismatch(crate::Error),
+
+    /// Used when percent-decoding URL query string.
+    /// Used when percent-decoding URI path label.
+    InvalidUtf8(crate::Error),
+
+    /// Used when failing to deserialize strings from a URL query string and from URI path labels
+    /// into an [`aws_smithy_types::DateTime`].
+    DateTimeParse(crate::Error),
+
+    /// Used when failing to deserialize strings from a URL query string and from URI path labels
+    /// into "primitive" types.
+    PrimitiveParse(crate::Error),
+
+    // The following three variants are used when failing to deserialize strings from a URL query
+    // string and URI path labels into "primitive" types.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1232): They should be removed and
+    // conflated into the `PrimitiveParse` variant above after this issue is resolved.
+    IntParse(crate::Error),
+    FloatParse(crate::Error),
+    BoolParse(crate::Error),
+
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1243): In theory, we could get rid of this
+    // error, but it would be a lot of effort for comparatively low benefit.
+    /// Used when consuming the input struct builder.
+    Build(crate::Error),
 }
 
-define_rejection! {
-    #[status = INTERNAL_SERVER_ERROR]
-    #[body = "Response serialize failed"]
-    /// Rejection type used if the response serialization encountered errors.
-    pub struct Serialize(Error);
-}
+impl std::error::Error for RequestRejection {}
 
-define_rejection! {
-    #[status = BAD_REQUEST]
-    #[body = "Request body does not contain valid UTF-8"]
-    /// Rejection type used when buffering the request into a [`String`] if the
-    /// body doesn't contain valid UTF-8.
-    pub struct InvalidUtf8(Error);
-}
+// These converters are solely to make code-generation simpler. They convert from a specific error
+// type (from a runtime/third-party crate or the standard library) into a variant of the
+// [`crate::rejection::RequestRejection`] enum holding the type-erased boxed [`crate::Error`]
+// type. Generated functions that use [crate::rejection::RequestRejection] can thus use `?` to
+// bubble up instead of having to sprinkle things like [`Result::map_err`] everywhere.
 
-define_rejection! {
-    // TODO: we probably want to be more specific as the http::Error enum has many variants
-    #[status = INTERNAL_SERVER_ERROR]
-    #[body = "Error handling HTTP request"]
-    /// Rejection type used when there is an error handling the HTTP request.
-    pub struct Http(Error);
-}
+convert_to_request_rejection!(aws_smithy_json::deserialize::Error, JsonDeserialize);
+convert_to_request_rejection!(aws_smithy_xml::decode::XmlError, XmlDeserialize);
+convert_to_request_rejection!(aws_smithy_http::operation::BuildError, Build);
+convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
+convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
+convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);
+convert_to_request_rejection!(std::str::ParseBoolError, BoolParse);
+convert_to_request_rejection!(std::num::ParseFloatError, FloatParse);
+convert_to_request_rejection!(std::num::ParseIntError, IntParse);
+convert_to_request_rejection!(serde_urlencoded::de::Error, InvalidUtf8);
 
-define_rejection! {
-    // TODO: we probably want to be more specific as the header parsing can have many variants
-    #[status = BAD_REQUEST]
-    #[body = "Error parsing headers"]
-    /// Rejection type used if the any of the header parsing fails.
-    pub struct HeadersParse(Error);
-}
-
-define_rejection! {
-    #[status = BAD_REQUEST]
-    #[body = "Expected `Content-Type: application/json`"]
-    /// Rejection type used if the JSON `Content-Type` header is missing.
-    pub struct MissingJsonContentType;
-}
-
-define_rejection! {
-    #[status = BAD_REQUEST]
-    #[body = "Expected `Content-Type: application/xml`"]
-    /// Rejection type used if the XML `Content-Type` header is missing.
-    pub struct MissingXmlContentType;
-}
-
-define_rejection! {
-    #[status = BAD_REQUEST]
-    #[body = "Failed to parse request MIME type"]
-    /// Rejection type used if the MIME type parsing failed.
-    pub struct MimeParsingFailed;
-}
-
-define_rejection! {
-    #[status = INTERNAL_SERVER_ERROR]
-    #[body = "Extensions taken by other extractor"]
-    /// Rejection used if the request extension has been taken by another
-    /// extractor.
-    pub struct ExtensionsAlreadyExtracted;
-}
-
-define_rejection! {
-    #[status = INTERNAL_SERVER_ERROR]
-    #[body = "Missing request extension"]
-    /// Rejection type for [`Extension`](super::Extension) if an expected
-    /// request extension was not found.
-    pub struct MissingExtension(Error);
-}
-
-composite_rejection! {
-    /// Rejection used for `Content-Type` errors such as missing `Content-Type`
-    /// header, MIME parse issues, etc.
-    pub enum ContentTypeRejection {
-        MissingJsonContentType,
-        MissingXmlContentType,
-        MimeParsingFailed,
-    }
-}
-
-composite_rejection! {
-    /// Rejection used for [`Extension`](super::Extension).
-    ///
-    /// Contains one variant for each way the [`Extension`](super::Extension) extractor
-    /// can fail.
-    pub enum ExtensionHandlingRejection {
-        MissingExtension,
-        ExtensionsAlreadyExtracted,
-    }
-}
-
-composite_rejection! {
-    /// General rejection type used by `smithy-rs` auto-generated extractors and responders.
-    ///
-    /// Contains one variant for each way extracting and responding can fail.
-    ///
-    /// This rejection type also aggregates all the errors that come from other `smithy-rs` runtime
-    /// crates, allowing a nice integration with serialization, deserialization, and builder types
-    /// generated by the codegen.
-    pub enum SmithyRejection {
-        Serialize,
-        Deserialize,
-        InvalidUtf8,
-        Http,
-        HeadersParse,
-        ContentTypeRejection,
-        BodyAlreadyExtracted,
-        HeadersAlreadyExtracted,
-        ExtensionsAlreadyExtracted,
-    }
-}
-
-impl From<aws_smithy_json::deserialize::Error> for SmithyRejection {
-    fn from(err: aws_smithy_json::deserialize::Error) -> Self {
-        SmithyRejection::Deserialize(Deserialize::from_err(err))
-    }
-}
-
-impl From<aws_smithy_xml::decode::XmlError> for SmithyRejection {
-    fn from(err: aws_smithy_xml::decode::XmlError) -> Self {
-        SmithyRejection::Deserialize(Deserialize::from_err(err))
-    }
-}
-
-impl From<aws_smithy_http::operation::BuildError> for SmithyRejection {
-    fn from(err: aws_smithy_http::operation::BuildError) -> Self {
-        SmithyRejection::Deserialize(Deserialize::from_err(err))
-    }
-}
-
-impl From<std::num::ParseIntError> for SmithyRejection {
-    fn from(err: std::num::ParseIntError) -> Self {
-        SmithyRejection::Deserialize(Deserialize::from_err(err))
-    }
-}
-
-impl From<std::num::ParseFloatError> for SmithyRejection {
-    fn from(err: std::num::ParseFloatError) -> Self {
-        SmithyRejection::Deserialize(Deserialize::from_err(err))
-    }
-}
-
-impl From<std::str::ParseBoolError> for SmithyRejection {
-    fn from(err: std::str::ParseBoolError) -> Self {
-        SmithyRejection::Deserialize(Deserialize::from_err(err))
-    }
-}
-
-impl From<aws_smithy_types::date_time::DateTimeParseError> for SmithyRejection {
-    fn from(err: aws_smithy_types::date_time::DateTimeParseError) -> Self {
-        SmithyRejection::Deserialize(Deserialize::from_err(err))
-    }
-}
-
-impl From<aws_smithy_types::date_time::DateTimeFormatError> for SmithyRejection {
-    fn from(err: aws_smithy_types::date_time::DateTimeFormatError) -> Self {
-        SmithyRejection::Serialize(Serialize::from_err(err))
-    }
-}
-
-impl From<aws_smithy_types::primitive::PrimitiveParseError> for SmithyRejection {
-    fn from(err: aws_smithy_types::primitive::PrimitiveParseError) -> Self {
-        SmithyRejection::Deserialize(Deserialize::from_err(err))
-    }
-}
-
-impl From<aws_smithy_http::operation::SerializationError> for SmithyRejection {
-    fn from(err: aws_smithy_http::operation::SerializationError) -> Self {
-        SmithyRejection::Serialize(Serialize::from_err(err))
-    }
-}
-
-impl From<std::str::Utf8Error> for SmithyRejection {
-    fn from(err: std::str::Utf8Error) -> Self {
-        SmithyRejection::InvalidUtf8(InvalidUtf8::from_err(err))
-    }
-}
-
-impl From<http::Error> for SmithyRejection {
-    fn from(err: http::Error) -> Self {
-        SmithyRejection::Http(Http::from_err(err))
-    }
-}
-
-impl From<hyper::Error> for SmithyRejection {
-    fn from(err: hyper::Error) -> Self {
-        SmithyRejection::Http(Http::from_err(err))
-    }
-}
-
-impl From<aws_smithy_http::header::ParseError> for SmithyRejection {
-    fn from(err: aws_smithy_http::header::ParseError) -> Self {
-        SmithyRejection::HeadersParse(HeadersParse::from_err(err))
-    }
-}
-
-impl From<serde_urlencoded::de::Error> for SmithyRejection {
-    fn from(err: serde_urlencoded::de::Error) -> Self {
-        SmithyRejection::Deserialize(Deserialize::from_err(err))
-    }
-}
-
-impl From<nom::Err<nom::error::Error<&str>>> for SmithyRejection {
+impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
     fn from(err: nom::Err<nom::error::Error<&str>>) -> Self {
-        SmithyRejection::Deserialize(Deserialize::from_err(err.to_owned()))
+        Self::UriPatternMismatch(crate::Error::new(err.to_owned()))
     }
 }
+
+// Used when calling
+// [`percent_encoding::percent_decode_str`](https://docs.rs/percent-encoding/latest/percent_encoding/fn.percent_decode_str.html)
+// and bubbling up.
+// This can happen when the percent-encoded data in e.g. a query string decodes to bytes that are
+// not a well-formed UTF-8 string.
+convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
+
+// `[crate::body::Body]` is `[hyper::Body]`, whose associated `Error` type is `[hyper::Error]`. We
+// need this converter for when we convert the body into bytes in the framework, since protocol
+// tests use `[crate::body::Body]` as their body type when constructing requests (and almost
+// everyone will run a Hyper-based server in their services).
+convert_to_request_rejection!(hyper::Error, HttpBody);

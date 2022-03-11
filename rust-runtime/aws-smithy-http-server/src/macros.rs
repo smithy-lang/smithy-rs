@@ -34,155 +34,6 @@
 
 //! Macros implementation.
 
-// Define a single rejection type
-macro_rules! define_rejection {
-    (
-        #[status = $status:ident]
-        #[body = $body:expr]
-        $(#[$m:meta])*
-        pub struct $name:ident;
-    ) => {
-        $(#[$m])*
-        #[derive(Debug)]
-        pub struct $name;
-
-        impl axum_core::response::IntoResponse for $name {
-            fn into_response(self) -> axum_core::response::Response {
-                let mut res = http::Response::new(axum_core::body::boxed(http_body::Full::from($body)));
-                *res.status_mut() = http::StatusCode::$status;
-                res.extensions_mut().insert(
-                    crate::ExtensionRejection::new(self.to_string())
-                );
-                res
-            }
-        }
-
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", $body)
-            }
-        }
-
-        impl std::error::Error for $name {}
-
-        impl Default for $name {
-            fn default() -> Self {
-                Self
-            }
-        }
-    };
-
-    (
-        #[status = $status:ident]
-        #[body = $body:expr]
-        $(#[$m:meta])*
-        pub struct $name:ident (Error);
-    ) => {
-        $(#[$m])*
-        #[derive(Debug)]
-        pub struct $name(crate::Error);
-
-        impl $name {
-            pub fn from_err<E>(err: E) -> Self
-            where
-                E: Into<$crate::BoxError>,
-            {
-                Self(crate::Error::new(err))
-            }
-        }
-
-        impl axum_core::response::IntoResponse for $name {
-
-            fn into_response(self) -> axum_core::response::Response {
-                let body = http_body::Full::from(format!(concat!($body, ": {}"), self.0));
-                let body = $crate::body::boxed(body);
-                let mut res =
-                    http::Response::new(body);
-                *res.status_mut() = http::StatusCode::$status;
-                res
-            }
-        }
-
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", $body)
-            }
-        }
-
-        impl std::error::Error for $name {
-            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-                Some(&self.0)
-            }
-        }
-
-        impl From<&str> for $name {
-            fn from(src: &str) -> Self {
-                Self(Err(src).expect("Unable to convert string into error"))
-            }
-        }
-    };
-}
-
-// Define a composite rejection type
-macro_rules! composite_rejection {
-    (
-        $(#[$m:meta])*
-        pub enum $name:ident {
-            $($variant:ident),+
-            $(,)?
-        }
-    ) => {
-        $(#[$m])*
-        #[derive(Debug)]
-        pub enum $name {
-            $(
-                #[allow(missing_docs, deprecated)]
-                $variant($variant)
-            ),+
-        }
-
-        impl axum_core::response::IntoResponse for $name {
-
-            fn into_response(self) -> axum_core::response::Response {
-                match self {
-                    $(
-                        Self::$variant(inner) => inner.into_response(),
-                    )+
-                }
-            }
-        }
-
-        $(
-            #[allow(deprecated)]
-            impl From<$variant> for $name {
-                fn from(inner: $variant) -> Self {
-                    Self::$variant(inner)
-                }
-            }
-        )+
-
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                match self {
-                    $(
-                        Self::$variant(inner) => write!(f, "{}", inner),
-                    )+
-                }
-            }
-        }
-
-        impl std::error::Error for $name {
-            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-                match self {
-                    $(
-                        Self::$variant(inner) => Some(inner),
-                    )+
-                }
-            }
-        }
-    }
-}
-
 /// Define a type that implements [`std::future::Future`].
 #[macro_export]
 macro_rules! opaque_future {
@@ -257,5 +108,25 @@ macro_rules! impl_extension_new_and_deref {
         }
 
         impl_deref!($name);
+    };
+}
+
+macro_rules! convert_to_request_rejection {
+    ($from:ty, $to:ident) => {
+        impl From<$from> for RequestRejection {
+            fn from(err: $from) -> Self {
+                Self::$to(crate::Error::new(err))
+            }
+        }
+    };
+}
+
+macro_rules! convert_to_response_rejection {
+    ($from:ty, $to:ident) => {
+        impl From<$from> for ResponseRejection {
+            fn from(err: $from) -> Self {
+                Self::$to(crate::Error::new(err))
+            }
+        }
     };
 }
