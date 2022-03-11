@@ -1,0 +1,13 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+#
+version: '3.9'
+services:
+  smithy-rs-build:
+    image: smithy-rs-build-image:latest
+    volumes:
+    - type: bind
+      source: ./workspace
+      target: /root/workspace
+    command: [/bin/bash, -c, --, sleep infinity]

@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+#
+
+set -e
+
+REMOTE_IMAGE_NAME="public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci:latest"
+SCRIPT_PATH="$(realpath $(dirname $0))"
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 <base-revision>"
+    echo "Determines if tools changed between HEAD and the given <base-revision>, "
+    echo "and locates build Docker image based on that. This image becomes tagged "
+    echo "locally with Docker as 'smithy-rs-build-image'."
+    exit 1
+fi
+BASE_REV="$1"
+
+cd "${SCRIPT_PATH}"
+cd "$(git rev-parse --show-toplevel)"
+
+if (git diff --quiet HEAD "${BASE_REV}" -- tools); then
+    echo "Tools did not change. Will reuse existing Docker build image."
+    docker pull "${REMOTE_IMAGE_NAME}"
+    docker tag "${REMOTE_IMAGE_NAME}" smithy-rs-build-image
+else
+    echo "Tools changed. Will build a new Docker build image with updated tools."
+    cd "${SCRIPT_PATH}"
+    docker build -t smithy-rs-build-image --file build-image.dockerfile .
+fi

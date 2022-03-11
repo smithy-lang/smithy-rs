@@ -1,0 +1,49 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+#
+
+set -e
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: ci-action <action> [args...]"
+  echo "Runs the given action in the build Docker container."
+  echo "The build image must already be acquired with 'acquire-build-iamge' before this is run."
+  echo "The <action> is the name of a script in 'scripts', and the [args...] will be forwarded to it."
+  exit 1
+fi
+
+ACTION_NAME="$1"
+shift
+ACTION_ARGS="$@"
+
+if [[ ! -d smithy-rs ]]; then
+  echo "A fresh copy of smithy-rs must be checked out from the path this script is executed from."
+  exit 1
+fi
+
+START_PATH="$(realpath $(pwd))"
+rm -rf "${START_PATH}/artifacts"
+
+SCRIPT_PATH="$(realpath $(dirname $0))"
+cd "${SCRIPT_PATH}"
+
+ACTION_PATH="$(mktemp -d -t smithy-rs-build.XXXXXX)"
+echo "Action path: ${ACTION_PATH}"
+
+cp build.docker-compose.yml "${ACTION_PATH}/"
+mkdir -p "${ACTION_PATH}/workspace/artifacts"
+cp -r "${START_PATH}/smithy-rs" "${ACTION_PATH}/smithy-rs"
+
+function cleanup {
+    docker-compose -f build.docker-compose.yml down
+    cd "${START_PATH}"
+    mv "${ACTION_PATH}/workspace/artifacts" .
+    rm -rf "${ACTION_PATH}"
+}
+trap cleanup EXIT
+
+cd "${ACTION_PATH}"
+docker-compose -f build.docker-compose.yml up -d
+docker-compose -f build.docker-compose.yml exec smithy-rs-build "./scripts/${ACTION_NAME}" "${ACTION_ARGS}"
