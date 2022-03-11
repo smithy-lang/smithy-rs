@@ -1,3 +1,4 @@
+name: Docker Build Image
 on:
   workflow_dispatch:
   push:
@@ -13,6 +14,10 @@ env:
 jobs:
   rebuild-docker-build-image:
     runs-on: ubuntu-latest
+    name: Rebuild image
+    permissions:
+      id-token: write
+      contents: read
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -21,6 +26,7 @@ jobs:
         cd tools/ci-build
         docker build -t ${{ env.ecr_repository }}:latest --file build-image.dockerfile .
     - name: Acquire credentials
+      uses: aws-actions/configure-aws-credentials@v1
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
