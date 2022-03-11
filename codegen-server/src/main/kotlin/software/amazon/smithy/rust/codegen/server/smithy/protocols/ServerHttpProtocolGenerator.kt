@@ -157,7 +157,7 @@ private class ServerHttpProtocolImplGenerator(
         rustTemplate(
             """
             ##[derive(Debug)]
-            pub struct $inputName(pub #{I});
+            pub(crate) struct $inputName(#{I});
             ##[#{AsyncTrait}::async_trait]
             impl<B> #{AxumCore}::extract::FromRequest<B> for $inputName
             where
@@ -225,7 +225,7 @@ private class ServerHttpProtocolImplGenerator(
 
             rustTemplate(
                 """
-                pub enum $outputName {
+                pub(crate) enum $outputName {
                     Output(#{O}),
                     Error(#{E})
                 }
@@ -260,7 +260,7 @@ private class ServerHttpProtocolImplGenerator(
 
             rustTemplate(
                 """
-                pub struct $outputName(pub #{O});
+                pub(crate) struct $outputName(#{O});
                 ##[#{AsyncTrait}::async_trait]
                 impl #{AxumCore}::response::IntoResponse for $outputName {
                     fn into_response(self) -> #{AxumCore}::response::Response {
