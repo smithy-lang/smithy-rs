@@ -24,17 +24,9 @@ if [[ ! -d smithy-rs ]]; then
 fi
 
 START_PATH="$(realpath $(pwd))"
-rm -rf "${START_PATH}/artifacts"
-
 SCRIPT_PATH="$(realpath $(dirname $0))"
+ACTION_PATH="$(${SCRIPT_PATH}/ci-create-workspace)"
 cd "${SCRIPT_PATH}"
-
-ACTION_PATH="$(mktemp -d -t smithy-rs-build.XXXXXX)"
-echo "Action path: ${ACTION_PATH}"
-
-cp build.docker-compose.yml "${ACTION_PATH}/"
-mkdir -p "${ACTION_PATH}/workspace/artifacts"
-cp -r "${START_PATH}/smithy-rs" "${ACTION_PATH}/smithy-rs"
 
 function cleanup {
     docker-compose -f build.docker-compose.yml down
@@ -45,5 +37,9 @@ function cleanup {
 trap cleanup EXIT
 
 cd "${ACTION_PATH}"
+export USER_ID="$(id -u)"
+export GROUP_ID="$(id -g)"
+export GRADLE_CACHE_PATH="${START_PATH}/gradle"
 docker-compose -f build.docker-compose.yml up -d
 docker-compose -f build.docker-compose.yml exec smithy-rs-build "./scripts/${ACTION_NAME}" "${ACTION_ARGS}"
+exit $?

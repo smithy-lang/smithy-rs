@@ -99,6 +99,9 @@ COPY --from=install_rust /opt/rustup /opt/rustup
 ENV PATH=/opt/cargo/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
+    JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto.x86_64 \
+    GRADLE_USER_HOME=/root/.gradle \
     RUST_NIGHTLY_VERSION=${rust_nightly_version}
+RUN chmod +rx /root
 COPY ./scripts /root/scripts
 RUN /root/scripts/sanity-test
