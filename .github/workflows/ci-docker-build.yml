@@ -5,8 +5,6 @@ on:
     branches: [main]
     paths:
     - tools/**
-  # TODO: Remove once verified working since it should not run on pull request
-  pull_request:
 
 env:
   ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
