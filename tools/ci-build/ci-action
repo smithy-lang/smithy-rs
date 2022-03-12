@@ -32,6 +32,7 @@ function cleanup {
     docker-compose -f build.docker-compose.yml down
     cd "${START_PATH}"
     mv "${ACTION_PATH}/workspace/artifacts" .
+    mv "${ACTION_PATH}/smithy-rs/target" ./smithy-rs-target
     rm -rf "${ACTION_PATH}"
 }
 trap cleanup EXIT
