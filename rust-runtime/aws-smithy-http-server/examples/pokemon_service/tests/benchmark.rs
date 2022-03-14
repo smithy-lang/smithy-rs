@@ -37,9 +37,9 @@ async fn benchmark() -> Result<(), Box<dyn std::error::Error>> {
 
         // Run a single benchmark with 8 threads and 64 connections for 60 seconds.
         let benches = vec![BenchmarkBuilder::default()
-            .duration(Duration::from_secs(60))
-            .threads(8)
-            .connections(64)
+            .duration(Duration::from_secs(90))
+            .threads(2)
+            .connections(32)
             .build()?];
         wrk.bench(&benches)?;
 

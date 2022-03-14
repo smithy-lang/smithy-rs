@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.smithy.customizations
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
@@ -17,7 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 /* Example Generated Code */
 /*
 pub struct Config {
-    pub(crate) timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
+    pub(crate) timeout_config: Option<aws_smithy_types::timeout::Config>,
 }
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -26,29 +25,70 @@ impl std::fmt::Debug for Config {
     }
 }
 impl Config {
+    /// Constructs a config builder.
     pub fn builder() -> Builder {
         Builder::default()
     }
 }
+/// Builder for creating a `Config`.
 #[derive(Default)]
 pub struct Builder {
-    timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
+    timeout_config: Option<aws_smithy_types::timeout::Config>,
 }
 impl Builder {
+    /// Constructs a config builder.
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn timeout_config(mut self, timeout_config: aws_smithy_types::timeout::TimeoutConfig) -> Self {
+    /// Set the timeout_config for the builder
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use std::time::Duration;
+    /// use test_smithy_test2036416049427740159::config::Config;
+    /// use aws_smithy_types::{timeout, tristate::TriState};
+    ///
+    /// let api_timeouts = timeout::Api::new()
+    ///     .with_call_attempt_timeout(TriState::Set(Duration::from_secs(1)));
+    /// let timeout_config = timeout::Config::new()
+    ///     .with_api_timeouts(api_timeouts);
+    /// let config = Config::builder().timeout_config(timeout_config).build();
+    /// ```
+    pub fn timeout_config(mut self, timeout_config: aws_smithy_types::timeout::Config) -> Self {
         self.set_timeout_config(Some(timeout_config));
         self
     }
+
+    /// Set the timeout_config for the builder
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use std::time::Duration;
+    /// use test_smithy_test2036416049427740159::config::{Builder, Config};
+    /// use aws_smithy_types::{timeout, tristate::TriState};
+    ///
+    /// fn set_request_timeout(builder: &mut Builder) {
+    ///     let api_timeouts = timeout::Api::new()
+    ///         .with_call_attempt_timeout(TriState::Set(Duration::from_secs(1)));
+    ///     let timeout_config = timeout::Config::new()
+    ///         .with_api_timeouts(api_timeouts);
+    ///     builder.set_timeout_config(Some(timeout_config));
+    /// }
+    ///
+    /// let mut builder = Config::builder();
+    /// set_request_timeout(&mut builder);
+    /// let config = builder.build();
+    /// ```
     pub fn set_timeout_config(
         &mut self,
-        timeout_config: Option<aws_smithy_types::timeout::TimeoutConfig>,
+        timeout_config: Option<aws_smithy_types::timeout::Config>,
     ) -> &mut Self {
         self.timeout_config = timeout_config;
         self
     }
+    /// Builds a [`Config`].
     pub fn build(self) -> Config {
         Config {
             timeout_config: self.timeout_config,
@@ -60,7 +100,6 @@ fn test_1() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<Config>();
 }
-
  */
 
 class TimeoutConfigDecorator : RustCodegenDecorator {
@@ -76,9 +115,12 @@ class TimeoutConfigDecorator : RustCodegenDecorator {
 }
 
 class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val timeoutConfig = smithyTypesTimeout(codegenContext.runtimeConfig)
+    private val smithyTypesCrate = codegenContext.runtimeConfig.runtimeCrate("types")
+    private val timeoutModule = RuntimeType("timeout", smithyTypesCrate, "aws_smithy_types")
     private val moduleUseName = codegenContext.moduleUseName()
-    private val codegenScope = arrayOf("TimeoutConfig" to timeoutConfig.member("TimeoutConfig"))
+    private val codegenScope = arrayOf(
+        "TimeoutConfig" to timeoutModule.member("Config"),
+    )
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
@@ -98,10 +140,12 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     /// ```no_run
                     /// ## use std::time::Duration;
                     /// use $moduleUseName::config::Config;
-                    /// use #{TimeoutConfig};
+                    /// use aws_smithy_types::{timeout, tristate::TriState};
                     ///
-                    /// let timeout_config = TimeoutConfig::new()
-                    ///     .with_api_call_attempt_timeout(Some(Duration::from_secs(1)));
+                    /// let api_timeouts = timeout::Api::new()
+                    ///     .with_call_attempt_timeout(TriState::Set(Duration::from_secs(1)));
+                    /// let timeout_config = timeout::Config::new()
+                    ///     .with_api_timeouts(api_timeouts);
                     /// let config = Config::builder().timeout_config(timeout_config).build();
                     /// ```
                     pub fn timeout_config(mut self, timeout_config: #{TimeoutConfig}) -> Self {
@@ -116,11 +160,13 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                     /// ```no_run
                     /// ## use std::time::Duration;
                     /// use $moduleUseName::config::{Builder, Config};
-                    /// use #{TimeoutConfig};
+                    /// use aws_smithy_types::{timeout, tristate::TriState};
                     ///
                     /// fn set_request_timeout(builder: &mut Builder) {
-                    ///     let timeout_config = TimeoutConfig::new()
-                    ///         .with_api_call_timeout(Some(Duration::from_secs(3)));
+                    ///     let api_timeouts = timeout::Api::new()
+                    ///         .with_call_attempt_timeout(TriState::Set(Duration::from_secs(1)));
+                    ///     let timeout_config = timeout::Config::new()
+                    ///         .with_api_timeouts(api_timeouts);
                     ///     builder.set_timeout_config(Some(timeout_config));
                     /// }
                     ///
@@ -142,7 +188,3 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
         }
     }
 }
-
-// Generate path to the timeout module in aws_smithy_types
-fun smithyTypesTimeout(runtimeConfig: RuntimeConfig) =
-    RuntimeType("timeout", runtimeConfig.runtimeCrate("types"), "aws_smithy_types")
