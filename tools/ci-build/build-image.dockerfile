@@ -65,6 +65,8 @@ RUN set -eux; \
     ./rustup-init -y --no-modify-path --profile minimal --default-toolchain ${rust_stable_version}; \
     rm rustup-init; \
     rustup --version; \
+    rustup component add rustfmt; \
+    rustup component add clippy; \
     rustup install ${rust_nightly_version}; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
