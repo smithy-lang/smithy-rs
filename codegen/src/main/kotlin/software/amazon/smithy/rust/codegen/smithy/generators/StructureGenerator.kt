@@ -65,17 +65,10 @@ class StructureGenerator(
     }
     private val name = symbolProvider.toSymbol(shape).name
 
-    fun render() {
+    fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
         errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render()
-        }
-    }
-
-    fun renderServer() {
-        renderStructure()
-        errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).renderServer()
+            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render(forWhom)
         }
     }
 

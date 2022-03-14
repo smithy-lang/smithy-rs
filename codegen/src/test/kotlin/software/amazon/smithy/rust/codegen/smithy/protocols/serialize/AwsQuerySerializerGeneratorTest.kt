@@ -96,7 +96,7 @@ class AwsQuerySerializerGeneratorTest {
             false -> CodegenMode.Server
         }
         val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model).copy(mode = mode))
-        val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))
+        val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
@@ -142,10 +142,6 @@ class AwsQuerySerializerGeneratorTest {
         project.withModule(RustModule.public("input")) {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/operation_ser.rs")
-        println("file:///${project.baseDir}/src/query_ser.rs")
         project.compileAndTest()
     }
 }

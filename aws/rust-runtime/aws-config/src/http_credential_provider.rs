@@ -16,7 +16,8 @@ use aws_smithy_http::response::ParseStrictResponse;
 use aws_smithy_http::result::{SdkError, SdkSuccess};
 use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
-use aws_smithy_types::timeout::TimeoutConfig;
+use aws_smithy_types::timeout;
+use aws_smithy_types::tristate::TriState;
 use aws_types::credentials::CredentialsError;
 use aws_types::{credentials, Credentials};
 
@@ -79,7 +80,7 @@ impl HttpCredentialProvider {
 #[derive(Default)]
 pub(crate) struct Builder {
     provider_config: Option<ProviderConfig>,
-    timeout_config: TimeoutConfig,
+    http_timeout_config: timeout::Http,
 }
 
 impl Builder {
@@ -91,22 +92,28 @@ impl Builder {
     // read_timeout and connect_timeout accept options to enable easy pass through from
     // other builders
     pub(crate) fn read_timeout(mut self, read_timeout: Option<Duration>) -> Self {
-        self.timeout_config = self.timeout_config.with_read_timeout(read_timeout);
+        self.http_timeout_config = self
+            .http_timeout_config
+            .with_read_timeout(read_timeout.into());
         self
     }
 
     pub(crate) fn connect_timeout(mut self, connect_timeout: Option<Duration>) -> Self {
-        self.timeout_config = self.timeout_config.with_connect_timeout(connect_timeout);
+        self.http_timeout_config = self
+            .http_timeout_config
+            .with_connect_timeout(connect_timeout.into());
         self
     }
 
     pub(crate) fn build(self, provider_name: &'static str, uri: Uri) -> HttpCredentialProvider {
         let provider_config = self.provider_config.unwrap_or_default();
-        let default_timeout_config = TimeoutConfig::new()
-            .with_connect_timeout(Some(DEFAULT_CONNECT_TIMEOUT))
-            .with_read_timeout(Some(DEFAULT_READ_TIMEOUT));
-        let timeout_config = self.timeout_config.take_unset_from(default_timeout_config);
-        let http_settings = HttpSettings::default().with_timeout_config(timeout_config);
+        let default_timeout_config = timeout::Http::new()
+            .with_connect_timeout(TriState::Set(DEFAULT_CONNECT_TIMEOUT))
+            .with_read_timeout(TriState::Set(DEFAULT_READ_TIMEOUT));
+        let http_timeout_config = self
+            .http_timeout_config
+            .take_unset_from(default_timeout_config);
+        let http_settings = HttpSettings::default().with_http_timeout_config(http_timeout_config);
         let connector = expect_connector(provider_config.connector(&http_settings));
         let client = aws_smithy_client::Builder::new()
             .connector(connector)
@@ -174,7 +181,7 @@ impl ClassifyResponse<SdkSuccess<Credentials>, SdkError<CredentialsError>>
          *   - Non-parseable 200 responses.
          *  */
         match response {
-            Ok(_) => RetryKind::NotRetryable,
+            Ok(_) => RetryKind::Unnecessary,
             // socket errors, networking timeouts
             Err(SdkError::DispatchFailure(client_err))
                 if client_err.is_timeout() || client_err.is_io() =>
@@ -192,7 +199,7 @@ impl ClassifyResponse<SdkSuccess<Credentials>, SdkError<CredentialsError>>
             {
                 RetryKind::Error(ErrorKind::ServerError)
             }
-            Err(_) => RetryKind::NotRetryable,
+            Err(_) => RetryKind::UnretryableFailure,
         }
     }
 }
@@ -260,7 +267,7 @@ mod test {
 
         assert_eq!(
             HttpCredentialRetryPolicy.classify(sdk_result.as_ref()),
-            RetryKind::NotRetryable
+            RetryKind::Unnecessary
         );
 
         assert!(sdk_result.is_ok(), "should be ok: {:?}", sdk_result)
@@ -275,7 +282,7 @@ mod test {
         let sdk_result = sdk_resp(error_response);
         assert_eq!(
             HttpCredentialRetryPolicy.classify(sdk_result.as_ref()),
-            RetryKind::NotRetryable
+            RetryKind::UnretryableFailure
         );
         let sdk_error = sdk_result.expect_err("should be error");
 

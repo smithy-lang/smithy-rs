@@ -24,19 +24,9 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 abstract class Section(val name: String)
 
 /**
- * A named section generator allows customization via a predefined set of named sections. Implementors may either:
- * 1. Override section and use a `when` clause to handle each section individually
- * 2. Call `registerSection { ... }` to register individual sections on demand.
+ * A named section generator allows customization via a predefined set of named sections.
  *
- * ```rust
- * struct Config {
- *    /* section:ConfigStruct */
- *    make_token: TokenProvider
- *    /* endsection:ConfigStruct */
- * }
- * ```
- *
- * In cases where the generated code is static, this will improve readability.
+ * Implementors MUST override section and use a `when` clause to handle each section individually
  */
 abstract class NamedSectionGenerator<T : Section> {
     abstract fun section(section: T): Writable

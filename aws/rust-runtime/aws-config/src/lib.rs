@@ -10,7 +10,7 @@
 //! [`from_env`]/[`ConfigLoader`] or ad-hoc individual credential and region providers.
 //!
 //! [`ConfigLoader`](ConfigLoader) can combine different configuration sources into an AWS shared-config:
-//! [`Config`](aws_types::config::Config). [`Config`](aws_types::config::Config) can be used configure
+//! [`SdkConfig`](aws_types::SdkConfig). [`SdkConfig`](aws_types::SdkConfig) can be used configure
 //! an AWS service client.
 //!
 //! # Examples
@@ -20,7 +20,7 @@
 //! # mod aws_sdk_dynamodb {
 //! #   pub struct Client;
 //! #   impl Client {
-//! #     pub fn new(config: &aws_types::config::Config) -> Self { Client }
+//! #     pub fn new(config: &aws_types::SdkConfig) -> Self { Client }
 //! #   }
 //! # }
 //! # async fn docs() {
@@ -34,7 +34,7 @@
 //! # mod aws_sdk_dynamodb {
 //! #   pub struct Client;
 //! #   impl Client {
-//! #     pub fn new(config: &aws_types::config::Config) -> Self { Client }
+//! #     pub fn new(config: &aws_types::SdkConfig) -> Self { Client }
 //! #   }
 //! # }
 //! # async fn docs() {
@@ -84,13 +84,14 @@ pub mod sso;
 
 pub mod connector;
 
+pub(crate) mod parsing;
+
 // Re-export types from smithy-types
 pub use aws_smithy_types::retry::RetryConfig;
-pub use aws_smithy_types::timeout::TimeoutConfig;
+pub use aws_smithy_types::timeout;
 
 // Re-export types from aws-types
 pub use aws_types::app_name::{AppName, InvalidAppName};
-pub use aws_types::config::Config;
 
 /// Create an environment loader for AWS Configuration
 ///
@@ -108,7 +109,7 @@ pub fn from_env() -> ConfigLoader {
 /// Load a default configuration from the environment
 ///
 /// Convenience wrapper equivalent to `aws_config::from_env().load().await`
-pub async fn load_from_env() -> aws_types::config::Config {
+pub async fn load_from_env() -> aws_types::SdkConfig {
     from_env().load().await
 }
 
@@ -122,16 +123,16 @@ mod loader {
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
     use aws_smithy_client::http_connector::{HttpConnector, HttpSettings};
     use aws_smithy_types::retry::RetryConfig;
-    use aws_smithy_types::timeout::TimeoutConfig;
+    use aws_smithy_types::timeout;
     use aws_types::app_name::AppName;
-    use aws_types::config::Config;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    use aws_types::SdkConfig;
 
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
     use crate::provider_config::ProviderConfig;
 
-    /// Load a cross-service [`Config`](aws_types::config::Config) from the environment
+    /// Load a cross-service [`SdkConfig`](aws_types::SdkConfig) from the environment
     ///
     /// This builder supports overriding individual components of the generated config. Overriding a component
     /// will skip the standard resolution chain from **for that component**. For example,
@@ -144,13 +145,13 @@ mod loader {
         region: Option<Box<dyn ProvideRegion>>,
         retry_config: Option<RetryConfig>,
         sleep: Option<Arc<dyn AsyncSleep>>,
-        timeout_config: Option<TimeoutConfig>,
+        timeout_config: Option<timeout::Config>,
         provider_config: Option<ProviderConfig>,
         http_connector: Option<HttpConnector>,
     }
 
     impl ConfigLoader {
-        /// Override the region used to build [`Config`](aws_types::config::Config).
+        /// Override the region used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
         /// ```no_run
@@ -166,7 +167,7 @@ mod loader {
             self
         }
 
-        /// Override the retry_config used to build [`Config`](aws_types::config::Config).
+        /// Override the retry_config used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
         /// ```no_run
@@ -182,23 +183,26 @@ mod loader {
             self
         }
 
-        /// Override the timeout config used to build [`Config`](aws_types::config::Config).
+        /// Override the timeout config used to build [`SdkConfig`](aws_types::SdkConfig).
         /// **Note: This only sets timeouts for calls to AWS services.** Timeouts for the credentials
         /// provider chain are configured separately.
         ///
         /// # Examples
         /// ```no_run
         /// # use std::time::Duration;
-        /// # use aws_smithy_types::timeout::TimeoutConfig;
         /// # async fn create_config() {
-        ///  let timeout_config = TimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs(1)));
+        ///  use aws_smithy_types::{timeout, tristate::TriState};
+        ///
+        ///  let api_timeout_config = timeout::Api::new()
+        ///     .with_call_timeout(TriState::Set(Duration::from_secs(1)));
+        ///  let timeout_config = timeout::Config::new().with_api_timeouts(api_timeout_config);
         ///  let config = aws_config::from_env()
         ///     .timeout_config(timeout_config)
         ///     .load()
         ///     .await;
         /// # }
         /// ```
-        pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
+        pub fn timeout_config(mut self, timeout_config: timeout::Config) -> Self {
             self.timeout_config = Some(timeout_config);
             self
         }
@@ -211,13 +215,13 @@ mod loader {
             self
         }
 
-        /// Override the [`HttpConnector`] used to build [`Config`](aws_types::config::Config).
+        /// Override the [`HttpConnector`] used to build [`SdkConfig`](aws_types::SdkConfig).
         pub fn http_connector(mut self, http_connector: HttpConnector) -> Self {
             self.http_connector = Some(http_connector);
             self
         }
 
-        /// Override the credentials provider used to build [`Config`](aws_types::config::Config).
+        /// Override the credentials provider used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
         ///
@@ -273,8 +277,8 @@ mod loader {
         ///
         /// NOTE: When an override is provided, the default implementation is **not** used as a fallback.
         /// This means that if you provide a region provider that does not return a region, no region will
-        /// be set in the resulting [`Config`](aws_types::config::Config)
-        pub async fn load(self) -> aws_types::config::Config {
+        /// be set in the resulting [`SdkConfig`](aws_types::SdkConfig)
+        pub async fn load(self) -> SdkConfig {
             let conf = self.provider_config.unwrap_or_default();
             let region = if let Some(provider) = self.region {
                 provider.region().await
@@ -304,15 +308,6 @@ mod loader {
                     .await
             };
 
-            let timeout_config = if let Some(timeout_config) = self.timeout_config {
-                timeout_config
-            } else {
-                timeout_config::default_provider()
-                    .configure(&conf)
-                    .timeout_config()
-                    .await
-            };
-
             let sleep_impl = if self.sleep.is_none() {
                 if default_async_sleep().is_none() {
                     tracing::warn!(
@@ -328,12 +323,24 @@ mod loader {
                 self.sleep
             };
 
-            let http_connector: HttpConnector = if let Some(http_connector) = self.http_connector {
+            let http_connector = if let Some(http_connector) = self.http_connector {
                 http_connector
             } else {
-                let settings = HttpSettings::default().with_timeout_config(timeout_config.clone());
+                let timeouts = self.timeout_config.clone().unwrap_or_default();
+                let settings = HttpSettings::default()
+                    .with_http_timeout_config(timeouts.http_timeouts())
+                    .with_tcp_timeout_config(timeouts.tcp_timeouts());
                 let sleep_impl = sleep_impl.clone();
                 HttpConnector::Prebuilt(default_connector(&settings, sleep_impl))
+            };
+
+            let timeout_config = if let Some(timeout_config) = self.timeout_config {
+                timeout_config
+            } else {
+                timeout_config::default_provider()
+                    .configure(&conf)
+                    .timeout_config()
+                    .await
             };
 
             let credentials_provider = if let Some(provider) = self.credentials_provider {
@@ -344,7 +351,7 @@ mod loader {
                 SharedCredentialsProvider::new(builder.build().await)
             };
 
-            let mut builder = Config::builder()
+            let mut builder = SdkConfig::builder()
                 .region(region)
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)

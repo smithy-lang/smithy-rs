@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdError
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.stdfmt
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
@@ -65,22 +66,7 @@ class ErrorGenerator(
     private val shape: StructureShape,
     private val error: ErrorTrait
 ) {
-    /*
-     * Renders an error specific for the client implementation.
-     */
-    fun render() {
-        renderError(false)
-    }
-
-    /*
-     * Renders an error specific for the server implementation, where the [name] method is added to allow
-     * to record encoutered error types inside `http::Extensions`.
-     */
-    fun renderServer() {
-        renderError(true)
-    }
-
-    private fun renderError(isServer: Boolean) {
+    fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         val symbol = symbolProvider.toSymbol(shape)
         val messageShape = shape.errorMessageMember()
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
@@ -105,7 +91,12 @@ class ErrorGenerator(
                 pub fn message(&self) -> $returnType { $message }
                 """
             )
-            if (isServer) {
+
+            /*
+             * If we're generating for a server, the `name` method is added to enable
+             * recording encountered error types inside `http::Extensions`s.
+             */
+            if (forWhom == CodegenTarget.SERVER) {
                 rust(
                     """
                     ##[doc(hidden)]

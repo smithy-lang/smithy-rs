@@ -46,7 +46,13 @@ class HttpBoundProtocolGenerator(
 ) : ProtocolGenerator(
     codegenContext,
     protocol,
-    MakeOperationGenerator(codegenContext, protocol, HttpBoundProtocolPayloadGenerator(codegenContext, protocol)),
+    MakeOperationGenerator(
+        codegenContext,
+        protocol,
+        HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+        public = true,
+        includeDefaultPayloadHeaders = true
+    ),
     HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 )
 

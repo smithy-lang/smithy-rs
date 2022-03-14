@@ -88,7 +88,7 @@ class Ec2QuerySerializerGeneratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = Ec2QuerySerializerGenerator(testCodegenContext(model))
-        val operationGenerator = parserGenerator.operationSerializer(model.lookup("test#Op"))
+        val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
@@ -134,10 +134,6 @@ class Ec2QuerySerializerGeneratorTest {
         project.withModule(RustModule.public("input")) {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/operation_ser.rs")
-        println("file:///${project.baseDir}/src/query_ser.rs")
         project.compileAndTest()
     }
 }

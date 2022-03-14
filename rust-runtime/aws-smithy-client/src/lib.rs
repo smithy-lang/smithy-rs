@@ -100,7 +100,6 @@ use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::retry::ProvideErrorKind;
-use aws_smithy_types::timeout::TimeoutConfig;
 use aws_smithy_types::tristate::TriState;
 
 /// Smithy service client.
@@ -131,7 +130,7 @@ pub struct Client<
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
-    timeout_config: TimeoutConfig,
+    timeout_config: aws_smithy_types::timeout::Config,
     sleep_impl: TriState<Arc<dyn AsyncSleep>>,
 }
 
@@ -167,12 +166,15 @@ impl<C, M> Client<C, M> {
 
 impl<C, M, R> Client<C, M, R> {
     /// Set the client's timeout configuration.
-    pub fn set_timeout_config(&mut self, timeout_config: TimeoutConfig) {
+    pub fn set_timeout_config(&mut self, timeout_config: aws_smithy_types::timeout::Config) {
         self.timeout_config = timeout_config;
     }
 
     /// Set the client's timeout configuration.
-    pub fn with_timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
+    pub fn with_timeout_config(
+        mut self,
+        timeout_config: aws_smithy_types::timeout::Config,
+    ) -> Self {
         self.set_timeout_config(timeout_config);
         self
     }
@@ -248,7 +250,7 @@ where
         let connector = self.connector.clone();
 
         let timeout_service_params = generate_timeout_service_params_from_timeout_config(
-            &self.timeout_config,
+            &self.timeout_config.api,
             self.sleep_impl.clone().into(),
         );
 

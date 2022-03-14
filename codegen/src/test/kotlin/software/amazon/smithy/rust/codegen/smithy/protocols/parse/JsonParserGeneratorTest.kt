@@ -200,10 +200,6 @@ class JsonParserGeneratorTest {
         project.withModule(RustModule.public("error")) {
             model.lookup<StructureShape>("test#Error").renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/json_deser.rs")
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/output.rs")
         project.compileAndTest()
     }
 }

@@ -135,8 +135,8 @@ private class AwsFluentClientExtensions(types: Types) {
 
                 /// Creates a new client from a shared config.
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
-                pub fn new(config: &#{aws_types}::config::Config) -> Self {
-                    Self::from_conf(config.into())
+                pub fn new(sdk_config: &#{aws_types}::sdk_config::SdkConfig) -> Self {
+                    Self::from_conf(sdk_config.into())
                 }
                 """,
                 *codegenScope,

@@ -28,6 +28,53 @@ impl<T> TriState<T> {
             None => Self::Unset,
         }
     }
+
+    /// Return `true` if this `TriState` is `Unset`
+    pub fn is_unset(&self) -> bool {
+        matches!(self, TriState::Unset)
+    }
+
+    /// Returns the tristate if it contains a set value or is disabled, otherwise returns `other`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::time::Duration;
+    /// # use aws_smithy_types::tristate::TriState;
+    /// let disabled_timeout: TriState<Duration> = TriState::Disabled;
+    /// let timeout: TriState<Duration> = TriState::Set(Duration::from_secs(1));
+    /// assert_eq!(timeout.or(disabled_timeout), TriState::Set(Duration::from_secs(1)));
+    ///
+    /// let disabled_timeout: TriState<Duration> = TriState::Disabled;
+    /// let timeout: TriState<Duration> = TriState::Set(Duration::from_secs(2));
+    /// assert_eq!(disabled_timeout.or(timeout), TriState::Disabled);
+    ///
+    /// let unset_timeout: TriState<Duration> = TriState::Unset;
+    /// let timeout: TriState<Duration> = TriState::Set(Duration::from_secs(3));
+    /// assert_eq!(unset_timeout.or(timeout), TriState::Set(Duration::from_secs(3)));
+    /// ```
+    pub fn or(self, other: TriState<T>) -> TriState<T> {
+        use TriState::*;
+
+        match self {
+            Set(_) | Disabled => self,
+            Unset => other,
+        }
+    }
+
+    /// Maps a `TriState<T>` to `TriState<U>` by applying a function to a contained value.
+    pub fn map<U, F>(self, f: F) -> TriState<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        use TriState::*;
+
+        match self {
+            Set(x) => Set(f(x)),
+            Unset => Unset,
+            Disabled => Disabled,
+        }
+    }
 }
 
 impl<T> Default for TriState<T> {

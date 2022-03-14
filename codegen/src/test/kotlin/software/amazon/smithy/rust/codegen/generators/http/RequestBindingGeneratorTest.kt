@@ -199,7 +199,7 @@ class RequestBindingGeneratorTest {
                     let mut o = String::new();
                     inp.test_uri_query(&mut o);
                     assert_eq!(o.as_str(), "?primitive=1&enabled=true")
-                 """
+                """
             )
 
             writer.unitTest(
@@ -232,7 +232,7 @@ class RequestBindingGeneratorTest {
 
                     let prefix_header = http_request.headers().get_all("X-Prefix-k").iter().map(|hv|std::str::from_utf8(hv.as_ref()).unwrap()).collect::<Vec<_>>();
                     assert_eq!(prefix_header, vec!["😹"])
-                 """
+                """
             )
 
             writer.unitTest(
@@ -247,7 +247,7 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header out of a cat emoji");
                     assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `😹` cannot be used as a header name: invalid HTTP header name)");
-                 """
+                """
             )
 
             writer.unitTest(
@@ -262,7 +262,7 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
                     assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
-                 """
+                """
             )
 
             writer.unitTest(
@@ -277,7 +277,7 @@ class RequestBindingGeneratorTest {
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
                     // make sure we obey the sensitive trait
                     assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
-                 """
+                """
             )
 
             writer.unitTest(
@@ -311,20 +311,17 @@ class RequestBindingGeneratorTest {
             writer.unitTest(
                 name = "empty_uri_label_produces_an_error",
                 test = """
-                 let ts = aws_smithy_types::DateTime::from_secs(10123125);
-                 let inp = PutObjectInput::builder()
-                     .bucket_name("")
-                     .key(ts.clone())
-                     .build().unwrap();
-                 let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
-                 assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
-                 """
+                    let ts = aws_smithy_types::DateTime::from_secs(10123125);
+                    let inp = PutObjectInput::builder()
+                        .bucket_name("")
+                        .key(ts.clone())
+                        .build().unwrap();
+                    let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
+                    assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
+                """
             )
         }
 
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/input.rs")
         project.compileAndTest()
     }
 }

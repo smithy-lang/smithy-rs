@@ -30,7 +30,7 @@ val DECORATORS = listOf(
     IntegrationTestDecorator(),
     AwsFluentClientDecorator(),
     CrateLicenseDecorator(),
-    SharedConfigDecorator(),
+    SdkConfigDecorator(),
     ServiceConfigDecorator(),
     AwsPresigningDecorator(),
     AwsReadmeDecorator(),

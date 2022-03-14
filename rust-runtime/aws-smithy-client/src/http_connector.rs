@@ -10,6 +10,7 @@ use crate::erase::DynConnector;
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_types::box_error::BoxError;
+use aws_smithy_types::timeout;
 use http::version::Version as HttpVersion;
 
 use std::error::Error;
@@ -108,22 +109,22 @@ impl std::error::Error for HttpConnectorError {}
 #[non_exhaustive]
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct MakeConnectorSettings {
-    /// Set a timeout for reading a stream of bytes
-    pub read_timeout: Option<Duration>,
-    /// Set a timeout for the connection phase of an HTTP request
-    pub connect_timeout: Option<Duration>,
+    /// Timeout configuration used when making HTTP connections
+    pub http_timeout_config: timeout::Http,
+    /// Timeout configuration used when creating TCP connections
+    pub tcp_timeout_config: timeout::Tcp,
 }
 
 impl MakeConnectorSettings {
-    /// Set the read timeout
-    pub fn with_read_timeout(mut self, read_timeout: Option<Duration>) -> Self {
-        self.read_timeout = read_timeout;
+    /// Set the HTTP timeouts to be used when making HTTP connections
+    pub fn with_http_timeout_config(mut self, http_timeout_config: timeout::Http) -> Self {
+        self.http_timeout_config = http_timeout_config;
         self
     }
 
-    /// Set the connect timeout
-    pub fn with_connect_timeout(mut self, connect_timeout: Option<Duration>) -> Self {
-        self.connect_timeout = connect_timeout;
+    /// Set the TCP timeouts to be used when creating TCP connections
+    pub fn with_tcp_timeout_config(mut self, tcp_timeout_config: timeout::Tcp) -> Self {
+        self.tcp_timeout_config = tcp_timeout_config;
         self
     }
 }
