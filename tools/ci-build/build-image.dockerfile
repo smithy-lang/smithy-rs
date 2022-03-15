@@ -77,7 +77,8 @@ RUN set -eux; \
     cd smithy-rs; \
     git checkout ${smithy_rs_revision}; \
     cargo install --path tools/publisher; \
-    cargo +${rust_nightly_version} install --path tools/api-linter;
+    cargo +${rust_nightly_version} install --path tools/api-linter; \
+    cargo install --path tools/sdk-lints;
 
 #
 # Final image

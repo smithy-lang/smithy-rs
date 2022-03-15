@@ -13,6 +13,9 @@ env:
   java_version: 11
 
 jobs:
+  # This job detects if the PR made changes to build tools. If it did, then it builds a new
+  # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
+  # it uploads the image as a build artifact for other jobs to download and use.
   acquire-build-image:
     name: Acquire build image
     runs-on: ubuntu-latest
@@ -31,25 +34,8 @@ jobs:
         path: smithy-rs-build-image
         retention-days: 1
 
-  repo-lint:
-    name: Repo Lints
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
-        components: ${{ env.rust_toolchain_components }}
-        default: true
-    - run: cargo run -- check --all
-      name: run checks
-      working-directory: tools/sdk-lints
-    - run: cargo run -- fix --all
-      name: run fixes
-      working-directory: tools/sdk-lints
-
-  codegen-tests:
-    name: Codegen Tests
+  tests:
+    name: Tests
     needs: acquire-build-image
     runs-on: ubuntu-latest
     # To avoid repeating setup boilerplate, we have the actual test commands
@@ -58,8 +44,8 @@ jobs:
       fail-fast: false
       matrix:
         test:
-        - name: Kotlin Style
-          action: check-kotlin-style
+        - name: Style checks and lints
+          action: check-style-and-lints
         - name: BuildSrc Tests
           action: check-buildsrc-tests
         - name: Client Unit Tests

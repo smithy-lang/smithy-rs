@@ -6,4 +6,6 @@
 
 set -eux
 cd workspace/smithy-rs
+sdk-lints check --all
+sdk-lints fix --all
 ./gradlew ktlint
