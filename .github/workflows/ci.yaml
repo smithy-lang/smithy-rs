@@ -80,7 +80,6 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: smithy-rs-build-image
-        path: smithy-rs-build-image
     - name: Load build image
       run: docker load -i smithy-rs-build-image
     # This runs the commands from the matrix strategy
