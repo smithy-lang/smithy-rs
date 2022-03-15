@@ -139,8 +139,8 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         return orderedDecorators.forEach { it.extras(codegenContext, rustCrate) }
     }
 
-    override fun transformModel(service: ServiceShape, baseModel: Model): Model {
-        return orderedDecorators.foldRight(baseModel) { decorator, model ->
+    override fun transformModel(service: ServiceShape, model: Model): Model {
+        return orderedDecorators.foldRight(model) { decorator, model ->
             decorator.transformModel(service, model)
         }
     }
