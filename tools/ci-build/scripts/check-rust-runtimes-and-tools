@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+#
+
+set -eux
+cd workspace/smithy-rs
+
+for runtime_path in \
+    "rust-runtime" \
+    "aws/rust-runtime"
+do
+    pushd "${runtime_path}" &>/dev/null
+    cargo clippy --all-features
+    cargo test --all-features
+    cargo doc --no-deps --document-private-items --all-features
+    popd &>/dev/null
+done
+
+for tool_path in \
+    "tools/api-linter" \
+    "tools/publisher" \
+    "tools/sdk-lints" \
+    "tools/sdk-versioner" \
+    "tools/smithy-rs-sync" \
+    "tools/smithy-rs-tool-common"
+do
+    pushd "${tool_path}" &>/dev/null
+    cargo clippy --all-features
+    cargo test --all-features
+    popd &>/dev/null
+done

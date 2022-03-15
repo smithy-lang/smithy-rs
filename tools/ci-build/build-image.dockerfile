@@ -42,7 +42,8 @@ ARG cargo_hack_version=0.5.12
 ARG smithy_rs_revision=main
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
-    PATH=/opt/cargo/bin/:${PATH}
+    PATH=/opt/cargo/bin/:${PATH} \
+    CARGO_INCREMENTAL=0
 WORKDIR /root
 RUN yum -y updateinfo && \
     yum -y install \
@@ -109,7 +110,10 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     RUSTUP_HOME=/opt/rustup \
     JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto.x86_64 \
     GRADLE_USER_HOME=/home/build/.gradle \
-    RUST_NIGHTLY_VERSION=${rust_nightly_version}
+    RUST_NIGHTLY_VERSION=${rust_nightly_version} \
+    CARGO_INCREMENTAL=0 \
+    RUSTDOCFLAGS="-D warnings" \
+    RUSTFLAGS="-D warnings"
 COPY ./scripts /home/build/scripts
 WORKDIR /home/build
 RUN /home/build/scripts/sanity-test

@@ -49,10 +49,10 @@ jobs:
       fail-fast: false
       matrix:
         test:
-        - name: Style checks and lints
+        - name: Lints
           action: check-style-and-lints
-        - name: BuildSrc Tests
-          action: check-buildsrc-tests
+        - name: Rust Runtimes and Tools
+          action: check-rust-runtimes-and-tools
         - name: Client Unit Tests
           action: check-client-codegen-unit-tests
         - name: SDK Unit Tests
@@ -63,6 +63,8 @@ jobs:
           action: check-client-codegen-integration-tests
         - name: Server Integration Tests
           action: check-server-codegen-integration-tests
+        - name: Generate smithy-rs Runtime Bundle
+          action: generate-smithy-rs-runtime-bundle
     steps:
     - uses: actions/checkout@v2
       with:
@@ -97,18 +99,16 @@ jobs:
     # This runs the commands from the matrix strategy
     - name: ${{ matrix.test.name }}
       run: ./smithy-rs/tools/ci-build/ci-action ${{ matrix.test.action }}
+    - name: Upload artifacts
+      if: ${{ matrix.test.action == 'generate-smithy-rs-runtime-bundle' }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: smithy-rs-runtime-${{ github.sha }}
+        path: artifacts
 
-  rust-tests:
-    name: Rust Tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        runtime: [rust-runtime, aws/rust-runtime, tools/publisher]
-        exclude:
-        # Don't need to test the publisher tool on Windows
-        - os: windows-latest
-          runtime: tools/publisher
+  windows-rust-tests:
+    name: Windows Rust Tests
+    runs-on: windows-latest
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0
@@ -116,7 +116,7 @@ jobs:
       RUSTFLAGS: -D warnings
     steps:
     - uses: actions/checkout@v2
-    # Pinned to the commit hash of v1.3.0
+      # Pinned to the commit hash of v1.3.0
     - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
       with:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
@@ -126,61 +126,28 @@ jobs:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
         default: true
-    - name: Format Check
-      run: rustfmt --check --edition 2018 $(find -name '*.rs' -print | grep -v /target/)
-      # windows doesn't support using --check like this
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-    - name: clippy check
-      run: cargo clippy --all-features -- -D warnings
-      working-directory: ${{ matrix.runtime }}
-      # don't bother running Clippy twice, it will have the same results on Windows
-      if: ${{ matrix.os == 'ubuntu-latest' }}
     - name: run tests
-      run: cargo test --all-features
-      working-directory: ${{ matrix.runtime }}
-    - name: generate docs
-      run: cargo doc --no-deps --document-private-items --all-features
-      working-directory: ${{ matrix.runtime }}
+      shell: bash
+      run: |
+        for runtime_path in "rust-runtime" "aws/rust-runtime"; do
+          pushd "${runtime_path}" &>/dev/null
+          cargo test --all-features
+          cargo doc --no-deps --document-private-items --all-features
+          popd &>/dev/null
+        done
 
-  # Psuedo-job that depends on the rust-tests job so that we don't have to enter
+  # Psuedo-job that depends on matrix jobs so that we don't have to enter
   # the myriad of test matrix combinations into GitHub's protected branch rules
-  require-rust-tests:
-    needs: rust-tests
+  require-all:
+    needs:
+    - tests
+    - windows-rust-tests
     # Run this job even if its dependency jobs fail
     if: always()
     runs-on: ubuntu-latest
-    name: Rust Tests Matrix Success
+    name: Matrix Success
     steps:
     - name: Verify jobs succeeded
       uses: re-actors/alls-green@3a2de129f0713010a71314c74e33c0e3ef90e696
       with:
         jobs: ${{ toJSON(needs) }}
-
-  runtime-bundle:
-    name: Produce smithy-rs runtime bundle
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - uses: actions/cache@v2
-      name: Gradle Cache
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-      # Pinned to the commit hash of v1.3.0
-    - name: Set up JDK
-      uses: actions/setup-java@v1
-      with:
-        java-version: ${{ env.java_version }}
-    - name: Produce bundle
-      run: |
-        ./gradlew rust-runtime:assemble
-        tar cfvz smithy-rs-runtime.tar.gz -C rust-runtime/build smithy-rs
-    - uses: actions/upload-artifact@v3
-      name: Upload bundle
-      with:
-        name: smithy-rs-runtime-${{ github.sha }}
-        path: smithy-rs-runtime.tar.gz
