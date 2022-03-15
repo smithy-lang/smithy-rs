@@ -95,6 +95,8 @@ RUN set -eux; \
         gcc \
         git \
         java-11-amazon-corretto-headless \
+        openssl-devel \
+        pkgconfig \
         python3 \
         shadow-utils; \
     yum clean all; \
