@@ -78,7 +78,8 @@ RUN set -eux; \
     git checkout ${smithy_rs_revision}; \
     cargo install --path tools/publisher; \
     cargo +${rust_nightly_version} install --path tools/api-linter; \
-    cargo install --path tools/sdk-lints;
+    cargo install --path tools/sdk-lints; \
+    chmod g+rw -R /opt/cargo/registry
 
 #
 # Final image
@@ -103,7 +104,6 @@ RUN set -eux; \
 COPY --chown=build:build --from=install_node /opt/nodejs /opt/nodejs
 COPY --chown=build:build --from=install_rust /opt/cargo /opt/cargo
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
-RUN chmod g+rw -R /opt/cargo/registry
 ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
