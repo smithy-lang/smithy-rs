@@ -13,9 +13,12 @@ import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGener
 import software.amazon.smithy.rust.codegen.smithy.customizations.CrateVersionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.HttpChecksumRequiredGenerator
+import software.amazon.smithy.rust.codegen.smithy.customizations.HttpVersionListGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.IdempotencyTokenGenerator
+import software.amazon.smithy.rust.codegen.smithy.customizations.MakeConnectorSettingsFromConfigGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.SmithyTypesPubUseGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 
 /** A set of customizations that are included in all protocols.
  *
@@ -30,10 +33,18 @@ class RequiredCustomizations : RustCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + IdempotencyTokenGenerator(codegenContext, operation) + EndpointPrefixGenerator(
-            codegenContext,
-            operation
-        ) + HttpChecksumRequiredGenerator(codegenContext, operation)
+        return baseCustomizations +
+            IdempotencyTokenGenerator(codegenContext, operation) +
+            EndpointPrefixGenerator(codegenContext, operation) +
+            HttpChecksumRequiredGenerator(codegenContext, operation) +
+            HttpVersionListGenerator(codegenContext)
+    }
+
+    override fun configCustomizations(
+        codegenContext: CodegenContext,
+        baseCustomizations: List<ConfigCustomization>
+    ): List<ConfigCustomization> {
+        return baseCustomizations + MakeConnectorSettingsFromConfigGenerator(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(

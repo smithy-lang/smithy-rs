@@ -16,7 +16,6 @@
 use std::collections::HashMap;
 
 pub mod base64;
-pub mod box_error;
 pub mod date_time;
 pub mod primitive;
 pub mod retry;
@@ -262,3 +261,6 @@ pub mod error {
 
     impl std::error::Error for Error {}
 }
+
+/// A boxed [std::error::Error] trait object that's [Send] and [Sync]
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

@@ -6,16 +6,16 @@
 //! Default connectors based on what TLS features are active. Also contains HTTP-related abstractions
 //! that enable passing HTTP connectors around.
 
+use crate::bounds::SmithyConnector;
 use crate::erase::DynConnector;
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_types::box_error::BoxError;
 use aws_smithy_types::timeout;
+use aws_smithy_types::BoxError;
 use http::version::Version as HttpVersion;
 
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::time::Duration;
 use std::{fmt::Debug, sync::Arc};
 
 /// Type alias for a Connector factory function.
@@ -68,8 +68,11 @@ impl HttpConnector {
         }
     }
 
+    /// Attempt to create an [HttpConnector] from defaults. This will return an
+    /// [`Err(HttpConnectorError::NoAvailableDefault)`](HttpConnectorError) if default features
+    /// are disabled.
     pub fn try_default() -> Result<Self, HttpConnectorError> {
-        if cfg!(feature = rustls) {
+        if cfg!(feature = "rustls") {
             todo!("How do I actually create this?");
             // Ok(HttpConnector::ConnectorFn(Arc::new(
             //     |settings: &MakeConnectorSettings, sleep_impl: Option<Arc<dyn AsyncSleep>>| {
@@ -82,22 +85,55 @@ impl HttpConnector {
     }
 }
 
+/// A trait allowing for the easy conversion of various testing connectors into an `HttpConnector`
+pub trait MakeTestConnector {
+    /// Convert
+    fn make_test_connector(self) -> HttpConnector;
+}
+
+// TODO can we do some downcasting magic to avoid double-wrapping this if it's already a `DynConnector`?
+impl<C> MakeTestConnector for C
+where
+    C: SmithyConnector,
+{
+    fn make_test_connector(self) -> HttpConnector {
+        HttpConnector::Prebuilt(Some(DynConnector::new(self)))
+    }
+}
+
+/// Errors related to the creation and use of [HttpConnector]s
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum HttpConnectorError {
+    /// Tried to create a new [HttpConnector] from default but couldn't because default features were disabled
     NoAvailableDefault,
+    /// Expected an [HttpConnector] to be set but none was set
     NoConnectorDefined,
+    /// Expected at least one [http::Version] to be set but none was set
+    NoHttpVersionsSpecified,
 }
 
 impl Display for HttpConnectorError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        use HttpConnectorError::*;
         match self {
-            HttpConnectorError::NoAvailableDefault => {
+            NoAvailableDefault => {
                 // TODO Update this error message with a link to an example demonstrating how to fix it
                 write!(
                     f,
                     "When default features are disabled, an HttpConnector must be set manually."
                 )
+            }
+            NoConnectorDefined => {
+                write!(
+                    f,
+                    // TODO in what cases does this error actually appear?
+                    "No connector was defined"
+                )
+            }
+            // TODO should this really be an error?
+            NoHttpVersionsSpecified => {
+                write!(f, "Couldn't get or create a client because no HTTP versions were specified as valid.")
             }
         }
     }
@@ -107,7 +143,7 @@ impl std::error::Error for HttpConnectorError {}
 
 /// HttpSettings for HTTP Connectors
 #[non_exhaustive]
-#[derive(Default, Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Hash, PartialEq, Eq)]
 pub struct MakeConnectorSettings {
     /// Timeout configuration used when making HTTP connections
     pub http_timeout_config: timeout::Http,
@@ -116,6 +152,11 @@ pub struct MakeConnectorSettings {
 }
 
 impl MakeConnectorSettings {
+    /// Create a new `MakeConnectorSettings` from defaults
+    pub fn new() -> Self {
+        Default::default()
+    }
+
     /// Set the HTTP timeouts to be used when making HTTP connections
     pub fn with_http_timeout_config(mut self, http_timeout_config: timeout::Http) -> Self {
         self.http_timeout_config = http_timeout_config;
@@ -134,13 +175,9 @@ impl MakeConnectorSettings {
 pub struct ConnectorKey {
     /// The HTTP-related settings that were used to create the client that this key points to
     pub make_connector_settings: MakeConnectorSettings,
-    /// The desired HTTP version that was uset to create the client that this key points to
+    /// The desired HTTP version that was used to create the client that this key points to
     pub http_version: HttpVersion,
 }
-
-/// A list of supported or desired HttpVersions. Typically use when requesting an HTTP Client from a
-/// client cache.
-pub type HttpVersionList = Vec<HttpVersion>;
 
 // // The referenced version of ConnectorKey
 // // TODO I'm not sure how to make these lifetimes work yet

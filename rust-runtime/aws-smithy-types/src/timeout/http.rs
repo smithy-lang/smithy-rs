@@ -8,7 +8,7 @@ use std::time::Duration;
 
 /// HTTP timeouts used by `DynConnector`s
 #[non_exhaustive]
-#[derive(Clone, PartialEq, Default, Debug)]
+#[derive(Clone, PartialEq, Eq, Default, Debug, Hash)]
 pub struct Http {
     connect: TriState<Duration>,
     write: TriState<Duration>,

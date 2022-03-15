@@ -8,7 +8,7 @@ use std::time::Duration;
 
 /// TCP timeouts used by lower-level `DynConnector`s
 #[non_exhaustive]
-#[derive(Clone, PartialEq, Default, Debug)]
+#[derive(Clone, PartialEq, Eq, Default, Debug, Hash)]
 pub struct Tcp {
     connect: TriState<Duration>,
     write: TriState<Duration>,

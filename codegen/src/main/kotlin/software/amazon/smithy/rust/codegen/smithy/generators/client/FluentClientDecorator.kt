@@ -267,17 +267,47 @@ class FluentClientGenerator(
         TopDownIndex.of(codegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
-    private val dynConnector = RuntimeType("DynConnector", clientDep, "aws_smithy_client::erase")
-    private val dynMiddleware = RuntimeType("DynMiddleware", clientDep, "aws_smithy_client::erase")
-    private val makeConnectorSettings = RuntimeType("MakeConnectorSettings", clientDep, "aws_smithy_client::http_connector")
-    private val connectorKey = RuntimeType("ConnectorKey", clientDep, "aws_smithy_client::http_connector")
-    private val httpConnector = RuntimeType("HttpConnector", clientDep, "aws_smithy_client::http_connector")
-    private val httpVersionList = RuntimeType("HttpVersionList", clientDep, "aws_smithy_client::http_connector")
-    private val tokioDep = CargoDependency.Tokio.withFeature("sync")
-    private val rwLock = RuntimeType("RwLock", tokioDep, "tokio::sync")
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
+
+    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
+    private val tokioDep = CargoDependency.Tokio.withFeature("sync")
+
+    private val connectorKey = RuntimeType("ConnectorKey", clientDep, "aws_smithy_client::http_connector")
+    private val dynConnector = RuntimeType("DynConnector", clientDep, "aws_smithy_client::erase")
+    private val dynMiddleware = RuntimeType("DynMiddleware", clientDep, "aws_smithy_client::erase")
+    private val httpConnector = RuntimeType("HttpConnector", clientDep, "aws_smithy_client::http_connector")
+    private val httpConnectorError = RuntimeType("HttpConnectorError", clientDep, "aws_smithy_client::http_connector")
+    private val httpVersion = RuntimeType("Version", CargoDependency.Http, "http::version")
+    private val httpVersionList = RuntimeType("HttpVersionList", clientDep, "aws_smithy_http::http_versions")
+    private val makeConnectorSettings = RuntimeType("MakeConnectorSettings", clientDep, "aws_smithy_client::http_connector")
+    private val rwLock = RuntimeType("RwLock", tokioDep, "tokio::sync")
+
+    private val codegenScope = arrayOf(
+        "client" to clientDep.asType(),
+        "connectorKey" to connectorKey,
+        "dynConnector" to dynConnector,
+        "dynMiddleware" to dynMiddleware,
+        "generics_decl" to generics.decl,
+        "httpConnector" to httpConnector,
+        "httpConnectorError" to httpConnectorError,
+        "httpVersion" to httpVersion,
+        "httpVersionList" to httpVersionList,
+        "makeConnectorSettings" to makeConnectorSettings,
+        "rwLock" to rwLock,
+        "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType().copy(name = "result::SdkError"),
+        "smithy_inst" to generics.smithyInst,
+        "client_docs" to writable
+        {
+            customizations.forEach {
+                it.section(
+                    FluentClientSection.FluentClientDocs(
+                        serviceShape
+                    )
+                )(this)
+            }
+        }
+    )
 
     fun render(crate: RustCrate) {
         crate.withModule(clientModule) { writer ->
@@ -288,44 +318,48 @@ class FluentClientGenerator(
     private fun renderFluentClient(writer: RustWriter) {
         writer.rustTemplate(
             """
+            type SharedSmithyClient = std::sync::Arc<#{client}::Client#{smithy_inst:W}>;
+            type ClientsMap = std::sync::Arc<
+                #{rwLock}<
+                    std::collections::HashMap<#{connectorKey}, SharedSmithyClient>
+                >
+            >;
+
             ##[derive(Debug)]
             pub(crate) struct Handle#{generics_decl:W} {
-                pub(crate) clients: #{RwLock}<
-                    std::collections::HashMap<
-                        #{ConnectorKey},
-                        std::sync::Arc<#{client}::Client#{smithy_inst:W}>
-                    >
-                >,
+                pub(crate) clients: ClientsMap,
                 pub(crate) conf: crate::Config,
             }
 
             impl Handle#{generics_decl:W} {
                 pub fn from_conf(conf: crate::Config) -> Self {
-                    use std::collections::HashMap;
-
-                    let clients: HashMap<#{ConnectorKey}, #{client}::Client#{smithy_inst:W}> = HashMap::new();
-                    let clients = #{RwLock}::new(clients);
+                    let clients: std::collections::HashMap<#{connectorKey}, SharedSmithyClient> = std::collections::HashMap::new();
+                    let clients = std::sync::Arc::new(#{rwLock}::new(clients));
 
                     Self { clients, conf }
                 }
 
                 pub async fn get_or_create_client<E>(
-                    &mut self,
-                    make_connector_settings: #{MakeConnectorSettings},
-                    http_versions: #{HttpVersionList},
-                    middleware: #{DynMiddleware}<#{DynConnector}>,
+                    &self,
+                    make_connector_settings: &#{makeConnectorSettings},
+                    http_versions: &[#{httpVersion}],
                 ) -> Result<
                     std::sync::Arc<#{client}::Client#{smithy_inst:W}>,
                     #{sdk_err}<E>
                 > {
-                    let mut construction_failure = None;
+                    if http_versions.is_empty() {
+                        return Err(#{sdk_err}::ConstructionFailure(Box::new(
+                            #{httpConnectorError}::NoHttpVersionsSpecified,
+                        )));
+                    }
 
+                    let mut construction_failure = None;
                     for http_version in http_versions {
                         // TODO Use some Cow magic so that cloning this is cheap
-                        let make_connector_settings = make_connector_settings.clone();
-                        let connector_key = aws_smithy_client::http_connector::ConnectorKey {
-                            make_connector_settings,
-                            http_version,
+                        let connector_key = #{connectorKey} {
+                            // TODO Use some Cow magic so that cloning this is cheap
+                            make_connector_settings: make_connector_settings.clone(),
+                            http_version: http_version.clone(),
                         };
 
                         // Try to fetch an existing client and return early if we find one
@@ -334,7 +368,7 @@ class FluentClientGenerator(
                         }
 
                         // Otherwise, create the new client, store a copy of it in the client cache, and then return it
-                        let middleware = middleware.clone();
+                        let middleware = #{dynMiddleware}::new(self.conf.default_middleware());
                         match self
                             .initialize_and_store_new_client(connector_key, middleware)
                             .await
@@ -344,152 +378,76 @@ class FluentClientGenerator(
                         }
                     }
 
-                    Err(construction_failure.expect("We early return on success so this must contain an error and is therefore safe to unwrap"))
+                    Err(construction_failure.expect(
+                        "We early return on success so this must contain an error and is therefore safe to unwrap"
+                    ))
                 }
 
                 async fn fetch_existing_client(
                     &self,
-                    connector_key: &#{ConnectorKey}
-                ) -> Option<Arc<#{client}::Client#{smithy_inst:W}>> {
+                    connector_key: &#{connectorKey}
+                ) -> Option<std::sync::Arc<#{client}::Client#{smithy_inst:W}>> {
                     let clients = self.clients.read().await;
                     clients.get(connector_key).cloned()
                 }
 
                 async fn initialize_and_store_new_client<E>(
-                    &mut self,
-                    connector_key: #{ConnectorKey},
-                    middleware: #{DynMiddleware}<#{DynConnector}>,
+                    &self,
+                    connector_key: #{connectorKey},
+                    middleware: #{dynMiddleware}<#{dynConnector}>,
                 ) -> Result<
                     std::sync::Arc<#{client}::Client#{smithy_inst:W}>,
                     #{sdk_err}<E>
                 > {
                     let sleep_impl = self.conf.sleep_impl.clone();
-
-                    let connector = match self.conf.http_connector {
-                        Some(connector) => Ok(connector),
-                        None => #{HttpConnector}::try_default()
-                            .map_err(|err| #{sdk_err}::ConstructionFailure(err)),
-                    }
-                    .load(connector_key.make_connector_settings, sleep_impl)?;
-
-                    let mut builder = #{client}::Builder::dyn_https()
+                    let connector = match &self.conf.http_connector {
+                        Some(connector) => Ok(connector.clone()),
+                        None => #{httpConnector}::try_default()
+                            .map_err(|err| #{sdk_err}::ConstructionFailure(err.into())),
+                    }?
+                    .load(&connector_key.make_connector_settings, sleep_impl.clone())
+                    .map_err(|err| #{sdk_err}::ConstructionFailure(err.into()))?;
+                    let mut builder = #{client}::Builder::new()
                         .connector(connector)
                         .middleware(middleware);
-
                     let retry_config = self.conf.retry_config.as_ref().cloned().unwrap_or_default();
-                    let timeout_config = self.conf.timeout_config.as_ref().cloned().unwrap_or_default();
+                    let timeout_config = self
+                        .conf
+                        .timeout_config
+                        .as_ref()
+                        .cloned()
+                        .unwrap_or_default();
                     builder.set_retry_config(retry_config.into());
                     builder.set_timeout_config(timeout_config);
                     // the builder maintains a try-state. To avoid suppressing the warning when sleep is unset,
                     // only set it if we actually have a sleep impl.
-                    if let Some(sleep_impl) = sleep_impl {
+                    if let Some(sleep_impl) = sleep_impl.clone() {
                         builder.set_sleep_impl(Some(sleep_impl));
                     }
-                    let client = builder.build();
-
+                    let client = std::sync::Arc::new(builder.build());
                     let mut clients = self.clients.write().await;
                     clients.insert(connector_key, client.clone());
-
                     Ok(client)
                 }
             }
 
             #{client_docs:W}
-            ##[derive(std::fmt::Debug)]
+            ##[derive(Debug, Clone)]
             pub struct Client#{generics_decl:W} {
-                handle: std::sync::Arc<Handle${generics.inst}>,
-                middleware: #{DynMiddleware}
-            }
-
-            impl${generics.inst} std::clone::Clone for Client${generics.inst} {
-                fn clone(&self) -> Self {
-                    Self { handle: self.handle.clone(), middleware: self.middleware.clone() }
-                }
+                smithy_clients: std::sync::Arc<Handle${generics.inst}>,
+                // TODO insert this with string formatting instead
+                middleware: crate::middleware::DefaultMiddleware,
             }
 
             ##[doc(inline)]
             pub use #{client}::Builder;
 
-            impl${generics.inst} From<#{client}::Client#{smithy_inst:W}> for Client${generics.inst} {
-                fn from(client: #{client}::Client#{smithy_inst:W}) -> Self {
-                    Self::with_config(client, crate::Config::builder().build())
-                }
-            }
-
-            impl Into<#{ConnectorKey}> for &crate::Config {
-                fn into(self) -> #{ConnectorKey} {
-                    use http::version::Version as HttpVersion;
-
-                    let mut make_connector_settings = #{MakeConnectorSettings}::default();
-
-                    if let Some(timeout_config) = self.timeout_config.as_ref() {
-                        make_connector_settings = make_connector_settings
-                            .with_read_timeout(timeout_config.read_timeout())
-                            .with_connect_timeout(timeout_config.connect_timeout());
-                    }
-
-                    #{ConnectorKey} {
-                        http_version: HttpVersion::HTTP_11,
-                        make_connector_settings,
-                    }
-                }
-            }
-
             impl${generics.inst} Client${generics.inst} {
-                /// Creates a client with the given service configuration.
-                pub fn with_config(client: #{client}::Client#{smithy_inst:W}, conf: crate::Config) -> Self {
-                    use std::sync::Arc;
-                    use std::collections::HashMap;
-                    use http::version::Version as HttpVersion;
-
-                    let mut make_connector_settings = #{MakeConnectorSettings}::default();
-
-                    if let Some(timeout_config) = conf.timeout_config.as_ref() {
-                        make_connector_settings = make_connector_settings
-                            .with_read_timeout(timeout_config.read_timeout())
-                            .with_connect_timeout(timeout_config.connect_timeout());
-                    }
-
-                    let connector_key = #{ConnectorKey} {
-                        http_version: HttpVersion::HTTP_11,
-                        make_connector_settings,
-                    };
-
-                    let mut clients = HashMap::new();
-                    clients.insert(connector_key, Arc::new(client));
-                    let clients = #{RwLock}::new(clients);
-
-                    Self {
-                        handle: Arc::new(Handle { clients, conf }),
-                    }
-                }
-
                 /// Returns the client's configuration.
-                pub fn conf(&self) -> &crate::Config { &self.handle.conf }
+                pub fn conf(&self) -> &crate::Config { &self.smithy_clients.conf }
             }
             """,
-            "generics_decl" to generics.decl,
-            "smithy_inst" to generics.smithyInst,
-            "client" to clientDep.asType(),
-            "DynMiddleware" to dynMiddleware,
-            "DynConnector" to dynConnector,
-            "MakeConnectorSettings" to makeConnectorSettings,
-            "HttpConnector" to httpConnector,
-            "ConnectorKey" to connectorKey,
-            "HttpVersionList" to httpVersionList,
-            "RwLock" to rwLock,
-            "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType()
-                .copy(name = "result::SdkError"),
-            "client_docs" to writable
-            {
-                customizations.forEach {
-                    it.section(
-                        FluentClientSection.FluentClientDocs(
-                            serviceShape
-                        )
-                    )(this)
-                }
-            },
+            *codegenScope,
         )
         writer.rustBlockTemplate(
             "impl${generics.inst} Client${generics.inst} #{bounds:W}",
@@ -546,7 +504,7 @@ class FluentClientGenerator(
                         symbolProvider
                     )
                     }(&self) -> fluent_builders::$name${generics.inst} {
-                        fluent_builders::$name::new(self.handle.clone(), self.middleware.clone())
+                        fluent_builders::$name::new(self.smithy_clients.clone())
                     }
                     """
                 )
@@ -581,17 +539,16 @@ class FluentClientGenerator(
                 rustTemplate(
                     """
                     pub struct ${operationSymbol.name}#{generics:W} {
-                        handle: std::sync::Arc<super::Handle${generics.inst}>,
+                        smithy_clients: std::sync::Arc<super::Handle${generics.inst}>,
                         inner: #{Inner},
-                        middleware: #{DynMiddleware}<#{DynConnector}>
                     }
                     """,
                     "Inner" to input.builderSymbol(symbolProvider),
                     "client" to clientDep.asType(),
                     "generics" to generics.decl,
                     "operation" to operationSymbol,
-                    "DynMiddleware" to dynMiddleware,
-                    "DynConnector" to dynConnector,
+                    "dynMiddleware" to dynMiddleware,
+                    "dynConnector" to dynConnector,
                 )
 
                 rustBlockTemplate(
@@ -606,8 +563,8 @@ class FluentClientGenerator(
                     rustTemplate(
                         """
                         /// Creates a new `${operationSymbol.name}`.
-                        pub(crate) fn new(handle: std::sync::Arc<super::Handle${generics.inst}>, middleware: #{DynMiddleware}<#{DynConnector}>) -> Self {
-                            Self { handle, middleware, inner: Default::default() }
+                        pub(crate) fn new(smithy_clients: std::sync::Arc<super::Handle${generics.inst}>) -> Self {
+                            Self { smithy_clients, inner: Default::default() }
                         }
 
                         /// Sends the request and returns the response.
@@ -618,20 +575,30 @@ class FluentClientGenerator(
                         /// By default, any retryable failures will be retried twice. Retry behavior
                         /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
                         /// set when configuring the client.
-                        pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
+                        pub async fn send(self) -> Result<#{ok}, #{sdk_err}<#{operation_err}>>
                         #{send_bounds:W} {
-                            let op = self.inner.build().map_err(|err| #{sdk_err}::ConstructionFailure(err.into()))?
-                                .make_operation(&self.handle.conf)
+                            let op = self.inner.build()
+                                .map_err(|err| #{sdk_err}::ConstructionFailure(err.into()))?
+                                .make_operation(&self.smithy_clients.conf)
                                 .await
                                 .map_err(|err| aws_smithy_http::result::SdkError::ConstructionFailure(err.into()))?;
 
                             // Acquire the prioritized HttpVersion list
-                            let http_versions = op.properties().get::<#{HttpVersionList}>();
+                            let http_versions = op
+                                .properties()
+                                .get::<#{httpVersionList}>()
+                                // TODO do we have to clone this? Can we cow it?
+                                .cloned()
+                                .unwrap_or_else(|| vec![#{httpVersion}::HTTP_11]);
 
-                            let make_connector_settings = self.handle.conf.into();
+                            let make_connector_settings = (&self.smithy_clients.conf).into();
 
-                            let client = self.handle
-                                .get_or_create_client(&make_connector_settings, &http_versions, self.middleware)
+                            let client = self
+                                .smithy_clients
+                                .get_or_create_client::<#{sdk_err}<#{operation_err}>>(
+                                    &make_connector_settings,
+                                    &http_versions,
+                                )
                                 .await
                                 .map_err(|err| #{sdk_err}::ConstructionFailure(err.into()))?;
 
@@ -643,9 +610,10 @@ class FluentClientGenerator(
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType()
                             .copy(name = "result::SdkError"),
                         "send_bounds" to generics.sendBounds(inputType, outputType, errorType),
-                        "DynMiddleware" to dynMiddleware,
-                        "DynConnector" to dynConnector,
-                        "HttpVersionList" to httpVersionList,
+                        "dynMiddleware" to dynMiddleware,
+                        "dynConnector" to dynConnector,
+                        "httpVersion" to httpVersion,
+                        "httpVersionList" to httpVersionList,
                     )
                     PaginatorGenerator.paginatorType(codegenContext, generics, operation)?.also { paginatorType ->
                         rustTemplate(
@@ -654,7 +622,7 @@ class FluentClientGenerator(
                             ///
                             /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`Stream`](tokio_stream::Stream).
                             pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
-                                #{Paginator}::new(self.handle, self.inner)
+                                #{Paginator}::new(self.smithy_clients, self.inner)
                             }
                             """,
                             "Paginator" to paginatorType

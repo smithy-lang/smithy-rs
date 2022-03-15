@@ -76,6 +76,11 @@ sealed class ServiceConfig(name: String) : Section(name) {
      *  ```
      */
     object BuilderBuild : ServiceConfig("BuilderBuild")
+
+    /**
+     * Section where various trait implementations of a config or builder struct will be placed
+     */
+    object TraitImpls : ServiceConfig("TraitImpls")
 }
 
 fun ServiceShape.needsIdempotencyToken(model: Model): Boolean {
@@ -126,7 +131,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
             }
         }
 
-        // Custom implementation for Debug so we don't need to enforce Debug down the chain
+        // Custom implementation for `Debug` so we don't need to enforce `Debug` down the chain
         writer.rustBlock("impl std::fmt::Debug for Config") {
             rustTemplate(
                 """
@@ -171,6 +176,9 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
                     }
                 }
             }
+        }
+        customizations.forEach {
+            it.section(ServiceConfig.TraitImpls)(writer)
         }
     }
 }

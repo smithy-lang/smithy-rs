@@ -34,6 +34,7 @@ val DECORATORS = listOf(
     ServiceConfigDecorator(),
     AwsPresigningDecorator(),
     AwsReadmeDecorator(),
+    DefaultMiddlewareHelperDecorator(),
 
     // Smithy specific decorators
     RetryConfigDecorator(),
