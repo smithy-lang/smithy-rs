@@ -82,6 +82,7 @@ jobs:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         target-dir: ./smithy-rs-target
     - name: Download build image
+      if: ${{ needs.acquire-build-image.outputs.image-in-artifacts == 'true' }}
       uses: actions/download-artifact@v3
       with:
         name: smithy-rs-build-image-original
