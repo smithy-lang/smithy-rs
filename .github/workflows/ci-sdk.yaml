@@ -45,11 +45,12 @@ jobs:
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
     - name: Tar the SDK
       run: tar -cvf sdk.tar -C aws/sdk/build/aws-sdk/ .
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       name: Upload SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-smoketest-${{ github.sha }}
         path: sdk.tar
+        retention-days: 3
 
   smoke-test:
     name: Smoke Test
@@ -214,11 +215,12 @@ jobs:
       run: echo "name=${GITHUB_REF##*/}" >> $GITHUB_ENV
     - name: Tar the SDK
       run: tar -cvf sdk.tar -C aws/sdk/build/aws-sdk/ .
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       name: Upload SDK Artifact
       with:
         name: aws-sdk-${{ env.name }}-${{ github.sha }}
         path: sdk.tar
+        retention-days: 3
 
   check-all-examples:
     name: Full SDK - Check examples

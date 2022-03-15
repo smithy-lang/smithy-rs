@@ -13,6 +13,24 @@ env:
   java_version: 11
 
 jobs:
+  acquire-build-image:
+    name: Acquire build image
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        path: smithy-rs
+    - name: Acquire build image
+      run: |
+        ./smithy-rs/tools/ci-build/acquire-build-image ${{ github.event.pull_request.base.sha }}
+        docker save -o smithy-rs-build-image smithy-rs-build-image:latest
+    - name: Upload build image
+      uses: actions/upload-artifact@v3
+      with:
+        name: smithy-rs-build-image
+        path: smithy-rs-build-image
+        retention-days: 1
+
   repo-lint:
     name: Repo Lints
     runs-on: ubuntu-latest
@@ -32,6 +50,7 @@ jobs:
 
   codegen-tests:
     name: Codegen Tests
+    needs: acquire-build-image
     runs-on: ubuntu-latest
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
@@ -71,8 +90,13 @@ jobs:
       with:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         target-dir: ./smithy-rs-target
-    - name: Acquire build image
-      run: ./smithy-rs/tools/ci-build/acquire-build-image ${{ github.event.pull_request.base.sha }}
+    - name: Download build image
+      uses: actions/download-artifact@v3
+      with:
+        name: smithy-rs-build-image
+        path: smithy-rs-build-image
+    - name: Load build image
+      run: docker load -i smithy-rs-build-image
     # This runs the commands from the matrix strategy
     - name: ${{ matrix.test.name }}
       run: ./smithy-rs/tools/ci-build/ci-action ${{ matrix.test.action }}
@@ -158,7 +182,7 @@ jobs:
       run: |
         ./gradlew rust-runtime:assemble
         tar cfvz smithy-rs-runtime.tar.gz -C rust-runtime/build smithy-rs
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       name: Upload bundle
       with:
         name: smithy-rs-runtime-${{ github.sha }}
