@@ -30,12 +30,14 @@ fi
 
 function acquire_remote_image {
     docker pull "${REMOTE_IMAGE_NAME}"
-    docker tag "${REMOTE_IMAGE_NAME}" smithy-rs-build-image
+    docker tag "${REMOTE_IMAGE_NAME}" smithy-rs-build-image-original
+    docker build -t smithy-rs-build-image --file add-local-user.dockerfile --build-arg=USER_ID=$(id -u) .
     exit 0
 }
 function acquire_local_image {
     cd "${SCRIPT_PATH}"
-    docker build -t smithy-rs-build-image --file build-image.dockerfile .
+    docker build -t smithy-rs-build-image-original --file build-image.dockerfile .
+    docker build -t smithy-rs-build-image --file add-local-user.dockerfile --build-arg=USER_ID=$(id -u) .
     exit 0
 }
 

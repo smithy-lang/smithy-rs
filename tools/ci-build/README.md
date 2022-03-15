@@ -5,6 +5,7 @@ This directory includes the build Docker image and scripts to use it in CI.
 - `acquire-build-image`: Script that retrieves the build image from public ECR or builds one locally
   depending on the state of the tools directory. If the tools have changed (in git history), then it opts
   to build a new image rather than reuse an existing one.
+- `add-local-user.dockerfile`: Creates a user in the build image with the host's user ID
 - `build-image.dockerfile`: Dockerfile used to create the build image
 - `build.docker-compose.yml`: Docker Compose file for using the build image
 - `ci-action`: Script for running CI actions inside of the Docker build image

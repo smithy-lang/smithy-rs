@@ -85,25 +85,30 @@ RUN set -eux; \
 FROM bare_base_image AS final_image
 ARG rust_stable_version=1.56.1
 ARG rust_nightly_version=nightly-2022-03-03
-WORKDIR /root
-RUN yum -y updateinfo && \
+RUN set -eux; \
+    yum -y updateinfo; \
     yum -y install \
         ca-certificates \
+        gcc \
         git \
         java-11-amazon-corretto-headless \
-        python3 && \
-    yum clean all && \
-    rm -rf /var/cache/yum
-COPY --from=install_node /opt/nodejs /opt/nodejs
-ENV PATH=/opt/nodejs/bin:$PATH
-COPY --from=install_rust /opt/cargo /opt/cargo
-COPY --from=install_rust /opt/rustup /opt/rustup
-ENV PATH=/opt/cargo/bin:$PATH \
+        python3 \
+        shadow-utils; \
+    yum clean all; \
+    rm -rf /var/cache/yum; \
+    groupadd build; \
+    useradd -m -g build build; \
+    chmod 775 /home/build;
+COPY --chown=build:build --from=install_node /opt/nodejs /opt/nodejs
+COPY --chown=build:build --from=install_rust /opt/cargo /opt/cargo
+COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
+RUN chmod g+rw -R /opt/cargo/registry
+ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
     JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto.x86_64 \
-    GRADLE_USER_HOME=/root/.gradle \
+    GRADLE_USER_HOME=/home/build/.gradle \
     RUST_NIGHTLY_VERSION=${rust_nightly_version}
-RUN chmod +rx /root
-COPY ./scripts /root/scripts
-RUN /root/scripts/sanity-test
+COPY ./scripts /home/build/scripts
+WORKDIR /home/build
+RUN /home/build/scripts/sanity-test
