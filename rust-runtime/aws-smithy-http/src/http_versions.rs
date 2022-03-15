@@ -13,5 +13,5 @@ use once_cell::sync::Lazy;
 pub type HttpVersionList = Vec<HttpVersion>;
 
 /// The default list of desired HTTP protocol versions to use when making requests
-pub const DEFAULT_HTTP_VERSION_LIST: Lazy<HttpVersionList> =
+pub static DEFAULT_HTTP_VERSION_LIST: Lazy<HttpVersionList> =
     Lazy::new(|| vec![HttpVersion::HTTP_11]);
