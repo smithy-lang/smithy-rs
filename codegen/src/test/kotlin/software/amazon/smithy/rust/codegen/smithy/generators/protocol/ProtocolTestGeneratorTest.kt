@@ -53,7 +53,7 @@ private class TestProtocolTraitImplGenerator(
             """
             impl #{parse_strict} for ${operationShape.id.name}{
                 type Output = Result<#{output}, #{error}>;
-                fn parse(&self, response: &#{response}<#{bytes}>) -> Self::Output {
+                fn parse(&self, _response: &#{response}<#{bytes}>) -> Self::Output {
                     ${operationWriter.escape(correctResponse)}
                 }
                     }""",
@@ -120,7 +120,16 @@ private class TestProtocolFactory(
     override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
-        return ProtocolSupport(true, true, true, true, false, false, false, false)
+        return ProtocolSupport(
+            requestSerialization = true,
+            requestBodySerialization = true,
+            responseDeserialization = true,
+            errorDeserialization = true,
+            requestDeserialization = false,
+            requestBodyDeserialization = false,
+            responseSerialization = false,
+            errorSerialization = false
+        )
     }
 }
 
