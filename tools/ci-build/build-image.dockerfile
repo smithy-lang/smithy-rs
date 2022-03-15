@@ -113,7 +113,8 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
     CARGO_INCREMENTAL=0 \
     RUSTDOCFLAGS="-D warnings" \
-    RUSTFLAGS="-D warnings"
+    RUSTFLAGS="-D warnings" \
+    SMITHY_RS_DOCKER_BUILD_IMAGE=1
 COPY ./scripts /home/build/scripts
 WORKDIR /home/build
 RUN /home/build/scripts/sanity-test
