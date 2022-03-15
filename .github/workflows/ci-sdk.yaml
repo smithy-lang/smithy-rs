@@ -3,7 +3,7 @@ on:
     branches: [main]
     tags:
     - '*'
-  pull_request:
+#  pull_request:
 
 name: AWS SDK CI
 

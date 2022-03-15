@@ -5,7 +5,7 @@ on:
     types:
     - opened
     - reopened
-    - synchronize
+#    - synchronize
 env:
   java_version: 11
   rust_version: 1.56.1
