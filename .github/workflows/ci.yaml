@@ -10,14 +10,13 @@ name: CI
 env:
   rust_version: 1.56.1
   rust_toolchain_components: clippy,rustfmt
-  java_version: 11
 
 jobs:
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
   # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
   # it uploads the image as a build artifact for other jobs to download and use.
   acquire-build-image:
-    name: Acquire build image
+    name: Acquire Build Image
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -25,12 +24,13 @@ jobs:
         path: smithy-rs
     - name: Acquire build image
       run: |
-        ./smithy-rs/tools/ci-build/acquire-build-image --nothing-or-local-if-changed ${{ github.event.pull_request.base.sha }}
+        set -x
+        ./smithy-rs/tools/ci-build/acquire-build-image --nothing-or-local-if-changed ${{ github.event.pull_request.base.sha }};
         if (docker inspect smithy-rs-build-image-original:latest &>/dev/null); then
-          docker save -o smithy-rs-build-image smithy-rs-build-image-original:latest
-          echo "::set-output name=image-in-artifacts::true"
+          docker save -o smithy-rs-build-image-original smithy-rs-build-image-original:latest;
+          echo "::set-output name=image-in-artifacts::true";
         else
-          echo "::set-output name=image-in-artifacts::false"
+          echo "::set-output name=image-in-artifacts::false";
         fi
     - name: Upload build image
       uses: actions/upload-artifact@v3
@@ -126,7 +126,7 @@ jobs:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
         default: true
-    - name: run tests
+    - name: Run tests
       shell: bash
       run: |
         for runtime_path in "rust-runtime" "aws/rust-runtime"; do
