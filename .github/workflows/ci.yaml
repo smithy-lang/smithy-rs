@@ -87,7 +87,7 @@ jobs:
         name: smithy-rs-build-image-original
     - name: Prepare build image
       run: |
-        if [[ "${{ jobs.acquire-build-image.outputs.image-in-artifacts }}" == "true" ]]; then
+        if [[ "${{ needs.acquire-build-image.outputs.image-in-artifacts }}" == "true" ]]; then
           docker load -i smithy-rs-build-image-original
         else
           ./smithy-rs/tools/ci-build/acquire-build-image --force-remote
