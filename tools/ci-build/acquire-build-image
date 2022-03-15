@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0.
 #
 
-set -e
+set -ue
 
 REMOTE_IMAGE_NAME="public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci:latest"
 SCRIPT_PATH="$(realpath $(dirname $0))"
@@ -19,6 +19,8 @@ if [[ $# -eq 1 && $1 == "--help" ]]; then
     echo "    $0 --force-remote"
     echo "       OR"
     echo "    $0 --force-local"
+    echo "       OR"
+    echo "    $0 --nothing-or-local-if-changed <base-revision>"
     echo
     echo "Determines if tools changed between HEAD and the given <base-revision>, "
     echo "and locates build Docker image based on that. This image becomes tagged "
@@ -31,13 +33,11 @@ fi
 function acquire_remote_image {
     docker pull "${REMOTE_IMAGE_NAME}"
     docker tag "${REMOTE_IMAGE_NAME}" smithy-rs-build-image-original
-    docker build -t smithy-rs-build-image --file add-local-user.dockerfile --build-arg=USER_ID=$(id -u) .
     exit 0
 }
 function acquire_local_image {
     cd "${SCRIPT_PATH}"
     docker build -t smithy-rs-build-image-original --file build-image.dockerfile .
-    docker build -t smithy-rs-build-image --file add-local-user.dockerfile --build-arg=USER_ID=$(id -u) .
     exit 0
 }
 
@@ -45,6 +45,16 @@ if [[ $# -eq 0 || "$1" == "--force-remote" ]]; then
   acquire_remote_image
 elif [[ "$1" == "--force-local" ]]; then
   acquire_local_image
+elif [[ "$1" == "--nothing-or-local-if-changed" ]]; then
+  BASE_REV="$2"
+  cd "$(git rev-parse --show-toplevel)"
+
+  if (git diff --quiet HEAD "${BASE_REV}" -- tools); then
+      echo "Tools did not change. Doing nothing."
+  else
+      echo "Tools changed. Will build a new Docker build image with updated tools."
+      acquire_local_image
+  fi
 else
   BASE_REV="$1"
   cd "$(git rev-parse --show-toplevel)"

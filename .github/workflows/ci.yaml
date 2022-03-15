@@ -25,13 +25,18 @@ jobs:
         path: smithy-rs
     - name: Acquire build image
       run: |
-        ./smithy-rs/tools/ci-build/acquire-build-image ${{ github.event.pull_request.base.sha }}
-        docker save -o smithy-rs-build-image smithy-rs-build-image:latest
+        ./smithy-rs/tools/ci-build/acquire-build-image --nothing-or-local-if-changed ${{ github.event.pull_request.base.sha }}
+        if (docker inspect smithy-rs-build-image-original:latest &>/dev/null); then
+          docker save -o smithy-rs-build-image smithy-rs-build-image-original:latest
+          echo "::set-output name=image-in-artifacts::true"
+        else
+          echo "::set-output name=image-in-artifacts::false"
+        fi
     - name: Upload build image
       uses: actions/upload-artifact@v3
       with:
-        name: smithy-rs-build-image
-        path: smithy-rs-build-image
+        name: smithy-rs-build-image-original
+        path: smithy-rs-build-image-original
         retention-days: 1
 
   tests:
@@ -79,9 +84,15 @@ jobs:
     - name: Download build image
       uses: actions/download-artifact@v3
       with:
-        name: smithy-rs-build-image
-    - name: Load build image
-      run: docker load -i smithy-rs-build-image
+        name: smithy-rs-build-image-original
+    - name: Prepare build image
+      run: |
+        if [[ "${{ jobs.acquire-build-image.outputs.image-in-artifacts }}" == "true" ]]; then
+          docker load -i smithy-rs-build-image-original
+        else
+          ./smithy-rs/tools/ci-build/acquire-build-image --force-remote
+        fi
+        ./smithy-rs/tools/ci-build/create-local-build-image
     # This runs the commands from the matrix strategy
     - name: ${{ matrix.test.name }}
       run: ./smithy-rs/tools/ci-build/ci-action ${{ matrix.test.action }}
