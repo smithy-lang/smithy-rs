@@ -18,11 +18,14 @@ jobs:
   acquire-build-image:
     name: Acquire Build Image
     runs-on: ubuntu-latest
+    outputs:
+      image-in-artifacts: ${{ steps.acquire.outputs.image-in-artifacts }}
     steps:
     - uses: actions/checkout@v2
       with:
         path: smithy-rs
     - name: Acquire build image
+      id: acquire
       run: |
         set -x
         ./smithy-rs/tools/ci-build/acquire-build-image --nothing-or-local-if-changed ${{ github.event.pull_request.base.sha }};
