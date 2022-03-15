@@ -6,6 +6,9 @@
 
 set -ue
 
+SCRIPT_PATH="$(realpath $(dirname $0))"
+cd "${SCRIPT_PATH}"
+
 # Check to see if the original image is available
 docker inspect smithy-rs-build-image-original:latest &>/dev/null
 
