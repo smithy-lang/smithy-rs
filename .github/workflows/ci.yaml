@@ -42,15 +42,80 @@ jobs:
         path: smithy-rs-build-image-original
         retention-days: 1
 
-  tests:
-    name: Tests
+  generate:
+    name: Generate
+    needs: acquire-build-image
+    runs-on: ubuntu-latest
+    # To avoid repeating setup boilerplate, we have the actual commands
+    # in a matrix strategy. These commands get run in the steps after all the setup.
+    strategy:
+      fail-fast: false
+      matrix:
+        # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
+        actions:
+        - action: generate-aws-sdk
+        - action: generate-aws-sdk-smoketest
+        - action: generate-smithy-rs-runtime-bundle
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        path: smithy-rs
+    - uses: actions/checkout@v2
+      with:
+        repository: awsdocs/aws-doc-sdk-examples
+        path: aws-doc-sdk-examples
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          gradle/caches
+          gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        target-dir: ./smithy-rs-target
+    - name: Download build image
+      if: ${{ needs.acquire-build-image.outputs.image-in-artifacts == 'true' }}
+      uses: actions/download-artifact@v3
+      with:
+        name: smithy-rs-build-image-original
+    - name: Prepare build image
+      run: |
+        if [[ "${{ needs.acquire-build-image.outputs.image-in-artifacts }}" == "true" ]]; then
+          docker load -i smithy-rs-build-image-original
+        else
+          ./smithy-rs/tools/ci-build/acquire-build-image --force-remote
+        fi
+        ./smithy-rs/tools/ci-build/create-local-build-image
+      # This runs the commands from the matrix strategy
+    - name: Run ${{ matrix.actions.action }}
+      run: |
+        ./smithy-rs/tools/ci-build/ci-action ${{ matrix.actions.action }}
+        tar cfz artifacts-${{ matrix.actions.action }}.tar.gz -C artifacts .
+    - name: Upload artifacts
+      if: ${{ matrix.test.action == 'generate-smithy-rs-runtime-bundle' }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: artifacts-${{ matrix.actions.action }}
+        path: artifacts-${{ matrix.actions.action }}.tar.gz
+        if-no-files-found: error
+        retention-days: 3
+
+  test:
+    name: Test
     needs: acquire-build-image
     runs-on: ubuntu-latest
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
+        # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
         test:
         - action: check-client-codegen-integration-tests
         - action: check-client-codegen-unit-tests
@@ -59,7 +124,6 @@ jobs:
         - action: check-server-codegen-integration-tests
         - action: check-server-codegen-unit-tests
         - action: check-style-and-lints
-        - action: generate-smithy-rs-runtime-bundle
     steps:
     - uses: actions/checkout@v2
       with:
@@ -94,15 +158,9 @@ jobs:
     # This runs the commands from the matrix strategy
     - name: Run ${{ matrix.test.action }}
       run: ./smithy-rs/tools/ci-build/ci-action ${{ matrix.test.action }}
-    - name: Upload artifacts
-      if: ${{ matrix.test.action == 'generate-smithy-rs-runtime-bundle' }}
-      uses: actions/upload-artifact@v3
-      with:
-        name: smithy-rs-runtime-${{ github.sha }}
-        path: artifacts
 
-  windows-rust-tests:
-    name: Windows Rust Tests
+  test-rust-windows:
+    name: Rust Tests on Windows
     runs-on: windows-latest
     env:
       # Disable incremental compilation to reduce disk space use
@@ -135,8 +193,9 @@ jobs:
   # the myriad of test matrix combinations into GitHub's protected branch rules
   require-all:
     needs:
-    - tests
-    - windows-rust-tests
+    - generate
+    - test
+    - test-rust-windows
     # Run this job even if its dependency jobs fail
     if: always()
     runs-on: ubuntu-latest

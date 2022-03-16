@@ -35,4 +35,5 @@ $ORIGIN_PATH/tools/ci-build/ci-action <action> [args...]
 The action names are the names of the scripts in `scripts/`, and `[args...]` get forwarded to those scripts.
 
 __Note:__ `ci-action` does not rebuild the build image, so if you modified a script,
-you need to run `./acquire-build-image --force-local` from the origin `tools/ci-build` path.
+you need to run `./acquire-build-image --force-local && ./create-local-build-image` from
+the origin `tools/ci-build` path.
