@@ -97,7 +97,6 @@ jobs:
         ./smithy-rs/tools/ci-build/ci-action ${{ matrix.actions.action }}
         tar cfz artifacts-${{ matrix.actions.action }}.tar.gz -C artifacts .
     - name: Upload artifacts
-      if: ${{ matrix.test.action == 'generate-smithy-rs-runtime-bundle' }}
       uses: actions/upload-artifact@v3
       with:
         name: artifacts-${{ matrix.actions.action }}

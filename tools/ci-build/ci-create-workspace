@@ -6,6 +6,10 @@
 
 set -e
 
+if [[ ! -d aws-doc-sdk-examples ]]; then
+  echo "A fresh copy of aws-doc-sdk-examples must be checked out from the path this script is executed from." >&2
+  exit 1
+fi
 if [[ ! -d smithy-rs ]]; then
   echo "A fresh copy of smithy-rs must be checked out from the path this script is executed from." >&2
   exit 1
@@ -22,6 +26,7 @@ ACTION_PATH="$(mktemp -d -t smithy-rs-build.XXXXXX)"
 
 cp build.docker-compose.yml "${ACTION_PATH}/"
 mkdir -p "${ACTION_PATH}/workspace/artifacts"
+cp -r "${START_PATH}/aws-doc-sdk-examples" "${ACTION_PATH}/workspace/aws-doc-sdk-examples"
 cp -r "${START_PATH}/smithy-rs" "${ACTION_PATH}/workspace/smithy-rs"
 if [[ -d "${START_PATH}/smithy-rs-target" ]]; then
     mv "${START_PATH}/smithy-rs-target" "${ACTION_PATH}/workspace/smithy-rs/target"
