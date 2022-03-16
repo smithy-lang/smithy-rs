@@ -141,7 +141,7 @@ internal class EndpointTraitBindingsTest {
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val testWriter = object : RustCodegenDecorator {
+        val codegenDecorator = object : RustCodegenDecorator {
             override val name: String = "add tests"
             override val order: Byte = 0
             override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
@@ -169,7 +169,7 @@ internal class EndpointTraitBindingsTest {
                 }
             }
         }
-        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx).withDecorator(testWriter))
+        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx).withDecorator(codegenDecorator))
         visitor.execute()
         "cargo test".runCommand(testDir)
     }

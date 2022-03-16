@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGener
 import software.amazon.smithy.rust.codegen.smithy.customizations.CrateVersionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.HttpChecksumRequiredGenerator
-import software.amazon.smithy.rust.codegen.smithy.customizations.HttpVersionListGenerator
+import software.amazon.smithy.rust.codegen.smithy.customizations.HttpVersionListCustomization
 import software.amazon.smithy.rust.codegen.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.SmithyTypesPubUseGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -35,7 +35,7 @@ class RequiredCustomizations : RustCodegenDecorator {
             IdempotencyTokenGenerator(codegenContext, operation) +
             EndpointPrefixGenerator(codegenContext, operation) +
             HttpChecksumRequiredGenerator(codegenContext, operation) +
-            HttpVersionListGenerator(codegenContext)
+            HttpVersionListCustomization(codegenContext, operation)
     }
 
     override fun libRsCustomizations(
