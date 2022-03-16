@@ -6,10 +6,6 @@
 
 set -e
 
-if [[ ! -d aws-doc-sdk-examples ]]; then
-  echo "A fresh copy of aws-doc-sdk-examples must be checked out from the path this script is executed from." >&2
-  exit 1
-fi
 if [[ ! -d smithy-rs ]]; then
   echo "A fresh copy of smithy-rs must be checked out from the path this script is executed from." >&2
   exit 1

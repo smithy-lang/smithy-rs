@@ -80,6 +80,7 @@ RUN set -eux; \
     cargo install --path tools/publisher; \
     cargo +${rust_nightly_version} install --path tools/api-linter; \
     cargo install --path tools/sdk-lints; \
+    cargo install --path tools/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
 
 #
