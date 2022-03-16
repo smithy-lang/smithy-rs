@@ -52,22 +52,14 @@ jobs:
       fail-fast: false
       matrix:
         test:
-        - name: Lints
-          action: check-style-and-lints
-        - name: Rust Runtimes and Tools
-          action: check-rust-runtimes-and-tools
-        - name: Client Unit Tests
-          action: check-client-codegen-unit-tests
-        - name: SDK Unit Tests
-          action: check-sdk-codegen-unit-tests
-        - name: Server Unit Tests
-          action: check-server-codegen-unit-tests
-        - name: Client Integration Tests
-          action: check-client-codegen-integration-tests
-        - name: Server Integration Tests
-          action: check-server-codegen-integration-tests
-        - name: Generate smithy-rs Runtime Bundle
-          action: generate-smithy-rs-runtime-bundle
+        - action: check-client-codegen-integration-tests
+        - action: check-client-codegen-unit-tests
+        - action: check-rust-runtimes-and-tools
+        - action: check-sdk-codegen-unit-tests
+        - action: check-server-codegen-integration-tests
+        - action: check-server-codegen-unit-tests
+        - action: check-style-and-lints
+        - action: generate-smithy-rs-runtime-bundle
     steps:
     - uses: actions/checkout@v2
       with:
@@ -100,7 +92,7 @@ jobs:
         fi
         ./smithy-rs/tools/ci-build/create-local-build-image
     # This runs the commands from the matrix strategy
-    - name: ${{ matrix.test.name }}
+    - name: Run ${{ matrix.test.action }}
       run: ./smithy-rs/tools/ci-build/ci-action ${{ matrix.test.action }}
     - name: Upload artifacts
       if: ${{ matrix.test.action == 'generate-smithy-rs-runtime-bundle' }}

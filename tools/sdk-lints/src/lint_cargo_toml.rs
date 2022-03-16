@@ -127,7 +127,7 @@ where
     let parsed = Manifest::from_path_with_metadata(path).context("failed to parse Cargo.toml")?;
     match parsed.package {
         Some(package) => Ok(Ok(package)),
-        None => return Ok(Err(vec![LintError::new("missing `[package]` section")])),
+        None => Ok(Err(vec![LintError::new("missing `[package]` section")])),
     }
 }
 

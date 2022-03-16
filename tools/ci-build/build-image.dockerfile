@@ -112,6 +112,7 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     RUSTUP_HOME=/opt/rustup \
     JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto.x86_64 \
     GRADLE_USER_HOME=/home/build/.gradle \
+    RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
     CARGO_INCREMENTAL=0 \
     RUSTDOCFLAGS="-D warnings" \
