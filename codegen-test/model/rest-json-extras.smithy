@@ -7,46 +7,6 @@ use aws.api#service
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
 
-// TODO(https://github.com/awslabs/smithy/pull/1049): Remove this once the test case in Smithy is fixed
-apply InputAndOutputWithHeaders @httpResponseTests([
-    {
-        id: "FIXED_RestJsonInputAndOutputWithQuotedStringHeaders",
-        documentation: "Tests responses with string list header bindings that require quoting",
-        protocol: restJson1,
-        code: 200,
-        headers: {
-            "X-StringList": "\"b,c\", \"\\\"def\\\"\", a"
-        },
-        params: {
-            headerStringList: ["b,c", "\"def\"", "a"]
-        }
-    }
-])
-
-// TODO(https://github.com/awslabs/smithy/pull/1042): Remove this once the test case in Smithy is fixed
-apply PostPlayerAction @httpRequestTests([
-    {
-        id: "FIXED_RestJsonInputUnionWithUnitMember",
-        documentation: "Unit types in unions are serialized like normal structures in requests.",
-        protocol: restJson1,
-        method: "POST",
-        "uri": "/PostPlayerInput",
-        body: """
-            {
-                "action": {
-                    "quit": {}
-                }
-            }""",
-        bodyMediaType: "application/json",
-        headers: {"Content-Type": "application/json"},
-        params: {
-            action: {
-                quit: {}
-            }
-        }
-    }
-])
-
 apply QueryPrecedence @httpRequestTests([
     {
         id: "UrlParamsKeyEncoding",
