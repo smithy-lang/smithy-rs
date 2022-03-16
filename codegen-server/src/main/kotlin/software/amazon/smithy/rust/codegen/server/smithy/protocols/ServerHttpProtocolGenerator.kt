@@ -639,7 +639,6 @@ private class ServerHttpProtocolImplGenerator(
                     }
                     val errorSymbol = getDeserializePayloadErrorSymbol(binding)
                     val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
-                        operationShape,
                         binding,
                         errorSymbol,
                         structuredHandler = structureShapeHandler
