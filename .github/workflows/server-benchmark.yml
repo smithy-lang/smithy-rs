@@ -5,7 +5,7 @@ on:
     types:
     - opened
     - reopened
-#    - synchronize
+    - synchronize
 
 concurrency:
   group: server-benchmark-yml-${{ github.ref }}
