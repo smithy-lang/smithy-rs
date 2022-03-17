@@ -251,8 +251,23 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.deserializeNumber(target: NumberShape) {
-        val symbol = symbolProvider.toSymbol(target)
-        rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())", "T" to symbol, *codegenScope)
+        if (target.isFloatShape) {
+            rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_f32_lossy())", *codegenScope)
+        } else if (target.isDoubleShape) {
+            rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_f64_lossy())", *codegenScope)
+        } else {
+            rustTemplate(
+                """
+                #{expect_number_or_null}(tokens.next())?
+                    .map(|v| {
+                        use std::convert::TryInto;
+                        v.try_into()
+                    })
+                    .transpose()?
+                """,
+                *codegenScope
+            )
+        }
     }
 
     private fun RustWriter.deserializeTimestamp(member: MemberShape) {
