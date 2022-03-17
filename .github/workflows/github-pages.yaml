@@ -5,6 +5,10 @@ on:
     paths:
     - design/**
 
+concurrency:
+  group: github-pages-yml
+  cancel-in-progress: true
+
 jobs:
   build-and-deploy-docs:
     runs-on: ubuntu-latest

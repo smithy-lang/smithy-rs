@@ -7,6 +7,10 @@ on:
 
 name: CI
 
+concurrency:
+  group: ci-yaml-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   rust_version: 1.56.1
   rust_toolchain_components: clippy,rustfmt
@@ -106,16 +110,23 @@ jobs:
 
   test:
     name: Test
-    needs: acquire-build-image
+    needs:
+    - acquire-build-image
+    - generate
     runs-on: ubuntu-latest
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 6
       matrix:
         # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
         test:
+        - action: check-aws-sdk-examples
+        - action: check-aws-sdk-services
+        - action: check-aws-sdk-smoketest-additional-checks
+        - action: check-aws-sdk-smoketest-docs-clippy-udeps
+        - action: check-aws-sdk-smoketest-unit-tests
         - action: check-client-codegen-integration-tests
         - action: check-client-codegen-unit-tests
         - action: check-rust-runtimes-and-tools
@@ -141,6 +152,18 @@ jobs:
       with:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         target-dir: ./smithy-rs-target
+    - name: Download artifacts-generate-aws-sdk
+      uses: actions/download-artifact@v3
+      with:
+        name: artifacts-generate-aws-sdk
+    - name: Download artifacts-generate-aws-sdk-smoketest
+      uses: actions/download-artifact@v3
+      with:
+        name: artifacts-generate-aws-sdk-smoketest
+    - name: Untar artifacts
+      run: |
+        tar xfz artifacts-generate-aws-sdk.tar.gz
+        tar xfz artifacts-generate-aws-sdk-smoketest.tar.gz
     - name: Download build image
       if: ${{ needs.acquire-build-image.outputs.image-in-artifacts == 'true' }}
       uses: actions/download-artifact@v3

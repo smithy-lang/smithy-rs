@@ -22,11 +22,22 @@ ACTION_PATH="$(mktemp -d -t smithy-rs-build.XXXXXX)"
 
 cp build.docker-compose.yml "${ACTION_PATH}/"
 mkdir -p "${ACTION_PATH}/workspace/artifacts"
-if [[ -d "${START_PATH}/aws-doc-sdk-examples" ]]; then
-    cp -r "${START_PATH}/aws-doc-sdk-examples" "${ACTION_PATH}/workspace/aws-doc-sdk-examples"
-fi
-cp -r "${START_PATH}/smithy-rs" "${ACTION_PATH}/workspace/smithy-rs"
+
+# Copy inputs into workspace
+for input_path in \
+    "${START_PATH}/aws-doc-sdk-examples" \
+    "${START_PATH}/aws-sdk" \
+    "${START_PATH}/aws-sdk-smoketest" \
+    "${START_PATH}/smithy-rs";
+do
+    if [[ -d "${input_path}" ]]; then
+        cp -r "${input_path}" "${ACTION_PATH}/workspace/$(basename ${input_path})"
+    fi
+done
+
 if [[ -d "${START_PATH}/smithy-rs-target" ]]; then
     mv "${START_PATH}/smithy-rs-target" "${ACTION_PATH}/workspace/smithy-rs/target"
 fi
+
+# Output path to workspace
 echo "${ACTION_PATH}"

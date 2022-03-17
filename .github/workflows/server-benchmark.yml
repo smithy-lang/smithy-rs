@@ -6,6 +6,11 @@ on:
     - opened
     - reopened
 #    - synchronize
+
+concurrency:
+  group: server-benchmark-yml-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   java_version: 11
   rust_version: 1.56.1
