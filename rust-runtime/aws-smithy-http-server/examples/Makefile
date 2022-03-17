@@ -9,7 +9,7 @@ CLIENT_SDK_SRC := $(SRC_DIR)/codegen-test/build/smithyprojections/codegen-test/p
 all: codegen
 
 codegen:
-	$(GRADLE) --project-dir $(SRC_DIR) -P modules='pokemon_service_sdk' :codegen-server-test:assemble
+	$(GRADLE) --project-dir $(SRC_DIR) -P modules='pokemon_service_sdk,pokemon_service_client' :codegen-test:assemble :codegen-server-test:assemble
 	mkdir -p $(SERVER_SDK_DST) $(CLIENT_SDK_DST)
 	cp -av $(SERVER_SDK_SRC)/* $(SERVER_SDK_DST)/
 	cp -av $(CLIENT_SDK_SRC)/* $(CLIENT_SDK_DST)/
