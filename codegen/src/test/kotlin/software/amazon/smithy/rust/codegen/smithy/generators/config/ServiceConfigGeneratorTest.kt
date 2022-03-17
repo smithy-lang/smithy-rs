@@ -87,6 +87,7 @@ internal class ServiceConfigGeneratorTest {
                     ServiceConfig.BuilderStruct -> writable { rust("config_field: Option<u64>") }
                     ServiceConfig.BuilderImpl -> emptySection
                     ServiceConfig.BuilderBuild -> writable { rust("config_field: self.config_field.unwrap_or_default(),") }
+                    else -> emptySection
                 }
             }
         }

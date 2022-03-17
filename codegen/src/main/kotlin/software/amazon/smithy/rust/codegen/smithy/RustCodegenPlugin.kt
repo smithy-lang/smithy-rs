@@ -43,7 +43,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
         /** SymbolProvider
          * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider
          *
-         * The Symbol provider is composed of a base `SymbolVisitor` which handles the core funcitonality, then is layered
+         * The Symbol provider is composed of a base `SymbolVisitor` which handles the core functionality, then is layered
          * with other symbol providers, documented inline, to handle the full scope of Smithy types.
          */
         fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) =
