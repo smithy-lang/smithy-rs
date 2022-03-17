@@ -11,8 +11,8 @@ set -eux
 cd workspace/smithy-rs
 
 # Make aws-config (which depends on generated services) available to additional checks
-mkdir -p smithy-rs/aws/sdk/build
-mv ../aws-sdk-smoketest smithy-rs/aws/sdk/build/aws-sdk
+mkdir -p aws/sdk/build
+mv ../../aws-sdk-smoketest aws/sdk/build/aws-sdk
 
 for runtime_path in \
     "rust-runtime" \
