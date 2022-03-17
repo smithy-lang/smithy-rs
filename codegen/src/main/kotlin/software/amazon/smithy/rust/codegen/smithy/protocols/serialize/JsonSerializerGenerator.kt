@@ -70,7 +70,7 @@ class JsonSerializerGenerator(
         /** Expression representing the value to write to the JsonValueWriter */
         val valueExpression: ValueExpression,
         val shape: MemberShape,
-        /** Whether or not to serialize null values if the type is optional */
+        /** Whether to serialize null values if the type is optional */
         val writeNulls: Boolean = false,
     ) {
         companion object {

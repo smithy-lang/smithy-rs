@@ -185,6 +185,7 @@ class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustom
                 """timeout_config: self.timeout_config,""",
                 *codegenScope
             )
+            else -> emptySection
         }
     }
 }
