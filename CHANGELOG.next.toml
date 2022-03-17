@@ -133,3 +133,9 @@ functional in a future update.
 references = ["smithy-rs#724"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "HTTP request property bag now contains list of desired HTTP versions to use when making requests. This list is not currently used but will be in an upcoming update."
+references = ["smithy-rs#1257"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
