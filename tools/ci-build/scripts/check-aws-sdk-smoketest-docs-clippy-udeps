@@ -24,4 +24,4 @@ mkdir -p smithy-rs/aws/sdk/build
 mv aws-sdk-smoketest smithy-rs/aws/sdk/build/aws-sdk
 pushd smithy-rs/aws/sdk/integration-tests
 cargo check
-popd &/dev/null
+popd &>/dev/null
