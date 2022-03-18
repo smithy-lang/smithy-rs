@@ -33,6 +33,7 @@ fun stubCustomization(name: String): ConfigCustomization {
                     $name: self.$name.unwrap_or(123),
                     """
                 )
+                else -> emptySection
             }
         }
     }

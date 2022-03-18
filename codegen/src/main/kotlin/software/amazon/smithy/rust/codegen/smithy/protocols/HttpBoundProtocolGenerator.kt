@@ -350,7 +350,6 @@ class HttpBoundProtocolTraitImplGenerator(
                     rust("#T($body).map_err(#T::unhandled)", structuredDataParser.payloadParser(member), errorSymbol)
                 }
                 val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
-                    operationShape,
                     binding,
                     errorSymbol,
                     payloadParser = payloadParser
