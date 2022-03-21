@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "Fix link to Developer Guide in crate's README.md"
+references = ["smithy-rs#1262"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "liubin"
+
+[[aws-sdk-rust]]
+message = "Fix link to Developer Guide in crate's README.md"
+references = ["smithy-rs#1262"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "liubin"
