@@ -17,7 +17,7 @@ BASE_MANIFEST = """
 [package]
 name = "aws-sdk-rust-lambda-canary"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 
 # Emit an empty workspace so that the canary can successfully build when
