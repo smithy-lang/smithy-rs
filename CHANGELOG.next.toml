@@ -25,12 +25,12 @@ author = "liubin"
 
 [[smithy-rs]]
 message = "Update all runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)"
-references = ["smithy-rs#1154"]
+references = ["aws-sdk-rust#490"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
 
 [[aws-sdk-rust]]
 message = "Update all SDK and runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)"
-references = ["smithy-rs#1154"]
+references = ["aws-sdk-rust#490"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
