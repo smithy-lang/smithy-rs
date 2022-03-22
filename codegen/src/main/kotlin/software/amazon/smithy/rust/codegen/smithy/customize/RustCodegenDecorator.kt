@@ -26,7 +26,7 @@ import java.util.logging.Logger
  * [RustCodegenDecorator] allows downstream users to customize code generation.
  *
  * For example, AWS-specific code generation generates customizations required to support
- * AWS services. A different downstream customer way wish to add a different set of derive
+ * AWS services. A different downstream customer may wish to add a different set of derive
  * attributes to the generated classes.
  */
 interface RustCodegenDecorator {
@@ -139,9 +139,9 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         return orderedDecorators.forEach { it.extras(codegenContext, rustCrate) }
     }
 
-    override fun transformModel(service: ServiceShape, baseModel: Model): Model {
-        return orderedDecorators.foldRight(baseModel) { decorator, model ->
-            decorator.transformModel(service, model)
+    override fun transformModel(service: ServiceShape, model: Model): Model {
+        return orderedDecorators.foldRight(model) { decorator, otherModel ->
+            decorator.transformModel(service, otherModel)
         }
     }
 

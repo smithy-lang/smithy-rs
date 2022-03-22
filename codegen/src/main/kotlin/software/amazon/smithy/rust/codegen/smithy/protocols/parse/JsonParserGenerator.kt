@@ -370,7 +370,7 @@ class JsonParserGenerator(
                         if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
                             rustTemplate(
                                 """.map_err(|err| #{Error}::new(
-                                #{ErrorReason}::Custom(format!({}, err).into()), None)
+                                #{ErrorReason}::Custom(format!("{}", err).into()), None)
                                 )?""",
                                 *codegenScope
                             )
