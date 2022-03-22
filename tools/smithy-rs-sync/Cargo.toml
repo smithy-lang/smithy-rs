@@ -1,7 +1,7 @@
 [package]
 name = "smithy-rs-sync"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 description = "A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk"
 authors = ["Zelda Hessler <zhessler@amazon.com>"]
 
