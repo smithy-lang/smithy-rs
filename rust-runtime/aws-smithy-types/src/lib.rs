@@ -91,7 +91,7 @@ pub enum Number {
 impl Number {
     /// Converts to an `f64` lossily.
     /// Use `Number::try_from` to make the conversion only if it is not lossy.
-    pub fn to_f64_lossy(self: Self) -> f64 {
+    pub fn to_f64_lossy(self) -> f64 {
         match self {
             Number::PosInt(v) => v as f64,
             Number::NegInt(v) => v as f64,
@@ -101,7 +101,7 @@ impl Number {
 
     /// Converts to an `f32` lossily.
     /// Use `Number::try_from` to make the conversion only if it is not lossy.
-    pub fn to_f32_lossy(self: Self) -> f32 {
+    pub fn to_f32_lossy(self) -> f32 {
         match self {
             Number::PosInt(v) => v as f32,
             Number::NegInt(v) => v as f32,
