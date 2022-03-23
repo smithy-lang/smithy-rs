@@ -15,7 +15,8 @@ service MiscService {
     ],
 }
 
-/// To not regress on https://github.com/awslabs/smithy-rs/pull/1266
+/// This operation tests that (de)serializing required values from a nested
+/// shape works correctly.
 @http(uri: "/operation", method: "GET")
 operation OperationWithInnerRequiredShape {
     input: OperationWithInnerRequiredShapeInput,
@@ -26,13 +27,84 @@ structure OperationWithInnerRequiredShapeInput {
     inner: InnerShape
 }
 
+structure OperationWithInnerRequiredShapeOutput {
+    inner: InnerShape
+}
+
 structure InnerShape {
     @required
     requiredInnerMostShape: InnermostShape
 }
 
 structure InnermostShape {
-    aString: String
+    @required
+    aString: String,
+
+    @required
+    aBoolean: Boolean,
+
+    @required
+    aByte: Byte,
+
+    @required
+    aShort: Short,
+
+    @required
+    anInt: Integer,
+
+    @required
+    aLong: Long,
+
+    @required
+    aFloat: Float,
+
+    @required
+    aDouble: Double,
+
+    // TODO(https://github.com/awslabs/smithy-rs/issues/312)
+    // @required
+    // aBigInteger: BigInteger,
+
+    // @required
+    // aBigDecimal: BigDecimal,
+
+    @required
+    aTimestamp: Timestamp,
+
+    @required
+    aDocument: Timestamp,
+
+    @required
+    aStringList: AStringList,
+
+    @required
+    aStringMap: AMap,
+
+    @required
+    aStringSet: AStringSet,
+
+    @required
+    aBlob: Blob,
+
+    @required
+    aUnion: AUnion
 }
 
-structure OperationWithInnerRequiredShapeOutput { }
+list AStringList {
+    member: String
+}
+
+list AStringSet {
+    member: String
+}
+
+map AMap {
+    key: String,
+    value: Timestamp
+}
+
+union AUnion {
+    i32: Integer,
+    string: String,
+    time: Timestamp,
+}
