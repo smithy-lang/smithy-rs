@@ -2,7 +2,7 @@
 name = "transcribestreaming"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
-edition = "2018"
+edition = "2021"
 
 [dev-dependencies]
 async-stream = "0.3"

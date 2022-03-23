@@ -347,7 +347,7 @@ class JsonSerializerGenerator(
                 )
             }
             is BlobShape -> rust(
-                "$writer.string_unchecked(&#T(${value.name}));",
+                "$writer.string_unchecked(&#T(${value.name}.as_ref()));",
                 RuntimeType.Base64Encode(runtimeConfig)
             )
             is TimestampShape -> {

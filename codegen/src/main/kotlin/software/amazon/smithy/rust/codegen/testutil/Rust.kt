@@ -266,7 +266,6 @@ fun RustWriter.compileAndTest(
     }
 }
 
-@JvmOverloads
 private fun String.intoCrate(
     deps: Set<CargoDependency>,
     module: String? = null,
@@ -280,7 +279,7 @@ private fun String.intoCrate(
         name = ${tempDir.nameWithoutExtension.dq()}
         version = "0.0.1"
         authors = ["rcoh@amazon.com"]
-        edition = "2018"
+        edition = "2021"
 
         [dependencies]
         ${deps.joinToString("\n") { it.toString() }}
@@ -300,6 +299,15 @@ private fun String.intoCrate(
             """.trimIndent()
         )
     }
+
+    if (strict) {
+        mainRs.appendText(
+            """
+            #![deny(clippy::all)]
+            """.trimIndent()
+        )
+    }
+
     mainRs.appendText(
         """
         pub mod $module;
