@@ -34,3 +34,9 @@ message = "Update all SDK and runtime crates to [edition 2021](https://blog.rust
 references = ["aws-sdk-rust#490"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Refactor converters to numeric types for `aws_smithy_types::Number`"
+references = ["smithy-rs#1274"]
+meta = { "breaking" = true, "tada" = false, "bug" = true }
+author = "david-perez"
