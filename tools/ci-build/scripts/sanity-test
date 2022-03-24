@@ -13,5 +13,5 @@ node --version
 publisher --version
 sdk-versioner --version
 python3 --version
-rustc +${RUST_NIGHTLY_VERSION} --version
+rustc +"${RUST_NIGHTLY_VERSION}" --version
 rustc --version

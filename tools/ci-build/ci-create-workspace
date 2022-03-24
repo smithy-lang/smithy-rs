@@ -11,11 +11,11 @@ if [[ ! -d smithy-rs ]]; then
   exit 1
 fi
 
-START_PATH="$(realpath $(pwd))"
+START_PATH="$(realpath "$(pwd)")"
 rm -rf "${START_PATH}/artifacts"
 mkdir -p "${START_PATH}/gradle"
 
-SCRIPT_PATH="$(realpath $(dirname $0))"
+SCRIPT_PATH="$(realpath "$(dirname "$0")")"
 cd "${SCRIPT_PATH}"
 
 ACTION_PATH="$(mktemp -d -t smithy-rs-build.XXXXXX)"
@@ -31,7 +31,7 @@ for input_path in \
     "${START_PATH}/smithy-rs";
 do
     if [[ -d "${input_path}" ]]; then
-        cp -r "${input_path}" "${ACTION_PATH}/workspace/$(basename ${input_path})"
+        cp -r "${input_path}" "${ACTION_PATH}/workspace/$(basename "${input_path}")"
     fi
 done
 

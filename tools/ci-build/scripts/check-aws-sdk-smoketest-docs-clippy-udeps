@@ -15,7 +15,7 @@ pushd aws-sdk-smoketest &>/dev/null
 RUSTDOCFLAGS="" cargo doc --no-deps --document-private-items --all-features
 
 cargo clippy --all-features
-cargo +${RUST_NIGHTLY_VERSION} udeps
+cargo +"${RUST_NIGHTLY_VERSION}" udeps
 popd &>/dev/null
 
 # Move the smoketest artifacts into smithy-rs and check the integration tests

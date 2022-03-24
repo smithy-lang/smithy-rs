@@ -34,7 +34,7 @@ function test_tool {
     echo -e "${C_YELLOW}Testing ${tool_path}...${C_RESET}"
     pushd "${tool_path}" &>/dev/null
     cargo clippy --all-features
-    cargo +${rust_version} test --all-features
+    cargo +"${rust_version}" test --all-features
     popd &>/dev/null
 }
 

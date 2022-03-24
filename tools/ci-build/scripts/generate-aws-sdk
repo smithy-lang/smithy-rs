@@ -10,7 +10,7 @@ C_RESET='\033[0m'
 set -eux
 cd workspace
 
-echo -e "${C_YELLOW}Taking examples from `awsdocs/aws-doc-sdk-examples`...${C_RESET}"
+echo -e "${C_YELLOW}Taking examples from 'awsdocs/aws-doc-sdk-examples'...${C_RESET}"
 mv aws-doc-sdk-examples/rust_dev_preview smithy-rs/aws/sdk/examples
 rm -rf smithy-rs/aws/sdk/examples/.cargo
 rm smithy-rs/aws/sdk/examples/Cargo.toml

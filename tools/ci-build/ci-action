@@ -20,16 +20,16 @@ fi
 
 ACTION_NAME="$1"
 shift
-ACTION_ARGS="$@"
+ACTION_ARGS=("$@")
 
 if [[ ! -d smithy-rs ]]; then
   echo "A fresh copy of smithy-rs must be checked out from the path this script is executed from."
   exit 1
 fi
 
-START_PATH="$(realpath $(pwd))"
-SCRIPT_PATH="$(realpath $(dirname $0))"
-ACTION_PATH="$(${SCRIPT_PATH}/ci-create-workspace)"
+START_PATH="$(realpath "$(pwd)")"
+SCRIPT_PATH="$(realpath "$(dirname "$0")")"
+ACTION_PATH="$("${SCRIPT_PATH}"/ci-create-workspace)"
 cd "${SCRIPT_PATH}"
 
 function cleanup {
@@ -46,13 +46,15 @@ function cleanup {
 trap cleanup EXIT
 
 cd "${ACTION_PATH}"
-export USER_ID="$(id -u)"
-export GROUP_ID="$(id -g)"
+USER_ID="$(id -u)"
+GROUP_ID="$(id -g)"
+export USER_ID
+export GROUP_ID
 export GRADLE_CACHE_PATH="${START_PATH}/gradle"
 docker-compose -f build.docker-compose.yml up -d
 if [[ "${ACTION_NAME}" == "--shell" ]]; then
     docker-compose -f build.docker-compose.yml exec smithy-rs-build /bin/bash
 else
-    docker-compose -f build.docker-compose.yml exec -T smithy-rs-build "./scripts/${ACTION_NAME}" "${ACTION_ARGS}"
+    docker-compose -f build.docker-compose.yml exec -T smithy-rs-build "./scripts/${ACTION_NAME}" "${ACTION_ARGS[@]}"
 fi
 exit $?
