@@ -347,26 +347,26 @@ class JsonSerializerGenerator(
                 )
             }
             is BlobShape -> rust(
-                "$writer.string_unchecked(&#T(${value.name}.as_ref()));",
+                "$writer.string_unchecked(&#T(${value.asRef()}));",
                 RuntimeType.Base64Encode(runtimeConfig)
             )
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-                rust("$writer.date_time(${value.name}, #T)?;", timestampFormatType)
+                rust("$writer.date_time(${value.asRef()}, #T)?;", timestampFormatType)
             }
             is CollectionShape -> jsonArrayWriter(context) { arrayName ->
-                serializeCollection(Context(arrayName, context.valueExpression, target))
+                serializeCollection(Context(arrayName, value, target))
             }
             is MapShape -> jsonObjectWriter(context) { objectName ->
-                serializeMap(Context(objectName, context.valueExpression, target))
+                serializeMap(Context(objectName, value, target))
             }
             is StructureShape -> jsonObjectWriter(context) { objectName ->
-                serializeStructure(StructContext(objectName, context.valueExpression.name, target))
+                serializeStructure(StructContext(objectName, value.asRef(), target))
             }
             is UnionShape -> jsonObjectWriter(context) { objectName ->
-                serializeUnion(Context(objectName, context.valueExpression, target))
+                serializeUnion(Context(objectName, value, target))
             }
             is DocumentShape -> rust("$writer.document(${value.asRef()});")
             else -> TODO(target.toString())
