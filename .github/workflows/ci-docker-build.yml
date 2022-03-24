@@ -6,6 +6,7 @@ on:
     paths:
     - tools/**
 
+# Allow only one Docker build image build to run at a time for the entire smithy-rs repo
 concurrency:
   group: ci-docker-build-yml
   cancel-in-progress: true
