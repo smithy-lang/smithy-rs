@@ -35,7 +35,7 @@ class ServerOperationRegistryGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
-        "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "Phantom" to ServerRuntimeType.Phantom,

@@ -122,7 +122,7 @@ private class ServerHttpProtocolImplGenerator(
         "Regex" to CargoDependency.Regex.asType(),
         "SerdeUrlEncoded" to ServerCargoDependency.SerdeUrlEncoded.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
-        "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
