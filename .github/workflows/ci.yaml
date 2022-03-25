@@ -32,7 +32,7 @@ jobs:
     - name: Acquire build image
       id: acquire
       # Script sets boolean output value named `image-in-artifacts`
-      run: ./smithy-rs/tools/ci-build/ci-output-build-image
+      run: ./smithy-rs/tools/ci-build/ci-output-build-image ${{ github.event.pull_request.base.sha }}
     - name: Upload build image
       uses: actions/upload-artifact@v3
       with:
