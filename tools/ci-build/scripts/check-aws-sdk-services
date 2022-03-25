@@ -5,7 +5,7 @@
 #
 
 set -eux
-cd workspace/aws-sdk
+cd aws-sdk
 
 # Remove examples from workspace
 sed -i '/"examples\//d' Cargo.toml

@@ -23,6 +23,9 @@ ACTION_PATH="$(mktemp -d -t smithy-rs-build.XXXXXX)"
 cp build.docker-compose.yml "${ACTION_PATH}/"
 mkdir -p "${ACTION_PATH}/workspace/artifacts"
 
+# Copy scripts into workspace
+cp -r "${SCRIPT_PATH}/scripts" "${ACTION_PATH}/workspace/"
+
 # Copy inputs into workspace
 for input_path in \
     "${START_PATH}/aws-doc-sdk-examples" \

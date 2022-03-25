@@ -8,7 +8,7 @@ C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
 
 set -eux
-cd workspace/aws-sdk/examples
+cd aws-sdk/examples
 
 for example in *; do
     echo -e "${C_YELLOW}Checking examples/${example}...${C_RESET}"

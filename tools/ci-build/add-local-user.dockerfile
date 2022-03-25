@@ -8,4 +8,4 @@ FROM ${base_image} AS bare_base_image
 ARG USER_ID
 RUN useradd -l -u ${USER_ID} -G build -o -s /bin/bash localbuild;
 USER localbuild
-RUN /home/build/scripts/sanity-test
+RUN /home/build/sanity-test

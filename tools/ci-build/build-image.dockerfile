@@ -119,6 +119,6 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     RUSTDOCFLAGS="-D warnings" \
     RUSTFLAGS="-D warnings" \
     SMITHY_RS_DOCKER_BUILD_IMAGE=1
-COPY ./scripts /home/build/scripts
 WORKDIR /home/build
-RUN /home/build/scripts/sanity-test
+COPY scripts/sanity-test /home/build/sanity-test
+RUN /home/build/sanity-test

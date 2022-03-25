@@ -5,7 +5,7 @@
 #
 
 set -eux
-cd workspace/smithy-rs
+cd smithy-rs
 
 ./gradlew aws:sdk:assemble
 python3 aws/sdk/test-services.py > aws/sdk/build/aws-sdk/services-with-tests

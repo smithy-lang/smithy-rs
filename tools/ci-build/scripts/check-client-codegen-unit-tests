@@ -5,5 +5,5 @@
 #
 
 set -eux
-cd workspace/smithy-rs
+cd smithy-rs
 ./gradlew codegen:test

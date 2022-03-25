@@ -5,6 +5,6 @@
 #
 
 set -eux
-cd workspace/aws-sdk-smoketest
+cd aws-sdk-smoketest
 # We run these on the generated SDK due to aws-config depending on generated services
 ../smithy-rs/tools/additional-per-crate-checks.sh ./sdk/

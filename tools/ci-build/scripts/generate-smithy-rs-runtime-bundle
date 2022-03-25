@@ -5,7 +5,7 @@
 #
 
 set -eux
-cd workspace/smithy-rs
+cd smithy-rs
 
 ./gradlew rust-runtime:assemble
 mv rust-runtime/build/smithy-rs ../artifacts/smithy-rs-runtime

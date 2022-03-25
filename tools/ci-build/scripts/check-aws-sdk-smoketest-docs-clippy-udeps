@@ -6,8 +6,6 @@
 
 set -eux
 
-cd workspace
-
 # Docs, clippy, etc on the smoketest itself
 pushd aws-sdk-smoketest &>/dev/null
 
