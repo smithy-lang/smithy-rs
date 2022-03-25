@@ -9,8 +9,8 @@ set -ue
 SCRIPT_PATH="$(realpath "$(dirname "$0")")"
 cd "${SCRIPT_PATH}"
 
-# Check to see if the original image is available
-docker inspect smithy-rs-build-image-original:latest &>/dev/null
+# Check to see if the base image is available
+docker inspect smithy-rs-base-image:latest &>/dev/null
 
 # Build a local user version of the image
 docker build -t smithy-rs-build-image --file add-local-user.dockerfile --build-arg=USER_ID="$(id -u)" .

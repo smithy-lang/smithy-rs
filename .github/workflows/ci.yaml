@@ -20,8 +20,8 @@ jobs:
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
   # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
   # it uploads the image as a build artifact for other jobs to download and use.
-  acquire-build-image:
-    name: Acquire Build Image
+  acquire-base-image:
+    name: Acquire Base Image
     runs-on: ubuntu-latest
     outputs:
       image-in-artifacts: ${{ steps.acquire.outputs.image-in-artifacts }}
@@ -29,20 +29,20 @@ jobs:
     - uses: actions/checkout@v2
       with:
         path: smithy-rs
-    - name: Acquire build image
+    - name: Acquire base image
       id: acquire
       # Script sets boolean output value named `image-in-artifacts`
       run: ./smithy-rs/tools/ci-build/ci-output-build-image ${{ github.event.pull_request.base.sha }}
-    - name: Upload build image
+    - name: Upload base image
       uses: actions/upload-artifact@v3
       with:
-        name: smithy-rs-build-image-original
-        path: smithy-rs-build-image-original
+        name: smithy-rs-base-image
+        path: smithy-rs-base-image
         retention-days: 1
 
   generate:
     name: Generate
-    needs: acquire-build-image
+    needs: acquire-base-image
     runs-on: ubuntu-latest
     # To avoid repeating setup boilerplate, we have the actual commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
@@ -78,16 +78,16 @@ jobs:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         target-dir: ./smithy-rs-target
     - name: Download build image
-      if: ${{ needs.acquire-build-image.outputs.image-in-artifacts == 'true' }}
+      if: ${{ needs.acquire-base-image.outputs.image-in-artifacts == 'true' }}
       uses: actions/download-artifact@v3
       with:
-        name: smithy-rs-build-image-original
+        name: smithy-rs-base-image
     - name: Prepare build image
       run: |
-        if [[ "${{ needs.acquire-build-image.outputs.image-in-artifacts }}" == "true" ]]; then
-          docker load -i smithy-rs-build-image-original
+        if [[ "${{ needs.acquire-base-image.outputs.image-in-artifacts }}" == "true" ]]; then
+          docker load -i smithy-rs-base-image
         else
-          ./smithy-rs/tools/ci-build/acquire-build-image --force-remote
+          ./smithy-rs/tools/ci-build/acquire-base-image --force-remote
         fi
         ./smithy-rs/tools/ci-build/create-local-build-image
       # This runs the commands from the matrix strategy
@@ -106,7 +106,7 @@ jobs:
   test:
     name: Test
     needs:
-    - acquire-build-image
+    - acquire-base-image
     - generate
     runs-on: ubuntu-latest
     # To avoid repeating setup boilerplate, we have the actual test commands
@@ -159,17 +159,17 @@ jobs:
       run: |
         tar xfz artifacts-generate-aws-sdk.tar.gz
         tar xfz artifacts-generate-aws-sdk-smoketest.tar.gz
-    - name: Download build image
-      if: ${{ needs.acquire-build-image.outputs.image-in-artifacts == 'true' }}
+    - name: Download base image
+      if: ${{ needs.acquire-base-image.outputs.image-in-artifacts == 'true' }}
       uses: actions/download-artifact@v3
       with:
-        name: smithy-rs-build-image-original
+        name: smithy-rs-base-image
     - name: Prepare build image
       run: |
-        if [[ "${{ needs.acquire-build-image.outputs.image-in-artifacts }}" == "true" ]]; then
-          docker load -i smithy-rs-build-image-original
+        if [[ "${{ needs.acquire-base-image.outputs.image-in-artifacts }}" == "true" ]]; then
+          docker load -i smithy-rs-base-image
         else
-          ./smithy-rs/tools/ci-build/acquire-build-image --force-remote
+          ./smithy-rs/tools/ci-build/acquire-base-image --force-remote
         fi
         ./smithy-rs/tools/ci-build/create-local-build-image
     # This runs the commands from the matrix strategy
@@ -209,7 +209,7 @@ jobs:
   check-sdk-examples:
     name: Check SDK Examples
     needs:
-    - acquire-build-image
+    - acquire-base-image
     - generate
     runs-on: ubuntu-latest
     steps:
@@ -237,22 +237,22 @@ jobs:
     - name: Untar artifacts
       run: tar xfz artifacts-generate-aws-sdk.tar.gz
     - name: Download build image
-      if: ${{ needs.acquire-build-image.outputs.image-in-artifacts == 'true' }}
+      if: ${{ needs.acquire-base-image.outputs.image-in-artifacts == 'true' }}
       uses: actions/download-artifact@v3
       with:
-        name: smithy-rs-build-image-original
+        name: smithy-rs-base-image
     - name: Prepare build image
       run: |
-        if [[ "${{ needs.acquire-build-image.outputs.image-in-artifacts }}" == "true" ]]; then
-          docker load -i smithy-rs-build-image-original
+        if [[ "${{ needs.acquire-base-image.outputs.image-in-artifacts }}" == "true" ]]; then
+          docker load -i smithy-rs-base-image
         else
-          ./smithy-rs/tools/ci-build/acquire-build-image --force-remote
+          ./smithy-rs/tools/ci-build/acquire-base-image --force-remote
         fi
         ./smithy-rs/tools/ci-build/create-local-build-image
     - name: Run check-aws-sdk-examples
       run: ./smithy-rs/tools/ci-build/ci-action check-aws-sdk-examples
 
-  # Psuedo-job that depends on matrix jobs so that we don't have to enter
+  # Pseudo-job that depends on matrix jobs so that we don't have to enter
   # the myriad of test matrix combinations into GitHub's protected branch rules
   require-all:
     # Should NOT depend on check-sdk-examples since that's an optional check

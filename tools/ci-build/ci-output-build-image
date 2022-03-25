@@ -15,13 +15,12 @@ fi
 
 BASE_REVISION="$1"
 SCRIPT_PATH="$(realpath "$(dirname "$0")")"
-cd "${SCRIPT_PATH}"
 
-./acquire-build-image --nothing-or-local-if-changed "${BASE_REVISION}"
+"${SCRIPT_PATH}/acquire-base-image" --nothing-or-local-if-changed "${BASE_REVISION}"
 
-# If a local build image was created, then save it off for upload to the artifacts
-if (docker inspect smithy-rs-build-image-original:latest &>/dev/null); then
-    docker save -o smithy-rs-build-image-original smithy-rs-build-image-original:latest;
+# If a local base image was created, then save it off for upload to the artifacts
+if (docker inspect smithy-rs-base-image:latest &>/dev/null); then
+    docker save -o smithy-rs-base-image smithy-rs-base-image:latest;
     echo "::set-output name=image-in-artifacts::true";
 else
   # Otherwise, tell dependent jobs to use the public ECR image

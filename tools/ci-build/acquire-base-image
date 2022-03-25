@@ -26,7 +26,7 @@ if [[ $# -eq 1 && $1 == "--help" ]]; then
     echo
     echo "Determines if tools changed between HEAD and the given <base-revision>, "
     echo "and locates build Docker image based on that. This image becomes tagged "
-    echo "locally with Docker as 'smithy-rs-build-image'."
+    echo "locally with Docker as 'smithy-rs-base-image'."
     echo
     echo "If run with no args, it will pull the remote image."
     exit 1
@@ -34,12 +34,12 @@ fi
 
 function acquire_remote_image {
     docker pull "${REMOTE_IMAGE_NAME}"
-    docker tag "${REMOTE_IMAGE_NAME}" smithy-rs-build-image-original
+    docker tag "${REMOTE_IMAGE_NAME}" smithy-rs-base-image
     exit 0
 }
 function acquire_local_image {
     cd "${SCRIPT_PATH}"
-    docker build -t smithy-rs-build-image-original --file build-image.dockerfile .
+    docker build -t smithy-rs-base-image --file base-image.dockerfile .
     exit 0
 }
 
