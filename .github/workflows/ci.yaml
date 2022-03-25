@@ -40,6 +40,8 @@ jobs:
         path: smithy-rs-base-image
         retention-days: 1
 
+  # The `generate` job runs scripts that produce artifacts that are required by the `test` job,
+  # and also runs some checks/lints so that those are run sooner rather than later.
   generate:
     name: Generate
     needs: acquire-base-image

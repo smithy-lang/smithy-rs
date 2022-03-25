@@ -12,6 +12,11 @@ import org.gradle.process.internal.ExecActionFactory
 import java.io.File
 import javax.inject.Inject
 
+/**
+ * Runs a smithy-rs build tool that is written in Rust and also included in the Docker build base image.
+ * If it detects that Gradle is running inside the Docker build image, it uses the prebuilt tool binary.
+ * Otherwise, it compiles the tool and runs it.
+ */
 abstract class ExecRustBuildTool : DefaultTask() {
     @get:InputDirectory
     var toolPath: File? = null
