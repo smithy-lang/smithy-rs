@@ -1,4 +1,54 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+0.39.0 (March 17, 2022)
+=======================
+**Breaking Changes:**
+- ⚠ ([aws-sdk-rust#406](https://github.com/awslabs/aws-sdk-rust/issues/406)) `aws_types::config::Config` has been renamed to `aws_types:sdk_config::SdkConfig`. This is to better differentiate it
+    from service-specific configs like `aws_s3_sdk::Config`. If you were creating shared configs with
+    `aws_config::load_from_env()`, then you don't have to do anything. If you were directly referring to a shared config,
+    update your `use` statements and `struct` names.
+
+    _Before:_
+    ```rust
+    use aws_types::config::Config;
+
+    fn main() {
+        let config = Config::builder()
+        // config builder methods...
+        .build()
+        .await;
+    }
+    ```
+
+    _After:_
+    ```rust
+    use aws_types::SdkConfig;
+
+    fn main() {
+        let config = SdkConfig::builder()
+        // config builder methods...
+        .build()
+        .await;
+    }
+    ```
+- ⚠ ([smithy-rs#724](https://github.com/awslabs/smithy-rs/issues/724)) Timeout configuration has been refactored a bit. If you were setting timeouts through environment variables or an AWS
+    profile, then you shouldn't need to change anything. Take note, however, that we don't currently support HTTP connect,
+    read, write, or TLS negotiation timeouts. If you try to set any of those timeouts in your profile or environment, we'll
+    log a warning explaining that those timeouts don't currently do anything.
+
+    If you were using timeouts programmatically,
+    you'll need to update your code. In previous versions, timeout configuration was stored in a single `TimeoutConfig`
+    struct. In this new version, timeouts have been broken up into several different config structs that are then collected
+    in a `timeout::Config` struct. As an example, to get the API per-attempt timeout in previous versions you would access
+    it with `<your TimeoutConfig>.api_call_attempt_timeout()` and in this new version you would access it with
+    `<your timeout::Config>.api.call_attempt_timeout()`. We also made some unimplemented timeouts inaccessible in order to
+    avoid giving users the impression that setting them had an effect. We plan to re-introduce them once they're made
+    functional in a future update.
+
+**New this release:**
+- ([smithy-rs#1225](https://github.com/awslabs/smithy-rs/issues/1225)) `DynMiddleware` is now `clone`able
+- ([smithy-rs#1257](https://github.com/awslabs/smithy-rs/issues/1257)) HTTP request property bag now contains list of desired HTTP versions to use when making requests. This list is not currently used but will be in an upcoming update.
+
+
 0.38.0 (Februrary 24, 2022)
 ===========================
 **Breaking Changes:**
