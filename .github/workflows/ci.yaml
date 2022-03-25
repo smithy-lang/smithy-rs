@@ -31,17 +31,8 @@ jobs:
         path: smithy-rs
     - name: Acquire build image
       id: acquire
-      run: |
-        set -x
-        ./smithy-rs/tools/ci-build/acquire-build-image --nothing-or-local-if-changed ${{ github.event.pull_request.base.sha }};
-        # If a local build image was created, then save it off for upload to the artifacts
-        if (docker inspect smithy-rs-build-image-original:latest &>/dev/null); then
-          docker save -o smithy-rs-build-image-original smithy-rs-build-image-original:latest;
-          echo "::set-output name=image-in-artifacts::true";
-        else
-          # Otherwise, tell dependent jobs to use the public ECR image
-          echo "::set-output name=image-in-artifacts::false";
-        fi
+      # Script sets boolean output value named `image-in-artifacts`
+      run: ./smithy-rs/tools/ci-build/ci-output-build-image
     - name: Upload build image
       uses: actions/upload-artifact@v3
       with:
