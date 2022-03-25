@@ -44,3 +44,26 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+class s3:
+    def GetObject(self):
+        pass
+
+    def GetObjectResponse(self):
+        pass
+
+
+class Exception(Exception):
+    def __init__(self, message):
+        pass
+
+
+def fake_s3(request):
+    """
+    Wire level mock of S3 GetObject that returns "test data" for every key
+    """
+    if request == s3.GetObject:
+        return s3.GetObjectResponse("test data")
+    else:
+        raise Exception("unsupported operation")
