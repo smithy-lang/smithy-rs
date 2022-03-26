@@ -6,8 +6,12 @@
 
 set -eux
 cd smithy-rs
+
 sdk-lints check --all
 sdk-lints fix --all
-rustfmt --check --edition 2018 "$(find . -name '*.rs' -print | grep -v /target/)"
+
+# shellcheck disable=SC2046
+rustfmt --check --edition 2018 $(find . -name '*.rs' -print | grep -v /target/)
+
 ./gradlew -p buildSrc test
 ./gradlew ktlint
