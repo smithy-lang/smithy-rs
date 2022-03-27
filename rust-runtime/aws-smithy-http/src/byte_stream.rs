@@ -95,6 +95,30 @@
 //! }
 //! }
 //! ```
+//!
+//! If you want more control over how the file is read, you can use PathBodyBuilder. This allows to specify
+//! options such as the size of the buffer used to read the file, the size of the file to read if known...
+// !
+//! ```no_run
+//! # #[cfg(feature = "rt-tokio")]
+//! # {
+//! use aws_smithy_http::byte_stream::{ByteStream, PathBodyBuilder};
+//! use std::path::Path;
+//! struct GetObjectInput {
+//!     body: ByteStream
+//! }
+//!
+//! async fn bytestream_from_file() -> GetObjectInput {
+//!     let bytestream = PathBodyBuilder::from_path("docs/some-large-file.csv")
+//!         .with_buffer_size(32_784)
+//!         .with_file_size(123_456)
+//!         .byte_stream()
+//!         .await
+//!         .expect("valid path");
+//!     GetObjectInput { body: bytestream }
+//! }
+//! # }
+//! ```
 
 use crate::body::SdkBody;
 use bytes::Buf;
@@ -108,10 +132,11 @@ use std::io::IoSlice;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-const DEFAULT_BUFFER_SIZE: usize = 4096;
-
 #[cfg(feature = "rt-tokio")]
 mod bytestream_util;
+
+#[cfg(feature = "rt-tokio")]
+pub use self::bytestream_util::PathBodyBuilder;
 
 /// Stream of binary data
 ///
@@ -253,6 +278,10 @@ impl ByteStream {
     ///
     /// Furthermore, a partial write MAY seek in the file and resume from the previous location.
     ///
+    /// Note: If you want more control, such as specifying the size of the buffer used to read the file
+    /// or the length of the file, use [`PathBodyBuilder`](crate::byte_stream::PathBodyBuilder).
+    ///
+    ///
     /// # Examples
     /// ```no_run
     /// use aws_smithy_http::byte_stream::ByteStream;
@@ -264,50 +293,7 @@ impl ByteStream {
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_path(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
-        Self::from_path_with_buffer_size(path, DEFAULT_BUFFER_SIZE).await
-    }
-
-    /// Create a ByteStream that streams data from the filesystem, with a specific read buffer initial capacity.
-    ///
-    /// This function creates a retryable ByteStream for a given `path`. The returned ByteStream
-    /// will provide a size hint when used as an HTTP body. If the request fails, the read will
-    /// begin again by reloading the file handle.
-    ///
-    /// Increasing the read buffer capacity to higher values than the default (4_096) can result in a large reduction
-    /// in CPU usage, at the cost of memory increase.
-    ///
-    /// ## Warning
-    /// The contents of the file MUST not change during retries. The length & checksum of the file
-    /// will be cached. If the contents of the file change, the operation will almost certainly fail.
-    ///
-    /// Furthermore, a partial write MAY seek in the file and resume from the previous location.
-    ///
-    /// # Examples
-    /// ```no_run
-    /// use aws_smithy_http::byte_stream::ByteStream;
-    /// use std::path::Path;
-    ///  async fn make_bytestream() -> ByteStream {
-    ///     ByteStream::from_path_with_buffer_size("docs/rows.csv", 32_768).await.expect("file should be readable")
-    /// }
-    /// ```
-    #[cfg(feature = "rt-tokio")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
-    pub async fn from_path_with_buffer_size(
-        path: impl AsRef<std::path::Path>,
-        buffer_size: usize,
-    ) -> Result<Self, Error> {
-        let path = path.as_ref();
-        let path_buf = path.to_path_buf();
-        let sz = tokio::fs::metadata(path)
-            .await
-            .map_err(|err| Error(err.into()))?
-            .len();
-        let body_loader = move || {
-            SdkBody::from_dyn(http_body::combinators::BoxBody::new(
-                bytestream_util::PathBody::from_path(path_buf.as_path(), sz, buffer_size),
-            ))
-        };
-        Ok(ByteStream::new(SdkBody::retryable(body_loader)))
+        PathBodyBuilder::from_path(path).byte_stream().await
     }
 
     /// Create a ByteStream from a file
@@ -317,31 +303,7 @@ impl ByteStream {
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_file(file: tokio::fs::File) -> Result<Self, Error> {
-        Self::from_file_with_buffer_size(file, DEFAULT_BUFFER_SIZE).await
-    }
-
-    /// Create a ByteStream from a file, with a specific read buffer initial capacity.
-    ///
-    /// Increasing the read buffer capacity to higher values than the default (4_096) can result in a large reduction
-    /// in CPU usage, at the cost of memory increase.
-    ///
-    /// NOTE: This will NOT result in a retryable ByteStream. For a ByteStream that can be retried in the case of
-    /// upstream failures, use [`ByteStream::from_path`](ByteStream::from_path)
-    #[cfg(feature = "rt-tokio")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
-    pub async fn from_file_with_buffer_size(
-        file: tokio::fs::File,
-        buffer_size: usize,
-    ) -> Result<Self, Error> {
-        let sz = file
-            .metadata()
-            .await
-            .map_err(|err| Error(err.into()))?
-            .len();
-        let body = SdkBody::from_dyn(http_body::combinators::BoxBody::new(
-            bytestream_util::PathBody::from_file(file, sz, buffer_size),
-        ));
-        Ok(ByteStream::new(body))
+        PathBodyBuilder::from_file(file).byte_stream().await
     }
 }
 
@@ -577,6 +539,48 @@ mod tests {
         assert!(body2.starts_with(b"Brian was here."));
         assert!(body2.ends_with(b"9999\n"));
         assert_eq!(body2.len(), 298890);
+
+        assert_eq!(
+            ByteStream::new(body1).collect().await?.remaining(),
+            298890 - some_data.len()
+        );
+
+        Ok(())
+    }
+
+    #[cfg(feature = "rt-tokio")]
+    #[tokio::test]
+    async fn path_based_bytestreams_with_builder() -> Result<(), Box<dyn std::error::Error>> {
+        use super::{ByteStream, PathBodyBuilder};
+        use bytes::Buf;
+        use http_body::Body;
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+        let mut file = NamedTempFile::new()?;
+
+        for i in 0..10000 {
+            writeln!(file, "Brian was here. Briefly. {}", i)?;
+        }
+        let body = PathBodyBuilder::from_path(&file)
+            .with_buffer_size(16384)
+            // This isn't the right file length - one shouln't done that in real life
+            .with_file_size(200)
+            .byte_stream()
+            .await?
+            .into_inner();
+
+        // assert that the file length specified size is used as size hint
+        assert_eq!(body.size_hint().exact(), Some(200));
+
+        let mut body1 = body.try_clone().expect("retryable bodies are cloneable");
+        // read a little bit from one of the clones
+        let some_data = body1
+            .data()
+            .await
+            .expect("should have some data")
+            .expect("read should not fail");
+        // The size of one read should be equal to that of the buffer size
+        assert_eq!(some_data.len(), 16384);
 
         assert_eq!(
             ByteStream::new(body1).collect().await?.remaining(),
