@@ -157,7 +157,8 @@ class JsonSerializerGenerator(
         fnName: String,
         structureShape: StructureShape,
         includedMembers: List<MemberShape>,
-        includeErrorType: Boolean
+        includeErrorType: Boolean,
+        useErrorNamespace: Boolean
     ): RuntimeType {
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustBlockTemplate(
@@ -169,7 +170,8 @@ class JsonSerializerGenerator(
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
                 if (includeErrorType && structureShape.hasTrait<ErrorTrait>()) {
-                    writeWithNoFormatting("""object.key("__type").string("${structureShape.getId()}");""")
+                    val typeId = if (useErrorNamespace) { structureShape.getId() } else { structureShape.id.name }
+                    writeWithNoFormatting("""object.key("__type").string("$typeId");""")
                 }
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)
@@ -271,7 +273,7 @@ class JsonSerializerGenerator(
 
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.serializeFunctionName(outputShape)
-        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers, false)
+        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers, false, false)
     }
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
@@ -280,7 +282,7 @@ class JsonSerializerGenerator(
             httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
                 .map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)
-        return serverStructureSerializer(fnName, errorShape, includedMembers, false)
+        return serverStructureSerializer(fnName, errorShape, includedMembers, false, false)
     }
 
     private fun RustWriter.serializeStructure(

@@ -11,7 +11,6 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -275,6 +274,9 @@ class ServerOperationRegistryGenerator(
             }
             AwsJson1_0Trait.ID -> {
                 awsJsonRequestSpec("AwsJson10")
+            }
+            AwsJson1_1Trait.ID -> {
+                awsJsonRequestSpec("AwsJson11")
             }
             else -> {
                 TODO("Protocol $protocol not supported yet")

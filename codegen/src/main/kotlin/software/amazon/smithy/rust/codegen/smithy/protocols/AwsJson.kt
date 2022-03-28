@@ -183,6 +183,6 @@ class AwsJson(
         }
 }
 
-private fun awsJsonFieldName(member: MemberShape): String {
+fun awsJsonFieldName(member: MemberShape): String {
     return member.memberName
 }

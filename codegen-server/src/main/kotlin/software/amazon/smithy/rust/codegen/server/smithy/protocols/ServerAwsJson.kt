@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -25,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.smithy.protocols.awsJsonFieldName
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
@@ -65,7 +65,8 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenera
  */
 class ServerAwsJsonSerializerGenerator(
     private val codegenContext: CodegenContext,
-    val httpBindingResolver: HttpBindingResolver,
+    private val httpBindingResolver: HttpBindingResolver,
+    private val awsJsonVersion: AwsJsonVersion,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
@@ -78,22 +79,20 @@ class ServerAwsJsonSerializerGenerator(
             httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
                 .map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)
-        return jsonSerializerGenerator.serverStructureSerializer(fnName, errorShape, includedMembers, true)
+        return jsonSerializerGenerator.serverStructureSerializer(fnName, errorShape, includedMembers, true, awsJsonVersion == AwsJsonVersion.Json10)
     }
 }
 
 class ServerAwsJson(
     private val codegenContext: CodegenContext,
-    awsJsonVersion: AwsJsonVersion
+    private val awsJsonVersion: AwsJsonVersion
 ) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
-        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
         "Response" to RuntimeType.http.member("Response"),
-        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
     private val jsonDeserModule = RustModule.private("json_deser")
 
@@ -109,7 +108,7 @@ class ServerAwsJson(
         JsonParserGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        ServerAwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
+        ServerAwsJsonSerializerGenerator(codegenContext, httpBindingResolver, awsJsonVersion)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
@@ -134,8 +133,4 @@ class ServerAwsJson(
                 *errorScope
             )
         }
-}
-
-private fun awsJsonFieldName(member: MemberShape): String {
-    return member.memberName
 }
