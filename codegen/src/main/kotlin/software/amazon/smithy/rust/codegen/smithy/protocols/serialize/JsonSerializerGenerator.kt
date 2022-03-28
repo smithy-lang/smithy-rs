@@ -20,6 +20,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -152,10 +153,11 @@ class JsonSerializerGenerator(
      * operation, error and structure shapes.
      * This function is only used by the server, the client uses directly [serializeStructure].
      */
-    private fun serverStructureSerializer(
+    fun serverStructureSerializer(
         fnName: String,
         structureShape: StructureShape,
-        includedMembers: List<MemberShape>
+        includedMembers: List<MemberShape>,
+        includeErrorType: Boolean
     ): RuntimeType {
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustBlockTemplate(
@@ -166,6 +168,9 @@ class JsonSerializerGenerator(
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
+                if (includeErrorType && structureShape.hasTrait<ErrorTrait>()) {
+                    writeWithNoFormatting("""object.key("__type").string("${structureShape.getId()}");""")
+                }
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)
             }
@@ -266,7 +271,7 @@ class JsonSerializerGenerator(
 
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.serializeFunctionName(outputShape)
-        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers)
+        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers, false)
     }
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
@@ -275,7 +280,7 @@ class JsonSerializerGenerator(
             httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
                 .map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)
-        return serverStructureSerializer(fnName, errorShape, includedMembers)
+        return serverStructureSerializer(fnName, errorShape, includedMembers, false)
     }
 
     private fun RustWriter.serializeStructure(

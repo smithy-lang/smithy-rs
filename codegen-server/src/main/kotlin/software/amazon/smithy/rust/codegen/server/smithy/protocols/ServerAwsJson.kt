@@ -8,20 +8,21 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
@@ -29,7 +30,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredData
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
-import software.amazon.smithy.rust.codegen.util.inputShape
 
 /*
  * RestJson1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGeneror]
@@ -65,33 +65,20 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenera
  */
 class ServerAwsJsonSerializerGenerator(
     private val codegenContext: CodegenContext,
-    httpBindingResolver: HttpBindingResolver,
+    val httpBindingResolver: HttpBindingResolver,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
+    private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
-    private val jsonSerModule = RustModule.private("json_ser")
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val codegenScope = arrayOf(
-        "Error" to runtimeConfig.serializationError(),
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-    )
 
-    override fun operationInputSerializer(operationShape: OperationShape): RuntimeType {
-        var serializer = jsonSerializerGenerator.operationInputSerializer(operationShape)
-        if (serializer == null) {
-            val inputShape = operationShape.inputShape(codegenContext.model)
-            val fnName = codegenContext.symbolProvider.serializeFunctionName(operationShape)
-            serializer = RuntimeType.forInlineFun(fnName, RustModule.private("operation_ser")) {
-                it.rustBlockTemplate(
-                    "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
-                    *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape)
-                ) {
-                    rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
-                }
-            }
-        }
-        return serializer
+    override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
+        val errorShape = model.expectShape(shape, StructureShape::class.java)
+        val includedMembers =
+            httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
+                .map { it.member }
+        val fnName = symbolProvider.serializeFunctionName(errorShape)
+        return jsonSerializerGenerator.serverStructureSerializer(fnName, errorShape, includedMembers, true)
     }
 }
 
@@ -129,7 +116,7 @@ class ServerAwsJson(
             writer.rustTemplate(
                 """
                 pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
-                    #{json_errors}::parse_generic_error(response.body(), response.headers())
+                    panic!("Parsing of http generic error is not supported in server implementation")
                 }
                 """,
                 *errorScope
@@ -141,8 +128,7 @@ class ServerAwsJson(
             writer.rustTemplate(
                 """
                 pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
-                    // Note: HeaderMap::new() doesn't allocate
-                    #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
+                    panic!("Parsing of http stream generic error is not supported in server implementation")
                 }
                 """,
                 *errorScope
