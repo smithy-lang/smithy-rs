@@ -7,92 +7,180 @@ on:
 
 name: CI
 
+# Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
+concurrency:
+  group: ci-yaml-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   rust_version: 1.56.1
   rust_toolchain_components: clippy,rustfmt
-  java_version: 11
 
 jobs:
-  repo-lint:
-    name: Repo Lints
+  # This job detects if the PR made changes to build tools. If it did, then it builds a new
+  # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
+  # it uploads the image as a build artifact for other jobs to download and use.
+  acquire-base-image:
+    name: Acquire Base Image
     runs-on: ubuntu-latest
+    outputs:
+      image-in-artifacts: ${{ steps.acquire.outputs.image-in-artifacts }}
     steps:
     - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
       with:
-        toolchain: ${{ env.rust_version }}
-        components: ${{ env.rust_toolchain_components }}
-        default: true
-    - run: cargo run -- check --all
-      name: run checks
-      working-directory: tools/sdk-lints
-    - run: cargo run -- fix --all
-      name: run fixes
-      working-directory: tools/sdk-lints
+        path: smithy-rs
+    - name: Acquire base image
+      id: acquire
+      # Script sets boolean output value named `image-in-artifacts`
+      run: ./smithy-rs/tools/ci-build/ci-output-build-image ${{ github.event.pull_request.base.sha }}
+    - name: Upload base image
+      uses: actions/upload-artifact@v3
+      with:
+        name: smithy-rs-base-image
+        path: smithy-rs-base-image
+        retention-days: 1
 
-  codegen-tests:
-    name: Codegen Tests
+  # The `generate` job runs scripts that produce artifacts that are required by the `test` job,
+  # and also runs some checks/lints so that those are run sooner rather than later.
+  generate:
+    name: Generate
+    needs: acquire-base-image
     runs-on: ubuntu-latest
-    # To avoid repeating setup boilerplate, we have the actual test commands
-    # in a matrix strategy. These commands get run in the steps after all of the setup.
+    # To avoid repeating setup boilerplate, we have the actual commands
+    # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
       fail-fast: false
       matrix:
-        test:
-        - name: Kotlin Style
-          run: ./gradlew ktlint
-        - name: BuildSrc Tests
-          run: ./gradlew -p buildSrc test
-        - name: Client Unit Tests
-          run: ./gradlew :codegen:test
-        - name: SDK Unit Tests
-          run: ./gradlew :aws:sdk-codegen:test
-        - name: Server Unit Tests
-          run: ./gradlew :codegen-server:test
-        - name: Client Integration Tests
-          run: ./gradlew :codegen-test:test
-        - name: Server Integration Tests
-          run: ./gradlew :codegen-server-test:test
+        # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
+        actions:
+        - action: check-style-and-lints
+        - action: generate-aws-sdk
+        - action: generate-aws-sdk-smoketest
+        - action: generate-smithy-rs-runtime-bundle
     steps:
     - uses: actions/checkout@v2
+      with:
+        path: smithy-rs
+    - uses: actions/checkout@v2
+      with:
+        repository: awsdocs/aws-doc-sdk-examples
+        path: aws-doc-sdk-examples
     - uses: actions/cache@v2
       name: Gradle Cache
       with:
         path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          gradle/caches
+          gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
       # Pinned to the commit hash of v1.3.0
     - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
       with:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
-        target-dir: ./target
-    - uses: actions-rs/toolchain@v1
+        target-dir: ./smithy-rs-target
+    - name: Download build image
+      if: ${{ needs.acquire-base-image.outputs.image-in-artifacts == 'true' }}
+      uses: actions/download-artifact@v3
       with:
-        toolchain: ${{ env.rust_version }}
-        components: ${{ env.rust_toolchain_components }}
-        default: true
-    - name: Set up JDK
-      uses: actions/setup-java@v1
+        name: smithy-rs-base-image
+    - name: Prepare build image
+      run: |
+        if [[ "${{ needs.acquire-base-image.outputs.image-in-artifacts }}" == "true" ]]; then
+          docker load -i smithy-rs-base-image
+        else
+          ./smithy-rs/tools/ci-build/acquire-base-image --force-remote ${{ github.event.pull_request.base.sha }}
+        fi
+        ./smithy-rs/tools/ci-build/create-local-build-image
+      # This runs the commands from the matrix strategy
+    - name: Run ${{ matrix.actions.action }}
+      run: |
+        ./smithy-rs/tools/ci-build/ci-action ${{ matrix.actions.action }}
+        tar cfz artifacts-${{ matrix.actions.action }}.tar.gz -C artifacts .
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
       with:
-        java-version: ${{ env.java_version }}
-    # This runs the commands from the matrix strategy
-    - name: ${{ matrix.test.name }}
-      run: ${{ matrix.test.run }}
+        name: artifacts-${{ matrix.actions.action }}
+        path: artifacts-${{ matrix.actions.action }}.tar.gz
+        if-no-files-found: error
+        retention-days: 3
 
-  rust-tests:
-    name: Rust Tests
-    runs-on: ${{ matrix.os }}
+  test:
+    name: Test
+    needs:
+    - acquire-base-image
+    - generate
+    runs-on: ubuntu-latest
+    # To avoid repeating setup boilerplate, we have the actual test commands
+    # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
+      fail-fast: false
+      max-parallel: 7
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        runtime: [rust-runtime, aws/rust-runtime, tools/publisher]
-        exclude:
-        # Don't need to test the publisher tool on Windows
-        - os: windows-latest
-          runtime: tools/publisher
+        # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
+        test:
+        # Kick off the slowest three first
+        - action: check-aws-sdk-services
+        - action: check-client-codegen-unit-tests
+        - action: check-rust-runtimes-and-tools
+        # Order by fastest to slowest
+        - action: check-server-codegen-unit-tests
+        - action: check-server-codegen-integration-tests
+        - action: check-sdk-codegen-unit-tests
+        - action: check-client-codegen-integration-tests
+        - action: check-aws-sdk-smoketest-additional-checks
+        - action: check-aws-sdk-smoketest-docs-clippy-udeps
+        - action: check-aws-sdk-smoketest-unit-tests
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        path: smithy-rs
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          gradle/caches
+          gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+    # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        target-dir: ./smithy-rs-target
+    - name: Download artifacts-generate-aws-sdk
+      uses: actions/download-artifact@v3
+      with:
+        name: artifacts-generate-aws-sdk
+    - name: Download artifacts-generate-aws-sdk-smoketest
+      uses: actions/download-artifact@v3
+      with:
+        name: artifacts-generate-aws-sdk-smoketest
+    - name: Untar artifacts
+      run: |
+        tar xfz artifacts-generate-aws-sdk.tar.gz
+        tar xfz artifacts-generate-aws-sdk-smoketest.tar.gz
+    - name: Download base image
+      if: ${{ needs.acquire-base-image.outputs.image-in-artifacts == 'true' }}
+      uses: actions/download-artifact@v3
+      with:
+        name: smithy-rs-base-image
+    - name: Prepare build image
+      run: |
+        if [[ "${{ needs.acquire-base-image.outputs.image-in-artifacts }}" == "true" ]]; then
+          docker load -i smithy-rs-base-image
+        else
+          ./smithy-rs/tools/ci-build/acquire-base-image --force-remote
+        fi
+        ./smithy-rs/tools/ci-build/create-local-build-image
+    # This runs the commands from the matrix strategy
+    - name: Run ${{ matrix.test.action }}
+      run: ./smithy-rs/tools/ci-build/ci-action ${{ matrix.test.action }}
+
+  test-rust-windows:
+    name: Rust Tests on Windows
+    runs-on: windows-latest
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0
@@ -100,7 +188,7 @@ jobs:
       RUSTFLAGS: -D warnings
     steps:
     - uses: actions/checkout@v2
-    # Pinned to the commit hash of v1.3.0
+      # Pinned to the commit hash of v1.3.0
     - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
       with:
         sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
@@ -110,61 +198,76 @@ jobs:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
         default: true
-    - name: Format Check
-      run: rustfmt --check --edition 2018 $(find -name '*.rs' -print | grep -v /target/)
-      # windows doesn't support using --check like this
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-    - name: clippy check
-      run: cargo clippy --all-features -- -D warnings
-      working-directory: ${{ matrix.runtime }}
-      # don't bother running Clippy twice, it will have the same results on Windows
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-    - name: run tests
-      run: cargo test --all-features
-      working-directory: ${{ matrix.runtime }}
-    - name: generate docs
-      run: cargo doc --no-deps --document-private-items --all-features
-      working-directory: ${{ matrix.runtime }}
+    - name: Run tests
+      shell: bash
+      run: |
+        for runtime_path in "rust-runtime" "aws/rust-runtime"; do
+          pushd "${runtime_path}" &>/dev/null
+          cargo test --all-features
+          cargo doc --no-deps --document-private-items --all-features
+          popd &>/dev/null
+        done
 
-  # Psuedo-job that depends on the rust-tests job so that we don't have to enter
+  check-sdk-examples:
+    name: Check SDK Examples
+    needs:
+    - acquire-base-image
+    - generate
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        path: smithy-rs
+    - uses: actions/cache@v2
+      name: Gradle Cache
+      with:
+        path: |
+          gradle/caches
+          gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+      # Pinned to the commit hash of v1.3.0
+    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+      with:
+        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        target-dir: ./smithy-rs-target
+    - name: Download artifacts-generate-aws-sdk
+      uses: actions/download-artifact@v3
+      with:
+        name: artifacts-generate-aws-sdk
+    - name: Untar artifacts
+      run: tar xfz artifacts-generate-aws-sdk.tar.gz
+    - name: Download build image
+      if: ${{ needs.acquire-base-image.outputs.image-in-artifacts == 'true' }}
+      uses: actions/download-artifact@v3
+      with:
+        name: smithy-rs-base-image
+    - name: Prepare build image
+      run: |
+        if [[ "${{ needs.acquire-base-image.outputs.image-in-artifacts }}" == "true" ]]; then
+          docker load -i smithy-rs-base-image
+        else
+          ./smithy-rs/tools/ci-build/acquire-base-image --force-remote
+        fi
+        ./smithy-rs/tools/ci-build/create-local-build-image
+    - name: Run check-aws-sdk-examples
+      run: ./smithy-rs/tools/ci-build/ci-action check-aws-sdk-examples
+
+  # Pseudo-job that depends on matrix jobs so that we don't have to enter
   # the myriad of test matrix combinations into GitHub's protected branch rules
-  require-rust-tests:
-    needs: rust-tests
+  require-all:
+    # Should NOT depend on check-sdk-examples since that's an optional check
+    needs:
+    - generate
+    - test
+    - test-rust-windows
     # Run this job even if its dependency jobs fail
     if: always()
     runs-on: ubuntu-latest
-    name: Rust Tests Matrix Success
+    name: Matrix Success
     steps:
     - name: Verify jobs succeeded
       uses: re-actors/alls-green@3a2de129f0713010a71314c74e33c0e3ef90e696
       with:
         jobs: ${{ toJSON(needs) }}
-
-  runtime-bundle:
-    name: Produce smithy-rs runtime bundle
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - uses: actions/cache@v2
-      name: Gradle Cache
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-      # Pinned to the commit hash of v1.3.0
-    - name: Set up JDK
-      uses: actions/setup-java@v1
-      with:
-        java-version: ${{ env.java_version }}
-    - name: Produce bundle
-      run: |
-        ./gradlew rust-runtime:assemble
-        tar cfvz smithy-rs-runtime.tar.gz -C rust-runtime/build smithy-rs
-    - uses: actions/upload-artifact@v2
-      name: Upload bundle
-      with:
-        name: smithy-rs-runtime-${{ github.sha }}
-        path: smithy-rs-runtime.tar.gz

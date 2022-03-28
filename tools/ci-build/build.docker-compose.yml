@@ -1,0 +1,17 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+#
+version: '3.9'
+services:
+  smithy-rs-build:
+    image: smithy-rs-build-image:latest
+    user: ${USER_ID}:build
+    volumes:
+    - type: bind
+      source: ./workspace
+      target: /home/build/workspace
+    - type: bind
+      source: ${GRADLE_CACHE_PATH}
+      target: /home/build/.gradle
+    command: [/bin/bash, -c, --, sleep infinity]

@@ -67,7 +67,7 @@ pub(crate) trait Lint {
                 .map(|lint| lint.at_location(path.clone()));
             errors.extend(new_errors);
         }
-        if errors.len() == 0 {
+        if errors.is_empty() {
             eprintln!("{}...OK!", self.name())
         } else {
             eprintln!("Errors for {}:", self.name());
@@ -105,7 +105,7 @@ pub(crate) trait Lint {
                 fixes.push(path);
             }
         }
-        if fixes.len() == 0 {
+        if fixes.is_empty() {
             eprintln!("{}...OK!", self.name())
         } else {
             eprintln!("Fixed {} files for {}:", fixes.len(), self.name());
