@@ -86,6 +86,7 @@ pub struct TokioSleep;
 
 #[cfg(feature = "rt-tokio")]
 impl TokioSleep {
+    /// Create a new [`AsyncSleep`] implementation using the Tokio hashed wheel sleep implementation
     pub fn new() -> TokioSleep {
         Default::default()
     }
