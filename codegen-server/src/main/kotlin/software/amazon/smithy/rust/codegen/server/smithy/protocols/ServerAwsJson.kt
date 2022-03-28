@@ -32,14 +32,14 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionNam
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 /*
- * RestJson1 server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
+ * RestJson1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGeneror]
  * with RestJson1 specific configurations.
  */
-class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<ServerHttpProtocolGenerator> {
+class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator> {
     override fun protocol(codegenContext: CodegenContext): Protocol = ServerAwsJson(codegenContext, version)
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpProtocolGenerator =
-        ServerHttpProtocolGenerator(codegenContext, protocol(codegenContext))
+    override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpBoundProtocolGenerator =
+        ServerHttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
 
     override fun transformModel(model: Model): Model = model
 
