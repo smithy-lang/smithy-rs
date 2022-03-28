@@ -79,7 +79,13 @@ class ServerAwsJsonSerializerGenerator(
             httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
                 .map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)
-        return jsonSerializerGenerator.serverStructureSerializer(fnName, errorShape, includedMembers, true, awsJsonVersion == AwsJsonVersion.Json10)
+        return jsonSerializerGenerator.serverStructureSerializer(
+            fnName,
+            errorShape,
+            includedMembers,
+            true,
+            awsJsonVersion == AwsJsonVersion.Json10
+        )
     }
 }
 

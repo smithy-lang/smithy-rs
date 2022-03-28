@@ -126,6 +126,7 @@ pub trait RequestSpec {
         0
     }
 
+    /// What protocol this request specification supports?
     fn protocol(&self) -> Protocol;
 }
 
@@ -178,19 +179,19 @@ impl RequestSpec for AwsJsonRequestSpec {
     }
 }
 
-/// Request specification for Smithy protocols like RestJson1 and RestXml.
+/// Request specification for REST protocols like RestJson1 and RestXml.
 #[derive(Debug, Clone)]
-pub struct SmithyRequestSpec {
+pub struct RestRequestSpec {
     method: http::Method,
     uri_spec: UriSpec,
     uri_path_regex: Regex,
     protocol: Protocol,
 }
 
-impl SmithyRequestSpec {
+impl RestRequestSpec {
     pub fn new(method: http::Method, uri_spec: UriSpec, protocol: Protocol) -> Self {
         let uri_path_regex = (&uri_spec.path_and_query.path_segments).into();
-        SmithyRequestSpec {
+        RestRequestSpec {
             method,
             uri_spec,
             uri_path_regex,
@@ -220,7 +221,7 @@ impl SmithyRequestSpec {
     }
 }
 
-impl RequestSpec for SmithyRequestSpec {
+impl RequestSpec for RestRequestSpec {
     fn matches<B>(&self, req: &Request<B>) -> Match {
         if let Some(_host_prefix) = &self.uri_spec.host_prefix {
             todo!("Look at host prefix");
@@ -357,7 +358,7 @@ mod tests {
 
     #[test]
     fn smithy_greedy_labels_match_greedily() {
-        let spec = SmithyRequestSpec::from_parts(
+        let spec = RestRequestSpec::from_parts(
             Method::GET,
             vec![
                 PathSegment::Literal(String::from("mg")),
@@ -381,7 +382,7 @@ mod tests {
 
     #[test]
     fn smithy_repeated_query_keys() {
-        let spec = SmithyRequestSpec::from_parts(
+        let spec = RestRequestSpec::from_parts(
             Method::DELETE,
             Vec::new(),
             vec![QuerySegment::Key(String::from("foo"))],
@@ -398,8 +399,8 @@ mod tests {
         }
     }
 
-    fn smithy_key_value_spec() -> SmithyRequestSpec {
-        SmithyRequestSpec::from_parts(
+    fn smithy_key_value_spec() -> RestRequestSpec {
+        RestRequestSpec::from_parts(
             Method::DELETE,
             Vec::new(),
             vec![QuerySegment::KeyValue(String::from("foo"), String::from("bar"))],
@@ -423,8 +424,8 @@ mod tests {
         );
     }
 
-    fn smithy_ab_spec() -> SmithyRequestSpec {
-        SmithyRequestSpec::from_parts(
+    fn smithy_ab_spec() -> RestRequestSpec {
+        RestRequestSpec::from_parts(
             Method::GET,
             vec![
                 PathSegment::Literal(String::from("a")),
@@ -451,7 +452,7 @@ mod tests {
 
     #[test]
     fn smithy_empty_segments_in_the_middle_do_matter_label_spec() {
-        let label_spec = SmithyRequestSpec::from_parts(
+        let label_spec = RestRequestSpec::from_parts(
             Method::GET,
             vec![
                 PathSegment::Literal(String::from("a")),
@@ -475,7 +476,7 @@ mod tests {
 
     #[test]
     fn smithy_empty_segments_in_the_middle_do_matter_greedy_label_spec() {
-        let greedy_label_spec = SmithyRequestSpec::from_parts(
+        let greedy_label_spec = RestRequestSpec::from_parts(
             Method::GET,
             vec![
                 PathSegment::Literal(String::from("a")),
@@ -513,7 +514,7 @@ mod tests {
 
     #[test]
     fn smithy_empty_segments_at_the_end_do_matter_label_spec() {
-        let label_spec = SmithyRequestSpec::from_parts(
+        let label_spec = RestRequestSpec::from_parts(
             Method::GET,
             vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
             Vec::new(),

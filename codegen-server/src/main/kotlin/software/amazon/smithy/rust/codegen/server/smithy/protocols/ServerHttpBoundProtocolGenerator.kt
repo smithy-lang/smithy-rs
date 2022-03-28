@@ -1094,7 +1094,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             return ServerRuntimeType.RequestRejection(runtimeConfig)
         }
         when (codegenContext.protocol) {
-            RestJson1Trait.ID, AwsJson1_0Trait.ID -> {
+            RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
                 return CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize").member("Error")
             }
             RestXmlTrait.ID -> {

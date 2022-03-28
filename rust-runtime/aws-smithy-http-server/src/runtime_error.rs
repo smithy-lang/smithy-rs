@@ -25,6 +25,7 @@ use crate::protocols::Protocol;
 
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
+    /// The requested operation does not exist.
     UnknownOperation,
     /// Request failed to deserialize or response failed to serialize.
     Serialization(crate::Error),

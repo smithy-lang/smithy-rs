@@ -238,9 +238,9 @@ mod tests {
     // https://github.com/awslabs/smithy-typescript/blob/fbf97a9bf4c1d8cf7f285ea7c24e1f0ef280142a/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.spec.ts
     #[tokio::test]
     async fn smithy_simple_routing() {
-        let request_specs: Vec<(SmithyRequestSpec, &str)> = vec![
+        let request_specs: Vec<(RestRequestSpec, &str)> = vec![
             (
-                SmithyRequestSpec::from_parts(
+                RestRequestSpec::from_parts(
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("a")),
@@ -253,7 +253,7 @@ mod tests {
                 "A",
             ),
             (
-                SmithyRequestSpec::from_parts(
+                RestRequestSpec::from_parts(
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("mg")),
@@ -266,7 +266,7 @@ mod tests {
                 "MiddleGreedy",
             ),
             (
-                SmithyRequestSpec::from_parts(
+                RestRequestSpec::from_parts(
                     Method::DELETE,
                     Vec::new(),
                     vec![
@@ -278,7 +278,7 @@ mod tests {
                 "Delete",
             ),
             (
-                SmithyRequestSpec::from_parts(
+                RestRequestSpec::from_parts(
                     Method::POST,
                     vec![PathSegment::Literal(String::from("query_key_only"))],
                     vec![QuerySegment::Key(String::from("foo"))],
@@ -342,9 +342,9 @@ mod tests {
 
     #[tokio::test]
     async fn smithy_basic_pattern_conflict_avoidance() {
-        let request_specs: Vec<(SmithyRequestSpec, &str)> = vec![
+        let request_specs: Vec<(RestRequestSpec, &str)> = vec![
             (
-                SmithyRequestSpec::from_parts(
+                RestRequestSpec::from_parts(
                     Method::GET,
                     vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
                     Vec::new(),
@@ -353,7 +353,7 @@ mod tests {
                 "A1",
             ),
             (
-                SmithyRequestSpec::from_parts(
+                RestRequestSpec::from_parts(
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("a")),
@@ -366,7 +366,7 @@ mod tests {
                 "A2",
             ),
             (
-                SmithyRequestSpec::from_parts(
+                RestRequestSpec::from_parts(
                     Method::GET,
                     vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
                     Vec::new(),
@@ -375,7 +375,7 @@ mod tests {
                 "B1",
             ),
             (
-                SmithyRequestSpec::from_parts(
+                RestRequestSpec::from_parts(
                     Method::GET,
                     vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
                     vec![QuerySegment::Key(String::from("q"))],
