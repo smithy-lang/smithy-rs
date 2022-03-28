@@ -25,7 +25,7 @@ use crate::protocols::Protocol;
 
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
-    // UnknownOperation,
+    UnknownOperation,
     /// Request failed to deserialize or response failed to serialize.
     Serialization(crate::Error),
     /// As of writing, this variant can only occur upon failure to extract an
@@ -43,6 +43,7 @@ impl RuntimeErrorKind {
         match self {
             RuntimeErrorKind::Serialization(_) => "SerializationException",
             RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
+            RuntimeErrorKind::UnknownOperation => "UnknownOperation",
         }
     }
 }
@@ -58,10 +59,11 @@ impl axum_core::response::IntoResponse for RuntimeError {
         let status_code = match self.kind {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
             RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
+            RuntimeErrorKind::UnknownOperation => http::StatusCode::METHOD_NOT_ALLOWED,
         };
 
         let body = crate::body::to_boxed(match self.protocol {
-            Protocol::RestJson1 => "{}",
+            Protocol::RestJson1 | Protocol::AwsJson10 | Protocol::AwsJson11 => "{}",
             Protocol::RestXml => "",
         });
 
@@ -74,9 +76,9 @@ impl axum_core::response::IntoResponse for RuntimeError {
                     .header("Content-Type", "application/json")
                     .header("X-Amzn-Errortype", self.kind.name());
             }
-            Protocol::RestXml => {
-                builder = builder.header("Content-Type", "application/xml");
-            }
+            Protocol::RestXml => builder = builder.header("Content-Type", "application/xml"),
+            Protocol::AwsJson10 => builder = builder.header("Content-Type", "application/x-amz-json-1.0"),
+            Protocol::AwsJson11 => builder = builder.header("Content-Type", "application/x-amz-json-1.1"),
         }
 
         builder = builder.extension(crate::extension::RuntimeErrorExtension::new(String::from(

@@ -7,21 +7,24 @@
 use crate::rejection::RequestRejection;
 use axum_core::extract::RequestParts;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Protocol {
     RestJson1,
     RestXml,
+    AwsJson10,
+    AwsJson11,
 }
 
-/// Validate that the request had the standard JSON content-type header.
-pub fn check_json_content_type<B>(req: &RequestParts<B>) -> Result<(), RequestRejection> {
+/// TODO: This check should be more strict and codegenerated.
+/// Validate that the request had the standard RestJson 1 content-type header.
+pub fn check_rest_json_1_content_type<B>(req: &RequestParts<B>) -> Result<(), RequestRejection> {
     let mime = req
         .headers()
-        .ok_or(RequestRejection::MissingJsonContentType)?
+        .ok_or(RequestRejection::MissingRestJson1ContentType)?
         .get(http::header::CONTENT_TYPE)
-        .ok_or(RequestRejection::MissingJsonContentType)?
+        .ok_or(RequestRejection::MissingRestJson1ContentType)?
         .to_str()
-        .map_err(|_| RequestRejection::MissingJsonContentType)?
+        .map_err(|_| RequestRejection::MissingRestJson1ContentType)?
         .parse::<mime::Mime>()
         .map_err(|_| RequestRejection::MimeParse)?;
 
@@ -30,19 +33,20 @@ pub fn check_json_content_type<B>(req: &RequestParts<B>) -> Result<(), RequestRe
     {
         Ok(())
     } else {
-        Err(RequestRejection::MissingJsonContentType)
+        Err(RequestRejection::MissingRestJson1ContentType)
     }
 }
 
+/// TODO: This check should be more strict and codegenerated.
 /// Validate that the request had the standard XML content-type header.
-pub fn check_xml_content_type<B>(req: &RequestParts<B>) -> Result<(), RequestRejection> {
+pub fn check_rest_xml_content_type<B>(req: &RequestParts<B>) -> Result<(), RequestRejection> {
     let mime = req
         .headers()
-        .ok_or(RequestRejection::MissingXmlContentType)?
+        .ok_or(RequestRejection::MissingRestXmlContentType)?
         .get(http::header::CONTENT_TYPE)
-        .ok_or(RequestRejection::MissingXmlContentType)?
+        .ok_or(RequestRejection::MissingRestXmlContentType)?
         .to_str()
-        .map_err(|_| RequestRejection::MissingXmlContentType)?
+        .map_err(|_| RequestRejection::MissingRestXmlContentType)?
         .parse::<mime::Mime>()
         .map_err(|_| RequestRejection::MimeParse)?;
 
@@ -51,6 +55,46 @@ pub fn check_xml_content_type<B>(req: &RequestParts<B>) -> Result<(), RequestRej
     {
         Ok(())
     } else {
-        Err(RequestRejection::MissingXmlContentType)
+        Err(RequestRejection::MissingRestXmlContentType)
+    }
+}
+
+/// TODO: This check should be more strict and codegenerated.
+/// Validate that the request had the standard AwsJson 1.0 content-type header.
+pub fn check_aws_json_10_content_type<B>(req: &RequestParts<B>) -> Result<(), RequestRejection> {
+    let mime = req
+        .headers()
+        .ok_or(RequestRejection::MissingAwsJson10ContentType)?
+        .get(http::header::CONTENT_TYPE)
+        .ok_or(RequestRejection::MissingAwsJson10ContentType)?
+        .to_str()
+        .map_err(|_| RequestRejection::MissingAwsJson10ContentType)?
+        .parse::<mime::Mime>()
+        .map_err(|_| RequestRejection::MimeParse)?;
+
+    if mime.type_() == "application" && mime.subtype() == "x-amz-json-1.0" {
+        Ok(())
+    } else {
+        Err(RequestRejection::MissingAwsJson10ContentType)
+    }
+}
+
+/// TODO: This check should be more strict and codegenerated.
+/// Validate that the request had the standard AwsJson 1.1 content-type header.
+pub fn check_aws_json_11_content_type<B>(req: &RequestParts<B>) -> Result<(), RequestRejection> {
+    let mime = req
+        .headers()
+        .ok_or(RequestRejection::MissingAwsJson11ContentType)?
+        .get(http::header::CONTENT_TYPE)
+        .ok_or(RequestRejection::MissingAwsJson11ContentType)?
+        .to_str()
+        .map_err(|_| RequestRejection::MissingAwsJson11ContentType)?
+        .parse::<mime::Mime>()
+        .map_err(|_| RequestRejection::MimeParse)?;
+
+    if mime.type_() == "application" && mime.subtype() == "x-amz-json-1.1" {
+        Ok(())
+    } else {
+        Err(RequestRejection::MissingAwsJson11ContentType)
     }
 }

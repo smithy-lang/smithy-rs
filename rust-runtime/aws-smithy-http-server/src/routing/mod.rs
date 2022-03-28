@@ -7,9 +7,12 @@
 //!
 //! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 
-use self::{future::RouterFuture, request_spec::RequestSpec};
+use self::future::RouterFuture;
+use self::request_spec::RequestSpec;
 use crate::body::{boxed, Body, BoxBody, HttpBody};
+use crate::runtime_error::{RuntimeError, RuntimeErrorKind};
 use crate::BoxError;
+use axum_core::response::IntoResponse;
 use http::{Request, Response, StatusCode};
 use std::{
     convert::Infallible,
@@ -40,11 +43,14 @@ pub use self::{into_make_service::IntoMakeService, route::Route};
 /// [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 /// [endpoint trait]: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
 #[derive(Debug)]
-pub struct Router<B = Body> {
-    routes: Vec<(Route<B>, RequestSpec)>,
+pub struct Router<S, B = Body> {
+    routes: Vec<(Route<B>, S)>,
 }
 
-impl<B> Clone for Router<B> {
+impl<S, B> Clone for Router<S, B>
+where
+    S: Clone,
+{
     fn clone(&self) -> Self {
         Self {
             routes: self.routes.clone(),
@@ -63,9 +69,10 @@ where
     }
 }
 
-impl<B> Router<B>
+impl<S, B> Router<S, B>
 where
     B: Send + 'static,
+    S: RequestSpec + Clone,
 {
     /// Create a new `Router` from a vector of pairs of request specs and services.
     ///
@@ -76,11 +83,11 @@ where
         T: IntoIterator<
             Item = (
                 tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
-                RequestSpec,
+                S,
             ),
         >,
     {
-        let mut routes: Vec<(Route<B>, RequestSpec)> = routes
+        let mut routes: Vec<(Route<B>, S)> = routes
             .into_iter()
             .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
             .collect();
@@ -119,6 +126,7 @@ where
         <L::Service as Service<Request<NewReqBody>>>::Future: Send + 'static,
         NewResBody: HttpBody<Data = bytes::Bytes> + Send + 'static,
         NewResBody::Error: Into<BoxError>,
+        Vec<(Route, NewReqBody)>: FromIterator<(Route<NewReqBody>, S)>,
     {
         let layer = ServiceBuilder::new()
             .layer_fn(Route::new)
@@ -133,9 +141,10 @@ where
     }
 }
 
-impl<B> Service<Request<B>> for Router<B>
+impl<S, B> Service<Request<B>> for Router<S, B>
 where
     B: Send + 'static,
+    S: RequestSpec + Clone,
 {
     type Response = Response<BoxBody>;
     type Error = Infallible;
@@ -148,27 +157,26 @@ where
 
     #[inline]
     fn call(&mut self, req: Request<B>) -> Self::Future {
-        let mut method_not_allowed = false;
-
         for (route, request_spec) in &self.routes {
             match request_spec.matches(&req) {
                 request_spec::Match::Yes => {
                     return RouterFuture::from_oneshot(route.clone().oneshot(req));
                 }
-                request_spec::Match::MethodNotAllowed => method_not_allowed = true,
+                request_spec::Match::MethodNotAllowed => {
+                    let error = RuntimeError {
+                        protocol: request_spec.protocol(),
+                        kind: RuntimeErrorKind::UnknownOperation,
+                    };
+                    return RouterFuture::from_response(error.into_response());
+                }
                 // Continue looping to see if another route matches.
                 request_spec::Match::No => continue,
             }
         }
 
-        let status_code = if method_not_allowed {
-            StatusCode::METHOD_NOT_ALLOWED
-        } else {
-            StatusCode::NOT_FOUND
-        };
         RouterFuture::from_response(
             Response::builder()
-                .status(status_code)
+                .status(StatusCode::NOT_FOUND)
                 .body(crate::body::empty())
                 .unwrap(),
         )
@@ -178,14 +186,19 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocols::Protocol;
     use crate::{body::boxed, routing::request_spec::*};
     use futures_util::Future;
-    use http::Method;
+    use http::{HeaderMap, Method};
     use std::pin::Pin;
 
     /// Helper function to build a `Request`. Used in other test modules.
-    pub fn req(method: &Method, uri: &str) -> Request<()> {
-        Request::builder().method(method).uri(uri).body(()).unwrap()
+    pub fn req(method: &Method, uri: &str, headers: Option<HeaderMap>) -> Request<()> {
+        let mut r = Request::builder().method(method).uri(uri).body(()).unwrap();
+        if let Some(headers) = headers {
+            *r.headers_mut() = headers
+        }
+        r
     }
 
     /// A service that returns its name and the request's URI in the response body.
@@ -224,10 +237,10 @@ mod tests {
     // This test is a rewrite of `mux.spec.ts`.
     // https://github.com/awslabs/smithy-typescript/blob/fbf97a9bf4c1d8cf7f285ea7c24e1f0ef280142a/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.spec.ts
     #[tokio::test]
-    async fn simple_routing() {
-        let request_specs: Vec<(RequestSpec, &str)> = vec![
+    async fn smithy_simple_routing() {
+        let request_specs: Vec<(SmithyRequestSpec, &str)> = vec![
             (
-                RequestSpec::from_parts(
+                SmithyRequestSpec::from_parts(
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("a")),
@@ -235,11 +248,12 @@ mod tests {
                         PathSegment::Label,
                     ],
                     Vec::new(),
+                    Protocol::RestJson1,
                 ),
                 "A",
             ),
             (
-                RequestSpec::from_parts(
+                SmithyRequestSpec::from_parts(
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("mg")),
@@ -247,25 +261,28 @@ mod tests {
                         PathSegment::Literal(String::from("z")),
                     ],
                     Vec::new(),
+                    Protocol::RestJson1,
                 ),
                 "MiddleGreedy",
             ),
             (
-                RequestSpec::from_parts(
+                SmithyRequestSpec::from_parts(
                     Method::DELETE,
                     Vec::new(),
                     vec![
                         QuerySegment::KeyValue(String::from("foo"), String::from("bar")),
                         QuerySegment::Key(String::from("baz")),
                     ],
+                    Protocol::RestJson1,
                 ),
                 "Delete",
             ),
             (
-                RequestSpec::from_parts(
+                SmithyRequestSpec::from_parts(
                     Method::POST,
                     vec![PathSegment::Literal(String::from("query_key_only"))],
                     vec![QuerySegment::Key(String::from("foo"))],
+                    Protocol::RestJson1,
                 ),
                 "QueryKeyOnly",
             ),
@@ -292,14 +309,14 @@ mod tests {
             ("QueryKeyOnly", Method::POST, "/query_key_only?foo=&"),
         ];
         for (svc_name, method, uri) in &hits {
-            let mut res = router.call(req(method, uri)).await.unwrap();
+            let mut res = router.call(req(method, uri, None)).await.unwrap();
             let actual_body = get_body_as_str(&mut res).await;
 
             assert_eq!(format!("{} :: {}", svc_name, uri), actual_body);
         }
 
         for (_, _, uri) in hits {
-            let res = router.call(req(&Method::PATCH, uri)).await.unwrap();
+            let res = router.call(req(&Method::PATCH, uri, None)).await.unwrap();
             assert_eq!(StatusCode::METHOD_NOT_ALLOWED, res.status());
         }
 
@@ -318,24 +335,25 @@ mod tests {
             (Method::POST, "/"),
         ];
         for (method, miss) in misses {
-            let res = router.call(req(&method, miss)).await.unwrap();
+            let res = router.call(req(&method, miss, None)).await.unwrap();
             assert_eq!(StatusCode::NOT_FOUND, res.status());
         }
     }
 
     #[tokio::test]
-    async fn basic_pattern_conflict_avoidance() {
-        let request_specs: Vec<(RequestSpec, &str)> = vec![
+    async fn smithy_basic_pattern_conflict_avoidance() {
+        let request_specs: Vec<(SmithyRequestSpec, &str)> = vec![
             (
-                RequestSpec::from_parts(
+                SmithyRequestSpec::from_parts(
                     Method::GET,
                     vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
                     Vec::new(),
+                    Protocol::RestJson1,
                 ),
                 "A1",
             ),
             (
-                RequestSpec::from_parts(
+                SmithyRequestSpec::from_parts(
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("a")),
@@ -343,22 +361,25 @@ mod tests {
                         PathSegment::Literal(String::from("a")),
                     ],
                     Vec::new(),
+                    Protocol::RestJson1,
                 ),
                 "A2",
             ),
             (
-                RequestSpec::from_parts(
+                SmithyRequestSpec::from_parts(
                     Method::GET,
                     vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
                     Vec::new(),
+                    Protocol::RestJson1,
                 ),
                 "B1",
             ),
             (
-                RequestSpec::from_parts(
+                SmithyRequestSpec::from_parts(
                     Method::GET,
                     vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
                     vec![QuerySegment::Key(String::from("q"))],
+                    Protocol::RestJson1,
                 ),
                 "B2",
             ),
@@ -378,7 +399,7 @@ mod tests {
             ("B2", Method::GET, "/b/foo?q=baz"),
         ];
         for (svc_name, method, uri) in &hits {
-            let mut res = router.call(req(method, uri)).await.unwrap();
+            let mut res = router.call(req(method, uri, None)).await.unwrap();
             let actual_body = get_body_as_str(&mut res).await;
 
             assert_eq!(format!("{} :: {}", svc_name, uri), actual_body);
