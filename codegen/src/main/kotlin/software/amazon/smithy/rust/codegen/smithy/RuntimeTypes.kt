@@ -193,19 +193,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun QueryFormat(runtimeConfig: RuntimeConfig, func: String) =
             RuntimeType(func, CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http::query")
 
-        fun Base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType(
-                "encode",
-                CargoDependency.SmithyTypes(runtimeConfig),
-                "${runtimeConfig.crateSrcPrefix}_types::base64"
-            )
-
-        fun Base64Decode(runtimeConfig: RuntimeConfig): RuntimeType =
-            RuntimeType(
-                "decode",
-                CargoDependency.SmithyTypes(runtimeConfig),
-                "${runtimeConfig.crateSrcPrefix}_types::base64"
-            )
+        val Base64Encode = RuntimeType("encode", CargoDependency.Base64, "base64")
+        val Base64Decode = RuntimeType("decode", CargoDependency.Base64, "base64")
 
         fun TimestampFormat(runtimeConfig: RuntimeConfig, format: TimestampFormatTrait.Format): RuntimeType {
             val timestampFormat = when (format) {

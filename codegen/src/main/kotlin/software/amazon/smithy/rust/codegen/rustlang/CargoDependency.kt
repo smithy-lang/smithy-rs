@@ -190,6 +190,7 @@ data class CargoDependency(
     }
 
     companion object {
+        val Base64: CargoDependency = CargoDependency("base64", CratesIo("0.13"))
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1"))
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.1"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1"))

@@ -348,7 +348,7 @@ class HttpBindingGenerator(
                             .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new_with_message("base64 encoded data was not valid utf-8")))
                         ).collect();
                     """,
-                    "base_64_decode" to RuntimeType.Base64Decode(runtimeConfig),
+                    "base_64_decode" to RuntimeType.Base64Decode,
                     "header" to headerUtil
                 )
                 rust("let $parsedValue = $parsedValue?;")
@@ -555,7 +555,7 @@ class HttpBindingGenerator(
         return when {
             target.isStringShape -> {
                 if (target.hasTrait<MediaTypeTrait>()) {
-                    val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
+                    val func = writer.format(RuntimeType.Base64Encode)
                     "$func(&$targetName)"
                 } else {
                     quoteValue("AsRef::<str>::as_ref($targetName)")

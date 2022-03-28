@@ -9,6 +9,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types" }
+base64 = "0.13"
 
 [dev-dependencies]
 proptest = "1"

@@ -346,10 +346,7 @@ class JsonSerializerGenerator(
                     smithyTypes.member("Number")
                 )
             }
-            is BlobShape -> rust(
-                "$writer.string_unchecked(&#T(${value.asRef()}));",
-                RuntimeType.Base64Encode(runtimeConfig)
-            )
+            is BlobShape -> rust("$writer.string_unchecked(&#T(${value.asRef()}));", RuntimeType.Base64Encode)
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(context.shape, HttpLocation.DOCUMENT, EPOCH_SECONDS)

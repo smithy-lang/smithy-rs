@@ -222,10 +222,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                     smithyTypes.member("Number")
                 )
             }
-            is BlobShape -> rust(
-                "$writer.string(&#T(${value.name}));",
-                RuntimeType.Base64Encode(runtimeConfig)
-            )
+            is BlobShape -> rust("$writer.string(&#T(${value.name}));", RuntimeType.Base64Encode)
             is TimestampShape -> {
                 val timestampFormat = determineTimestampFormat(context.shape)
                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)

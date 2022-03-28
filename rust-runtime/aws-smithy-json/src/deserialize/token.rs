@@ -6,7 +6,7 @@
 use crate::deserialize::error::{Error, ErrorReason};
 use crate::escape::unescape_string;
 use aws_smithy_types::date_time::Format;
-use aws_smithy_types::{base64, Blob, DateTime, Document, Number};
+use aws_smithy_types::{Blob, DateTime, Document, Number};
 use std::borrow::Cow;
 
 use crate::deserialize::must_not_be_finite;

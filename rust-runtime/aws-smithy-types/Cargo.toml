@@ -14,7 +14,6 @@ ryu = "1.0.5"
 time = { version = "0.3.4", features = ["parsing"] }
 
 [dev-dependencies]
-base64 = "0.13.0"
 lazy_static = "1.4"
 proptest = "1"
 serde = { version = "1", features = ["derive"] }

@@ -298,7 +298,7 @@ class XmlBindingTraitSerializerGenerator(
                     CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
                 )
             }
-            is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode(runtimeConfig))
+            is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.Base64Encode)
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(

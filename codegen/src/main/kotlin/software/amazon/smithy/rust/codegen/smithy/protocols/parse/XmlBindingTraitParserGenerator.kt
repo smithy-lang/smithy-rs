@@ -644,7 +644,7 @@ class XmlBindingTraitParserGenerator(
                 )
             }
             is BlobShape -> {
-                withBlock("#T(", ")", RuntimeType.Base64Decode(runtimeConfig)) {
+                withBlock("#T(", ")", RuntimeType.Base64Decode) {
                     provider()
                 }
                 rustTemplate(

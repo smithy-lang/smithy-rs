@@ -52,7 +52,7 @@ class HttpChecksumRequiredGenerator(
                     """,
                     "md5" to CargoDependency.Md5.asType(),
                     "http" to CargoDependency.Http.asType(),
-                    "base64_encode" to RuntimeType.Base64Encode(codegenContext.runtimeConfig),
+                    "base64_encode" to RuntimeType.Base64Encode,
                     "BuildError" to codegenContext.runtimeConfig.operationBuildError()
                 )
             }
