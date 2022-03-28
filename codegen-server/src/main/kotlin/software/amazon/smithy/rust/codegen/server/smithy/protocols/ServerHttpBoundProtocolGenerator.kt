@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.Symbol
@@ -1064,10 +1066,16 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private fun getContentTypeCheck(): String {
         when (codegenContext.protocol) {
             RestJson1Trait.ID -> {
-                return "check_json_content_type"
+                return "check_rest_json_1_content_type"
             }
             RestXmlTrait.ID -> {
-                return "check_xml_content_type"
+                return "check_rest_xml_content_type"
+            }
+            AwsJson1_0Trait.ID -> {
+                return "check_aws_json_10_content_type"
+            }
+            AwsJson1_1Trait.ID -> {
+                return "check_aws_json_11_content_type"
             }
             else -> {
                 TODO("Protocol ${codegenContext.protocol} not supported yet")
@@ -1086,7 +1094,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             return ServerRuntimeType.RequestRejection(runtimeConfig)
         }
         when (codegenContext.protocol) {
-            RestJson1Trait.ID -> {
+            RestJson1Trait.ID, AwsJson1_0Trait.ID -> {
                 return CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize").member("Error")
             }
             RestXmlTrait.ID -> {

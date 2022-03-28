@@ -36,6 +36,7 @@ val allCodegenTests = listOf(
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
     CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
     CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation"),
+    CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
     CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
     CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),

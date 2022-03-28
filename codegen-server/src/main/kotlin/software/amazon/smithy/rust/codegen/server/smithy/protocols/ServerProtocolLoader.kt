@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.CodegenException
@@ -14,6 +15,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
+import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 
@@ -39,6 +41,7 @@ class ServerProtocolLoader(private val supportedProtocols: ProtocolMap) {
         val DefaultProtocols = mapOf(
             RestJson1Trait.ID to ServerRestJsonFactory(),
             RestXmlTrait.ID to ServerRestXmlFactory(),
+            AwsJson1_0Trait.ID to ServerAwsJsonFactory(AwsJsonVersion.Json10),
         )
     }
 }

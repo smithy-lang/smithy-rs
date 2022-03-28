@@ -5,6 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -30,7 +34,9 @@ class ServerOperationRegistryGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     private val operations: List<OperationShape>,
 ) {
+    private val protocol = codegenContext.protocol
     private val symbolProvider = codegenContext.symbolProvider
+    private val serviceName = codegenContext.serviceShape.toShapeId().name
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
@@ -204,9 +210,10 @@ class ServerOperationRegistryGenerator(
                 In$i: 'static + Send"""
             }.joinToString(separator = ",\n")
         Attribute.Custom("allow(clippy::all)").render(writer)
+        val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
         writer.rustBlockTemplate(
             """
-            impl<$genericArguments> From<$operationRegistryNameWithArguments> for #{Router}<B>
+            impl<$genericArguments> From<$operationRegistryNameWithArguments> for #{Router}<$namespace::${requestSpecType()}, B>
             where
                 B: Send + 'static,
                 $operationsTraitBounds
@@ -233,6 +240,19 @@ class ServerOperationRegistryGenerator(
         }
     }
 
+    private fun requestSpecType(): String =
+        when (protocol) {
+            RestJson1Trait.ID, RestXmlTrait.ID -> {
+                "SmithyRequestSpec"
+            }
+            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
+                "AwsJsonRequestSpec"
+            }
+            else -> {
+                TODO("Protocol $protocol not supported yet")
+            }
+        }
+
     /*
      * Renders the `PhantomData` generic members.
      */
@@ -245,10 +265,38 @@ class ServerOperationRegistryGenerator(
     /*
      * Generate the `RequestSpec`s for an operation based on its HTTP-bound route.
      */
-    private fun OperationShape.requestSpec(): String {
+    private fun OperationShape.requestSpec(): String =
+        when (protocol) {
+            RestJson1Trait.ID -> {
+                smithyRequestSpec("RestJson1")
+            }
+            RestXmlTrait.ID -> {
+                smithyRequestSpec("RestXml")
+            }
+            AwsJson1_0Trait.ID -> {
+                awsJsonRequestSpec("AwsJson10")
+            }
+            else -> {
+                TODO("Protocol $protocol not supported yet")
+            }
+        }
+
+    private fun OperationShape.awsJsonRequestSpec(protocol: String): String {
+        val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
+        val protocols = ServerRuntimeType.Protocols(runtimeConfig).fullyQualifiedName()
+        val operation_name = symbolProvider.toSymbol(this).name
+        return """
+            $namespace::AwsJsonRequestSpec::new(
+                String::from("$serviceName.$operation_name"),
+                $protocols::$protocol
+            )
+        """.trimIndent()
+    }
+
+    private fun OperationShape.smithyRequestSpec(protocol: String): String {
         val httpTrait = httpBindingResolver.httpTrait(this)
         val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
-
+        val protocols = ServerRuntimeType.Protocols(runtimeConfig).fullyQualifiedName()
         // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
         val pathSegments = httpTrait.uri.segments.map {
             "$namespace::PathSegment::" +
@@ -263,14 +311,15 @@ class ServerOperationRegistryGenerator(
         }
 
         return """
-            $namespace::RequestSpec::new(
+            $namespace::SmithyRequestSpec::new(
                 http::Method::${httpTrait.method},
                 $namespace::UriSpec::new(
                     $namespace::PathAndQuerySpec::new(
                         $namespace::PathSpec::from_vector_unchecked(vec![${pathSegments.joinToString()}]),
                         $namespace::QuerySpec::from_vector_unchecked(vec![${querySegments.joinToString()}])
                     )
-                )
+                ),
+                $protocols::$protocol
             )
         """.trimIndent()
     }
