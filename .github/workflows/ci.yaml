@@ -89,7 +89,7 @@ jobs:
         if [[ "${{ needs.acquire-base-image.outputs.image-in-artifacts }}" == "true" ]]; then
           docker load -i smithy-rs-base-image
         else
-          ./smithy-rs/tools/ci-build/acquire-base-image --force-remote
+          ./smithy-rs/tools/ci-build/acquire-base-image --force-remote ${{ github.event.pull_request.base.sha }}
         fi
         ./smithy-rs/tools/ci-build/create-local-build-image
       # This runs the commands from the matrix strategy
