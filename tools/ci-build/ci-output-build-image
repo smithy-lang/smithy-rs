@@ -14,7 +14,7 @@ if [[ $# -eq 1 ]]; then
 else
     # Otherwise, for the use-case where CI is being run directly on the main branch
     # without a pull request, use the commit hash of HEAD
-    BASE_REVISION="$(git rev-parse HEAD)"
+    BASE_REVISION="$(cd smithy-rs; git rev-parse HEAD)"
 fi
 
 SCRIPT_PATH="$(realpath "$(dirname "$0")")"
