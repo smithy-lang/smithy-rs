@@ -98,7 +98,7 @@
 //!
 //! If you want more control over how the file is read, you can use PathBodyBuilder. This allows to specify
 //! options such as the size of the buffer used to read the file, the size of the file to read if known...
-// !
+//!
 //! ```no_run
 //! # #[cfg(feature = "rt-tokio")]
 //! # {
@@ -563,7 +563,7 @@ mod tests {
         }
         let body = PathBodyBuilder::from_path(&file)
             .with_buffer_size(16384)
-            // This isn't the right file length - one shouln't done that in real life
+            // This isn't the right file length - one shouldn't do this in real code
             .with_file_size(200)
             .byte_stream()
             .await?

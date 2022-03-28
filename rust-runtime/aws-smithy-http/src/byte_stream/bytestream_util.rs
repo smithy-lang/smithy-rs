@@ -19,6 +19,7 @@ use crate::body::SdkBody;
 
 use super::{ByteStream, Error};
 
+// 4KB corresponds to the default buffer size used by Tokio's ReaderStream
 const DEFAULT_BUFFER_SIZE: usize = 4096;
 
 /// An HTTP Body designed to wrap files
