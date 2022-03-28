@@ -2,7 +2,7 @@
 name = "aws-smithy-http-server"
 version = "0.0.0-smithy-rs-head"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 keywords = ["smithy", "framework", "web", "api", "aws"]

@@ -71,7 +71,7 @@ class AwsReadmeDecorator : RustCodegenDecorator {
                     ## Using the SDK
 
                     Until the SDK is released, we will be adding information about using the SDK to the
-                    [Guide](https://github.com/awslabs/aws-sdk-rust/blob/main/Guide.md). Feel free to suggest
+                    [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html). Feel free to suggest
                     additional sections for the guide by opening an issue and describing what you are trying to do.
 
                     ## Getting Help

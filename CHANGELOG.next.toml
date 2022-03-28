@@ -12,84 +12,25 @@
 # author = "rcoh"
 
 [[smithy-rs]]
-message = "`DynMiddleware` is now `clone`able"
-references = ["smithy-rs#1225"]
+message = "Fix link to Developer Guide in crate's README.md"
+references = ["smithy-rs#1262"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "Velfi"
+author = "liubin"
 
 [[aws-sdk-rust]]
-message = """
-`aws_types::config::Config` has been renamed to `aws_types::sdk_config::SdkConfig`. This is to better differentiate it
-from service-specific configs like `aws_sdk_s3::Config`. If you were creating shared configs with
-`aws_config::load_from_env()`, then you don't have to do anything. If you were directly referring to a shared config,
-update your `use` statements and `struct` names.
-
-_Before:_
-```rust
-use aws_types::config::Config;
-
-fn main() {
-    let config = Config::builder()
-    // config builder methods...
-    .build()
-    .await;
-}
-```
-
-_After:_
-```rust
-// We re-export this type from the root module so it's easier to reference
-use aws_types::SdkConfig;
-
-fn main() {
-    let config = SdkConfig::builder()
-    // config builder methods...
-    .build()
-    .await;
-}
-```
-"""
-references = ["aws-sdk-rust#406"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "Velfi"
+message = "Fix link to Developer Guide in crate's README.md"
+references = ["smithy-rs#1262"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "liubin"
 
 [[smithy-rs]]
-message = """
-`aws_types::config::Config` has been renamed to `aws_types:sdk_config::SdkConfig`. This is to better differentiate it
-from service-specific configs like `aws_s3_sdk::Config`. If you were creating shared configs with
-`aws_config::load_from_env()`, then you don't have to do anything. If you were directly referring to a shared config,
-update your `use` statements and `struct` names.
-
-_Before:_
-```rust
-use aws_types::config::Config;
-
-fn main() {
-    let config = Config::builder()
-    // config builder methods...
-    .build()
-    .await;
-}
-```
-
-_After:_
-```rust
-use aws_types::SdkConfig;
-
-fn main() {
-    let config = SdkConfig::builder()
-    // config builder methods...
-    .build()
-    .await;
-}
-```
-"""
-references = ["aws-sdk-rust#406"]
+message = "Update all runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)"
+references = ["aws-sdk-rust#490"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
 
 [[aws-sdk-rust]]
-message = "Enable presigning for S3 operations UploadPart and DeleteObject"
-references = ["aws-sdk-rust#475", "aws-sdk-rust#473"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "rcoh"
+message = "Update all SDK and runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)"
+references = ["aws-sdk-rust#490"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"

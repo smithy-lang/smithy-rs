@@ -122,7 +122,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "Regex" to CargoDependency.Regex.asType(),
         "SerdeUrlEncoded" to ServerCargoDependency.SerdeUrlEncoded.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
-        "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
@@ -157,7 +157,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         rustTemplate(
             """
             ##[derive(Debug)]
-            pub struct $inputName(pub #{I});
+            pub(crate) struct $inputName(#{I});
             ##[#{AsyncTrait}::async_trait]
             impl<B> #{AxumCore}::extract::FromRequest<B> for $inputName
             where
@@ -225,7 +225,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
             rustTemplate(
                 """
-                pub enum $outputName {
+                pub(crate) enum $outputName {
                     Output(#{O}),
                     Error(#{E})
                 }
@@ -260,7 +260,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
             rustTemplate(
                 """
-                pub struct $outputName(pub #{O});
+                pub(crate) struct $outputName(#{O});
                 ##[#{AsyncTrait}::async_trait]
                 impl #{AxumCore}::response::IntoResponse for $outputName {
                     fn into_response(self) -> #{AxumCore}::response::Response {
@@ -639,7 +639,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     }
                     val errorSymbol = getDeserializePayloadErrorSymbol(binding)
                     val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
-                        operationShape,
                         binding,
                         errorSymbol,
                         structuredHandler = structureShapeHandler

@@ -3,7 +3,7 @@ name = "publisher"
 version = "0.2.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Tool used to publish the AWS SDK to crates.io"
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 publish = false
 
