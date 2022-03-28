@@ -8,12 +8,15 @@
 
 set -uex
 
-if [[ $# -ne 1 ]]; then
-    echo "Usage: ci-output-build-image <base revision commit hash>"
-    exit 1
+if [[ $# -eq 1 ]]; then
+    # If a base revision is given as an argument, use it
+    BASE_REVISION="$1"
+else
+    # Otherwise, for the use-case where CI is being run directly on the main branch
+    # without a pull request, use the commit hash of HEAD
+    BASE_REVISION="$(git rev-parse HEAD)"
 fi
 
-BASE_REVISION="$1"
 SCRIPT_PATH="$(realpath "$(dirname "$0")")"
 
 "${SCRIPT_PATH}/acquire-base-image" --nothing-or-local-if-changed "${BASE_REVISION}"
