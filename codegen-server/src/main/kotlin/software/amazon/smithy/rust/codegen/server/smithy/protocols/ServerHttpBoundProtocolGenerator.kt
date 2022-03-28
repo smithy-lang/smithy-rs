@@ -70,7 +70,7 @@ import java.util.logging.Logger
  * and overrides by creating a protocol factory inheriting from this class and feeding it to the [ServerProtocolLoader].
  * See `ServerRestJson.kt` for more info.
  */
-class ServerHttpProtocolGenerator(
+class ServerHttpBoundProtocolGenerator(
     codegenContext: CodegenContext,
     protocol: Protocol,
 ) : ProtocolGenerator(
@@ -83,7 +83,7 @@ class ServerHttpProtocolGenerator(
         public = true,
         includeDefaultPayloadHeaders = true
     ),
-    ServerHttpProtocolImplGenerator(codegenContext, protocol),
+    ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 ) {
     // Define suffixes for operation input / output / error wrappers
     companion object {
@@ -96,7 +96,7 @@ class ServerHttpProtocolGenerator(
  * Generate all operation input parsers and output serializers for streaming and
  * non-streaming types.
  */
-private class ServerHttpProtocolImplGenerator(
+private class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenContext: CodegenContext,
     private val protocol: Protocol,
 ) : ProtocolTraitImplGenerator {
@@ -151,7 +151,7 @@ private class ServerHttpProtocolImplGenerator(
         operationShape: OperationShape
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
-        val inputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
+        val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
 
         // Implement Axum `FromRequest` trait for input types.
         rustTemplate(
@@ -186,7 +186,7 @@ private class ServerHttpProtocolImplGenerator(
 
         // Implement Axum `IntoResponse` for output types.
 
-        val outputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+        val outputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
 
         if (operationShape.errors.isNotEmpty()) {

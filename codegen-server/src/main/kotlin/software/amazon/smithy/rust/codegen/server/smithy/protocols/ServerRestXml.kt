@@ -17,11 +17,11 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
  * with RestXml specific configurations.
  */
 class ServerRestXmlFactory(private val generator: (CodegenContext) -> Protocol = { RestXml(it) }) :
-    ProtocolGeneratorFactory<ServerHttpProtocolGenerator> {
+    ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator> {
     override fun protocol(codegenContext: CodegenContext): Protocol = generator(codegenContext)
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpProtocolGenerator =
-        ServerHttpProtocolGenerator(codegenContext, RestXml(codegenContext))
+    override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpBoundProtocolGenerator =
+        ServerHttpBoundProtocolGenerator(codegenContext, RestXml(codegenContext))
 
     override fun transformModel(model: Model): Model = model
 
