@@ -1,0 +1,19 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+
+name: Get Artifact
+description: Downloads and untars a build artifact
+inputs:
+  artifact:
+    description: Name of the artifact to download and untar
+    required: true
+runs:
+  using: composite
+  steps:
+  - name: Download ${{ inputs.artifact }}
+    uses: actions/download-artifact@v3
+    with:
+      name: ${{ inputs.artifact }}
+  - name: Untar ${{ inputs.artifact }}
+    shell: bash
+    run: tar xfz "${{ inputs.artifact }}.tar.gz"

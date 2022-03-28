@@ -1,0 +1,59 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+
+name: smithy-rs Docker Build
+description: Run Docker build command for smithy-rs
+inputs:
+  action:
+    description: What action to run in the Docker build
+    required: true
+  image-in-artifacts:
+    description: Boolean indicating if the image was uploaded as a build artifact in GitHub Actions
+    required: true
+  base-revision-sha:
+    description: Base revision commit hash. This can be blank if there's not a pull request
+    required: false
+runs:
+  using: composite
+  steps:
+  - uses: actions/cache@v2
+    name: Gradle Cache
+    with:
+      path: |
+        gradle/caches
+        gradle/wrapper
+      key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
+      restore-keys: |
+        ${{ runner.os }}-gradle-
+      # Pinned to the commit hash of v1.3.0
+  - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
+    with:
+      sharedKey: ${{ runner.os }}-${{ github.job }}
+      target-dir: ./smithy-rs-target
+  - name: Download base image
+    if: ${{ inputs.image-in-artifacts == 'true' }}
+    uses: actions/download-artifact@v3
+    with:
+      name: smithy-rs-base-image
+  - name: Prepare build image
+    shell: bash
+    run: |
+      if [[ "${{ inputs.image-in-artifacts }}" == "true" ]]; then
+        docker load -i smithy-rs-base-image
+      else
+        ./smithy-rs/tools/ci-build/acquire-base-image --force-remote ${{ inputs.base-revision-sha }}
+      fi
+      ./smithy-rs/tools/ci-build/create-local-build-image
+    # This runs the commands from the matrix strategy
+  - name: Run ${{ inputs.action }}
+    shell: bash
+    run: |
+      ./smithy-rs/tools/ci-build/ci-action ${{ inputs.action }}
+      tar cfz artifacts-${{ inputs.action }}.tar.gz -C artifacts .
+  - name: Upload artifacts
+    uses: actions/upload-artifact@v3
+    with:
+      name: artifacts-${{ inputs.action }}
+      path: artifacts-${{ inputs.action }}.tar.gz
+      if-no-files-found: error
+      retention-days: 3
