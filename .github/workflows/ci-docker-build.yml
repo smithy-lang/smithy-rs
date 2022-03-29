@@ -28,7 +28,10 @@ jobs:
       run: |
         IMAGE_TAG="$(git rev-parse HEAD)"
         cd tools/ci-build
-        docker build -t "${{ env.ecr_repository }}:${IMAGE_TAG}" --file base-image.dockerfile .
+        docker build \
+          -t "${{ env.ecr_repository }}:${IMAGE_TAG}" \
+          -t "${{ env.ecr_repository }}:latest" \
+          --file base-image.dockerfile .
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
@@ -40,3 +43,4 @@ jobs:
         IMAGE_TAG="$(git rev-parse HEAD)"
         aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
         docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
+        docker push "${{ env.ecr_repository }}:latest"
