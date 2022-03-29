@@ -84,22 +84,19 @@ jobs:
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
       fail-fast: false
-      max-parallel: 5
       matrix:
         # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
         test:
-        # Kick off the slowest three first
         - action: check-aws-sdk-services
-        - action: check-client-codegen-unit-tests
-        - action: check-rust-runtimes-and-tools
-        # Order by fastest to slowest
-        - action: check-server-codegen-unit-tests
-        - action: check-server-codegen-integration-tests
-        - action: check-sdk-codegen-unit-tests
-        - action: check-client-codegen-integration-tests
         - action: check-aws-sdk-smoketest-additional-checks
         - action: check-aws-sdk-smoketest-docs-clippy-udeps
         - action: check-aws-sdk-smoketest-unit-tests
+        - action: check-client-codegen-integration-tests
+        - action: check-client-codegen-unit-tests
+        - action: check-rust-runtimes-and-tools
+        - action: check-sdk-codegen-unit-tests
+        - action: check-server-codegen-integration-tests
+        - action: check-server-codegen-unit-tests
     steps:
     - uses: actions/checkout@v3
       with:

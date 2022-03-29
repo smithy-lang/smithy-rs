@@ -29,6 +29,22 @@ if [[ $# -eq 1 && $1 == "--help" ]]; then
     exit 1
 fi
 
+function try_pull_image {
+    REMOTE_IMAGE_NAME="$1"
+    for _ in $(seq 1 3); do
+        echo "Pulling remote Docker image ${REMOTE_IMAGE_NAME}..."
+        if ! docker pull "${REMOTE_IMAGE_NAME}"; then
+            echo "Docker pull failed. Waiting and trying again..."
+            sleep 30
+        else
+            break
+        fi
+    done
+    if ! docker inspect "${REMOTE_IMAGE_NAME}" &>/dev/null; then
+        echo "Fatal: Failed to pull remote Docker image!"
+        exit 1
+    fi
+}
 function acquire_remote_image {
     REMOTE_IMAGE_TAG="$1"
     REMOTE_IMAGE_NAME="public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci:${REMOTE_IMAGE_TAG}"
