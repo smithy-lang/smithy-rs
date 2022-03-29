@@ -85,8 +85,9 @@ impl PathBodyBuilder {
         }
     }
 
-    /// Specify the length of the file to read. If not used, [byte_stream](PathBodyBuilder::byte_stream)
-    /// will require an extra call to query the file's metadata.
+    /// Specify the length of the file to read (in bytes).
+    ///
+    /// If not used, [byte_stream](PathBodyBuilder::byte_stream) will require an extra call to query the file's metadata.
     ///
     pub fn with_file_size(mut self, file_size: u64) -> Self {
         self.file_size = Some(file_size);
