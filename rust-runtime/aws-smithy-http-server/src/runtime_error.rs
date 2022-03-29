@@ -60,12 +60,16 @@ impl axum_core::response::IntoResponse for RuntimeError {
         let status_code = match self.kind {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
             RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
-            RuntimeErrorKind::UnknownOperation => http::StatusCode::METHOD_NOT_ALLOWED,
+            RuntimeErrorKind::UnknownOperation => http::StatusCode::NOT_FOUND,
         };
 
         let body = crate::body::to_boxed(match self.protocol {
-            Protocol::RestJson1 | Protocol::AwsJson10 | Protocol::AwsJson11 => "{}",
+            Protocol::RestJson1 => "{}",
             Protocol::RestXml => "",
+            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#empty-body-serialization
+            Protocol::AwsJson10 => "",
+            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#empty-body-serialization
+            Protocol::AwsJson11 => "",
         });
 
         let mut builder = http::Response::builder();

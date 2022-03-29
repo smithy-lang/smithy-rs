@@ -10,6 +10,7 @@
 use self::future::RouterFuture;
 use self::request_spec::RequestSpec;
 use crate::body::{boxed, Body, BoxBody, HttpBody};
+use crate::protocols::Protocol;
 use crate::runtime_error::{RuntimeError, RuntimeErrorKind};
 use crate::BoxError;
 use axum_core::response::IntoResponse;
@@ -34,17 +35,29 @@ mod route;
 pub use self::{into_make_service::IntoMakeService, route::Route};
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
-/// based on the request's URI and HTTP method, adhering to the [Smithy specification].
+/// based on the request's URI and HTTP method or on some specific header setting the target operation.
+/// The former is adhering to the [Smithy specification], while the latter is adhering to
+/// the [AwsJson specification].
+///
+/// The router is also [Protocol] aware and currently supports REST based protocols like [restJson1] or [restXml]
+/// and RPC based protocols like [awsJson1.0] or [awsJson1.1]
 /// It currently does not support Smithy's [endpoint trait].
 ///
 /// You should not **instantiate** this router directly; it will be created for you from the
 /// code generated from your Smithy model by `smithy-rs`.
 ///
 /// [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
+/// [AwsJson specification]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#protocol-behaviors
+/// [Protocol]: https://awslabs.github.io/smithy/1.0/spec/aws/index.html#aws-protocols
+/// [restJson1]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-restjson1-protocol.html
+/// [restXml]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-restxml-protocol.html
+/// [awsJson1.0]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html
+/// [awsJson1.1]: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html
 /// [endpoint trait]: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
 #[derive(Debug)]
 pub struct Router<S, B = Body> {
     routes: Vec<(Route<B>, S)>,
+    protocol: Protocol,
 }
 
 impl<S, B> Clone for Router<S, B>
@@ -54,14 +67,7 @@ where
     fn clone(&self) -> Self {
         Self {
             routes: self.routes.clone(),
-        }
-    }
-}
-
-impl<S, B> Default for Router<S, B> {
-    fn default() -> Self {
-        Self {
-            routes: Default::default(),
+            protocol: self.protocol,
         }
     }
 }
@@ -71,11 +77,11 @@ where
     B: Send + 'static,
     S: RequestSpec,
 {
-    /// Create a new `Router` from a vector of pairs of request specs and services.
+    /// Create a new `Router` from a vector of pairs of request specs and services and a `Protocol`.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
-    pub fn from_box_clone_service_iter<T>(routes: T) -> Self
+    pub fn from_box_clone_service_iter<T>(routes: T, protocol: Protocol) -> Self
     where
         T: IntoIterator<
             Item = (
@@ -94,7 +100,7 @@ where
         // and pick the first one that matches.
         routes.sort_by_key(|(_route, request_spec)| std::cmp::Reverse(request_spec.rank()));
 
-        Self { routes }
+        Self { routes, protocol }
     }
 
     /// Convert this router into a [`MakeService`], that is a [`Service`] whose
@@ -133,7 +139,10 @@ where
             .into_iter()
             .map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec))
             .collect();
-        Router { routes }
+        Router {
+            routes,
+            protocol: self.protocol,
+        }
     }
 }
 
@@ -153,29 +162,33 @@ where
 
     #[inline]
     fn call(&mut self, req: Request<B>) -> Self::Future {
+        let mut method_not_allowed = false;
+
         for (route, request_spec) in &self.routes {
             match request_spec.matches(&req) {
                 request_spec::Match::Yes => {
                     return RouterFuture::from_oneshot(route.clone().oneshot(req));
                 }
-                request_spec::Match::MethodNotAllowed => {
-                    let error = RuntimeError {
-                        protocol: request_spec.protocol(),
-                        kind: RuntimeErrorKind::UnknownOperation,
-                    };
-                    return RouterFuture::from_response(error.into_response());
-                }
+                request_spec::Match::MethodNotAllowed => method_not_allowed = true,
                 // Continue looping to see if another route matches.
                 request_spec::Match::No => continue,
             }
         }
 
-        RouterFuture::from_response(
-            Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(crate::body::empty())
-                .unwrap(),
-        )
+        if method_not_allowed {
+            RouterFuture::from_response(
+                Response::builder()
+                    .status(StatusCode::METHOD_NOT_ALLOWED)
+                    .body(crate::body::empty())
+                    .unwrap(),
+            )
+        } else {
+            let error = RuntimeError {
+                protocol: self.protocol,
+                kind: RuntimeErrorKind::UnknownOperation,
+            };
+            RouterFuture::from_response(error.into_response())
+        }
     }
 }
 
@@ -244,7 +257,6 @@ mod tests {
                         PathSegment::Label,
                     ],
                     Vec::new(),
-                    Protocol::RestJson1,
                 ),
                 "A",
             ),
@@ -257,7 +269,6 @@ mod tests {
                         PathSegment::Literal(String::from("z")),
                     ],
                     Vec::new(),
-                    Protocol::RestJson1,
                 ),
                 "MiddleGreedy",
             ),
@@ -269,7 +280,6 @@ mod tests {
                         QuerySegment::KeyValue(String::from("foo"), String::from("bar")),
                         QuerySegment::Key(String::from("baz")),
                     ],
-                    Protocol::RestJson1,
                 ),
                 "Delete",
             ),
@@ -278,18 +288,20 @@ mod tests {
                     Method::POST,
                     vec![PathSegment::Literal(String::from("query_key_only"))],
                     vec![QuerySegment::Key(String::from("foo"))],
-                    Protocol::RestJson1,
                 ),
                 "QueryKeyOnly",
             ),
         ];
 
-        let mut router = Router::from_box_clone_service_iter(request_specs.into_iter().map(|(spec, svc_name)| {
-            (
-                tower::util::BoxCloneService::new(RestNamedEchoUriService(String::from(svc_name))),
-                spec,
-            )
-        }));
+        let mut router = Router::from_box_clone_service_iter(
+            request_specs.into_iter().map(|(spec, svc_name)| {
+                (
+                    tower::util::BoxCloneService::new(RestNamedEchoUriService(String::from(svc_name))),
+                    spec,
+                )
+            }),
+            Protocol::RestJson1,
+        );
 
         let hits = vec![
             ("A", Method::GET, "/a/b/c"),
@@ -344,7 +356,6 @@ mod tests {
                     Method::GET,
                     vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
                     Vec::new(),
-                    Protocol::RestJson1,
                 ),
                 "A1",
             ),
@@ -357,7 +368,6 @@ mod tests {
                         PathSegment::Literal(String::from("a")),
                     ],
                     Vec::new(),
-                    Protocol::RestJson1,
                 ),
                 "A2",
             ),
@@ -366,7 +376,6 @@ mod tests {
                     Method::GET,
                     vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
                     Vec::new(),
-                    Protocol::RestJson1,
                 ),
                 "B1",
             ),
@@ -375,18 +384,20 @@ mod tests {
                     Method::GET,
                     vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
                     vec![QuerySegment::Key(String::from("q"))],
-                    Protocol::RestJson1,
                 ),
                 "B2",
             ),
         ];
 
-        let mut router = Router::from_box_clone_service_iter(request_specs.into_iter().map(|(spec, svc_name)| {
-            (
-                tower::util::BoxCloneService::new(RestNamedEchoUriService(String::from(svc_name))),
-                spec,
-            )
-        }));
+        let mut router = Router::from_box_clone_service_iter(
+            request_specs.into_iter().map(|(spec, svc_name)| {
+                (
+                    tower::util::BoxCloneService::new(RestNamedEchoUriService(String::from(svc_name))),
+                    spec,
+                )
+            }),
+            Protocol::RestJson1,
+        );
 
         let hits = vec![
             ("A1", Method::GET, "/a/foo"),

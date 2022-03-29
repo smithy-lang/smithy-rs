@@ -152,6 +152,12 @@ class JsonSerializerGenerator(
      * Reusable structure serializer implementation that can be used to generate serializing code for
      * operation, error and structure shapes.
      * This function is only used by the server, the client uses directly [serializeStructure].
+     *
+     * To obey to protocol implementations such as AwsJson 1.0 and 1.1, this methods accepts two boolean
+     * arguments, `includeErrorType` and `useErrorNamespace`, controlling the generation of the `__type`
+     * field in the response.
+     * See: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
+     * See: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#differences-between-awsjson1-0-and-awsjson1-1
      */
     fun serverStructureSerializer(
         fnName: String,

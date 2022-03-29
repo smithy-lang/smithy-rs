@@ -32,8 +32,8 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.Structured
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
 
 /*
- * RestJson1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGeneror]
- * with RestJson1 specific configurations.
+ * AwsJson 1.0 and 1.1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGeneror]
+ * with AwsJson specific configurations.
  */
 class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator> {
     override fun protocol(codegenContext: CodegenContext): Protocol = ServerAwsJson(codegenContext, version)
@@ -60,8 +60,8 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenera
 }
 
 /**
- * AwsJson requires all empty inputs to be sent across as `{}`. This class
- * customizes wraps [JsonSerializerGenerator] to add this functionality.
+ * AwsJson requires errors to be serialized with an additional "__type" field. This class
+ * customize [JsonSerializerGenerator] to add this functionality.
  */
 class ServerAwsJsonSerializerGenerator(
     private val codegenContext: CodegenContext,

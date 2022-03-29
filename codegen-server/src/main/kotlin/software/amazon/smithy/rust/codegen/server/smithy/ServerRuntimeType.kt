@@ -27,12 +27,6 @@ object ServerRuntimeType {
     fun RequestSpecModule(runtimeConfig: RuntimeConfig) =
         RuntimeType("request_spec", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
 
-    fun RestRequestSpec(runtimeConfig: RuntimeConfig) =
-        RuntimeType("RestRequestSpec", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::request_spec")
-
-    fun AwsJsonRequestSpec(runtimeConfig: RuntimeConfig) =
-        RuntimeType("AwsJsonRequestSpec", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing::request_spec")
-
     fun serverOperationHandler(runtimeConfig: RuntimeConfig) =
         forInlineDependency(ServerInlineDependency.serverOperationHandler(runtimeConfig))
 

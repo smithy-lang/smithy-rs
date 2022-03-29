@@ -211,7 +211,7 @@ class ServerOperationRegistryGenerator(
         Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlockTemplate(
             """
-            impl<$genericArguments> From<$operationRegistryNameWithArguments> for #{Router}<${requestSpecType().fullyQualifiedName()}, B>
+            impl<$genericArguments> From<$operationRegistryNameWithArguments> for #{Router}<${requestSpecType()}, B>
             where
                 B: Send + 'static,
                 $operationsTraitBounds
@@ -230,29 +230,13 @@ class ServerOperationRegistryGenerator(
                 rustTemplate(
                     """
                     $requestSpecs
-                    #{Router}::from_box_clone_service_iter($towerServices)
+                    #{Router}::from_box_clone_service_iter($towerServices, ${runtimeProtocolType()})
                     """.trimIndent(),
                     *codegenScope
                 )
             }
         }
     }
-
-    /*
-     * Find the runtime `RequestSpec` type for a specific protocol.
-     */
-    private fun requestSpecType(): RuntimeType =
-        when (protocol) {
-            RestJson1Trait.ID, RestXmlTrait.ID -> {
-                ServerRuntimeType.RestRequestSpec(runtimeConfig)
-            }
-            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                ServerRuntimeType.AwsJsonRequestSpec(runtimeConfig)
-            }
-            else -> {
-                TODO("Protocol $protocol not supported yet")
-            }
-        }
 
     /*
      * Renders the `PhantomData` generic members.
@@ -264,21 +248,57 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
+     * Finds the runtime `RequestSpec` type for a specific modeled protocol.
+     */
+    private fun requestSpecType(): String {
+        val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
+        when (protocol) {
+            RestJson1Trait.ID, RestXmlTrait.ID -> {
+                return "$namespace::RestRequestSpec"
+            }
+            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
+                return "$namespace::AwsJsonRequestSpec"
+            }
+            else -> {
+                TODO("Protocol $protocol not supported yet")
+            }
+        }
+    }
+
+    /*
+     * Finds the runtime `Protocol` type for a specific modeled protocol.
+     */
+    private fun runtimeProtocolType(): String {
+        val protocols = ServerRuntimeType.Protocols(runtimeConfig).fullyQualifiedName()
+        when (protocol) {
+            RestJson1Trait.ID -> {
+                return "$protocols::RestJson1"
+            }
+            RestXmlTrait.ID -> {
+                return "$protocols::RestXml"
+            }
+            AwsJson1_0Trait.ID -> {
+                return "$protocols::AwsJson10"
+            }
+            AwsJson1_1Trait.ID -> {
+                return "$protocols::AwsJson11"
+            }
+            else -> {
+                TODO("Protocol $protocol not supported yet")
+            }
+        }
+    }
+
+    /*
      * Generates the `RequestSpec`s for an operation based on its HTTP-bound route.
      */
     private fun OperationShape.requestSpec(): String =
         when (protocol) {
-            RestJson1Trait.ID -> {
-                restRequestSpec("RestJson1")
+            RestJson1Trait.ID, RestXmlTrait.ID -> {
+                restRequestSpec()
             }
-            RestXmlTrait.ID -> {
-                restRequestSpec("RestXml")
-            }
-            AwsJson1_0Trait.ID -> {
-                awsJsonRequestSpec("AwsJson10")
-            }
-            AwsJson1_1Trait.ID -> {
-                awsJsonRequestSpec("AwsJson11")
+            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
+                awsJsonRequestSpec()
             }
             else -> {
                 TODO("Protocol $protocol not supported yet")
@@ -288,15 +308,13 @@ class ServerOperationRegistryGenerator(
     /*
      * Generates an AwsJson specific runtime `RequestSpec`.
      */
-    private fun OperationShape.awsJsonRequestSpec(protocol: String): String {
-        val requestSpec = ServerRuntimeType.AwsJsonRequestSpec(runtimeConfig).fullyQualifiedName()
-        val protocols = ServerRuntimeType.Protocols(runtimeConfig).fullyQualifiedName()
+    private fun OperationShape.awsJsonRequestSpec(): String {
+        val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
         val operation_name = symbolProvider.toSymbol(this).name
         // TODO: Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
         return """
-            $requestSpec::new(
+            $namespace::AwsJsonRequestSpec::new(
                 String::from("$serviceName.$operation_name"),
-                $protocols::$protocol
             )
         """.trimIndent()
     }
@@ -304,10 +322,9 @@ class ServerOperationRegistryGenerator(
     /*
      * Generates a REST (RestJson1, RestXml) specific runtime `RequestSpec`.
      */
-    private fun OperationShape.restRequestSpec(protocol: String): String {
+    private fun OperationShape.restRequestSpec(): String {
         val httpTrait = httpBindingResolver.httpTrait(this)
         val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
-        val protocols = ServerRuntimeType.Protocols(runtimeConfig).fullyQualifiedName()
         // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
         val pathSegments = httpTrait.uri.segments.map {
             "$namespace::PathSegment::" +
@@ -330,7 +347,6 @@ class ServerOperationRegistryGenerator(
                         $namespace::QuerySpec::from_vector_unchecked(vec![${querySegments.joinToString()}])
                     )
                 ),
-                $protocols::$protocol
             )
         """.trimIndent()
     }
