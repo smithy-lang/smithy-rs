@@ -59,8 +59,8 @@ function acquire_local_image {
 }
 
 if [[ $# -eq 0 || "$1" == "--force-remote" ]]; then
-  # Default to "latest" if no base revision is given
-  BASE_REV_OR_IMAGE_TAG="${2:-latest}"
+  # Default to "main" if no base revision is given
+  BASE_REV_OR_IMAGE_TAG="${2:-main}"
   acquire_remote_image "${BASE_REV_OR_IMAGE_TAG}"
 elif [[ "$1" == "--force-local" ]]; then
   acquire_local_image
