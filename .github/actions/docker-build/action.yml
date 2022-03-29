@@ -36,7 +36,7 @@ runs:
     shell: bash
     run: |
       if [[ "${{ inputs.image-in-artifacts }}" == "true" ]]; then
-        docker load -i smithy-rs-base-image
+        docker load -i smithy-rs-base-image/smithy-rs-base-image
       else
         ./smithy-rs/tools/ci-build/acquire-base-image --force-remote ${{ inputs.base-revision-sha }}
       fi
