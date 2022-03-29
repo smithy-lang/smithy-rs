@@ -84,7 +84,7 @@ jobs:
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
       fail-fast: false
-      max-parallel: 7
+      max-parallel: 5
       matrix:
         # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
         test:
