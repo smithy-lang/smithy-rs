@@ -10,8 +10,4 @@ runs:
     uses: actions/download-artifact@v3
   - name: Untar artifacts
     shell: bash
-    run: |
-      for tarball in artifacts-*.tar.gz; do
-        echo "Untarring ${tarball}..."
-        tar xfz "${tarball}"
-      done
+    run: find . -maxdepth 2 -iname 'artifacts-*.tar.gz' -print -exec tar vxfz {} \;
