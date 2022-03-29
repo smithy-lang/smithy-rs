@@ -5,6 +5,11 @@ on:
     paths:
     - design/**
 
+# Allow only one doc pages build to run at a time for the entire smithy-rs repo
+concurrency:
+  group: github-pages-yml
+  cancel-in-progress: true
+
 jobs:
   build-and-deploy-docs:
     runs-on: ubuntu-latest

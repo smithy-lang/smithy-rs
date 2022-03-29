@@ -1,0 +1,72 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+#
+
+set -ue
+
+SCRIPT_PATH="$(realpath "$(dirname "$0")")"
+cd "${SCRIPT_PATH}"
+
+if [[ $# -eq 1 && $1 == "--help" ]]; then
+    echo "Usage:"
+    echo "    $0"
+    echo "       OR"
+    echo "    $0 <base-revision>"
+    echo "       OR"
+    echo "    $0 --force-remote"
+    echo "       OR"
+    echo "    $0 --force-local"
+    echo "       OR"
+    echo "    $0 --nothing-or-local-if-changed <base-revision>"
+    echo
+    echo "Determines if tools changed between HEAD and the given <base-revision>, "
+    echo "and locates build Docker image based on that. This image becomes tagged "
+    echo "locally with Docker as 'smithy-rs-base-image'."
+    echo
+    echo "If run with no args, it will pull the remote image."
+    exit 1
+fi
+
+function acquire_remote_image {
+    REMOTE_IMAGE_TAG="$1"
+    REMOTE_IMAGE_NAME="public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci:${REMOTE_IMAGE_TAG}"
+    docker pull "${REMOTE_IMAGE_NAME}"
+    docker tag "${REMOTE_IMAGE_NAME}" smithy-rs-base-image
+    exit 0
+}
+function acquire_local_image {
+    cd "${SCRIPT_PATH}"
+    docker build -t smithy-rs-base-image --file base-image.dockerfile .
+    exit 0
+}
+
+if [[ $# -eq 0 || "$1" == "--force-remote" ]]; then
+  # Default to "latest" if no base revision is given
+  BASE_REV_OR_IMAGE_TAG="${2:-latest}"
+  acquire_remote_image "${BASE_REV_OR_IMAGE_TAG}"
+elif [[ "$1" == "--force-local" ]]; then
+  acquire_local_image
+elif [[ "$1" == "--nothing-or-local-if-changed" ]]; then
+  BASE_REV="$2"
+  cd "$(git rev-parse --show-toplevel)"
+
+  if (git diff --quiet HEAD "${BASE_REV}" -- tools); then
+      echo "Tools did not change. Doing nothing."
+  else
+      echo "Tools changed. Will build a new Docker build image with updated tools."
+      acquire_local_image
+  fi
+else
+  BASE_REV="$1"
+  cd "$(git rev-parse --show-toplevel)"
+
+  if (git diff --quiet HEAD "${BASE_REV}" -- tools); then
+      echo "Tools did not change. Will reuse existing Docker build image."
+      acquire_remote_image "${BASE_REV}"
+  else
+      echo "Tools changed. Will build a new Docker build image with updated tools."
+      acquire_local_image
+  fi
+fi
