@@ -21,8 +21,6 @@ jobs:
   acquire-base-image:
     name: Acquire Base Image
     runs-on: ubuntu-latest
-    outputs:
-      image-in-artifacts: ${{ steps.acquire.outputs.image-in-artifacts }}
     steps:
     - uses: actions/checkout@v3
       with:
@@ -30,8 +28,7 @@ jobs:
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
-      # Script sets boolean output value named `image-in-artifacts`
-      run: ./smithy-rs/tools/ci-build/ci-output-build-image ${{ github.event.pull_request.base.sha }}
+      run: ./smithy-rs/tools/ci-build/acquire-build-image
     - name: Upload base image
       uses: actions/upload-artifact@v3
       with:
@@ -68,8 +65,6 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: ${{ matrix.actions.action }}
-        image-in-artifacts: ${{ needs.acquire-base-image.outputs.image-in-artifacts == 'true' }}
-        base-revision-sha: ${{ github.event.pull_request.base.sha }}
 
   test:
     name: Test
@@ -102,8 +97,6 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: ${{ matrix.test.action }}
-        image-in-artifacts: ${{ needs.acquire-base-image.outputs.image-in-artifacts == 'true' }}
-        base-revision-sha: ${{ github.event.pull_request.base.sha }}
 
   test-rust-windows:
     name: Rust Tests on Windows
@@ -150,8 +143,6 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: check-aws-sdk-examples
-        image-in-artifacts: ${{ needs.acquire-base-image.outputs.image-in-artifacts == 'true' }}
-        base-revision-sha: ${{ github.event.pull_request.base.sha }}
 
   # Pseudo-job that depends on matrix jobs so that we don't have to enter
   # the myriad of test matrix combinations into GitHub's protected branch rules

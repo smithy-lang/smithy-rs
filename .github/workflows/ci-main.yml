@@ -28,7 +28,7 @@ jobs:
       uses: actions/checkout@v2
     - name: Build image
       run: |
-        IMAGE_TAG="$(git rev-parse HEAD)"
+        IMAGE_TAG="$(git ls-files -s --full-name "tools" | git hash-object --stdin)"
         cd tools/ci-build
         docker build \
           -t "${{ env.ecr_repository }}:${IMAGE_TAG}" \
@@ -42,7 +42,7 @@ jobs:
         aws-region: us-west-2
     - name: Upload image
       run: |
-        IMAGE_TAG="$(git rev-parse HEAD)"
+        IMAGE_TAG="$(git ls-files -s --full-name "tools" | git hash-object --stdin)"
         aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
         docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
         docker push "${{ env.ecr_repository }}:main"

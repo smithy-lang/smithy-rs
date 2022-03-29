@@ -7,12 +7,6 @@ inputs:
   action:
     description: What action to run in the Docker build
     required: true
-  image-in-artifacts:
-    description: Boolean indicating if the image was uploaded as a build artifact in GitHub Actions
-    required: true
-  base-revision-sha:
-    description: Base revision commit hash. This can be blank if there's not a pull request
-    required: false
 runs:
   using: composite
   steps:
@@ -35,12 +29,13 @@ runs:
   - name: Prepare build image
     shell: bash
     run: |
-      if [[ "${{ inputs.image-in-artifacts }}" == "true" ]]; then
+      set -x
+      if [[ -d smithy-rs-base-image ]]; then
+        IMAGE_TAG="$(cd smithy-rs; git ls-files -s --full-name "tools" | git hash-object --stdin)"
         docker load -i smithy-rs-base-image/smithy-rs-base-image
-      else
-        ./smithy-rs/tools/ci-build/acquire-base-image --force-remote ${{ inputs.base-revision-sha }}
+        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "smithy-rs-base-image:local"
       fi
-      ./smithy-rs/tools/ci-build/create-local-build-image
+      ALLOW_LOCAL_BUILD=false ./smithy-rs/tools/ci-build/acquire-build-image
     # This runs the commands from the matrix strategy
   - name: Run ${{ inputs.action }}
     shell: bash
