@@ -1,0 +1,17 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+
+name: Get Artifacts
+description: Downloads and untars build artifacts
+runs:
+  using: composite
+  steps:
+  - name: Download artifacts
+    uses: actions/download-artifact@v3
+  - name: Untar artifacts
+    shell: bash
+    run: |
+      for tarball in artifacts-*.tar.gz; do
+        echo "Untarring ${tarball}..."
+        tar xfz "${tarball}"
+      done

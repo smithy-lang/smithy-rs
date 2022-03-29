@@ -30,11 +30,8 @@ runs:
     with:
       sharedKey: ${{ runner.os }}-${{ github.job }}
       target-dir: ./smithy-rs-target
-  - name: Download base image
-    if: ${{ inputs.image-in-artifacts == 'true' }}
-    uses: actions/download-artifact@v3
-    with:
-      name: smithy-rs-base-image
+  - name: Get artifacts
+    uses: ./smithy-rs/.github/actions/get-artifacts
   - name: Prepare build image
     shell: bash
     run: |
