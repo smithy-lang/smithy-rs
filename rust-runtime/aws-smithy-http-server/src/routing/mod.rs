@@ -58,10 +58,7 @@ where
     }
 }
 
-impl<B> Default for Router<B>
-where
-    B: Send + 'static,
-{
+impl<S, B> Default for Router<S, B> {
     fn default() -> Self {
         Self {
             routes: Default::default(),
@@ -72,7 +69,7 @@ where
 impl<S, B> Router<S, B>
 where
     B: Send + 'static,
-    S: RequestSpec + Clone,
+    S: RequestSpec,
 {
     /// Create a new `Router` from a vector of pairs of request specs and services.
     ///
@@ -118,7 +115,7 @@ where
     /// corresponding middleware.
     ///
     /// This can be used to add additional processing to all routes.
-    pub fn layer<L, NewReqBody, NewResBody>(self, layer: L) -> Router<NewReqBody>
+    pub fn layer<L, NewReqBody, NewResBody>(self, layer: L) -> Router<S, NewReqBody>
     where
         L: Layer<Route<B>>,
         L::Service:
@@ -126,7 +123,6 @@ where
         <L::Service as Service<Request<NewReqBody>>>::Future: Send + 'static,
         NewResBody: HttpBody<Data = bytes::Bytes> + Send + 'static,
         NewResBody::Error: Into<BoxError>,
-        Vec<(Route, NewReqBody)>: FromIterator<(Route<NewReqBody>, S)>,
     {
         let layer = ServiceBuilder::new()
             .layer_fn(Route::new)
@@ -144,7 +140,7 @@ where
 impl<S, B> Service<Request<B>> for Router<S, B>
 where
     B: Send + 'static,
-    S: RequestSpec + Clone,
+    S: RequestSpec,
 {
     type Response = Response<BoxBody>;
     type Error = Infallible;
@@ -201,11 +197,11 @@ mod tests {
         r
     }
 
-    /// A service that returns its name and the request's URI in the response body.
+    /// A REST service that returns its name and the request's URI in the response body.
     #[derive(Clone)]
-    struct NamedEchoUriService(String);
+    struct RestNamedEchoUriService(String);
 
-    impl<B> Service<Request<B>> for NamedEchoUriService {
+    impl<B> Service<Request<B>> for RestNamedEchoUriService {
         type Response = Response<BoxBody>;
         type Error = Infallible;
         type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -237,7 +233,7 @@ mod tests {
     // This test is a rewrite of `mux.spec.ts`.
     // https://github.com/awslabs/smithy-typescript/blob/fbf97a9bf4c1d8cf7f285ea7c24e1f0ef280142a/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.spec.ts
     #[tokio::test]
-    async fn smithy_simple_routing() {
+    async fn rest_simple_routing() {
         let request_specs: Vec<(RestRequestSpec, &str)> = vec![
             (
                 RestRequestSpec::from_parts(
@@ -290,7 +286,7 @@ mod tests {
 
         let mut router = Router::from_box_clone_service_iter(request_specs.into_iter().map(|(spec, svc_name)| {
             (
-                tower::util::BoxCloneService::new(NamedEchoUriService(String::from(svc_name))),
+                tower::util::BoxCloneService::new(RestNamedEchoUriService(String::from(svc_name))),
                 spec,
             )
         }));
@@ -341,7 +337,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn smithy_basic_pattern_conflict_avoidance() {
+    async fn rest_basic_pattern_conflict_avoidance() {
         let request_specs: Vec<(RestRequestSpec, &str)> = vec![
             (
                 RestRequestSpec::from_parts(
@@ -387,7 +383,7 @@ mod tests {
 
         let mut router = Router::from_box_clone_service_iter(request_specs.into_iter().map(|(spec, svc_name)| {
             (
-                tower::util::BoxCloneService::new(NamedEchoUriService(String::from(svc_name))),
+                tower::util::BoxCloneService::new(RestNamedEchoUriService(String::from(svc_name))),
                 spec,
             )
         }));

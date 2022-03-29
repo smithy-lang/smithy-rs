@@ -328,7 +328,7 @@ mod tests {
     use http::{HeaderMap, HeaderValue, Method};
 
     #[test]
-    fn path_spec_into_regex() {
+    fn rest_path_spec_into_regex() {
         let cases = vec![
             (PathSpec(vec![]), "/$"),
             (PathSpec(vec![PathSegment::Literal(String::from("a"))]), "/a$"),
@@ -357,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn smithy_greedy_labels_match_greedily() {
+    fn rest_greedy_labels_match_greedily() {
         let spec = RestRequestSpec::from_parts(
             Method::GET,
             vec![
@@ -381,7 +381,7 @@ mod tests {
     }
 
     #[test]
-    fn smithy_repeated_query_keys() {
+    fn rest_repeated_query_keys() {
         let spec = RestRequestSpec::from_parts(
             Method::DELETE,
             Vec::new(),
@@ -399,7 +399,7 @@ mod tests {
         }
     }
 
-    fn smithy_key_value_spec() -> RestRequestSpec {
+    fn rest_key_value_spec() -> RestRequestSpec {
         RestRequestSpec::from_parts(
             Method::DELETE,
             Vec::new(),
@@ -409,22 +409,22 @@ mod tests {
     }
 
     #[test]
-    fn smithy_repeated_query_keys_same_values_match() {
+    fn rest_repeated_query_keys_same_values_match() {
         assert_eq!(
             Match::Yes,
-            smithy_key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=bar", None))
+            rest_key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=bar", None))
         );
     }
 
     #[test]
-    fn smithy_repeated_query_keys_distinct_values_does_not_match() {
+    fn rest_repeated_query_keys_distinct_values_does_not_match() {
         assert_eq!(
             Match::No,
-            smithy_key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=baz", None))
+            rest_key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=baz", None))
         );
     }
 
-    fn smithy_ab_spec() -> RestRequestSpec {
+    fn rest_ab_spec() -> RestRequestSpec {
         RestRequestSpec::from_parts(
             Method::GET,
             vec![
@@ -441,17 +441,17 @@ mod tests {
     // See https://github.com/awslabs/smithy/issues/1024 for discussion.
 
     #[test]
-    fn smithy_empty_segments_in_the_middle_do_matter() {
-        assert_eq!(Match::Yes, smithy_ab_spec().matches(&req(&Method::GET, "/a/b", None)));
+    fn rest_empty_segments_in_the_middle_do_matter() {
+        assert_eq!(Match::Yes, rest_ab_spec().matches(&req(&Method::GET, "/a/b", None)));
 
         let misses = vec![(Method::GET, "/a//b"), (Method::GET, "//////a//b")];
         for (method, uri) in &misses {
-            assert_eq!(Match::No, smithy_ab_spec().matches(&req(method, uri, None)));
+            assert_eq!(Match::No, rest_ab_spec().matches(&req(method, uri, None)));
         }
     }
 
     #[test]
-    fn smithy_empty_segments_in_the_middle_do_matter_label_spec() {
+    fn rest_empty_segments_in_the_middle_do_matter_label_spec() {
         let label_spec = RestRequestSpec::from_parts(
             Method::GET,
             vec![
@@ -475,7 +475,7 @@ mod tests {
     }
 
     #[test]
-    fn smithy_empty_segments_in_the_middle_do_matter_greedy_label_spec() {
+    fn rest_empty_segments_in_the_middle_do_matter_greedy_label_spec() {
         let greedy_label_spec = RestRequestSpec::from_parts(
             Method::GET,
             vec![
@@ -501,19 +501,19 @@ mod tests {
     // default resource under `index`", for example `/index/index.html`, so trailing slashes at the
     // end of URIs _do_ matter.
     #[test]
-    fn smithy_empty_segments_at_the_end_do_matter() {
+    fn rest_empty_segments_at_the_end_do_matter() {
         let misses = vec![
             (Method::GET, "/a/b/"),
             (Method::GET, "/a/b//"),
             (Method::GET, "//a//b////"),
         ];
         for (method, uri) in &misses {
-            assert_eq!(Match::No, smithy_ab_spec().matches(&req(method, uri, None)));
+            assert_eq!(Match::No, rest_ab_spec().matches(&req(method, uri, None)));
         }
     }
 
     #[test]
-    fn smithy_empty_segments_at_the_end_do_matter_label_spec() {
+    fn rest_empty_segments_at_the_end_do_matter_label_spec() {
         let label_spec = RestRequestSpec::from_parts(
             Method::GET,
             vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
@@ -533,8 +533,8 @@ mod tests {
         }
     }
 
-    fn awsjson_spec() -> AwsJsonRequestSpec {
-        AwsJsonRequestSpec::new(String::from("com.smithy.test#Service.operation"), Protocol::AwsJson10)
+    fn aws_json_spec() -> AwsJsonRequestSpec {
+        AwsJsonRequestSpec::new(String::from("Service.operation"), Protocol::AwsJson10)
     }
 
     #[test]
@@ -543,26 +543,26 @@ mod tests {
             (
                 &Method::POST,
                 "/",
-                Some(HeaderValue::from_str("com.smithy.test#Service.operation").unwrap()),
+                Some(HeaderValue::from_str("Service.operation").unwrap()),
                 Match::Yes,
             ),
             (&Method::POST, "/", None, Match::No),
             (
                 &Method::GET,
                 "/",
-                Some(HeaderValue::from_str("com.smithy.test#Service.operation").unwrap()),
+                Some(HeaderValue::from_str("Service.operation").unwrap()),
                 Match::MethodNotAllowed,
             ),
             (
                 &Method::POST,
                 "/something",
-                Some(HeaderValue::from_str("com.smithy.test#Service.operation").unwrap()),
+                Some(HeaderValue::from_str("Service.operation").unwrap()),
                 Match::No,
             ),
             (
                 &Method::POST,
                 "/",
-                Some(HeaderValue::from_str("com.smithy.test#Service.unknown_operation").unwrap()),
+                Some(HeaderValue::from_str("Service.unknown_operation").unwrap()),
                 Match::No,
             ),
         ];
@@ -572,7 +572,7 @@ mod tests {
                 headers.insert("x-amz-target", h.clone());
                 headers
             });
-            assert_eq!(*result, awsjson_spec().matches(&req(method, uri, headers)));
+            assert_eq!(*result, aws_json_spec().matches(&req(method, uri, headers)));
         }
     }
 }

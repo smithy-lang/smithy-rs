@@ -15,7 +15,7 @@ use tower_http::trace::TraceLayer;
 #[tokio::main]
 pub async fn main() {
     setup_tracing();
-    let app: Router = OperationRegistryBuilder::default()
+    let app: Router<_> = OperationRegistryBuilder::default()
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
