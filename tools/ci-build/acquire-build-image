@@ -11,10 +11,9 @@ C_RESET='\033[0m'
 START_PATH="$(pwd)"
 SCRIPT_PATH="$(realpath "$(dirname "$0")")"
 cd "${SCRIPT_PATH}"
-REPO_ROOT="$(git rev-parse --show-toplevel)"
 
 # The image tag is the SHA-1 hash of the `tools` directory when taking the `.gitignore` into consideration
-IMAGE_TAG="$(git ls-files -s --full-name "${REPO_ROOT}/tools" | git hash-object --stdin)"
+IMAGE_TAG=$("${SCRIPT_PATH}/tools-hash")
 IMAGE_NAME="public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci"
 
 # If the image doesn't already exist locally, then look remotely

@@ -1,9 +1,11 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0.
 
+# Use this action to execute the action scripts in tools/ci-build/scripts within the Docker build image.
 name: smithy-rs Docker Build
 description: Run Docker build command for smithy-rs
 inputs:
+  # The name of the script in tools/ci-build/scripts to run
   action:
     description: What action to run in the Docker build
     required: true
@@ -24,17 +26,28 @@ runs:
     with:
       sharedKey: ${{ runner.os }}-${{ github.job }}
       target-dir: ./smithy-rs-target
-  - name: Get artifacts
-    uses: ./smithy-rs/.github/actions/get-artifacts
+  - name: Download all artifacts
+    uses: ./smithy-rs/.github/actions/download-all-artifacts
   - name: Prepare build image
     shell: bash
     run: |
       set -x
+
+      # Check the build artifacts to see if a prior step built a new Docker build image.
+      # If smithy-rs-base-image was included in the downloaded build artifacts, then load
+      # it and tag it as the base image to use for this action. This will prevent acquire-build-image
+      # from attempting to download an image from ECR since it will already exist,
+      # which enables testing build image modifications as part of the pull request.
       if [[ -d smithy-rs-base-image ]]; then
-        IMAGE_TAG="$(cd smithy-rs; git ls-files -s --full-name "tools" | git hash-object --stdin)"
+        IMAGE_TAG="$(./smithy-rs/tools/ci-build/tools-hash)"
         docker load -i smithy-rs-base-image/smithy-rs-base-image
         docker tag "smithy-rs-base-image:${IMAGE_TAG}" "smithy-rs-base-image:local"
       fi
+
+      # For this step, we want images to come from build artifacts (built as part a prior step),
+      # or from ECR. We disable building the image from scratch so that any mistakes in the CI
+      # configuration won't cause each individual action to build its own image, which would
+      # drastically increase the total CI time. Fail fast!
       ALLOW_LOCAL_BUILD=false ./smithy-rs/tools/ci-build/acquire-build-image
     # This runs the commands from the matrix strategy
   - name: Run ${{ inputs.action }}
