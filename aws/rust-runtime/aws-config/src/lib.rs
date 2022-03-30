@@ -73,10 +73,10 @@
 //! # async fn docs() {
 //! # use aws_config::meta::region::RegionProviderChain;
 //! # fn custom_provider(base: &SdkConfig) -> impl aws_types::credentials::ProvideCredentials {
-//! #   base
+//! #   base.credentials_provider().unwrap().clone()
 //! # }
 //! let sdk_config = aws_config::load_from_env().await;
-//! let custom_credentials_provider = custom_provider(&config);
+//! let custom_credentials_provider = custom_provider(&sdk_config);
 //! let dynamo_config = aws_sdk_dynamodb::config::Builder::from(&sdk_config)
 //!   .credentials_provider(custom_credentials_provider)
 //!   .build();
