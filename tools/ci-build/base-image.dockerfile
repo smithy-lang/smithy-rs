@@ -36,7 +36,7 @@ RUN set -eux; \
 #
 FROM bare_base_image AS install_rust
 ARG rust_stable_version=1.56.1
-ARG rust_nightly_version=nightly-2022-03-03
+ARG rust_nightly_version=nightly-2022-03-29
 ARG cargo_udeps_version=0.1.27
 ARG cargo_hack_version=0.5.12
 ARG smithy_rs_revision=main
@@ -88,7 +88,7 @@ RUN set -eux; \
 #
 FROM bare_base_image AS final_image
 ARG rust_stable_version=1.56.1
-ARG rust_nightly_version=nightly-2022-03-03
+ARG rust_nightly_version=nightly-2022-03-29
 RUN set -eux; \
     yum -y updateinfo; \
     yum -y install \
