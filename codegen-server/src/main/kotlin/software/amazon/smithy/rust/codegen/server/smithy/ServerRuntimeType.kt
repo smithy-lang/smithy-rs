@@ -39,6 +39,6 @@ object ServerRuntimeType {
     fun ResponseRejection(runtimeConfig: RuntimeConfig) =
         RuntimeType("ResponseRejection", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::rejection")
 
-    fun Protocols(runtimeConfig: RuntimeConfig) =
+    fun Protocol(runtimeConfig: RuntimeConfig) =
         RuntimeType("Protocol", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::protocols")
 }

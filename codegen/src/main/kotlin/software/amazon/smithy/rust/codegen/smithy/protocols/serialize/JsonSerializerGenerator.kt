@@ -153,8 +153,8 @@ class JsonSerializerGenerator(
      * operation, error and structure shapes.
      * This function is only used by the server, the client uses directly [serializeStructure].
      *
-     * To obey to protocol implementations such as AwsJson 1.0 and 1.1, this methods accepts two boolean
-     * arguments, `includeErrorType` and `useErrorNamespace`, controlling the generation of the `__type`
+     * To honor protocol specifications such as AwsJson 1.0 and 1.1, this method accepts two boolean
+     * parameters, `includeErrorType` and `useErrorNamespace`, controlling the generation of the `__type`
      * field in the response.
      * See: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
      * See: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#differences-between-awsjson1-0-and-awsjson1-1
@@ -176,7 +176,7 @@ class JsonSerializerGenerator(
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
                 if (includeErrorType && structureShape.hasTrait<ErrorTrait>()) {
-                    val typeId = if (useErrorNamespace) { structureShape.getId() } else { structureShape.id.name }
+                    val typeId = if (useErrorNamespace) { structureShape.id } else { structureShape.id.name }
                     writeWithNoFormatting("""object.key("__type").string("$typeId");""")
                 }
                 rust("object.finish();")
@@ -279,7 +279,7 @@ class JsonSerializerGenerator(
 
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.serializeFunctionName(outputShape)
-        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers, false, false)
+        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers, includeErrorType = false, useErrorNamespace = false)
     }
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
@@ -288,7 +288,7 @@ class JsonSerializerGenerator(
             httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
                 .map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)
-        return serverStructureSerializer(fnName, errorShape, includedMembers, false, false)
+        return serverStructureSerializer(fnName, errorShape, includedMembers, includeErrorType = false, useErrorNamespace = false)
     }
 
     private fun RustWriter.serializeStructure(

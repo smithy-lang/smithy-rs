@@ -266,7 +266,7 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Finds the runtime `Protocol` type for a specific modeled protocol.
+     * Finds the runtime `Protocol` variant for a specific modeled protocol.
      */
     private fun runtimeProtocolType(): String {
         val protocols = ServerRuntimeType.Protocols(runtimeConfig).fullyQualifiedName()
@@ -290,7 +290,7 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Generates the `RequestSpec`s for an operation based on its HTTP-bound route.
+     * Returns the `RequestSpec`s for an operation based on its HTTP-bound route.
      */
     private fun OperationShape.requestSpec(): String =
         when (protocol) {
@@ -306,17 +306,17 @@ class ServerOperationRegistryGenerator(
         }
 
     /*
-     * Generates an AwsJson specific runtime `RequestSpec`.
+     * Returns an AwsJson specific runtime `RequestSpec`.
      */
     private fun OperationShape.awsJsonRequestSpec(): String {
         val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
-        val operation_name = symbolProvider.toSymbol(this).name
-        // TODO: Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
+        val operationName = symbolProvider.toSymbol(this).name
+        // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
         return """
             $namespace::AwsJsonRequestSpec::new(
                 String::from("$serviceName.$operation_name"),
             )
-        """.trimIndent()
+        """
     }
 
     /*

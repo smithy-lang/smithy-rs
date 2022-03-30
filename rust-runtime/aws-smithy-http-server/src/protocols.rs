@@ -7,7 +7,7 @@
 use crate::rejection::RequestRejection;
 use axum_core::extract::RequestParts;
 
-/// Smithy protocols enumerator.
+/// Supported protocols.
 #[derive(Debug, Clone, Copy)]
 pub enum Protocol {
     RestJson1,

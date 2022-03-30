@@ -40,7 +40,7 @@ pub use self::{into_make_service::IntoMakeService, route::Route};
 /// the [AwsJson specification].
 ///
 /// The router is also [Protocol] aware and currently supports REST based protocols like [restJson1] or [restXml]
-/// and RPC based protocols like [awsJson1.0] or [awsJson1.1]
+/// and RPC based protocols like [awsJson1.0] or [awsJson1.1].
 /// It currently does not support Smithy's [endpoint trait].
 ///
 /// You should not **instantiate** this router directly; it will be created for you from the
