@@ -9,24 +9,18 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonHttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.awsJsonFieldName
-import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
@@ -92,51 +86,9 @@ class ServerAwsJsonSerializerGenerator(
 class ServerAwsJson(
     private val codegenContext: CodegenContext,
     private val awsJsonVersion: AwsJsonVersion
-) : Protocol {
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.GenericError(runtimeConfig),
-        "JsonError" to CargoDependency.smithyJson(runtimeConfig).asType().member("deserialize::Error"),
-        "Response" to RuntimeType.http.member("Response"),
-    )
+) : AwsJson(codegenContext, awsJsonVersion) {
     private val jsonDeserModule = RustModule.private("json_deser")
-
-    override val httpBindingResolver: HttpBindingResolver =
-        AwsJsonHttpBindingResolver(codegenContext.model, awsJsonVersion)
-
-    override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
-
-    override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
-        listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
-
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        JsonParserGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         ServerAwsJsonSerializerGenerator(codegenContext, httpBindingResolver, awsJsonVersion)
-
-    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
-            writer.rustTemplate(
-                """
-                pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{JsonError}> {
-                    panic!("Parsing of http generic error is not supported in server implementation")
-                }
-                """,
-                *errorScope
-            )
-        }
-
-    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", jsonDeserModule) { writer ->
-            writer.rustTemplate(
-                """
-                pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{JsonError}> {
-                    panic!("Parsing of http stream generic error is not supported in server implementation")
-                }
-                """,
-                *errorScope
-            )
-        }
 }

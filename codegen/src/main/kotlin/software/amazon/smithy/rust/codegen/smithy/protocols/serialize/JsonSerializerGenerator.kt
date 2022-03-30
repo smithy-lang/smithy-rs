@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -176,8 +177,8 @@ class JsonSerializerGenerator(
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
                 if (includeErrorType && structureShape.hasTrait<ErrorTrait>()) {
-                    val typeId = if (useErrorNamespace) { structureShape.id } else { structureShape.id.name }
-                    writeWithNoFormatting("""object.key("__type").string("$typeId");""")
+                    val typeId = if (useErrorNamespace) { structureShape.id.toString() } else { structureShape.id.name.toString() }
+                    rust("""object.key("__type").string("${it.escape(typeId)}");""")
                 }
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)

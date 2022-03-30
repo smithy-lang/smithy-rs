@@ -128,7 +128,7 @@ class AwsJsonSerializerGenerator(
     }
 }
 
-class AwsJson(
+open class AwsJson(
     private val codegenContext: CodegenContext,
     awsJsonVersion: AwsJsonVersion
 ) : Protocol {
