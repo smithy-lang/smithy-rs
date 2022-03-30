@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+#
+
+# This script is intended to be used in GitHub Actions to save the build Docker image for other jobs to use.
+
+set -uex
+
+if [[ $# -eq 1 ]]; then
+    # If a base revision is given as an argument, use it
+    BASE_REVISION="$1"
+else
+    # Otherwise, for the use-case where CI is being run directly on the main branch
+    # without a pull request, use the commit hash of HEAD
+    BASE_REVISION="$(cd smithy-rs; git rev-parse HEAD)"
+fi
+
+SCRIPT_PATH="$(realpath "$(dirname "$0")")"
+
+"${SCRIPT_PATH}/acquire-base-image" --nothing-or-local-if-changed "${BASE_REVISION}"
+
+# If a local base image was created, then save it off for upload to the artifacts
+if (docker inspect smithy-rs-base-image:latest &>/dev/null); then
+    docker save -o smithy-rs-base-image smithy-rs-base-image:latest;
+    echo "::set-output name=image-in-artifacts::true";
+else
+  # Otherwise, tell dependent jobs to use the public ECR image
+    echo "::set-output name=image-in-artifacts::false";
+fi

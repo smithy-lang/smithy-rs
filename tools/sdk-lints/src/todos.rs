@@ -37,7 +37,7 @@ impl Lint for TodosHaveContext {
             .iter()
             .filter(|path| !IGNORE_DIRS.iter().any(|dir| path.starts_with(dir)))
             .filter(|f| validate_todos(f.extension()))
-            .map(|t| t.clone())
+            .cloned()
             .collect())
     }
 }
