@@ -269,7 +269,7 @@ class ServerOperationRegistryGenerator(
      * Finds the runtime `Protocol` variant for a specific modeled protocol.
      */
     private fun runtimeProtocolType(): String {
-        val protocols = ServerRuntimeType.Protocols(runtimeConfig).fullyQualifiedName()
+        val protocols = ServerRuntimeType.Protocol(runtimeConfig).fullyQualifiedName()
         when (protocol) {
             RestJson1Trait.ID -> {
                 return "$protocols::RestJson1"
@@ -314,7 +314,7 @@ class ServerOperationRegistryGenerator(
         // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
         return """
             $namespace::AwsJsonRequestSpec::new(
-                String::from("$serviceName.$operation_name"),
+                String::from("$serviceName.$operationName"),
             )
         """
     }
