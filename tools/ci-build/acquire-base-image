@@ -37,8 +37,8 @@ function acquire_remote_image {
     exit 0
 }
 function acquire_local_image {
-    cd "${SCRIPT_PATH}"
-    docker build -t smithy-rs-base-image --file base-image.dockerfile .
+    cd "${SCRIPT_PATH}/.."
+    docker build -t smithy-rs-base-image .
     exit 0
 }
 
