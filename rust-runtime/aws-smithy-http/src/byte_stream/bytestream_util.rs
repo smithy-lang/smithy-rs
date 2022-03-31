@@ -51,8 +51,31 @@ impl PathBody {
     }
 }
 
-/// Builder for creating [ByteStreams](crate::byte_stream::ByteStream) from a file/path, with full control over advanced options.
+/// Builder for creating [`ByteStreams`](crate::byte_stream::ByteStream) from a file/path, with full control over advanced options.
 ///
+/// Example usage:
+/// ```no_run
+/// # #[cfg(feature = "rt-tokio")]
+/// # {
+/// use aws_smithy_http::byte_stream::{ByteStream, PathBodyBuilder};
+/// use std::path::Path;
+/// struct GetObjectInput {
+///     body: ByteStream
+/// }
+///
+/// async fn bytestream_from_file() -> GetObjectInput {
+///     let bytestream = PathBodyBuilder::from_path("docs/some-large-file.csv")
+///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
+///         .with_buffer_size(32_784)
+///         // Specify the length of the file used (skips an additional call to retrieve the size)
+///         .with_file_size(123_456)
+///         .byte_stream()
+///         .await
+///         .expect("valid path");
+///     GetObjectInput { body: bytestream }
+/// }
+/// # }
+/// ```
 pub struct PathBodyBuilder {
     file: Option<tokio::fs::File>,
     path: Option<PathBuf>,
@@ -61,7 +84,7 @@ pub struct PathBodyBuilder {
 }
 
 impl PathBodyBuilder {
-    /// Create a PathBodyBuilder from a path.
+    /// Create a PathBodyBuilder from a path (using a default read buffer of 4096 bytes).
     ///
     pub fn from_path(path: impl AsRef<std::path::Path>) -> Self {
         PathBodyBuilder {
@@ -72,7 +95,7 @@ impl PathBodyBuilder {
         }
     }
 
-    /// Create a PathBodyBuilder from a file.
+    /// Create a PathBodyBuilder from a file (using a default read buffer of 4096 bytes).
     ///
     /// NOTE: The resulting ByteStream (after calling [byte_stream](PathBodyBuilder::byte_stream)) will not be retryable ByteStream.
     /// For a ByteStream that can be retried in the case of upstream failures, use [`PathBodyBuilder::from_path`](PathBodyBuilder::from_path)
@@ -87,7 +110,7 @@ impl PathBodyBuilder {
 
     /// Specify the length of the file to read (in bytes).
     ///
-    /// If not used, [byte_stream](PathBodyBuilder::byte_stream) will require an extra call to query the file's metadata.
+    /// By pre-specifying the length of the file, this API skips an additional call to retrieve the size from file-system metadata.
     ///
     pub fn with_file_size(mut self, file_size: u64) -> Self {
         self.file_size = Some(file_size);
@@ -104,7 +127,7 @@ impl PathBodyBuilder {
         self
     }
 
-    /// Returns a [ByteStream](crate::byte_stream::ByteStream) from this builder.
+    /// Returns a [`ByteStream`](crate::byte_stream::ByteStream) from this builder.
     ///
     pub async fn byte_stream(self) -> Result<ByteStream, Error> {
         let buffer_size = self.buffer_size;
