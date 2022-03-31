@@ -2,6 +2,9 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0.
 #
+
+# This is the base Docker build image used by CI
+
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
 FROM ${base_image} AS bare_base_image
 
@@ -39,7 +42,9 @@ ARG rust_stable_version=1.56.1
 ARG rust_nightly_version=nightly-2022-03-29
 ARG cargo_udeps_version=0.1.27
 ARG cargo_hack_version=0.5.12
-ARG smithy_rs_revision=main
+# If the `checkout_smithy_rs_tools` arg is set to true, then the Dockerfile will acquire the tools
+# source code by checking out awslabs/smithy-rs/main rather than copying them from the local directory.
+ARG checkout_smithy_rs_tools=false
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
@@ -71,12 +76,14 @@ RUN set -eux; \
     rustup install ${rust_nightly_version}; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
+COPY . tools/
 RUN set -eux; \
     cargo +${rust_nightly_version} install cargo-udeps --version ${cargo_udeps_version}; \
     cargo install cargo-hack --version ${cargo_hack_version}; \
-    git clone https://github.com/awslabs/smithy-rs.git; \
-    cd smithy-rs; \
-    git checkout ${smithy_rs_revision}; \
+    if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
+        git clone https://github.com/awslabs/smithy-rs.git; \
+        cd smithy-rs; \
+    fi; \
     cargo install --path tools/publisher; \
     cargo +${rust_nightly_version} install --path tools/api-linter; \
     cargo install --path tools/sdk-lints; \
@@ -120,5 +127,5 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     RUSTFLAGS="-D warnings" \
     SMITHY_RS_DOCKER_BUILD_IMAGE=1
 WORKDIR /home/build
-COPY scripts/sanity-test /home/build/sanity-test
+COPY ci-build/scripts/sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test

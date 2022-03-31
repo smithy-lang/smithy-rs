@@ -27,8 +27,8 @@ jobs:
     - name: Build image
       run: |
         IMAGE_TAG="$(git rev-parse HEAD)"
-        cd tools/ci-build
-        docker build -t "${{ env.ecr_repository }}:${IMAGE_TAG}" --file base-image.dockerfile .
+        cd tools
+        docker build -t "${{ env.ecr_repository }}:${IMAGE_TAG}" .
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
