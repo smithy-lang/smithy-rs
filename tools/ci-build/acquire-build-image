@@ -12,6 +12,8 @@ START_PATH="$(pwd)"
 SCRIPT_PATH="$(realpath "$(dirname "$0")")"
 cd "${SCRIPT_PATH}"
 
+TOOLS_PATH="$(git rev-parse --show-toplevel)/tools"
+
 # The image tag is the SHA-1 hash of the `tools` directory when taking the `.gitignore` into consideration
 IMAGE_TAG=$("${SCRIPT_PATH}/tools-hash")
 IMAGE_NAME="public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci"
@@ -25,8 +27,13 @@ if ! docker inspect "smithy-rs-base-image:${IMAGE_TAG}" >/dev/null; then
           echo -e "${C_YELLOW}Local build turned off by ALLOW_LOCAL_BUILD env var. Aborting.${C_RESET}"
           exit 1
       fi
+
       echo -e "${C_YELLOW}Failed to pull remote image, which can happen if it doesn't exist. Building a new image locally...${C_RESET}"
-      docker build -t "smithy-rs-base-image:${IMAGE_TAG}" --file base-image.dockerfile .
+
+      pushd "${TOOLS_PATH}" &>/dev/null
+      docker build -t "smithy-rs-base-image:${IMAGE_TAG}" .
+      popd  &>/dev/null
+
       if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
           echo -e "${C_YELLOW}Saving base image for use in later jobs...${C_RESET}"
           docker save -o "${START_PATH}/smithy-rs-base-image" "smithy-rs-base-image:${IMAGE_TAG}"
