@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0.
 
 set -e
-cd "$(dirname $0)"
+cd "$(dirname "$0")"
 
 cargo clippy
-cargo +nightly-2022-03-03 test
+cargo "+${RUST_NIGHTLY_VERSION}" test
