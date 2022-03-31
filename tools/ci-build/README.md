@@ -2,11 +2,12 @@ ci-build
 ========
 
 This directory includes the build Docker image and scripts to use it in CI.
+- `../Dockerfile`: Dockerfile used to create the base build image. Needs to be in `tools/` root so that it
+  can copy all the tools source code into the image at build time.
 - `acquire-build-image`: Script that retrieves the base build image from public ECR or creates one locally
   depending on the state of the tools directory. If the git hash of the tools directory doesn't exist as a tag
   in public ECR, then it will build a new image locally. Otherwise, it will download the existing one and reuse it.
 - `add-local-user.dockerfile`: Creates a user in the build image with the host's user ID
-- `base-image.dockerfile`: Dockerfile used to create the base build image
 - `build.docker-compose.yml`: Docker Compose file for using the build image
 - `ci-action`: Script for running CI actions inside of the Docker build image
 - `ci-create-workspace`: Used by `ci-action`, but can be run manually to create a one-off workspace for debugging

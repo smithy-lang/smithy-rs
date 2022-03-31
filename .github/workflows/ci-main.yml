@@ -29,11 +29,11 @@ jobs:
     - name: Build image
       run: |
         IMAGE_TAG="$(./tools/ci-build/tools-hash)"
-        cd tools/ci-build
+        cd tools
         docker build \
           -t "${{ env.ecr_repository }}:${IMAGE_TAG}" \
           -t "${{ env.ecr_repository }}:main" \
-          --file base-image.dockerfile .
+          .
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
