@@ -1,307 +1,325 @@
 error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
-  --> test-crate/src/lib.rs:21:1
+  --> test-crate/src/lib.rs:22:1
    |
-21 | pub fn external_in_fn_input(_one: &SomeStruct, _two: impl SimpleTrait) {}␊
+22 | pub fn external_in_fn_input(_one: &SomeStruct, _two: impl SimpleTrait) {}␊
    | ^-----------------------------------------------------------------------^
    |
    = in argument named `_two` of `test_crate::external_in_fn_input`
 
 error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
-  --> test-crate/src/lib.rs:21:1
+  --> test-crate/src/lib.rs:22:1
    |
-21 | pub fn external_in_fn_input(_one: &SomeStruct, _two: impl SimpleTrait) {}␊
+22 | pub fn external_in_fn_input(_one: &SomeStruct, _two: impl SimpleTrait) {}␊
    | ^-----------------------------------------------------------------------^
    |
    = in trait bound of `test_crate::external_in_fn_input`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:21:1
+  --> test-crate/src/lib.rs:22:1
    |
-21 | pub fn external_in_fn_input(_one: &SomeStruct, _two: impl SimpleTrait) {}␊
+22 | pub fn external_in_fn_input(_one: &SomeStruct, _two: impl SimpleTrait) {}␊
    | ^-----------------------------------------------------------------------^
    |
    = in argument named `_one` of `test_crate::external_in_fn_input`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:26:1
+  --> test-crate/src/lib.rs:27:1
    |
-26 | pub fn external_in_fn_output() -> SomeStruct {␊
+27 | pub fn external_in_fn_output() -> SomeStruct {␊
    | ...
-28 | }␊
+29 | }␊
    | ^
    |
    = in return value of `test_crate::external_in_fn_output`
 
 error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
-  --> test-crate/src/lib.rs:30:1
+  --> test-crate/src/lib.rs:31:1
    |
-30 | pub fn external_opaque_type_in_output() -> impl SimpleTrait {␊
+31 | pub fn external_opaque_type_in_output() -> impl SimpleTrait {␊
    | ...
-32 | }␊
+33 | }␊
    | ^
    |
    = in return value of `test_crate::external_opaque_type_in_output`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:37:1
+  --> test-crate/src/lib.rs:38:1
    |
-37 | pub fn external_in_fn_output_generic() -> Option<SomeStruct> {␊
+38 | pub fn external_in_fn_output_generic() -> Option<SomeStruct> {␊
    | ...
-39 | }␊
+40 | }␊
    | ^
    |
    = in generic arg of `test_crate::external_in_fn_output_generic`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:45:5
+  --> test-crate/src/lib.rs:46:5
    |
-45 |     pub fn something(_one: &SomeStruct) {}␊
+46 |     pub fn something(_one: &SomeStruct) {}␊
    |     ^------------------------------------^
    |
    = in argument named `_one` of `test_crate::something`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:50:5
+  --> test-crate/src/lib.rs:51:5
    |
-50 |     pub field: SomeStruct,␊
+51 |     pub field: SomeStruct,␊
    |     ^-------------------^
    |
    = in struct field of `test_crate::StructWithExternalFields::field`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:51:5
+  --> test-crate/src/lib.rs:52:5
    |
-51 |     pub optional_field: Option<SomeStruct>,␊
+52 |     pub optional_field: Option<SomeStruct>,␊
    |     ^------------------------------------^
    |
    = in generic arg of `test_crate::StructWithExternalFields::optional_field`
 
 error: Unapproved external type `external_lib::SomeOtherStruct` referenced in public API
-  --> test-crate/src/lib.rs:55:5
+  --> test-crate/src/lib.rs:56:5
    |
-55 |     pub fn new(_field: impl Into<SomeStruct>, _optional_field: Option<SomeOtherStruct>) -> Self {␊
+56 |     pub fn new(_field: impl Into<SomeStruct>, _optional_field: Option<SomeOtherStruct>) -> Self {␊
    | ...
-57 |     }␊
+58 |     }␊
    |     ^
    |
    = in generic arg of `test_crate::StructWithExternalFields::new`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:55:5
+  --> test-crate/src/lib.rs:56:5
    |
-55 |     pub fn new(_field: impl Into<SomeStruct>, _optional_field: Option<SomeOtherStruct>) -> Self {␊
+56 |     pub fn new(_field: impl Into<SomeStruct>, _optional_field: Option<SomeOtherStruct>) -> Self {␊
    | ...
-57 |     }␊
+58 |     }␊
    |     ^
    |
    = in generic arg of `test_crate::StructWithExternalFields::new`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:61:5
+  --> test-crate/src/lib.rs:62:5
    |
-61 |     fn something(&self, a: SomeStruct) -> LocalStruct;␊
+62 |     fn something(&self, a: SomeStruct) -> LocalStruct;␊
    |     ^------------------------------------------------^
    |
    = in argument named `a` of `test_crate::TraitReferencingExternals::something`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:62:5
+  --> test-crate/src/lib.rs:63:5
    |
-62 |     fn optional_something(&self, a: Option<SomeStruct>) -> LocalStruct;␊
+63 |     fn optional_something(&self, a: Option<SomeStruct>) -> LocalStruct;␊
    |     ^-----------------------------------------------------------------^
    |
    = in generic arg of `test_crate::TraitReferencingExternals::optional_something`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:63:5
+  --> test-crate/src/lib.rs:64:5
    |
-63 |     fn otherthing(&self) -> SomeStruct;␊
+64 |     fn otherthing(&self) -> SomeStruct;␊
    |     ^---------------------------------^
    |
    = in return value of `test_crate::TraitReferencingExternals::otherthing`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:64:5
+  --> test-crate/src/lib.rs:65:5
    |
-64 |     fn optional_otherthing(&self) -> Option<SomeStruct>;␊
+65 |     fn optional_otherthing(&self) -> Option<SomeStruct>;␊
    |     ^--------------------------------------------------^
    |
    = in generic arg of `test_crate::TraitReferencingExternals::optional_otherthing`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:67:1
+  --> test-crate/src/lib.rs:68:1
    |
-67 | pub enum EnumWithExternals<T = SomeStruct> {␊
+68 | pub enum EnumWithExternals<T = SomeStruct> {␊
    | ...
-81 | }␊
+82 | }␊
    | ^
    |
    = in generic default binding of `test_crate::EnumWithExternals`
 
 error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
-  --> test-crate/src/lib.rs:72:5
+  --> test-crate/src/lib.rs:73:5
    |
-72 |     TupleEnum(SomeStruct, Box<dyn SimpleTrait>),␊
+73 |     TupleEnum(SomeStruct, Box<dyn SimpleTrait>),␊
    |     ^-----------------------------------------^
    |
    = in generic arg of `test_crate::EnumWithExternals::TupleEnum`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:72:5
+  --> test-crate/src/lib.rs:73:5
    |
-72 |     TupleEnum(SomeStruct, Box<dyn SimpleTrait>),␊
+73 |     TupleEnum(SomeStruct, Box<dyn SimpleTrait>),␊
    |     ^-----------------------------------------^
    |
    = in enum tuple entry of `test_crate::EnumWithExternals::TupleEnum`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:74:9
+  --> test-crate/src/lib.rs:75:9
    |
-74 |         some_struct: SomeStruct,␊
+75 |         some_struct: SomeStruct,␊
    |         ^---------------------^
    |
    = in struct field of `test_crate::EnumWithExternals::StructEnum::some_struct`
 
 error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
-  --> test-crate/src/lib.rs:75:9
+  --> test-crate/src/lib.rs:76:9
    |
-75 |         simple_trait: Box<dyn SimpleTrait>,␊
+76 |         simple_trait: Box<dyn SimpleTrait>,␊
    |         ^--------------------------------^
    |
    = in generic arg of `test_crate::EnumWithExternals::StructEnum::simple_trait`
 
 error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
-  --> test-crate/src/lib.rs:87:5
+  --> test-crate/src/lib.rs:88:5
    |
-87 |     pub fn another_thing<S: SimpleTrait>(_s: S) -> Self {␊
+88 |     pub fn another_thing<S: SimpleTrait>(_s: S) -> Self {␊
    | ...
-89 |     }␊
+90 |     }␊
    |     ^
    |
    = in trait bound of `test_crate::EnumWithExternals::another_thing`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:92:1
+  --> test-crate/src/lib.rs:93:1
    |
-92 | pub static SOME_STRUCT: SomeStruct = SomeStruct;␊
+93 | pub static SOME_STRUCT: SomeStruct = SomeStruct;␊
    | ^----------------------------------------------^
    |
    = in static value `test_crate::SOME_STRUCT`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:93:1
+  --> test-crate/src/lib.rs:94:1
    |
-93 | pub const SOME_CONST: SomeStruct = SomeStruct;␊
+94 | pub const SOME_CONST: SomeStruct = SomeStruct;␊
    | ^--------------------------------------------^
    |
    = in constant `test_crate::SOME_CONST`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:98:5
+  --> test-crate/src/lib.rs:99:5
    |
-98 |     pub static OPTIONAL_STRUCT: Option<SomeStruct> = None;␊
+99 |     pub static OPTIONAL_STRUCT: Option<SomeStruct> = None;␊
    |     ^----------------------------------------------------^
    |
    = in generic arg of `test_crate::some_pub_mod::OPTIONAL_STRUCT`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-  --> test-crate/src/lib.rs:99:5
-   |
-99 |     pub const OPTIONAL_CONST: Option<SomeStruct> = None;␊
-   |     ^--------------------------------------------------^
-   |
-   = in generic arg of `test_crate::some_pub_mod::OPTIONAL_CONST`
+   --> test-crate/src/lib.rs:100:5
+    |
+100 |     pub const OPTIONAL_CONST: Option<SomeStruct> = None;␊
+    |     ^--------------------------------------------------^
+    |
+    = in generic arg of `test_crate::some_pub_mod::OPTIONAL_CONST`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-   --> test-crate/src/lib.rs:103:1
+   --> test-crate/src/lib.rs:104:1
     |
-103 | pub type ExternalReferencingTypedef = SomeStruct;␊
+104 | pub type ExternalReferencingTypedef = SomeStruct;␊
     | ^-----------------------------------------------^
     |
     = in typedef type of `test_crate::ExternalReferencingTypedef`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-   --> test-crate/src/lib.rs:104:1
+   --> test-crate/src/lib.rs:105:1
     |
-104 | pub type OptionalExternalReferencingTypedef = Option<SomeStruct>;␊
+105 | pub type OptionalExternalReferencingTypedef = Option<SomeStruct>;␊
     | ^---------------------------------------------------------------^
     |
     = in generic arg of `test_crate::OptionalExternalReferencingTypedef`
 
 error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
-   --> test-crate/src/lib.rs:105:1
+   --> test-crate/src/lib.rs:106:1
     |
-105 | pub type DynExternalReferencingTypedef = Box<dyn SimpleTrait>;␊
+106 | pub type DynExternalReferencingTypedef = Box<dyn SimpleTrait>;␊
     | ^------------------------------------------------------------^
     |
     = in generic arg of `test_crate::DynExternalReferencingTypedef`
 
 error: Unapproved external type `external_lib::AssociatedGenericTrait` referenced in public API
-   --> test-crate/src/lib.rs:107:1
+   --> test-crate/src/lib.rs:108:1
     |
-107 | pub fn fn_with_external_trait_bounds<I, O, E, T>(_thing: T)␊
+108 | pub fn fn_with_external_trait_bounds<I, O, E, T>(_thing: T)␊
     | ...
-114 | }␊
+115 | }␊
     | ^
     |
     = in trait bound of `test_crate::fn_with_external_trait_bounds`
 
 error: Unapproved external type `external_lib::SomeOtherStruct` referenced in public API
-   --> test-crate/src/lib.rs:107:1
+   --> test-crate/src/lib.rs:108:1
     |
-107 | pub fn fn_with_external_trait_bounds<I, O, E, T>(_thing: T)␊
+108 | pub fn fn_with_external_trait_bounds<I, O, E, T>(_thing: T)␊
     | ...
-114 | }␊
+115 | }␊
     | ^
     |
     = in generic arg of `test_crate::fn_with_external_trait_bounds`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-   --> test-crate/src/lib.rs:107:1
+   --> test-crate/src/lib.rs:108:1
     |
-107 | pub fn fn_with_external_trait_bounds<I, O, E, T>(_thing: T)␊
+108 | pub fn fn_with_external_trait_bounds<I, O, E, T>(_thing: T)␊
     | ...
-114 | }␊
+115 | }␊
     | ^
     |
     = in generic arg of `test_crate::fn_with_external_trait_bounds`
 
 error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
-   --> test-crate/src/lib.rs:117:5
+   --> test-crate/src/lib.rs:118:5
     |
-117 |     type Thing: SimpleTrait;␊
+118 |     type Thing: SimpleTrait;␊
     |     ^----------------------^
     |
     = in trait bound of `test_crate::SomeTraitWithExternalDefaultTypes::Thing`
 
 error: Unapproved external type `external_lib::AssociatedGenericTrait` referenced in public API
-   --> test-crate/src/lib.rs:118:5
+   --> test-crate/src/lib.rs:119:5
     |
-118 |     type OtherThing: AssociatedGenericTrait<␊
+119 |     type OtherThing: AssociatedGenericTrait<␊
     | ...
-122 |     >;␊
+123 |     >;␊
     |     ^^
     |
     = in trait bound of `test_crate::SomeTraitWithExternalDefaultTypes::OtherThing`
 
 error: Unapproved external type `external_lib::SomeOtherStruct` referenced in public API
-   --> test-crate/src/lib.rs:118:5
+   --> test-crate/src/lib.rs:119:5
     |
-118 |     type OtherThing: AssociatedGenericTrait<␊
+119 |     type OtherThing: AssociatedGenericTrait<␊
     | ...
-122 |     >;␊
+123 |     >;␊
     |     ^^
     |
     = in generic default binding of `test_crate::SomeTraitWithExternalDefaultTypes::OtherThing`
 
 error: Unapproved external type `external_lib::SomeStruct` referenced in public API
-   --> test-crate/src/lib.rs:118:5
+   --> test-crate/src/lib.rs:119:5
     |
-118 |     type OtherThing: AssociatedGenericTrait<␊
+119 |     type OtherThing: AssociatedGenericTrait<␊
     | ...
-122 |     >;␊
+123 |     >;␊
     |     ^^
     |
     = in generic default binding of `test_crate::SomeTraitWithExternalDefaultTypes::OtherThing`
 
-35 errors emitted
+error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
+   --> test-crate/src/lib.rs:129:5
+    |
+129 |     type MyGAT<T>␊
+    | ...
+131 |         T: SimpleTrait;␊
+    |     ^-----------------^
+    |
+    = in trait bound of `test_crate::SomeTraitWithGenericAssociatedType::MyGAT`
+
+error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
+   --> test-crate/src/lib.rs:133:5
+    |
+133 |     fn some_fn<T: SimpleTrait>(&self, thing: Self::MyGAT<T>);␊
+    |     ^-------------------------------------------------------^
+    |
+    = in trait bound of `test_crate::SomeTraitWithGenericAssociatedType::some_fn`
+
+37 errors emitted

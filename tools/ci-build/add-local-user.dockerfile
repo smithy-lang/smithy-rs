@@ -12,8 +12,7 @@
 # Gradle caches, or Cargo/Rust caches will not require root access to manipulate after
 # Docker execution is completed.
 
-ARG base_image=smithy-rs-base-image
-FROM ${base_image} AS bare_base_image
+FROM smithy-rs-base-image:local AS bare_base_image
 
 ARG USER_ID
 RUN useradd -l -u ${USER_ID} -G build -o -s /bin/bash localbuild;

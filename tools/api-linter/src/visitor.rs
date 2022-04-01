@@ -93,12 +93,17 @@ impl Visitor {
         let mut path = path.clone();
         match &item.inner {
             ItemEnum::AssocConst { .. } => unimplemented!("visit_item ItemEnum::AssocConst"),
-            ItemEnum::AssocType { bounds, default } => {
+            ItemEnum::AssocType {
+                bounds,
+                default,
+                generics,
+            } => {
                 path.push(ComponentType::AssocType, item);
                 if let Some(typ) = default {
                     self.visit_type(&path, &ErrorLocation::AssocType, typ)?;
                 }
                 self.visit_generic_bounds(&path, bounds)?;
+                self.visit_generics(&path, generics)?;
             }
             ItemEnum::Constant(constant) => {
                 path.push(ComponentType::Constant, item);
@@ -361,26 +366,7 @@ impl Visitor {
             {
                 self.visit_type(path, &ErrorLocation::TraitBound, trait_)
                     .context(here!())?;
-                for param_def in generic_params {
-                    match &param_def.kind {
-                        GenericParamDefKind::Type { bounds, default } => {
-                            self.visit_generic_bounds(path, bounds)?;
-                            if let Some(default) = default {
-                                self.visit_type(
-                                    path,
-                                    &ErrorLocation::GenericDefaultBinding,
-                                    default,
-                                )
-                                .context(here!())?;
-                            }
-                        }
-                        GenericParamDefKind::Const { ty, .. } => {
-                            self.visit_type(path, &ErrorLocation::GenericDefaultBinding, ty)
-                                .context(here!())?;
-                        }
-                        _ => {}
-                    }
-                }
+                self.visit_generic_param_defs(path, generic_params)?;
             }
         }
         Ok(())
@@ -390,15 +376,19 @@ impl Visitor {
     fn visit_generic_param_defs(&self, path: &Path, params: &[GenericParamDef]) -> Result<()> {
         for param in params {
             match &param.kind {
-                GenericParamDefKind::Type { bounds, default } => {
+                GenericParamDefKind::Type {
+                    bounds,
+                    default,
+                    synthetic: _,
+                } => {
                     self.visit_generic_bounds(path, bounds)?;
                     if let Some(typ) = default {
                         self.visit_type(path, &ErrorLocation::GenericDefaultBinding, typ)
                             .context(here!())?;
                     }
                 }
-                GenericParamDefKind::Const { ty, .. } => {
-                    self.visit_type(path, &ErrorLocation::ConstGeneric, ty)
+                GenericParamDefKind::Const { type_, .. } => {
+                    self.visit_type(path, &ErrorLocation::ConstGeneric, type_)
                         .context(here!())?;
                 }
                 _ => {}
@@ -412,8 +402,8 @@ impl Visitor {
         self.visit_generic_param_defs(path, &generics.params)?;
         for where_pred in &generics.where_predicates {
             match where_pred {
-                WherePredicate::BoundPredicate { ty, bounds } => {
-                    self.visit_type(path, &ErrorLocation::WhereBound, ty)
+                WherePredicate::BoundPredicate { type_, bounds } => {
+                    self.visit_type(path, &ErrorLocation::WhereBound, type_)
                         .context(here!())?;
                     self.visit_generic_bounds(path, bounds)?;
                 }

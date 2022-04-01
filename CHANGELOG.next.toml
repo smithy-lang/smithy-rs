@@ -34,3 +34,9 @@ message = "Update all SDK and runtime crates to [edition 2021](https://blog.rust
 references = ["aws-sdk-rust#490"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Treat blank environment variable credentials (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`) as missing instead of attempting to use them to sign requests."
+references = ["aws-sdk-rust#1271"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "elrob"
