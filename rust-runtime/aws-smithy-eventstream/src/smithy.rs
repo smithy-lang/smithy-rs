@@ -40,7 +40,11 @@ expect_shape_fn!(fn expect_timestamp[Timestamp] -> DateTime { value -> *value })
 pub struct ResponseHeaders<'a> {
     /// Content Type of the message
     ///
-    /// For binary data, this will be `application/octet-stream`. For strings, this will be `text/plain`.
+    /// This can be a number of things depending on the protocol. For example, if the protocol is
+    /// AwsJson1, then this could be `application/json`, or `application/xml` for RestXml.
+    ///
+    /// It will be `application/octet-stream` if there is a Blob payload shape, and `text/plain` if
+    /// there is a String payload shape.
     pub content_type: Option<&'a StrBytes>,
 
     /// Message Type field
