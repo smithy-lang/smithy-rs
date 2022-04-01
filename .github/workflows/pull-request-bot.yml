@@ -139,6 +139,7 @@ jobs:
         aws s3 cp target/doc "s3://${S3_BUCKET_NAME}/docs/${{ github.event.pull_request.head.sha }}" --recursive
 
   generate-server-benchmark:
+    name: Generate server benchmark
     runs-on: ubuntu-latest
     outputs:
       bot-message: ${{ steps.run-benchmark.outputs.bot-message }}
