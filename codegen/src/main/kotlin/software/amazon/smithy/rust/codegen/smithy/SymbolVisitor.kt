@@ -131,7 +131,7 @@ fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder {
 /**
  * Track both the past and current name of a symbol
  *
- * When a symbol name conflicts another name, we need to rename it. This tracks both names enabling us to generate helpful
+ * When a symbol name conflicts with another name, we need to rename it. This tracks both names enabling us to generate helpful
  * docs that cover both cases.
  *
  * Note that this is only used for enum shapes an enum variant does not have it's own symbol. For structures, the [Symbol.renamedFrom]
