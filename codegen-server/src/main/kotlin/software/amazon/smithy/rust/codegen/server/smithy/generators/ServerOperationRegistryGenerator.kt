@@ -7,10 +7,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -36,7 +34,7 @@ class ServerOperationRegistryGenerator(
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
+        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "Phantom" to ServerRuntimeType.Phantom,
         "StdError" to RuntimeType.StdError
