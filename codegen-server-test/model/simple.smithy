@@ -16,22 +16,30 @@ service SimpleService {
 operation AnOperation {
     input: AnOperationInput,
     output: AnOperationOutput,
-    errors: [MyError]
 }
 
 structure AnOperationInput {
-    @httpResponseCode
-    responseCode: Integer
+    @required
+    conA: ConA
 }
 
 structure AnOperationOutput {
-    @httpResponseCode
-    responseCode: Integer
+    conA: ConA
 }
 
-@error("client")
-@httpError(404)
-structure MyError {
-    @httpResponseCode
-    responseCode: Integer
+structure ConA {
+    @required
+    conB: ConB,
+
+    optConB: ConB
+}
+
+structure ConB {
+    @required
+    nice: String,
+    @required
+    int: Integer,
+
+    optNice: String,
+    optInt: Integer
 }
