@@ -12,6 +12,12 @@
 # author = "rcoh"
 
 [[smithy-rs]]
+message = "Switch to `base64` crate"
+references = ["smithy-rs#1294"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "david-perez"
+
+[[smithy-rs]]
 message = "Fix link to Developer Guide in crate's README.md"
 references = ["smithy-rs#1262"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
