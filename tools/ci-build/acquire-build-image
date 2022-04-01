@@ -18,33 +18,64 @@ TOOLS_PATH="$(git rev-parse --show-toplevel)/tools"
 IMAGE_TAG=$("${SCRIPT_PATH}/tools-hash")
 IMAGE_NAME="public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci"
 
+function pull_docker_image() {
+    local TMP_FILE
+    TMP_FILE="$(mktemp /tmp/acquire-build-image.XXXXXX)"
+
+    # Image pull retry loop
+    for _ in $(seq 1 5); do
+        echo -e "${C_YELLOW}Attempting to pull remote image ${IMAGE_NAME}:${IMAGE_TAG}...${C_RESET}"
+        if ! docker pull "${IMAGE_NAME}:${IMAGE_TAG}" &>"${TMP_FILE}"; then
+            cat "${TMP_FILE}"
+            # Pull failed; check the output to see if it was due to throttling
+            if grep -q "toomanyrequests: Rate exceeded" "${TMP_FILE}"; then
+                # It was throttled, so sleep and try again
+                echo "Docker pull failed due to throttling. Waiting and trying again..."
+                sleep 30
+            else
+                # It wasn't throttled; the image doesn't exist. Return 0 to indicate it doesn't exist.
+                rm -f "${TMP_FILE}"
+                return 1
+            fi
+        else
+            # Pull succeeded; return 0 to indicate the remote image exists
+            rm -f "${TMP_FILE}"
+            return 0
+        fi
+    done
+
+    # Hit max retries; the image probably exists, but we are getting throttled hard. Fail.
+    echo "Image pulling throttled for too many retries. The remote image might exist, but we can't get it. Aborting."
+    rm -f "${TMP_FILE}"
+    exit 1
+}
+
 # If the image doesn't already exist locally, then look remotely
 if ! docker inspect "smithy-rs-base-image:${IMAGE_TAG}" >/dev/null; then
-  echo -e "${C_YELLOW}Attempting to pull remote image ${IMAGE_NAME}:${IMAGE_TAG}...${C_RESET}"
-  if ! docker pull "${IMAGE_NAME}:${IMAGE_TAG}" >/dev/null; then
-      # If there is no remote image with the matching IMAGE_TAG, then build one locally
-      if [[ "${ALLOW_LOCAL_BUILD:-}" == "false" ]]; then
-          echo -e "${C_YELLOW}Local build turned off by ALLOW_LOCAL_BUILD env var. Aborting.${C_RESET}"
-          exit 1
-      fi
+    if ! pull_docker_image; then
+        # If there is no remote image with the matching IMAGE_TAG, then build one locally
+        if [[ "${ALLOW_LOCAL_BUILD:-}" == "false" ]]; then
+            echo -e "${C_YELLOW}Local build turned off by ALLOW_LOCAL_BUILD env var. Aborting.${C_RESET}"
+            exit 1
+        fi
 
-      echo -e "${C_YELLOW}Failed to pull remote image, which can happen if it doesn't exist. Building a new image locally...${C_RESET}"
+        echo -e "${C_YELLOW}Failed to pull remote image, which can happen if it doesn't exist. Building a new image locally...${C_RESET}"
 
-      pushd "${TOOLS_PATH}" &>/dev/null
-      docker build -t "smithy-rs-base-image:${IMAGE_TAG}" .
-      popd  &>/dev/null
+        pushd "${TOOLS_PATH}" &>/dev/null
+        docker build -t "smithy-rs-base-image:${IMAGE_TAG}" .
+        popd  &>/dev/null
 
-      if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-          echo -e "${C_YELLOW}Saving base image for use in later jobs...${C_RESET}"
-          docker save -o "${START_PATH}/smithy-rs-base-image" "smithy-rs-base-image:${IMAGE_TAG}"
-      fi
-  else
-      # Otherwise, we have successfully pulled the remote image
-      echo -e "${C_YELLOW}Successfully pulled remote image!${C_RESET}"
-      docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "smithy-rs-base-image:${IMAGE_TAG}"
-  fi
+        if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+            echo -e "${C_YELLOW}Saving base image for use in later jobs...${C_RESET}"
+            docker save -o "${START_PATH}/smithy-rs-base-image" "smithy-rs-base-image:${IMAGE_TAG}"
+        fi
+    else
+        # Otherwise, we have successfully pulled the remote image
+        echo -e "${C_YELLOW}Successfully pulled remote image!${C_RESET}"
+        docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "smithy-rs-base-image:${IMAGE_TAG}"
+    fi
 else
-  echo -e "${C_YELLOW}Base image found locally! No retrieval or rebuild necessary.${C_RESET}"
+    echo -e "${C_YELLOW}Base image found locally! No retrieval or rebuild necessary.${C_RESET}"
 fi
 
 echo -e "${C_YELLOW}Creating local build image...${C_RESET}"
