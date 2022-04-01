@@ -19,39 +19,6 @@ env:
   apt_dependencies: libssl-dev gnuplot jq
 
 jobs:
-  run-e2e-integration-test:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - uses: actions/cache@v2
-      name: Gradle Cache
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-      # Pinned to the commit hash of v1.3.0
-    - uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
-      with:
-        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
-        target-dir: ./target
-    - name: Set up JDK
-      uses: actions/setup-java@v1
-      with:
-        java-version: ${{ env.java_version }}
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
-        components: ${{ env.rust_toolchain_components }}
-        default: true
-    - name: Run integration tests
-      run: |
-        cd rust-runtime/aws-smithy-http-server/examples && \
-          make && cargo test
-
   run-benchmark:
     runs-on: ubuntu-latest
     steps:

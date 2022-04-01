@@ -89,6 +89,7 @@ jobs:
         - action: check-sdk-codegen-unit-tests
         - action: check-server-codegen-integration-tests
         - action: check-server-codegen-unit-tests
+        - action: check-server-e2e-test
     steps:
     - uses: actions/checkout@v3
       with:
