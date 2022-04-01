@@ -28,7 +28,7 @@ const EXAMPLE_ENTRY: &str = r#"
 "#;
 
 const USE_UPDATE_CHANGELOGS: &str =
-    "<!-- Do not manually edit this file, use `update-changelogs` -->";
+    "<!-- Do not manually edit this file, use the `update-changelog` subcommand of the binary under `tools/sdk-lints` -->";
 
 fn maintainers() -> Vec<&'static str> {
     include_str!("../smithy-rs-maintainers.txt")

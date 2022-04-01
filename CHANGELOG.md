@@ -1,4 +1,4 @@
-<!-- Do not manually edit this file, use `update-changelogs` -->
+<!-- Do not manually edit this file, use the `update-changelog` subcommand of the binary under `tools/sdk-lints` -->
 0.39.0 (March 17, 2022)
 =======================
 **Breaking Changes:**
