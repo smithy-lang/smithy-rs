@@ -65,6 +65,8 @@ jobs:
       with:
         action: ${{ matrix.actions.action }}
 
+  # Test the code generator and other parts (styles and lints) that don't require
+  # code to have already been generated in order to run.
   test-codegen:
     name: Test Codegen
     needs:
@@ -92,6 +94,8 @@ jobs:
       with:
         action: ${{ matrix.test.action }}
 
+  # Test all the things that require generated code. Note: the Rust runtimes require codegen
+  # to be checked since `aws-config` depends on the generated STS client.
   test-runtimes-tools-and-sdk:
     name: Test Rust Runtimes, Tools, and SDK
     needs:
