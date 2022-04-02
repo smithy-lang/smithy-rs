@@ -40,3 +40,15 @@ message = "Treat blank environment variable credentials (`AWS_ACCESS_KEY_ID` and
 references = ["aws-sdk-rust#1271"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "elrob"
+
+[[aws-sdk-rust]]
+message = "Add support for configuring the session length in [AssumeRoleProvider](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html)"
+references = ["aws-sdk-rust#479", "smithy-rs#1296"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add caching to [AssumeRoleProvider](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html)"
+references = ["smithy-rs#1296"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
