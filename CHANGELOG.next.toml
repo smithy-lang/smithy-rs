@@ -58,3 +58,9 @@ message = "Update urlencoding crate to v2.1.0"
 references = ["smithy-rs#1301"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "benesch"
+
+[[aws-sdk-rust]]
+message = "Add endpoint resolver to SdkConfig"
+references = ["smithy-rs#1300"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "benesch"

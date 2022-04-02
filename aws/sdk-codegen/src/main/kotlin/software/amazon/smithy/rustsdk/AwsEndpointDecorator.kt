@@ -90,7 +90,15 @@ class EndpointConfigCustomization(private val codegenContext: CodegenContext, pr
                         self.endpoint_resolver = Some(::std::sync::Arc::new(endpoint_resolver));
                         self
                     }
+
+                    // TODO(docs): include an example of using a static endpoint
+                    /// Sets the endpoint resolver to use when making requests.
+                    pub fn set_endpoint_resolver(&mut self, endpoint_resolver: Option<::std::sync::Arc<dyn #T>>) -> &mut Self {
+                        self.endpoint_resolver = endpoint_resolver;
+                        self
+                    }
                     """,
+                    resolveAwsEndpoint,
                     resolveAwsEndpoint
                 )
             ServiceConfig.BuilderBuild -> {
@@ -145,6 +153,7 @@ class EndpointResolverGenerator(codegenContext: CodegenContext, private val endp
     private val runtimeConfig = codegenContext.runtimeConfig
     private val endpointPrefix = codegenContext.serviceShape.expectTrait<ServiceTrait>().endpointPrefix
     private val awsEndpoint = runtimeConfig.awsEndpoint().asType()
+    private val awsTypes = runtimeConfig.awsTypes().asType()
     private val codegenScope =
         arrayOf(
             "Partition" to awsEndpoint.member("Partition"),
@@ -154,7 +163,9 @@ class EndpointResolverGenerator(codegenContext: CodegenContext, private val endp
             "Protocol" to awsEndpoint.member("partition::endpoint::Protocol"),
             "SignatureVersion" to awsEndpoint.member("partition::endpoint::SignatureVersion"),
             "PartitionResolver" to awsEndpoint.member("PartitionResolver"),
-            "ResolveAwsEndpoint" to awsEndpoint.member("ResolveAwsEndpoint")
+            "ResolveAwsEndpoint" to awsEndpoint.member("ResolveAwsEndpoint"),
+            "SigningService" to awsTypes.member("SigningService"),
+            "SigningRegion" to awsTypes.member("region::SigningRegion")
         )
 
     fun resolver(): RuntimeType {
@@ -338,10 +349,16 @@ class EndpointResolverGenerator(codegenContext: CodegenContext, private val endp
                 *codegenScope
             )
             objectNode.getStringMember("service").map {
-                rust(".service(${it.value.dq()})")
+                rustTemplate(
+                    ".service(#{SigningService}::from_static(${it.value.dq()}))",
+                    *codegenScope,
+                )
             }
             objectNode.getStringMember("region").map {
-                rust(".region(${it.value.dq()})")
+                rustTemplate(
+                    ".region(#{SigningRegion}::from_static(${it.value.dq()}))",
+                    *codegenScope,
+                )
             }
             rust(".build()")
         }

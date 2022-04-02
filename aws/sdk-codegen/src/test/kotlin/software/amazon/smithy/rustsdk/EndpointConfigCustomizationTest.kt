@@ -132,7 +132,7 @@ internal class EndpointConfigCustomizationTest {
                 let endpoint = conf.endpoint_resolver
                     .resolve_endpoint(&Region::new("fips-ca-central-1")).expect("default resolver produces a valid endpoint");
                 let mut uri = Uri::from_static("/?k=v");
-                endpoint.set_endpoint(&mut uri, None);
+                endpoint.endpoint().set_endpoint(&mut uri, None);
                 assert_eq!(uri, Uri::from_static("https://access-analyzer-fips.ca-central-1.amazonaws.com/?k=v"));
                 """
             )
@@ -156,13 +156,13 @@ internal class EndpointConfigCustomizationTest {
                 let endpoint = conf.endpoint_resolver
                     .resolve_endpoint(&Region::new("us-east-1")).expect("default resolver produces a valid endpoint");
                 let mut uri = Uri::from_static("/?k=v");
-                endpoint.set_endpoint(&mut uri, None);
+                endpoint.endpoint().set_endpoint(&mut uri, None);
                 assert_eq!(uri, Uri::from_static("https://iam.amazonaws.com/?k=v"));
 
                 let endpoint = conf.endpoint_resolver
                     .resolve_endpoint(&Region::new("iam-fips")).expect("default resolver produces a valid endpoint");
                 let mut uri = Uri::from_static("/?k=v");
-                endpoint.set_endpoint(&mut uri, None);
+                endpoint.endpoint().set_endpoint(&mut uri, None);
                 assert_eq!(uri, Uri::from_static("https://iam-fips.amazonaws.com/?k=v"));
                 """
             )
