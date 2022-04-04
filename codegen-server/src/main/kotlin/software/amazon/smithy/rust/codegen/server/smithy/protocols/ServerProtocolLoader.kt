@@ -32,13 +32,11 @@ class ServerProtocolLoader(private val supportedProtocols: ProtocolMap) {
             throw CodegenException("No matching protocol — service offers: ${protocols.keys}. We offer: ${supportedProtocols.keys}")
         }
         val pair = matchingProtocols.first()
-        // TODO: is there a better way than an unsafe cast here?
         return Pair(pair.first, pair.second)
     }
 
     companion object {
         val DefaultProtocols = mapOf(
-            // TODO: support other protocols.
             RestJson1Trait.ID to ServerRestJsonFactory(),
             RestXmlTrait.ID to ServerRestXmlFactory(),
         )
