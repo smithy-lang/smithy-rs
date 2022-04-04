@@ -66,10 +66,10 @@ impl PathBody {
 /// async fn bytestream_from_file() -> GetObjectInput {
 ///     let bytestream = FsBuilder::from_path("docs/some-large-file.csv")
 ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
-///         .with_buffer_size(32_784)
+///         .buffer_size(32_784)
 ///         // Specify the length of the file used (skips an additional call to retrieve the size)
-///         .with_file_size(123_456)
-///         .byte_stream()
+///         .file_size(123_456)
+///         .build()
 ///         .await
 ///         .expect("valid path");
 ///     GetObjectInput { body: bytestream }
@@ -112,7 +112,7 @@ impl FsBuilder {
     ///
     /// By pre-specifying the length of the file, this API skips an additional call to retrieve the size from file-system metadata.
     ///
-    pub fn with_file_size(mut self, file_size: u64) -> Self {
+    pub fn file_size(mut self, file_size: u64) -> Self {
         self.file_size = Some(file_size);
         self
     }
@@ -122,14 +122,14 @@ impl FsBuilder {
     /// Increasing the read buffer capacity to higher values than the default (4096 bytes) can result in a large reduction
     /// in CPU usage, at the cost of memory increase.
     ///
-    pub fn with_buffer_size(mut self, buffer_size: usize) -> Self {
+    pub fn buffer_size(mut self, buffer_size: usize) -> Self {
         self.buffer_size = buffer_size;
         self
     }
 
     /// Returns a [`ByteStream`](crate::byte_stream::ByteStream) from this builder.
     ///
-    pub async fn byte_stream(self) -> Result<ByteStream, Error> {
+    pub async fn build(self) -> Result<ByteStream, Error> {
         let buffer_size = self.buffer_size;
 
         if let Some(path) = self.path {

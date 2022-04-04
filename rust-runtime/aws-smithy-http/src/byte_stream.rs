@@ -110,9 +110,9 @@
 //!
 //! async fn bytestream_from_file() -> GetObjectInput {
 //!     let bytestream = FsBuilder::from_path("docs/some-large-file.csv")
-//!         .with_buffer_size(32_784)
-//!         .with_file_size(123_456)
-//!         .byte_stream()
+//!         .buffer_size(32_784)
+//!         .file_size(123_456)
+//!         .build()
 //!         .await
 //!         .expect("valid path");
 //!     GetObjectInput { body: bytestream }
@@ -293,7 +293,7 @@ impl ByteStream {
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_path(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
-        FsBuilder::from_path(path).byte_stream().await
+        FsBuilder::from_path(path).build().await
     }
 
     /// Create a ByteStream from a file
@@ -303,7 +303,7 @@ impl ByteStream {
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_file(file: tokio::fs::File) -> Result<Self, Error> {
-        FsBuilder::from_file(file).byte_stream().await
+        FsBuilder::from_file(file).build().await
     }
 }
 
@@ -562,10 +562,10 @@ mod tests {
             writeln!(file, "Brian was here. Briefly. {}", i)?;
         }
         let body = FsBuilder::from_path(&file)
-            .with_buffer_size(16384)
+            .buffer_size(16384)
             // This isn't the right file length - one shouldn't do this in real code
-            .with_file_size(200)
-            .byte_stream()
+            .file_size(200)
+            .build()
             .await?
             .into_inner();
 
