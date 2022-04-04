@@ -96,20 +96,20 @@
 //! }
 //! ```
 //!
-//! If you want more control over how the file is read, you can use PathBodyBuilder. This allows to specify
+//! If you want more control over how the file is read, you can use FsBuilder. This allows to specify
 //! options such as the size of the buffer used to read the file, the size of the file to read if known...
 //!
 //! ```no_run
 //! # #[cfg(feature = "rt-tokio")]
 //! # {
-//! use aws_smithy_http::byte_stream::{ByteStream, PathBodyBuilder};
+//! use aws_smithy_http::byte_stream::{ByteStream, FsBuilder};
 //! use std::path::Path;
 //! struct GetObjectInput {
 //!     body: ByteStream
 //! }
 //!
 //! async fn bytestream_from_file() -> GetObjectInput {
-//!     let bytestream = PathBodyBuilder::from_path("docs/some-large-file.csv")
+//!     let bytestream = FsBuilder::from_path("docs/some-large-file.csv")
 //!         .with_buffer_size(32_784)
 //!         .with_file_size(123_456)
 //!         .byte_stream()
@@ -136,7 +136,7 @@ use std::task::{Context, Poll};
 mod bytestream_util;
 
 #[cfg(feature = "rt-tokio")]
-pub use self::bytestream_util::PathBodyBuilder;
+pub use self::bytestream_util::FsBuilder;
 
 /// Stream of binary data
 ///
@@ -279,7 +279,7 @@ impl ByteStream {
     /// Furthermore, a partial write MAY seek in the file and resume from the previous location.
     ///
     /// Note: If you want more control, such as specifying the size of the buffer used to read the file
-    /// or the length of the file, use [`PathBodyBuilder`](crate::byte_stream::PathBodyBuilder).
+    /// or the length of the file, use [`FsBuilder`](crate::byte_stream::FsBuilder).
     ///
     ///
     /// # Examples
@@ -293,7 +293,7 @@ impl ByteStream {
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_path(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
-        PathBodyBuilder::from_path(path).byte_stream().await
+        FsBuilder::from_path(path).byte_stream().await
     }
 
     /// Create a ByteStream from a file
@@ -303,7 +303,7 @@ impl ByteStream {
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_file(file: tokio::fs::File) -> Result<Self, Error> {
-        PathBodyBuilder::from_file(file).byte_stream().await
+        FsBuilder::from_file(file).byte_stream().await
     }
 }
 
@@ -551,7 +551,7 @@ mod tests {
     #[cfg(feature = "rt-tokio")]
     #[tokio::test]
     async fn path_based_bytestreams_with_builder() -> Result<(), Box<dyn std::error::Error>> {
-        use super::{ByteStream, PathBodyBuilder};
+        use super::{ByteStream, FsBuilder};
         use bytes::Buf;
         use http_body::Body;
         use std::io::Write;
@@ -561,7 +561,7 @@ mod tests {
         for i in 0..10000 {
             writeln!(file, "Brian was here. Briefly. {}", i)?;
         }
-        let body = PathBodyBuilder::from_path(&file)
+        let body = FsBuilder::from_path(&file)
             .with_buffer_size(16384)
             // This isn't the right file length - one shouldn't do this in real code
             .with_file_size(200)

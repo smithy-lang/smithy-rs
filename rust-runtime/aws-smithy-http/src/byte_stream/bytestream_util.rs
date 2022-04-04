@@ -57,14 +57,14 @@ impl PathBody {
 /// ```no_run
 /// # #[cfg(feature = "rt-tokio")]
 /// # {
-/// use aws_smithy_http::byte_stream::{ByteStream, PathBodyBuilder};
+/// use aws_smithy_http::byte_stream::{ByteStream, FsBuilder};
 /// use std::path::Path;
 /// struct GetObjectInput {
 ///     body: ByteStream
 /// }
 ///
 /// async fn bytestream_from_file() -> GetObjectInput {
-///     let bytestream = PathBodyBuilder::from_path("docs/some-large-file.csv")
+///     let bytestream = FsBuilder::from_path("docs/some-large-file.csv")
 ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
 ///         .with_buffer_size(32_784)
 ///         // Specify the length of the file used (skips an additional call to retrieve the size)
@@ -76,18 +76,18 @@ impl PathBody {
 /// }
 /// # }
 /// ```
-pub struct PathBodyBuilder {
+pub struct FsBuilder {
     file: Option<tokio::fs::File>,
     path: Option<PathBuf>,
     file_size: Option<u64>,
     buffer_size: usize,
 }
 
-impl PathBodyBuilder {
-    /// Create a PathBodyBuilder from a path (using a default read buffer of 4096 bytes).
+impl FsBuilder {
+    /// Create a FsBuilder from a path (using a default read buffer of 4096 bytes).
     ///
     pub fn from_path(path: impl AsRef<std::path::Path>) -> Self {
-        PathBodyBuilder {
+        FsBuilder {
             file: None,
             path: Some(path.as_ref().to_path_buf()),
             file_size: None,
@@ -95,12 +95,12 @@ impl PathBodyBuilder {
         }
     }
 
-    /// Create a PathBodyBuilder from a file (using a default read buffer of 4096 bytes).
+    /// Create a FsBuilder from a file (using a default read buffer of 4096 bytes).
     ///
-    /// NOTE: The resulting ByteStream (after calling [byte_stream](PathBodyBuilder::byte_stream)) will not be retryable ByteStream.
-    /// For a ByteStream that can be retried in the case of upstream failures, use [`PathBodyBuilder::from_path`](PathBodyBuilder::from_path)
+    /// NOTE: The resulting ByteStream (after calling [byte_stream](FsBuilder::byte_stream)) will not be retryable ByteStream.
+    /// For a ByteStream that can be retried in the case of upstream failures, use [`FsBuilder::from_path`](FsBuilder::from_path)
     pub fn from_file(file: tokio::fs::File) -> Self {
-        PathBodyBuilder {
+        FsBuilder {
             file: Some(file),
             path: None,
             file_size: None,
@@ -163,7 +163,7 @@ impl PathBodyBuilder {
 
             Ok(ByteStream::new(body))
         } else {
-            panic!("PathBodyBuilder constructed without a file or a path")
+            panic!("FsBuilder constructed without a file or a path")
         }
     }
 }
