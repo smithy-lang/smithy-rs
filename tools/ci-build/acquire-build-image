@@ -41,6 +41,7 @@ if ! docker inspect "smithy-rs-base-image:${IMAGE_TAG}" >/dev/null; then
   else
       # Otherwise, we have successfully pulled the remote image
       echo -e "${C_YELLOW}Successfully pulled remote image!${C_RESET}"
+      docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "smithy-rs-base-image:${IMAGE_TAG}"
   fi
 else
   echo -e "${C_YELLOW}Base image found locally! No retrieval or rebuild necessary.${C_RESET}"
