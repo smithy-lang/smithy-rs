@@ -249,7 +249,7 @@ class ServerOperationRegistryGenerator(
         val httpTrait = httpBindingResolver.httpTrait(this)
         val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
 
-        // TODO: Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
+        // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
         val pathSegments = httpTrait.uri.segments.map {
             "$namespace::PathSegment::" +
                 if (it.isGreedyLabel) "Greedy"
