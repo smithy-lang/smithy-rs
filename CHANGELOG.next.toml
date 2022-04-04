@@ -52,3 +52,9 @@ message = "Add caching to [AssumeRoleProvider](https://docs.rs/aws-config/latest
 references = ["smithy-rs#1296"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Update urlencoding crate to v2.1.0"
+references = ["smithy-rs#1301"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "benesch"
