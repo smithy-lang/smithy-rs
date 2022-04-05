@@ -350,13 +350,13 @@ class EndpointResolverGenerator(codegenContext: CodegenContext, private val endp
             )
             objectNode.getStringMember("service").map {
                 rustTemplate(
-                    ".service(#{SigningService}::from_static(${it.value.dq()}))",
+                    ".service(${it.value.dq()})",
                     *codegenScope,
                 )
             }
             objectNode.getStringMember("region").map {
                 rustTemplate(
-                    ".region(#{SigningRegion}::from_static(${it.value.dq()}))",
+                    ".region(${it.value.dq()})",
                     *codegenScope,
                 )
             }
