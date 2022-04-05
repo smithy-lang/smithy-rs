@@ -53,3 +53,9 @@ impl From<String> for SigningService {
         SigningService(Cow::Owned(service))
     }
 }
+
+impl From<&'static str> for SigningService {
+    fn from(service: &'static str) -> Self {
+        Self::from_static(service)
+    }
+}

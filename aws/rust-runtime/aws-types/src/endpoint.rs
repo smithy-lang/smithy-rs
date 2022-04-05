@@ -111,14 +111,14 @@ pub mod credential_scope {
 
     impl Builder {
         /// Sets the signing region.
-        pub fn region(mut self, region: SigningRegion) -> Self {
-            self.region = Some(region);
+        pub fn region(mut self, region: impl Into<SigningRegion>) -> Self {
+            self.region = Some(region.into());
             self
         }
 
         /// Sets the signing service.
-        pub fn service(mut self, service: SigningService) -> Self {
-            self.service = Some(service);
+        pub fn service(mut self, service: impl Into<SigningService>) -> Self {
+            self.service = Some(service.into());
             self
         }
 
@@ -160,5 +160,25 @@ impl ResolveAwsEndpoint for Endpoint {
             endpoint: self.clone(),
             credential_scope: Default::default(),
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::endpoint::CredentialScope;
+    use crate::region::SigningRegion;
+    use crate::SigningService;
+
+    #[test]
+    fn create_credentials_scope_from_strs() {
+        let scope = CredentialScope::builder()
+            .service("s3")
+            .region("us-east-1")
+            .build();
+        assert_eq!(scope.service(), Some(&SigningService::from_static("s3")));
+        assert_eq!(
+            scope.region(),
+            Some(&SigningRegion::from_static("us-east-1"))
+        );
     }
 }
