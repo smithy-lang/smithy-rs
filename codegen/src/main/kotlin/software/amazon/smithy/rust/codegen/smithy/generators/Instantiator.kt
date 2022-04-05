@@ -157,7 +157,9 @@ class Instantiator(
         } else {
             writer.conditionalBlock(
                 "Some(", ")",
-                conditional = ctx.builder || symbol.isOptional()
+//                conditional = ctx.builder || symbol.isOptional()
+                // TODO Client builder
+                conditional = symbol.isOptional()
             ) {
                 writer.conditionalBlock(
                     "Box::new(",
@@ -261,16 +263,19 @@ class Instantiator(
      * MyStruct::builder().field_1("hello").field_2(5).build()
      * ```
      */
+    // TODO I wonder if we can create a renderStructure that does not use the builder.
     private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, ctx: Ctx) {
         writer.write("#T::builder()", symbolProvider.toSymbol(shape))
         data.members.forEach { (key, value) ->
             val memberShape = shape.expectMember(key.value)
-            writer.withBlock(".${memberShape.setterName()}(", ")") {
+            // TODO Client uses setter name.
+            writer.withBlock(".${symbolProvider.toMemberName(memberShape)}(", ")") {
                 renderMember(this, memberShape, value, ctx)
             }
         }
         writer.write(".build()")
-        if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
+        // TODO Client
+        if (StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)) {
             writer.write(".unwrap()")
         }
     }

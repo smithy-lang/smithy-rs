@@ -226,14 +226,15 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
                 func, CargoDependency.SmithyProtocolTestHelpers(runtimeConfig), "aws_smithy_protocol_test"
             )
 
+        fun ValidateTrait() = RuntimeType("Validate", InlineDependency.validation(), namespace = "crate::validation")
+        fun Validated() = RuntimeType("Validated", InlineDependency.validation(), namespace = "crate::validation")
+
         val http = CargoDependency.Http.asType()
         fun Http(path: String): RuntimeType =
             RuntimeType(name = path, dependency = CargoDependency.Http, namespace = "http")
 
         val HttpRequestBuilder = Http("request::Builder")
         val HttpResponseBuilder = Http("response::Builder")
-
-        val Hyper = CargoDependency.Hyper.asType()
 
         fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType(
@@ -242,8 +243,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
                 "aws_smithy_http::event_stream"
             )
 
-        fun jsonErrors(runtimeConfig: RuntimeConfig) =
-            forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
+        fun jsonErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
 
         val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
 

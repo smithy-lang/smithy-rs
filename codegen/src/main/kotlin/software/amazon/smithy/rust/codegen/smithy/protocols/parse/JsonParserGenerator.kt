@@ -39,8 +39,8 @@ import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
-import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -205,8 +205,18 @@ class JsonParserGenerator(
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
                     rustBlock("${jsonName(member).dq()} =>") {
-                        withBlock("builder = builder.${member.setterName()}(", ");") {
+                        if (member.isOptional) {
+                            withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider)}(", ");") {
+                                deserializeMember(member)
+                            }
+                        } else {
+                            rust("if let Some(v) = ")
                             deserializeMember(member)
+                            rust("""
+                                {
+                                    builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider)}(v);
+                                }
+                            """)
                         }
                     }
                 }
@@ -353,28 +363,42 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
+        val returnBuilder = StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)
+        val returnType = if (returnBuilder) {
+            shape.builderSymbol(symbolProvider)
+        } else {
+            symbol
+        }
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 """
-                pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
+                pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
-                "Shape" to symbol,
+                "ReturnType" to returnType,
                 *codegenScope,
             ) {
                 startObjectOrNull {
                     Attribute.AllowUnusedMut.render(this)
                     rustTemplate("let mut builder = #{Shape}::builder();", *codegenScope, "Shape" to symbol)
                     deserializeStructInner(shape.members())
-                    withBlock("Ok(Some(builder.build()", "))") {
-                        if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
-                            rustTemplate(
-                                """.map_err(|err| #{Error}::new(
-                                #{ErrorReason}::Custom(format!("{}", err).into()), None)
-                                )?""",
-                                *codegenScope
-                            )
-                        }
+                    // Only call `build()` if the builder is not fallible. Otherwise, return the builder.
+                    if (returnBuilder) {
+                        rust("Ok(Some(builder))")
+                    } else {
+                        rust("Ok(Some(builder.build()))")
+//                        withBlock("Ok(Some(builder.build()", "))") {
+//                            if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
+//                                rustTemplate(
+//                                    """
+//                                    .map_err(|err| #{Error}::new(
+//                                        #{ErrorReason}::Custom(format!("{}", err).into()), None)
+//                                    )?
+//                                    """,
+//                                    *codegenScope
+//                                )
+//                            }
+//                        }
                     }
                 }
             }

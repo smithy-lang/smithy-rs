@@ -96,23 +96,32 @@ val Outputs = SymbolLocation("output")
  *
  * This is idempotent and will have no change if the type is already optional.
  */
-fun Symbol.makeOptional(): Symbol {
-    return if (isOptional()) {
+fun Symbol.makeOptional(): Symbol =
+    if (isOptional()) {
         this
     } else {
         val rustType = RustType.Option(this.rustType())
-        Symbol.builder().rustType(rustType)
+        Symbol.builder()
             .rustType(rustType)
             .addReference(this)
             .name(rustType.name)
             .build()
     }
+
+fun Symbol.wrapValidated(): Symbol {
+    val rustType = RustType.Validated(this.rustType())
+    return Symbol.builder()
+        .rustType(rustType)
+        .addReference(this)
+        .name(rustType.name)
+        .build()
 }
 
 /** Map the RustType of a symbol with [f] */
 fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
     val newType = f(this.rustType())
-    return Symbol.builder().rustType(newType)
+    return Symbol.builder()
+        .rustType(newType)
         .addReference(this)
         .name(newType.name)
         .build()
@@ -363,9 +372,7 @@ private const val SHAPE_KEY = "shape"
 private const val SYMBOL_DEFAULT = "symboldefault"
 private const val RENAMED_FROM_KEY = "renamedfrom"
 
-fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder {
-    return this.putProperty(RUST_TYPE_KEY, rustType)
-}
+fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProperty(RUST_TYPE_KEY, rustType)
 
 fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
     return this.putProperty(RENAMED_FROM_KEY, name)
@@ -374,9 +381,7 @@ fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
 fun Symbol.renamedFrom(): String? = this.getProperty(RENAMED_FROM_KEY, String::class.java).orNull()
 
 fun Symbol.defaultValue(): Default = this.getProperty(SYMBOL_DEFAULT, Default::class.java).orElse(Default.NoDefault)
-fun Symbol.Builder.setDefault(default: Default): Symbol.Builder {
-    return this.putProperty(SYMBOL_DEFAULT, default)
-}
+fun Symbol.Builder.setDefault(default: Default): Symbol.Builder = this.putProperty(SYMBOL_DEFAULT, default)
 
 /**
  * Type representing the default value for a given type. (eg. for Strings, this is `""`)

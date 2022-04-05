@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.rustlang
 
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 
@@ -91,11 +92,11 @@ sealed class RustType {
     }
 
     data class Reference(val lifetime: kotlin.String?, override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = member.name
+        override val name = member.name
     }
 
     data class Option(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = "Option"
+        override val name = "Option"
         override val namespace = "std::option"
 
         /** Convert `Option<T>` to `Option<&T>` **/
@@ -104,8 +105,14 @@ sealed class RustType {
         }
     }
 
+    data class Validated(override val member: RustType): RustType(), Container {
+        val runtimeType: RuntimeType = RuntimeType.Validated()
+        override val name = runtimeType.name!!
+        override val namespace = runtimeType.namespace
+    }
+
     data class Box(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = "Box"
+        override val name = "Box"
         override val namespace = "std::boxed"
     }
 
@@ -115,7 +122,7 @@ sealed class RustType {
     }
 
     data class Vec(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = "Vec"
+        override val name = "Vec"
         override val namespace = "std::vec"
     }
 
@@ -148,25 +155,21 @@ fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
 }
 
 /** Format this Rust type so that it may be used as an argument type in a function definition */
-fun RustType.asArgumentValue(name: String): String {
-    return when (this) {
-        is RustType.String,
-        is RustType.Box -> "$name.into()"
+fun RustType.asArgumentValue(name: String) =
+    when (this) {
+        is RustType.String, is RustType.Box -> "$name.into()"
         else -> name
     }
-}
 
 /**
  * For a given name, generate an `Argument` data class containing pre-formatted strings for using this type when
- * writing a Rust function
+ * writing a Rust function.
  */
-fun RustType.asArgument(name: String): Argument {
-    return Argument(
-        "$name: ${this.asArgumentType()}",
-        this.asArgumentValue(name),
-        this.render(),
-    )
-}
+fun RustType.asArgument(name: String) = Argument(
+    "$name: ${this.asArgumentType()}",
+    this.asArgumentValue(name),
+    this.render(),
+)
 
 /**
  * Render this type, including references and generic parameters.
@@ -191,6 +194,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
         is RustType.Opaque -> this.name
+        is RustType.Validated -> "${this.name}<${this.member.render(fullyQualified)}>"
     }
     return "$namespace$base"
 }
@@ -329,6 +333,8 @@ sealed class Attribute {
         val NonExhaustive = Custom("non_exhaustive")
         val AllowUnusedMut = Custom("allow(unused_mut)")
         val DocInline = Custom("doc(inline)")
+        val DocHidden = Custom("doc(hidden)")
+        val AllowDeadCode = Custom("allow(dead_code)")
     }
 
     data class Derives(val derives: Set<RuntimeType>) : Attribute() {

@@ -42,18 +42,18 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.toOptional
 import software.amazon.smithy.rust.codegen.smithy.wrapOptional
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -599,15 +599,34 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             val member = binding.member
             val parsedValue = serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
             if (parsedValue != null) {
-                withBlock("input = input.${member.setterName()}(", ");") {
-                    parsedValue(this)
-                }
+                rust("if let Some(value) = ")
+                parsedValue(this)
+                rust(
+                    """
+                    {
+                        input = input.${member.deserializerBuilderSetterName(model, symbolProvider)}(${
+                            if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                                "Some(value)"
+                            } else {
+                                "value"
+                            }
+                        });
+                    }
+                    """
+                )
+//                withBlock("input = input.${member.deserializerBuilderSetterName(model, symbolProvider)}(", ");") {
+//                    if (symbolProvider.toSymbol(binding.member).isOptional()) {
+//                        "Some(${parsedValue(this)})"
+//                    } else {
+//                        parsedValue(this)
+//                    }
+//                }
             }
         }
         serverRenderUriPathParser(this, operationShape)
         serverRenderQueryStringParser(this, operationShape)
 
-        val err = if (StructureGenerator.fallibleBuilder(inputShape, symbolProvider)) {
+        val err = if (StructureGenerator.serverHasFallibleBuilder(inputShape, model, symbolProvider)) {
             "?"
         } else ""
         rustTemplate("input.build()$err", *codegenScope)
@@ -743,8 +762,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         val deserializer = generateParsePercentEncodedStrFn(binding)
                         rustTemplate(
                             """
-                            input = input.${binding.member.setterName()}(
-                                ${symbolProvider.toOptional(binding.member, "#{deserializer}(m$index)?")}
+                            input = input.${binding.member.deserializerBuilderSetterName(model, symbolProvider)}(
+                                #{deserializer}(m$index)?
                             );
                             """.trimIndent(),
                             *codegenScope,
@@ -840,8 +859,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     rustTemplate(
                         """
                         if !seen_$memberName && k == "${it.locationName}" {
-                            input = input.${it.member.setterName()}(
-                                ${symbolProvider.toOptional(it.member, "#{deserializer}(&v)?")}
+                            input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider)}(
+                                #{deserializer}(&v)?
                             );
                             seen_$memberName = true;
                         }
@@ -913,19 +932,27 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
             if (queryParamsBinding != null) {
-                rust("input = input.${queryParamsBinding.member.setterName()}(Some(query_params));")
+                rust("input = input.${queryParamsBinding.member.deserializerBuilderSetterName(model, symbolProvider)}(${
+                    if (symbolProvider.toSymbol(queryParamsBinding.member).isOptional()) {
+                        "Some(query_params)"
+                    } else {
+                        "query_params"
+                    }
+                });")
             }
             queryBindingsTargettingCollection.forEach {
                 val memberName = symbolProvider.toMemberName(it.member)
                 rustTemplate(
                     """
-                    input = input.${it.member.setterName()}(
-                        if $memberName.is_empty() {
-                            None
-                        } else {
-                            Some($memberName)
-                        }
-                    );
+                    if !$memberName.is_empty() {
+                        input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider)}(${
+                            if (symbolProvider.toSymbol(it.member).isOptional()) {
+                                "Some($memberName)"
+                            } else {
+                                memberName
+                            }
+                        });
+                    }
                     """.trimIndent()
                 )
             }

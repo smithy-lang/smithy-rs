@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.ErrorGenerator
+import software.amazon.smithy.rust.codegen.smithy.isBoxed
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -35,6 +36,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 fun RustWriter.implBlock(structureShape: Shape, symbolProvider: SymbolProvider, block: RustWriter.() -> Unit) {
     rustBlock("impl ${symbolProvider.toSymbol(structureShape).name}") {
@@ -48,6 +50,40 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
     } else {
         safeToPrint
     }
+}
+
+// TODO Perhaps move these into `StructureGenerator`?
+
+fun MemberShape.targetNeedsValidation(model: Model, symbolProvider: SymbolProvider): Boolean {
+    val targetShape = model.expectShape(this.target)
+
+    // TODO In reality, we need to recurse but not checking ourselves.
+    val symbol = symbolProvider.toSymbol(targetShape)
+    println(symbol.name)
+    if (symbol.name == "RecursiveShapesInputOutputNested1") {
+        return false
+    }
+    // TODO Why is the symbol not boxed?
+//    if (symbol.isBoxed()) {
+//        return false
+//    }
+
+    return targetShape.isStructureShape
+        && StructureGenerator.serverHasFallibleBuilder(targetShape.asStructureShape().get(), model, symbolProvider)
+}
+
+/**
+ * The name of the builder's setter the server deserializer should use.
+ * Setter names will never hit a reserved word and therefore never need escaping.
+ */
+fun MemberShape.deserializerBuilderSetterName(model: Model, symbolProvider: SymbolProvider): String {
+    val targetShape = model.expectShape(this.target)
+    if (targetShape.isStructureShape
+        && StructureGenerator.serverHasFallibleBuilder(targetShape.asStructureShape().get(), model, symbolProvider)) {
+        return "set_${this.memberName.toSnakeCase()}"
+    }
+
+    return this.memberName.toSnakeCase()
 }
 
 class StructureGenerator(
@@ -74,16 +110,23 @@ class StructureGenerator(
 
     companion object {
         /** Returns whether a structure shape requires a fallible builder to be generated. */
+        // TODO Rename to `hasFallibleBuilder`.
         fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
             // All operation inputs should have fallible builders in case a new required field is added in the future.
             structureShape.hasTrait<SyntheticInputTrait>() ||
                 structureShape
-                    .allMembers
-                    .values.map { symbolProvider.toSymbol(it) }.any {
+                    .members()
+                    .map { symbolProvider.toSymbol(it) }.any {
                         // If any members are not optional && we can't use a default, we need to
-                        // generate a fallible builder
+                        // generate a fallible builder.
                         !it.isOptional() && !it.canUseDefault()
                     }
+
+        // TODO Ensure server subproject uses this function
+        // TODO Not quite right. @box not taken into account. Also shape builders / constrained shapes
+        fun serverHasFallibleBuilder(structureShape: StructureShape, model: Model, symbolProvider: SymbolProvider): Boolean =
+            structureShape.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
+                    || structureShape.members().any { it.targetNeedsValidation(model, symbolProvider) }
     }
 
     /**
@@ -104,7 +147,8 @@ class StructureGenerator(
         } else ""
     }
 
-    /** Render a custom debug implementation
+    /**
+     * Render a custom debug implementation
      * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
      */
     private fun renderDebugImpl() {
@@ -123,6 +167,18 @@ class StructureGenerator(
                 rust("formatter.finish()")
             }
         }
+    }
+
+    private fun renderValidateImpl() {
+        writer.rust(
+            """
+            impl #T for $name {
+                type Unvalidated = #T;
+            }
+            """,
+            RuntimeType.ValidateTrait(),
+            shape.builderSymbol(symbolProvider)
+        )
     }
 
     private fun renderStructureImpl() {
@@ -170,6 +226,7 @@ class StructureGenerator(
 
         renderStructureImpl()
         renderDebugImpl()
+        renderValidateImpl()
     }
 
     private fun RustWriter.forEachMember(
