@@ -3,19 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use structopt::StructOpt;
+use clap::Parser;
 use tracing_subscriber::{filter::EnvFilter, prelude::*};
 
 mod generate_matrix;
 mod run;
 
-#[derive(StructOpt, Debug)]
-#[structopt(name = "canary-runner")]
+#[derive(Debug, Parser)]
+#[clap(version, about)]
 enum Opt {
-    #[structopt(alias = "generate-matrix")]
+    /// Generates a GitHub Actions test matrix for the canary
+    #[clap(alias = "generate-matrix")]
     GenerateMatrix(generate_matrix::GenerateMatrixOpt),
 
-    #[structopt(alias = "run")]
+    /// Builds, uploads, and invokes the canary as a Lambda
+    #[clap(alias = "run")]
     Run(run::RunOpt),
 }
 
@@ -29,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer().with_target(false))
         .init();
 
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     match opt {
         Opt::GenerateMatrix(subopt) => generate_matrix::generate_matrix(subopt).await,
         Opt::Run(subopt) => run::run(subopt).await,
