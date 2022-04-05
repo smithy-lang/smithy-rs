@@ -72,6 +72,7 @@ class EndpointConfigCustomization(private val codegenContext: CodegenContext, pr
     ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val resolveAwsEndpoint = runtimeConfig.awsEndpoint().asType().copy(name = "ResolveAwsEndpoint")
+    private val moduleUseName = codegenContext.moduleUseName()
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rust(
@@ -82,24 +83,37 @@ class EndpointConfigCustomization(private val codegenContext: CodegenContext, pr
             is ServiceConfig.BuilderStruct ->
                 rust("endpoint_resolver: Option<::std::sync::Arc<dyn #T>>,", resolveAwsEndpoint)
             ServiceConfig.BuilderImpl ->
-                rust(
+                rustTemplate(
                     """
-                    // TODO(docs): include an example of using a static endpoint
-                    /// Sets the endpoint resolver to use when making requests.
-                    pub fn endpoint_resolver(mut self, endpoint_resolver: impl #T + 'static) -> Self {
+                    /// Overrides the endpoint resolver to use when making requests.
+                    ///
+                    /// When unset, the client will used a generated endpoint resolver based on the endpoint metadata
+                    /// for `$moduleUseName`.
+                    ///
+                    /// ## Examples
+                    /// ```no_run
+                    /// use #{aws_types}::region::Region;
+                    /// use $moduleUseName::config::{Builder, Config};
+                    /// use $moduleUseName::Endpoint;
+                    ///
+                    /// let config = $moduleUseName::Config::builder()
+                    ///     .endpoint_resolver(
+                    ///         Endpoint::immutable("http://localhost:8080".parse().expect("valid URI"))
+                    ///     ).build();
+                    /// ```
+                    pub fn endpoint_resolver(mut self, endpoint_resolver: impl #{ResolveAwsEndpoint} + 'static) -> Self {
                         self.endpoint_resolver = Some(::std::sync::Arc::new(endpoint_resolver));
                         self
                     }
 
-                    // TODO(docs): include an example of using a static endpoint
                     /// Sets the endpoint resolver to use when making requests.
-                    pub fn set_endpoint_resolver(&mut self, endpoint_resolver: Option<::std::sync::Arc<dyn #T>>) -> &mut Self {
+                    pub fn set_endpoint_resolver(&mut self, endpoint_resolver: Option<std::sync::Arc<dyn #{ResolveAwsEndpoint}>>) -> &mut Self {
                         self.endpoint_resolver = endpoint_resolver;
                         self
                     }
                     """,
-                    resolveAwsEndpoint,
-                    resolveAwsEndpoint
+                    "ResolveAwsEndpoint" to resolveAwsEndpoint,
+                    "aws_types" to awsTypes(runtimeConfig).asType()
                 )
             ServiceConfig.BuilderBuild -> {
                 val resolverGenerator = EndpointResolverGenerator(codegenContext, endpointData)

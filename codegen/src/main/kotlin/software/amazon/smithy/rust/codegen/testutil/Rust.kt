@@ -24,10 +24,12 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.dq
@@ -122,7 +124,7 @@ object TestWorkspace {
  * "cargo test".runCommand(path)
  * ```
  */
-fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectNode.builder().build(), addModuleToEventStreamAllowList: Boolean = false): Pair<PluginContext, Path> {
+fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectNode.builder().build(), addModuleToEventStreamAllowList: Boolean = false, service: String? = null, runtimeConfig: RuntimeConfig? = null): Pair<PluginContext, Path> {
     val testDir = TestWorkspace.subproject()
     val moduleName = "test_${testDir.nameWithoutExtension}"
     val testPath = testDir.toPath()
@@ -132,11 +134,12 @@ fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectN
         .withMember("moduleVersion", Node.from("1.0.0"))
         .withMember("moduleDescription", Node.from("test"))
         .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
+        .letIf(service != null) { it.withMember("service", service) }
         .withMember(
             "runtimeConfig",
             Node.objectNodeBuilder().withMember(
                 "relativePath",
-                Node.from((TestRuntimeConfig.runtimeCrateLocation).path)
+                Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path)
             ).build()
         )
 
@@ -187,7 +190,7 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
         }
     """.asSmithyModel()
     this.finalize(
-        rustSettings(stubModel),
+        rustSettings(),
         stubModel,
         manifestCustomizations = emptyMap(),
         libRsCustomizations = listOf(),
@@ -208,7 +211,7 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     }
 }
 
-fun TestWriterDelegator.rustSettings(stubModel: Model = "namespace test".asSmithyModel()) =
+fun TestWriterDelegator.rustSettings() =
     RustSettings(
         ShapeId.from("fake#Fake"),
         "test_${baseDir.toFile().nameWithoutExtension}",
@@ -218,8 +221,7 @@ fun TestWriterDelegator.rustSettings(stubModel: Model = "namespace test".asSmith
         moduleRepository = null,
         runtimeConfig = TestRuntimeConfig,
         codegenConfig = CodegenConfig(),
-        license = null,
-        model = stubModel
+        license = null
     )
 
 fun String.shouldParseAsRust() {

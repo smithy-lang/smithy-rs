@@ -73,9 +73,7 @@ pub type BoxError = Box<dyn Error + Send + Sync + 'static>;
 ///         Endpoint::immutable(Uri::from_static("http://localhost:8080"))
 ///     );
 /// ```
-/// In the future, each AWS service will generate their own implementation of `ResolveAwsEndpoint`. This implementation
-/// may use endpoint discovery. The list of supported regions for a given service
-/// will be codegenerated from `endpoints.json`.
+/// Each AWS service generates their own implementation of `ResolveAwsEndpoint`.
 pub trait ResolveAwsEndpoint: Send + Sync + Debug {
     /// Resolves the AWS endpoint for a given region.
     // TODO(https://github.com/awslabs/smithy-rs/issues/866): Create `ResolveEndpointError`
