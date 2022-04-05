@@ -8,7 +8,7 @@
 //! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 
 use self::future::RouterFuture;
-use self::request_spec::RequestSpec;
+use self::request_spec::{AwsJsonRequestSpec, RestRequestSpec};
 use crate::body::{boxed, Body, BoxBody, HttpBody};
 use crate::protocols::Protocol;
 use crate::runtime_error::{RuntimeError, RuntimeErrorKind};
@@ -57,7 +57,6 @@ pub use self::{into_make_service::IntoMakeService, route::Route};
 #[derive(Debug)]
 pub struct Router<S, B = Body> {
     routes: Vec<(Route<B>, S)>,
-    protocol: Protocol,
 }
 
 impl<S, B> Clone for Router<S, B>
@@ -67,7 +66,6 @@ where
     fn clone(&self) -> Self {
         Self {
             routes: self.routes.clone(),
-            protocol: self.protocol,
         }
     }
 }
@@ -75,34 +73,7 @@ where
 impl<S, B> Router<S, B>
 where
     B: Send + 'static,
-    S: RequestSpec,
 {
-    /// Create a new `Router` from a vector of pairs of request specs and services and a `Protocol`.
-    ///
-    /// If the vector is empty the router will respond `404 Not Found` to all requests.
-    #[doc(hidden)]
-    pub fn from_box_clone_service_iter<T>(routes: T, protocol: Protocol) -> Self
-    where
-        T: IntoIterator<
-            Item = (
-                tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
-                S,
-            ),
-        >,
-    {
-        let mut routes: Vec<(Route<B>, S)> = routes
-            .into_iter()
-            .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
-            .collect();
-
-        // Sort them once by specifity, with the more specific routes sorted before the less
-        // specific ones, so that when routing a request we can simply iterate through the routes
-        // and pick the first one that matches.
-        routes.sort_by_key(|(_route, request_spec)| std::cmp::Reverse(request_spec.rank()));
-
-        Self { routes, protocol }
-    }
-
     /// Convert this router into a [`MakeService`], that is a [`Service`] whose
     /// response is another service.
     ///
@@ -139,17 +110,64 @@ where
             .into_iter()
             .map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec))
             .collect();
-        Router {
-            routes,
-            protocol: self.protocol,
-        }
+        Router { routes }
     }
 }
 
-impl<S, B> Service<Request<B>> for Router<S, B>
+impl<B> Router<RestRequestSpec, B> {
+    /// Create a new `Router` from a vector of pairs of request specs and services and a `Protocol`.
+    ///
+    /// If the vector is empty the router will respond `404 Not Found` to all requests.
+    #[doc(hidden)]
+    pub fn from_box_clone_service_iter<T>(routes: T) -> Self
+    where
+        T: IntoIterator<
+            Item = (
+                tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
+                RestRequestSpec,
+            ),
+        >,
+    {
+        let mut routes: Vec<(Route<B>, RestRequestSpec)> = routes
+            .into_iter()
+            .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
+            .collect();
+
+        // Sort them once by specifity, with the more specific routes sorted before the less
+        // specific ones, so that when routing a request we can simply iterate through the routes
+        // and pick the first one that matches.
+        routes.sort_by_key(|(_route, request_spec)| std::cmp::Reverse(request_spec.rank()));
+
+        Self { routes }
+    }
+}
+
+impl<B> Router<AwsJsonRequestSpec, B> {
+    /// Create a new `Router` from a vector of pairs of request specs and services and a `Protocol`.
+    ///
+    /// If the vector is empty the router will respond `404 Not Found` to all requests.
+    #[doc(hidden)]
+    pub fn from_box_clone_service_iter<T>(routes: T) -> Self
+    where
+        T: IntoIterator<
+            Item = (
+                tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
+                AwsJsonRequestSpec,
+            ),
+        >,
+    {
+        let mut routes: Vec<(Route<B>, AwsJsonRequestSpec)> = routes
+            .into_iter()
+            .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
+            .collect();
+
+        Self { routes }
+    }
+}
+
+impl<B> Service<Request<B>> for Router<RestRequestSpec, B>
 where
     B: Send + 'static,
-    S: RequestSpec,
 {
     type Response = Response<BoxBody>;
     type Error = Infallible;
@@ -184,13 +202,104 @@ where
             )
         } else {
             let error = RuntimeError {
-                protocol: self.protocol,
+                protocol: Protocol::RestJson1,
                 kind: RuntimeErrorKind::UnknownOperation,
             };
             RouterFuture::from_response(error.into_response())
         }
     }
 }
+
+impl<B> Service<Request<B>> for Router<AwsJsonRequestSpec, B>
+where
+    B: Send + 'static,
+{
+    type Response = Response<BoxBody>;
+    type Error = Infallible;
+    type Future = RouterFuture<B>;
+
+    #[inline]
+    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    #[inline]
+    fn call(&mut self, req: Request<B>) -> Self::Future {
+        let mut method_not_allowed = false;
+
+        for (route, request_spec) in &self.routes {
+            match request_spec.matches(&req) {
+                request_spec::Match::Yes => {
+                    return RouterFuture::from_oneshot(route.clone().oneshot(req));
+                }
+                request_spec::Match::MethodNotAllowed => method_not_allowed = true,
+                // Continue looping to see if another route matches.
+                request_spec::Match::No => continue,
+            }
+        }
+
+        if method_not_allowed {
+            RouterFuture::from_response(
+                Response::builder()
+                    .status(StatusCode::METHOD_NOT_ALLOWED)
+                    .body(crate::body::empty())
+                    .unwrap(),
+            )
+        } else {
+            let error = RuntimeError {
+                protocol: Protocol::AwsJson10,
+                kind: RuntimeErrorKind::UnknownOperation,
+            };
+            RouterFuture::from_response(error.into_response())
+        }
+    }
+}
+
+// impl<S, B> Service<Request<B>> for Router<S, B>
+// where
+//     B: Send + 'static,
+//     S: RequestSpec,
+// {
+//     type Response = Response<BoxBody>;
+//     type Error = Infallible;
+//     type Future = RouterFuture<B>;
+
+//     #[inline]
+//     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+//         Poll::Ready(Ok(()))
+//     }
+
+//     #[inline]
+//     fn call(&mut self, req: Request<B>) -> Self::Future {
+//         let mut method_not_allowed = false;
+
+//         for (route, request_spec) in &self.routes {
+//             match request_spec.matches(&req) {
+//                 request_spec::Match::Yes => {
+//                     return RouterFuture::from_oneshot(route.clone().oneshot(req));
+//                 }
+//                 request_spec::Match::MethodNotAllowed => method_not_allowed = true,
+//                 // Continue looping to see if another route matches.
+//                 request_spec::Match::No => continue,
+//             }
+//         }
+
+//         if method_not_allowed {
+//             RouterFuture::from_response(
+//                 Response::builder()
+//                     .status(StatusCode::METHOD_NOT_ALLOWED)
+//                     .body(crate::body::empty())
+//                     .unwrap(),
+//             )
+//         } else {
+//             let error = RuntimeError {
+//                 protocol: self.protocol,
+//                 kind: RuntimeErrorKind::UnknownOperation,
+//             };
+//             RouterFuture::from_response(error.into_response())
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -210,11 +319,11 @@ mod tests {
         r
     }
 
-    /// A REST service that returns its name and the request's URI in the response body.
+    /// A service that returns its name and the request's URI in the response body.
     #[derive(Clone)]
-    struct RestNamedEchoUriService(String);
+    struct NamedEchoUriService(String);
 
-    impl<B> Service<Request<B>> for RestNamedEchoUriService {
+    impl<B> Service<Request<B>> for NamedEchoUriService {
         type Response = Response<BoxBody>;
         type Error = Infallible;
         type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -246,7 +355,7 @@ mod tests {
     // This test is a rewrite of `mux.spec.ts`.
     // https://github.com/awslabs/smithy-typescript/blob/fbf97a9bf4c1d8cf7f285ea7c24e1f0ef280142a/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.spec.ts
     #[tokio::test]
-    async fn rest_simple_routing() {
+    async fn simple_routing() {
         let request_specs: Vec<(RestRequestSpec, &str)> = vec![
             (
                 RestRequestSpec::from_parts(
@@ -296,7 +405,7 @@ mod tests {
         let mut router = Router::from_box_clone_service_iter(
             request_specs.into_iter().map(|(spec, svc_name)| {
                 (
-                    tower::util::BoxCloneService::new(RestNamedEchoUriService(String::from(svc_name))),
+                    tower::util::BoxCloneService::new(NamedEchoUriService(String::from(svc_name))),
                     spec,
                 )
             }),
@@ -349,7 +458,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rest_basic_pattern_conflict_avoidance() {
+    async fn basic_pattern_conflict_avoidance() {
         let request_specs: Vec<(RestRequestSpec, &str)> = vec![
             (
                 RestRequestSpec::from_parts(
@@ -392,7 +501,7 @@ mod tests {
         let mut router = Router::from_box_clone_service_iter(
             request_specs.into_iter().map(|(spec, svc_name)| {
                 (
-                    tower::util::BoxCloneService::new(RestNamedEchoUriService(String::from(svc_name))),
+                    tower::util::BoxCloneService::new(NamedEchoUriService(String::from(svc_name))),
                     spec,
                 )
             }),

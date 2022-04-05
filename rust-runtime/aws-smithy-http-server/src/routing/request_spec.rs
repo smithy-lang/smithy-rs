@@ -6,6 +6,8 @@
 use http::Request;
 use regex::Regex;
 
+use crate::protocols::Protocol;
+
 #[derive(Debug, Clone)]
 pub enum PathSegment {
     Literal(String),
@@ -110,21 +112,6 @@ impl From<&PathSpec> for Regex {
     }
 }
 
-/// Trait definition of a request specification, used to define different routing strategies.
-pub trait RequestSpec {
-    /// Validate the route against the current request and return a [`Match`] enum.
-    fn matches<B>(&self, req: &Request<B>) -> Match;
-
-    /// This method is used to rank how "important" is a route as some protocols defined by Smithy
-    /// (Ie RestJson1 or RestXml) can have conflicting routes.
-    ///
-    /// Other protocols (Ie AwsJson 1.0 and 1.1) cannot have conflicting routes since every
-    /// request MUST be sent to the root URL (/), hence the default implementation returns 0.
-    fn rank(&self) -> usize {
-        0
-    }
-}
-
 /// Request specification for AwsJson 1.0 and 1.1.
 /// Both protocols routing is based on the header `x-amz-target`, which holds the selected operation.
 #[derive(Debug, Clone)]
@@ -139,8 +126,8 @@ impl AwsJsonRequestSpec {
     }
 }
 
-impl RequestSpec for AwsJsonRequestSpec {
-    fn matches<B>(&self, req: &Request<B>) -> Match {
+impl AwsJsonRequestSpec {
+    pub(super) fn matches<B>(&self, req: &Request<B>) -> Match {
         // We first check for the method and URI of the current HTTP request.
         // Every request for the AwsJson 1.0 and 1.1 protocol MUST be sent to the root URL (/)
         // using the HTTP "POST" method.
@@ -172,24 +159,27 @@ pub struct RestRequestSpec {
     method: http::Method,
     uri_spec: UriSpec,
     uri_path_regex: Regex,
+    protocol: Protocol,
 }
 
 impl RestRequestSpec {
-    pub fn new(method: http::Method, uri_spec: UriSpec) -> Self {
+    pub fn new(method: http::Method, uri_spec: UriSpec, protocol: Protocol) -> Self {
         let uri_path_regex = (&uri_spec.path_and_query.path_segments).into();
         RestRequestSpec {
             method,
             uri_spec,
             uri_path_regex,
+            protocol,
         }
     }
 
-    // Helper function to build a `RequestSpec`.
+    // Helper function to build a `RestRequestSpec`.
     #[cfg(test)]
     pub fn from_parts(
         method: http::Method,
         path_segments: Vec<PathSegment>,
         query_segments: Vec<QuerySegment>,
+        protocol: Protocol,
     ) -> Self {
         Self::new(
             method,
@@ -200,12 +190,13 @@ impl RestRequestSpec {
                     query_segments: QuerySpec::from_vector_unchecked(query_segments),
                 },
             },
+            protocol,
         )
     }
 }
 
-impl RequestSpec for RestRequestSpec {
-    fn matches<B>(&self, req: &Request<B>) -> Match {
+impl RestRequestSpec {
+    pub(super) fn matches<B>(&self, req: &Request<B>) -> Match {
         if let Some(_host_prefix) = &self.uri_spec.host_prefix {
             todo!("Look at host prefix");
         }
@@ -266,14 +257,14 @@ impl RequestSpec for RestRequestSpec {
         }
     }
 
-    /// A measure of how "important" a `RequestSpec` is. The more specific a `RequestSpec` is, the
+    /// A measure of how "important" a `RestRequestSpec` is. The more specific a `RestRequestSpec` is, the
     /// higher it ranks in importance. Specificity is measured by the number of segments plus the
     /// number of query string literals in its URI pattern, so `/{Bucket}/{Key}?query` is more
     /// specific than `/{Bucket}/{Key}`, which is more specific than `/{Bucket}`, which is more
     /// specific than `/`.
     ///
     /// This rank effectively induces a total order, but we don't implement as `Ord` for
-    /// `RequestSpec` because it would appear in its public interface.
+    /// `RestRequestSpec` because it would appear in its public interface.
     ///
     /// # Why do we need this?
     ///
@@ -295,7 +286,7 @@ impl RequestSpec for RestRequestSpec {
     /// updates the spec to define the behavior, update our implementation.
     ///
     /// [the TypeScript sSDK is implementing]: https://github.com/awslabs/smithy-typescript/blob/d263078b81485a6a2013d243639c0c680343ff47/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.ts#L59.
-    fn rank(&self) -> usize {
+    pub(super) fn rank(&self) -> usize {
         self.uri_spec.path_and_query.path_segments.0.len() + self.uri_spec.path_and_query.query_segments.0.len()
     }
 }
@@ -510,26 +501,26 @@ mod tests {
     fn aws_json_matches() {
         let reqs = vec![
             (
-                &Method::POST,
+                Method::POST,
                 "/",
                 Some(HeaderValue::from_str("Service.operation").unwrap()),
                 Match::Yes,
             ),
-            (&Method::POST, "/", None, Match::No),
+            (Method::POST, "/", None, Match::No),
             (
-                &Method::GET,
+                Method::GET,
                 "/",
                 Some(HeaderValue::from_str("Service.operation").unwrap()),
                 Match::MethodNotAllowed,
             ),
             (
-                &Method::POST,
+                Method::POST,
                 "/something",
                 Some(HeaderValue::from_str("Service.operation").unwrap()),
                 Match::No,
             ),
             (
-                &Method::POST,
+                Method::POST,
                 "/",
                 Some(HeaderValue::from_str("Service.unknown_operation").unwrap()),
                 Match::No,
