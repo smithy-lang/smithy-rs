@@ -660,6 +660,12 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCodeDefaultsToModeledCode", TestType.Response),
 
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1302)
+            FailingTest(RestJson, "RestJsonStreamingTraitsWithNoBlobBody", TestType.Request),
+            FailingTest(RestJson, "RestJsonStreamingTraitsWithNoBlobBody", TestType.Response),
+            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithNoBlobBody", TestType.Request),
+            FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithNoBlobBody", TestType.Response),
+
             FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonAccept", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedAccept", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonWithPayloadExpectsModeledAccept", TestType.MalformedRequest),
