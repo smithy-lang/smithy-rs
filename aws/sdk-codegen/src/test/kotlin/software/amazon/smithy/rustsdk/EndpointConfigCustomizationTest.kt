@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.generatePluginContext
-import software.amazon.smithy.rust.codegen.testutil.stubCustomization
+import software.amazon.smithy.rust.codegen.testutil.stubConfigCustomization
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.runCommand
 
@@ -41,13 +41,17 @@ internal class EndpointConfigCustomizationTest {
         }
 
         @aws.api#service(sdkId: "Test", endpointPrefix: "iam")
+        @restJson1
         service NoRegions {
-            version: "123"
+            version: "123",
+            operations: [Nop]
         }
 
         @aws.api#service(sdkId: "Test")
+        @restJson1
         service NoEndpointPrefix {
-            version: "123"
+            version: "123",
+            operations: [Nop]
         }
     """.asSmithyModel()
 
@@ -120,10 +124,10 @@ internal class EndpointConfigCustomizationTest {
                 codegenContext: CodegenContext,
                 baseCustomizations: List<ConfigCustomization>
             ): List<ConfigCustomization> {
-                return baseCustomizations + stubCustomization("a") + EndpointConfigCustomization(
+                return baseCustomizations + stubConfigCustomization("a") + EndpointConfigCustomization(
                     codegenContext,
                     endpointConfig
-                ) + stubCustomization("b")
+                ) + stubConfigCustomization("b")
             }
 
             override fun libRsCustomizations(
@@ -179,7 +183,7 @@ internal class EndpointConfigCustomizationTest {
 
     @Test
     fun `support region-agnostic services`() {
-        validateEndpointCustomizationForService("test#TestService") { crate ->
+        validateEndpointCustomizationForService("test#NoRegions") { crate ->
             crate.lib {
                 it.addDependency(awsTypes(AwsTestRuntimeConfig))
                 it.addDependency(CargoDependency.Http)
