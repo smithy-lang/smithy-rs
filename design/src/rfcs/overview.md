@@ -11,4 +11,4 @@
 - [RFC-0009: Example Consolidation](./rfc0009_example_consolidation.md)
 - [RFC-0010: Waiters](./rfc0010_waiters.md)
 - [RFC-0011: Publishing Alpha to Crates.io](./rfc0011_crates_io_alpha_publishing.md)
-- [RFC-0012: Publishing to Crates.io](./rfc0012_crates_io_publishing.md)
+- [RFC-0012: Unsynchronized Crate Versioning](./rfc0012_unsynchronized_versioning.md)
