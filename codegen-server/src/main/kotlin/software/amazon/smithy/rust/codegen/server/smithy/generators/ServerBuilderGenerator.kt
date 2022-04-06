@@ -79,7 +79,6 @@ class ServerBuilderGenerator(
         } else {
             renderFromBuilderImpl(writer)
         }
-        renderValidateImpl(writer)
 
         writer.docs("A builder for #D.", structureSymbol)
         // Matching derives to the main structure, - `PartialEq`, + `Default` since we are a builder and everything is optional.
@@ -105,18 +104,6 @@ class ServerBuilderGenerator(
             }
             renderBuildFn(this)
         }
-    }
-
-    private fun renderValidateImpl(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            impl #{ValidateTrait} for #{Structure} {
-                type Unvalidated = Builder;
-            }
-            """,
-            "ValidateTrait" to RuntimeType.ValidateTrait(),
-            "Structure" to structureSymbol,
-        )
     }
 
     // TODO This impl does not take into account sensitive trait.
