@@ -128,7 +128,7 @@ so all model changes will result in a `minor` version bump during this phase.
 
 Overall, determining a generated crate's version number looks as follows:
 
-![Phase 1: How to version a generated crate](rfc0012_unsynchronized_versioning/phase1_generated_crate_version.svg)
+![Phase 1: How to version a generated crate](rfc0012_independent_crate_versioning/phase1_generated_crate_version.svg)
 
 - __A: smithy-rs changed?__: Compare the `smithy_rs_version` in the previous `versions.toml` with the
   next `versions.toml` file, and if the values are different, consider [smithy-rs] to have changed.
@@ -146,7 +146,7 @@ and repeated when merging into `aws-sdk-rust/main`.
 
 The following checks need to be run for runtime crates:
 
-![Phase 1: How to validate a runtime version bump](rfc0012_unsynchronized_versioning/phase1_runtime_crate_version_checks.svg)
+![Phase 1: How to validate a runtime version bump](rfc0012_independent_crate_versioning/phase1_runtime_crate_version_checks.svg)
 
 - __A: Crate has changed?__ The crate's source files and manifest will be hashed for the previous version
   and the next version. If these hashes match, then the crate is considered unchanged.
