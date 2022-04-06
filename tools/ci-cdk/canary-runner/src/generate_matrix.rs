@@ -4,18 +4,20 @@
  */
 
 use anyhow::Result;
+use clap::Parser;
 use crates_io_api::AsyncClient;
 use lazy_static::lazy_static;
 use serde::Serialize;
 use std::time::Duration;
-use structopt::StructOpt;
 
-#[derive(StructOpt, Debug)]
+#[derive(Debug, Parser)]
 pub struct GenerateMatrixOpt {
-    #[structopt(short, long)]
+    /// Number of previous SDK versions to run the canary against
+    #[clap(short, long)]
     sdk_versions: u8,
 
-    #[structopt(short, long)]
+    /// Versions of Rust to compile against
+    #[clap(short, long, multiple_values = true)]
     rust_versions: Vec<String>,
 }
 

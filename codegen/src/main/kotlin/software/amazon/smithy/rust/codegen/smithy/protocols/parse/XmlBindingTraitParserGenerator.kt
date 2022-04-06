@@ -44,8 +44,8 @@ import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.smithy.isBoxed
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.XmlNameIndex
 import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
@@ -356,7 +356,7 @@ class XmlBindingTraitParserGenerator(
         val target = model.expectShape(memberShape.target)
         val symbol = symbolProvider.toSymbol(memberShape)
         conditionalBlock("Some(", ")", forceOptional || symbol.isOptional()) {
-            conditionalBlock("Box::new(", ")", symbol.isBoxed()) {
+            conditionalBlock("Box::new(", ")", symbol.isRustBoxed()) {
                 when (target) {
                     is StringShape, is BooleanShape, is NumberShape, is TimestampShape, is BlobShape ->
                         parsePrimitiveInner(memberShape) {
