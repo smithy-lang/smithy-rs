@@ -13,7 +13,11 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustom
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
 
-fun stubCustomization(name: String): ConfigCustomization {
+/**
+ * Test helper to produce a valid config customization to test that a [ConfigCustomization] can be used in conjunction
+ * with other [ConfigCustomization]s.
+ */
+fun stubConfigCustomization(name: String): ConfigCustomization {
     return object : ConfigCustomization() {
         override fun section(section: ServiceConfig): Writable = writable {
             when (section) {
@@ -33,6 +37,7 @@ fun stubCustomization(name: String): ConfigCustomization {
                     $name: self.$name.unwrap_or(123),
                     """
                 )
+                else -> emptySection
             }
         }
     }
@@ -55,7 +60,7 @@ fun validateConfigCustomizations(
 }
 
 fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDelegator): TestWriterDelegator {
-    val customizations = listOf(stubCustomization("a")) + customization + stubCustomization("b")
+    val customizations = listOf(stubConfigCustomization("a")) + customization + stubConfigCustomization("b")
     val generator = ServiceConfigGenerator(customizations = customizations.toList())
     project.withModule(RustModule.Config) {
         generator.render(it)

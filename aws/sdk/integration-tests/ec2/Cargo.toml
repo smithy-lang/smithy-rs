@@ -1,7 +1,7 @@
 [package]
 name = "ec2-tests"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [dev-dependencies]
 aws-sdk-ec2 = { path = "../../build/aws-sdk/sdk/ec2" }

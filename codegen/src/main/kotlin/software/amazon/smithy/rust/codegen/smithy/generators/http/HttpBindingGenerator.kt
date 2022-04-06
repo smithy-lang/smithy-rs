@@ -173,7 +173,6 @@ class HttpBindingGenerator(
      * Generate a function to deserialize `[binding]` from the request / response payload.
      */
     fun generateDeserializePayloadFn(
-        operationShape: OperationShape,
         binding: HttpBindingDescriptor,
         errorT: RuntimeType,
         // Deserialize a single structure, union or document member marked as a payload

@@ -88,7 +88,7 @@ class RustWriterTest {
             |[a link](asdf)
             """.trimMargin()
         )
-        sut.rustBlock("fn main()") { }
+        sut.rustBlock("pub fn foo()") { }
         sut.compileAndTest()
         sut.toString() shouldContain "Top level module"
     }

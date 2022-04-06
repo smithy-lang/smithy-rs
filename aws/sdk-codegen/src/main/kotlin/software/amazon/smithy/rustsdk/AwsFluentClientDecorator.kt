@@ -151,8 +151,8 @@ private class AwsFluentClientExtensions(types: Types) {
 
                 /// Creates a new client from a shared config.
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
-                pub fn new(config: &#{aws_types}::config::Config) -> Self {
-                    Self::from_conf(config.into())
+                pub fn new(sdk_config: &#{aws_types}::sdk_config::SdkConfig) -> Self {
+                    Self::from_conf(sdk_config.into())
                 }
 
                 /// Creates a new client from the service [`Config`](crate::Config).
@@ -225,11 +225,11 @@ private class AwsFluentClientDocs(codegenContext: CodegenContext) : FluentClient
                         /// ```rust,no_run
                         /// use #{aws_config}::RetryConfig;
                         /// ## async fn docs() {
-                        ///     let shared_config = #{aws_config}::load_from_env().await;
-                        ///     let config = $crateName::config::Builder::from(&shared_config)
-                        ///         .retry_config(RetryConfig::disabled())
-                        ///         .build();
-                        ///     let client = $crateName::Client::from_conf(config);
+                        /// let shared_config = #{aws_config}::load_from_env().await;
+                        /// let config = $crateName::config::Builder::from(&shared_config)
+                        ///   .retry_config(RetryConfig::disabled())
+                        ///   .build();
+                        /// let client = $crateName::Client::from_conf(config);
                         /// ## }
                         """,
                         *codegenScope

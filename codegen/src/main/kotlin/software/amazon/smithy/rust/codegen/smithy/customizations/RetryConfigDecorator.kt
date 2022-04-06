@@ -143,6 +143,7 @@ class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomiz
                 """retry_config: self.retry_config,""",
                 *codegenScope
             )
+            else -> emptySection
         }
     }
 }

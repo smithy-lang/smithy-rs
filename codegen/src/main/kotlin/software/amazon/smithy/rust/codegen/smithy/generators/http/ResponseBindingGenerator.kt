@@ -26,12 +26,10 @@ class ResponseBindingGenerator(
         httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
 
     fun generateDeserializePayloadFn(
-        operationShape: OperationShape,
         binding: HttpBindingDescriptor,
         errorT: RuntimeType,
         payloadParser: RustWriter.(String) -> Unit
     ): RuntimeType = httpBindingGenerator.generateDeserializePayloadFn(
-        operationShape,
         binding,
         errorT,
         payloadParser

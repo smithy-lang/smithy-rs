@@ -13,7 +13,7 @@ build.
 Once the example has been built successfully the first time, idiomatic `cargo`
 can be used directly.
 
-`make dist-clean` can be used for a complete cleanup of all artefacts.
+`make distclean` can be used for a complete cleanup of all artefacts.
 
 ## Run
 
@@ -29,4 +29,4 @@ More info can be found in the `tests` folder of `pokemon_service` package.
 
 ## Benchmarks
 
-TBD.
+Please see [BENCHMARKS.md](/rust-runtime/aws-smithy-http-server/examples/BENCHMARKS.md).

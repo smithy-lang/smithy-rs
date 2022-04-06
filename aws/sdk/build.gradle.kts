@@ -187,22 +187,19 @@ task("relocateExamples") {
     outputs.dir(outputDir)
 }
 
-task("fixExampleManifests") {
+task<ExecRustBuildTool>("fixExampleManifests") {
     description = "Adds dependency path and corrects version number of examples after relocation"
-    doLast {
-        if (awsServices.examples.isNotEmpty()) {
-            exec {
-                workingDir(sdkVersionerToolPath)
-                commandLine(
-                    "cargo", "run", "--",
-                    outputDir.resolve("examples").absolutePath,
-                    "--sdk-path", "../../sdk",
-                    "--sdk-version", getSdkVersion(),
-                    "--smithy-version", getSmithyRsVersion()
-                )
-            }
-        }
-    }
+    enabled = awsServices.examples.isNotEmpty()
+
+    toolPath = sdkVersionerToolPath
+    binaryName = "sdk-versioner"
+    arguments = listOf(
+        outputDir.resolve("examples").absolutePath,
+        "--sdk-path", "../../sdk",
+        "--sdk-version", getSdkVersion(),
+        "--smithy-version", getSmithyRsVersion()
+    )
+
     outputs.dir(outputDir)
     dependsOn("relocateExamples")
 }
@@ -283,14 +280,15 @@ task("generateCargoWorkspace") {
     outputs.upToDateWhen { false }
 }
 
-tasks.register<Exec>("fixManifests") {
+tasks.register<ExecRustBuildTool>("fixManifests") {
     description = "Run the publisher tool's `fix-manifests` sub-command on the generated services"
 
     inputs.dir(publisherToolPath)
     outputs.dir(outputDir)
 
-    workingDir(publisherToolPath)
-    commandLine("cargo", "run", "--", "fix-manifests", "--location", outputDir.absolutePath)
+    toolPath = publisherToolPath
+    binaryName = "publisher"
+    arguments = listOf("fix-manifests", "--location", outputDir.absolutePath)
 
     dependsOn("assemble")
     dependsOn("relocateServices")
@@ -300,15 +298,16 @@ tasks.register<Exec>("fixManifests") {
     dependsOn("fixExampleManifests")
 }
 
-tasks.register<Exec>("hydrateReadme") {
+tasks.register<ExecRustBuildTool>("hydrateReadme") {
     description = "Run the publisher tool's `hydrate-readme` sub-command to create the final AWS Rust SDK README file"
 
     inputs.dir(publisherToolPath)
     outputs.dir(outputDir)
 
-    workingDir(publisherToolPath)
-    commandLine(
-        "cargo", "run", "--","hydrate-readme",
+    toolPath = publisherToolPath
+    binaryName = "publisher"
+    arguments = listOf(
+        "hydrate-readme",
         "--sdk-version", getSdkVersion(),
         "--msrv", getRustMSRV(),
         "--output", outputDir.resolve("README.md").absolutePath

@@ -211,6 +211,7 @@ class SleepImplProviderConfig(codegenContext: CodegenContext) : ConfigCustomizat
                 """sleep_impl: self.sleep_impl,""",
                 *codegenScope
             )
+            else -> emptySection
         }
     }
 }

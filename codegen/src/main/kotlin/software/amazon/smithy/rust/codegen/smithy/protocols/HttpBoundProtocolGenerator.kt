@@ -149,7 +149,7 @@ class HttpBoundProtocolTraitImplGenerator(
         )
     }
 
-    fun parseError(operationShape: OperationShape): RuntimeType {
+    private fun parseError(operationShape: OperationShape): RuntimeType {
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_error"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
@@ -247,7 +247,7 @@ class HttpBoundProtocolTraitImplGenerator(
         }
     }
 
-    fun parseResponse(operationShape: OperationShape): RuntimeType {
+    private fun parseResponse(operationShape: OperationShape): RuntimeType {
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_response"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
@@ -350,7 +350,6 @@ class HttpBoundProtocolTraitImplGenerator(
                     rust("#T($body).map_err(#T::unhandled)", structuredDataParser.payloadParser(member), errorSymbol)
                 }
                 val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
-                    operationShape,
                     binding,
                     errorSymbol,
                     payloadParser = payloadParser

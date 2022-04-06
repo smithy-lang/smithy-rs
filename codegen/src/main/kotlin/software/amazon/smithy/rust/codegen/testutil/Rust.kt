@@ -12,6 +12,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.EnumDefinition
@@ -36,7 +37,7 @@ import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
 
 /**
- * Waiting for Kotlin to stabilize their temp directory stuff
+ * Waiting for Kotlin to stabilize their temp directory functionality
  */
 private fun tempDir(directory: File? = null): File {
     return if (directory != null) {
@@ -121,12 +122,12 @@ object TestWorkspace {
  * "cargo test".runCommand(path)
  * ```
  */
-fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
+fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectNode.builder().build(), addModuleToEventStreamAllowList: Boolean = false): Pair<PluginContext, Path> {
     val testDir = TestWorkspace.subproject()
     val moduleName = "test_${testDir.nameWithoutExtension}"
     val testPath = testDir.toPath()
     val manifest = FileManifest.create(testPath)
-    val settings = Node.objectNodeBuilder()
+    var settingsBuilder = Node.objectNodeBuilder()
         .withMember("module", Node.from(moduleName))
         .withMember("moduleVersion", Node.from("1.0.0"))
         .withMember("moduleDescription", Node.from("test"))
@@ -138,6 +139,18 @@ fun generatePluginContext(model: Model): Pair<PluginContext, Path> {
                 Node.from((TestRuntimeConfig.runtimeCrateLocation).path)
             ).build()
         )
+
+    if (addModuleToEventStreamAllowList) {
+        settingsBuilder = settingsBuilder.withMember(
+            "codegen",
+            Node.objectNodeBuilder().withMember(
+                "eventStreamAllowList",
+                Node.fromStrings(moduleName)
+            ).build()
+        )
+    }
+
+    val settings = settingsBuilder.merge(additionalSettings)
         .build()
     val pluginContext = PluginContext.builder().model(model).fileManifest(manifest).settings(settings).build()
     return pluginContext to testPath
@@ -154,6 +167,11 @@ fun RustWriter.unitTest(
     }
 }
 
+/**
+ * WriterDelegator used for test purposes
+ *
+ * This exposes both the base directory and a list of [generatedFiles] for test purposes
+ */
 class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider: RustSymbolProvider) :
     RustCrate(fileManifest, symbolProvider, DefaultPublicModules) {
     val baseDir: Path = fileManifest.baseDir
@@ -163,7 +181,7 @@ class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider
 
 /**
  * Setting `runClippy` to true can be helpful when debugging clippy failures, but
- * should generally be set to false to avoid invalidating the Cargo cache between
+ * should generally be set to `false` to avoid invalidating the Cargo cache between
  * every unit test run.
  */
 fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
@@ -253,7 +271,6 @@ fun RustWriter.compileAndTest(
     }
 }
 
-@JvmOverloads
 private fun String.intoCrate(
     deps: Set<CargoDependency>,
     module: String? = null,
@@ -267,7 +284,7 @@ private fun String.intoCrate(
         name = ${tempDir.nameWithoutExtension.dq()}
         version = "0.0.1"
         authors = ["rcoh@amazon.com"]
-        edition = "2018"
+        edition = "2021"
 
         [dependencies]
         ${deps.joinToString("\n") { it.toString() }}
@@ -287,6 +304,15 @@ private fun String.intoCrate(
             """.trimIndent()
         )
     }
+
+    if (strict) {
+        mainRs.appendText(
+            """
+            #![deny(clippy::all)]
+            """.trimIndent()
+        )
+    }
+
     mainRs.appendText(
         """
         pub mod $module;

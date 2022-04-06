@@ -65,9 +65,8 @@ pub struct UriSpec {
 }
 
 impl UriSpec {
-    // TODO When we add support for the endpoint trait, this constructor will take in
-    // a first argument `host_prefix`.
-    // https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
+    // TODO(https://github.com/awslabs/smithy-rs/issues/950): When we add support for the endpoint
+    // trait, this constructor will take in a first argument `host_prefix`.
     pub fn new(path_and_query: PathAndQuerySpec) -> Self {
         UriSpec {
             host_prefix: None,
