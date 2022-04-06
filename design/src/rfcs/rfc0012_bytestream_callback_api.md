@@ -18,7 +18,7 @@ Adding a callback API to `ByteStream` will enable developers using the SDK to im
 pub trait ByteStreamReadCallback
 // I don't really like this bound but we need it because this will be inserted into an `Inner`
 where
-    Self: Debug + Clone + PartialEq + Eq,
+    Self: Debug,
 {
     /// This callback is called for each chunk **successfully** read.
     /// If an error occurs while reading a chunk, this will not be called.
@@ -33,22 +33,20 @@ where
     /// This function takes `&mut self` so that implementors may modify an
     /// implementing struct/enum's internal state.
     fn finally(&mut self, #[allow(unused_variables)] aggregated_bytes: &AggregatedBytes) {}
+
+    /// return any trailers to be appended to this `ByteStream` if it's used to
+    /// create the body of an HTTP request.
+    // `HeaderMap`/`HeaderValue` are defined by `hyper`
+    fn trailers(&self) -> Option<HeaderMap<HeaderValue>> {}
 }
 
 // We add a new method to `ByteStream` for inserting callbacks
 impl ByteStream {
     // ...other impls omitted
 
-    // Read callbacks can only be inserted, not removed or reordered. If users
-    // desire extra management functions, we can add them in a later update.
-    // Callbacks are actually stored and called from the `Inner` object
-    pub fn insert_read_callback(&mut self, callback: Box<dyn ByteStreamReadCallback>) {
-        self.inner.insert_read_callback(callback);
-    }
-
-    // Alternatively, we could add a "builder-style" method for setting callbacks
-    pub fn with_callback(&mut self) -> &mut Self {
-        self.inner.insert_read_callback(callback);
+    // A "builder-style" method for setting callbacks
+    pub fn with_callback(&mut self, callback: Arc<dyn ByteStreamReadCallback>) -> &mut Self {
+        self.inner.with_callback(callback);
         self
     }
 }
@@ -56,14 +54,21 @@ impl ByteStream {
 // Callbacks actually get stored in the `Inner` struct because that's where
 // the chunk-reading actually occurs.
 #[pin_project]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 struct Inner<B> {
     #[pin]
     body: B,
     // This field is new. It's going to store callbacks that get called when we're
-    // reading the `SdkBody` chunk-by-chunk
-    callbacks: Vec<Box<dyn ByteStreamReadCallback>>
+    // reading the `SdkBody` chunk-by-chunk. This field doesn't get checked for
+    // equality purposes.
+    callbacks: Vec<Arc<dyn ByteStreamReadCallback>>
 }
+
+impl PartialEq for Inner<B: PartialEq> {
+    fn eq(&self, rhs: &Self) -> bool { self.body == rhs.body }
+}
+
+impl Eq for Inner<B: Eq> {}
 
 impl<B> Inner<B> {
     // ...other impls omitted
@@ -72,8 +77,10 @@ impl<B> Inner<B> {
         Self { body, callbacks: Vec::new() }
     }
 
-    pub fn insert_read_callback(&mut self, callback: Box<dyn ByteStreamReadCallback>) {
+    // `Inner` also gets a "builder-style" function for adding callbacks
+    pub fn with_callback(&mut self, callback: Arc<dyn ByteStreamReadCallback>) -> &mut self {
         self.callbacks.push(callback);
+        self
     }
 
     pub async fn collect(self) -> Result<AggregatedBytes, B::Error>
