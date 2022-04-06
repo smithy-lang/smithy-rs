@@ -8,14 +8,10 @@ for versioning and publishing to crates.io](./rfc0011_crates_io_alpha_publishing
 This doc proposes a long-term versioning strategy that will carry the SDK from dev preview
 into general availability.
 
-This strategy will be implemented in three phases:
-1. __New versioning strategy__: The SDK will break with its current version strategy
-   of maintaining consistent `major.minor` version numbers. This change will be made
-   in isolation for a period of time so that kinks can be worked out with it.
-2. __Full release automation__: Once the new versioning scheme is stable, the release
-   process will be fully automated. Developers will only need to kick off releases manually
-   for changes made to [smithy-rs].
-3. __Stability and 1.x__: This phase begins when the SDK becomes generally available. The
+This strategy will be implemented in two phases:
+1. __Unsynchronized Dev Preview__: The SDK will break with its current version strategy
+   of maintaining consistent `major.minor` version numbers.
+2. __Stability and 1.x__: This phase begins when the SDK becomes generally available. The
    major version will be bumped to 1, and backwards breaking changes will no longer be allowed
    without a major version bump to all crates in the SDK.
 
@@ -76,8 +72,8 @@ It must be possible to yank an entire release with a single action. The publishe
 be updated to understand which crate versions were released with a given release tag, and be able to
 yank all the crates published from that tag.
 
-Phase 1: New Versioning Strategy
---------------------------------
+Phase 1: Unsynchronized Dev Preview
+-----------------------------------
 
 Phase 1 will address the following challenges introduced by uncoordinating the `major.minor` versions:
 - Tracking of versions associated with a release tag
@@ -197,23 +193,13 @@ This process will look as follows:
 
 **Estimate:** 2-4 dev weeks
 
-Phase 2: Full Release Automation
---------------------------------
-
-TODO:
-- Describe changes to generated crate version determination
-- Describe how to automatically update models without incremental smithy-rs changes causing version bump thrash
-- Describe automatic publish process
-
-### Changes Checklist
-
-TODO
-
-Phase 3: Stability and 1.x
+Phase 2: Stability and 1.x
 --------------------------
 
-TODO:
-- Describe changes to runtime crate version checks
+When stabilizing to 1.x, the version process will stay the same, but with the introduction of the greater than zero
+major version number, the minor version bumps caused by version bumping runtime crates, updating models, or changing
+the code generator will be candidate for automatic upgrade per semver. At that point, no further API breaking changes
+can be made without a major version bump.
 
 ### Changes Checklist
 
