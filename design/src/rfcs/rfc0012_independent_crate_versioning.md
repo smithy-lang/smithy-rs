@@ -1,5 +1,5 @@
-RFC: Unsynchronized Crate Versioning
-====================================
+RFC: Independent Crate Versioning
+=================================
 
 > Status: RFC
 
@@ -9,7 +9,7 @@ This doc proposes a long-term versioning strategy that will carry the SDK from d
 into general availability.
 
 This strategy will be implemented in two phases:
-1. __Unsynchronized Dev Preview__: The SDK will break with its current version strategy
+1. __Dev Preview__: The SDK will break with its current version strategy
    of maintaining consistent `major.minor` version numbers.
 2. __Stability and 1.x__: This phase begins when the SDK becomes generally available. The
    major version will be bumped to 1, and backwards breaking changes will no longer be allowed
@@ -72,8 +72,8 @@ It must be possible to yank an entire release with a single action. The publishe
 be updated to understand which crate versions were released with a given release tag, and be able to
 yank all the crates published from that tag.
 
-Phase 1: Unsynchronized Dev Preview
------------------------------------
+Phase 1: Dev Preview
+--------------------
 
 Phase 1 will address the following challenges introduced by uncoordinating the `major.minor` versions:
 - Tracking of versions associated with a release tag
