@@ -71,6 +71,10 @@ class Shell:
     # Pulls the requested `image_name` with `image_tag`. Returns `DockerPullResult`.
     def docker_pull(self, image_name, image_tag):
         (status, output) = get_cmd_output(f"docker pull \"{image_name}:{image_tag}\"", check=False)
+        print("Docker pull output:")
+        print("-------------------")
+        print(output)
+        print("-------------------")
         if status == 0:
             return DockerPullResult.SUCCESS
         elif "toomanyrequests: Rate exceeded" in output:
