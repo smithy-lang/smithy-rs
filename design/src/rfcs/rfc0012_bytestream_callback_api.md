@@ -45,6 +45,12 @@ impl ByteStream {
     pub fn insert_read_callback(&mut self, callback: Box<dyn ByteStreamReadCallback>) {
         self.inner.insert_read_callback(callback);
     }
+
+    // Alternatively, we could add a "builder-style" method for setting callbacks
+    pub fn with_callback(&mut self) -> &mut Self {
+        self.inner.insert_read_callback(callback);
+        self
+    }
 }
 
 // Callbacks actually get stored in the `Inner` struct because that's where
