@@ -157,7 +157,7 @@ The following checks need to be run for runtime crates:
   number was bumped.
 - __E: Semverver passes?__ Runs [rust-semverver] against the old and new versions of the crate.
   - If semverver fails to run (for example, if it needs to be updated to the latest nightly to succeed),
-    then fail CI saying that either semverver needs to be updated, or that a minor version bump is required.
+    then fail CI saying that either semverver needs maintenance, or that a minor version bump is required.
   - If semverver results in errors, fail CI indicating a minor version bump is required.
   - If semverver passes, then pass CI.
 
@@ -196,10 +196,9 @@ This process will look as follows:
 Phase 2: Stability and 1.x
 --------------------------
 
-When stabilizing to 1.x, the version process will stay the same, but with the introduction of the greater than zero
-major version number, the minor version bumps caused by version bumping runtime crates, updating models, or changing
-the code generator will be candidate for automatic upgrade per semver. At that point, no further API breaking changes
-can be made without a major version bump.
+When stabilizing to 1.x, the version process will stay the same, but the minor version bumps caused by version
+bumping runtime crates, updating models, or changing the code generator will be candidate for automatic upgrade
+per semver. At that point, no further API breaking changes can be made without a major version bump.
 
 - [aws-sdk-rust]: https://github.com/awslabs/aws-sdk-rust
 - [rust-semverver]: https://github.com/rust-lang/rust-semverver
