@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.ErrorGenerator
-import software.amazon.smithy.rust.codegen.smithy.isBoxed
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -57,15 +56,29 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
 fun MemberShape.targetNeedsValidation(model: Model, symbolProvider: SymbolProvider): Boolean {
     val targetShape = model.expectShape(this.target)
 
-    // TODO In reality, we need to recurse but not checking ourselves.
+//    val memberSymbol = symbolProvider.toSymbol(this)
+//    val targetSymbol = symbolProvider.toSymbol(targetShape)
+//    val hasRustBoxTrait = this.hasTrait<RustBoxTrait>()
+//    println("hasRustBoxTrait = $hasRustBoxTrait")
+//    println(symbol.name)
+
+    // TODO We have a problem with recursion. In the case of recursive shapes whose members are all not `@required`, this
+    // function recurses indefinitely, but it should return the current member _does not_ require validation.
+    // We can detect recursion by checking the `RustBoxTrait` on the member, but we can't inspect the cycle.
+    // An easy way to determine whether a shape member requires validation would be if we defined  the "closure of a shape `S`"
+    // as all the shapes reachable from `S`. Then a member shape whose target is a structure shape `S` requires
+    // validation if and only if any of the shapes in its closure is `@required` (or is a constrained shape, when we implement those).
+    //
+    // I see `TopologicalIndex.java` in Smithy allows me to get the _recursive_ closure of a shape, but I need its entire
+    // closure.
+    // Perhaps I can simply do `PathFinder.search(shape, "")` with an empty selector.
     val symbol = symbolProvider.toSymbol(targetShape)
-    println(symbol.name)
     if (symbol.name == "RecursiveShapesInputOutputNested1") {
         return false
     }
-    // TODO Why is the symbol not boxed?
-//    if (symbol.isBoxed()) {
-//        return false
+
+//    if (targetShape.isListShape) {
+//        targetShape.asListShape().get()
 //    }
 
     return targetShape.isStructureShape

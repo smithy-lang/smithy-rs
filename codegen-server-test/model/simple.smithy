@@ -14,6 +14,8 @@ service SimpleService {
 
 @http(uri: "/operation", method: "GET")
 operation AnOperation {
+    // input: RecursiveShapesInputOutput,
+    // output: RecursiveShapesInputOutput,
     input: AnOperationInput,
     output: AnOperationOutput,
 }
@@ -31,7 +33,9 @@ structure ConA {
     @required
     conB: ConB,
 
-    optConB: ConB
+    optConB: ConB,
+
+    // conBList: ConBList
 }
 
 structure ConB {
@@ -43,3 +47,23 @@ structure ConB {
     optNice: String,
     optInt: Integer
 }
+
+// structure RecursiveShapesInputOutput {
+//     nested: RecursiveShapesInputOutputNested1
+// }
+//
+// structure RecursiveShapesInputOutputNested1 {
+//     foo: String,
+//     nested: RecursiveShapesInputOutputNested2
+// }
+//
+// structure RecursiveShapesInputOutputNested2 {
+//     bar: StringList,
+//     recursiveMember: RecursiveShapesInputOutputNested1,
+// }
+//
+
+
+// list ConBList {
+//     member: ConB
+// }

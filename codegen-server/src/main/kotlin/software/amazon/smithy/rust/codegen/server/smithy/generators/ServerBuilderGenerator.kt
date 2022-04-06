@@ -9,7 +9,6 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
@@ -24,40 +23,24 @@ import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.targetNeedsValidation
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.wrapValidated
-import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
-import java.util.*
-
-// TODO This function is the same as `BuilderGenerator.kt.`
-fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
-    val symbol = symbolProvider.toSymbol(this)
-    val builderNamespace = RustReservedWords.escapeIfNeeded(symbol.name.toSnakeCase())
-    return RuntimeType("Builder", null, "${symbol.namespace}::$builderNamespace")
-}
-
-fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("BuildError")
-fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).member("SerializationError")
-
-class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
-    fun missingField(w: RustWriter, field: String, details: String) = "${w.format(runtimeConfig.operationBuildError())}::MissingField { field: ${field.dq()}, details: ${details.dq()} }"
-    fun invalidField(w: RustWriter, field: String, details: String) = "${w.format(runtimeConfig.operationBuildError())}::InvalidField { field: ${field.dq()}, details: ${details.dq()}.to_string() }"
-    fun serializationError(w: RustWriter, error: String) = "${w.format(runtimeConfig.operationBuildError())}::SerializationError($error.into())"
-}
 
 // TODO Document differences:
 //     - This one takes in codegenContext.
+//     - Unlike in `BuilderGenerator.kt`, we don't add helper methods to add items to vectors and hash maps.
+//     - This builder is not `PartialEq`.
 class ServerBuilderGenerator(
     private val codegenContext: CodegenContext,
     private val shape: StructureShape
@@ -65,7 +48,6 @@ class ServerBuilderGenerator(
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val members: List<MemberShape> = shape.allMembers.values.toList()
-    // TODO Ensure everyone uses this instead of recomputing
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val moduleName = shape.builderSymbol(symbolProvider).namespace.split("::").last()
 
@@ -74,59 +56,9 @@ class ServerBuilderGenerator(
         writer.withModule(moduleName) {
             renderBuilder(this)
         }
-
-        // TODO Can't we move these into the builder module?
-        if (StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)) {
-            renderTryFromBuilderImpl(writer)
-        } else {
-            renderFromBuilderImpl(writer)
-        }
-    }
-
-    // TODO This impl does not take into account sensitive trait.
-    private fun renderImplDisplayValidationFailure(writer: RustWriter) {
-        writer.rustBlock("impl std::fmt::Display for ValidationFailure") {
-            rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
-                rustBlock("match self") {
-                    validationFailures().forEach {
-                        val arm = if (it.hasInner()) {
-                           "ValidationFailure::${it.name()}(_)"
-                        } else {
-                            "ValidationFailure::${it.name()}"
-                        }
-                        rust("""$arm => write!(f, "${validationFailureErrorMessage(it)}"),""")
-                    }
-                }
-            }
-        }
-    }
-
-    // TODO This only needs to be generated for operation input shapes.
-    private fun renderImplFromValidationFailureForRequestRejection(writer: RustWriter) {
-        // TODO No need for rustBlock
-        writer.rustBlock("impl From<ValidationFailure> for #T", ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig)) {
-            rustBlock("fn from(value: ValidationFailure) -> Self") {
-                rust("Self::BuildV2(value.into())")
-            }
-        }
-    }
-
-    private fun renderImplFromBuilderForValidated(writer: RustWriter) {
-        // TODO No need for rustBlock
-        writer.rustBlock("impl From<Builder> for #T", structureSymbol.wrapValidated()) {
-            rust(
-                """
-                fn from(value: Builder) -> Self {
-                    Self::Unvalidated(value)
-                }
-                """
-            )
-        }
     }
 
     private fun renderBuilder(writer: RustWriter) {
-        val builderName = "Builder"
-
         if (StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)) {
             Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
             // TODO(): `#[non_exhaustive] until we commit to making builders of builders public.
@@ -137,57 +69,98 @@ class ServerBuilderGenerator(
 
             renderImplDisplayValidationFailure(writer)
             writer.rust("impl std::error::Error for ValidationFailure { }")
+
+            // TODO This only needs to be generated for operation input shapes.
             renderImplFromValidationFailureForRequestRejection(writer)
 
             renderImplFromBuilderForValidated(writer)
+
+            renderTryFromBuilderImpl(writer)
+        } else {
+            renderFromBuilderImpl(writer)
         }
 
         writer.docs("A builder for #D.", structureSymbol)
-        // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
+        // Matching derives to the main structure, - `PartialEq`, + `Default` since we are a builder and everything is optional.
         // TODO Manually implement `Default` so that we can add custom docs.
         val baseDerives = structureSymbol.expectRustMetadata().derives
-        // TODO Document breaking `PartialEq`.
         val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
         baseDerives.copy(derives = derives).render(writer)
-        writer.rustBlock("pub struct $builderName") {
+        writer.rustBlock("pub struct Builder") {
             for (member in members) {
-                // All fields in the builder are optional.
                 val memberSymbol = builderMemberSymbol(member)
                 val memberName = symbolProvider.toMemberName(member)
                 renderBuilderMember(this, memberName, memberSymbol)
             }
         }
 
-        writer.rustBlock("impl $builderName") {
+        writer.rustBlock("impl Builder") {
             for (member in members) {
                 renderBuilderMemberFn(this, member)
 
                 if (member.targetNeedsValidation(model, symbolProvider)) {
                     renderBuilderMemberSetterFn(this, member)
                 }
-
-                // Unlike in `BuilderGenerator.kt`, we don't add helper methods to add items to vectors and hash maps.
             }
             renderBuildFn(this)
         }
     }
 
+    // TODO This impl does not take into account sensitive trait.
+    private fun renderImplDisplayValidationFailure(writer: RustWriter) {
+        writer.rustBlock("impl std::fmt::Display for ValidationFailure") {
+            rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
+                rustBlock("match self") {
+                    validationFailures().forEach {
+                        val arm = if (it.hasInner()) {
+                            "ValidationFailure::${it.name()}(_)"
+                        } else {
+                            "ValidationFailure::${it.name()}"
+                        }
+                        rust("""$arm => write!(f, "${validationFailureErrorMessage(it)}"),""")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun renderImplFromValidationFailureForRequestRejection(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+            impl From<ValidationFailure> for #{RequestRejection} {
+                fn from(value: ValidationFailure) -> Self {
+                    Self::BuildV2(value.into())
+                }
+            }
+            """,
+            "RequestRejection" to ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig)
+        )
+    }
+
+    private fun renderImplFromBuilderForValidated(writer: RustWriter) {
+        writer.rust(
+            """
+            impl From<Builder> for #{T} {
+                fn from(builder: Builder) -> Self {
+                    Self::Unvalidated(builder)
+                }
+            }
+            """,
+            structureSymbol.wrapValidated()
+        )
+    }
+
     private fun renderBuildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)
-        val outputSymbol = symbolProvider.toSymbol(shape)
         val returnType = when (fallibleBuilder) {
-            true -> "Result<${implBlockWriter.format(outputSymbol)}, ValidationFailure>"
-            false -> implBlockWriter.format(outputSymbol)
+            true -> "Result<${implBlockWriter.format(structureSymbol)}, ValidationFailure>"
+            false -> implBlockWriter.format(structureSymbol)
         }
         // TODO Document when builder can fail.
         // TODO Document it returns the first error.
-        implBlockWriter.docs("Consumes the builder and constructs a #D.", outputSymbol)
+        implBlockWriter.docs("Consumes the builder and constructs a #D.", structureSymbol)
         implBlockWriter.rustBlock("pub fn build(self) -> $returnType") {
-//            if (members.any { targetNeedsValidation(it) }) {
-//                implBlockWriter.rust("use std::convert::TryInto;")
-//            }
             conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
-                // If a wrapper is specified, use the `::new` associated function to construct the wrapper.
                 coreBuilder(this)
             }
         }
@@ -208,6 +181,10 @@ class ServerBuilderGenerator(
         writer.write("pub(crate) $memberName: #T,", memberSymbol)
     }
 
+    /**
+     * Render a `foo` method for to set shape member `foo`. The caller must provide a value with the exact same type
+     * as the shape member's type.
+     */
     private fun renderBuilderMemberFn(
         writer: RustWriter,
         member: MemberShape,
@@ -235,8 +212,7 @@ class ServerBuilderGenerator(
         }
     }
 
-
-    /*
+    /**
      * Render a `set_foo` method. This method is able to take in builders of structure shape types.
      */
     private fun renderBuilderMemberSetterFn(
@@ -246,18 +222,12 @@ class ServerBuilderGenerator(
         check(model.expectShape(member.target, StructureShape::class.java) != null)
 
         val builderMemberSymbol = builderMemberSymbol(member)
-        val inputType = builderMemberSymbol.rustType().stripOuter<RustType.Option>().implInto().let {
-            if (member.isOptional) {
-                "Option<$it>"
-            } else {
-                it
-            }
-        }
+        val inputType = builderMemberSymbol.rustType().stripOuter<RustType.Option>().implInto().letIf(member.isOptional) { "Option<$it>" }
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
         // TODO: This method is only used by deserializers, so it will remain unused for shapes that are not (transitively)
-        // part of an operation input. We therefore `[allow(dead_code)]` here.
+        //     part of an operation input. We therefore `[allow(dead_code)]` here.
         Attribute.AllowDeadCode.render(writer)
         // TODO(): `pub(crate)` until we commit to making builders of builders public.
         // Setter names will never hit a reserved word and therefore never need escaping.
@@ -277,17 +247,25 @@ class ServerBuilderGenerator(
         }
     }
 
-    // TODO Docs
+    /**
+     * The kinds of validation failures that can occur when building the builder.
+     */
     enum class ValidationFailureKind {
+        // A field is required but was not provided.
         MISSING_MEMBER,
+        // A builder was provided for a field targeting a struct, but that builder failed to build.
         BUILDER_FAILURE,
     }
+
     data class ValidationFailure(val forMember: MemberShape, val kind: ValidationFailureKind) {
         fun name() = when (kind) {
             ValidationFailureKind.MISSING_MEMBER -> "Missing${forMember.memberName.toPascalCase()}"
             ValidationFailureKind.BUILDER_FAILURE -> "${forMember.memberName.toPascalCase()}ValidationFailure"
         }
 
+        /**
+         * Whether the validation failure is a Rust tuple struct with one element.
+         */
         fun hasInner() = kind == ValidationFailureKind.BUILDER_FAILURE
     }
 
@@ -311,14 +289,6 @@ class ServerBuilderGenerator(
         }
     }
 
-    // ONLY RETURNS BUILDER validation failure, intentional
-    private fun builderValidationFailureForMember(member: MemberShape) =
-        if (model.expectShape(member.target).isStructureShape) {
-            Optional.of(ValidationFailure(member, ValidationFailureKind.BUILDER_FAILURE))
-        } else {
-            Optional.empty()
-        }
-
     private fun validationFailureErrorMessage(validationFailure: ValidationFailure): String {
         val memberName = symbolProvider.toMemberName(validationFailure.forMember)
         // TODO $structureSymbol here is not quite right because it's printing the full namespace: crate:: in the context of the user will surely be different.
@@ -330,81 +300,96 @@ class ServerBuilderGenerator(
     }
 
     private fun validationFailures() = members.flatMap { member ->
-        val ret = mutableListOf<ValidationFailure>()
-        if (mustProvideValueForMember(member)) {
-            ret.add(ValidationFailure(member, ValidationFailureKind.MISSING_MEMBER))
-        }
-        val builderValidationFailure = builderValidationFailureForMember(member)
-        if (builderValidationFailure.isPresent) {
-            ret.add(builderValidationFailure.get())
-        }
-
-        // TODO Constrained shapes.
-
-        ret
+        listOfNotNull(
+            builderMissingFieldForMember(member),
+            builderValidationFailureForMember(member),
+        )
+        // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Constrained shapes.
     }
 
+    /**
+     * Returns the builder failure associated with the `member` field if its target requires validation.
+     */
+    private fun builderValidationFailureForMember(member: MemberShape) =
+        if (member.targetNeedsValidation(model, symbolProvider)) {
+            ValidationFailure(member, ValidationFailureKind.BUILDER_FAILURE)
+        } else {
+            null
+        }
+
+    /**
+     * Returns the builder failure associated with the `member` field if it is `required`.
+     */
+    private fun builderMissingFieldForMember(member: MemberShape) =
+        if (symbolProvider.toSymbol(member).isOptional()) {
+            null
+        } else {
+            ValidationFailure(member, ValidationFailureKind.MISSING_MEMBER)
+        }
+
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
-        val shapeSymbol = symbolProvider.toSymbol(shape)
-        val builderSymbol = shape.builderSymbol(symbolProvider)
+        // TODO `TryFrom` is in Rust 2021's prelude.
         writer.rustTemplate(
             """
-            impl std::convert::TryFrom<#{Builder}> for #{Shape} {
-                type Error = $moduleName::ValidationFailure;
+            impl std::convert::TryFrom<Builder> for #{Structure} {
+                type Error = ValidationFailure;
                 
-                fn try_from(value: #{Builder}) -> Result<Self, Self::Error> {
-                    value.build()
+                fn try_from(builder: Builder) -> Result<Self, Self::Error> {
+                    builder.build()
                 }
             }
             """,
-            "Builder" to builderSymbol,
-            "Shape" to shapeSymbol,
+            "Structure" to structureSymbol,
         )
     }
 
     private fun renderFromBuilderImpl(writer: RustWriter) {
-        val shapeSymbol = symbolProvider.toSymbol(shape)
-        val builderSymbol = shape.builderSymbol(symbolProvider)
         writer.rustTemplate(
             """
-            impl From<#{Builder}> for #{Shape} {
-                fn from(value: #{Builder}) -> Self {
-                    value.build()
+            impl From<Builder> for #{Structure} {
+                fn from(builder: Builder) -> Self {
+                    builder.build()
                 }
             }
             """,
-            "Builder" to builderSymbol,
-            "Shape" to shapeSymbol,
+            "Structure" to structureSymbol,
         )
     }
 
-    // TODO Docs
+    /**
+     * Returns the symbol for a builder's member.
+     * All builder members are optional, but only some are `Option<T>`s where `T` needs to be validated.
+     */
     private fun builderMemberSymbol(member: MemberShape): Symbol =
         symbolProvider.toSymbol(member)
+            // Strip the `Option` in case the member is not `required`.
             .mapRustType { it.stripOuter<RustType.Option>() }
-            .let {
-                if (member.targetNeedsValidation(model, symbolProvider)) it.wrapValidated()
-                else it
-            }.makeOptional()
+            // Wrap the symbol with the Cow-like `validation::Validated` type in case the target member shape needs validation.
+            .letIf(member.targetNeedsValidation(model, symbolProvider)) { it.wrapValidated() }
+            // Ensure we end up with an `Option`.
+            .makeOptional()
 
     /**
-     * TODO DOCS
+     * Writes the code to instantiate the struct the builder builds.
+     *
+     * Builder member types are either:
+     *     1. `Option<Validated<T>>`; or
+     *     2. `Option<T>`.
+     *
+     * The structs they build have member types:
+     *     a) `Option<T>`; or
+     *     b) `T`.
+     *
+     * For each member, this function first unwraps case 1. into 2., and then converts into b) if necessary.
      */
     private fun coreBuilder(writer: RustWriter) {
-        // Builder type:
-        //     Option<Validated<T>>
-        //     Option<T>
-        //
-        // Struct type:
-        //     Option<T>
-        //     T
         writer.rustBlock("#T", structureSymbol) {
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
 
                 withBlock("$memberName: self.$memberName", ",") {
                     // Write the modifier(s).
-                    if (member.targetNeedsValidation(model, symbolProvider)) {
+                    builderValidationFailureForMember(member)?.let {
                         // TODO Remove `TryInto` import when we switch to 2021 edition.
                         rustTemplate(
                             """
@@ -415,22 +400,17 @@ class ServerBuilderGenerator(
                                     x.try_into()
                                 }
                             })
-                            .map(|v| v.map_err(|err| ValidationFailure::${builderValidationFailureForMember(member).get().name()}(err)))
+                            .map(|v| v.map_err(|err| ValidationFailure::${it.name()}(err)))
                             .transpose()?
                             """,
                             "Validated" to RuntimeType.Validated()
                         )
                     }
-                    if (mustProvideValueForMember(member)) {
-                        rust(".ok_or(ValidationFailure::${ValidationFailure(member, ValidationFailureKind.MISSING_MEMBER).name()})?")
+                    builderMissingFieldForMember(member)?.let {
+                        rust(".ok_or(ValidationFailure::${it.name()})?")
                     }
                 }
             }
         }
     }
-
-    // TODO We could move to extension function in `StructureGenerator.kt`.
-    // TODO Is it.isOptional() necessary? Won't canUseDefault take into account `Option`s already?
-    private fun mustProvideValueForMember(member: MemberShape) =
-        !symbolProvider.toSymbol(member).isOptional()
 }
