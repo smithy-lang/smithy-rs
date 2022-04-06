@@ -182,18 +182,6 @@ class StructureGenerator(
         }
     }
 
-    private fun renderValidateImpl() {
-        writer.rust(
-            """
-            impl #T for $name {
-                type Unvalidated = #T;
-            }
-            """,
-            RuntimeType.ValidateTrait(),
-            shape.builderSymbol(symbolProvider)
-        )
-    }
-
     private fun renderStructureImpl() {
         if (accessorMembers.isEmpty()) {
             return
@@ -239,7 +227,6 @@ class StructureGenerator(
 
         renderStructureImpl()
         renderDebugImpl()
-        renderValidateImpl()
     }
 
     private fun RustWriter.forEachMember(
