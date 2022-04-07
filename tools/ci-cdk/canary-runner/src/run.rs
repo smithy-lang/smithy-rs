@@ -22,6 +22,7 @@ use clap::Parser;
 use cloudwatch::model::StandardUnit;
 use s3::ByteStream;
 use semver::Version;
+use serde::Deserialize;
 use smithy_rs_tool_common::git;
 use smithy_rs_tool_common::macros::here;
 use smithy_rs_tool_common::shell::ShellOperation;
@@ -62,23 +63,82 @@ pub struct RunOpt {
     #[clap(long)]
     musl: bool,
 
-    /// The name of the S3 bucket to upload the canary binary bundle to
+    /// File path to a CDK outputs JSON file. This can be used instead
+    /// of all the --lambda... args.
     #[clap(long)]
-    lambda_code_s3_bucket_name: String,
+    cdk_output: Option<PathBuf>,
+
+    /// The name of the S3 bucket to upload the canary binary bundle to
+    #[clap(long, required_unless_present = "cdk-output")]
+    lambda_code_s3_bucket_name: Option<String>,
 
     /// The name of the S3 bucket for the canary Lambda to interact with
-    #[clap(long)]
-    lambda_test_s3_bucket_name: String,
+    #[clap(long, required_unless_present = "cdk-output")]
+    lambda_test_s3_bucket_name: Option<String>,
 
     /// The ARN of the role that the Lambda will execute as
-    #[clap(long)]
+    #[clap(long, required_unless_present = "cdk-output")]
+    lambda_execution_role_arn: Option<String>,
+}
+
+#[derive(Debug)]
+struct Options {
+    sdk_version: Option<String>,
+    sdk_path: Option<PathBuf>,
+    musl: bool,
+    lambda_code_s3_bucket_name: String,
+    lambda_test_s3_bucket_name: String,
     lambda_execution_role_arn: String,
 }
 
+impl Options {
+    fn load_from(run_opt: RunOpt) -> Result<Options> {
+        if let Some(cdk_output) = &run_opt.cdk_output {
+            #[derive(Deserialize)]
+            struct Inner {
+                #[serde(rename = "canarycodebucketname")]
+                lambda_code_s3_bucket_name: String,
+                #[serde(rename = "canarytestbucketname")]
+                lambda_test_s3_bucket_name: String,
+                #[serde(rename = "lambdaexecutionrolearn")]
+                lambda_execution_role_arn: String,
+            }
+            #[derive(Deserialize)]
+            struct Outer {
+                #[serde(rename = "aws-sdk-rust-canary-stack")]
+                inner: Inner,
+            }
+
+            let value: Outer = serde_json::from_reader(
+                std::fs::File::open(cdk_output).context("open cdk output")?,
+            )
+            .context("read cdk output")?;
+            Ok(Options {
+                sdk_version: run_opt.sdk_version,
+                sdk_path: run_opt.sdk_path,
+                musl: run_opt.musl,
+                lambda_code_s3_bucket_name: value.inner.lambda_code_s3_bucket_name,
+                lambda_test_s3_bucket_name: value.inner.lambda_test_s3_bucket_name,
+                lambda_execution_role_arn: value.inner.lambda_execution_role_arn,
+            })
+        } else {
+            Ok(Options {
+                sdk_version: run_opt.sdk_version,
+                sdk_path: run_opt.sdk_path,
+                musl: run_opt.musl,
+                lambda_code_s3_bucket_name: run_opt.lambda_code_s3_bucket_name.expect("required"),
+                lambda_test_s3_bucket_name: run_opt.lambda_test_s3_bucket_name.expect("required"),
+                lambda_execution_role_arn: run_opt.lambda_execution_role_arn.expect("required"),
+            })
+        }
+    }
+}
+
 pub async fn run(opt: RunOpt) -> Result<()> {
+    let options = Options::load_from(opt)?;
     let start_time = SystemTime::now();
     let config = aws_config::load_from_env().await;
-    let result = run_canary(opt, &config).await;
+    let result = run_canary(&options, &config).await;
 
     let mut metrics = vec![
         (
@@ -129,19 +189,19 @@ pub async fn run(opt: RunOpt) -> Result<()> {
     result.map(|_| ())
 }
 
-async fn run_canary(opt: RunOpt, config: &aws_config::Config) -> Result<Duration> {
+async fn run_canary(options: &Options, config: &aws_config::Config) -> Result<Duration> {
     let repo_root = git_root().await?;
     env::set_current_dir(repo_root.join("tools/ci-cdk/canary-lambda"))
         .context("failed to change working directory")?;
 
-    if let Some(sdk_version) = &opt.sdk_version {
+    if let Some(sdk_version) = &options.sdk_version {
         use_correct_revision(sdk_version)
             .await
             .context(here!("failed to select correct revision of smithy-rs"))?;
     }
 
     info!("Building the canary...");
-    let bundle_path = build_bundle(&opt).await?;
+    let bundle_path = build_bundle(options).await?;
     let bundle_file_name = bundle_path.file_name().unwrap().to_str().unwrap();
     let bundle_name = bundle_path.file_stem().unwrap().to_str().unwrap();
 
@@ -151,7 +211,7 @@ async fn run_canary(opt: RunOpt, config: &aws_config::Config) -> Result<Duration
     info!("Uploading Lambda code bundle to S3...");
     upload_bundle(
         s3_client,
-        &opt.lambda_code_s3_bucket_name,
+        &options.lambda_code_s3_bucket_name,
         bundle_file_name,
         &bundle_path,
     )
@@ -166,9 +226,9 @@ async fn run_canary(opt: RunOpt, config: &aws_config::Config) -> Result<Duration
         lambda_client.clone(),
         bundle_name,
         bundle_file_name,
-        &opt.lambda_execution_role_arn,
-        &opt.lambda_code_s3_bucket_name,
-        &opt.lambda_test_s3_bucket_name,
+        &options.lambda_execution_role_arn,
+        &options.lambda_code_s3_bucket_name,
+        &options.lambda_test_s3_bucket_name,
     )
     .await
     .context(here!())?;
@@ -208,15 +268,15 @@ async fn use_correct_revision(sdk_version: &str) -> Result<()> {
 }
 
 /// Returns the path to the compiled bundle zip file
-async fn build_bundle(opt: &RunOpt) -> Result<PathBuf> {
+async fn build_bundle(options: &Options) -> Result<PathBuf> {
     let mut builder = Command::new("./build-bundle");
-    if let Some(sdk_version) = &opt.sdk_version {
+    if let Some(sdk_version) = &options.sdk_version {
         builder.arg("--sdk-version").arg(sdk_version);
     }
-    if let Some(sdk_path) = &opt.sdk_path {
+    if let Some(sdk_path) = &options.sdk_path {
         builder.arg("--sdk-path").arg(sdk_path);
     }
-    if opt.musl {
+    if options.musl {
         builder.arg("--musl");
     }
     let output = builder

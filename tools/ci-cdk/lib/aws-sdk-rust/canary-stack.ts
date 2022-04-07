@@ -11,19 +11,23 @@ import {
     ServicePrincipal,
 } from "aws-cdk-lib/aws-iam";
 import { BlockPublicAccess, Bucket, BucketEncryption } from "aws-cdk-lib/aws-s3";
-import { StackProps, Stack, Tags, RemovalPolicy, Duration } from "aws-cdk-lib";
+import { StackProps, Stack, Tags, RemovalPolicy, Duration, CfnOutput } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import { GitHubOidcRole } from "../constructs/github-oidc-role";
 
 export interface Properties extends StackProps {
-    githubActionsOidcProvider: OpenIdConnectProvider;
+    githubActionsOidcProvider?: OpenIdConnectProvider;
 }
 
 export class CanaryStack extends Stack {
-    public readonly awsSdkRustOidcRole: GitHubOidcRole;
+    public readonly awsSdkRustOidcRole?: GitHubOidcRole;
     public readonly lambdaExecutionRole: Role;
     public readonly canaryCodeBucket: Bucket;
     public readonly canaryTestBucket: Bucket;
+
+    public readonly lambdaExecutionRoleArn: CfnOutput;
+    public readonly canaryCodeBucketName: CfnOutput;
+    public readonly canaryTestBucketName: CfnOutput;
 
     constructor(scope: Construct, id: string, props: Properties) {
         super(scope, id, props);
@@ -31,36 +35,38 @@ export class CanaryStack extends Stack {
         // Tag the resources created by this stack to make identifying resources easier
         Tags.of(this).add("stack", id);
 
-        this.awsSdkRustOidcRole = new GitHubOidcRole(this, "aws-sdk-rust", {
-            name: "aws-sdk-rust-canary",
-            githubOrg: "awslabs",
-            githubRepo: "aws-sdk-rust",
-            oidcProvider: props.githubActionsOidcProvider,
-        });
+        if (props.githubActionsOidcProvider) {
+            this.awsSdkRustOidcRole = new GitHubOidcRole(this, "aws-sdk-rust", {
+                name: "aws-sdk-rust-canary",
+                githubOrg: "awslabs",
+                githubRepo: "aws-sdk-rust",
+                oidcProvider: props.githubActionsOidcProvider,
+            });
 
-        // Grant permission to create/invoke/delete a canary Lambda
-        this.awsSdkRustOidcRole.oidcRole.addToPolicy(
-            new PolicyStatement({
-                actions: [
-                    "lambda:CreateFunction",
-                    "lambda:DeleteFunction",
-                    "lambda:InvokeFunction",
-                    "lambda:GetFunctionConfiguration",
-                ],
-                effect: Effect.ALLOW,
-                // Only allow this for functions starting with prefix `canary-`
-                resources: ["arn:aws:lambda:*:*:function:canary-*"],
-            }),
-        );
+            // Grant permission to create/invoke/delete a canary Lambda
+            this.awsSdkRustOidcRole.oidcRole.addToPolicy(
+                new PolicyStatement({
+                    actions: [
+                        "lambda:CreateFunction",
+                        "lambda:DeleteFunction",
+                        "lambda:InvokeFunction",
+                        "lambda:GetFunctionConfiguration",
+                    ],
+                    effect: Effect.ALLOW,
+                    // Only allow this for functions starting with prefix `canary-`
+                    resources: ["arn:aws:lambda:*:*:function:canary-*"],
+                }),
+            );
 
-        // Grant permission to put metric data to CloudWatch
-        this.awsSdkRustOidcRole.oidcRole.addToPolicy(
-            new PolicyStatement({
-                actions: ["cloudwatch:PutMetricData"],
-                effect: Effect.ALLOW,
-                resources: ["*"],
-            }),
-        );
+            // Grant permission to put metric data to CloudWatch
+            this.awsSdkRustOidcRole.oidcRole.addToPolicy(
+                new PolicyStatement({
+                    actions: ["cloudwatch:PutMetricData"],
+                    effect: Effect.ALLOW,
+                    resources: ["*"],
+                }),
+            );
+        }
 
         // Create S3 bucket to upload canary Lambda code into
         this.canaryCodeBucket = new Bucket(this, "canary-code-bucket", {
@@ -77,9 +83,18 @@ export class CanaryStack extends Stack {
             removalPolicy: RemovalPolicy.DESTROY,
         });
 
+        // Output the bucket name to make it easier to invoke the canary runner
+        this.canaryCodeBucketName = new CfnOutput(this, "canary-code-bucket-name", {
+            value: this.canaryCodeBucket.bucketName,
+            description: "Name of the canary code bucket",
+            exportName: "canaryCodeBucket",
+        });
+
         // Allow the OIDC role to GetObject and PutObject to the code bucket
-        this.canaryCodeBucket.grantRead(this.awsSdkRustOidcRole.oidcRole);
-        this.canaryCodeBucket.grantWrite(this.awsSdkRustOidcRole.oidcRole);
+        if (this.awsSdkRustOidcRole) {
+            this.canaryCodeBucket.grantRead(this.awsSdkRustOidcRole.oidcRole);
+            this.canaryCodeBucket.grantWrite(this.awsSdkRustOidcRole.oidcRole);
+        }
 
         // Create S3 bucket for the canaries to talk to
         this.canaryTestBucket = new Bucket(this, "canary-test-bucket", {
@@ -96,10 +111,24 @@ export class CanaryStack extends Stack {
             removalPolicy: RemovalPolicy.DESTROY,
         });
 
+        // Output the bucket name to make it easier to invoke the canary runner
+        this.canaryTestBucketName = new CfnOutput(this, "canary-test-bucket-name", {
+            value: this.canaryTestBucket.bucketName,
+            description: "Name of the canary test bucket",
+            exportName: "canaryTestBucket",
+        });
+
         // Create a role for the canary Lambdas to assume
         this.lambdaExecutionRole = new Role(this, "lambda-execution-role", {
             roleName: "aws-sdk-rust-canary-lambda-exec-role",
             assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
+        });
+
+        // Output the Lambda execution role ARN to make it easier to invoke the canary runner
+        this.lambdaExecutionRoleArn = new CfnOutput(this, "lambda-execution-role-arn", {
+            value: this.lambdaExecutionRole.roleArn,
+            description: "Canary Lambda execution role ARN",
+            exportName: "canaryLambdaExecutionRoleArn",
         });
 
         // Allow canaries to write logs to CloudWatch
@@ -124,19 +153,21 @@ export class CanaryStack extends Stack {
         );
 
         // Allow the OIDC role to pass the Lambda execution role to Lambda
-        this.awsSdkRustOidcRole.oidcRole.addToPolicy(
-            new PolicyStatement({
-                actions: ["iam:PassRole"],
-                effect: Effect.ALLOW,
-                // Security: only allow the Lambda execution role to be passed
-                resources: [this.lambdaExecutionRole.roleArn],
-                // Security: only allow the role to be passed to Lambda
-                conditions: {
-                    StringEquals: {
-                        "iam:PassedToService": "lambda.amazonaws.com",
+        if (this.awsSdkRustOidcRole) {
+            this.awsSdkRustOidcRole.oidcRole.addToPolicy(
+                new PolicyStatement({
+                    actions: ["iam:PassRole"],
+                    effect: Effect.ALLOW,
+                    // Security: only allow the Lambda execution role to be passed
+                    resources: [this.lambdaExecutionRole.roleArn],
+                    // Security: only allow the role to be passed to Lambda
+                    conditions: {
+                        StringEquals: {
+                            "iam:PassedToService": "lambda.amazonaws.com",
+                        },
                     },
-                },
-            }),
-        );
+                }),
+            );
+        }
     }
 }
