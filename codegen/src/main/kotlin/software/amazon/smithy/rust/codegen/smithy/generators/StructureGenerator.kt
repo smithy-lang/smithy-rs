@@ -239,6 +239,9 @@ class StructureGenerator(
 
         renderStructureImpl()
         renderDebugImpl()
+
+        // TODO This only needs to be called in the server, for structures that are reachable from operation input AND
+        //     that require validation. It's probably best that we move it to an entirely different class.
         renderValidateImpl()
     }
 

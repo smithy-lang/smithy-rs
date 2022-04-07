@@ -35,7 +35,7 @@ structure ConA {
 
     optConB: ConB,
 
-    // conBList: ConBList
+    conBList: ConBList
 }
 
 structure ConB {
@@ -64,6 +64,6 @@ structure ConB {
 //
 
 
-// list ConBList {
-//     member: ConB
-// }
+list ConBList {
+    member: ConB
+}

@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
@@ -16,6 +17,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedListGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
@@ -171,6 +173,16 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             writer.implBlock(shape, symbolProvider) {
                 builderGenerator.renderConvenienceMethod(this)
             }
+        }
+    }
+
+    override fun listShape(shape: ListShape) {
+        logger.info("[rust-server-codegen] Generating a wrapper tuple struct for list $shape")
+
+        // TODO We only have to generate this for lists that are reachable from operation input AND from which you can
+        //     reach a structure that requires validation e.g. Vec<Struct>, Vec<HashMap<String, Struct>>...
+        rustCrate.useShapeWriter(shape) { writer ->
+            ConstrainedListGenerator(model, symbolProvider, writer, shape).render()
         }
     }
 
