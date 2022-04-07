@@ -50,4 +50,4 @@ jobs:
   # Run normal CI, which should pick up the updated build image
   ci:
     needs: rebuild-docker-build-image
-    uses: awslabs/smithy-rs/.github/worfklows/ci.yaml@main
+    uses: ./.github/workflows/ci.yml

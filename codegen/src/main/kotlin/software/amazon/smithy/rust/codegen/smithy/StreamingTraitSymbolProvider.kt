@@ -48,6 +48,14 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
     }
 }
 
+/**
+ * SymbolProvider to drop the clone and PartialEq bounds in streaming shapes
+ *
+ * Streaming shapes cannot be cloned and equality cannot be checked without reading the body. Because of this, these shapes
+ * do not implement `Clone` or `PartialEq`.
+ *
+ * Note that since streaming members can only be used on the root shape, this can only impact input and output shapes.
+ */
 class StreamingShapeMetadataProvider(private val base: RustSymbolProvider, private val model: Model) : SymbolMetadataProvider(base) {
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
         return base.toSymbol(memberShape).expectRustMetadata()
