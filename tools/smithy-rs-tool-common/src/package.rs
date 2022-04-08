@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+use serde::Serialize;
+
 pub const SMITHY_PREFIX: &str = "aws-smithy-";
 pub const SDK_PREFIX: &str = "aws-sdk-";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub enum PackageCategory {
     SmithyRuntime,
     AwsRuntime,
