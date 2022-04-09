@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedListGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenMode
@@ -59,6 +60,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     private val settings = ServerRustSettings.from(context.model, context.settings)
 
     private val symbolProvider: RustSymbolProvider
+    private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider
     private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
     private val model: Model
@@ -88,6 +90,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         val baseProvider = RustCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
         symbolProvider =
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
+        unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, service)
 
         codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, mode = CodegenMode.Server)
 
@@ -178,13 +181,14 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     }
 
     override fun listShape(shape: ListShape) {
-        logger.info("[rust-server-codegen] Generating a wrapper tuple struct for list $shape")
+        // TODO We only have to generate this for lists that are reachable from operation
+        //  input AND from which you can reach a shape that is constrained.
+        if (shape.canReachConstrainedShape(model)) {
+            logger.info("[rust-server-codegen] Generating an unconstrained type for list $shape")
 
-        // TODO We only have to generate this for lists that are members of a structure that is reachable from operation
-        //  input AND from which you can reach a structure that requires validation e.g. Vec<Struct>,
-        //     Vec<HashMap<String, Struct>>...
-        rustCrate.withModule(RustModule.private("validation")) { writer ->
-            ConstrainedListGenerator(model, symbolProvider, writer, shape).render()
+            rustCrate.withModule(RustModule.private("validation")) { writer ->
+                ConstrainedListGenerator(model, symbolProvider, unconstrainedShapeSymbolProvider, writer, shape).render()
+            }
         }
     }
 

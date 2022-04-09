@@ -65,5 +65,9 @@ structure ConB {
 
 
 list ConBList {
+    member: AnotherList
+}
+
+list AnotherList {
     member: ConB
 }
