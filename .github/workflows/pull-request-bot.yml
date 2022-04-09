@@ -1,11 +1,7 @@
-name: PR Bot
 # This job will generate a codegen diff, upload it to S3, and link to it in a comment on the PR.
+name: PR Bot
 on:
-  pull_request:
-    types:
-    - opened
-    - reopened
-    - synchronize
+  workflow_call:
 
 # Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
 concurrency:
@@ -33,32 +29,12 @@ jobs:
       bot-message: ${{ steps.generate-diff.outputs.bot-message }}
     steps:
     - uses: actions/checkout@v2
-    - uses: actions/cache@v2
-      name: Gradle Cache
       with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-    # JDK is needed to generate code
-    - name: Set up JDK
-      uses: actions/setup-java@v1
-      with:
-        java-version: ${{ env.java_version }}
-    # Node is needed to run diff2html
-    - name: Set up NodeJS
-      uses: actions/setup-node@v2
-      with:
-        node-version: '16'
-    - name: Install diff2html-cli
-      run: npm install -g diff2html-cli@5.1.11
+        path: smithy-rs
     - name: Generate diff
-      id: generate-diff
-      run: |
-        ./tools/codegen-diff-revisions.py . ${{ github.event.pull_request.base.sha }}
-        echo "::set-output name=bot-message::$(cat tmp-codegen-diff/bot-message)"
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: generate-codegen-diff
     - uses: aws-actions/configure-aws-credentials@v1
       name: Acquire credentials for uploading to S3
       with:
@@ -67,8 +43,8 @@ jobs:
         aws-region: us-west-2
     - name: Upload diff to S3
       run: |
-        if [[ -d tmp-codegen-diff/${{ github.event.pull_request.base.sha }} ]]; then
-            aws s3 cp tmp-codegen-diff/${{ github.event.pull_request.base.sha }} \
+        if [[ -d artifacts/codegen-diff/${{ github.event.pull_request.base.sha }} ]]; then
+            aws s3 cp artifacts/codegen-diff/${{ github.event.pull_request.base.sha }} \
                 "s3://${S3_BUCKET_NAME}/codegen-diff/${{ github.event.pull_request.base.sha }}" --recursive
         fi
 

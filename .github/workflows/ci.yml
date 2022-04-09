@@ -36,6 +36,12 @@ jobs:
         path: smithy-rs-base-image
         retention-days: 1
 
+  # Run the PR bot after acquiring the build Docker image is completed since it will use it.
+  pr_bot:
+    name: PR Bot
+    needs: acquire-base-image
+    uses: ./github/workflows/pull-request-bot.yml
+
   # The `generate` job runs scripts that produce artifacts that are required by the `test` job,
   # and also runs some checks/lints so that those are run sooner rather than later.
   generate:

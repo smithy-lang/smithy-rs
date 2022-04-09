@@ -113,7 +113,8 @@ RUN set -eux; \
     rm -rf /var/cache/yum; \
     groupadd build; \
     useradd -m -g build build; \
-    chmod 775 /home/build;
+    chmod 775 /home/build; \
+    npm install -g diff2html-cli@5.1.11;
 COPY --chown=build:build --from=install_node /opt/nodejs /opt/nodejs
 COPY --chown=build:build --from=install_rust /opt/cargo /opt/cargo
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
