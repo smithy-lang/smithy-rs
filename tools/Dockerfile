@@ -73,7 +73,7 @@ RUN set -eux; \
     rustup --version; \
     rustup component add rustfmt; \
     rustup component add clippy; \
-    rustup install ${rust_nightly_version}; \
+    rustup toolchain install ${rust_nightly_version} --component clippy; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
 COPY . tools/
