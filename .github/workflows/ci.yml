@@ -40,7 +40,7 @@ jobs:
   pr_bot:
     name: PR Bot
     needs: acquire-base-image
-    uses: ./github/workflows/pull-request-bot.yml
+    uses: ./.github/workflows/pull-request-bot.yml
 
   # The `generate` job runs scripts that produce artifacts that are required by the `test` job,
   # and also runs some checks/lints so that those are run sooner rather than later.
