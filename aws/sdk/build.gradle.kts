@@ -23,6 +23,7 @@ val defaultRustFlags: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
+val crateHasherToolPath = rootProject.projectDir.resolve("tools/crate-hasher")
 val publisherToolPath = rootProject.projectDir.resolve("tools/publisher")
 val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/sdk-versioner")
 val outputDir = buildDir.resolve("aws-sdk")
@@ -314,6 +315,31 @@ tasks.register<ExecRustBuildTool>("hydrateReadme") {
     )
 }
 
+tasks.register<RequireRustBuildTool>("requireCrateHasher") {
+    description = "Ensures the crate-hasher tool is available"
+    inputs.dir(crateHasherToolPath)
+    toolPath = crateHasherToolPath
+    compilerVersion = "nightly-2022-03-29"
+}
+
+tasks.register<ExecRustBuildTool>("generateVersionManifest") {
+    description = "Generate the SDK version.toml file"
+    dependsOn("requireCrateHasher")
+    dependsOn("fixManifests")
+
+    inputs.dir(publisherToolPath)
+
+    toolPath = publisherToolPath
+    binaryName = "publisher"
+    arguments = listOf(
+        "generate-version-manifest",
+        "--location",
+        outputDir.absolutePath,
+        "--smithy-build",
+        outputDir.resolve("../../smithy-build.json").normalize().absolutePath
+    )
+}
+
 task("finalizeSdk") {
     dependsOn("assemble")
     outputs.upToDateWhen { false }
@@ -325,7 +351,8 @@ task("finalizeSdk") {
         "generateIndexMd",
         "fixManifests",
         "hydrateReadme",
-        "relocateChangelog"
+        "relocateChangelog",
+        "generateVersionManifest"
     )
 }
 

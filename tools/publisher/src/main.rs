@@ -71,9 +71,6 @@ enum Args {
     },
     /// Generates a version manifest file for a generated SDK
     GenerateVersionManifest {
-        /// Revision (commit hash, branch, tag, etc) of smithy-rs used to generate the SDK
-        #[clap(long)]
-        smithy_rs_revision: String,
         /// Path to `smithy-build.json`
         #[clap(long)]
         smithy_build: PathBuf,
@@ -117,12 +114,10 @@ async fn main() -> Result<()> {
             subcommand_hydrate_readme(sdk_version, msrv, &output).await?;
         }
         Args::GenerateVersionManifest {
-            smithy_rs_revision,
             smithy_build,
             location,
         } => {
-            subcommand_generate_version_manifest(&smithy_rs_revision, &smithy_build, &location)
-                .await?;
+            subcommand_generate_version_manifest(&smithy_build, &location).await?;
         }
     }
     Ok(())

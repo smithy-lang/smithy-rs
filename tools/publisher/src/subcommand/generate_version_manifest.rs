@@ -7,18 +7,25 @@ use crate::fs::Fs;
 use crate::package::{discover_package_manifests, read_packages};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
+use smithy_rs_tool_common::git::GetLastCommit;
 use smithy_rs_tool_common::package::PackageCategory;
-use smithy_rs_tool_common::shell;
+use smithy_rs_tool_common::shell::{self, ShellOperation};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::Path;
+use tracing::info;
 
 pub async fn subcommand_generate_version_manifest(
-    smithy_rs_revision: &str,
     smithy_build_path: &Path,
     location: &Path,
 ) -> Result<()> {
     verify_crate_hasher_available()?;
+
+    let smithy_rs_revision = GetLastCommit::new(std::env::current_dir()?)
+        .spawn()
+        .await
+        .context("get smithy-rs revision")?;
+    info!("Resolved smithy-rs revision to {}", smithy_rs_revision);
 
     let smithy_build_root = SmithyBuildRoot::from_file(smithy_build_path)?;
     let manifests = discover_package_manifests(location.into())
@@ -30,6 +37,11 @@ pub async fn subcommand_generate_version_manifest(
 
     let mut crates = BTreeMap::new();
     for package in packages {
+        // Don't include examples
+        if let PackageCategory::Unknown = package.category {
+            continue;
+        }
+
         let mut model_hash = None;
         if package.handle.name.starts_with("aws-sdk-") {
             if let Some(projection) = smithy_build_root
@@ -53,12 +65,14 @@ pub async fn subcommand_generate_version_manifest(
             },
         );
     }
+    info!("Discovered and hashed {} crates", crates.len());
     let versions_manifest = VersionsManifest {
-        smithy_rs_revision: smithy_rs_revision.into(),
+        smithy_rs_revision,
         crates,
     };
     let output = toml::to_string_pretty(&versions_manifest).context("serialize versions.toml")?;
     let manifest_file_name = location.join("versions.toml");
+    info!("Writing {:?}...", manifest_file_name);
     std::fs::write(&manifest_file_name, output).context("write versions.toml")?;
     Ok(())
 }
