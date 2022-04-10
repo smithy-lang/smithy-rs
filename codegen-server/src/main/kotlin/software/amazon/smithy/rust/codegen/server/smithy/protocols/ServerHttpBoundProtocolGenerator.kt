@@ -442,7 +442,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         }
                     }
                     val status =
-                        variantShape.getTrait<HttpErrorTrait>()?.let { trait -> trait.code }
+                        variantShape.getTrait<HttpErrorTrait>()?.code
                             ?: errorTrait.defaultHttpStatusCode
                     rustTemplate(
                         """

@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -47,6 +48,8 @@ class ServerBuilderGenerator(
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    private val constraintViolationSymbolProvider =
+        ConstraintViolationSymbolProvider(codegenContext.symbolProvider, model, codegenContext.serviceShape)
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val moduleName = shape.builderSymbol(symbolProvider).namespace.split("::").last()
@@ -87,11 +90,7 @@ class ServerBuilderGenerator(
         val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.Clone)) + RuntimeType.Default
         baseDerives.copy(derives = derives).render(writer)
         writer.rustBlock("pub struct Builder") {
-            for (member in members) {
-                val memberSymbol = builderMemberSymbol(member)
-                val memberName = symbolProvider.toMemberName(member)
-                renderBuilderMember(this, memberName, memberSymbol)
-            }
+            members.forEach { renderBuilderMember(this, it) }
         }
 
         writer.rustBlock("impl Builder") {
@@ -175,7 +174,9 @@ class ServerBuilderGenerator(
     }
 
     // TODO(EventStream): [DX] Consider updating builders to take EventInputStream as Into<EventInputStream>
-    private fun renderBuilderMember(writer: RustWriter, memberName: String, memberSymbol: Symbol) {
+    private fun renderBuilderMember(writer: RustWriter, member: MemberShape) {
+        val memberSymbol = builderMemberSymbol(member)
+        val memberName = symbolProvider.toMemberName(member)
         // Builder members are crate-public to enable using them directly in serializers/deserializers.
         // During XML deserialization, `builder.<field>.take` is used to append to lists and maps.
         writer.write("pub(crate) $memberName: #T,", memberSymbol)
@@ -219,8 +220,6 @@ class ServerBuilderGenerator(
         writer: RustWriter,
         member: MemberShape,
     ) {
-        check(model.expectShape(member.target, StructureShape::class.java) != null)
-
         val builderMemberSymbol = builderMemberSymbol(member)
         val inputType = builderMemberSymbol.rustType().stripOuter<RustType.Option>().implInto().letIf(member.isOptional) { "Option<$it>" }
         val memberName = symbolProvider.toMemberName(member)
@@ -253,24 +252,24 @@ class ServerBuilderGenerator(
     enum class ValidationFailureKind {
         // A field is required but was not provided.
         MISSING_MEMBER,
-        // A builder was provided for a field targeting a struct, but that builder failed to build.
-        BUILDER_FAILURE,
+        // An unconstrained type was provided for a field targeting a constrained shape, but it failed to convert into the constrained type.
+        CONSTRAINED_SHAPE_FAILURE,
     }
 
     data class ValidationFailure(val forMember: MemberShape, val kind: ValidationFailureKind) {
         fun name() = when (kind) {
             ValidationFailureKind.MISSING_MEMBER -> "Missing${forMember.memberName.toPascalCase()}"
-            ValidationFailureKind.BUILDER_FAILURE -> "${forMember.memberName.toPascalCase()}ValidationFailure"
+            ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE -> "${forMember.memberName.toPascalCase()}ValidationFailure"
         }
 
         /**
          * Whether the validation failure is a Rust tuple struct with one element.
          */
-        fun hasInner() = kind == ValidationFailureKind.BUILDER_FAILURE
+        fun hasInner() = kind == ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE
     }
 
     private fun renderValidationFailure(writer: RustWriter, validationFailure: ValidationFailure) {
-        if (validationFailure.kind == ValidationFailureKind.BUILDER_FAILURE) {
+        if (validationFailure.kind == ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE) {
             // TODO(): `#[doc(hidden)]` until we commit to making builders of builders public.
             Attribute.DocHidden.render(writer)
         }
@@ -279,12 +278,11 @@ class ServerBuilderGenerator(
 
         when (validationFailure.kind) {
             ValidationFailureKind.MISSING_MEMBER -> writer.rust("${validationFailure.name()},")
-            ValidationFailureKind.BUILDER_FAILURE -> {
-                val targetStructureShape = model.expectShape(validationFailure.forMember.target, StructureShape::class.java)
-                writer.rust("${validationFailure.name()}(<#{T} as std::convert::TryFrom<#{T}>>::Error),",
-                    symbolProvider.toSymbol(targetStructureShape),
-                    targetStructureShape.builderSymbol(symbolProvider)
-                )
+            ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE -> {
+                val targetShape = model.expectShape(validationFailure.forMember.target)
+                // Note we cannot express the inner validation failure as `<T as TryFrom<T>>::Error`, because `T` might
+                // be `pub(crate)` and that would leak `T` in a public interface.
+                writer.rust("${validationFailure.name()}(#T),", constraintViolationSymbolProvider.toSymbol(targetShape))
             }
         }
     }
@@ -295,7 +293,7 @@ class ServerBuilderGenerator(
         return when (validationFailure.kind) {
             ValidationFailureKind.MISSING_MEMBER -> "`$memberName` was not specified but it is required when building `$structureSymbol`"
             // TODO Nest errors.
-            ValidationFailureKind.BUILDER_FAILURE -> "validation failure occurred when building member `$memberName`, when building `$structureSymbol`"
+            ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE -> "validation failure occurred building member `$memberName` when building `$structureSymbol`"
         }
     }
 
@@ -304,7 +302,6 @@ class ServerBuilderGenerator(
             builderMissingFieldForMember(member),
             builderValidationFailureForMember(member),
         )
-        // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Constrained shapes.
     }
 
     /**
@@ -312,7 +309,7 @@ class ServerBuilderGenerator(
      */
     private fun builderValidationFailureForMember(member: MemberShape) =
         if (member.targetNeedsValidation(model, symbolProvider)) {
-            ValidationFailure(member, ValidationFailureKind.BUILDER_FAILURE)
+            ValidationFailure(member, ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE)
         } else {
             null
         }
@@ -321,6 +318,8 @@ class ServerBuilderGenerator(
      * Returns the builder failure associated with the `member` field if it is `required`.
      */
     private fun builderMissingFieldForMember(member: MemberShape) =
+        // TODO: We go through the symbol provider because non-`required` blob streaming members are interpreted as `required`,
+        //     so we can't use `member.isOptional`. See https://github.com/awslabs/smithy-rs/issues/1302.
         if (symbolProvider.toSymbol(member).isOptional()) {
             null
         } else {

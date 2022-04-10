@@ -10,10 +10,10 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.util.lookup
@@ -60,6 +60,8 @@ class UnconstrainedShapeSymbolProviderTest {
             """.asSmithyModel()
 
         val serviceShape = model.lookup<ServiceShape>("test#TestService")
+        // TODO I can't move this file to `codegen` subproject because `serverTestSymbolProvider` is only in server subproject,
+        //     but I need the symbol provider to be in `codegen` subproject because it's used in the JsonParser.
         val symbolProvider = UnconstrainedShapeSymbolProvider(serverTestSymbolProvider(model, serviceShape), model, serviceShape)
 
         val listAShape = model.lookup<ListShape>("test#ListA")

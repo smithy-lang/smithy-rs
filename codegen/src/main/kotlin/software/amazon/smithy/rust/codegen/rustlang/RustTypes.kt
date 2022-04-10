@@ -279,7 +279,9 @@ fun RustType.isCopy(): Boolean = when (this) {
 data class RustMetadata(
     val derives: Attribute.Derives = Attribute.Derives.Empty,
     val additionalAttributes: List<Attribute> = listOf(),
-    val public: Boolean
+    val public: Boolean,
+    // TODO Refactor using enum
+    val pubCrate: Boolean = false
 ) {
     fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
@@ -296,8 +298,10 @@ data class RustMetadata(
         return this
     }
 
-    fun renderVisibility(writer: RustWriter): RustMetadata {
-        if (public) {
+    private fun renderVisibility(writer: RustWriter): RustMetadata {
+        if (pubCrate) {
+            writer.writeInline("pub (crate) ")
+        } else if (public) {
             writer.writeInline("pub ")
         }
         return this

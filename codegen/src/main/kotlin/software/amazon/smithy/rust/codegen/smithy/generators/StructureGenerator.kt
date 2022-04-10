@@ -8,6 +8,8 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -25,6 +27,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.error.ErrorGenerator
@@ -77,12 +80,13 @@ fun MemberShape.targetNeedsValidation(model: Model, symbolProvider: SymbolProvid
         return false
     }
 
-//    if (targetShape.isListShape) {
-//        targetShape.asListShape().get()
-//    }
-
-    return targetShape.isStructureShape
-        && StructureGenerator.serverHasFallibleBuilder(targetShape.asStructureShape().get(), model, symbolProvider)
+    return when {
+        targetShape.isListShape -> targetShape.asListShape().get().canReachConstrainedShape(model, symbolProvider)
+        targetShape.isSetShape -> targetShape.asSetShape().get().canReachConstrainedShape(model, symbolProvider)
+        targetShape.isMapShape -> targetShape.asMapShape().get().canReachConstrainedShape(model, symbolProvider)
+        targetShape.isStructureShape -> targetShape.asStructureShape().get().canReachConstrainedShape(model, symbolProvider)
+        else -> false
+    }
 }
 
 /**
@@ -90,13 +94,18 @@ fun MemberShape.targetNeedsValidation(model: Model, symbolProvider: SymbolProvid
  * Setter names will never hit a reserved word and therefore never need escaping.
  */
 fun MemberShape.deserializerBuilderSetterName(model: Model, symbolProvider: SymbolProvider): String {
-    val targetShape = model.expectShape(this.target)
-    if (targetShape.isStructureShape
-        && StructureGenerator.serverHasFallibleBuilder(targetShape.asStructureShape().get(), model, symbolProvider)) {
-        return "set_${this.memberName.toSnakeCase()}"
+    val canReachConstrainedShape = when (val targetShape = model.expectShape(this.target)) {
+        is CollectionShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
+        is MapShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
+        is StructureShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
+        else -> false
     }
 
-    return this.memberName.toSnakeCase()
+    return if (canReachConstrainedShape) {
+        "set_${this.memberName.toSnakeCase()}"
+    } else {
+        this.memberName.toSnakeCase()
+    }
 }
 
 class StructureGenerator(
@@ -137,9 +146,8 @@ class StructureGenerator(
 
         // TODO Ensure server subproject uses this function
         // TODO Not quite right. @box not taken into account. Also shape builders / constrained shapes
-        fun serverHasFallibleBuilder(structureShape: StructureShape, model: Model, symbolProvider: SymbolProvider): Boolean =
-            structureShape.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
-                    || structureShape.members().any { it.targetNeedsValidation(model, symbolProvider) }
+        fun serverHasFallibleBuilder(structureShape: StructureShape, model: Model, symbolProvider: SymbolProvider) =
+            structureShape.canReachConstrainedShape(model, symbolProvider)
     }
 
     /**

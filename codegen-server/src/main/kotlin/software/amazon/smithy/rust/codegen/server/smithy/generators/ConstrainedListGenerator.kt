@@ -5,108 +5,90 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.server.smithy.UnconstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.shape
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.smithy.wrapValidated
 
 // TODO Rename to Unconstrained?
 class ConstrainedListGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
+    private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val writer: RustWriter,
     val shape: ListShape
 ) {
-    private val symbol = symbolProvider.toSymbol(shape)
-
     fun render() {
-        check(shape.canReachConstrainedShape(model))
+        check(shape.canReachConstrainedShape(model, symbolProvider))
 
         // TODO Unit test that this is pub(crate).
 
+        // TODO Some of these can be come private properties.
         val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
         val name = symbol.name
-        val innerSymbol = unconstrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.member.target))
+        val innerShape = model.expectShape(shape.member.target)
+        val innerSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
+        // TODO: We will need a `ConstrainedSymbolProvider` when we have constraint traits.
+        val constrainedSymbol = symbolProvider.toSymbol(shape)
+        val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
+        val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
-        // impl #{ValidateTrait} for #{Shape}  {
-        //     type Unvalidated = #{UnvalidatedSymbol};
-        // }
-        //
-        // impl std::convert::TryFrom<Builder> for #{Structure} {
-        //     type Error = ValidationFailure;
-        //
-        //     fn try_from(builder: Builder) -> Result<Self, Self::Error> {
-        //         builder.build()
-        //     }
-        // }
-
-        writer.withModule(module, RustMetadata(public = false)) {
+        // TODO Strictly, `ValidateTrait` only needs to be implemented if this list is a struct member.
+        // TODO I don't understand why pub(crate) suffices, when we're leaking it via the server builder validation failure enum variant definition.
+        // TODO The implementation of the Validate trait is probably not for the correct type. There might be more than
+        //    one "path" to an e.g. Vec<Vec<StructA>> with different constraint traits along the path, because constraint
+        //    traits can be applied to members, or simply because the model might have two different lists holding `StructA`.
+        //    So we might have to newtype things.
+        writer.withModule(module, RustMetadata(public = false, pubCrate = true)) {
             rustTemplate(
                 """
-                pub(crate) struct $name(#{UnconstrainedInnerSymbol});
+                ##[derive(Debug, Clone)]
+                pub(crate) struct $name(pub(crate) Vec<#{InnerUnconstrainedSymbol}>);
+                
+                impl #{ValidateTrait} for #{ConstrainedSymbol}  {
+                    type Unvalidated = $name;
+                }
+                
+                impl From<$name> for #{Validated} {
+                    fn from(value: $name) -> Self {
+                        Self::Unvalidated(value)
+                    }
+                }
+                
+                ##[derive(Debug)]
+                pub struct $constraintViolationName(#{InnerConstraintViolationSymbol});
+                
+                impl std::convert::TryFrom<$name> for #{ConstrainedSymbol} {
+                    type Error = $constraintViolationName;
+                
+                    fn try_from(value: $name) -> Result<Self, Self::Error> {
+                        let res: Result<Self, #{InnerConstraintViolationSymbol}> = value
+                            .0
+                            .into_iter()
+                            .map(|inner| {
+                                use std::convert::TryInto;
+                                inner.try_into()
+                            })
+                            .collect();
+                        res.map_err(|err| ValidationFailure(err))
+                    }
+                }
                 """,
-//            "ValidateTrait" to RuntimeType.ValidateTrait(),
-                "UnconstrainedInnerSymbol" to innerSymbol,
-//            "Shape" to symbol,
-//            "UnvalidatedSymbol" to unvalidatedSymbol,
+                "InnerUnconstrainedSymbol" to innerSymbol,
+                "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
+                "ConstrainedSymbol" to constrainedSymbol,
+                "Validated" to constrainedSymbol.wrapValidated(),
+                "ValidateTrait" to RuntimeType.ValidateTrait(),
             )
-        }
-    }
-
-//    private fun unconstrainedSymbol(shape: ListShape): Symbol {
-//        mapStructToBuilderRecursively(symbol)
-//    }
-
-//    private fun structDefinition() = if (shape.isConstrained()) {
-//        "pub ${name()}();"
-//    } else {
-//        "${name()};"
-//    }
-//
-//    private fun name() = if (shape.isConstrained()) {
-//        shape.id.name
-//    } else {
-//        "${shape.id.name}Constrained"
-//    }
-
-    private fun mapStructToBuilderRecursively(symbol: Symbol): Symbol {
-        // TODO I think this will fail for lists of hash maps.
-        check(symbol.references.size <= 1)
-
-        val shape = symbol.shape()
-
-        if (shape.isStructureShape) {
-            val builderSymbolBuilder = shape.asStructureShape().get().builderSymbol(symbolProvider).toBuilder()
-            check(symbol.references.isEmpty())
-            return builderSymbolBuilder.build()
-        } else {
-            return if (symbol.references.isEmpty()) {
-                symbol
-            } else {
-                // TODO This will fail with maps
-                check(shape.isListShape)
-
-                val newSymbol = mapStructToBuilderRecursively(symbol.references[0].symbol)
-                val newType = RustType.Vec(newSymbol.rustType())
-                // TODO Not using `mapRustType` because it adds a reference to itself, which is wrong.
-                Symbol.builder()
-                    .rustType(newType)
-                    .addReference(newSymbol)
-                    .name(newType.name)
-                    .build()
-            }
         }
     }
 }

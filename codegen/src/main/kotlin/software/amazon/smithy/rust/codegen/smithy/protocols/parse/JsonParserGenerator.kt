@@ -35,8 +35,9 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
-import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
@@ -52,6 +53,9 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
+// TODO: Separate commit: Make all functions pub(crate). If the functions have in their type signature a pub(crate) type,
+//     and the function is declared `pub`, Rust will complain, even if the json_deser module is not `pub`.
+
 class JsonParserGenerator(
     codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
@@ -60,6 +64,7 @@ class JsonParserGenerator(
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    private val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, codegenContext.serviceShape)
     private val runtimeConfig = codegenContext.runtimeConfig
     private val mode = codegenContext.mode
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
@@ -97,7 +102,7 @@ class JsonParserGenerator(
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
             it.rustBlockTemplate(
-                "pub fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "pub(crate) fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
                 "Builder" to structureShape.builderSymbol(symbolProvider),
                 *codegenScope
             ) {
@@ -122,7 +127,7 @@ class JsonParserGenerator(
         val fnName = symbolProvider.deserializeFunctionName(shape) + "_payload"
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
-                "pub fn $fnName(input: &[u8]) -> Result<#{Shape}, #{Error}>",
+                "pub(crate) fn $fnName(input: &[u8]) -> Result<#{Shape}, #{Error}>",
                 *codegenScope,
                 "Shape" to symbolProvider.toSymbol(shape)
             ) {
@@ -170,7 +175,7 @@ class JsonParserGenerator(
     private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", jsonDeserModule) {
         it.rust(
             """
-            pub fn or_empty_doc(data: &[u8]) -> &[u8] {
+            pub(crate) fn or_empty_doc(data: &[u8]) -> &[u8] {
                 if data.is_empty() {
                     b"{}"
                 } else {
@@ -278,16 +283,22 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
+        val returnUnconstrainedType = shape.canReachConstrainedShape(model, symbolProvider)
+        val returnType = if (returnUnconstrainedType) {
+            unconstrainedShapeSymbolProvider.toSymbol(shape)
+        } else {
+            symbolProvider.toSymbol(shape)
+        }
         val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             // Allow non-snake-case since some SDK models have lists with names prefixed with `__listOf__`,
             // which become `__list_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
             it.rustBlockTemplate(
                 """
                 ##[allow(clippy::type_complexity, non_snake_case)]
-                pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
+                pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
-                "Shape" to symbolProvider.toSymbol(shape),
+                "ReturnType" to returnType,
                 *codegenScope,
             ) {
                 startArrayOrNull {
@@ -313,7 +324,11 @@ class JsonParserGenerator(
                             }
                         }
                     }
-                    rust("Ok(Some(items))")
+                    if (returnUnconstrainedType) {
+                        rust("Ok(Some(#{T}(items)))", returnType)
+                    } else {
+                        rust("Ok(Some(items))")
+                    }
                 }
             }
         }
@@ -330,7 +345,7 @@ class JsonParserGenerator(
             it.rustBlockTemplate(
                 """
                 ##[allow(clippy::type_complexity, non_snake_case)]
-                pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
+                pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
                 "Shape" to symbolProvider.toSymbol(shape),
@@ -363,16 +378,16 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
-        val returnBuilder = StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)
+        val returnBuilder = shape.canReachConstrainedShape(model, symbolProvider)
         val returnType = if (returnBuilder) {
-            shape.builderSymbol(symbolProvider)
+            unconstrainedShapeSymbolProvider.toSymbol(shape)
         } else {
             symbol
         }
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 """
-                pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
+                pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
                 "ReturnType" to returnType,
@@ -412,7 +427,7 @@ class JsonParserGenerator(
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 """
-                pub fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
+                pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
                 *codegenScope,
