@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
@@ -50,7 +51,7 @@ class ServerCombinedErrorGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(RustModule.public("error")) { writer ->
             listOf("FooException", "ComplexError", "InvalidGreeting").forEach {
-                model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, writer, CodegenTarget.SERVER)
+                model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(model, symbolProvider, writer)
             }
             val generator = ServerCombinedErrorGenerator(model, symbolProvider, model.lookup("error#Greeting"))
             generator.render(writer)

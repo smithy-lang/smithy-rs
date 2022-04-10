@@ -18,7 +18,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedListGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedListGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
@@ -190,7 +190,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             logger.info("[rust-server-codegen] Generating an unconstrained type for list $shape")
 
             rustCrate.withModule(RustModule.private("validation")) { writer ->
-                ConstrainedListGenerator(model, symbolProvider, unconstrainedShapeSymbolProvider, constraintViolationSymbolProvider, writer, shape).render()
+                UnconstrainedListGenerator(model, symbolProvider, unconstrainedShapeSymbolProvider, constraintViolationSymbolProvider, writer, shape).render()
             }
         }
     }

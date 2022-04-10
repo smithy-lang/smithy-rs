@@ -63,7 +63,7 @@ class ServerBuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         if (StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)) {
-            Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
+            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
             // TODO(): `#[non_exhaustive] until we commit to making builders of builders public.
             Attribute.NonExhaustive.render(writer)
             writer.rustBlock("pub enum ValidationFailure") {

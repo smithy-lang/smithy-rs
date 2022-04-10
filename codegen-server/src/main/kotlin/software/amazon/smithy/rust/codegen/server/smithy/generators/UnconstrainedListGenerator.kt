@@ -17,8 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.wrapValidated
 
-// TODO Rename to Unconstrained?
-class ConstrainedListGenerator(
+class UnconstrainedListGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
@@ -31,7 +30,7 @@ class ConstrainedListGenerator(
 
         // TODO Unit test that this is pub(crate).
 
-        // TODO Some of these can be come private properties.
+        // TODO Some of these can become private properties.
         val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
         val name = symbol.name
@@ -64,8 +63,8 @@ class ConstrainedListGenerator(
                     }
                 }
                 
-                ##[derive(Debug)]
-                pub struct $constraintViolationName(#{InnerConstraintViolationSymbol});
+                ##[derive(Debug, PartialEq)]
+                pub struct $constraintViolationName(pub(crate) #{InnerConstraintViolationSymbol});
                 
                 impl std::convert::TryFrom<$name> for #{ConstrainedSymbol} {
                     type Error = $constraintViolationName;

@@ -80,9 +80,11 @@ fun testCodegenContext(
     model,
     testSymbolProvider(model),
     TestRuntimeConfig,
+    // TODO We should not fabricate a service shape out of thin air here, but rather look it up in the model.
     serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
     ShapeId.from("test#Protocol"),
-    settings, mode
+    settings,
+    mode
 )
 
 private const val SmithyVersion = "1.0"
@@ -93,7 +95,7 @@ fun String.asSmithyModel(sourceLocation: String? = null): Model {
 }
 
 /**
- * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder
+ * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
 fun StructureShape.renderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter, forWhom: CodegenTarget = CodegenTarget.CLIENT) {
     StructureGenerator(model, symbolProvider, writer, this).render(forWhom)
