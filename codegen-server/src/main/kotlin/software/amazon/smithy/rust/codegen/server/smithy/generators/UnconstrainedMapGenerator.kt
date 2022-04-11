@@ -33,9 +33,6 @@ class UnconstrainedMapGenerator(
 ) {
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
-
-        // TODO Save in booleans whether keys and/or values need validation.
-
         // TODO Unit test that this is pub(crate).
 
         // TODO Some of these can become private properties.
@@ -57,19 +54,17 @@ class UnconstrainedMapGenerator(
         // TODO: We will need a `ConstrainedSymbolProvider` when we have constraint traits.
         val constrainedSymbol = symbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
-        val keyConstraintViolationSymbol = if (isKeyConstrained(keyShape)) {
-            constraintViolationSymbolProvider.toSymbol(keyShape)
-        } else {
-            null
-        }
-        val valueConstraintViolationSymbol = if (isValueConstrained(valueShape)) {
-            constraintViolationSymbolProvider.toSymbol(valueShape)
-        } else {
-            null
-        }
         val constraintViolationCodegenScope = listOfNotNull(
-            keyConstraintViolationSymbol?.let { "KeyConstraintViolationSymbol" to it },
-            valueConstraintViolationSymbol?.let { "ValueConstraintViolationSymbol" to it },
+            if (isKeyConstrained(keyShape)) {
+                "KeyConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(keyShape)
+            } else {
+                null
+            },
+            if (isValueConstrained(valueShape)) {
+                "ValueConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(valueShape)
+            } else {
+                null
+            },
         ).toTypedArray()
 
         // TODO Strictly, `ValidateTrait` only needs to be implemented if this list is a struct member.
@@ -135,5 +130,4 @@ class UnconstrainedMapGenerator(
         // TODO Constraint traits on simple shapes.
         else -> false
     }
-
 }
