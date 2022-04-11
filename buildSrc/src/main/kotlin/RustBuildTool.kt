@@ -86,9 +86,6 @@ abstract class RequireRustBuildTool : DefaultTask() {
     @get:InputDirectory
     var toolPath: File? = null
 
-    @get:Input
-    var compilerVersion: String? = null
-
     @Inject
     protected open fun getObjectFactory(): ObjectFactory = throw UnsupportedOperationException()
 
@@ -103,9 +100,6 @@ abstract class RequireRustBuildTool : DefaultTask() {
         // Otherwise, in local dev, run `cargo install` to make sure the tool is on the path.
         if (System.getenv()["SMITHY_RS_DOCKER_BUILD_IMAGE"] != "1") {
             val command = mutableListOf("cargo")
-            if (compilerVersion != null) {
-                command.add("+$compilerVersion")
-            }
             command.add("install")
             command.add("--path")
             command.add(toolPath!!.absolutePath)
