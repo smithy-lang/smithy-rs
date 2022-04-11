@@ -206,6 +206,14 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+    - uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
+    - name: Set bot message outputs
+      id: bot-messages
+      run: echo ::set-output name=codegen-diff::"$(cat ./artifacts/bot-message-codegen-diff)"
     - name: Post bot comment
       uses: actions/github-script@v5
       if: ${{ github.head_ref != null }}
@@ -215,7 +223,7 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '${{ needs.generate-diff.outputs.bot-message }}\n\n' +
+            body: '${{ steps.bot-messages.outputs.codegen-diff }}\n\n' +
               '${{ needs.generate-doc-preview.outputs.bot-message }}\n\n' +
               '${{ needs.generate-server-benchmark.outputs.bot-message }}\n\n'
           })

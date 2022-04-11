@@ -14,6 +14,5 @@ fi
 
 base_revision="$1"
 ./tools/codegen-diff-revisions.py . "${base_revision}"
-echo "::set-output name=bot-message::$(cat tmp-codegen-diff/bot-message)"
 
-mv tmp-codegen-diff ../artifacts/codegen-diff
+mv tmp-codegen-diff/bot-message ../artifacts/bot-message-codegen-diff
