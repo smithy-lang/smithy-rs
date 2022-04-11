@@ -113,8 +113,7 @@ RUN set -eux; \
     rm -rf /var/cache/yum; \
     groupadd build; \
     useradd -m -g build build; \
-    chmod 775 /home/build; \
-    npm install -g diff2html-cli@5.1.11;
+    chmod 775 /home/build;
 COPY --chown=build:build --from=install_node /opt/nodejs /opt/nodejs
 COPY --chown=build:build --from=install_rust /opt/cargo /opt/cargo
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
@@ -129,6 +128,7 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     RUSTDOCFLAGS="-D warnings" \
     RUSTFLAGS="-D warnings" \
     SMITHY_RS_DOCKER_BUILD_IMAGE=1
+RUN npm install -g diff2html-cli@5.1.11
 WORKDIR /home/build
 COPY ci-build/scripts/sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test

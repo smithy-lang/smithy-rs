@@ -7,12 +7,13 @@
 set -eux
 
 cargo --version
+crate-hasher --version
+diff2html --version
 git --version
 java --version
 node --version
 publisher --version
-crate-hasher --version
-sdk-versioner --version
 python3 --version
 rustc +"${RUST_NIGHTLY_VERSION}" --version
 rustc --version
+sdk-versioner --version
