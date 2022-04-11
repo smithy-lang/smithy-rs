@@ -25,16 +25,20 @@ import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymb
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.targetNeedsValidation
+import software.amazon.smithy.rust.codegen.smithy.isBoxed
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
+import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.wrapValidated
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -193,6 +197,8 @@ class ServerBuilderGenerator(
         val symbol = symbolProvider.toSymbol(member)
         val memberName = symbolProvider.toMemberName(member)
 
+        val hasBox = symbol.mapRustType { it.stripOuter<RustType.Option>() }.isBoxed()
+
         writer.documentShape(member, model)
         writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
             rust("self.$memberName = ")
@@ -200,9 +206,18 @@ class ServerBuilderGenerator(
                 if (member.targetNeedsValidation(model, symbolProvider)) {
                     val validatedType = "${symbol.wrapValidated().rustType().namespace}::Validated::Validated"
                     if (symbol.isOptional()) {
-                        write("input.map(|v| $validatedType(v))")
+                        if (hasBox) {
+                            write("input.map(|v| Box::new($validatedType(*v)))")
+                        } else {
+                            write("input.map(|v| $validatedType(v))")
+                        }
                     } else {
-                        write("$validatedType(input)")
+                        if (hasBox) {
+                            // TODO Add a protocol test testing this branch.
+                            write("Box::new($validatedType(*input))")
+                        } else {
+                            write("$validatedType(input)")
+                        }
                     }
                 } else {
                     write("input")
@@ -280,9 +295,17 @@ class ServerBuilderGenerator(
             ValidationFailureKind.MISSING_MEMBER -> writer.rust("${validationFailure.name()},")
             ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE -> {
                 val targetShape = model.expectShape(validationFailure.forMember.target)
+
+                // TODO I guess the RustBoxTrait logic could be handled by the symbol provider.
+                val constraintViolationSymbol =
+                    constraintViolationSymbolProvider.toSymbol(targetShape)
+                        .letIf(validationFailure.forMember.hasTrait<RustBoxTrait>()) {
+                            it.makeRustBoxed()
+                        }
+
                 // Note we cannot express the inner validation failure as `<T as TryFrom<T>>::Error`, because `T` might
                 // be `pub(crate)` and that would leak `T` in a public interface.
-                writer.rust("${validationFailure.name()}(#T),", constraintViolationSymbolProvider.toSymbol(targetShape))
+                writer.rust("${validationFailure.name()}(#T),", constraintViolationSymbol)
             }
         }
     }
@@ -359,14 +382,22 @@ class ServerBuilderGenerator(
      * Returns the symbol for a builder's member.
      * All builder members are optional, but only some are `Option<T>`s where `T` needs to be validated.
      */
-    private fun builderMemberSymbol(member: MemberShape): Symbol =
-        symbolProvider.toSymbol(member)
+    private fun builderMemberSymbol(member: MemberShape): Symbol {
+        val strippedOption = symbolProvider.toSymbol(member)
             // Strip the `Option` in case the member is not `required`.
             .mapRustType { it.stripOuter<RustType.Option>() }
-            // Wrap the symbol with the Cow-like `validation::Validated` type in case the target member shape needs validation.
+
+        val hadBox = strippedOption.isBoxed()
+        return strippedOption
+            // Strip the `Box` in case the member can reach itself recursively.
+            .mapRustType { it.stripOuter<RustType.Box>() }
+            // Wrap it in the Cow-like `validation::Validated` type in case the target member shape needs validation.
             .letIf(member.targetNeedsValidation(model, symbolProvider)) { it.wrapValidated() }
-            // Ensure we end up with an `Option`.
+            // Box it in case the member can reach itself recursively.
+            .letIf(hadBox) { it.makeRustBoxed() }
+            // Ensure we always end up with an `Option`.
             .makeOptional()
+    }
 
     /**
      * Writes the code to instantiate the struct the builder builds.
@@ -388,24 +419,44 @@ class ServerBuilderGenerator(
 
                 withBlock("$memberName: self.$memberName", ",") {
                     // Write the modifier(s).
-                    builderValidationFailureForMember(member)?.let {
+                    builderValidationFailureForMember(member)?.also { validationFailure ->
                         // TODO Remove `TryInto` import when we switch to 2021 edition.
-                        rustTemplate(
-                            """
-                            .map(|v| match v {
-                                #{Validated}::Validated(x) => Ok(x),
-                                #{Validated}::Unvalidated(x) => {
-                                    use std::convert::TryInto;
-                                    x.try_into()
-                                }
-                            })
-                            .map(|v| v.map_err(|err| ValidationFailure::${it.name()}(err)))
-                            .transpose()?
-                            """,
-                            "Validated" to RuntimeType.Validated()
-                        )
+                        val hasBox = builderMemberSymbol(member)
+                            .mapRustType { it.stripOuter<RustType.Option>() }
+                            .isBoxed()
+                        if (hasBox) {
+                            rustTemplate(
+                                """
+                                .map(|v| match *v {
+                                    #{Validated}::Validated(x) => Ok(Box::new(x)),
+                                    #{Validated}::Unvalidated(x) => {
+                                        use std::convert::TryInto;
+                                        Ok(Box::new(x.try_into()?))
+                                    }
+                                })
+                                .map(|v| v.map_err(|err| ValidationFailure::${validationFailure.name()}(Box::new(err))))
+                                .transpose()?
+                                """,
+                                "Validated" to RuntimeType.Validated()
+                            )
+                        } else {
+                            rustTemplate(
+                                """
+                                .map(|v| match v {
+                                    #{Validated}::Validated(x) => Ok(x),
+                                    #{Validated}::Unvalidated(x) => {
+                                        use std::convert::TryInto;
+                                        x.try_into()
+                                    }
+                                })
+                                .map(|v| v.map_err(|err| ValidationFailure::${validationFailure.name()}(err)))
+                                .transpose()?
+                                """,
+                                "Validated" to RuntimeType.Validated()
+                            )
+                        }
                     }
-                    builderMissingFieldForMember(member)?.let {
+                    builderMissingFieldForMember(member)?.also {
                         rust(".ok_or(ValidationFailure::${it.name()})?")
                     }
                 }

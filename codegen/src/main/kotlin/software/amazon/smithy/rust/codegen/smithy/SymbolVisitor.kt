@@ -234,9 +234,12 @@ class SymbolVisitor(
         }
 
     /**
-     * Produce `Box<T>` when the shape has the `RustBoxTrait`
+     * Boxes and returns [symbol], the symbol for the target of the member shape [shape], if [shape] is annotated with
+     * [RustBoxTrait]; otherwise returns [symbol] unchanged.
+     *
+     * See `RecursiveShapeBoxer.kt` for the model transformation pass that annotates model shapes with [RustBoxTrait].
      */
-    private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
+    private fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol {
         return if (shape.hasTrait<RustBoxTrait>()) {
             val rustType = RustType.Box(symbol.rustType())
             with(Symbol.builder()) {

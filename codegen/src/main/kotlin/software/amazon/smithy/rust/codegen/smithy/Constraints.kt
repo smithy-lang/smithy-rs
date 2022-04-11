@@ -36,30 +36,30 @@ fun Shape.isConstrained(symbolProvider: SymbolProvider) = when (this) {
     }
 }
 
-fun StructureShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean {
+fun StructureShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider, visited: Set<Shape> = emptySet()): Boolean {
     if (this.isConstrained(symbolProvider)) {
         return true
     }
 
     return this.members().map { model.expectShape(it.target) }.any {
-        it.isConstrained(symbolProvider) || unconstrainedShapeCanReachConstrainedShape(it, model, symbolProvider)
+        it.isConstrained(symbolProvider) || unconstrainedShapeCanReachConstrainedShape(it, model, symbolProvider, visited)
     }
 }
 
-fun CollectionShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean {
+fun CollectionShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider, visited: Set<Shape> = emptySet()): Boolean {
     if (this.isConstrained(symbolProvider)) {
         return true
     }
 
     val member = model.expectShape(this.member.target)
 
-    return member.isConstrained(symbolProvider) || unconstrainedShapeCanReachConstrainedShape(member, model, symbolProvider)
+    return member.isConstrained(symbolProvider) || unconstrainedShapeCanReachConstrainedShape(member, model, symbolProvider, visited)
 }
 
 fun ListShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) = (this as CollectionShape).canReachConstrainedShape(model, symbolProvider)
 fun SetShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) = (this as CollectionShape).canReachConstrainedShape(model, symbolProvider)
 
-fun MapShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean {
+fun MapShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider, visited: Set<Shape> = emptySet()): Boolean {
     if (this.isConstrained(symbolProvider)) {
         return true
     }
@@ -67,21 +67,27 @@ fun MapShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvid
     val key = model.expectShape(this.key.target)
     val value = model.expectShape(this.value.target)
 
-    return key.isConstrained(symbolProvider) || value.isConstrained(symbolProvider) || unconstrainedShapeCanReachConstrainedShape(value, model, symbolProvider)
+    return key.isConstrained(symbolProvider) || value.isConstrained(symbolProvider) || unconstrainedShapeCanReachConstrainedShape(value, model, symbolProvider, visited)
 }
 
-private fun unconstrainedShapeCanReachConstrainedShape(shape: Shape, model: Model, symbolProvider: SymbolProvider): Boolean {
+private fun unconstrainedShapeCanReachConstrainedShape(shape: Shape, model: Model, symbolProvider: SymbolProvider, visited: Set<Shape>): Boolean {
     check(!shape.isConstrained(symbolProvider)) { "This function can only be called with unconstrained shapes" }
 
-    // TODO
-    if (shape.id.name == "RecursiveShapesInputOutputNested1") {
+    if (visited.contains(shape)) {
         return false
     }
 
+//    // TODO
+//    if (shape.id.name == "RecursiveShapesInputOutputNested1") {
+//        return false
+//    }
+
+    val newVisited = setOf(shape).plus(visited)
+
     return when (shape) {
-        is StructureShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        is CollectionShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        is MapShape -> shape.canReachConstrainedShape(model, symbolProvider)
+        is StructureShape -> shape.canReachConstrainedShape(model, symbolProvider, newVisited)
+        is CollectionShape -> shape.canReachConstrainedShape(model, symbolProvider, newVisited)
+        is MapShape -> shape.canReachConstrainedShape(model, symbolProvider, newVisited)
         // TODO Constraint traits on simple shapes.
         else -> false
     }

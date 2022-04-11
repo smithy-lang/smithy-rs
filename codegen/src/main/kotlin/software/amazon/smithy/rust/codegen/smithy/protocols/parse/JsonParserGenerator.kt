@@ -246,6 +246,8 @@ class JsonParserGenerator(
         }
         val symbol = symbolProvider.toSymbol(memberShape)
         if (symbol.isRustBoxed()) {
+            // Before boxing, convert into `Validated`.
+            rust(".map(|x| x.into())")
             rust(".map(Box::new)")
         }
     }

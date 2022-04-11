@@ -76,9 +76,9 @@ fun MemberShape.targetNeedsValidation(model: Model, symbolProvider: SymbolProvid
     // closure.
     // Perhaps I can simply do `PathFinder.search(shape, "")` with an empty selector.
     val symbol = symbolProvider.toSymbol(targetShape)
-    if (symbol.name == "RecursiveShapesInputOutputNested1") {
-        return false
-    }
+//    if (symbol.name == "RecursiveShapesInputOutputNested1") {
+//        return false
+//    }
 
     return when {
         targetShape.isListShape -> targetShape.asListShape().get().canReachConstrainedShape(model, symbolProvider)

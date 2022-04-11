@@ -55,15 +55,23 @@ structure ConB {
 // }
 //
 // structure RecursiveShapesInputOutputNested1 {
-//     foo: String,
-//     nested: RecursiveShapesInputOutputNested2
+//     @required
+//     recursiveMember: RecursiveShapesInputOutputNested2
 // }
 //
 // structure RecursiveShapesInputOutputNested2 {
-//     bar: StringList,
+//     @required
 //     recursiveMember: RecursiveShapesInputOutputNested1,
 // }
+
+// list ValidList {
+//     member: RecursiveShapesInputOutput
+// }
 //
+// structure RecursiveShapesInputOutput {
+//     @required
+//     foo: ValidList
+// }
 
 list ConBList {
     member: AnotherList
