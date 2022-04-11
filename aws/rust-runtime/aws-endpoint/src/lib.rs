@@ -81,9 +81,7 @@ impl MapRequest for AwsEndpointStage {
             if let Some(signing_service) = endpoint.credential_scope().service() {
                 props.insert::<SigningService>(signing_service.clone());
             }
-            endpoint
-                .endpoint()
-                .set_endpoint(http_req.uri_mut(), props.get::<EndpointPrefix>());
+            endpoint.set_endpoint(http_req.uri_mut(), props.get::<EndpointPrefix>());
             Ok(http_req)
         })
     }

@@ -7,7 +7,7 @@
 
 use crate::region::{Region, SigningRegion};
 use crate::SigningService;
-use aws_smithy_http::endpoint::Endpoint;
+use aws_smithy_http::endpoint::{Endpoint, EndpointPrefix};
 use std::error::Error;
 use std::fmt::Debug;
 
@@ -40,6 +40,11 @@ impl AwsEndpoint {
     /// Returns the credential scope.
     pub fn credential_scope(&self) -> &CredentialScope {
         &self.credential_scope
+    }
+
+    /// Sets the endpoint on a given `uri` based on this endpoint
+    pub fn set_endpoint(&self, uri: &mut http::Uri, endpoint_prefix: Option<&EndpointPrefix>) {
+        self.endpoint.set_endpoint(uri, endpoint_prefix);
     }
 }
 
