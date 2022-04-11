@@ -14,6 +14,7 @@ import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
 // TODO Find a better place for these primitives. Probably rust.codegen.util
+// TODO Unit test these functions.
 
 // TODO This will work fine if we include RequiredTrait too won't it?
 fun Shape.hasConstraintTrait() =
@@ -64,7 +65,7 @@ fun MapShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvid
     }
 
     val key = model.expectShape(this.key.target)
-    val value = model.expectShape(this.key.target)
+    val value = model.expectShape(this.value.target)
 
     return key.isConstrained(symbolProvider) || value.isConstrained(symbolProvider) || unconstrainedShapeCanReachConstrainedShape(value, model, symbolProvider)
 }
@@ -81,6 +82,7 @@ private fun unconstrainedShapeCanReachConstrainedShape(shape: Shape, model: Mode
         is StructureShape -> shape.canReachConstrainedShape(model, symbolProvider)
         is CollectionShape -> shape.canReachConstrainedShape(model, symbolProvider)
         is MapShape -> shape.canReachConstrainedShape(model, symbolProvider)
+        // TODO Constraint traits on simple shapes.
         else -> false
     }
 }

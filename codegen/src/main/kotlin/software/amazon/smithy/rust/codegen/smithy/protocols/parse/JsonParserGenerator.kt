@@ -339,16 +339,22 @@ class JsonParserGenerator(
         val keyTarget = model.expectShape(shape.key.target) as StringShape
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
+        val returnUnconstrainedType = shape.canReachConstrainedShape(model, symbolProvider)
+        val returnType = if (returnUnconstrainedType) {
+            unconstrainedShapeSymbolProvider.toSymbol(shape)
+        } else {
+            symbolProvider.toSymbol(shape)
+        }
         val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             // Allow non-snake-case since some SDK models have maps with names prefixed with `__mapOf__`,
             // which become `__map_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
             it.rustBlockTemplate(
                 """
                 ##[allow(clippy::type_complexity, non_snake_case)]
-                pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
+                pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
-                "Shape" to symbolProvider.toSymbol(shape),
+                "ReturnType" to returnType,
                 *codegenScope,
             ) {
                 startObjectOrNull {
@@ -368,7 +374,11 @@ class JsonParserGenerator(
                             }
                         }
                     }
-                    rust("Ok(Some(map))")
+                    if (returnUnconstrainedType) {
+                        rust("Ok(Some(#{T}(map)))", returnType)
+                    } else {
+                        rust("Ok(Some(map))")
+                    }
                 }
             }
         }

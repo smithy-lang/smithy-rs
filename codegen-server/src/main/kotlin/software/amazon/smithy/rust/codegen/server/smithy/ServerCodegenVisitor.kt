@@ -9,6 +9,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
@@ -21,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedListGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -191,6 +193,18 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
 
             rustCrate.withModule(RustModule.private("validation")) { writer ->
                 UnconstrainedListGenerator(model, symbolProvider, unconstrainedShapeSymbolProvider, constraintViolationSymbolProvider, writer, shape).render()
+            }
+        }
+    }
+
+    override fun mapShape(shape: MapShape) {
+        // TODO We only have to generate this for maps that are reachable from operation
+        //  input AND from which you can reach a shape that is constrained.
+        if (shape.canReachConstrainedShape(model, symbolProvider)) {
+            logger.info("[rust-server-codegen] Generating an unconstrained type for map $shape")
+
+            rustCrate.withModule(RustModule.private("validation")) { writer ->
+                UnconstrainedMapGenerator(model, symbolProvider, unconstrainedShapeSymbolProvider, constraintViolationSymbolProvider, writer, shape).render()
             }
         }
     }

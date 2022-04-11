@@ -35,7 +35,9 @@ structure ConA {
 
     optConB: ConB,
 
-    conBList: ConBList
+    conBList: ConBList,
+
+    conBMap: ConBMap
 }
 
 structure ConB {
@@ -63,11 +65,20 @@ structure ConB {
 // }
 //
 
-
 list ConBList {
     member: AnotherList
 }
 
 list AnotherList {
     member: ConB
+}
+
+map ConBMap {
+    key: String,
+    value: AnotherMap
+}
+
+map AnotherMap {
+    key: String,
+    value: ConBList
 }
