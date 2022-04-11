@@ -35,10 +35,16 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
-    val symbol = symbolProvider.toSymbol(this)
-    val builderNamespace = RustReservedWords.escapeIfNeeded(symbol.name.toSnakeCase())
-    return RuntimeType("Builder", null, "${symbol.namespace}::$builderNamespace")
+fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
+    val structureSymbol = symbolProvider.toSymbol(this)
+    val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase())
+    val rustType = RustType.Opaque("Builder", "${structureSymbol.namespace}::$builderNamespace")
+    return Symbol.builder()
+        .rustType(rustType)
+        .name(rustType.name)
+        .namespace(rustType.namespace, "::")
+        .definitionFile(structureSymbol.definitionFile)
+        .build()
 }
 
 fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("BuildError")

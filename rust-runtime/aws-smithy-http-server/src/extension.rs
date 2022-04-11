@@ -82,7 +82,21 @@ impl OperationExtension {
 /// These are modeled errors, defined in the Smithy model.
 #[derive(Debug, Clone)]
 pub struct ModeledErrorExtension(&'static str);
-impl_extension_new_and_deref!(ModeledErrorExtension);
+
+impl ModeledErrorExtension {
+    /// Creates a new `ModeledErrorExtension`.
+    pub fn new(value: &'static str) -> ModeledErrorExtension {
+        ModeledErrorExtension(value)
+    }
+}
+
+impl Deref for ModeledErrorExtension {
+    type Target = &'static str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Extension type used to store the _name_ of the [`crate::runtime_error::RuntimeError`] that
 /// occurred during request handling (see [`crate::runtime_error::RuntimeErrorKind::name`]).
