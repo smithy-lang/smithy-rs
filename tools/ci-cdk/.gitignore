@@ -7,3 +7,4 @@ build
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+cdk-outputs.json

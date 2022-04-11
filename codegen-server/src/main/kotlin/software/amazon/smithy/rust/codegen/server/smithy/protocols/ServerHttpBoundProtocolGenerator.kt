@@ -705,7 +705,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
             .joinToString(
-                // TODO: tuple() is currently limited to 21 items
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1289): Note we're limited to 21 labels because of `tuple`.
                 prefix = if (segments.size > 1) "#{Nom}::sequence::tuple::<_, _, #{Nom}::error::Error<&str>, _>((" else "",
                 postfix = if (segments.size > 1) "))" else "",
                 transform = { parser ->
