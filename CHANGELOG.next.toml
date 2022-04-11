@@ -64,3 +64,9 @@ message = "Update urlencoding crate to v2.1.0"
 references = ["smithy-rs#1301"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "benesch"
+
+[[smithy-rs]]
+message = "The base64 implementation from `aws-smithy-types` has been removed. Please switch to another implementation (e.g. the [base64](https://crates.io/crates/base64) crate)."
+references = ["smithy-rs#1294"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "david-perez"
