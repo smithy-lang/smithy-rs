@@ -36,7 +36,7 @@ jobs:
         path: smithy-rs-base-image
         retention-days: 1
 
-  # Run the PR bot after acquiring the build Docker image is completed since it will use it.
+  # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
     name: PR Bot
     needs: acquire-base-image
