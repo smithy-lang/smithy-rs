@@ -2,6 +2,11 @@
 name: PR Bot
 on:
   workflow_call:
+    secrets:
+      SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME:
+        required: true
+      SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN:
+        required: true
 
 # Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
 concurrency:

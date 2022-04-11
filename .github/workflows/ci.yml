@@ -40,7 +40,12 @@ jobs:
   pr_bot:
     name: PR Bot
     needs: acquire-base-image
+    # Only run this job on pull requests (not directly on main)
+    if: ${{ github.head_ref }}
     uses: ./.github/workflows/pull-request-bot.yml
+    secrets:
+      SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME }}
+      SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
 
   # The `generate` job runs scripts that produce artifacts that are required by the `test` job,
   # and also runs some checks/lints so that those are run sooner rather than later.
