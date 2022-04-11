@@ -28,21 +28,21 @@ const DEFAULT_BUFFER_SIZE: usize = 4096;
 /// 1. The underlying file is wrapped with StreamReader to implement HTTP body
 /// 2. It can be constructed directly from a path so it's easy to use during retries
 /// 3. Provide size hint
-pub struct PathBody {
+struct PathBody {
     state: State,
     file_size: u64,
     buffer_size: usize,
 }
 
 impl PathBody {
-    pub fn from_path(path_buf: PathBuf, file_size: u64, buffer_size: usize) -> Self {
+    fn from_path(path_buf: PathBuf, file_size: u64, buffer_size: usize) -> Self {
         PathBody {
             state: State::Unloaded(path_buf),
             file_size,
             buffer_size,
         }
     }
-    pub fn from_file(file: File, file_size: u64, buffer_size: usize) -> Self {
+    fn from_file(file: File, file_size: u64, buffer_size: usize) -> Self {
         PathBody {
             state: State::Loaded(ReaderStream::with_capacity(file, buffer_size)),
             file_size,
