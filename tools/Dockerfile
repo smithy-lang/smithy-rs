@@ -103,6 +103,7 @@ RUN set -eux; \
         gcc \
         git \
         java-11-amazon-corretto-headless \
+        make \
         openssl-devel \
         pkgconfig \
         python3 \

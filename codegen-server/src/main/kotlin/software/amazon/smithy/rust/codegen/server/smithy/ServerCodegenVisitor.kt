@@ -135,7 +135,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             model,
             codegenDecorator.crateManifestCustomizations(codegenContext),
             codegenDecorator.libRsCustomizations(codegenContext, listOf()),
-            // TODO: Remove `requireDocs` and always require them once the server codegen is far enough along
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
             requireDocs = false
         )
         try {
