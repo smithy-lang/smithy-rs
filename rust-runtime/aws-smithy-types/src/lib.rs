@@ -88,6 +88,8 @@ pub enum Number {
     Float(f64),
 }
 
+/* ANCHOR_END: document */
+
 impl Number {
     /// Converts to an `f64` lossily.
     /// Use `Number::try_from` to make the conversion only if it is not lossy.
@@ -134,12 +136,12 @@ impl std::fmt::Display for TryFromNumberError {
             TryFromNumberError::OutsideIntegerRange(err) => write!(f, "integer too large: {}", err),
             TryFromNumberError::UnexpectedFloat(v) => write!(
                 f,
-                "cannot convert {} floating point number into an integer",
+                "cannot convert floating point number {} into an integer",
                 v
             ),
             TryFromNumberError::UnexpectedNegativeInteger(v) => write!(
                 f,
-                "cannot convert {} negative integer into an unsigned integer type",
+                "cannot convert negative integer {} into an unsigned integer type",
                 v
             ),
             TryFromNumberError::U64ToFloatLossyConversion(v) => {
@@ -175,7 +177,7 @@ macro_rules! to_unsigned_integer_converter {
     ($typ:ident, $styp:expr) => {
         #[doc = "Converts to a `"]
         #[doc = $styp]
-        #[doc = "`. This conversion can only fail if it is lossy."]
+        #[doc = "`. This conversion fails if it is lossy."]
         impl TryFrom<Number> for $typ {
             type Error = TryFromNumberError;
 
@@ -198,7 +200,7 @@ macro_rules! to_signed_integer_converter {
     ($typ:ident, $styp:expr) => {
         #[doc = "Converts to a `"]
         #[doc = $styp]
-        #[doc = "`. This conversion can only fail if it is lossy."]
+        #[doc = "`. This conversion fails if it is lossy."]
         impl TryFrom<Number> for $typ {
             type Error = TryFromNumberError;
 
@@ -217,7 +219,7 @@ macro_rules! to_signed_integer_converter {
     };
 }
 
-/// Converts to a `u64`. The conversion can only fail if it is lossy.
+/// Converts to a `u64`. The conversion fails if it is lossy.
 impl TryFrom<Number> for u64 {
     type Error = TryFromNumberError;
 
@@ -248,7 +250,7 @@ to_signed_integer_converter!(i32);
 to_signed_integer_converter!(i16);
 to_signed_integer_converter!(i8);
 
-/// Converts to an `f64`. The conversion can only fail if it is lossy.
+/// Converts to an `f64`. The conversion fails if it is lossy.
 impl TryFrom<Number> for f64 {
     type Error = TryFromNumberError;
 
@@ -276,7 +278,7 @@ impl TryFrom<Number> for f64 {
     }
 }
 
-/// Converts to an `f64`. The conversion can only fail if it is lossy.
+/// Converts to an `f64`. The conversion fails if it is lossy.
 impl TryFrom<Number> for f32 {
     type Error = TryFromNumberError;
 
@@ -527,8 +529,6 @@ mod number {
         );
     }
 }
-
-/* ANCHOR_END: document */
 
 pub use error::Error;
 
