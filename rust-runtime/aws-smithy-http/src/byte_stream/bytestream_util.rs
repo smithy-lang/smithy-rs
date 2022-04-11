@@ -57,14 +57,15 @@ impl PathBody {
 /// ```no_run
 /// # #[cfg(feature = "rt-tokio")]
 /// # {
-/// use aws_smithy_http::byte_stream::{ByteStream, FsBuilder};
+/// use aws_smithy_http::byte_stream::ByteStream;
 /// use std::path::Path;
 /// struct GetObjectInput {
 ///     body: ByteStream
 /// }
 ///
 /// async fn bytestream_from_file() -> GetObjectInput {
-///     let bytestream = FsBuilder::from_path("docs/some-large-file.csv")
+///     let bytestream = ByteStream::read_from()
+///         .path("docs/some-large-file.csv")
 ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
 ///         .buffer_size(32_784)
 ///         // Specify the length of the file used (skips an additional call to retrieve the size)
@@ -84,34 +85,40 @@ pub struct FsBuilder {
 }
 
 impl FsBuilder {
-    /// Create a FsBuilder from a path (using a default read buffer of 4096 bytes).
+    /// Create a new [`FsBuilder`] (using a default read buffer of 4096 bytes).
     ///
-    pub fn from_path(path: impl AsRef<std::path::Path>) -> Self {
+    /// You must then call either [`file`](FsBuilder::file) or [`path`](FsBuilder::path) to specify what to read from.
+    pub fn new() -> Self {
         FsBuilder {
             file: None,
-            path: Some(path.as_ref().to_path_buf()),
-            file_size: None,
-            buffer_size: DEFAULT_BUFFER_SIZE,
-        }
-    }
-
-    /// Create a FsBuilder from a file (using a default read buffer of 4096 bytes).
-    ///
-    /// NOTE: The resulting ByteStream (after calling [byte_stream](FsBuilder::byte_stream)) will not be retryable ByteStream.
-    /// For a ByteStream that can be retried in the case of upstream failures, use [`FsBuilder::from_path`](FsBuilder::from_path)
-    pub fn from_file(file: tokio::fs::File) -> Self {
-        FsBuilder {
-            file: Some(file),
             path: None,
             file_size: None,
             buffer_size: DEFAULT_BUFFER_SIZE,
         }
     }
 
+    /// Sets the path to read from.
+    ///
+    /// NOTE: The resulting ByteStream (after calling [build](FsBuilder::build)) will be retryable.
+    /// The returned ByteStream will provide a size hint when used as an HTTP body.
+    /// If the request fails, the read will begin again by reloading the file handle.
+    pub fn path(mut self, path: impl AsRef<std::path::Path>) -> Self {
+        self.path = Some(path.as_ref().to_path_buf());
+        self
+    }
+
+    /// Sets the file to read from.
+    ///
+    /// NOTE: The resulting ByteStream (after calling [build](FsBuilder::build)) will not be a retryable ByteStream.
+    /// For a ByteStream that can be retried in the case of upstream failures, use [`FsBuilder::path`](FsBuilder::path).
+    pub fn file(mut self, file: tokio::fs::File) -> Self {
+        self.file = Some(file);
+        self
+    }
+
     /// Specify the length of the file to read (in bytes).
     ///
     /// By pre-specifying the length of the file, this API skips an additional call to retrieve the size from file-system metadata.
-    ///
     pub fn file_size(mut self, file_size: u64) -> Self {
         self.file_size = Some(file_size);
         self
@@ -121,14 +128,14 @@ impl FsBuilder {
     ///
     /// Increasing the read buffer capacity to higher values than the default (4096 bytes) can result in a large reduction
     /// in CPU usage, at the cost of memory increase.
-    ///
     pub fn buffer_size(mut self, buffer_size: usize) -> Self {
         self.buffer_size = buffer_size;
         self
     }
 
     /// Returns a [`ByteStream`](crate::byte_stream::ByteStream) from this builder.
-    ///
+    /// NOTE: If both [`file`](FsBuilder::file) and [`path`](FsBuilder::path) have been called for this FsBuilder, `build` will
+    /// behave read from the path specified by [`path`](FsBuilder::path).
     pub async fn build(self) -> Result<ByteStream, Error> {
         let buffer_size = self.buffer_size;
 

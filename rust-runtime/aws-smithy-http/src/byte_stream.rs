@@ -96,20 +96,20 @@
 //! }
 //! ```
 //!
-//! If you want more control over how the file is read, you can use FsBuilder. This allows to specify
-//! options such as the size of the buffer used to read the file, the size of the file to read if known...
+//! If you want more control over how the file is read, such as specifying the size of the buffer used to read the file
+//! or the length of the file, use a [`FsBuilder`](crate::byte_stream::FsBuilder).
 //!
 //! ```no_run
 //! # #[cfg(feature = "rt-tokio")]
 //! # {
-//! use aws_smithy_http::byte_stream::{ByteStream, FsBuilder};
+//! use aws_smithy_http::byte_stream::ByteStream;
 //! use std::path::Path;
 //! struct GetObjectInput {
 //!     body: ByteStream
 //! }
 //!
 //! async fn bytestream_from_file() -> GetObjectInput {
-//!     let bytestream = FsBuilder::from_path("docs/some-large-file.csv")
+//!     let bytestream = ByteStream::read_from().path("docs/some-large-file.csv")
 //!         .buffer_size(32_784)
 //!         .file_size(123_456)
 //!         .build()
@@ -279,8 +279,8 @@ impl ByteStream {
     /// Furthermore, a partial write MAY seek in the file and resume from the previous location.
     ///
     /// Note: If you want more control, such as specifying the size of the buffer used to read the file
-    /// or the length of the file, use [`FsBuilder`](crate::byte_stream::FsBuilder).
-    ///
+    /// or the length of the file, use a [`FsBuilder`](crate::byte_stream::FsBuilder) as returned
+    /// from `ByteStream::read_from`
     ///
     /// # Examples
     /// ```no_run
@@ -293,17 +293,27 @@ impl ByteStream {
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_path(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
-        FsBuilder::from_path(path).build().await
+        FsBuilder::new().path(path).build().await
     }
 
     /// Create a ByteStream from a file
     ///
     /// NOTE: This will NOT result in a retryable ByteStream. For a ByteStream that can be retried in the case of
     /// upstream failures, use [`ByteStream::from_path`](ByteStream::from_path)
+    #[deprecated(
+        since = "0.40",
+        note = "Prefer the more extensible ByteStream::read_from() API"
+    )]
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_file(file: tokio::fs::File) -> Result<Self, Error> {
-        FsBuilder::from_file(file).build().await
+        FsBuilder::new().file(file).build().await
+    }
+
+    #[cfg(feature = "rt-tokio")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
+    pub fn read_from() -> FsBuilder {
+        FsBuilder::new()
     }
 }
 
@@ -551,7 +561,7 @@ mod tests {
     #[cfg(feature = "rt-tokio")]
     #[tokio::test]
     async fn path_based_bytestreams_with_builder() -> Result<(), Box<dyn std::error::Error>> {
-        use super::{ByteStream, FsBuilder};
+        use super::ByteStream;
         use bytes::Buf;
         use http_body::Body;
         use std::io::Write;
@@ -561,7 +571,8 @@ mod tests {
         for i in 0..10000 {
             writeln!(file, "Brian was here. Briefly. {}", i)?;
         }
-        let body = FsBuilder::from_path(&file)
+        let body = ByteStream::read_from()
+            .path(&file)
             .buffer_size(16384)
             // This isn't the right file length - one shouldn't do this in real code
             .file_size(200)
