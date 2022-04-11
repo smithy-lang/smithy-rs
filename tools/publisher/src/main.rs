@@ -75,6 +75,7 @@ enum Args {
         #[clap(long)]
         smithy_build: PathBuf,
         /// Revision of `aws-doc-sdk-examples` repository used to retrieve examples
+        #[clap(long)]
         examples_revision: String,
         /// Path containing the generated SDK to generate a version manifest for
         #[clap(long)]
