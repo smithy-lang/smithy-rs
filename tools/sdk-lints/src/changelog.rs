@@ -243,7 +243,7 @@ fn render(mut entries: Vec<ChangelogEntry>, version: &str, date: &str) -> String
         out.push_str("**Breaking Changes:**\n");
         for change in breaking {
             change.render(&mut out);
-            out.push_str("\n");
+            out.push('\n');
         }
         out.push('\n')
     }
@@ -252,7 +252,7 @@ fn render(mut entries: Vec<ChangelogEntry>, version: &str, date: &str) -> String
         out.push_str("**New this release:**\n");
         for change in non_breaking {
             change.render(&mut out);
-            out.push_str("\n");
+            out.push('\n');
         }
         out.push('\n');
     }

@@ -9,6 +9,9 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 
+/**
+ * Code generation mode: In some situations, codegen has different behavior for client vs. server (eg. required fields)
+ */
 sealed class CodegenMode {
     object Server : CodegenMode()
     object Client : CodegenMode()

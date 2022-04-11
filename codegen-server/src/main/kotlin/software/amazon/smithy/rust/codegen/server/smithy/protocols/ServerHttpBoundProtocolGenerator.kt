@@ -70,7 +70,7 @@ import java.util.logging.Logger
  * and overrides by creating a protocol factory inheriting from this class and feeding it to the [ServerProtocolLoader].
  * See `ServerRestJson.kt` for more info.
  */
-class ServerHttpProtocolGenerator(
+class ServerHttpBoundProtocolGenerator(
     codegenContext: CodegenContext,
     protocol: Protocol,
 ) : ProtocolGenerator(
@@ -83,7 +83,7 @@ class ServerHttpProtocolGenerator(
         public = true,
         includeDefaultPayloadHeaders = true
     ),
-    ServerHttpProtocolImplGenerator(codegenContext, protocol),
+    ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 ) {
     // Define suffixes for operation input / output / error wrappers
     companion object {
@@ -96,7 +96,7 @@ class ServerHttpProtocolGenerator(
  * Generate all operation input parsers and output serializers for streaming and
  * non-streaming types.
  */
-private class ServerHttpProtocolImplGenerator(
+private class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenContext: CodegenContext,
     private val protocol: Protocol,
 ) : ProtocolTraitImplGenerator {
@@ -122,7 +122,7 @@ private class ServerHttpProtocolImplGenerator(
         "Regex" to CargoDependency.Regex.asType(),
         "SerdeUrlEncoded" to ServerCargoDependency.SerdeUrlEncoded.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
-        "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
@@ -151,7 +151,7 @@ private class ServerHttpProtocolImplGenerator(
         operationShape: OperationShape
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
-        val inputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
+        val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
 
         // Implement Axum `FromRequest` trait for input types.
         rustTemplate(
@@ -186,7 +186,7 @@ private class ServerHttpProtocolImplGenerator(
 
         // Implement Axum `IntoResponse` for output types.
 
-        val outputName = "${operationName}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+        val outputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
 
         if (operationShape.errors.isNotEmpty()) {
@@ -705,7 +705,7 @@ private class ServerHttpProtocolImplGenerator(
                 }
             }
             .joinToString(
-                // TODO: tuple() is currently limited to 21 items
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1289): Note we're limited to 21 labels because of `tuple`.
                 prefix = if (segments.size > 1) "#{Nom}::sequence::tuple::<_, _, #{Nom}::error::Error<&str>, _>((" else "",
                 postfix = if (segments.size > 1) "))" else "",
                 transform = { parser ->

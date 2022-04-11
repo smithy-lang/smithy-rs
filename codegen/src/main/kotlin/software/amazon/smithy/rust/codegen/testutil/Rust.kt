@@ -37,7 +37,7 @@ import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
 
 /**
- * Waiting for Kotlin to stabilize their temp directory stuff
+ * Waiting for Kotlin to stabilize their temp directory functionality
  */
 private fun tempDir(directory: File? = null): File {
     return if (directory != null) {
@@ -167,6 +167,11 @@ fun RustWriter.unitTest(
     }
 }
 
+/**
+ * WriterDelegator used for test purposes
+ *
+ * This exposes both the base directory and a list of [generatedFiles] for test purposes
+ */
 class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider: RustSymbolProvider) :
     RustCrate(fileManifest, symbolProvider, DefaultPublicModules) {
     val baseDir: Path = fileManifest.baseDir

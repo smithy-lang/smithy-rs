@@ -24,7 +24,7 @@ impl Check for ReadmesExist {
         if !path.as_ref().join("README.md").exists() {
             return Ok(vec![LintError::new("Crate is missing a README")]);
         }
-        return Ok(vec![]);
+        Ok(vec![])
     }
 }
 
