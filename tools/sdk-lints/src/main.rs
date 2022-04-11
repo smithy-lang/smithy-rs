@@ -10,12 +10,12 @@ use crate::lint_cargo_toml::{CrateAuthor, CrateLicense, DocsRs};
 use crate::readmes::{ReadmesExist, ReadmesHaveFooters};
 use crate::todos::TodosHaveContext;
 use anyhow::{bail, Context, Result};
+use clap::Parser;
 use lazy_static::lazy_static;
 use std::env::set_current_dir;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
-use structopt::StructOpt;
 
 mod anchor;
 mod changelog;
@@ -34,40 +34,40 @@ fn load_repo_root() -> Result<PathBuf> {
     Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 enum Args {
     Check {
-        #[structopt(long)]
+        #[clap(long)]
         all: bool,
-        #[structopt(long)]
+        #[clap(long)]
         readme: bool,
-        #[structopt(long)]
+        #[clap(long)]
         cargo_toml: bool,
-        #[structopt(long)]
+        #[clap(long)]
         docsrs_metadata: bool,
-        #[structopt(long)]
+        #[clap(long)]
         changelog: bool,
-        #[structopt(long)]
+        #[clap(long)]
         license: bool,
-        #[structopt(long)]
+        #[clap(long)]
         todos: bool,
     },
     Fix {
-        #[structopt(long)]
+        #[clap(long)]
         readme: bool,
-        #[structopt(long)]
+        #[clap(long)]
         docsrs_metadata: bool,
-        #[structopt(long)]
+        #[clap(long)]
         all: bool,
-        #[structopt(long)]
+        #[clap(long)]
         dry_run: Option<bool>,
     },
     UpdateChangelog {
-        #[structopt(long)]
+        #[clap(long)]
         smithy_version: String,
-        #[structopt(long)]
+        #[clap(long)]
         sdk_version: String,
-        #[structopt(long)]
+        #[clap(long)]
         date: String,
     },
 }
@@ -112,7 +112,7 @@ fn ok<T>(errors: Vec<T>) -> anyhow::Result<()> {
 
 fn main() -> Result<()> {
     set_current_dir(repo_root())?;
-    let opt = Args::from_args();
+    let opt = Args::parse();
     match opt {
         Args::Check {
             all,
