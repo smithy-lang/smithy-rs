@@ -34,7 +34,7 @@ jobs:
     - name: Generate diff
       uses: ./smithy-rs/.github/actions/docker-build
       with:
-        action: generate-codegen-diff
+        action: generate-codegen-diff ${{ github.event.pull_request.base.sha }}
     - uses: aws-actions/configure-aws-credentials@v1
       name: Acquire credentials for uploading to S3
       with:
