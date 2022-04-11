@@ -60,7 +60,39 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "benesch"
 
 [[smithy-rs]]
-message = "Refactor converters to numeric types for `aws_smithy_types::Number`"
+message = """
+Lossy converters into integer types for `aws_smithy_types::Number` have been
+removed. Lossy converters into floating point types for
+`aws_smithy_types::Number` have been suffixed with `_lossy`. If you were
+directly using the integer lossy converters, we recommend you use the safe
+converters.
+
+_Before:_
+
+```rust
+fn f1(n: aws_smithy_types::Number) {
+    let foo: f32 = n.to_f32(); // Lossy conversion!
+
+    let bar: u32 = n.to_u32(); // Lossy conversion!
+}
+```
+
+_After:_
+
+```rust
+fn f1(n: aws_smithy_types::Number) {
+    use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.
+
+    let foo: f32 = n.try_into().expect("lossy conversion detected"); // Or handle the error instead of panicking.
+
+    // You can still do lossy conversions, but only into floating point types.
+    let foo: f32 = n.to_f32_lossy();
+
+    // To lossily convert into integer types, use an `as` cast directly.
+    let bar: u32 = n as u32; // Lossy conversion!
+}
+```
+"""
 references = ["smithy-rs#1274"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "david-perez"
