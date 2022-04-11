@@ -26,7 +26,6 @@ fun defaultSdkVersion(): String {
 
 fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
     val updatedPath = runtimeCrateLocation.path?.let { cratePath ->
-        print(cratePath)
         val asPath = Path.of(cratePath)
         val path = if (asPath.isAbsolute) {
             asPath.parent.resolve("aws/rust-runtime").toAbsolutePath().toString()
