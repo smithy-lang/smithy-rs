@@ -335,7 +335,9 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
         "--location",
         outputDir.absolutePath,
         "--smithy-build",
-        outputDir.resolve("../../smithy-build.json").normalize().absolutePath
+        outputDir.resolve("../../smithy-build.json").normalize().absolutePath,
+        "--examples-revision",
+        properties.get("aws.sdk.examples.revision") ?: "missing"
     )
 }
 

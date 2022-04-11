@@ -17,6 +17,7 @@ use tracing::info;
 
 pub async fn subcommand_generate_version_manifest(
     smithy_build_path: &Path,
+    examples_revision: &str,
     location: &Path,
 ) -> Result<()> {
     verify_crate_hasher_available()?;
@@ -68,6 +69,7 @@ pub async fn subcommand_generate_version_manifest(
     info!("Discovered and hashed {} crates", crates.len());
     let versions_manifest = VersionsManifest {
         smithy_rs_revision,
+        aws_doc_sdk_examples_revision: examples_revision.to_string(),
         crates,
     };
     let output = toml::to_string_pretty(&versions_manifest).context("serialize versions.toml")?;
@@ -80,6 +82,7 @@ pub async fn subcommand_generate_version_manifest(
 #[derive(Debug, Serialize)]
 struct VersionsManifest {
     smithy_rs_revision: String,
+    aws_doc_sdk_examples_revision: String,
     crates: BTreeMap<String, CrateVersion>,
 }
 

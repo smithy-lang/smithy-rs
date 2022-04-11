@@ -74,6 +74,8 @@ enum Args {
         /// Path to `smithy-build.json`
         #[clap(long)]
         smithy_build: PathBuf,
+        /// Revision of `aws-doc-sdk-examples` repository used to retrieve examples
+        examples_revision: String,
         /// Path containing the generated SDK to generate a version manifest for
         #[clap(long)]
         location: PathBuf,
@@ -115,9 +117,11 @@ async fn main() -> Result<()> {
         }
         Args::GenerateVersionManifest {
             smithy_build,
+            examples_revision,
             location,
         } => {
-            subcommand_generate_version_manifest(&smithy_build, &location).await?;
+            subcommand_generate_version_manifest(&smithy_build, &examples_revision, &location)
+                .await?;
         }
     }
     Ok(())
