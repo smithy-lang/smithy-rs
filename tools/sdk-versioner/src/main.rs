@@ -15,7 +15,8 @@ use toml::value::{Table, Value};
 #[derive(Parser, Debug)]
 #[clap(
     name = "sdk-versioner",
-    about = "CLI tool to recursively update SDK/Smithy crate references in Cargo.toml files"
+    about = "CLI tool to recursively update SDK/Smithy crate references in Cargo.toml files",
+    version
 )]
 struct Args {
     /// Path(s) to recursively update Cargo.toml files in
