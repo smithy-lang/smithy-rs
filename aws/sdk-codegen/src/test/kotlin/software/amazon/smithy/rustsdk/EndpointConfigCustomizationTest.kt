@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -134,7 +135,7 @@ internal class EndpointConfigCustomizationTest {
                 codegenContext: CodegenContext,
                 baseCustomizations: List<LibRsCustomization>
             ): List<LibRsCustomization> {
-                return baseCustomizations + PubUseEndpoint(AwsTestRuntimeConfig)
+                return baseCustomizations + PubUseEndpoint(AwsTestRuntimeConfig) + AllowLintsGenerator(listOf("dead_code"), listOf(), listOf())
             }
 
             override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {

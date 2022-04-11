@@ -180,6 +180,11 @@ class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider
     val baseDir: Path = fileManifest.baseDir
 
     fun generatedFiles(): List<Path> = fileManifest.files.toList().sorted()
+    fun printGeneratedFiles() {
+        generatedFiles().forEach { path ->
+            println("file:///$path")
+        }
+    }
 }
 
 /**
@@ -201,9 +206,7 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
         libRsCustomizations = listOf(),
     )
     println("Generated files:")
-    generatedFiles().forEach { path ->
-        println("file:///$path")
-    }
+    printGeneratedFiles()
     try {
         "cargo fmt".runCommand(baseDir)
     } catch (e: Exception) {
