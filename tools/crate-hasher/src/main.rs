@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-//! Uses Cargo to discover files relevant to the build of a given crate, and
+//! Discovers files relevant to the build of a given crate, and
 //! prints out a determistic SHA-256 of the entire crate contents.
 
 use anyhow::Result;

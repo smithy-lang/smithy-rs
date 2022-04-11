@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use std::collections::BTreeSet;
+use std::fs::Metadata;
 use std::path::Path;
 
 #[derive(Debug, Default)]
@@ -36,37 +37,28 @@ impl FileList {
 
     /// Uses Cargo's `PathSource` implementation to discover which files are relevant to building the crate
     pub fn discover(location: &Path) -> Result<FileList> {
-        use cargo::core::manifest::EitherManifest;
-        use cargo::core::package::Package;
-        use cargo::core::source::SourceId;
-        use cargo::sources::path::PathSource;
-        use cargo::util::config::Config;
-        use cargo::util::toml::read_manifest;
-
         let location = location.canonicalize().context("canonicalize input path")?;
-        let config = Config::default().context("default cargo config")?;
-        let source_id = SourceId::for_path(&location).context("resolve cargo source id")?;
-        let path_source = PathSource::new(&location, source_id, &config);
+        let mut file_list = FileList::new();
 
-        let manifest_path = location.join("Cargo.toml");
-        // `_related_manifests` is a list of Cargo.toml paths for path dependencies used
-        // by the crate, which is not relevant for this tool's use-case.
-        let (either_manifest, _related_manifests) =
-            read_manifest(&manifest_path, source_id, &config).context("read Cargo.toml file")?;
-        if let EitherManifest::Real(manifest) = either_manifest {
-            let package = Package::new(manifest, &manifest_path);
-            let paths = path_source
-                .list_files(&package)
-                .context("list crate files")?;
-
-            let mut file_list = FileList::new();
-            for path in paths {
+        let mut ignore_builder = ignore::WalkBuilder::new(&location);
+        ignore_builder
+            .ignore(false) // Don't consider .ignore files
+            .git_ignore(true) // Do consider .gitignore files
+            .require_git(false) // Don't require a git repository to consider .gitignore
+            .hidden(true); // Ignore hidden files
+        ignore_builder
+            .add_ignore("/target") // Ignore root target directories
+            .expect("valid ignore path");
+        for dir_entry in ignore_builder.build() {
+            let dir_entry = dir_entry.context("dir_entry")?;
+            if !dir_entry.file_type().context("file_type")?.is_dir() {
+                let path = dir_entry.path();
                 let relative_path = path
                     .strip_prefix(&location)
                     .expect("location is the parent directory");
 
                 file_list.insert(FileMetadata {
-                    mode: file_mode(&path).context("file mode")?,
+                    mode: file_mode(path, &dir_entry.metadata()?).context("file mode")?,
                     path: relative_path
                         .to_str()
                         .expect("not using unusual file names in crate source")
@@ -74,10 +66,8 @@ impl FileList {
                     sha256: sha256::digest_file(&path).context("hash file")?,
                 });
             }
-            Ok(file_list)
-        } else {
-            bail!("This tool doesn't support virtual cargo manifests");
         }
+        Ok(file_list)
     }
 }
 
@@ -104,15 +94,15 @@ impl FileMetadata {
 }
 
 /// Returns the file mode (permissions) for the given path
-fn file_mode(path: &Path) -> Result<u32> {
+fn file_mode(path: &Path, metadata: &Metadata) -> Result<u32> {
     use std::os::unix::fs::PermissionsExt;
 
-    let file_metadata = std::fs::metadata(&path).context("file metadata")?;
-    if file_metadata.is_symlink() {
+    if metadata.file_type().is_symlink() {
         let actual_path = std::fs::read_link(path).context("follow symlink")?;
-        file_mode(&actual_path)
+        let actual_metadata = std::fs::metadata(&actual_path).context("file metadata")?;
+        file_mode(&actual_path, &actual_metadata)
     } else {
-        Ok(file_metadata.permissions().mode())
+        Ok(metadata.permissions().mode())
     }
 }
 

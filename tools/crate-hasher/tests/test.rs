@@ -13,7 +13,7 @@ use tempdir::TempDir;
 use crate_hasher::file_list::FileList;
 
 fn assert_correct_aws_smithy_async_hash(file_list: &FileList) {
-    assert_eq!(
+    pretty_assertions::assert_eq!(
         include_str!("./aws-smithy-async-2022-04-08-entries.txt"),
         file_list.entries()
     );

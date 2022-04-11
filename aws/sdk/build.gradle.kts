@@ -319,7 +319,6 @@ tasks.register<RequireRustBuildTool>("requireCrateHasher") {
     description = "Ensures the crate-hasher tool is available"
     inputs.dir(crateHasherToolPath)
     toolPath = crateHasherToolPath
-    compilerVersion = "nightly-2022-03-29"
 }
 
 tasks.register<ExecRustBuildTool>("generateVersionManifest") {
