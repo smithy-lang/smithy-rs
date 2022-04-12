@@ -34,7 +34,18 @@ for input_path in \
     "${START_PATH}/smithy-rs";
 do
     if [[ -d "${input_path}" ]]; then
-        cp -r "${input_path}" "${ACTION_PATH}/workspace/$(basename "${input_path}")"
+        if [[ -d "${input_path}/.git" ]]; then
+            # Copy the inputs across while excluding .gitignore'd files
+            EXCLUDES_FILE="${ACTION_PATH}/.excludes"
+            git -C "${input_path}" ls-files --exclude-standard -oi --directory >"${EXCLUDES_FILE}"
+            rsync -ra \
+                "${input_path}/" \
+                "${ACTION_PATH}/workspace/$(basename "${input_path}")" \
+                --exclude-from="${EXCLUDES_FILE}"
+            rm "${EXCLUDES_FILE}"
+        else
+            cp -r "${input_path}" "${ACTION_PATH}/workspace/$(basename "${input_path}")"
+        fi
     fi
 done
 
