@@ -216,8 +216,8 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
                     /// /// 2. Sign the request with SigV4
                     /// /// 3. Resolve an Endpoint for the request
                     /// /// 4. Add a user agent to the request
-                    /// #[derive(Debug, Default, Clone)]
-                    /// #[non_exhaustive]
+                    /// ##[derive(Debug, Default, Clone)]
+                    /// ##[non_exhaustive]
                     /// pub struct AwsMiddleware;
                     ///
                     /// impl AwsMiddleware {
