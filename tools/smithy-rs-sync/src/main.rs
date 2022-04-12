@@ -17,9 +17,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
+/// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
 #[derive(Parser, Debug)]
 #[clap(name = "smithy-rs-sync")]
-/// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
 struct Args {
     /// The path to the smithy-rs repo folder.
     #[clap(long, parse(from_os_str))]
@@ -249,10 +249,14 @@ fn set_last_synced_commit(repo_path: &Path, oid: &Oid) -> Result<()> {
 
 /// Place the examples from aws-doc-sdk-examples into the correct place in smithy-rs
 /// to be included with the generated SDK.
-fn setup_examples(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<()> {
+fn setup_examples(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<String> {
     let from = sdk_examples_path.canonicalize().context(here!())?;
     let from = from.join("rust_dev_preview");
     let from = from.as_os_str().to_string_lossy();
+
+    let examples_revision = GetLastCommit::new(sdk_examples_path)
+        .run()
+        .context(here!())?;
 
     eprintln!("\tcleaning examples...");
     fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/examples")).context(here!())?;
@@ -265,13 +269,13 @@ fn setup_examples(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<()>
     fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/examples/.cargo"))
         .context(here!())?;
     std::fs::remove_file(smithy_rs_path.join("aws/sdk/examples/Cargo.toml")).context(here!())?;
-    Ok(())
+    Ok(examples_revision)
 }
 
 /// Run the necessary commands to build the SDK. On success, returns the path to the folder containing
 /// the build artifacts.
 fn build_sdk(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<PathBuf> {
-    setup_examples(sdk_examples_path, smithy_rs_path).context(here!())?;
+    let examples_revision = setup_examples(sdk_examples_path, smithy_rs_path).context(here!())?;
 
     eprintln!("\tbuilding the SDK...");
     let start = Instant::now();
@@ -284,7 +288,12 @@ fn build_sdk(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<PathBuf>
     fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/build")).context(here!())?;
     let _ = run(&[gradlew, ":aws:sdk:clean"], smithy_rs_path).context(here!())?;
     let _ = run(
-        &[gradlew, "-Paws.fullsdk=true", ":aws:sdk:assemble"],
+        &[
+            gradlew,
+            "-Paws.fullsdk=true",
+            &format!("-Paws.sdk.examples.revision={}", examples_revision),
+            ":aws:sdk:assemble",
+        ],
         smithy_rs_path,
     )
     .context(here!())?;
