@@ -54,5 +54,5 @@ rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
 
 [[test]]
-name = "e2e_test"
+name = "retry_test"
 required-features = ["test-util", "rt-tokio"]

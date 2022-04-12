@@ -138,7 +138,7 @@ fn transient_err() -> http::Response<&'static str> {
 }
 
 #[tokio::test]
-async fn end_to_end_retry_test() {
+async fn retry_test() {
     // 1 failing response followed by 1 successful response
     let events = vec![
         // First operation
@@ -191,7 +191,7 @@ async fn end_to_end_retry_test() {
 }
 
 #[tokio::test]
-async fn end_to_end_retry_test_transients_not_retried() {
+async fn retry_test_transients_not_retried() {
     // 1 failing response followed by 1 successful response
     let events = vec![
         // First operation
