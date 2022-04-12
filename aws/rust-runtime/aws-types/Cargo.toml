@@ -14,11 +14,14 @@ hardcoded-credentials = []
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 tracing = "0.1"
 zeroize = "1.4.1"
+http = "0.2.6"
 
 [dev-dependencies]
 futures-util = "0.3.16"
+http = "0.2.4"
 tracing-test = "0.2.1"
 
 [build-dependencies]
