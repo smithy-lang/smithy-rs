@@ -213,7 +213,9 @@ jobs:
       uses: ./smithy-rs/.github/actions/download-all-artifacts
     - name: Set bot message outputs
       id: bot-messages
-      run: echo ::set-output name=codegen-diff::"$(cat ./artifacts/bot-message-codegen-diff)"
+      run: |
+        set -eux
+        echo ::set-output name=codegen-diff::"$(cat ./bot-message-codegen-diff)"
     - name: Post bot comment
       uses: actions/github-script@v5
       if: ${{ github.head_ref != null }}
