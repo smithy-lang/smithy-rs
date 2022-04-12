@@ -79,12 +79,13 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
         test:
-        - action: check-style-and-lints
         - action: check-client-codegen-integration-tests
         - action: check-client-codegen-unit-tests
         - action: check-sdk-codegen-unit-tests
         - action: check-server-codegen-integration-tests
         - action: check-server-codegen-unit-tests
+        - action: check-server-e2e-test
+        - action: check-style-and-lints
     steps:
     - uses: actions/checkout@v3
       with:

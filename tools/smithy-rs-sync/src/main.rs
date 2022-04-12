@@ -7,6 +7,7 @@ mod fs;
 
 use crate::fs::{delete_all_generated_files_and_folders, find_handwritten_files_and_folders};
 use anyhow::{bail, Context, Result};
+use clap::Parser;
 use git2::{Commit, Oid, Repository, ResetType};
 use smithy_rs_tool_common::git::GetLastCommit;
 use smithy_rs_tool_common::macros::here;
@@ -15,26 +16,25 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
-use structopt::StructOpt;
 
-#[derive(StructOpt, Debug)]
-#[structopt(name = "smithy-rs-sync")]
+#[derive(Parser, Debug)]
+#[clap(name = "smithy-rs-sync")]
 /// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
-struct Opt {
+struct Args {
     /// The path to the smithy-rs repo folder.
-    #[structopt(long, parse(from_os_str))]
+    #[clap(long, parse(from_os_str))]
     smithy_rs: PathBuf,
     /// The path to the aws-sdk-rust folder.
-    #[structopt(long, parse(from_os_str))]
+    #[clap(long, parse(from_os_str))]
     aws_sdk: PathBuf,
     /// Path to the aws-doc-sdk-examples repository.
-    #[structopt(long, parse(from_os_str))]
+    #[clap(long, parse(from_os_str))]
     sdk_examples: PathBuf,
     /// The branch in aws-sdk-rust that commits will be mirrored to.
-    #[structopt(long, default_value = "next")]
+    #[clap(long, default_value = "next")]
     branch: String,
     /// The maximum amount of commits to sync in one run.
-    #[structopt(long, default_value = "5")]
+    #[clap(long, default_value = "5")]
     max_commits_to_sync: usize,
 }
 
@@ -57,20 +57,14 @@ const COMMIT_HASH_FILENAME: &str = ".smithyrs-githash";
 /// --aws-sdk /Users/zhessler/Documents/aws-sdk-rust-test/
 /// ```
 fn main() -> Result<()> {
-    let Opt {
-        smithy_rs,
-        aws_sdk,
-        sdk_examples,
-        branch,
-        max_commits_to_sync,
-    } = Opt::from_args();
+    let args = Args::parse();
 
     sync_aws_sdk_with_smithy_rs(
-        &smithy_rs,
-        &aws_sdk,
-        &sdk_examples,
-        &branch,
-        max_commits_to_sync,
+        &args.smithy_rs,
+        &args.aws_sdk,
+        &args.sdk_examples,
+        &args.branch,
+        args.max_commits_to_sync,
     )
     .map_err(|e| e.context("The sync failed"))
 }

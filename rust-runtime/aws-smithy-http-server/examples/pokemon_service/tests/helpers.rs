@@ -12,6 +12,7 @@ pub(crate) struct PokemonService {
 }
 
 impl PokemonService {
+    #[allow(dead_code)]
     pub(crate) fn run() -> Self {
         let process = Command::cargo_bin("pokemon_service").unwrap().spawn().unwrap();
 
@@ -27,6 +28,7 @@ impl Drop for PokemonService {
     }
 }
 
+#[allow(dead_code)]
 pub fn client() -> Client<
     aws_smithy_client::erase::DynConnector,
     aws_smithy_client::erase::DynMiddleware<aws_smithy_client::erase::DynConnector>,
