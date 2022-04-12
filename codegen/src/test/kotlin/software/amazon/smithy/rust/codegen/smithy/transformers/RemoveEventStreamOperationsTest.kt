@@ -50,7 +50,6 @@ internal class RemoveEventStreamOperationsTest {
         val transformed = RemoveEventStreamOperations.transform(
             model,
             testRustSettings(
-                model,
                 codegenConfig = CodegenConfig(eventStreamAllowList = setOf("not-test-module")),
             )
         )
@@ -63,7 +62,6 @@ internal class RemoveEventStreamOperationsTest {
         val transformed = RemoveEventStreamOperations.transform(
             model,
             testRustSettings(
-                model,
                 codegenConfig = CodegenConfig(eventStreamAllowList = setOf("test-module")),
             )
         )

@@ -78,8 +78,7 @@ class RustSettings(
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
     val license: String?,
-    val examplesUri: String? = null,
-    private val model: Model
+    val examplesUri: String? = null
 ) {
 
     /**
@@ -152,8 +151,7 @@ class RustSettings(
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
                 codegenConfig,
                 license = config.getStringMember(LICENSE).orNull()?.value,
-                examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
-                model = model
+                examplesUri = config.getStringMember(EXAMPLES).orNull()?.value
             )
         }
 
