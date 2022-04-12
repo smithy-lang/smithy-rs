@@ -44,7 +44,7 @@ pub async fn subcommand_generate_version_manifest(
         }
 
         let mut model_hash = None;
-        if package.handle.name.starts_with("aws-sdk-") {
+        if let PackageCategory::AwsSdk = package.category {
             if let Some(projection) = smithy_build_root
                 .projections
                 .get(&package.handle.name["aws-sdk-".len()..])
