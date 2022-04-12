@@ -6,6 +6,7 @@
 use crate::test_operation::TestPolicy;
 use aws_smithy_async::rt::sleep::TokioSleep;
 
+use aws_smithy_client::retry::AllowOperationRetryOnTransientFailure;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_client::Client;
 use aws_smithy_http::body::SdkBody;
@@ -22,6 +23,7 @@ mod test_operation {
     use aws_smithy_http::response::ParseHttpResponse;
     use aws_smithy_http::result::SdkError;
     use aws_smithy_http::retry::ClassifyResponse;
+    use aws_smithy_types::retry::ErrorKind::{ThrottlingError, TransientError};
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryKind};
     use bytes::Bytes;
     use std::error::Error;
@@ -31,7 +33,7 @@ mod test_operation {
     pub(super) struct TestOperationParser;
 
     #[derive(Debug)]
-    pub(super) struct OperationError;
+    pub(super) struct OperationError(ErrorKind);
 
     impl Display for OperationError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -43,7 +45,7 @@ mod test_operation {
 
     impl ProvideErrorKind for OperationError {
         fn retryable_error_kind(&self) -> Option<ErrorKind> {
-            Some(ErrorKind::ThrottlingError)
+            Some(self.0)
         }
 
         fn code(&self) -> Option<&str> {
@@ -57,8 +59,11 @@ mod test_operation {
         fn parse_unloaded(&self, response: &mut operation::Response) -> Option<Self::Output> {
             if response.http().status().is_success() {
                 Some(Ok("Hello!".to_string()))
+            } else if response.http().status().as_u16() == 418 {
+                // Hardcoding "418 - I'm a teapot" as a transient error for the purposes of this test
+                Some(Err(OperationError(TransientError)))
             } else {
-                Some(Err(OperationError))
+                Some(Err(OperationError(ThrottlingError)))
             }
         }
 
@@ -89,50 +94,64 @@ mod test_operation {
     }
 }
 
-fn test_operation() -> Operation<test_operation::TestOperationParser, test_operation::TestPolicy> {
+fn test_operation(
+    allow_retry_transient: bool,
+) -> Operation<test_operation::TestOperationParser, test_operation::TestPolicy> {
     let req = operation::Request::new(
         http::Request::builder()
             .uri("https://test-service.test-region.amazonaws.com/")
             .body(SdkBody::from("request body"))
             .unwrap(),
     );
-    Operation::new(req, test_operation::TestOperationParser).with_retry_policy(TestPolicy)
+    let mut operation =
+        Operation::new(req, test_operation::TestOperationParser).with_retry_policy(TestPolicy);
+    if allow_retry_transient {
+        operation
+            .properties_mut()
+            .insert(AllowOperationRetryOnTransientFailure::new());
+    }
+    operation
+}
+
+fn req() -> http::Request<SdkBody> {
+    http::Request::builder()
+        .body(SdkBody::from("request body"))
+        .unwrap()
+}
+fn ok() -> http::Response<&'static str> {
+    http::Response::builder()
+        .status(200)
+        .body("response body")
+        .unwrap()
+}
+fn err() -> http::Response<&'static str> {
+    http::Response::builder()
+        .status(500)
+        .body("response body")
+        .unwrap()
+}
+fn transient_err() -> http::Response<&'static str> {
+    http::Response::builder()
+        .status(418) // transient error for the purposes of this test
+        .body("response body")
+        .unwrap()
 }
 
 #[tokio::test]
 async fn end_to_end_retry_test() {
-    fn req() -> http::Request<SdkBody> {
-        http::Request::builder()
-            .body(SdkBody::from("request body"))
-            .unwrap()
-    }
-
-    fn ok() -> http::Response<&'static str> {
-        http::Response::builder()
-            .status(200)
-            .body("response body")
-            .unwrap()
-    }
-
-    fn err() -> http::Response<&'static str> {
-        http::Response::builder()
-            .status(500)
-            .body("response body")
-            .unwrap()
-    }
     // 1 failing response followed by 1 successful response
     let events = vec![
         // First operation
         (req(), err()),
-        (req(), err()),
+        (req(), transient_err()),
         (req(), ok()),
         // Second operation
         (req(), err()),
         (req(), ok()),
         // Third operation will fail, only errors
+        (req(), transient_err()),
         (req(), err()),
-        (req(), err()),
-        (req(), err()),
+        (req(), transient_err()),
         (req(), err()),
     ];
     let conn = TestConnection::new(events);
@@ -145,7 +164,7 @@ async fn end_to_end_retry_test() {
     tokio::time::pause();
     let initial = tokio::time::Instant::now();
     let resp = client
-        .call(test_operation())
+        .call(test_operation(true))
         .await
         .expect("successful operation");
     assert_time_passed(initial, Duration::from_secs(3));
@@ -155,14 +174,14 @@ async fn end_to_end_retry_test() {
 
     let initial = tokio::time::Instant::now();
     client
-        .call(test_operation())
+        .call(test_operation(true))
         .await
         .expect("successful operation");
     assert_time_passed(initial, Duration::from_secs(1));
     assert_eq!(conn.requests().len(), 5);
     let initial = tokio::time::Instant::now();
     let err = client
-        .call(test_operation())
+        .call(test_operation(true))
         .await
         .expect_err("all responses failed");
     // 4 more tries followed by failure
@@ -171,9 +190,49 @@ async fn end_to_end_retry_test() {
     assert_time_passed(initial, Duration::from_secs(7));
 }
 
+#[tokio::test]
+async fn end_to_end_retry_test_transients_not_retried() {
+    // 1 failing response followed by 1 successful response
+    let events = vec![
+        // First operation
+        (req(), err()),
+        (req(), transient_err()),
+        // Second operation
+        (req(), err()),
+        (req(), err()),
+        (req(), ok()),
+    ];
+    let conn = TestConnection::new(events);
+    let retry_config = aws_smithy_client::retry::Config::default()
+        .with_max_attempts(4)
+        .with_base(|| 1_f64);
+    let client = Client::<TestConnection<_>, Identity>::new(conn.clone())
+        .with_retry_config(retry_config)
+        .with_sleep_impl(Arc::new(TokioSleep::new()));
+    tokio::time::pause();
+    let initial = tokio::time::Instant::now();
+    client
+        .call(test_operation(false))
+        .await
+        .err()
+        .expect("failed because transients not retried");
+    assert_time_passed(initial, Duration::from_secs(1));
+    // 2 requests should have been made
+    assert_eq!(conn.requests().len(), 2);
+
+    let initial = tokio::time::Instant::now();
+    client
+        .call(test_operation(false))
+        .await
+        .expect("successful operation");
+    assert_time_passed(initial, Duration::from_secs(3));
+    assert_eq!(conn.requests().len(), 5);
+}
+
 /// Validate that time has passed with a 5ms tolerance
 ///
 /// This is to account for some non-determinism in the Tokio timer
+#[track_caller]
 fn assert_time_passed(initial: Instant, passed: Duration) {
     let now = tokio::time::Instant::now();
     let delta = now - initial;

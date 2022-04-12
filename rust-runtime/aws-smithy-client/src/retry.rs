@@ -29,6 +29,22 @@ use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
 use tracing::Instrument;
 
+/// Marker that goes in an operation's property bag to communicate that retry is allowed for that operation.
+///
+/// Only operations that are modeled as `@idempotent`, `@readonly`, or `@retryable` should
+/// retry on transient failures. The code generator only includes this marker when creating
+/// the operation for operations that are marked by these traits.
+#[non_exhaustive]
+#[derive(Debug, Default)]
+pub struct AllowOperationRetryOnTransientFailure;
+
+impl AllowOperationRetryOnTransientFailure {
+    /// Creates a new `AllowOperationRetryOnTransientFailure` marker.
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 /// A policy instantiator.
 ///
 /// Implementors are essentially "policy factories" that can produce a new instance of a retry
@@ -287,7 +303,11 @@ impl RetryHandler {
         Some((next, backoff))
     }
 
-    fn should_retry(&self, retry_kind: &RetryKind) -> Option<(Self, Duration)> {
+    fn should_retry(
+        &self,
+        transient_failures_retryable: bool,
+        retry_kind: &RetryKind,
+    ) -> Option<(Self, Duration)> {
         match retry_kind {
             RetryKind::Explicit(dur) => Some((self.clone(), *dur)),
             RetryKind::UnretryableFailure => None,
@@ -296,13 +316,23 @@ impl RetryHandler {
                     .quota_release(self.local.last_quota_usage, &self.config);
                 None
             }
-            RetryKind::Error(err) => self.should_retry_error(err),
+            RetryKind::Error(kind) => {
+                if transient_failures_retryable || !matches!(kind, ErrorKind::TransientError) {
+                    self.should_retry_error(kind)
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
 
-    fn retry_for(&self, retry_kind: RetryKind) -> Option<BoxFuture<Self>> {
-        let (next, dur) = self.should_retry(&retry_kind)?;
+    fn retry_for(
+        &self,
+        transient_failures_retryable: bool,
+        retry_kind: RetryKind,
+    ) -> Option<BoxFuture<Self>> {
+        let (next, dur) = self.should_retry(transient_failures_retryable, &retry_kind)?;
 
         let sleep = match &self.sleep_impl {
             Some(sleep) => sleep,
@@ -337,9 +367,13 @@ where
         req: &Operation<Handler, R>,
         result: Result<&SdkSuccess<T>, &SdkError<E>>,
     ) -> Option<Self::Future> {
+        let transient_failures_retryable = req
+            .properties()
+            .get::<AllowOperationRetryOnTransientFailure>()
+            .is_some();
         let policy = req.retry_policy();
         let retry_kind = policy.classify(result);
-        self.retry_for(retry_kind)
+        self.retry_for(transient_failures_retryable, retry_kind)
     }
 
     fn clone_request(&self, req: &Operation<Handler, R>) -> Option<Operation<Handler, R>> {
@@ -375,18 +409,18 @@ mod test {
     fn eventual_success() {
         let policy = Standard::new(test_config()).new_request_policy(None);
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(policy.retry_quota(), 495);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(2));
         assert_eq!(policy.retry_quota(), 490);
 
-        let no_retry = policy.should_retry(&RetryKind::Unnecessary);
+        let no_retry = policy.should_retry(false, &RetryKind::Unnecessary);
         assert!(no_retry.is_none());
         assert_eq!(policy.retry_quota(), 495);
     }
@@ -395,18 +429,18 @@ mod test {
     fn no_more_attempts() {
         let policy = Standard::new(test_config()).new_request_policy(None);
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(policy.retry_quota(), 495);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(2));
         assert_eq!(policy.retry_quota(), 490);
 
-        let no_retry = policy.should_retry(&RetryKind::Error(ErrorKind::ServerError));
+        let no_retry = policy.should_retry(false, &RetryKind::Error(ErrorKind::ServerError));
         assert!(no_retry.is_none());
         assert_eq!(policy.retry_quota(), 490);
     }
@@ -418,12 +452,12 @@ mod test {
         let policy = Standard::new(conf).new_request_policy(None);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(policy.retry_quota(), 0);
 
-        let no_retry = policy.should_retry(&RetryKind::Error(ErrorKind::ServerError));
+        let no_retry = policy.should_retry(false, &RetryKind::Error(ErrorKind::ServerError));
         assert!(no_retry.is_none());
         assert_eq!(policy.retry_quota(), 0);
     }
@@ -434,13 +468,13 @@ mod test {
         conf.initial_retry_tokens = 100;
         let policy = Standard::new(conf).new_request_policy(None);
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::TransientError))
+            .should_retry(true, &RetryKind::Error(ErrorKind::TransientError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(policy.retry_quota(), 90);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Explicit(Duration::from_secs(1)))
+            .should_retry(true, &RetryKind::Explicit(Duration::from_secs(1)))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(
@@ -450,7 +484,7 @@ mod test {
         );
 
         assert!(
-            policy.should_retry(&RetryKind::Unnecessary).is_none(),
+            policy.should_retry(true, &RetryKind::Unnecessary).is_none(),
             "it should not retry success"
         );
         let available = policy.shared.quota_available.lock().unwrap();
@@ -463,30 +497,30 @@ mod test {
         conf.max_attempts = 5;
         let policy = Standard::new(conf).new_request_policy(None);
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(policy.retry_quota(), 495);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(2));
         assert_eq!(policy.retry_quota(), 490);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(4));
         assert_eq!(policy.retry_quota(), 485);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(8));
         assert_eq!(policy.retry_quota(), 480);
 
-        let no_retry = policy.should_retry(&RetryKind::Error(ErrorKind::ServerError));
+        let no_retry = policy.should_retry(false, &RetryKind::Error(ErrorKind::ServerError));
         assert!(no_retry.is_none());
         assert_eq!(policy.retry_quota(), 480);
     }
@@ -498,31 +532,52 @@ mod test {
         conf.max_backoff = Duration::from_secs(3);
         let policy = Standard::new(conf).new_request_policy(None);
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(policy.retry_quota(), 495);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(2));
         assert_eq!(policy.retry_quota(), 490);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(3));
         assert_eq!(policy.retry_quota(), 485);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Error(ErrorKind::ServerError))
+            .should_retry(false, &RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
         assert_eq!(dur, Duration::from_secs(3));
         assert_eq!(policy.retry_quota(), 480);
 
-        let no_retry = policy.should_retry(&RetryKind::Error(ErrorKind::ServerError));
+        let no_retry = policy.should_retry(false, &RetryKind::Error(ErrorKind::ServerError));
         assert!(no_retry.is_none());
         assert_eq!(policy.retry_quota(), 480);
+    }
+
+    #[test]
+    fn disable_retry_transient_failure() {
+        let conf = test_config();
+        let policy = Standard::new(conf).new_request_policy(None);
+        assert!(policy
+            .should_retry(false, &RetryKind::Error(ErrorKind::TransientError))
+            .is_none());
+    }
+
+    #[test]
+    fn enable_retry_transient_failure() {
+        let conf = test_config();
+        let policy = Standard::new(conf).new_request_policy(None);
+        policy
+            .should_retry(true, &RetryKind::Error(ErrorKind::TransientError))
+            .expect("should retry");
+        policy
+            .should_retry(true, &RetryKind::Error(ErrorKind::TransientError))
+            .expect("should retry");
     }
 }

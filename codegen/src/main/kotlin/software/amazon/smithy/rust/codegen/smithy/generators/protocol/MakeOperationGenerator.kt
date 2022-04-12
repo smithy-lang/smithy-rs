@@ -8,6 +8,8 @@ package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.traits.IdempotentTrait
+import software.amazon.smithy.model.traits.ReadonlyTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -31,6 +33,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 /** Generates the `make_operation` function on input structs */
@@ -53,6 +56,7 @@ open class MakeOperationGenerator(
             ?: codegenContext.serviceShape.id.getName(codegenContext.serviceShape)
 
     private val codegenScope = arrayOf(
+        "aws_smithy_client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
         "config" to RuntimeType.Config,
         "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
         "http" to RuntimeType.http,
@@ -92,6 +96,16 @@ open class MakeOperationGenerator(
                 createHttpRequest(this, shape)
             }
             rust("let mut properties = aws_smithy_http::property_bag::SharedPropertyBag::new();")
+            if (shape.transientFailuresRetryable()) {
+                rustTemplate(
+                    """
+                    properties.acquire_mut().insert(
+                        #{aws_smithy_client}::retry::AllowOperationRetryOnTransientFailure::new()
+                    );
+                    """,
+                    *codegenScope
+                )
+            }
 
             // When the payload is a `ByteStream`, `into_inner()` already returns an `SdkBody`, so we mute this
             // Clippy warning to make the codegen a little simpler in that case.
@@ -157,6 +171,9 @@ open class MakeOperationGenerator(
         return protocol.httpBindingResolver.requestBindings(operationShape)
             .any { it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD }
     }
+
+    private fun OperationShape.transientFailuresRetryable(): Boolean =
+        hasTrait<ReadonlyTrait>() || hasTrait<IdempotentTrait>()
 
     open fun createHttpRequest(writer: RustWriter, operationShape: OperationShape) {
         val httpBindingGenerator = RequestBindingGenerator(
