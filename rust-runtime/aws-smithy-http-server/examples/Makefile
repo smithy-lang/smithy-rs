@@ -18,7 +18,7 @@ build: codegen
 	cargo build
 
 run: codegen
-	cargo run
+	RUST_LOG=DEBUG cargo run
 
 doc-open: codegen
 	cargo doc --no-deps --open

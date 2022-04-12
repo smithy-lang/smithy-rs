@@ -124,6 +124,8 @@ impl Default for State {
     }
 }
 
+// Operation handler implementations get automatically instrumented at the callsite within a new
+// `tracing::span::Span`.
 /// Retrieves information about a Pokémon species.
 pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
@@ -156,7 +158,7 @@ pub async fn get_pokemon_species(
             Ok(output)
         }
         None => {
-            tracing::error!("Requested Pokémon {} not available", input.name);
+            tracing::error!("Requested Pokémon `{}` not available", input.name);
             Err(error::GetPokemonSpeciesError::ResourceNotFoundException(
                 error::ResourceNotFoundException {
                     message: String::from("Requested Pokémon not available"),

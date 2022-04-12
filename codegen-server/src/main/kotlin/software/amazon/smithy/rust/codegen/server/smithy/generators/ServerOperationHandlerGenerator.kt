@@ -46,6 +46,7 @@ class ServerOperationHandlerGenerator(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "Phantom" to ServerRuntimeType.Phantom,
         "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
+        "Tracing" to ServerCargoDependency.Tracing.asType(),
         "http" to RuntimeType.http,
     )
 
@@ -78,11 +79,27 @@ class ServerOperationHandlerGenerator(
                 """.trimIndent(),
                 *codegenScope
             ) {
+                // Instrument operation handler at callsite.
+                val operationHandlerInvoke = if (state) {
+                    "self(input_inner, state)"
+                } else {
+                    "self(input_inner)"
+                }
+                val operationHandlerCall =
+                    """
+                    let input_inner = input_wrapper.into();
+                    #{Tracing}::debug!(input = ?input_inner, "calling operation handler");
+                    let output_inner = $operationHandlerInvoke
+                        .instrument(#{Tracing}::debug_span!("${operationName}_handler"))
+                        .await;
+                    #{Tracing}::debug!(output = ?output_inner, "operation handler returned");
+                    """
                 val callImpl = if (state) {
                     """
                     let state = match $serverCrate::extension::extract_extension(&mut req).await {
                         Ok(v) => v,
                         Err(extension_not_found_rejection) => {
+                            #{Tracing}::error!(?extension_not_found_rejection, "unable to extract extension from request; maybe you forgot to register it with `AddExtensionLayer`?");
                             let extension = $serverCrate::extension::RuntimeErrorExtension::new(extension_not_found_rejection.to_string());
                             let runtime_error = $serverCrate::runtime_error::RuntimeError {
                                 protocol: #{SmithyHttpServer}::protocols::Protocol::${protocol.name.toPascalCase()},
@@ -90,29 +107,34 @@ class ServerOperationHandlerGenerator(
                             };
                             let mut response = runtime_error.into_response();
                             response.extensions_mut().insert(extension);
-                            return response.map($serverCrate::body::boxed);
+                            let response = response.map($serverCrate::body::boxed);
+                            #{Tracing}::debug!(?response, "returning HTTP response");
+                            return response;
                         }
                     };
-                    let input_inner = input_wrapper.into();
-                    let output_inner = self(input_inner, state).await;
-                    """.trimIndent()
-                } else {
+                    $operationHandlerCall
                     """
-                    let input_inner = input_wrapper.into();
-                    let output_inner = self(input_inner).await;
-                    """.trimIndent()
+                } else {
+                    operationHandlerCall
                 }
                 rustTemplate(
                     """
                     type Sealed = #{ServerOperationHandler}::sealed::Hidden;
+                    
+                    ##[#{Tracing}::instrument(level = "debug", skip_all, name = "${operationName}_service_call")]
                     async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::body::BoxBody> {
+                        use #{Tracing}::Instrument;
+                    
                         let mut req = #{AxumCore}::extract::RequestParts::new(req);
                         use #{AxumCore}::extract::FromRequest;
                         use #{AxumCore}::response::IntoResponse;
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
                             Err(runtime_error) => {
-                                return runtime_error.into_response().map($serverCrate::body::boxed);
+                                #{Tracing}::debug!(?runtime_error, "unable to extract operation input from request");
+                                let response = runtime_error.into_response().map($serverCrate::body::boxed);
+                                #{Tracing}::debug!(?response, "returning HTTP response");
+                                return response;
                             }
                         };
                         $callImpl
@@ -121,7 +143,9 @@ class ServerOperationHandlerGenerator(
                         response.extensions_mut().insert(
                             #{SmithyHttpServer}::extension::OperationExtension::new("${operation.id.namespace}", "$operationName")
                         );
-                        response.map(#{SmithyHttpServer}::body::boxed)
+                        response = response.map(#{SmithyHttpServer}::body::boxed);
+                        #{Tracing}::debug!(?response, "returning HTTP response");
+                        response
                     }
                     """,
                     *codegenScope
@@ -157,6 +181,7 @@ class ServerOperationHandlerGenerator(
             Fut: std::future::Future<Output = $outputType> + Send,
             B: $serverCrate::body::HttpBody + Send + 'static, $streamingBodyTraitBounds
             B::Data: Send,
+            B: std::fmt::Debug,
             $serverCrate::rejection::RequestRejection: From<<B as $serverCrate::body::HttpBody>::Error>
         """.trimIndent()
     }

@@ -146,6 +146,7 @@ where
         Poll::Ready(Ok(()))
     }
 
+    #[tracing::instrument(level = "debug", skip_all, name = "router")]
     #[inline]
     fn call(&mut self, req: Request<B>) -> Self::Future {
         let mut method_not_allowed = false;
@@ -153,6 +154,7 @@ where
         for (route, request_spec) in &self.routes {
             match request_spec.matches(&req) {
                 request_spec::Match::Yes => {
+                    tracing::debug!("request routed successfully to operation");
                     return RouterFuture::from_oneshot(route.clone().oneshot(req));
                 }
                 request_spec::Match::MethodNotAllowed => method_not_allowed = true,
@@ -161,6 +163,13 @@ where
             }
         }
 
+        tracing::debug!(
+            method = ?req.method(),
+            uri = ?req.uri(),
+            headers = ?req.headers(),
+            version = ?req.version(),
+            "request does not match any operation route"
+        );
         let status_code = if method_not_allowed {
             StatusCode::METHOD_NOT_ALLOWED
         } else {
