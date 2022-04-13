@@ -40,6 +40,7 @@ class ServerOperationRegistryGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
+        "AwsJsonVersion" to ServerRuntimeType.AwsJsonVersion(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
         "Tower" to ServerCargoDependency.Tower.asType(),
@@ -211,7 +212,7 @@ class ServerOperationRegistryGenerator(
         Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlockTemplate(
             """
-            impl<$genericArguments> From<$operationRegistryNameWithArguments> for #{Router}<${requestSpecType()}, B>
+            impl<$genericArguments> From<$operationRegistryNameWithArguments> for #{Router}<B>
             where
                 B: Send + 'static,
                 $operationsTraitBounds
@@ -230,7 +231,7 @@ class ServerOperationRegistryGenerator(
                 rustTemplate(
                     """
                     $requestSpecs
-                    #{Router}::from_box_clone_service_iter($towerServices, ${runtimeProtocolType()})
+                    ${runtimeRouterConstructor(towerServices)}
                     """.trimIndent(),
                     *codegenScope
                 )
@@ -248,40 +249,21 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Finds the runtime `RequestSpec` type for a specific modeled protocol.
-     */
-    private fun requestSpecType(): String {
-        val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
-        when (protocol) {
-            RestJson1Trait.ID, RestXmlTrait.ID -> {
-                return "$namespace::RestRequestSpec"
-            }
-            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                return "$namespace::AwsJsonRequestSpec"
-            }
-            else -> {
-                TODO("Protocol $protocol not supported yet")
-            }
-        }
-    }
-
-    /*
      * Finds the runtime `Protocol` variant for a specific modeled protocol.
      */
-    private fun runtimeProtocolType(): String {
-        val protocols = ServerRuntimeType.Protocol(runtimeConfig).fullyQualifiedName()
+    private fun runtimeRouterConstructor(services: String): String {
         when (protocol) {
             RestJson1Trait.ID -> {
-                return "$protocols::RestJson1"
+                return "#{Router}::new_rest_json_router($services)"
             }
             RestXmlTrait.ID -> {
-                return "$protocols::RestXml"
+                return "#{Router}::new_rest_xml_router($services)"
             }
             AwsJson1_0Trait.ID -> {
-                return "$protocols::AwsJson10"
+                return "#{Router}::new_aws_json_router(#{AwsJsonVersion}::V10, $services)"
             }
             AwsJson1_1Trait.ID -> {
-                return "$protocols::AwsJson11"
+                return "#{Router}::new_aws_json_router(#{AwsJsonVersion}::V11, $services)"
             }
             else -> {
                 TODO("Protocol $protocol not supported yet")
@@ -309,14 +291,9 @@ class ServerOperationRegistryGenerator(
      * Returns an AwsJson specific runtime `RequestSpec`.
      */
     private fun OperationShape.awsJsonRequestSpec(): String {
-        val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
         val operationName = symbolProvider.toSymbol(this).name
         // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
-        return """
-            $namespace::AwsJsonRequestSpec::new(
-                String::from("$serviceName.$operationName"),
-            )
-        """
+        return """String::from("$serviceName.$operationName")"""
     }
 
     /*
@@ -339,7 +316,7 @@ class ServerOperationRegistryGenerator(
         }
 
         return """
-            $namespace::RestRequestSpec::new(
+            $namespace::RequestSpec::new(
                 http::Method::${httpTrait.method},
                 $namespace::UriSpec::new(
                     $namespace::PathAndQuerySpec::new(

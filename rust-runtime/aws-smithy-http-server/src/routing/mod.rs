@@ -8,7 +8,7 @@
 //! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 
 use self::future::RouterFuture;
-use self::request_spec::RestRequestSpec;
+use self::request_spec::RequestSpec;
 use crate::body::{boxed, Body, BoxBody, HttpBody};
 use crate::protocols::Protocol;
 use crate::runtime_error::{RuntimeError, RuntimeErrorKind};
@@ -43,13 +43,13 @@ pub enum AwsJsonVersion {
 
 #[derive(Debug, Clone)]
 pub(crate) enum Routes<B = Body> {
-    RestXmlRoutes {
-        routes: Vec<(Route<B>, RestRequestSpec)>,
+    RestXml {
+        routes: Vec<(Route<B>, RequestSpec)>,
     },
-    RestJson1Routes {
-        routes: Vec<(Route<B>, RestRequestSpec)>,
+    RestJson1 {
+        routes: Vec<(Route<B>, RequestSpec)>,
     },
-    AwsJsonRoutes {
+    AwsJson {
         version: AwsJsonVersion,
         routes: HashMap<String, Route<B>>,
     },
@@ -127,34 +127,55 @@ where
             .layer(MapResponseBodyLayer::new(boxed))
             .layer(layer);
         match self.routes {
-            Routes::RestJson1Routes { routes } => {
+            Routes::RestJson1 { routes } => {
                 let routes = routes
                     .into_iter()
                     .map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec))
                     .collect();
                 Router {
-                    routes: Routes::RestJson1Routes { routes },
+                    routes: Routes::RestJson1 { routes },
                 }
             }
-            Routes::RestXmlRoutes { routes } => {
+            Routes::RestXml { routes } => {
                 let routes = routes
                     .into_iter()
                     .map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec))
                     .collect();
                 Router {
-                    routes: Routes::RestXmlRoutes { routes },
+                    routes: Routes::RestXml { routes },
                 }
             }
-            Routes::AwsJsonRoutes { version, routes } => {
+            Routes::AwsJson { version, routes } => {
                 let routes = routes
                     .into_iter()
                     .map(|(operation, route)| (operation, Layer::layer(&layer, route)))
                     .collect();
                 Router {
-                    routes: Routes::AwsJsonRoutes { version, routes },
+                    routes: Routes::AwsJson { version, routes },
                 }
             }
         }
+    }
+
+    fn sort_rest_routes<T>(routes: T) -> Vec<(Route<B>, RequestSpec)>
+    where
+        T: IntoIterator<
+            Item = (
+                tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
+                RequestSpec,
+            ),
+        >,
+    {
+        let mut routes: Vec<(Route<B>, RequestSpec)> = routes
+            .into_iter()
+            .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
+            .collect();
+
+        // Sort them once by specifity, with the more specific routes sorted before the less
+        // specific ones, so that when routing a request we can simply iterate through the routes
+        // and pick the first one that matches.
+        routes.sort_by_key(|(_route, request_spec)| std::cmp::Reverse(request_spec.rank()));
+        routes
     }
 
     /// Create a new `Router` from a vector of pairs of request specs and services and a `Protocol`.
@@ -166,23 +187,14 @@ where
         T: IntoIterator<
             Item = (
                 tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
-                RestRequestSpec,
+                RequestSpec,
             ),
         >,
     {
-        let mut routes: Vec<(Route<B>, RestRequestSpec)> = routes
-            .into_iter()
-            .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
-            .collect();
-
-        // Sort them once by specifity, with the more specific routes sorted before the less
-        // specific ones, so that when routing a request we can simply iterate through the routes
-        // and pick the first one that matches.
-        routes.sort_by_key(|(_route, request_spec)| std::cmp::Reverse(request_spec.rank()));
-
-        Self {
-            routes: Routes::RestJson1Routes { routes },
-        }
+        let routes = Routes::RestJson1 {
+            routes: Self::sort_rest_routes(routes),
+        };
+        Self { routes }
     }
 
     /// Create a new `Router` from a vector of pairs of request specs and services and a `Protocol`.
@@ -194,30 +206,21 @@ where
         T: IntoIterator<
             Item = (
                 tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
-                RestRequestSpec,
+                RequestSpec,
             ),
         >,
     {
-        let mut routes: Vec<(Route<B>, RestRequestSpec)> = routes
-            .into_iter()
-            .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
-            .collect();
-
-        // Sort them once by specifity, with the more specific routes sorted before the less
-        // specific ones, so that when routing a request we can simply iterate through the routes
-        // and pick the first one that matches.
-        routes.sort_by_key(|(_route, request_spec)| std::cmp::Reverse(request_spec.rank()));
-
-        Self {
-            routes: Routes::RestXmlRoutes { routes },
-        }
+        let routes = Routes::RestXml {
+            routes: Self::sort_rest_routes(routes),
+        };
+        Self { routes }
     }
 
     /// Create a new `Router` from a vector of pairs of request specs and services and a `Protocol`.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
-    pub fn new_awsjson_router<T>(version: AwsJsonVersion, routes: T) -> Self
+    pub fn new_aws_json_router<T>(version: AwsJsonVersion, routes: T) -> Self
     where
         T: IntoIterator<
             Item = (
@@ -232,7 +235,7 @@ where
             .collect();
 
         Self {
-            routes: Routes::AwsJsonRoutes { version, routes },
+            routes: Routes::AwsJson { version, routes },
         }
     }
 }
@@ -255,8 +258,8 @@ where
         let mut method_not_allowed = false;
 
         match &self.routes {
-            Routes::RestJson1Routes { routes: store } | Routes::RestXmlRoutes { routes: store } => {
-                for (route, request_spec) in store {
+            Routes::RestJson1 { routes } | Routes::RestXml { routes } => {
+                for (route, request_spec) in routes {
                     match request_spec.matches(&req) {
                         request_spec::Match::Yes => {
                             return RouterFuture::from_oneshot(route.clone().oneshot(req));
@@ -276,7 +279,7 @@ where
                     )
                 } else {
                     let protocol = match &self.routes {
-                        Routes::RestJson1Routes { routes: _ } => Protocol::RestJson1,
+                        Routes::RestJson1 { routes: _ } => Protocol::RestJson1,
                         _ => Protocol::RestXml,
                     };
                     let error = RuntimeError {
@@ -286,7 +289,7 @@ where
                     RouterFuture::from_response(error.into_response())
                 }
             }
-            Routes::AwsJsonRoutes { version, routes } => {
+            Routes::AwsJson { version, routes } => {
                 let protocol = match version {
                     AwsJsonVersion::V10 => Protocol::AwsJson10,
                     AwsJsonVersion::V11 => Protocol::AwsJson11,
@@ -374,9 +377,9 @@ mod tests {
     // https://github.com/awslabs/smithy-typescript/blob/fbf97a9bf4c1d8cf7f285ea7c24e1f0ef280142a/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.spec.ts
     #[tokio::test]
     async fn simple_routing() {
-        let request_specs: Vec<(RestRequestSpec, &str)> = vec![
+        let request_specs: Vec<(RequestSpec, &str)> = vec![
             (
-                RestRequestSpec::from_parts(
+                RequestSpec::from_parts(
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("a")),
@@ -388,7 +391,7 @@ mod tests {
                 "A",
             ),
             (
-                RestRequestSpec::from_parts(
+                RequestSpec::from_parts(
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("mg")),
@@ -400,7 +403,7 @@ mod tests {
                 "MiddleGreedy",
             ),
             (
-                RestRequestSpec::from_parts(
+                RequestSpec::from_parts(
                     Method::DELETE,
                     Vec::new(),
                     vec![
@@ -411,7 +414,7 @@ mod tests {
                 "Delete",
             ),
             (
-                RestRequestSpec::from_parts(
+                RequestSpec::from_parts(
                     Method::POST,
                     vec![PathSegment::Literal(String::from("query_key_only"))],
                     vec![QuerySegment::Key(String::from("foo"))],
@@ -474,9 +477,9 @@ mod tests {
 
     #[tokio::test]
     async fn basic_pattern_conflict_avoidance() {
-        let request_specs: Vec<(RestRequestSpec, &str)> = vec![
+        let request_specs: Vec<(RequestSpec, &str)> = vec![
             (
-                RestRequestSpec::from_parts(
+                RequestSpec::from_parts(
                     Method::GET,
                     vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
                     Vec::new(),
@@ -484,7 +487,7 @@ mod tests {
                 "A1",
             ),
             (
-                RestRequestSpec::from_parts(
+                RequestSpec::from_parts(
                     Method::GET,
                     vec![
                         PathSegment::Literal(String::from("a")),
@@ -496,7 +499,7 @@ mod tests {
                 "A2",
             ),
             (
-                RestRequestSpec::from_parts(
+                RequestSpec::from_parts(
                     Method::GET,
                     vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
                     Vec::new(),
@@ -504,7 +507,7 @@ mod tests {
                 "B1",
             ),
             (
-                RestRequestSpec::from_parts(
+                RequestSpec::from_parts(
                     Method::GET,
                     vec![PathSegment::Literal(String::from("b")), PathSegment::Greedy],
                     vec![QuerySegment::Key(String::from("q"))],

@@ -24,6 +24,9 @@ object ServerRuntimeType {
     fun Router(runtimeConfig: RuntimeConfig) =
         RuntimeType("Router", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
 
+    fun AwsJsonVersion(runtimeConfig: RuntimeConfig) =
+        RuntimeType("AwsJsonVersion", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
+
     fun RequestSpecModule(runtimeConfig: RuntimeConfig) =
         RuntimeType("request_spec", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::routing")
 
