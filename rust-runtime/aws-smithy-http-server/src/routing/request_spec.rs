@@ -6,8 +6,6 @@
 use http::Request;
 use regex::Regex;
 
-use crate::protocols::Protocol;
-
 #[derive(Debug, Clone)]
 pub enum PathSegment {
     Literal(String),
@@ -112,64 +110,21 @@ impl From<&PathSpec> for Regex {
     }
 }
 
-/// Request specification for AwsJson 1.0 and 1.1.
-/// Both protocols routing is based on the header `x-amz-target`, which holds the selected operation.
-#[derive(Debug, Clone)]
-pub struct AwsJsonRequestSpec {
-    x_amzn_target: String,
-}
-
-impl AwsJsonRequestSpec {
-    /// Create a new [`AwsJsonRequestSpec`]
-    pub fn new(x_amzn_target: String) -> Self {
-        Self { x_amzn_target }
-    }
-}
-
-impl AwsJsonRequestSpec {
-    pub(super) fn matches<B>(&self, req: &Request<B>) -> Match {
-        // We first check for the method and URI of the current HTTP request.
-        // Every request for the AwsJson 1.0 and 1.1 protocol MUST be sent to the root URL (/)
-        // using the HTTP "POST" method.
-        if req.method() != http::Method::POST {
-            return Match::MethodNotAllowed;
-        }
-        if req.uri() != "/" {
-            return Match::No;
-        }
-
-        // The routing is based on the X-Amz-Target header where the value is the shape name
-        // of the service's Shape ID joined to the shape name of the operation's Shape ID,
-        // separated by a single period (.) character.
-        if let Some(target) = req.headers().get("x-amz-target") {
-            if let Ok(target) = target.to_str() {
-                if target == self.x_amzn_target {
-                    return Match::Yes;
-                }
-            }
-        }
-
-        Match::No
-    }
-}
-
 /// Request specification for REST protocols like RestJson1 and RestXml.
 #[derive(Debug, Clone)]
 pub struct RestRequestSpec {
     method: http::Method,
     uri_spec: UriSpec,
     uri_path_regex: Regex,
-    protocol: Protocol,
 }
 
 impl RestRequestSpec {
-    pub fn new(method: http::Method, uri_spec: UriSpec, protocol: Protocol) -> Self {
+    pub fn new(method: http::Method, uri_spec: UriSpec) -> Self {
         let uri_path_regex = (&uri_spec.path_and_query.path_segments).into();
         RestRequestSpec {
             method,
             uri_spec,
             uri_path_regex,
-            protocol,
         }
     }
 
@@ -179,7 +134,6 @@ impl RestRequestSpec {
         method: http::Method,
         path_segments: Vec<PathSegment>,
         query_segments: Vec<QuerySegment>,
-        protocol: Protocol,
     ) -> Self {
         Self::new(
             method,
@@ -190,7 +144,6 @@ impl RestRequestSpec {
                     query_segments: QuerySpec::from_vector_unchecked(query_segments),
                 },
             },
-            protocol,
         )
     }
 }
@@ -295,7 +248,7 @@ impl RestRequestSpec {
 mod tests {
     use super::super::tests::req;
     use super::*;
-    use http::{HeaderMap, HeaderValue, Method};
+    use http::Method;
 
     #[test]
     fn rest_path_spec_into_regex() {
@@ -490,49 +443,6 @@ mod tests {
         let hits = vec![(Method::GET, "/a/label"), (Method::GET, "/a/")];
         for (method, uri) in &hits {
             assert_eq!(Match::Yes, label_spec.matches(&req(method, uri, None)));
-        }
-    }
-
-    fn aws_json_spec() -> AwsJsonRequestSpec {
-        AwsJsonRequestSpec::new(String::from("Service.operation"))
-    }
-
-    #[test]
-    fn aws_json_matches() {
-        let reqs = vec![
-            (
-                Method::POST,
-                "/",
-                Some(HeaderValue::from_str("Service.operation").unwrap()),
-                Match::Yes,
-            ),
-            (Method::POST, "/", None, Match::No),
-            (
-                Method::GET,
-                "/",
-                Some(HeaderValue::from_str("Service.operation").unwrap()),
-                Match::MethodNotAllowed,
-            ),
-            (
-                Method::POST,
-                "/something",
-                Some(HeaderValue::from_str("Service.operation").unwrap()),
-                Match::No,
-            ),
-            (
-                Method::POST,
-                "/",
-                Some(HeaderValue::from_str("Service.unknown_operation").unwrap()),
-                Match::No,
-            ),
-        ];
-        for (method, uri, header, result) in &reqs {
-            let headers = header.as_ref().map(|h| {
-                let mut headers = HeaderMap::new();
-                headers.insert("x-amz-target", h.clone());
-                headers
-            });
-            assert_eq!(*result, aws_json_spec().matches(&req(method, uri, headers)));
         }
     }
 }
