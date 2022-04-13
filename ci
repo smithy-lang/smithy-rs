@@ -13,5 +13,4 @@ if [[ $# -lt 1 ]]; then
 fi
 
 cd ..
-./smithy-rs/tools/ci-build/acquire-build-image
-./smithy-rs/tools/ci-build/ci-action "$@"
+make -f ./smithy-rs/ci.mk "$@"
