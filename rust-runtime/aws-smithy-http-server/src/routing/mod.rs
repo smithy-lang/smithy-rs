@@ -35,7 +35,7 @@ mod route;
 
 pub use self::{into_make_service::IntoMakeService, route::Route};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum AwsJsonVersion {
     V10,
     V11,
@@ -80,13 +80,21 @@ pub struct Router<B = Body> {
     routes: Routes<B>,
 }
 
-impl<B> Clone for Router<B>
-where
-    B: Clone,
-{
+impl<B> Clone for Router<B> {
     fn clone(&self) -> Self {
-        Self {
-            routes: self.routes.clone(),
+        match &self.routes {
+            Routes::RestJson1 { routes } => Router {
+                routes: Routes::RestJson1 { routes: routes.clone() },
+            },
+            Routes::RestXml { routes } => Router {
+                routes: Routes::RestXml { routes: routes.clone() },
+            },
+            Routes::AwsJson { version, routes } => Router {
+                routes: Routes::AwsJson {
+                    version: *version,
+                    routes: routes.clone(),
+                },
+            },
         }
     }
 }
