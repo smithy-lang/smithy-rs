@@ -1,8 +1,6 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
 0.10.0 (April 13th, 2022)
 =========================
-**Breaking Changes:**
-- ⚠ ([aws-sdk-rust#490](https://github.com/awslabs/aws-sdk-rust/issues/490)) Update all SDK and runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)
 
 **New this release:**
 - ([smithy-rs#1262](https://github.com/awslabs/smithy-rs/issues/1262), @liubin) Fix link to Developer Guide in crate's README.md
@@ -10,6 +8,7 @@
 - ([aws-sdk-rust#479](https://github.com/awslabs/aws-sdk-rust/issues/479), [smithy-rs#1296](https://github.com/awslabs/smithy-rs/issues/1296)) Add support for configuring the session length in [AssumeRoleProvider](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html)
 - ([smithy-rs#1296](https://github.com/awslabs/smithy-rs/issues/1296)) Add caching to [AssumeRoleProvider](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html)
 - ([smithy-rs#1300](https://github.com/awslabs/smithy-rs/issues/1300), @benesch) Add endpoint resolver to SdkConfig. This enables overriding the endpoint resolver for all services build from a single SdkConfig.
+- ([aws-sdk-rust#490](https://github.com/awslabs/aws-sdk-rust/issues/490)) Update all runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)
 - ([smithy-rs#1318](https://github.com/awslabs/smithy-rs/issues/1318)) We updated the MSRV from 1.56.1 to 1.58.1.
 
 **Contributors**

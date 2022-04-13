@@ -7,12 +7,11 @@
 
 0.40.0 (April 13th, 2022)
 =========================
-**Breaking Changes:**
-- ⚠ ([aws-sdk-rust#490](https://github.com/awslabs/aws-sdk-rust/issues/490)) Update all runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)
 
 **New this release:**
 - ([smithy-rs#1262](https://github.com/awslabs/smithy-rs/issues/1262), @liubin) Fix link to Developer Guide in crate's README.md
 - ([smithy-rs#1301](https://github.com/awslabs/smithy-rs/issues/1301), @benesch) Update urlencoding crate to v2.1.0
+- ([aws-sdk-rust#490](https://github.com/awslabs/aws-sdk-rust/issues/490)) Update all runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)
 
 **Contributors**
 Thank you for your contributions! ❤
