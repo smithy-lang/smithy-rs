@@ -1,3 +1,13 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0.
+#
+
+# This is a makefile executed by the `./ci` script that
+# has a target for every single CI script in `tools/ci-build/scripts`,
+# with dependencies between targets included so that it's not necessary
+# to remember to generate a SDK for the targets that require one.
+
 CI_BUILD=./smithy-rs/tools/ci-build
 CI_ACTION=$(CI_BUILD)/ci-action
 
