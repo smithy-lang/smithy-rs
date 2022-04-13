@@ -10,38 +10,35 @@ Adding a callback APIs to `ByteStream` and `SdkBody` will enable developers usin
 *Note that comments starting with '//' are not necessarily going to be included in the actual implementation and are intended as clarifying comments for the purposes of this RFC.*
 
 ```rust
-// in aws_smithy_http::read_callback...
+// in aws_smithy_http::callbacks...
 
 // Each trait method defaults to doing nothing. It's up to implementors to
 // implement one or both of the trait methods
 /// Structs and enums implementing this trait can be inserted into a `ByteStream`,
 /// and will then be called in reaction to various events during a `ByteStream`'s
 /// lifecycle.
-pub trait ReadCallback: Send + Sync {
-    /// This callback is called for each chunk **successfully** read.
-    /// If an error occurs while reading a chunk, this will not be called.
-    /// This function takes `&mut self` so that implementors may modify
-    /// an implementing struct/enum's internal state.
-    // In order to stop the compiler complaining about these empty default impls,
-    // we allow unused variables.
+pub trait BaseCallback: Send + Sync {
+    /// This callback is called for each chunk **successfully** read. If an error occurs while reading a chunk,
+    /// this will not be called. This function takes `&mut self` so that implementors may modify an implementing
+    /// struct/enum's internal state.
+    // In order to stop the compiler complaining about these empty default impls, we allow unused variables.
     fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) {}
 
     /// This callback is called once all chunks have been read. If the callback encountered 1 or more errors
-    /// while running `update`s, this is how those errors are raised.
-    fn finally(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> { Ok(()) }
+    /// while running `update`s, this is how those errors are raised. Otherwise, this may optionally return
+    /// a [`HeaderMap`][HeaderMap] to be appended to an HTTP body as a trailer or inserted into a request's
+    /// headers.
+    fn finally(&self) -> Result<Option<HeaderMap<HeaderValue>>, Box<dyn std::error::Error + Send + Sync>> { Ok(()) }
 
-    /// return any trailers to be appended to this `ByteStream` if it's used to
-    /// create the body of an HTTP request.
-    // `HeaderMap`/`HeaderValue` are defined by `hyper`
-    fn trailers(&self) -> Option<HeaderMap<HeaderValue>> { None }
-
-    /// Create a new `ReadCallback` from an existing one. This is called when a `ReadCallback` need
+    /// Create a new `BaseCallback` from an existing one. This is called when a `BaseCallback` need
     /// to be re-initialized with default state. For example: when a request has a body that needs
     /// to be rebuilt, all read callbacks on that body need to be run again but with a fresh internal state.
-    fn make_new(&self) -> Box<dyn ReadCallback>;
+    fn make_new(&self) -> Box<dyn BaseCallback>;
 }
 
-// We also impl `ReadCallback` for `Box<dyn ReadCallback>` because it makes callback trait objects easier to work with.
+// We also impl `BaseCallback` for `Box<dyn BaseCallback>` because it makes callback trait objects easier to work with.
+
+// TODO add the ReadCallback and WriteCallback traits
 ```
 
 The changes we need to make to `ByteStream`:
@@ -56,8 +53,8 @@ impl ByteStream {
     // ...other impls omitted
 
     // A "builder-style" method for setting callbacks
-    pub fn with_callback(&mut self, callback: Box<dyn ReadCallback>) -> &mut Self {
-        self.inner.with_callback(callback);
+    pub fn with_read_callback(&mut self, read_callback: Box<dyn ReadCallback>) -> &mut Self {
+        self.inner.with_callback(read_callback);
         self
     }
 }
@@ -65,7 +62,7 @@ impl ByteStream {
 impl Inner<SdkBody> {
     // `Inner` wraps an `SdkBody` which has a "builder-style" function for adding callbacks.
     pub fn with_read_callback(&mut self, read_callback: Box<dyn ReadCallback>) -> &mut Self {
-        self.body.with_read_callback(read_callback);
+        self.body.with_callback(read_callback);
         self
     }
 }
@@ -85,7 +82,7 @@ pub struct SdkBody {
     rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
     // We add a `Vec` to store the callbacks
     #[pin]
-    read_callbacks: Vec<Box<dyn ReadCallback>>,
+    callbacks: Vec<Box<dyn BaseCallback>>,
 }
 
 impl SdkBody {
@@ -118,14 +115,14 @@ impl SdkBody {
         match &polling_result {
             // When we get some bytes back from polling, pass those bytes to each callback in turn
             Poll::Ready(Some(Ok(bytes))) => {
-                this.read_callbacks
+                this.callbacks
                     .iter_mut()
                     .for_each(|callback| callback.update(bytes));
             }
             // When we're done polling for bytes, run each callback's `finally()` method. If any calls to
             // `finally()` return an error, propagate that error up. Otherwise, continue.
             Poll::Ready(None) => {
-                for callback_result in this.read_callbacks.iter().map(ReadCallback::finally) {
+                for callback_result in this.callbacks.iter().map(BaseCallback::finally) {
                     if let Err(e) = callback_result {
                         return Poll::Ready(Some(Err(e)));
                     }
@@ -143,24 +140,79 @@ impl SdkBody {
     pub fn try_clone(&self) -> Option<Self> {
         self.rebuild.as_ref().map(|rebuild| {
             let next = rebuild();
-            let read_callbacks = self
-                .read_callbacks
+            let callbacks = self
+                .callbacks
                 .iter()
-                .map(ReadCallback::make_new)
+                .map(BaseCallback::make_new)
                 .collect();
 
             Self {
                 inner: next,
                 rebuild: self.rebuild.clone(),
-                read_callbacks,
+                callbacks,
             }
         })
     }
 
-    pub fn with_read_callback(&mut self, read_callback: Box<dyn ReadCallback>) -> &mut Self {
-        self.read_callbacks.push(read_callback);
+    pub fn with_callback(&mut self, callback: Box<dyn BaseCallback>) -> &mut Self {
+        self.callbacks.push(callback);
         self
     }
+}
+
+/// Given two [`HeaderMap`][HeaderMap]s, merge them together and return the merged `HeaderMap`. If the
+/// two `HeaderMap`s share any keys, values from the right `HeaderMap` be appended to the left `HeaderMap`.
+///
+/// # Example
+///
+/// ```rust
+/// let header_name = HeaderName::from_static("some_key");
+///
+/// let mut left_hand_side_headers = HeaderMap::new();
+/// left_hand_side_headers.insert(
+///     header_name.clone(),
+///     HeaderValue::from_str("lhs value").unwrap(),
+/// );
+///
+/// let mut right_hand_side_headers = HeaderMap::new();
+/// right_hand_side_headers.insert(
+///     header_name.clone(),
+///     HeaderValue::from_str("rhs value").unwrap(),
+/// );
+///
+/// let merged_header_map =
+///     append_merge_header_maps(left_hand_side_headers, right_hand_side_headers);
+/// let merged_values: Vec<_> = merged_header_map
+///     .get_all(header_name.clone())
+///     .into_iter()
+///     .collect();
+///
+/// // Will print 'some_key: ["lhs value", "rhs value"]'
+/// println!("{}: {:?}", header_name.as_str(), merged_values);
+/// ```
+fn append_merge_header_maps(
+    mut lhs: HeaderMap<HeaderValue>,
+    rhs: HeaderMap<HeaderValue>,
+) -> HeaderMap<HeaderValue> {
+    let mut last_header_name_seen = None;
+    for (header_name, header_value) in rhs.into_iter() {
+        // For each yielded item that has None provided for the `HeaderName`,
+        // then the associated header name is the same as that of the previously
+        // yielded item. The first yielded item will have `HeaderName` set.
+        // https://docs.rs/http/latest/http/header/struct.HeaderMap.html#method.into_iter-2
+        match (&mut last_header_name_seen, header_name) {
+            (_, Some(header_name)) => {
+                lhs.append(header_name.clone(), header_value);
+                last_header_name_seen = Some(header_name);
+            }
+            (Some(header_name), None) => {
+                lhs.append(header_name.clone(), header_value);
+            }
+            (None, None) => unreachable!(),
+        };
+    }
+
+    lhs
 }
 
 impl http_body::Body for SdkBody {
@@ -170,31 +222,18 @@ impl http_body::Body for SdkBody {
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
     ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        let mut last_header_key_seen = None;
         let header_map = self
             .read_callbacks
             .iter()
-            .filter_map(|callback| callback.trailers())
-            .reduce(|mut left_header_map, mut right_header_map| {
-                right_header_map.into_iter().for_each(|(key, value)| {
-                    // For each yielded item that has None provided for the `HeaderName`,
-                    // then the associated header name is the same as that of the previously
-                    // yielded item. The first yielded item will have `HeaderName` set.
-                    // https://docs.rs/http/latest/http/header/struct.HeaderMap.html#method.into_iter-2
-                    match (last_header_key_seen, key) {
-                        (_, Some(key)) => {
-                            left_header_map.append(key, value);
-                            last_header_key_seen = Some(key);
-                        }
-                        (Some(key), None) => {
-                            left_header_map.append(key, value);
-                        }
-                        (None, None) => unreachable!(),
-                    };
-                });
-
-                left_header_map
-            });
+            .filter_map(|callback| {
+                match callback.finally() {
+                    Ok(optional_header_map) => optional_header_map,
+                    // early return if a callback encountered an error
+                    Err(e) => { return e },
+                }
+            })
+            // Merge any `HeaderMap`s from the last step together, one by one.
+            .reduce(append_merge_header_maps);
 
         Poll::Ready(Ok(header_map))
     }
@@ -221,7 +260,10 @@ impl ReadCallback for Crc32cChecksumCallback {
         };
     }
 
-    fn trailers(&self) -> Option<HeaderMap<HeaderValue>> {
+    fn finally(&self) ->
+    Result<Option<HeaderMap<HeaderValue>>,
+          Box<dyn std::error::Error + Send + Sync>>
+    {
         let mut header_map = HeaderMap::new();
         // This checksum name is an Amazon standard and would be a `const` in the real implementation
         let key = HeaderName::from_static("x-amz-checksum-crc32c");
@@ -249,11 +291,7 @@ In order to use this in a request, we'd modify codegen for that request's servic
 2. If validation was requested but no pre-calculated checksum was given, we'd create a callback similar to the one above
 3. Then, we'd create a new checksum callback and:
    - (if streaming) we'd set the checksum callback on the request body object
-   - (if non-streaming) we'd immediately read the body and call `ReadCallback::update` manually. Once all data was read, we'd get the checksum by calling `trailers` and insert that data as a request header.
-
-## Other thoughts
-
-- What if we defined a `headers` method on `ReadCallback` too? We could just have it default to calling `trailers` internally by default (or vice versa.) This would make it less confusing when we manually call the checksum callback in order to set headers.
+   - (if non-streaming) we'd immediately read the body and call `ReadCallback::update` manually. Once all data was read, we'd get the checksum by calling `finally` and insert that data as a request header.
 
 [ByteStream impls]: https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205
 [SdkBody impls]: https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71
