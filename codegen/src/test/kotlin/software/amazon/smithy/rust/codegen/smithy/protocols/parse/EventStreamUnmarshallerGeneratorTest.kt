@@ -30,7 +30,7 @@ class EventStreamUnmarshallerGeneratorTest {
             TestRuntimeConfig,
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
-            testRustSettings(test.model),
+            testRustSettings(),
             mode = testCase.mode
         )
         val protocol = testCase.protocolBuilder(codegenContext)

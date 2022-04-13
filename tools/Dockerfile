@@ -73,7 +73,7 @@ RUN set -eux; \
     rustup --version; \
     rustup component add rustfmt; \
     rustup component add clippy; \
-    rustup install ${rust_nightly_version}; \
+    rustup toolchain install ${rust_nightly_version} --component clippy; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
 COPY . tools/
@@ -86,6 +86,7 @@ RUN set -eux; \
     fi; \
     cargo install --path tools/publisher; \
     cargo +${rust_nightly_version} install --path tools/api-linter; \
+    cargo install --path tools/crate-hasher; \
     cargo install --path tools/sdk-lints; \
     cargo install --path tools/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
@@ -127,6 +128,7 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     RUSTDOCFLAGS="-D warnings" \
     RUSTFLAGS="-D warnings" \
     SMITHY_RS_DOCKER_BUILD_IMAGE=1
+RUN npm install -g diff2html-cli@5.1.11
 WORKDIR /home/build
 COPY ci-build/scripts/sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test
