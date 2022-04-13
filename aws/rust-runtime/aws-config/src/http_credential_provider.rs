@@ -10,6 +10,7 @@
 
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::HttpSettings;
+use aws_smithy_client::retry::AllowOperationRetryOnTransientFailure;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::{Operation, Request};
 use aws_smithy_http::response::ParseStrictResponse;
@@ -67,13 +68,18 @@ impl HttpCredentialProvider {
             http_req = http_req.header(AUTHORIZATION, auth);
         }
         let http_req = http_req.body(SdkBody::empty()).expect("valid request");
-        Operation::new(
+        let mut operation = Operation::new(
             Request::new(http_req),
             CredentialsResponseParser {
                 provider_name: self.provider_name,
             },
         )
-        .with_retry_policy(HttpCredentialRetryPolicy)
+        .with_retry_policy(HttpCredentialRetryPolicy);
+        // Allow retry on transient failures
+        operation
+            .properties_mut()
+            .insert(AllowOperationRetryOnTransientFailure::new());
+        operation
     }
 }
 

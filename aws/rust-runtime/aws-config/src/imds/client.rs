@@ -15,6 +15,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent, UserAgentStage};
+use aws_smithy_client::retry::AllowOperationRetryOnTransientFailure;
 use aws_smithy_client::{erase::DynConnector, SdkSuccess};
 use aws_smithy_client::{retry, SdkError};
 use aws_smithy_http::body::SdkBody;
@@ -183,7 +184,13 @@ impl Client {
     /// # }
     /// ```
     pub async fn get(&self, path: &str) -> Result<String, ImdsError> {
-        let operation = self.make_operation(path)?;
+        let mut operation = self.make_operation(path)?;
+
+        // Allow retry of transient failures
+        operation
+            .properties_mut()
+            .insert(AllowOperationRetryOnTransientFailure::new());
+
         self.inner.call(operation).await.map_err(|err| match err {
             SdkError::ConstructionFailure(err) => match err.downcast::<ImdsError>() {
                 Ok(token_failure) => *token_failure,
