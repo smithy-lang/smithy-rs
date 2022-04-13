@@ -4,6 +4,7 @@
 # This is the shared CI workflow that is run by both `ci-pr.yml` and `ci-main.yml` depending
 # on if a pull request is being checked, or if the `main` branch is being checked after merge.
 
+name: Test
 on:
   workflow_call:
 
