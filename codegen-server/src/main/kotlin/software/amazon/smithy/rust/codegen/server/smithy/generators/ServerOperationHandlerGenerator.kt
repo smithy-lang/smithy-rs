@@ -45,7 +45,7 @@ class ServerOperationHandlerGenerator(
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "Phantom" to ServerRuntimeType.Phantom,
-        "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
+        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
         "http" to RuntimeType.http,
     )
 
