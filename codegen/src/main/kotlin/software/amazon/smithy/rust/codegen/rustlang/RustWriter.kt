@@ -214,7 +214,7 @@ fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMis
     when (docTrait?.value?.isNotBlank()) {
         // If docs are modeled, then place them on the code generated shape
         true -> {
-            this.docs(normalizeHtml(escape(docTrait.value)))
+            this.docs(escapeSquareBracketsInHtml(normalizeHtml(escape(docTrait.value))))
             note?.also {
                 // Add a blank line between the docs and the note to visually differentiate
                 write("///")
@@ -259,7 +259,7 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: Strin
     return this
 }
 
-/** Escape the [expressionStart] character to avoid problems during formatting */
+/** Escape the `expressionStart` character to avoid problems during formatting */
 fun CodeWriter.escape(text: String): String = text.replace("$expressionStart", "$expressionStart$expressionStart")
 
 /** Parse input as HTML and normalize it */
@@ -270,6 +270,11 @@ fun normalizeHtml(input: String): String {
     }
 
     return doc.body().html()
+}
+
+// Escape square brackets with their HTML code equivalent.
+fun escapeSquareBracketsInHtml(doc: String): String {
+    return doc.replace("[", "&##91;").replace("]", "&##93;")
 }
 
 private fun Element.normalizeAnchors() {
@@ -370,7 +375,7 @@ class RustWriter private constructor(
     /**
      * Create an inline module.
      *
-     * Callers must take care to use [this] when writing to ensure code is written to the right place:
+     * Callers must take care to use `this` when writing to ensure code is written to the right place:
      * ```kotlin
      * val writer = RustWriter.forModule("model")
      * writer.withModule("nested") {
