@@ -39,7 +39,6 @@ class ServerOperationRegistryGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
-        "AwsJsonVersion" to ServerRuntimeType.AwsJsonVersion(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
         "Tower" to ServerCargoDependency.Tower.asType(),
@@ -230,7 +229,7 @@ class ServerOperationRegistryGenerator(
                 rustTemplate(
                     """
                     $requestSpecs
-                    ${runtimeRouterConstructor(towerServices)}
+                    #{Router}::${runtimeRouterConstructor()}($towerServices)
                     """.trimIndent(),
                     *codegenScope
                 )
@@ -250,40 +249,23 @@ class ServerOperationRegistryGenerator(
     /*
      * Finds the runtime `Protocol` variant for a specific modeled protocol.
      */
-    private fun runtimeRouterConstructor(services: String): String {
+    private fun runtimeRouterConstructor(): String =
         when (protocol) {
-            RestJson1Trait.ID -> {
-                return "#{Router}::new_rest_json_router($services)"
-            }
-            RestXmlTrait.ID -> {
-                return "#{Router}::new_rest_xml_router($services)"
-            }
-            AwsJson1_0Trait.ID -> {
-                return "#{Router}::new_aws_json_router(#{AwsJsonVersion}::V10, $services)"
-            }
-            AwsJson1_1Trait.ID -> {
-                return "#{Router}::new_aws_json_router(#{AwsJsonVersion}::V11, $services)"
-            }
-            else -> {
-                TODO("Protocol $protocol not supported yet")
-            }
+            RestJson1Trait.ID -> "new_rest_json_router"
+            RestXmlTrait.ID -> "new_rest_xml_router"
+            AwsJson1_0Trait.ID -> "new_aws_json_10_router"
+            AwsJson1_1Trait.ID -> "new_aws_json_11_router"
+            else -> TODO("Protocol $protocol not supported yet")
         }
-    }
 
     /*
      * Returns the `RequestSpec`s for an operation based on its HTTP-bound route.
      */
     private fun OperationShape.requestSpec(): String =
         when (protocol) {
-            RestJson1Trait.ID, RestXmlTrait.ID -> {
-                restRequestSpec()
-            }
-            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                awsJsonRequestSpec()
-            }
-            else -> {
-                TODO("Protocol $protocol not supported yet")
-            }
+            RestJson1Trait.ID, RestXmlTrait.ID -> restRequestSpec()
+            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> awsJsonRequestSpec()
+            else -> TODO("Protocol $protocol not supported yet")
         }
 
     /*

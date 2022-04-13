@@ -60,42 +60,29 @@ pub struct Router<B = Body> {
     routes: Routes<B>,
 }
 
-/// Version of the awsJson protocol.
-#[derive(Debug, Clone, Copy)]
-pub enum AwsJsonVersion {
-    V10,
-    V11,
-}
-
 /// Protocol-aware routes types.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) enum Routes<B = Body> {
-    RestXml {
-        routes: Vec<(Route<B>, RequestSpec)>,
-    },
-    RestJson1 {
-        routes: Vec<(Route<B>, RequestSpec)>,
-    },
-    AwsJson {
-        version: AwsJsonVersion,
-        routes: HashMap<String, Route<B>>,
-    },
+    RestXml(Vec<(Route<B>, RequestSpec)>),
+    RestJson1(Vec<(Route<B>, RequestSpec)>),
+    AwsJson10(HashMap<String, Route<B>>),
+    AwsJson11(HashMap<String, Route<B>>),
 }
 
 impl<B> Clone for Router<B> {
     fn clone(&self) -> Self {
         match &self.routes {
-            Routes::RestJson1 { routes } => Router {
-                routes: Routes::RestJson1 { routes: routes.clone() },
+            Routes::RestJson1(routes) => Router {
+                routes: Routes::RestJson1(routes.clone()),
             },
-            Routes::RestXml { routes } => Router {
-                routes: Routes::RestXml { routes: routes.clone() },
+            Routes::RestXml(routes) => Router {
+                routes: Routes::RestXml(routes.clone()),
             },
-            Routes::AwsJson { version, routes } => Router {
-                routes: Routes::AwsJson {
-                    version: *version,
-                    routes: routes.clone(),
-                },
+            Routes::AwsJson10(routes) => Router {
+                routes: Routes::AwsJson10(routes.clone()),
+            },
+            Routes::AwsJson11(routes) => Router {
+                routes: Routes::AwsJson11(routes.clone()),
             },
         }
     }
@@ -137,37 +124,46 @@ where
             .layer(MapResponseBodyLayer::new(boxed))
             .layer(layer);
         match self.routes {
-            Routes::RestJson1 { routes } => {
+            Routes::RestJson1(routes) => {
                 let routes = routes
                     .into_iter()
                     .map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec))
                     .collect();
                 Router {
-                    routes: Routes::RestJson1 { routes },
+                    routes: Routes::RestJson1(routes),
                 }
             }
-            Routes::RestXml { routes } => {
+            Routes::RestXml(routes) => {
                 let routes = routes
                     .into_iter()
                     .map(|(route, request_spec)| (Layer::layer(&layer, route), request_spec))
                     .collect();
                 Router {
-                    routes: Routes::RestXml { routes },
+                    routes: Routes::RestXml(routes),
                 }
             }
-            Routes::AwsJson { version, routes } => {
+            Routes::AwsJson10(routes) => {
                 let routes = routes
                     .into_iter()
                     .map(|(operation, route)| (operation, Layer::layer(&layer, route)))
                     .collect();
                 Router {
-                    routes: Routes::AwsJson { version, routes },
+                    routes: Routes::AwsJson10(routes),
+                }
+            }
+            Routes::AwsJson11(routes) => {
+                let routes = routes
+                    .into_iter()
+                    .map(|(operation, route)| (operation, Layer::layer(&layer, route)))
+                    .collect();
+                Router {
+                    routes: Routes::AwsJson11(routes),
                 }
             }
         }
     }
 
-    fn sort_rest_routes<T>(routes: T) -> Vec<(Route<B>, RequestSpec)>
+    fn rest_routes<T>(routes: T) -> Vec<(Route<B>, RequestSpec)>
     where
         T: IntoIterator<
             Item = (
@@ -188,6 +184,21 @@ where
         routes
     }
 
+    fn aws_json_routes<T>(routes: T) -> HashMap<String, Route<B>>
+    where
+        T: IntoIterator<
+            Item = (
+                tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
+                String,
+            ),
+        >,
+    {
+        routes
+            .into_iter()
+            .map(|(svc, operation)| (operation, Route::from_box_clone_service(svc)))
+            .collect()
+    }
+
     /// Create a new restJson1 `Router` from a vector of pairs of request specs and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
@@ -201,10 +212,9 @@ where
             ),
         >,
     {
-        let routes = Routes::RestJson1 {
-            routes: Self::sort_rest_routes(routes),
-        };
-        Self { routes }
+        Self {
+            routes: Routes::RestJson1(Self::rest_routes(routes)),
+        }
     }
 
     /// Create a new restXml `Router` from a vector of pairs of request specs and services.
@@ -220,17 +230,16 @@ where
             ),
         >,
     {
-        let routes = Routes::RestXml {
-            routes: Self::sort_rest_routes(routes),
-        };
-        Self { routes }
+        Self {
+            routes: Routes::RestXml(Self::rest_routes(routes)),
+        }
     }
 
     /// Create a new awsJson 1.0 or 1.1 `Router` from a vector of pairs of operation and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
-    pub fn new_aws_json_router<T>(version: AwsJsonVersion, routes: T) -> Self
+    pub fn new_aws_json_10_router<T>(routes: T) -> Self
     where
         T: IntoIterator<
             Item = (
@@ -239,13 +248,26 @@ where
             ),
         >,
     {
-        let routes: HashMap<String, Route<B>> = routes
-            .into_iter()
-            .map(|(svc, operation)| (operation, Route::from_box_clone_service(svc)))
-            .collect();
-
         Self {
-            routes: Routes::AwsJson { version, routes },
+            routes: Routes::AwsJson10(Self::aws_json_routes(routes)),
+        }
+    }
+
+    /// Create a new awsJson 1.0 or 1.1 `Router` from a vector of pairs of operation and services.
+    ///
+    /// If the vector is empty the router will respond `404 Not Found` to all requests.
+    #[doc(hidden)]
+    pub fn new_aws_json_11_router<T>(routes: T) -> Self
+    where
+        T: IntoIterator<
+            Item = (
+                tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
+                String,
+            ),
+        >,
+    {
+        Self {
+            routes: Routes::AwsJson11(Self::aws_json_routes(routes)),
         }
     }
 }
@@ -268,7 +290,7 @@ where
         let mut method_not_allowed = false;
 
         match &self.routes {
-            Routes::RestJson1 { routes } | Routes::RestXml { routes } => {
+            Routes::RestJson1(routes) | Routes::RestXml(routes) => {
                 for (route, request_spec) in routes {
                     match request_spec.matches(&req) {
                         request_spec::Match::Yes => {
@@ -289,7 +311,7 @@ where
                     )
                 } else {
                     let protocol = match &self.routes {
-                        Routes::RestJson1 { routes: _ } => Protocol::RestJson1,
+                        Routes::RestJson1(_) => Protocol::RestJson1,
                         _ => Protocol::RestXml,
                     };
                     let error = RuntimeError {
@@ -299,11 +321,7 @@ where
                     RouterFuture::from_response(error.into_response())
                 }
             }
-            Routes::AwsJson { version, routes } => {
-                let protocol = match version {
-                    AwsJsonVersion::V10 => Protocol::AwsJson10,
-                    AwsJsonVersion::V11 => Protocol::AwsJson11,
-                };
+            Routes::AwsJson10(routes) | Routes::AwsJson11(routes) => {
                 if req.uri() == "/" {
                     if req.method() == http::Method::POST {
                         if let Some(target) = req.headers().get("x-amz-target") {
@@ -323,6 +341,10 @@ where
                         );
                     }
                 }
+                let protocol = match &self.routes {
+                    Routes::AwsJson11(_) => Protocol::AwsJson11,
+                    _ => Protocol::AwsJson10,
+                };
                 let error = RuntimeError {
                     protocol,
                     kind: RuntimeErrorKind::UnknownOperation,
