@@ -35,26 +35,6 @@ mod route;
 
 pub use self::{into_make_service::IntoMakeService, route::Route};
 
-#[derive(Debug, Clone, Copy)]
-pub enum AwsJsonVersion {
-    V10,
-    V11,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum Routes<B = Body> {
-    RestXml {
-        routes: Vec<(Route<B>, RequestSpec)>,
-    },
-    RestJson1 {
-        routes: Vec<(Route<B>, RequestSpec)>,
-    },
-    AwsJson {
-        version: AwsJsonVersion,
-        routes: HashMap<String, Route<B>>,
-    },
-}
-
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
 /// based on the request's URI and HTTP method or on some specific header setting the target operation.
 /// The former is adhering to the [Smithy specification], while the latter is adhering to
@@ -78,6 +58,28 @@ pub(crate) enum Routes<B = Body> {
 #[derive(Debug)]
 pub struct Router<B = Body> {
     routes: Routes<B>,
+}
+
+/// Version of the awsJson protocol.
+#[derive(Debug, Clone, Copy)]
+pub enum AwsJsonVersion {
+    V10,
+    V11,
+}
+
+/// Protocol-aware routes types.
+#[derive(Debug, Clone)]
+pub(crate) enum Routes<B = Body> {
+    RestXml {
+        routes: Vec<(Route<B>, RequestSpec)>,
+    },
+    RestJson1 {
+        routes: Vec<(Route<B>, RequestSpec)>,
+    },
+    AwsJson {
+        version: AwsJsonVersion,
+        routes: HashMap<String, Route<B>>,
+    },
 }
 
 impl<B> Clone for Router<B> {
@@ -186,7 +188,7 @@ where
         routes
     }
 
-    /// Create a new `Router` from a vector of pairs of request specs and services and a `Protocol`.
+    /// Create a new restJson1 `Router` from a vector of pairs of request specs and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
@@ -205,7 +207,7 @@ where
         Self { routes }
     }
 
-    /// Create a new `Router` from a vector of pairs of request specs and services and a `Protocol`.
+    /// Create a new restXml `Router` from a vector of pairs of request specs and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
@@ -224,7 +226,7 @@ where
         Self { routes }
     }
 
-    /// Create a new `Router` from a vector of pairs of request specs and services and a `Protocol`.
+    /// Create a new awsJson 1.0 or 1.1 `Router` from a vector of pairs of operation and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
@@ -239,7 +241,7 @@ where
     {
         let routes: HashMap<String, Route<B>> = routes
             .into_iter()
-            .map(|(svc, request_spec)| (request_spec, Route::from_box_clone_service(svc)))
+            .map(|(svc, operation)| (operation, Route::from_box_clone_service(svc)))
             .collect();
 
         Self {
