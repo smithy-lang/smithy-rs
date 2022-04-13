@@ -10,15 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "We updated the MSRV from 1.56.1 to 1.58.1 in the last release but failed to mention it in the changelog."
-references = ["smithy-rs#1318"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "Velfi"
-
-[[smithy-rs]]
-message = "We updated the MSRV from 1.56.1 to 1.58.1 in the last release but failed to mention it in the changelog."
-references = ["smithy-rs#1318"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "Velfi"

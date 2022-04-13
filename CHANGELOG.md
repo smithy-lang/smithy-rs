@@ -1,4 +1,9 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+0.40.1 (April 13th, 2022)
+=========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#1318](https://github.com/awslabs/smithy-rs/issues/1318)) We updated the MSRV from 1.56.1 to 1.58.1 in the last release but failed to mention it in the changelog.
+
 0.40.0 (April 13th, 2022)
 =========================
 **Breaking Changes:**

@@ -2,6 +2,12 @@
 0.10.0 (April 13th, 2022)
 =========================
 **Breaking Changes:**
+- ⚠ ([smithy-rs#1318](https://github.com/awslabs/smithy-rs/issues/1318)) We updated the MSRV from 1.56.1 to 1.58.1 in the last release but failed to mention it in the changelog.
+
+
+0.10.0 (April 13th, 2022)
+=========================
+**Breaking Changes:**
 - ⚠ ([aws-sdk-rust#490](https://github.com/awslabs/aws-sdk-rust/issues/490)) Update all SDK and runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)
 
 **New this release:**
