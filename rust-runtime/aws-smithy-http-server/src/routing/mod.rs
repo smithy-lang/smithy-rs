@@ -193,7 +193,7 @@ where
         }
     }
 
-    /// Create a new restJson1 `Router` from a vector of pairs of request specs and services.
+    /// Create a new RestJson1 `Router` from a vector of pairs of request specs and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
@@ -221,7 +221,7 @@ where
         }
     }
 
-    /// Create a new restXml `Router` from a vector of pairs of request specs and services.
+    /// Create a new RestXml `Router` from a vector of pairs of request specs and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
@@ -249,7 +249,7 @@ where
         }
     }
 
-    /// Create a new awsJson 1.0 or 1.1 `Router` from a vector of pairs of operations and services.
+    /// Create a new AwsJson 1.0 `Router` from a vector of pairs of operations and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
@@ -272,7 +272,7 @@ where
         }
     }
 
-    /// Create a new awsJson 1.0 or 1.1 `Router` from a vector of pairs of operations and services.
+    /// Create a new AwsJson 1.1 `Router` from a vector of pairs of operations and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
@@ -320,6 +320,7 @@ where
                 for (route, request_spec) in routes {
                     match request_spec.matches(&req) {
                         request_spec::Match::Yes => {
+                            // We have a match, return the Router future.
                             return RouterFuture::from_oneshot(route.clone().oneshot(req));
                         }
                         request_spec::Match::MethodNotAllowed => method_not_allowed = true,
@@ -329,8 +330,10 @@ where
                 }
 
                 if method_not_allowed {
+                    // The HTTP method is not correct.
                     self.method_not_allowed()
                 } else {
+                    // In any other case return the `RuntimeError::UnknownOperation`.
                     self.unknown_operation()
                 }
             }
@@ -345,13 +348,13 @@ where
                                 // Search inside the HashMap for a route for the target.
                                 let route = routes.get(target);
                                 if let Some(route) = route {
-                                    // Return the Router future.
+                                    // We have a match, return the Router future.
                                     return RouterFuture::from_oneshot(route.clone().oneshot(req));
                                 }
                             }
                         }
-                    // The method is not POST.
                     } else {
+                        // The HTTP method is not POST.
                         return self.method_not_allowed();
                     }
                 }
