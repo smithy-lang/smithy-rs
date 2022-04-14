@@ -3,78 +3,146 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use anyhow::Context;
+use anyhow::{Context, Result};
 use gitignore::Pattern;
 use smithy_rs_tool_common::macros::here;
+use smithy_rs_tool_common::shell::handle_failure;
 use std::error::Error;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
-pub static HANDWRITTEN_DOTFILE: &str = ".handwritten";
+static HANDWRITTEN_DOTFILE: &str = ".handwritten";
 
-pub fn delete_all_generated_files_and_folders(directory: &Path) -> anyhow::Result<()> {
-    eprintln!("\tchecking for 'generated' files and folders in the current SDK...");
-    let dotfile_path = directory.join(HANDWRITTEN_DOTFILE);
-    eprintln!("\tloading dotfile at {}", dotfile_path.display());
-    let handwritten_files =
-        HandwrittenFiles::from_dotfile(&dotfile_path, directory).context(here!())?;
-    let generated_files = handwritten_files
-        .generated_files_and_folders_iter()
-        .context(here!())?;
+pub trait Fs {
+    /// Deletes generated SDK files from the given path
+    fn delete_all_generated_files_and_folders(&self, directory: &Path) -> Result<()>;
 
-    let mut file_count = 0;
-    let mut folder_count = 0;
+    /// Finds handwritten files and directories in the given SDK path
+    fn find_handwritten_files_and_folders(
+        &self,
+        aws_sdk_path: &Path,
+        build_artifacts_path: &Path,
+    ) -> Result<Vec<PathBuf>>;
 
-    for path in generated_files {
-        if path.is_file() {
-            std::fs::remove_file(path)?;
-            file_count += 1;
-        } else if path.is_dir() {
-            std::fs::remove_dir_all(path)?;
-            folder_count += 1;
-        };
+    /// Similar to [`std::fs::remove_dir_all`] except that it doesn't error out if
+    /// the directory to be removed doesn't exist.
+    fn remove_dir_all_idempotent(&self, path: &Path) -> Result<()>;
+
+    /// Reads a file into a string and returns it.
+    fn read_to_string(&self, path: &Path) -> Result<String>;
+
+    /// Deletes a file.
+    fn remove_file(&self, path: &Path) -> Result<()>;
+
+    /// Recursively copies files.
+    fn recursive_copy(
+        &self,
+        source: &Path,
+        destination: &Path,
+        working_directory: Option<&Path>,
+    ) -> Result<()>;
+}
+
+pub struct DefaultFs;
+
+impl DefaultFs {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Fs for DefaultFs {
+    fn delete_all_generated_files_and_folders(&self, directory: &Path) -> Result<()> {
+        eprintln!("\tchecking for 'generated' files and folders in the current SDK...");
+        let dotfile_path = directory.join(HANDWRITTEN_DOTFILE);
+        eprintln!("\tloading dotfile at {}", dotfile_path.display());
+        let handwritten_files =
+            HandwrittenFiles::from_dotfile(&dotfile_path, directory).context(here!())?;
+        let generated_files = handwritten_files
+            .generated_files_and_folders_iter()
+            .context(here!())?;
+
+        let mut file_count = 0;
+        let mut folder_count = 0;
+
+        for path in generated_files {
+            if path.is_file() {
+                std::fs::remove_file(path)?;
+                file_count += 1;
+            } else if path.is_dir() {
+                std::fs::remove_dir_all(path)?;
+                folder_count += 1;
+            };
+        }
+
+        eprintln!(
+            "\tdeleted {} 'generated' files and {} folders in the current SDK folder",
+            file_count, folder_count
+        );
+
+        Ok(())
     }
 
-    eprintln!(
-        "\tdeleted {} 'generated' files and {} folders in the current SDK folder",
-        file_count, folder_count
-    );
+    fn find_handwritten_files_and_folders(
+        &self,
+        aws_sdk_path: &Path,
+        build_artifacts_path: &Path,
+    ) -> Result<Vec<PathBuf>> {
+        eprintln!("\tchecking for 'handwritten' files and folders in the generated SDK folder...");
+        let dotfile_path = aws_sdk_path.join(HANDWRITTEN_DOTFILE);
+        eprintln!("\tloading dotfile at {}", dotfile_path.display());
+        let handwritten_files =
+            HandwrittenFiles::from_dotfile(&dotfile_path, build_artifacts_path).context(here!())?;
 
-    Ok(())
-}
+        let files: Vec<_> = handwritten_files
+            .handwritten_files_and_folders_iter()
+            .context(here!())?
+            .collect();
 
-pub fn find_handwritten_files_and_folders(
-    aws_sdk_path: &Path,
-    build_artifacts_path: &Path,
-) -> anyhow::Result<Vec<PathBuf>> {
-    eprintln!("\tchecking for 'handwritten' files and folders in the generated SDK folder...");
-    let dotfile_path = aws_sdk_path.join(HANDWRITTEN_DOTFILE);
-    eprintln!("\tloading dotfile at {}", dotfile_path.display());
-    let handwritten_files =
-        HandwrittenFiles::from_dotfile(&dotfile_path, build_artifacts_path).context(here!())?;
+        eprintln!(
+            "\tfound {} 'handwritten' files and folders in the generated SDK folder",
+            files.len()
+        );
 
-    let files: Vec<_> = handwritten_files
-        .handwritten_files_and_folders_iter()
-        .context(here!())?
-        .collect();
+        Ok(files)
+    }
 
-    eprintln!(
-        "\tfound {} 'handwritten' files and folders in the generated SDK folder",
-        files.len()
-    );
+    fn remove_dir_all_idempotent(&self, path: &Path) -> Result<()> {
+        match std::fs::remove_dir_all(path) {
+            Ok(_) => Ok(()),
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => Ok(()),
+                _ => Err(err).context(here!()),
+            },
+        }
+    }
 
-    Ok(files)
-}
+    fn read_to_string(&self, path: &Path) -> Result<String> {
+        Ok(std::fs::read_to_string(path)?)
+    }
 
-/// Similar to [`std::fs::remove_dir_all`] except that it doesn't error out if
-/// the directory to be removed doesn't exist.
-pub fn remove_dir_all_idempotent(path: impl AsRef<Path>) -> anyhow::Result<()> {
-    match std::fs::remove_dir_all(path.as_ref()) {
-        Ok(_) => Ok(()),
-        Err(err) => match err.kind() {
-            std::io::ErrorKind::NotFound => Ok(()),
-            _ => Err(err).context(here!()),
-        },
+    fn remove_file(&self, path: &Path) -> Result<()> {
+        Ok(std::fs::remove_file(path)?)
+    }
+
+    fn recursive_copy(
+        &self,
+        source: &Path,
+        destination: &Path,
+        working_directory: Option<&Path>,
+    ) -> Result<()> {
+        let mut command = Command::new("cp");
+        command.arg("-r");
+        command.arg(source);
+        command.arg(destination);
+        if let Some(working_directory) = working_directory {
+            command.current_dir(working_directory);
+        }
+
+        let output = command.output()?;
+        handle_failure("recursive_copy", &output)?;
+        Ok(())
     }
 }
 
@@ -218,10 +286,7 @@ impl From<gitignore::Error> for HandwrittenFilesError {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        delete_all_generated_files_and_folders, find_handwritten_files_and_folders,
-        HANDWRITTEN_DOTFILE,
-    };
+    use super::{DefaultFs, Fs, HANDWRITTEN_DOTFILE};
     use pretty_assertions::assert_eq;
     use std::fs::File;
     use tempdir::TempDir;
@@ -261,7 +326,9 @@ mod tests {
             .map(|entry| entry.unwrap().path())
             .collect();
 
-        delete_all_generated_files_and_folders(dir.path()).unwrap();
+        DefaultFs::new()
+            .delete_all_generated_files_and_folders(dir.path())
+            .unwrap();
 
         let actual_files_and_folders: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()
@@ -290,7 +357,9 @@ mod tests {
         create_test_file(&dir, "bar.txt");
         create_test_dir(&dir, "qux");
 
-        delete_all_generated_files_and_folders(dir.path()).unwrap();
+        DefaultFs::new()
+            .delete_all_generated_files_and_folders(dir.path())
+            .unwrap();
 
         let actual_files_and_folders: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()
@@ -312,7 +381,9 @@ mod tests {
             .map(|entry| entry.unwrap().path())
             .collect();
 
-        delete_all_generated_files_and_folders(dir.path()).unwrap();
+        DefaultFs::new()
+            .delete_all_generated_files_and_folders(dir.path())
+            .unwrap();
 
         let actual_files_and_folders: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()
@@ -345,8 +416,9 @@ mod tests {
         create_test_file(&build_artifacts_dir, "bar.txt");
         create_test_dir(&build_artifacts_dir, "qux");
 
-        let actual_files_and_folders =
-            find_handwritten_files_and_folders(sdk_dir.path(), build_artifacts_dir.path()).unwrap();
+        let actual_files_and_folders = DefaultFs::new()
+            .find_handwritten_files_and_folders(sdk_dir.path(), build_artifacts_dir.path())
+            .unwrap();
 
         assert_eq!(expected_files_and_folders, actual_files_and_folders);
     }

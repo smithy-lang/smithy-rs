@@ -7,15 +7,13 @@ mod fs;
 mod git;
 mod gradle;
 
-use crate::fs::{delete_all_generated_files_and_folders, find_handwritten_files_and_folders};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use fs::{DefaultFs, Fs};
 use git::{Commit, CommitHash, Git, GitCLI};
 use gradle::{Gradle, GradleCLI};
 use smithy_rs_tool_common::macros::here;
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Instant;
 
 /// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
@@ -76,6 +74,7 @@ struct Sync {
     aws_sdk_rust: Box<dyn Git>,
     smithy_rs: Box<dyn Git>,
     smithy_rs_gradle: Box<dyn Gradle>,
+    fs: Box<dyn Fs>,
 }
 
 impl Sync {
@@ -106,6 +105,7 @@ impl Sync {
             aws_sdk_rust: new_git_repo(aws_sdk_rust_path)?,
             smithy_rs: new_git_repo(smithy_rs_path)?,
             smithy_rs_gradle: Box::new(GradleCLI::new(smithy_rs_path)) as Box<dyn Gradle>,
+            fs: Box::new(DefaultFs::new()) as Box<dyn Fs>,
         })
     }
 
@@ -143,8 +143,9 @@ impl Sync {
                 .context("couldn't clean out existing SDK from aws-sdk-rust")?;
 
             // Check that we aren't generating any files that we've marked as "handwritten"
-            let handwritten_files_in_generated_sdk_folder =
-                find_handwritten_files_and_folders(self.aws_sdk_rust.path(), &build_artifacts)?;
+            let handwritten_files_in_generated_sdk_folder = self
+                .fs
+                .find_handwritten_files_and_folders(self.aws_sdk_rust.path(), &build_artifacts)?;
             if !handwritten_files_in_generated_sdk_folder.is_empty() {
                 bail!(
                     "found one or more 'handwritten' files/folders in generated code: {:#?}\nhint: if this file is newly generated, remove it from .handwritten",
@@ -152,7 +153,7 @@ impl Sync {
                 );
             }
 
-            copy_sdk(&build_artifacts, self.aws_sdk_rust.path())?;
+            self.copy_sdk(&build_artifacts, self.aws_sdk_rust.path())?;
             self.create_mirror_commit(&commit)
                 .context("couldn't commit SDK changes to aws-sdk-rust")?;
         }
@@ -169,9 +170,11 @@ impl Sync {
     /// Read the file from aws-sdk-rust that tracks the last smithy-rs commit it was synced with.
     /// Returns the hash of that commit.
     fn get_last_synced_commit(&self) -> Result<CommitHash> {
+        // TODO: Replace with versions.toml
         let path = self.aws_sdk_rust.path().join(COMMIT_HASH_FILENAME);
         Ok(CommitHash::from(
-            std::fs::read_to_string(&path)
+            self.fs
+                .read_to_string(&path)
                 .with_context(|| {
                     format!("couldn't get commit hash from file at '{}'", path.display())
                 })?
@@ -206,7 +209,8 @@ impl Sync {
         let start = Instant::now();
 
         // The output of running these commands isn't logged anywhere unless they fail
-        fs::remove_dir_all_idempotent(self.smithy_rs.path().join("aws/sdk/build"))
+        self.fs
+            .remove_dir_all_idempotent(&self.smithy_rs.path().join("aws/sdk/build"))
             .context(here!())?;
         self.smithy_rs_gradle.aws_sdk_clean().context(here!())?;
         self.smithy_rs_gradle
@@ -227,7 +231,6 @@ impl Sync {
             .canonicalize()
             .context(here!())?;
         let from = from.join("rust_dev_preview");
-        let from = from.as_os_str().to_string_lossy();
 
         let examples_revision = self
             .aws_doc_sdk_examples
@@ -235,21 +238,26 @@ impl Sync {
             .context(here!())?;
 
         eprintln!("\tcleaning examples...");
-        fs::remove_dir_all_idempotent(self.smithy_rs.path().join("aws/sdk/examples"))
+        self.fs
+            .remove_dir_all_idempotent(&self.smithy_rs.path().join("aws/sdk/examples"))
             .context(here!())?;
 
         eprintln!(
-            "\tcopying examples from '{}' to 'smithy-rs/aws/sdk/examples'...",
+            "\tcopying examples from {:?} to 'smithy-rs/aws/sdk/examples'...",
             from
         );
-        let _ = run(
-            &["cp", "-r", &from, "aws/sdk/examples"],
-            self.smithy_rs.path(),
-        )
-        .context(here!())?;
-        fs::remove_dir_all_idempotent(self.smithy_rs.path().join("aws/sdk/examples/.cargo"))
+        self.fs
+            .recursive_copy(
+                &from,
+                &PathBuf::from("aws/sdk/examples"),
+                Some(self.smithy_rs.path()),
+            )
             .context(here!())?;
-        std::fs::remove_file(self.smithy_rs.path().join("aws/sdk/examples/Cargo.toml"))
+        self.fs
+            .remove_dir_all_idempotent(&self.smithy_rs.path().join("aws/sdk/examples/.cargo"))
+            .context(here!())?;
+        self.fs
+            .remove_file(&self.smithy_rs.path().join("aws/sdk/examples/Cargo.toml"))
             .context(here!())?;
         Ok(examples_revision)
     }
@@ -289,106 +297,46 @@ impl Sync {
     fn clean_out_existing_sdk(&self) -> Result<()> {
         eprintln!("\tcleaning out previously built SDK...");
         let start = Instant::now();
-        delete_all_generated_files_and_folders(self.aws_sdk_rust.path()).context(here!())?;
+        self.fs
+            .delete_all_generated_files_and_folders(self.aws_sdk_rust.path())
+            .context(here!())?;
         eprintln!(
             "\tsuccessfully cleaned out previously built SDK in {:?}",
             start.elapsed()
         );
         Ok(())
     }
-}
 
-/// Use `cp -r` to recursively copy all files and folders from the smithy-rs build artifacts folder
-/// to the aws-sdk-rust repo folder. Paths passed in must be absolute.
-fn copy_sdk(from_path: &Path, to_path: &Path) -> Result<()> {
-    eprintln!("\tcopying built SDK...");
+    /// Recursively copy all files and folders from the smithy-rs build artifacts folder
+    /// to the aws-sdk-rust repo folder. Paths passed in must be absolute.
+    fn copy_sdk(&self, from_path: &Path, to_path: &Path) -> Result<()> {
+        eprintln!("\tcopying built SDK...");
 
-    if !from_path.is_absolute() {
-        bail!(
-            "expected absolute from_path but got: {}",
-            from_path.display()
+        assert!(
+            from_path.is_absolute(),
+            "expected absolute from_path but got: {:?}",
+            from_path
         );
-    } else if !to_path.is_absolute() {
-        bail!("expected absolute to_path but got: {}", from_path.display());
-    }
+        assert!(
+            to_path.is_absolute(),
+            "expected absolute to_path but got: {:?}",
+            to_path
+        );
 
-    // The '.' tells cp to copy the folder contents, not the folder
-    let from_path = from_path.join(".");
-    let from_path = from_path
-        .to_str()
-        .expect("for our use case, this will always be UTF-8");
-    let to_path = to_path
-        .to_str()
-        .expect("for our use case, this will always be UTF-8");
+        // The '.' tells cp to copy the folder contents, not the folder
+        let from_path = from_path.join(".");
 
-    // This command uses absolute paths so working dir doesn't matter. Even so, we set
-    // working dir to the dir this binary was run from because `run` expects one.
-    // GitHub actions don't support current_dir so we use current_exe
-    let exe_dir = std::env::current_exe().expect("can't access path of this exe");
-    let working_dir = exe_dir.parent().expect("exe is not in a folder?");
+        // This command uses absolute paths so working dir doesn't matter. Even so, we set
+        // working dir to the dir this binary was run from because `run` expects one.
+        // GitHub actions don't support current_dir so we use current_exe
+        let exe_dir = std::env::current_exe().expect("can't access path of this exe");
+        let working_dir = exe_dir.parent().expect("exe is not in a folder?");
 
-    let _ = run(&["cp", "-r", from_path, to_path], working_dir).context(here!())?;
+        self.fs
+            .recursive_copy(&from_path, to_path, Some(working_dir))
+            .context(here!())?;
 
-    eprintln!("\tsuccessfully copied built SDK");
-    Ok(())
-}
-
-/// Run a shell command from a given working directory.
-fn run<S>(args: &[S], working_dir: &Path) -> Result<()>
-where
-    S: AsRef<OsStr>,
-{
-    if args.is_empty() {
-        bail!("args slice passed to run must have length >= 1");
-    }
-
-    let command_output = Command::new(&args[0])
-        .args(&args[1..])
-        .current_dir(working_dir)
-        .output()
-        .with_context(|| {
-            format!(
-                "failed to execute '{}' in dir '{}'",
-                stringify_args(args),
-                working_dir.display()
-            )
-        })?;
-
-    if !command_output.status.success() {
-        let stderr = String::from_utf8_lossy(&command_output.stderr);
-        let stdout = String::from_utf8_lossy(&command_output.stdout);
-
-        eprintln!("stdout:\n{}\n", stdout);
-        eprintln!("stderr:\n{}\n", stderr);
-
-        bail!(
-            "command '{}' exited with a non-zero status",
-            stringify_args(args)
-        )
-    }
-
-    Ok(())
-}
-
-/// For a slice containing `S` where `S: AsRef<OsStr>`, join all `S` into a space-separated String.
-fn stringify_args<S>(args: &[S]) -> String
-where
-    S: AsRef<OsStr>,
-{
-    let args: Vec<_> = args.iter().map(|s| s.as_ref().to_string_lossy()).collect();
-    args.join(" ")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::stringify_args;
-
-    #[test]
-    fn test_stringify_args() {
-        let args = &["this", "is", "a", "test"];
-        let expected = "this is a test";
-        let actual = stringify_args(args);
-
-        assert_eq!(expected, actual);
+        eprintln!("\tsuccessfully copied built SDK");
+        Ok(())
     }
 }
