@@ -1,0 +1,22 @@
+[package]
+name = "sdk-sync"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = "A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+# Having this here prevents this tool from being included in a higher-level workspace
+[workspace]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "3.1.8", features = ["derive"] }
+git2 = "0.13"
+gitignore = "1"
+smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
+
+[dev-dependencies]
+pretty_assertions = "1"
+tempdir = "0.3"
