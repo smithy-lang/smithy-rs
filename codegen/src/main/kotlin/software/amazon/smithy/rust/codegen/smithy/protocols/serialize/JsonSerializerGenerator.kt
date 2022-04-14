@@ -55,7 +55,7 @@ import software.amazon.smithy.rust.codegen.util.outputShape
  * Class describing a JSON section that can be used in a customization.
  */
 sealed class JsonSection(name: String) : Section(name) {
-    /** Write the server error __type customization just before `object.finish()` */
+    /** Mutate the server error object prior to finalization. Eg: this can be used to inject `__type` to record the error type. */
     data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSection("ServerError")
 }
 
