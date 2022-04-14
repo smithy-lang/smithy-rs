@@ -1,4 +1,9 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+0.40.1 (April 14th, 2022)
+=========================
+**New this release:**
+- Undo the MSRV bump from v1.56.1 to v1.58.1
+
 0.40.0 (April 13th, 2022)
 =========================
 **Breaking Changes:**
