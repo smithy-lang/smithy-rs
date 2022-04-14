@@ -5,11 +5,13 @@
 
 mod fs;
 mod git;
+mod gradle;
 
 use crate::fs::{delete_all_generated_files_and_folders, find_handwritten_files_and_folders};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use git::{Commit, CommitHash, Git, GitCLI};
+use gradle::{Gradle, GradleCLI};
 use smithy_rs_tool_common::macros::here;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -73,6 +75,7 @@ struct Sync {
     aws_doc_sdk_examples: Box<dyn Git>,
     aws_sdk_rust: Box<dyn Git>,
     smithy_rs: Box<dyn Git>,
+    smithy_rs_gradle: Box<dyn Gradle>,
 }
 
 impl Sync {
@@ -102,6 +105,7 @@ impl Sync {
             aws_doc_sdk_examples: new_git_repo(aws_doc_sdk_examples_path)?,
             aws_sdk_rust: new_git_repo(aws_sdk_rust_path)?,
             smithy_rs: new_git_repo(smithy_rs_path)?,
+            smithy_rs_gradle: Box::new(GradleCLI::new(smithy_rs_path)) as Box<dyn Gradle>,
         })
     }
 
@@ -200,25 +204,14 @@ impl Sync {
 
         eprintln!("\tbuilding the SDK...");
         let start = Instant::now();
-        let gradlew = self.smithy_rs.path().join("gradlew");
-        let gradlew = gradlew
-            .to_str()
-            .expect("for our use case, this will always be UTF-8");
 
         // The output of running these commands isn't logged anywhere unless they fail
         fs::remove_dir_all_idempotent(self.smithy_rs.path().join("aws/sdk/build"))
             .context(here!())?;
-        let _ = run(&[gradlew, ":aws:sdk:clean"], self.smithy_rs.path()).context(here!())?;
-        let _ = run(
-            &[
-                gradlew,
-                "-Paws.fullsdk=true",
-                &format!("-Paws.sdk.examples.revision={}", examples_revision),
-                ":aws:sdk:assemble",
-            ],
-            self.smithy_rs.path(),
-        )
-        .context(here!())?;
+        self.smithy_rs_gradle.aws_sdk_clean().context(here!())?;
+        self.smithy_rs_gradle
+            .aws_sdk_assemble(&examples_revision)
+            .context(here!())?;
 
         let build_artifact_path = self.smithy_rs.path().join("aws/sdk/build/aws-sdk");
         eprintln!("\tsuccessfully built the SDK in {:?}", start.elapsed());
