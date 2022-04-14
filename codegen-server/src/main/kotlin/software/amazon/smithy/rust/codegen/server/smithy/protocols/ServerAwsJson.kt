@@ -7,23 +7,25 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.protocols.awsJsonFieldName
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonCustomization
+import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSection
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.smithy.protocols.serializeFunctionName
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /*
  * AwsJson 1.0 and 1.1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGeneror]
@@ -54,6 +56,24 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenera
 }
 
 /**
+ * AwsJson requires errors to be serialized with an additional "__type" field. This
+ * custimization writes the right field depending on the version of the AwsJson protocol.
+ */
+class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCustomization() {
+    override fun section(section: JsonSection): Writable = when (section) {
+        is JsonSection.FinalizeObject -> writable {
+            if (section.structureShape.hasTrait<ErrorTrait>()) {
+                val typeId = when (awsJsonVersion) {
+                    AwsJsonVersion.Json10 -> section.structureShape.id.toString()
+                    AwsJsonVersion.Json11 -> section.structureShape.id.name.toString()
+                }
+                rust("""object.key("__type").string("${escape(typeId)}");""")
+            }
+        }
+    }
+}
+
+/**
  * AwsJson requires errors to be serialized with an additional "__type" field. This class
  * customize [JsonSerializerGenerator] to add this functionality.
  */
@@ -62,26 +82,8 @@ class ServerAwsJsonSerializerGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     private val awsJsonVersion: AwsJsonVersion,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
-        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
-) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
-    private val model = codegenContext.model
-    private val symbolProvider = codegenContext.symbolProvider
-
-    override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
-        val errorShape = model.expectShape(shape, StructureShape::class.java)
-        val includedMembers =
-            httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
-                .map { it.member }
-        val fnName = symbolProvider.serializeFunctionName(errorShape)
-        return jsonSerializerGenerator.serverStructureSerializer(
-            fnName,
-            errorShape,
-            includedMembers,
-            true,
-            awsJsonVersion == AwsJsonVersion.Json10
-        )
-    }
-}
+        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName, listOf(ServerAwsJsonError(awsJsonVersion)))
+) : StructuredDataSerializerGenerator by jsonSerializerGenerator
 
 class ServerAwsJson(
     private val codegenContext: CodegenContext,

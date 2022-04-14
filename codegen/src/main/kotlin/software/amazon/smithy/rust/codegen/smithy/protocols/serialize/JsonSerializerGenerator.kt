@@ -20,14 +20,12 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -36,6 +34,8 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
+import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
@@ -51,11 +51,27 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
+/**
+ * Class describing a JSON section that can be used in a customization.
+ */
+sealed class JsonSection(name: String) : Section(name) {
+    /**
+     * Write the customization just before `object.finish()`.
+     */
+    data class FinalizeObject(val structureShape: StructureShape) : JsonSection("FinalizeObject")
+}
+
+/**
+ * JSON customization.
+ */
+typealias JsonCustomization = NamedSectionGenerator<JsonSection>
+
 class JsonSerializerGenerator(
     codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
+    private val customizations: List<JsonCustomization>,
 ) : StructuredDataSerializerGenerator {
     private data class Context<T : Shape>(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
@@ -160,12 +176,10 @@ class JsonSerializerGenerator(
      * See: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
      * See: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#differences-between-awsjson1-0-and-awsjson1-1
      */
-    fun serverStructureSerializer(
+    private fun serverStructureSerializer(
         fnName: String,
         structureShape: StructureShape,
         includedMembers: List<MemberShape>,
-        includeErrorType: Boolean,
-        useErrorNamespace: Boolean
     ): RuntimeType {
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustBlockTemplate(
@@ -176,10 +190,7 @@ class JsonSerializerGenerator(
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
-                if (includeErrorType && structureShape.hasTrait<ErrorTrait>()) {
-                    val typeId = if (useErrorNamespace) { structureShape.id.toString() } else { structureShape.id.name.toString() }
-                    rust("""object.key("__type").string("${it.escape(typeId)}");""")
-                }
+                customizations.forEach { it.section(JsonSection.FinalizeObject(structureShape))(this) }
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)
             }
@@ -280,7 +291,7 @@ class JsonSerializerGenerator(
 
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.serializeFunctionName(outputShape)
-        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers, includeErrorType = false, useErrorNamespace = false)
+        return serverStructureSerializer(fnName, outputShape, httpDocumentMembers)
     }
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
@@ -289,7 +300,7 @@ class JsonSerializerGenerator(
             httpBindingResolver.errorResponseBindings(shape).filter { it.location == HttpLocation.DOCUMENT }
                 .map { it.member }
         val fnName = symbolProvider.serializeFunctionName(errorShape)
-        return serverStructureSerializer(fnName, errorShape, includedMembers, includeErrorType = false, useErrorNamespace = false)
+        return serverStructureSerializer(fnName, errorShape, includedMembers)
     }
 
     private fun RustWriter.serializeStructure(

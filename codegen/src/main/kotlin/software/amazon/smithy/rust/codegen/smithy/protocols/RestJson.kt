@@ -95,7 +95,7 @@ class RestJson(private val codegenContext: CodegenContext) : Protocol {
         JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
+        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName, listOf())
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
