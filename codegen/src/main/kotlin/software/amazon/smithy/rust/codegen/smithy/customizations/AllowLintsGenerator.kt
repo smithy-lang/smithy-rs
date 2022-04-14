@@ -39,13 +39,16 @@ val AllowDocsLints = listOf(
     "bare_urls"
 )
 
-class AllowLintsGenerator : LibRsCustomization() {
+class AllowLintsGenerator(private val bareLints: List<String> = listOf(), private val clippyLints: List<String> = ClippyAllowLints, private val docsLints: List<String> = AllowDocsLints) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Attributes -> writable {
-            ClippyAllowLints.forEach {
+            bareLints.forEach {
+                Attribute.Custom("allow($it)", container = true).render(this)
+            }
+            clippyLints.forEach {
                 Attribute.Custom("allow(clippy::$it)", container = true).render(this)
             }
-            AllowDocsLints.forEach {
+            docsLints.forEach {
                 Attribute.Custom("allow(rustdoc::$it)", container = true).render(this)
             }
             // add a newline at the end

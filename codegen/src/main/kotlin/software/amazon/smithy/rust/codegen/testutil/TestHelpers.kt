@@ -41,7 +41,6 @@ val TestSymbolVisitorConfig = SymbolVisitorConfig(
 )
 
 fun testRustSettings(
-    model: Model,
     service: ShapeId = ShapeId.from("notrelevant#notrelevant"),
     moduleName: String = "test-module",
     moduleVersion: String = "notrelevant",
@@ -62,8 +61,7 @@ fun testRustSettings(
     runtimeConfig,
     codegenConfig,
     license,
-    examplesUri,
-    model
+    examplesUri
 )
 
 fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
@@ -76,7 +74,7 @@ fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSy
 fun testCodegenContext(
     model: Model,
     serviceShape: ServiceShape? = null,
-    settings: RustSettings = testRustSettings(model),
+    settings: RustSettings = testRustSettings(),
     mode: CodegenMode = CodegenMode.Client
 ): CodegenContext = CodegenContext(
     model,

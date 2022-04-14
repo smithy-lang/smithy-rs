@@ -7,6 +7,7 @@ mod fs;
 
 use crate::fs::{delete_all_generated_files_and_folders, find_handwritten_files_and_folders};
 use anyhow::{bail, Context, Result};
+use clap::Parser;
 use git2::{Commit, Oid, Repository, ResetType};
 use smithy_rs_tool_common::git::GetLastCommit;
 use smithy_rs_tool_common::macros::here;
@@ -15,26 +16,25 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
-use structopt::StructOpt;
 
-#[derive(StructOpt, Debug)]
-#[structopt(name = "smithy-rs-sync")]
 /// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
-struct Opt {
+#[derive(Parser, Debug)]
+#[clap(name = "smithy-rs-sync")]
+struct Args {
     /// The path to the smithy-rs repo folder.
-    #[structopt(long, parse(from_os_str))]
+    #[clap(long, parse(from_os_str))]
     smithy_rs: PathBuf,
     /// The path to the aws-sdk-rust folder.
-    #[structopt(long, parse(from_os_str))]
+    #[clap(long, parse(from_os_str))]
     aws_sdk: PathBuf,
     /// Path to the aws-doc-sdk-examples repository.
-    #[structopt(long, parse(from_os_str))]
+    #[clap(long, parse(from_os_str))]
     sdk_examples: PathBuf,
     /// The branch in aws-sdk-rust that commits will be mirrored to.
-    #[structopt(long, default_value = "next")]
+    #[clap(long, default_value = "next")]
     branch: String,
     /// The maximum amount of commits to sync in one run.
-    #[structopt(long, default_value = "5")]
+    #[clap(long, default_value = "5")]
     max_commits_to_sync: usize,
 }
 
@@ -57,20 +57,14 @@ const COMMIT_HASH_FILENAME: &str = ".smithyrs-githash";
 /// --aws-sdk /Users/zhessler/Documents/aws-sdk-rust-test/
 /// ```
 fn main() -> Result<()> {
-    let Opt {
-        smithy_rs,
-        aws_sdk,
-        sdk_examples,
-        branch,
-        max_commits_to_sync,
-    } = Opt::from_args();
+    let args = Args::parse();
 
     sync_aws_sdk_with_smithy_rs(
-        &smithy_rs,
-        &aws_sdk,
-        &sdk_examples,
-        &branch,
-        max_commits_to_sync,
+        &args.smithy_rs,
+        &args.aws_sdk,
+        &args.sdk_examples,
+        &args.branch,
+        args.max_commits_to_sync,
     )
     .map_err(|e| e.context("The sync failed"))
 }
@@ -255,10 +249,14 @@ fn set_last_synced_commit(repo_path: &Path, oid: &Oid) -> Result<()> {
 
 /// Place the examples from aws-doc-sdk-examples into the correct place in smithy-rs
 /// to be included with the generated SDK.
-fn setup_examples(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<()> {
+fn setup_examples(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<String> {
     let from = sdk_examples_path.canonicalize().context(here!())?;
     let from = from.join("rust_dev_preview");
     let from = from.as_os_str().to_string_lossy();
+
+    let examples_revision = GetLastCommit::new(sdk_examples_path)
+        .run()
+        .context(here!())?;
 
     eprintln!("\tcleaning examples...");
     fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/examples")).context(here!())?;
@@ -271,13 +269,13 @@ fn setup_examples(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<()>
     fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/examples/.cargo"))
         .context(here!())?;
     std::fs::remove_file(smithy_rs_path.join("aws/sdk/examples/Cargo.toml")).context(here!())?;
-    Ok(())
+    Ok(examples_revision)
 }
 
 /// Run the necessary commands to build the SDK. On success, returns the path to the folder containing
 /// the build artifacts.
 fn build_sdk(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<PathBuf> {
-    setup_examples(sdk_examples_path, smithy_rs_path).context(here!())?;
+    let examples_revision = setup_examples(sdk_examples_path, smithy_rs_path).context(here!())?;
 
     eprintln!("\tbuilding the SDK...");
     let start = Instant::now();
@@ -290,7 +288,12 @@ fn build_sdk(sdk_examples_path: &Path, smithy_rs_path: &Path) -> Result<PathBuf>
     fs::remove_dir_all_idempotent(smithy_rs_path.join("aws/sdk/build")).context(here!())?;
     let _ = run(&[gradlew, ":aws:sdk:clean"], smithy_rs_path).context(here!())?;
     let _ = run(
-        &[gradlew, "-Paws.fullsdk=true", ":aws:sdk:assemble"],
+        &[
+            gradlew,
+            "-Paws.fullsdk=true",
+            &format!("-Paws.sdk.examples.revision={}", examples_revision),
+            ":aws:sdk:assemble",
+        ],
         smithy_rs_path,
     )
     .context(here!())?;
