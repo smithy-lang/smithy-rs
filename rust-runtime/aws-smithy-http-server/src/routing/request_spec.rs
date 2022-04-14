@@ -243,7 +243,7 @@ impl RequestSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::req;
+    use super::super::rest_tests::req;
     use super::*;
     use http::Method;
 

@@ -61,6 +61,12 @@ pub struct Router<B = Body> {
 }
 
 /// Protocol-aware routes types.
+///
+/// RestJson1 and RestXml routes are implemented using a `Vec` of handlers because there can be multiple
+/// matches on the URI and thus we need to iterate the whole list and use a ranking mechanism to choose.
+///
+/// AwsJson 1.0 and 1.1 can be implemented using a `HashMap` since operations cannot be ambiguous as they
+/// are all registered on POST /.
 #[derive(Debug)]
 pub(crate) enum Routes<B = Body> {
     RestXml(Vec<(Route<B>, RequestSpec)>),
@@ -92,6 +98,30 @@ impl<B> Router<B>
 where
     B: Send + 'static,
 {
+    /// Return the correct, protocol-specific error for an unknown operation.
+    fn unknown_operation(&self) -> RouterFuture<B> {
+        let protocol = match &self.routes {
+            Routes::RestJson1(_) => Protocol::RestJson1,
+            Routes::RestXml(_) => Protocol::RestXml,
+            Routes::AwsJson10(_) => Protocol::AwsJson10,
+            Routes::AwsJson11(_) => Protocol::AwsJson11,
+        };
+        let error = RuntimeError {
+            protocol,
+            kind: RuntimeErrorKind::UnknownOperation,
+        };
+        RouterFuture::from_response(error.into_response())
+    }
+
+    /// Return the HTTP error for non allowed method.
+    fn method_not_allowed(&self) -> RouterFuture<B> {
+        RouterFuture::from_response(
+            Response::builder()
+                .status(StatusCode::METHOD_NOT_ALLOWED)
+                .body(crate::body::empty())
+                .unwrap(),
+        )
+    }
     /// Convert this router into a [`MakeService`], that is a [`Service`] whose
     /// response is another service.
     ///
@@ -163,7 +193,11 @@ where
         }
     }
 
-    fn rest_routes<T>(routes: T) -> Vec<(Route<B>, RequestSpec)>
+    /// Create a new restJson1 `Router` from a vector of pairs of request specs and services.
+    ///
+    /// If the vector is empty the router will respond `404 Not Found` to all requests.
+    #[doc(hidden)]
+    pub fn new_rest_json_router<T>(routes: T) -> Self
     where
         T: IntoIterator<
             Item = (
@@ -181,39 +215,9 @@ where
         // specific ones, so that when routing a request we can simply iterate through the routes
         // and pick the first one that matches.
         routes.sort_by_key(|(_route, request_spec)| std::cmp::Reverse(request_spec.rank()));
-        routes
-    }
 
-    fn aws_json_routes<T>(routes: T) -> HashMap<String, Route<B>>
-    where
-        T: IntoIterator<
-            Item = (
-                tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
-                String,
-            ),
-        >,
-    {
-        routes
-            .into_iter()
-            .map(|(svc, operation)| (operation, Route::from_box_clone_service(svc)))
-            .collect()
-    }
-
-    /// Create a new restJson1 `Router` from a vector of pairs of request specs and services.
-    ///
-    /// If the vector is empty the router will respond `404 Not Found` to all requests.
-    #[doc(hidden)]
-    pub fn new_rest_json_router<T>(routes: T) -> Self
-    where
-        T: IntoIterator<
-            Item = (
-                tower::util::BoxCloneService<Request<B>, Response<BoxBody>, Infallible>,
-                RequestSpec,
-            ),
-        >,
-    {
         Self {
-            routes: Routes::RestJson1(Self::rest_routes(routes)),
+            routes: Routes::RestJson1(routes),
         }
     }
 
@@ -230,12 +234,22 @@ where
             ),
         >,
     {
+        let mut routes: Vec<(Route<B>, RequestSpec)> = routes
+            .into_iter()
+            .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
+            .collect();
+
+        // Sort them once by specifity, with the more specific routes sorted before the less
+        // specific ones, so that when routing a request we can simply iterate through the routes
+        // and pick the first one that matches.
+        routes.sort_by_key(|(_route, request_spec)| std::cmp::Reverse(request_spec.rank()));
+
         Self {
-            routes: Routes::RestXml(Self::rest_routes(routes)),
+            routes: Routes::RestXml(routes),
         }
     }
 
-    /// Create a new awsJson 1.0 or 1.1 `Router` from a vector of pairs of operation and services.
+    /// Create a new awsJson 1.0 or 1.1 `Router` from a vector of pairs of operations and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
@@ -248,12 +262,17 @@ where
             ),
         >,
     {
+        let routes = routes
+            .into_iter()
+            .map(|(svc, operation)| (operation, Route::from_box_clone_service(svc)))
+            .collect();
+
         Self {
-            routes: Routes::AwsJson10(Self::aws_json_routes(routes)),
+            routes: Routes::AwsJson10(routes),
         }
     }
 
-    /// Create a new awsJson 1.0 or 1.1 `Router` from a vector of pairs of operation and services.
+    /// Create a new awsJson 1.0 or 1.1 `Router` from a vector of pairs of operations and services.
     ///
     /// If the vector is empty the router will respond `404 Not Found` to all requests.
     #[doc(hidden)]
@@ -266,8 +285,13 @@ where
             ),
         >,
     {
+        let routes = routes
+            .into_iter()
+            .map(|(svc, operation)| (operation, Route::from_box_clone_service(svc)))
+            .collect();
+
         Self {
-            routes: Routes::AwsJson11(Self::aws_json_routes(routes)),
+            routes: Routes::AwsJson11(routes),
         }
     }
 }
@@ -290,7 +314,9 @@ where
         let mut method_not_allowed = false;
 
         match &self.routes {
+            // REST routes.
             Routes::RestJson1(routes) | Routes::RestXml(routes) => {
+                // Loop through all the routes and validate if any of them matches. Routes are already ranked.
                 for (route, request_spec) in routes {
                     match request_spec.matches(&req) {
                         request_spec::Match::Yes => {
@@ -303,60 +329,41 @@ where
                 }
 
                 if method_not_allowed {
-                    RouterFuture::from_response(
-                        Response::builder()
-                            .status(StatusCode::METHOD_NOT_ALLOWED)
-                            .body(crate::body::empty())
-                            .unwrap(),
-                    )
+                    self.method_not_allowed()
                 } else {
-                    let protocol = match &self.routes {
-                        Routes::RestJson1(_) => Protocol::RestJson1,
-                        _ => Protocol::RestXml,
-                    };
-                    let error = RuntimeError {
-                        protocol,
-                        kind: RuntimeErrorKind::UnknownOperation,
-                    };
-                    RouterFuture::from_response(error.into_response())
+                    self.unknown_operation()
                 }
             }
+            // AwsJson routes.
             Routes::AwsJson10(routes) | Routes::AwsJson11(routes) => {
                 if req.uri() == "/" {
+                    // Check the request method for POST.
                     if req.method() == http::Method::POST {
+                        // Find the `x-amz-target` header.
                         if let Some(target) = req.headers().get("x-amz-target") {
                             if let Ok(target) = target.to_str() {
+                                // Search inside the HashMap for a route for the target.
                                 let route = routes.get(target);
                                 if let Some(route) = route {
+                                    // Return the Router future.
                                     return RouterFuture::from_oneshot(route.clone().oneshot(req));
                                 }
                             }
                         }
+                    // The method is not POST.
                     } else {
-                        return RouterFuture::from_response(
-                            Response::builder()
-                                .status(StatusCode::METHOD_NOT_ALLOWED)
-                                .body(crate::body::empty())
-                                .unwrap(),
-                        );
+                        return self.method_not_allowed();
                     }
                 }
-                let protocol = match &self.routes {
-                    Routes::AwsJson11(_) => Protocol::AwsJson11,
-                    _ => Protocol::AwsJson10,
-                };
-                let error = RuntimeError {
-                    protocol,
-                    kind: RuntimeErrorKind::UnknownOperation,
-                };
-                RouterFuture::from_response(error.into_response())
+                // In any other case return the `RuntimeError::UnknownOperation`.
+                self.unknown_operation()
             }
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod rest_tests {
     use super::*;
     use crate::{body::boxed, routing::request_spec::*};
     use futures_util::Future;
@@ -370,6 +377,17 @@ mod tests {
             *r.headers_mut() = headers
         }
         r
+    }
+
+    // Returns a `Response`'s body as a `String`, without consuming the response.
+    pub async fn get_body_as_str<B>(res: &mut Response<B>) -> String
+    where
+        B: http_body::Body + std::marker::Unpin,
+        B::Error: std::fmt::Debug,
+    {
+        let body_mut = res.body_mut();
+        let body_bytes = hyper::body::to_bytes(body_mut).await.unwrap();
+        String::from(std::str::from_utf8(&body_bytes).unwrap())
     }
 
     /// A service that returns its name and the request's URI in the response body.
@@ -392,17 +410,6 @@ mod tests {
             let fut = async { Ok(Response::builder().status(&http::StatusCode::OK).body(body).unwrap()) };
             Box::pin(fut)
         }
-    }
-
-    // Returns a `Response`'s body as a `String`, without consuming the response.
-    async fn get_body_as_str<B>(res: &mut Response<B>) -> String
-    where
-        B: http_body::Body + std::marker::Unpin,
-        B::Error: std::fmt::Debug,
-    {
-        let body_mut = res.body_mut();
-        let body_bytes = hyper::body::to_bytes(body_mut).await.unwrap();
-        String::from(std::str::from_utf8(&body_bytes).unwrap())
     }
 
     // This test is a rewrite of `mux.spec.ts`.
@@ -455,55 +462,64 @@ mod tests {
             ),
         ];
 
-        let mut router = Router::new_rest_json_router(request_specs.into_iter().map(|(spec, svc_name)| {
+        // Test both RestJson1 and RestXml routers.
+        let router_json = Router::new_rest_json_router(request_specs.clone().into_iter().map(|(spec, svc_name)| {
+            (
+                tower::util::BoxCloneService::new(NamedEchoUriService(String::from(svc_name))),
+                spec,
+            )
+        }));
+        let router_xml = Router::new_rest_xml_router(request_specs.into_iter().map(|(spec, svc_name)| {
             (
                 tower::util::BoxCloneService::new(NamedEchoUriService(String::from(svc_name))),
                 spec,
             )
         }));
 
-        let hits = vec![
-            ("A", Method::GET, "/a/b/c"),
-            ("MiddleGreedy", Method::GET, "/mg/a/z"),
-            ("MiddleGreedy", Method::GET, "/mg/a/b/c/d/z?abc=def"),
-            ("Delete", Method::DELETE, "/?foo=bar&baz=quux"),
-            ("Delete", Method::DELETE, "/?foo=bar&baz"),
-            ("Delete", Method::DELETE, "/?foo=bar&baz=&"),
-            ("Delete", Method::DELETE, "/?foo=bar&baz=quux&baz=grault"),
-            ("QueryKeyOnly", Method::POST, "/query_key_only?foo=bar"),
-            ("QueryKeyOnly", Method::POST, "/query_key_only?foo"),
-            ("QueryKeyOnly", Method::POST, "/query_key_only?foo="),
-            ("QueryKeyOnly", Method::POST, "/query_key_only?foo=&"),
-        ];
-        for (svc_name, method, uri) in &hits {
-            let mut res = router.call(req(method, uri, None)).await.unwrap();
-            let actual_body = get_body_as_str(&mut res).await;
+        for mut router in [router_json, router_xml] {
+            let hits = vec![
+                ("A", Method::GET, "/a/b/c"),
+                ("MiddleGreedy", Method::GET, "/mg/a/z"),
+                ("MiddleGreedy", Method::GET, "/mg/a/b/c/d/z?abc=def"),
+                ("Delete", Method::DELETE, "/?foo=bar&baz=quux"),
+                ("Delete", Method::DELETE, "/?foo=bar&baz"),
+                ("Delete", Method::DELETE, "/?foo=bar&baz=&"),
+                ("Delete", Method::DELETE, "/?foo=bar&baz=quux&baz=grault"),
+                ("QueryKeyOnly", Method::POST, "/query_key_only?foo=bar"),
+                ("QueryKeyOnly", Method::POST, "/query_key_only?foo"),
+                ("QueryKeyOnly", Method::POST, "/query_key_only?foo="),
+                ("QueryKeyOnly", Method::POST, "/query_key_only?foo=&"),
+            ];
+            for (svc_name, method, uri) in &hits {
+                let mut res = router.call(req(method, uri, None)).await.unwrap();
+                let actual_body = get_body_as_str(&mut res).await;
 
-            assert_eq!(format!("{} :: {}", svc_name, uri), actual_body);
-        }
+                assert_eq!(format!("{} :: {}", svc_name, uri), actual_body);
+            }
 
-        for (_, _, uri) in hits {
-            let res = router.call(req(&Method::PATCH, uri, None)).await.unwrap();
-            assert_eq!(StatusCode::METHOD_NOT_ALLOWED, res.status());
-        }
+            for (_, _, uri) in hits {
+                let res = router.call(req(&Method::PATCH, uri, None)).await.unwrap();
+                assert_eq!(StatusCode::METHOD_NOT_ALLOWED, res.status());
+            }
 
-        let misses = vec![
-            (Method::GET, "/a"),
-            (Method::GET, "/a/b"),
-            (Method::GET, "/mg"),
-            (Method::GET, "/mg/q"),
-            (Method::GET, "/mg/z"),
-            (Method::GET, "/mg/a/b/z/c"),
-            (Method::DELETE, "/?foo=bar"),
-            (Method::DELETE, "/?foo=bar"),
-            (Method::DELETE, "/?baz=quux"),
-            (Method::POST, "/query_key_only?baz=quux"),
-            (Method::GET, "/"),
-            (Method::POST, "/"),
-        ];
-        for (method, miss) in misses {
-            let res = router.call(req(&method, miss, None)).await.unwrap();
-            assert_eq!(StatusCode::NOT_FOUND, res.status());
+            let misses = vec![
+                (Method::GET, "/a"),
+                (Method::GET, "/a/b"),
+                (Method::GET, "/mg"),
+                (Method::GET, "/mg/q"),
+                (Method::GET, "/mg/z"),
+                (Method::GET, "/mg/a/b/z/c"),
+                (Method::DELETE, "/?foo=bar"),
+                (Method::DELETE, "/?foo=bar"),
+                (Method::DELETE, "/?baz=quux"),
+                (Method::POST, "/query_key_only?baz=quux"),
+                (Method::GET, "/"),
+                (Method::POST, "/"),
+            ];
+            for (method, miss) in misses {
+                let res = router.call(req(&method, miss, None)).await.unwrap();
+                assert_eq!(StatusCode::NOT_FOUND, res.status());
+            }
         }
     }
 
@@ -566,6 +582,92 @@ mod tests {
             let actual_body = get_body_as_str(&mut res).await;
 
             assert_eq!(format!("{} :: {}", svc_name, uri), actual_body);
+        }
+    }
+}
+
+#[cfg(test)]
+mod awsjson_tests {
+    use super::rest_tests::{get_body_as_str, req};
+    use super::*;
+    use crate::body::boxed;
+    use futures_util::Future;
+    use http::{HeaderMap, HeaderValue, Method};
+    use pretty_assertions::assert_eq;
+    use std::pin::Pin;
+
+    /// A service that returns its name and the request's URI in the response body.
+    #[derive(Clone)]
+    struct NamedEchoOperationService(String);
+
+    impl<B> Service<Request<B>> for NamedEchoOperationService {
+        type Response = Response<BoxBody>;
+        type Error = Infallible;
+        type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+        #[inline]
+        fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        #[inline]
+        fn call(&mut self, req: Request<B>) -> Self::Future {
+            let target = req
+                .headers()
+                .get("x-amz-target")
+                .map(|x| x.to_str().unwrap())
+                .unwrap_or("unknown");
+            let body = boxed(Body::from(format!("{} :: {}", self.0, target)));
+            let fut = async { Ok(Response::builder().status(&http::StatusCode::OK).body(body).unwrap()) };
+            Box::pin(fut)
+        }
+    }
+
+    #[tokio::test]
+    async fn simple_routing() {
+        let routes = vec![("Service.Operation", "A")];
+        let router_json10 = Router::new_aws_json_10_router(routes.clone().into_iter().map(|(operation, svc_name)| {
+            (
+                tower::util::BoxCloneService::new(NamedEchoOperationService(String::from(svc_name))),
+                operation.to_string(),
+            )
+        }));
+        let router_json11 = Router::new_aws_json_11_router(routes.into_iter().map(|(operation, svc_name)| {
+            (
+                tower::util::BoxCloneService::new(NamedEchoOperationService(String::from(svc_name))),
+                operation.to_string(),
+            )
+        }));
+
+        for mut router in [router_json10, router_json11] {
+            let mut headers = HeaderMap::new();
+            headers.insert("x-amz-target", HeaderValue::from_static("Service.Operation"));
+
+            // Good request, should return a valid body.
+            let mut res = router
+                .call(req(&Method::POST, "/", Some(headers.clone())))
+                .await
+                .unwrap();
+            let actual_body = get_body_as_str(&mut res).await;
+            assert_eq!(format!("{} :: {}", "A", "Service.Operation"), actual_body);
+
+            // No headers, should return NOT_FOUND.
+            let res = router.call(req(&Method::POST, "/", None)).await.unwrap();
+            assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+            // Wrong HTTP method, should return METHOD_NOT_ALLOWED..
+            let res = router
+                .call(req(&Method::GET, "/", Some(headers.clone())))
+                .await
+                .unwrap();
+            assert_eq!(res.status(), StatusCode::METHOD_NOT_ALLOWED);
+
+            // Wrong URI, should return NOT_FOUND.
+            let res = router
+                .call(req(&Method::POST, "/something", Some(headers)))
+                .await
+                .unwrap();
+            assert_eq!(res.status(), StatusCode::NOT_FOUND);
         }
     }
 }
