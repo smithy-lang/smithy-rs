@@ -61,13 +61,17 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenera
  */
 class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCustomization() {
     override fun section(section: JsonSection): Writable = when (section) {
-        is JsonSection.FinalizeObject -> writable {
+        is JsonSection.ServerError -> writable {
             if (section.structureShape.hasTrait<ErrorTrait>()) {
                 val typeId = when (awsJsonVersion) {
+                    // AwsJson 1.0 wants the whole shape ID (namespace#Shape).
+                    // https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
                     AwsJsonVersion.Json10 -> section.structureShape.id.toString()
+                    // AwsJson 1.1 wants only the shape name (Shape).
+                    // https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#operation-error-serialization
                     AwsJsonVersion.Json11 -> section.structureShape.id.name.toString()
                 }
-                rust("""object.key("__type").string("${escape(typeId)}");""")
+                rust("""${section.jsonObject}.key("__type").string("${escape(typeId)}");""")
             }
         }
     }

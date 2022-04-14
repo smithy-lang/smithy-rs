@@ -55,10 +55,8 @@ import software.amazon.smithy.rust.codegen.util.outputShape
  * Class describing a JSON section that can be used in a customization.
  */
 sealed class JsonSection(name: String) : Section(name) {
-    /**
-     * Write the customization just before `object.finish()`.
-     */
-    data class FinalizeObject(val structureShape: StructureShape) : JsonSection("FinalizeObject")
+    /** Write the server error __type customization just before `object.finish()` */
+    data class ServerError(val structureShape: StructureShape, val jsonObject: String) : JsonSection("ServerError")
 }
 
 /**
@@ -184,7 +182,7 @@ class JsonSerializerGenerator(
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
-                customizations.forEach { it.section(JsonSection.FinalizeObject(structureShape))(this) }
+                customizations.forEach { it.section(JsonSection.ServerError(structureShape, "object"))(this) }
                 rust("object.finish();")
                 rustTemplate("Ok(out)", *codegenScope)
             }
