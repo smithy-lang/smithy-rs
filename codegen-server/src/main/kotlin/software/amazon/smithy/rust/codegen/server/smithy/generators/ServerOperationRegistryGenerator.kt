@@ -247,7 +247,7 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Finds the runtime `Protocol` variant for a specific modeled protocol.
+     * Finds the runtime function to construct a new `Router` based on the Protocol.
      */
     private fun runtimeRouterConstructor(): String =
         when (protocol) {

@@ -71,7 +71,7 @@ class JsonSerializerGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
-    private val customizations: List<JsonCustomization>,
+    private val customizations: List<JsonCustomization> = listOf(),
 ) : StructuredDataSerializerGenerator {
     private data class Context<T : Shape>(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
@@ -169,12 +169,6 @@ class JsonSerializerGenerator(
      * Reusable structure serializer implementation that can be used to generate serializing code for
      * operation, error and structure shapes.
      * This function is only used by the server, the client uses directly [serializeStructure].
-     *
-     * To honor protocol specifications such as AwsJson 1.0 and 1.1, this method accepts two boolean
-     * parameters, `includeErrorType` and `useErrorNamespace`, controlling the generation of the `__type`
-     * field in the response.
-     * See: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
-     * See: https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#differences-between-awsjson1-0-and-awsjson1-1
      */
     private fun serverStructureSerializer(
         fnName: String,

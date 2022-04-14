@@ -82,7 +82,7 @@ class ServerAwsJsonSerializerGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     private val awsJsonVersion: AwsJsonVersion,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
-        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName, listOf(ServerAwsJsonError(awsJsonVersion)))
+        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName, customizations = listOf(ServerAwsJsonError(awsJsonVersion)))
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator
 
 class ServerAwsJson(

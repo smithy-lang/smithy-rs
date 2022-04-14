@@ -102,7 +102,7 @@ class AwsJsonSerializerGenerator(
     private val codegenContext: CodegenContext,
     httpBindingResolver: HttpBindingResolver,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
-        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName, listOf())
+        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
