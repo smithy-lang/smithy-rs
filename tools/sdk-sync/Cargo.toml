@@ -13,7 +13,6 @@ publish = false
 [dependencies]
 anyhow = "1"
 clap = { version = "3.1.8", features = ["derive"] }
-git2 = "0.13"
 gitignore = "1"
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
 
