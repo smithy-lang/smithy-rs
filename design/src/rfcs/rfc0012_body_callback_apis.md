@@ -12,33 +12,80 @@ Adding a callback APIs to `ByteStream` and `SdkBody` will enable developers usin
 ```rust
 // in aws_smithy_http::callbacks...
 
-// Each trait method defaults to doing nothing. It's up to implementors to
-// implement one or both of the trait methods
-/// Structs and enums implementing this trait can be inserted into a `ByteStream`,
-/// and will then be called in reaction to various events during a `ByteStream`'s
-/// lifecycle.
-pub trait BaseCallback: Send + Sync {
-    /// This callback is called for each chunk **successfully** read. If an error occurs while reading a chunk,
-    /// this will not be called. This function takes `&mut self` so that implementors may modify an implementing
-    /// struct/enum's internal state.
-    // In order to stop the compiler complaining about these empty default impls, we allow unused variables.
-    fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) {}
-
-    /// This callback is called once all chunks have been read. If the callback encountered 1 or more errors
-    /// while running `update`s, this is how those errors are raised. Otherwise, this may optionally return
-    /// a [`HeaderMap`][HeaderMap] to be appended to an HTTP body as a trailer or inserted into a request's
-    /// headers.
-    fn finally(&self) -> Result<Option<HeaderMap<HeaderValue>>, Box<dyn std::error::Error + Send + Sync>> { Ok(()) }
-
-    /// Create a new `BaseCallback` from an existing one. This is called when a `BaseCallback` need
-    /// to be re-initialized with default state. For example: when a request has a body that needs
-    /// to be rebuilt, all read callbacks on that body need to be run again but with a fresh internal state.
-    fn make_new(&self) -> Box<dyn BaseCallback>;
+// An internal-only type that `SdkBody` interacts with in order to call callbacks
+pub(crate) enum Callback {
+   // A callback to be called when sending requests
+    Send(Box<dyn SendCallback>),
+    // A callback to be called when receiving responses
+    Receive(Box<dyn ReceiveCallback>),
 }
 
-// We also impl `BaseCallback` for `Box<dyn BaseCallback>` because it makes callback trait objects easier to work with.
+impl Callback {
+   /// This lifecycle function is called for each chunk **successfully** read. If an error occurs while reading a chunk,
+   /// this will not be called. This function takes `&mut self` so that implementors may modify an implementing
+   /// struct/enum's internal state. Implementors may return an error.
+   fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+      match self {
+         Callback::Send(send_callback) => send_callback.update(bytes),
+         Callback::Receive(receive_callback) => receive_callback.update(bytes),
+      }
+   }
 
-// TODO add the ReadCallback and WriteCallback traits
+   /// This callback is called once all chunks have been read. If the callback encountered 1 or more errors
+   /// while running `update`s, this is how those errors are raised. Otherwise, this may optionally return
+   /// a [`HeaderMap`][HeaderMap] to be appended to an HTTP body as a trailer or inserted into a request's
+   /// headers.
+   fn finally(
+      &self,
+   ) -> Result<Option<HeaderMap<HeaderValue>>, Box<dyn std::error::Error + Send + Sync>> {
+      match self {
+         Callback::Send(send_callback) => send_callback.headers(),
+         Callback::Receive(receive_callback) => receive_callback.trailers(),
+      }
+   }
+
+   /// Create a new `Callback` from an existing one. This is called when a `Callback` needs to be
+   /// re-initialized with default state. For example: when a request has a body that need to be
+   /// rebuilt, all read callbacks on that body need to be run again but with a fresh internal state.
+   fn make_new(&self) -> Box<dyn BaseCallback> {
+      match self {
+         Callback::Send(send_callback) => send_callback.make_new(),
+         Callback::Receive(receive_callback) => receive_callback.make_new(),
+      }
+   }
+}
+
+/// A callback that, when inserted into a request body, will be called for corresponding lifecycle events.
+// Docs for these methods will mostly be the same as the docs on `Callback` so I've omitted them.
+trait SendCallback: Send + Sync {
+   fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), BoxError> { Ok(()) }
+   fn headers(
+      &self,
+   ) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> { Ok(None) }
+   fn make_new() -> Box<dyn SendCallback>;
+}
+
+impl From<Box<dyn SendCallback>> for Callback {
+   fn from(send_callback: Box<dyn SendCallback>) -> Self {
+      Self::Send(send_callback)
+   }
+}
+
+/// A callback that, when inserted into a response body, will be called for corresponding lifecycle events.
+// Docs for these methods will mostly be the same as the docs on `Callback` so I've omitted them.
+trait ReceiveCallback: Send + Sync {
+   fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), BoxError> { Ok(()) }
+   fn trailers(
+      &self,
+   ) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> { Ok(None) }
+   fn make_new() -> Box<dyn ReceiveCallback>;
+}
+
+impl From<Box<dyn ReceiveCallback>> for Callback {
+   fn from(receive_callback: Box<dyn ReceiveCallback>) -> Self {
+      Self::Receive(receive_callback)
+   }
+}
 ```
 
 The changes we need to make to `ByteStream`:
@@ -52,17 +99,23 @@ The changes we need to make to `ByteStream`:
 impl ByteStream {
     // ...other impls omitted
 
-    // A "builder-style" method for setting callbacks
-    pub fn with_read_callback(&mut self, read_callback: Box<dyn ReadCallback>) -> &mut Self {
-        self.inner.with_callback(read_callback);
+    // A "builder-style" method for setting callbacks that will be triggered if this `ByteStream` is being used as a request body
+    pub fn with_send_callback(&mut self, send_callback: Box<dyn SendCallback>) -> &mut Self {
+        self.inner.with_callback(send_callback.into());
         self
     }
+
+   // A "builder-style" method for setting callbacks that will be triggered if this `ByteStream` is being used as a response body
+   pub fn with_receive_callback(&mut self, receive_callback: Box<dyn ReceiveCallback>) -> &mut Self {
+      self.inner.with_callback(receive_callback.into());
+      self
+   }
 }
 
 impl Inner<SdkBody> {
     // `Inner` wraps an `SdkBody` which has a "builder-style" function for adding callbacks.
-    pub fn with_read_callback(&mut self, read_callback: Box<dyn ReadCallback>) -> &mut Self {
-        self.body.with_callback(read_callback);
+    pub fn with_callback(&mut self, callback: Callback) -> &mut Self {
+        self.body.with_callback(callback);
         self
     }
 }
@@ -82,7 +135,7 @@ pub struct SdkBody {
     rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
     // We add a `Vec` to store the callbacks
     #[pin]
-    callbacks: Vec<Box<dyn BaseCallback>>,
+    callbacks: Vec<Callback>,
 }
 
 impl SdkBody {
@@ -115,14 +168,15 @@ impl SdkBody {
         match &polling_result {
             // When we get some bytes back from polling, pass those bytes to each callback in turn
             Poll::Ready(Some(Ok(bytes))) => {
-                this.callbacks
-                    .iter_mut()
-                    .for_each(|callback| callback.update(bytes));
+               for callback in this.callbacks.iter_mut() {
+                  // Callbacks can run into errors when reading bytes. They'll be surfaced here
+                  callback.update(bytes)?;
+               }
             }
             // When we're done polling for bytes, run each callback's `finally()` method. If any calls to
             // `finally()` return an error, propagate that error up. Otherwise, continue.
             Poll::Ready(None) => {
-                for callback_result in this.callbacks.iter().map(BaseCallback::finally) {
+                for callback_result in this.callbacks.iter().map(Callback::finally) {
                     if let Err(e) = callback_result {
                         return Poll::Ready(Some(Err(e)));
                     }
@@ -143,7 +197,7 @@ impl SdkBody {
             let callbacks = self
                 .callbacks
                 .iter()
-                .map(BaseCallback::make_new)
+                .map(Callback::make_new)
                 .collect();
 
             Self {
@@ -154,7 +208,7 @@ impl SdkBody {
         })
     }
 
-    pub fn with_callback(&mut self, callback: Box<dyn BaseCallback>) -> &mut Self {
+    pub fn with_callback(&mut self, callback: Callback) -> &mut Self {
         self.callbacks.push(callback);
         self
     }
@@ -253,11 +307,13 @@ struct Crc32cChecksumCallback {
 }
 
 impl ReadCallback for Crc32cChecksumCallback {
-    fn update(&mut self, bytes: &[u8]) {
+    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.state = match self.state {
             Some(crc) => { self.state = Some(crc32c_append(crc, bytes)) }
             None => { Some(crc32c(&bytes)) }
         };
+
+       Ok(())
     }
 
     fn finally(&self) ->
