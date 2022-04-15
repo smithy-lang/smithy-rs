@@ -57,7 +57,7 @@ impl Callback {
 
 /// A callback that, when inserted into a request body, will be called for corresponding lifecycle events.
 // Docs for these methods will mostly be the same as the docs on `Callback` so I've omitted them.
-trait SendCallback: Send + Sync {
+trait SendCallback: Send {
    fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), BoxError> { Ok(()) }
    fn headers(
       &self,
@@ -73,7 +73,7 @@ impl From<Box<dyn SendCallback>> for Callback {
 
 /// A callback that, when inserted into a response body, will be called for corresponding lifecycle events.
 // Docs for these methods will mostly be the same as the docs on `Callback` so I've omitted them.
-trait ReceiveCallback: Send + Sync {
+trait ReceiveCallback: Send {
    fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), BoxError> { Ok(()) }
    fn trailers(
       &self,
