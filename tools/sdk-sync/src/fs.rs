@@ -14,6 +14,7 @@ use std::process::Command;
 
 static HANDWRITTEN_DOTFILE: &str = ".handwritten";
 
+#[cfg_attr(test, mockall::automock)]
 pub trait Fs {
     /// Deletes generated SDK files from the given path
     fn delete_all_generated_files_and_folders(&self, directory: &Path) -> Result<()>;
@@ -36,12 +37,7 @@ pub trait Fs {
     fn remove_file(&self, path: &Path) -> Result<()>;
 
     /// Recursively copies files.
-    fn recursive_copy(
-        &self,
-        source: &Path,
-        destination: &Path,
-        working_directory: Option<&Path>,
-    ) -> Result<()>;
+    fn recursive_copy(&self, source: &Path, destination: &Path) -> Result<()>;
 }
 
 pub struct DefaultFs;
@@ -109,6 +105,8 @@ impl Fs for DefaultFs {
     }
 
     fn remove_dir_all_idempotent(&self, path: &Path) -> Result<()> {
+        assert!(path.is_absolute(), "remove_dir_all_idempotent should be used with absolute paths to avoid trivial pathing issues");
+
         match std::fs::remove_dir_all(path) {
             Ok(_) => Ok(()),
             Err(err) => match err.kind() {
@@ -126,19 +124,16 @@ impl Fs for DefaultFs {
         Ok(std::fs::remove_file(path)?)
     }
 
-    fn recursive_copy(
-        &self,
-        source: &Path,
-        destination: &Path,
-        working_directory: Option<&Path>,
-    ) -> Result<()> {
+    fn recursive_copy(&self, source: &Path, destination: &Path) -> Result<()> {
+        assert!(
+            source.is_absolute() && destination.is_absolute(),
+            "recursive_copy should be used with absolute paths to avoid trivial pathing issues"
+        );
+
         let mut command = Command::new("cp");
         command.arg("-r");
         command.arg(source);
         command.arg(destination);
-        if let Some(working_directory) = working_directory {
-            command.current_dir(working_directory);
-        }
 
         let output = command.output()?;
         handle_failure("recursive_copy", &output)?;

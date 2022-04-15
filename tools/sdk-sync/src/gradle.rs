@@ -9,6 +9,7 @@ use smithy_rs_tool_common::shell::handle_failure;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg_attr(test, mockall::automock)]
 pub trait Gradle {
     /// Runs the `aws:sdk:clean` target
     fn aws_sdk_clean(&self) -> Result<()>;

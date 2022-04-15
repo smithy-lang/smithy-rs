@@ -17,5 +17,6 @@ gitignore = "1"
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
 
 [dev-dependencies]
+mockall = "0.11"
 pretty_assertions = "1"
 tempdir = "0.3"

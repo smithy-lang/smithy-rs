@@ -10,7 +10,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CommitHash(String);
 
 impl<T: Into<String>> From<T> for CommitHash {
@@ -31,7 +31,7 @@ impl fmt::Display for CommitHash {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Commit {
     pub hash: CommitHash,
     pub author_name: String,
@@ -51,6 +51,7 @@ impl Commit {
 }
 
 /// Easily mockable interface with Git for testing
+#[cfg_attr(test, mockall::automock)]
 pub trait Git {
     /// Returns the repository path
     fn path(&self) -> &Path;
