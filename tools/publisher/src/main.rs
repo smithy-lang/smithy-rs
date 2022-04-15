@@ -10,6 +10,7 @@ use anyhow::Result;
 use clap::Parser;
 use semver::Version;
 use std::path::PathBuf;
+use subcommand::generate_version_manifest::subcommand_generate_version_manifest;
 use subcommand::hydrate_readme::subcommand_hydrate_readme;
 
 mod cargo;
@@ -68,6 +69,18 @@ enum Args {
         #[clap(short, long)]
         output: PathBuf,
     },
+    /// Generates a version manifest file for a generated SDK
+    GenerateVersionManifest {
+        /// Path to `smithy-build.json`
+        #[clap(long)]
+        smithy_build: PathBuf,
+        /// Revision of `aws-doc-sdk-examples` repository used to retrieve examples
+        #[clap(long)]
+        examples_revision: String,
+        /// Path containing the generated SDK to generate a version manifest for
+        #[clap(long)]
+        location: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -102,6 +115,14 @@ async fn main() -> Result<()> {
             output,
         } => {
             subcommand_hydrate_readme(sdk_version, msrv, &output).await?;
+        }
+        Args::GenerateVersionManifest {
+            smithy_build,
+            examples_revision,
+            location,
+        } => {
+            subcommand_generate_version_manifest(&smithy_build, &examples_revision, &location)
+                .await?;
         }
     }
     Ok(())

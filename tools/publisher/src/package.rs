@@ -258,7 +258,7 @@ fn validate_packages(packages: &[Package]) -> Result<()> {
     Ok(())
 }
 
-async fn read_packages(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Package>> {
+pub async fn read_packages(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Package>> {
     let mut result = Vec::new();
     for path in &manifest_paths {
         let contents: Vec<u8> = fs.read_file(path).await?;
