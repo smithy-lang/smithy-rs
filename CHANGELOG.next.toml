@@ -20,5 +20,5 @@ author = "Velfi"
 [[smithy-rs]]
 message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.56.1 to 1.58.1 per our \"two versions behind\" policy."
 references = ["smithy-rs#1318"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
