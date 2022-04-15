@@ -38,7 +38,7 @@ RUN set -eux; \
 # Rust & Tools Installation Stage
 #
 FROM bare_base_image AS install_rust
-ARG rust_stable_version=1.56.1
+ARG rust_stable_version=1.58.1
 ARG rust_nightly_version=nightly-2022-03-29
 ARG cargo_udeps_version=0.1.27
 ARG cargo_hack_version=0.5.12
@@ -95,7 +95,7 @@ RUN set -eux; \
 # Final image
 #
 FROM bare_base_image AS final_image
-ARG rust_stable_version=1.56.1
+ARG rust_stable_version=1.58.1
 ARG rust_nightly_version=nightly-2022-03-29
 RUN set -eux; \
     yum -y updateinfo; \
