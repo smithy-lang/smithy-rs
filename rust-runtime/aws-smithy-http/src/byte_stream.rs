@@ -80,7 +80,7 @@
 //!
 //! ```no_run
 //! # #[cfg(feature = "rt-tokio")]
-//! {
+//! # {
 //! use aws_smithy_http::byte_stream::ByteStream;
 //! use std::path::Path;
 //! struct GetObjectInput {
@@ -93,7 +93,7 @@
 //!         .expect("valid path");
 //!     GetObjectInput { body: bytestream }
 //! }
-//! }
+//! # }
 //! ```
 //!
 //! If you want more control over how the file is read, such as specifying the size of the buffer used to read the file
