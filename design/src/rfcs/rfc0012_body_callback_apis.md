@@ -3,7 +3,7 @@ RFC: Callback APIs for `ByteStream` and `SdkBody`
 
 > Status: RFC
 
-Adding a callback APIs to `ByteStream` and `SdkBody` will enable developers using the SDK to implement things like checksum validations and 'read progress' callbacks.
+Adding a callback API to `ByteStream` and `SdkBody` will enable developers using the SDK to implement things like checksum validations and 'read progress' callbacks.
 
 ## The Implementation
 
@@ -12,79 +12,29 @@ Adding a callback APIs to `ByteStream` and `SdkBody` will enable developers usin
 ```rust
 // in aws_smithy_http::callbacks...
 
-// An internal-only type that `SdkBody` interacts with in order to call callbacks
-pub(crate) enum Callback {
-   // A callback to be called when sending requests
-    Send(Box<dyn SendCallback>),
-    // A callback to be called when receiving responses
-    Receive(Box<dyn ReceiveCallback>),
-}
-
-impl Callback {
+/// A callback that, when inserted into a request body, will be called for corresponding lifecycle events.
+// Docs for these methods will mostly be the same as the docs on `Callback` so I've omitted them.
+trait BodyCallback: Send {
    /// This lifecycle function is called for each chunk **successfully** read. If an error occurs while reading a chunk,
    /// this will not be called. This function takes `&mut self` so that implementors may modify an implementing
    /// struct/enum's internal state. Implementors may return an error.
-   fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-      match self {
-         Callback::Send(send_callback) => send_callback.update(bytes),
-         Callback::Receive(receive_callback) => receive_callback.update(bytes),
-      }
-   }
+   fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), BoxError> { Ok(()) }
 
    /// This callback is called once all chunks have been read. If the callback encountered 1 or more errors
-   /// while running `update`s, this is how those errors are raised. Otherwise, this may optionally return
-   /// a [`HeaderMap`][HeaderMap] to be appended to an HTTP body as a trailer or inserted into a request's
-   /// headers.
-   fn finally(
-      &self,
-   ) -> Result<Option<HeaderMap<HeaderValue>>, Box<dyn std::error::Error + Send + Sync>> {
-      match self {
-         Callback::Send(send_callback) => send_callback.headers(),
-         Callback::Receive(receive_callback) => receive_callback.trailers(),
-      }
-   }
+   /// while running `update`s, this is how those errors are raised. Implementors may return a [`HeaderMap`][HeaderMap]
+   /// that will be appended to the HTTP body as a trailer. This is only useful to do for streaming requests.
+   fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> { Ok(None) }
 
    /// Create a new `Callback` from an existing one. This is called when a `Callback` needs to be
    /// re-initialized with default state. For example: when a request has a body that need to be
    /// rebuilt, all read callbacks on that body need to be run again but with a fresh internal state.
-   fn make_new(&self) -> Box<dyn BaseCallback> {
-      match self {
-         Callback::Send(send_callback) => send_callback.make_new(),
-         Callback::Receive(receive_callback) => receive_callback.make_new(),
-      }
-   }
+   fn make_new(&self) -> Box<dyn SendCallback>;
 }
 
-/// A callback that, when inserted into a request body, will be called for corresponding lifecycle events.
-// Docs for these methods will mostly be the same as the docs on `Callback` so I've omitted them.
-trait SendCallback: Send {
-   fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), BoxError> { Ok(()) }
-   fn headers(
-      &self,
-   ) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> { Ok(None) }
-   fn make_new() -> Box<dyn SendCallback>;
-}
-
-impl From<Box<dyn SendCallback>> for Callback {
-   fn from(send_callback: Box<dyn SendCallback>) -> Self {
-      Self::Send(send_callback)
-   }
-}
-
-/// A callback that, when inserted into a response body, will be called for corresponding lifecycle events.
-// Docs for these methods will mostly be the same as the docs on `Callback` so I've omitted them.
-trait ReceiveCallback: Send {
-   fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), BoxError> { Ok(()) }
-   fn trailers(
-      &self,
-   ) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> { Ok(None) }
-   fn make_new() -> Box<dyn ReceiveCallback>;
-}
-
-impl From<Box<dyn ReceiveCallback>> for Callback {
-   fn from(receive_callback: Box<dyn ReceiveCallback>) -> Self {
-      Self::Receive(receive_callback)
-   }
+impl BodyCallback for Box<dyn BodyCallback> {
+   fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> { BodyCallback::update(self, bytes) }
+   fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> { BodyCallback::trailers(self) }
+   fn make_new(&self) -> Box<dyn SendCallback> { BodyCallback::make_new(self) }
 }
 ```
 
@@ -99,23 +49,17 @@ The changes we need to make to `ByteStream`:
 impl ByteStream {
     // ...other impls omitted
 
-    // A "builder-style" method for setting callbacks that will be triggered if this `ByteStream` is being used as a request body
-    pub fn with_send_callback(&mut self, send_callback: Box<dyn SendCallback>) -> &mut Self {
-        self.inner.with_callback(send_callback.into());
+    // A "builder-style" method for setting callbacks
+    pub fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
+        self.inner.with_body_callback(body_callback);
         self
     }
-
-   // A "builder-style" method for setting callbacks that will be triggered if this `ByteStream` is being used as a response body
-   pub fn with_receive_callback(&mut self, receive_callback: Box<dyn ReceiveCallback>) -> &mut Self {
-      self.inner.with_callback(receive_callback.into());
-      self
-   }
 }
 
 impl Inner<SdkBody> {
     // `Inner` wraps an `SdkBody` which has a "builder-style" function for adding callbacks.
-    pub fn with_callback(&mut self, callback: Callback) -> &mut Self {
-        self.body.with_callback(callback);
+    pub fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
+        self.body.with_body_callback(body_callback);
         self
     }
 }
@@ -135,7 +79,7 @@ pub struct SdkBody {
     rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
     // We add a `Vec` to store the callbacks
     #[pin]
-    callbacks: Vec<Callback>,
+    callbacks: Vec<Box<dyn BodyCallback>>,
 }
 
 impl SdkBody {
@@ -176,7 +120,7 @@ impl SdkBody {
             // When we're done polling for bytes, run each callback's `finally()` method. If any calls to
             // `finally()` return an error, propagate that error up. Otherwise, continue.
             Poll::Ready(None) => {
-                for callback_result in this.callbacks.iter().map(Callback::finally) {
+                for callback_result in this.callbacks.iter().map(Callback::trailers) {
                     if let Err(e) = callback_result {
                         return Poll::Ready(Some(Err(e)));
                     }
@@ -208,7 +152,7 @@ impl SdkBody {
         })
     }
 
-    pub fn with_callback(&mut self, callback: Callback) -> &mut Self {
+    pub fn with_callback(&mut self, callback: BodyCallback) -> &mut Self {
         self.callbacks.push(callback);
         self
     }
@@ -280,7 +224,7 @@ impl http_body::Body for SdkBody {
             .read_callbacks
             .iter()
             .filter_map(|callback| {
-                match callback.finally() {
+                match callback.trailers() {
                     Ok(optional_header_map) => optional_header_map,
                     // early return if a callback encountered an error
                     Err(e) => { return e },
@@ -316,7 +260,7 @@ impl ReadCallback for Crc32cChecksumCallback {
        Ok(())
     }
 
-    fn finally(&self) ->
+    fn trailers(&self) ->
     Result<Option<HeaderMap<HeaderValue>>,
           Box<dyn std::error::Error + Send + Sync>>
     {
@@ -339,7 +283,7 @@ impl ReadCallback for Crc32cChecksumCallback {
 }
 ```
 
-*NOTE: If `Crc32cChecksumCallback` needed to validate a response, then we could modify it to check its internal state against a target checksum value and calling `finally` would produce an error if the values didn't match.*
+*NOTE: If `Crc32cChecksumCallback` needed to validate a response, then we could modify it to check its internal state against a target checksum value and calling `trailers` would produce an error if the values didn't match.*
 
 In order to use this in a request, we'd modify codegen for that request's service.
 
@@ -347,7 +291,7 @@ In order to use this in a request, we'd modify codegen for that request's servic
 2. If validation was requested but no pre-calculated checksum was given, we'd create a callback similar to the one above
 3. Then, we'd create a new checksum callback and:
    - (if streaming) we'd set the checksum callback on the request body object
-   - (if non-streaming) we'd immediately read the body and call `ReadCallback::update` manually. Once all data was read, we'd get the checksum by calling `finally` and insert that data as a request header.
+   - (if non-streaming) we'd immediately read the body and call `BodyCallback::update` manually. Once all data was read, we'd get the checksum by calling `trailers` and insert that data as a request header.
 
 [ByteStream impls]: https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205
 [SdkBody impls]: https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71
