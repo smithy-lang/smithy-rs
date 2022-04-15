@@ -13,22 +13,21 @@ Adding a callback API to `ByteStream` and `SdkBody` will enable developers using
 // in aws_smithy_http::callbacks...
 
 /// A callback that, when inserted into a request body, will be called for corresponding lifecycle events.
-// Docs for these methods will mostly be the same as the docs on `Callback` so I've omitted them.
 trait BodyCallback: Send {
    /// This lifecycle function is called for each chunk **successfully** read. If an error occurs while reading a chunk,
-   /// this will not be called. This function takes `&mut self` so that implementors may modify an implementing
+   /// this method will not be called. This method takes `&mut self` so that implementors may modify an implementing
    /// struct/enum's internal state. Implementors may return an error.
    fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), BoxError> { Ok(()) }
 
-   /// This callback is called once all chunks have been read. If the callback encountered 1 or more errors
+   /// This callback is called once all chunks have been read. If the callback encountered one or more errors
    /// while running `update`s, this is how those errors are raised. Implementors may return a [`HeaderMap`][HeaderMap]
    /// that will be appended to the HTTP body as a trailer. This is only useful to do for streaming requests.
    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> { Ok(None) }
 
-   /// Create a new `Callback` from an existing one. This is called when a `Callback` needs to be
-   /// re-initialized with default state. For example: when a request has a body that need to be
-   /// rebuilt, all read callbacks on that body need to be run again but with a fresh internal state.
-   fn make_new(&self) -> Box<dyn SendCallback>;
+   /// Create a new `BodyCallback` from an existing one. This is called when a `BodyCallback` needs to be
+   /// re-initialized with default state. For example: when a request has a body that needs to be
+   /// rebuilt, all callbacks for that body need to be run again but with a fresh internal state.
+   fn make_new(&self) -> Box<dyn BodyCallback>;
 }
 
 impl BodyCallback for Box<dyn BodyCallback> {
@@ -117,10 +116,10 @@ impl SdkBody {
                   callback.update(bytes)?;
                }
             }
-            // When we're done polling for bytes, run each callback's `finally()` method. If any calls to
-            // `finally()` return an error, propagate that error up. Otherwise, continue.
+            // When we're done polling for bytes, run each callback's `trailers()` method. If any calls to
+            // `trailers()` return an error, propagate that error up. Otherwise, continue.
             Poll::Ready(None) => {
-                for callback_result in this.callbacks.iter().map(Callback::trailers) {
+                for callback_result in this.callbacks.iter().map(BodyCallback::trailers) {
                     if let Err(e) = callback_result {
                         return Poll::Ready(Some(Err(e)));
                     }
@@ -221,7 +220,7 @@ impl http_body::Body for SdkBody {
         _cx: &mut Context<'_>,
     ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
         let header_map = self
-            .read_callbacks
+            .callbacks
             .iter()
             .filter_map(|callback| {
                 match callback.trailers() {
@@ -242,7 +241,7 @@ impl http_body::Body for SdkBody {
 
 What follows is a simplified example of how this API could be used to introduce checksum validation for outgoing request payloads. In this example, the checksum calculation is fallible and no validation takes place. All it does it calculate
 the checksum of some data and then returns the checksum of that data when `trailers` is called. This is fine because it's
-being used to calculate the checksum of a streaming body in a request.
+being used to calculate the checksum of a streaming body for a request.
 
 ```rust
 #[derive(Default)]
