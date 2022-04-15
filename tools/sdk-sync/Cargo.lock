@@ -446,8 +446,10 @@ dependencies = [
  "gitignore",
  "mockall",
  "pretty_assertions",
+ "serde",
  "smithy-rs-tool-common",
  "tempdir",
+ "toml",
 ]
 
 [[package]]
@@ -527,6 +529,15 @@ name = "textwrap"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
+
+[[package]]
+name = "toml"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d82e1a7758622a465f8cee077614c73484dac5b836c02ff6a40d5d1010324d7"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "tracing"

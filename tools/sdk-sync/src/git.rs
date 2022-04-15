@@ -10,7 +10,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommitHash(String);
 
 impl<T: Into<String>> From<T> for CommitHash {

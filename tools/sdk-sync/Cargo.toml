@@ -14,7 +14,9 @@ publish = false
 anyhow = "1"
 clap = { version = "3.1.8", features = ["derive"] }
 gitignore = "1"
+serde = { version = "1", features = ["derive"] }
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
+toml = "0.5"
 
 [dev-dependencies]
 mockall = "0.11"

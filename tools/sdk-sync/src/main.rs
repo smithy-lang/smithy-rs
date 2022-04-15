@@ -6,6 +6,7 @@
 mod fs;
 mod git;
 mod gradle;
+mod versions;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
@@ -15,6 +16,7 @@ use gradle::{Gradle, GradleCLI};
 use smithy_rs_tool_common::macros::here;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use versions::{DefaultVersions, Versions};
 
 /// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
 #[derive(Parser, Debug)]
@@ -34,7 +36,6 @@ struct Args {
 const BOT_NAME: &str = "AWS SDK Rust Bot";
 const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
 const BOT_COMMIT_PREFIX: &str = "[autosync]";
-const COMMIT_HASH_FILENAME: &str = ".smithyrs-githash";
 
 /// This tool syncs codegen changes from smithy-rs, examples changes from aws-doc-sdk-examples,
 /// and any additional (optional) model changes into aws-sdk-rust.
@@ -71,6 +72,7 @@ struct Sync {
     smithy_rs: Box<dyn Git>,
     smithy_rs_gradle: Box<dyn Gradle>,
     fs: Box<dyn Fs>,
+    versions: Box<dyn Versions>,
 }
 
 impl Sync {
@@ -85,6 +87,7 @@ impl Sync {
             smithy_rs: Box::new(GitCLI::new(smithy_rs_path)?),
             smithy_rs_gradle: Box::new(GradleCLI::new(smithy_rs_path)) as Box<dyn Gradle>,
             fs: Box::new(DefaultFs::new()) as Box<dyn Fs>,
+            versions: Box::new(DefaultVersions::new()) as Box<dyn Versions>,
         })
     }
 
@@ -95,6 +98,7 @@ impl Sync {
         smithy_rs: impl Git + 'static,
         smithy_rs_gradle: impl Gradle + 'static,
         fs: impl Fs + 'static,
+        versions: impl Versions + 'static,
     ) -> Self {
         Self {
             aws_doc_sdk_examples: Box::new(aws_doc_sdk_examples),
@@ -102,17 +106,19 @@ impl Sync {
             smithy_rs: Box::new(smithy_rs),
             smithy_rs_gradle: Box::new(smithy_rs_gradle),
             fs: Box::new(fs),
+            versions: Box::new(versions),
         }
     }
 
     /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
     pub fn sync(&self) -> Result<()> {
         // Check repo that we're going to be moving the code into to see what commit it was last synced with
-        let last_synced_commit = self
-            .get_last_synced_commit()
-            .context("couldn't get last synced commit")?;
+        let versions = self
+            .versions
+            .load(self.aws_sdk_rust.path())
+            .context("load versions.toml")?;
         let commits = self
-            .commits_to_be_applied(&last_synced_commit)
+            .commits_to_be_applied(&versions.smithy_rs_revision)
             .context("couldn't build list of commits that need to be synced")?;
 
         if commits.is_empty() {
@@ -160,22 +166,6 @@ impl Sync {
         );
 
         Ok(())
-    }
-
-    /// Read the file from aws-sdk-rust that tracks the last smithy-rs commit it was synced with.
-    /// Returns the hash of that commit.
-    fn get_last_synced_commit(&self) -> Result<CommitHash> {
-        // TODO: Replace with versions.toml
-        let path = self.aws_sdk_rust.path().join(COMMIT_HASH_FILENAME);
-        Ok(CommitHash::from(
-            self.fs
-                .read_to_string(&path)
-                .with_context(|| {
-                    format!("couldn't get commit hash from file at '{}'", path.display())
-                })?
-                .trim()
-                .to_string(),
-        ))
     }
 
     /// Starting from a given commit, walk the tree to its `HEAD` in order to build a list of commits that we'll
@@ -319,6 +309,7 @@ impl Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::versions::{MockVersions, VersionsManifest};
     use fs::MockFs;
     use git::MockGit;
     use gradle::MockGradle;
@@ -366,6 +357,7 @@ mod tests {
         smithy_rs: MockGit,
         smithy_rs_gradle: MockGradle,
         fs: MockFs,
+        versions: MockVersions,
     }
 
     impl Mocks {
@@ -376,15 +368,8 @@ mod tests {
                 self.smithy_rs,
                 self.smithy_rs_gradle,
                 self.fs,
+                self.versions,
             )
-        }
-
-        fn set_smithyrs_githash(&mut self, hash: &'static str) {
-            self.fs
-                .expect_read_to_string()
-                .withf(|path| path.to_string_lossy() == "/p2/aws-sdk-rust/.smithyrs-githash")
-                .once()
-                .returning(|_| Ok(hash.to_string()));
         }
 
         fn set_smithyrs_commits_to_sync(
@@ -546,7 +531,17 @@ mod tests {
         set_path(&mut mocks.aws_sdk_rust, "/p2/aws-sdk-rust");
         set_path(&mut mocks.smithy_rs, "/p2/smithy-rs");
 
-        mocks.set_smithyrs_githash("some-previous-commit-hash");
+        mocks
+            .versions
+            .expect_load()
+            .withf(|p| p.to_string_lossy() == "/p2/aws-sdk-rust")
+            .once()
+            .returning(|_| {
+                Ok(VersionsManifest {
+                    smithy_rs_revision: "some-previous-commit-hash".into(),
+                    aws_doc_sdk_examples_revision: "old-examples-hash".into(),
+                })
+            });
         mocks.set_smithyrs_commits_to_sync(
             "some-previous-commit-hash",
             &["hash-newest", "hash-oldest"],
