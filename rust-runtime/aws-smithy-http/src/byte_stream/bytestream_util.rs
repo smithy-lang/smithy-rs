@@ -135,7 +135,11 @@ impl FsBuilder {
 
     /// Returns a [`ByteStream`](crate::byte_stream::ByteStream) from this builder.
     /// NOTE: If both [`file`](FsBuilder::file) and [`path`](FsBuilder::path) have been called for this FsBuilder, `build` will
-    /// behave read from the path specified by [`path`](FsBuilder::path).
+    /// read from the path specified by [`path`](FsBuilder::path).
+    ///
+    /// # Panics
+    ///
+    /// Panics if neither of the `file` or`path` setters were called.
     pub async fn build(self) -> Result<ByteStream, Error> {
         let buffer_size = self.buffer_size;
 
