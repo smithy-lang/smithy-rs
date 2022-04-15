@@ -97,7 +97,7 @@
 //! ```
 //!
 //! If you want more control over how the file is read, such as specifying the size of the buffer used to read the file
-//! or the length of the file, use a [`FsBuilder`](crate::byte_stream::FsBuilder).
+//! or the length of the file, use an [`FsBuilder`](crate::byte_stream::FsBuilder).
 //!
 //! ```no_run
 //! # #[cfg(feature = "rt-tokio")]
