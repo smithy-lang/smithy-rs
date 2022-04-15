@@ -435,8 +435,10 @@ pub enum Number {
 }
 
 macro_rules! to_num_fn {
-    ($name:ident, $typ:ident) =&gt; {
-        /// Converts to a `$typ`. This conversion may be lossy.
+    ($name:ident, $typ:ident, $styp:expr) =&gt; {
+        #[doc = &quot;Converts to a `&quot;]
+        #[doc = $styp]
+        #[doc = &quot;`. This conversion may be lossy.&quot;]
         pub fn $name(self) -&gt; $typ {
             match self {
                 Number::PosInt(val) =&gt; val as $typ,
@@ -444,6 +446,10 @@ macro_rules! to_num_fn {
                 Number::Float(val) =&gt; val as $typ,
             }
         }
+    };
+
+    ($name:ident, $typ:ident) =&gt; {
+        to_num_fn!($name, $typ, stringify!($typ));
     };
 }
 
