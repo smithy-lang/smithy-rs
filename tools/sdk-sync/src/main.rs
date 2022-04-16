@@ -14,9 +14,10 @@ use fs::{DefaultFs, Fs};
 use git::{Commit, CommitHash, Git, GitCLI};
 use gradle::{Gradle, GradleCLI};
 use smithy_rs_tool_common::macros::here;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use versions::{DefaultVersions, Versions};
+use versions::{DefaultVersions, Versions, VersionsManifest};
 
 /// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
 #[derive(Parser, Debug)]
@@ -35,7 +36,6 @@ struct Args {
 
 const BOT_NAME: &str = "AWS SDK Rust Bot";
 const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
-const BOT_COMMIT_PREFIX: &str = "[autosync]";
 
 /// This tool syncs codegen changes from smithy-rs, examples changes from aws-doc-sdk-examples,
 /// and any additional (optional) model changes into aws-sdk-rust.
@@ -110,23 +110,36 @@ impl Sync {
         }
     }
 
-    /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
     pub fn sync(&self) -> Result<()> {
-        // Check repo that we're going to be moving the code into to see what commit it was last synced with
         let versions = self
             .versions
             .load(self.aws_sdk_rust.path())
             .context("load versions.toml")?;
-        let commits = self
-            .commits_to_be_applied(&versions.smithy_rs_revision)
-            .context("couldn't build list of commits that need to be synced")?;
+
+        self.sync_smithy_rs(&versions).context("sync smithy-rs")?;
+        self.sync_examples(&versions).context("sync examples")?;
+
+        Ok(())
+    }
+
+    /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
+    fn sync_smithy_rs(&self, versions: &VersionsManifest) -> Result<()> {
+        eprintln!(
+            "Checking for smithy-rs commits in range HEAD..{}",
+            versions.smithy_rs_revision
+        );
+        let mut commits = self
+            .smithy_rs
+            .rev_list("HEAD", versions.smithy_rs_revision.as_ref(), None)
+            .context(here!())?;
+        commits.reverse(); // Order the revs from earliest to latest
 
         if commits.is_empty() {
             eprintln!("There are no new commits to be applied, have a nice day.");
             return Ok(());
         }
 
-        eprintln!("Syncing {} un-synced commit(s)...", commits.len());
+        eprintln!("Syncing {} commit(s)...", commits.len());
 
         // Run through all the new commits, syncing them one by one
         for (i, rev) in commits.iter().enumerate() {
@@ -140,79 +153,42 @@ impl Sync {
                 .hard_reset(commit.hash.as_ref())
                 .with_context(|| format!("failed to reset to {} in smithy-rs", rev,))?;
 
-            let build_artifacts = self.build_sdk().context("couldn't build SDK")?;
-            self.clean_out_existing_sdk()
-                .context("couldn't clean out existing SDK from aws-sdk-rust")?;
-
-            // Check that we aren't generating any files that we've marked as "handwritten"
-            let handwritten_files_in_generated_sdk_folder = self
-                .fs
-                .find_handwritten_files_and_folders(self.aws_sdk_rust.path(), &build_artifacts)?;
-            if !handwritten_files_in_generated_sdk_folder.is_empty() {
-                bail!(
-                    "found one or more 'handwritten' files/folders in generated code: {:#?}\nhint: if this file is newly generated, remove it from .handwritten",
-                    handwritten_files_in_generated_sdk_folder
-                );
-            }
-
-            self.copy_sdk(&build_artifacts, self.aws_sdk_rust.path())?;
-            self.create_mirror_commit(&commit)
+            self.copy_original_examples().context(here!())?;
+            self.build_and_copy_sdk(&versions.aws_doc_sdk_examples_revision)
+                .context("failed to generate the SDK")?;
+            self.commit("[smithy-rs]", &commit)
                 .context("couldn't commit SDK changes to aws-sdk-rust")?;
         }
 
         eprintln!(
-            "Successfully synced {} mirror commit(s) to aws-sdk-rust",
+            "Successfully synced {} smithy-rs commit(s) to aws-sdk-rust",
             commits.len(),
         );
 
         Ok(())
     }
 
-    /// Starting from a given commit, walk the tree to its `HEAD` in order to build a list of commits that we'll
-    /// need to sync. If you don't see the commits you're expecting, make sure the repo is up to date.
-    /// This function doesn't include the `since_commit` in the list since that commit was synced last time
-    /// this tool was run.
-    fn commits_to_be_applied(&self, since_commit: &CommitHash) -> Result<Vec<CommitHash>> {
-        eprintln!(
-            "Checking for smithy-rs commits in range HEAD..{}",
-            since_commit
-        );
-        let mut commits = self
-            .smithy_rs
-            .rev_list("HEAD", since_commit.as_ref())
-            .context(here!())?;
-        commits.reverse(); // Order the revs from earliest to latest
-        Ok(commits)
-    }
-
-    /// Run the necessary commands to build the SDK. On success, returns the path to the folder containing
-    /// the build artifacts.
-    fn build_sdk(&self) -> Result<PathBuf> {
-        let examples_revision = self.setup_examples().context(here!())?;
-
-        eprintln!("\tbuilding the SDK...");
-        let start = Instant::now();
-
-        // The output of running these commands isn't logged anywhere unless they fail
-        self.smithy_rs_gradle.aws_sdk_clean().context(here!())?;
-        self.smithy_rs_gradle
-            .aws_sdk_assemble(&examples_revision)
-            .context(here!())?;
-
-        let build_artifact_path = self.smithy_rs.path().join("aws/sdk/build/aws-sdk");
-        eprintln!("\tsuccessfully generated the SDK in {:?}", start.elapsed());
-        Ok(build_artifact_path)
-    }
-
-    /// Place the examples from aws-doc-sdk-examples into the correct place in smithy-rs
-    /// to be included with the generated SDK.
-    fn setup_examples(&self) -> Result<CommitHash> {
-        let from = self.aws_doc_sdk_examples.path().join("rust_dev_preview");
-
-        let examples_revision = self
+    /// Aggregate the commits made to Rust SDK examples into one while maintaining attribution.
+    /// We squash all the example commits since the examples repo does merges rather than squash merges,
+    /// and we prefer squash merges in aws-sdk-rust.
+    fn sync_examples(&self, versions: &VersionsManifest) -> Result<()> {
+        // Only consider revisions on the `rust_dev_preview/` directory since
+        // copying over changes to other language examples is pointless
+        let example_revisions = self
             .aws_doc_sdk_examples
-            .get_head_revision()
+            .rev_list(
+                "HEAD",
+                versions.aws_doc_sdk_examples_revision.as_ref(),
+                Some(&PathBuf::from("rust_dev_preview")),
+            )
             .context(here!())?;
+        if example_revisions.is_empty() {
+            eprintln!("No example changes to copy over.");
+            return Ok(());
+        }
+        let examples_head = example_revisions.iter().cloned().next().unwrap();
+
+        let from = self.aws_doc_sdk_examples.path().join("rust_dev_preview");
 
         eprintln!("\tcleaning examples...");
         self.fs
@@ -232,21 +208,96 @@ impl Sync {
         self.fs
             .remove_file(&self.smithy_rs.path().join("aws/sdk/examples/Cargo.toml"))
             .context(here!())?;
-        Ok(examples_revision)
+
+        self.build_and_copy_sdk(&examples_head).context(here!())?;
+        self.aws_sdk_rust
+            .stage(&PathBuf::from("."))
+            .context(here!())?;
+
+        let example_commits: Vec<Commit> = example_revisions
+            .iter()
+            .map(|commit_hash| self.aws_doc_sdk_examples.show(commit_hash.as_ref()))
+            .collect::<Result<_, _>>()?;
+        let commit_message = Self::format_example_commit_message(&example_commits);
+        self.aws_sdk_rust
+            .commit(BOT_NAME, BOT_EMAIL, &commit_message)?;
+        Ok(())
     }
 
-    /// Create a "mirror" commit. Works by reading a smithy-rs commit and then using the info
-    /// attached to it to create a commit in aws-sdk-rust. This also updates the `.smithyrs-githash`
-    /// file with the hash of `based_on_commit`.
-    ///
-    /// *NOTE: If you're wondering why `git2` is used elsewhere in this tool but not in this function,
-    /// it's due to strange, undesired behavior that occurs. For every commit, something
-    /// happened that created leftover staged and unstaged changes. When the unstaged changes
-    /// were staged, they cancelled out the first set of staged changes. I don't know why this
-    /// happened and if you think you can fix it, you can check out the previous version of the*
-    /// tool in [this PR](https://github.com/awslabs/smithy-rs/pull/1042)
-    fn create_mirror_commit(&self, based_on_commit: &Commit) -> Result<()> {
-        eprintln!("\tcreating mirror commit...");
+    fn format_example_commit_message(example_commits: &[Commit]) -> String {
+        let mut commit_message =
+            "[examples] Sync SDK examples from `awsdocs/aws-doc-sdk-examples`\n\n".to_string();
+        commit_message.push_str("Includes commit(s):\n");
+        for commit in example_commits.iter().rev() {
+            commit_message.push_str("  ");
+            commit_message.push_str(commit.hash.as_ref());
+            commit_message.push('\n');
+        }
+        commit_message.push('\n');
+
+        let authors: BTreeSet<String> = example_commits
+            .iter()
+            .map(|c| format!("{} <{}>", c.author_name, c.author_email))
+            .collect();
+        for author in authors {
+            commit_message.push_str(&format!("Co-authored-by: {}\n", author));
+        }
+        commit_message
+    }
+
+    /// Generate an SDK and copy it into `aws-sdk-rust`.
+    fn build_and_copy_sdk(&self, aws_doc_sdk_examples_revision: &CommitHash) -> Result<()> {
+        eprintln!("\tbuilding the SDK...");
+        let start = Instant::now();
+
+        // The output of running these commands isn't logged anywhere unless they fail
+        self.smithy_rs_gradle.aws_sdk_clean().context(here!())?;
+        self.smithy_rs_gradle
+            .aws_sdk_assemble(aws_doc_sdk_examples_revision)
+            .context(here!())?;
+
+        let build_artifact_path = self.smithy_rs.path().join("aws/sdk/build/aws-sdk");
+        eprintln!("\tsuccessfully generated the SDK in {:?}", start.elapsed());
+
+        self.clean_out_existing_sdk()
+            .context("couldn't clean out existing SDK from aws-sdk-rust")?;
+
+        // Check that we aren't generating any files that we've marked as "handwritten"
+        let handwritten_files_in_generated_sdk_folder = self
+            .fs
+            .find_handwritten_files_and_folders(self.aws_sdk_rust.path(), &build_artifact_path)?;
+        if !handwritten_files_in_generated_sdk_folder.is_empty() {
+            bail!(
+                    "found one or more 'handwritten' files/folders in generated code: {:#?}\nhint: if this file is newly generated, remove it from .handwritten",
+                    handwritten_files_in_generated_sdk_folder
+                );
+        }
+
+        self.copy_sdk(&build_artifact_path, self.aws_sdk_rust.path())?;
+        Ok(())
+    }
+
+    /// Copies current examples in aws-sdk-rust back into smithy-rs.
+    fn copy_original_examples(&self) -> Result<()> {
+        eprintln!("\tcleaning examples...");
+        self.fs
+            .remove_dir_all_idempotent(&self.smithy_rs.path().join("aws/sdk/examples"))
+            .context(here!())?;
+
+        let from = self.aws_sdk_rust.path().join("examples");
+        eprintln!(
+            "\tcopying examples from {:?} to 'smithy-rs/aws/sdk/examples'...",
+            from
+        );
+        self.fs
+            .recursive_copy(&from, &self.smithy_rs.path().join("aws/sdk/examples"))
+            .context(here!())?;
+        Ok(())
+    }
+
+    /// Commit the changes to aws-sdk-rust reflecting the info from a commit in another repository.
+    fn commit(&self, prefix: &str, based_on_commit: &Commit) -> Result<()> {
+        eprintln!("\tcommitting...");
 
         self.aws_sdk_rust
             .stage(&PathBuf::from("."))
@@ -257,11 +308,11 @@ impl Sync {
             BOT_EMAIL,
             &based_on_commit.author_name,
             &based_on_commit.author_email,
-            &format!("{} {}", BOT_COMMIT_PREFIX, &based_on_commit.message()),
+            &format!("{} {}", prefix, &based_on_commit.message()),
         )?;
 
         let commit_hash = self.aws_sdk_rust.get_head_revision()?;
-        eprintln!("\tsuccessfully created mirror commit {}", commit_hash);
+        eprintln!("\tsuccessfully committed {}", commit_hash);
 
         Ok(())
     }
@@ -379,9 +430,13 @@ mod tests {
         ) {
             self.smithy_rs
                 .expect_rev_list()
-                .with(eq("HEAD"), eq(previous_synced_commit))
+                .withf(move |begin, end, path| {
+                    begin == "HEAD" && end == previous_synced_commit && path.is_none()
+                })
                 .once()
-                .returning(|_, _| Ok(hashes.iter().map(|&hash| CommitHash::from(hash)).collect()));
+                .returning(|_, _, _| {
+                    Ok(hashes.iter().map(|&hash| CommitHash::from(hash)).collect())
+                });
         }
 
         fn expect_remove_dir_all_idempotent(&mut self, seq: &mut Sequence, path: &'static str) {
@@ -418,12 +473,13 @@ mod tests {
                 .returning(|_| Ok(()));
         }
 
-        fn expect_build(&mut self, seq: &mut Sequence, examples_head: &'static str) {
+        fn expect_build(&mut self, seq: &mut Sequence, examples_head: &str) {
             self.smithy_rs_gradle
                 .expect_aws_sdk_clean()
                 .once()
                 .in_sequence(seq)
                 .returning(|| Ok(()));
+            let examples_head = examples_head.to_string();
             self.smithy_rs_gradle
                 .expect_aws_sdk_assemble()
                 .withf(move |examples_revision| examples_revision.as_ref() == examples_head)
@@ -464,27 +520,8 @@ mod tests {
         }
     }
 
-    fn expect_successful_sync(
-        mocks: &mut Mocks,
-        seq: &mut Sequence,
-        commit: Commit,
-        expected_commit_message: &str,
-    ) {
-        expect_show_commit(&mut mocks.smithy_rs, seq, commit.clone());
-        expect_hard_reset(&mut mocks.smithy_rs, seq, commit.hash.as_ref());
-
-        // Examples sync
-        mocks.expect_remove_dir_all_idempotent(seq, "/p2/smithy-rs/aws/sdk/examples");
-        mocks.expect_recursive_copy(
-            seq,
-            "/p2/aws-doc-sdk-examples/rust_dev_preview",
-            "/p2/smithy-rs/aws/sdk/examples",
-        );
-        mocks.expect_remove_dir_all_idempotent(seq, "/p2/smithy-rs/aws/sdk/examples/.cargo");
-        mocks.expect_remove_file(seq, "/p2/smithy-rs/aws/sdk/examples/Cargo.toml");
-
-        // Codegen
-        mocks.expect_build(seq, "examples-head");
+    fn expect_codegen(mocks: &mut Mocks, seq: &mut Sequence, examples_head: &str) {
+        mocks.expect_build(seq, examples_head);
         mocks.expect_delete_all_generated_files_and_folders(seq, "/p2/aws-sdk-rust");
         mocks.expect_find_handwritten_files_and_folders(
             seq,
@@ -497,6 +534,27 @@ mod tests {
             "/p2/smithy-rs/aws/sdk/build/aws-sdk/.",
             "/p2/aws-sdk-rust",
         );
+    }
+
+    fn expect_successful_smithyrs_sync(
+        mocks: &mut Mocks,
+        seq: &mut Sequence,
+        commit: Commit,
+        expected_commit_message: &str,
+    ) {
+        expect_show_commit(&mut mocks.smithy_rs, seq, commit.clone());
+        expect_hard_reset(&mut mocks.smithy_rs, seq, commit.hash.as_ref());
+
+        // Examples sync
+        mocks.expect_remove_dir_all_idempotent(seq, "/p2/smithy-rs/aws/sdk/examples");
+        mocks.expect_recursive_copy(
+            seq,
+            "/p2/aws-sdk-rust/examples",
+            "/p2/smithy-rs/aws/sdk/examples",
+        );
+
+        // Codegen
+        expect_codegen(mocks, seq, "old-examples-hash");
 
         // Commit generated SDK
         expect_stage(&mut mocks.aws_sdk_rust, seq, ".");
@@ -520,6 +578,62 @@ mod tests {
             .expect_get_head_revision()
             .once()
             .returning(|| Ok(CommitHash::from("newly-synced-hash")));
+    }
+
+    fn expect_successful_example_sync(
+        mocks: &mut Mocks,
+        seq: &mut Sequence,
+        old_examples_hash: &'static str,
+        example_commits: &[Commit],
+    ) {
+        // Example revision discovery
+        {
+            let example_commits = example_commits.to_vec();
+            mocks
+                .aws_doc_sdk_examples
+                .expect_rev_list()
+                .withf(move |begin, end, path| {
+                    begin == "HEAD"
+                        && end == old_examples_hash
+                        && *path == Some(&PathBuf::from("rust_dev_preview"))
+                })
+                .once()
+                .in_sequence(seq)
+                .returning(move |_, _, _| {
+                    Ok(example_commits.iter().cloned().map(|c| c.hash).collect())
+                });
+        }
+
+        // Example cleaning
+        mocks.expect_remove_dir_all_idempotent(seq, "/p2/smithy-rs/aws/sdk/examples");
+        mocks.expect_recursive_copy(
+            seq,
+            "/p2/aws-doc-sdk-examples/rust_dev_preview",
+            "/p2/smithy-rs/aws/sdk/examples",
+        );
+        mocks.expect_remove_dir_all_idempotent(seq, "/p2/smithy-rs/aws/sdk/examples/.cargo");
+        mocks.expect_remove_file(seq, "/p2/smithy-rs/aws/sdk/examples/Cargo.toml");
+
+        // Codegen
+        let examples_head = example_commits.iter().next().unwrap().hash.clone();
+        expect_codegen(mocks, seq, examples_head.as_ref());
+
+        // Commit generated SDK
+        expect_stage(&mut mocks.aws_sdk_rust, seq, ".");
+        for commit in example_commits {
+            expect_show_commit(&mut mocks.aws_doc_sdk_examples, seq, commit.clone());
+        }
+        mocks
+            .aws_sdk_rust
+            .expect_commit()
+            .withf(|name, email, message| {
+                name == BOT_NAME
+                    && email == BOT_EMAIL
+                    && message.starts_with("[examples] Sync SDK examples")
+            })
+            .once()
+            .in_sequence(seq)
+            .returning(|_, _, _| Ok(()));
     }
 
     #[test]
@@ -548,7 +662,7 @@ mod tests {
         );
         set_head(&mut mocks.aws_doc_sdk_examples, "examples-head");
 
-        expect_successful_sync(
+        expect_successful_smithyrs_sync(
             &mut mocks,
             &mut seq,
             Commit {
@@ -558,9 +672,9 @@ mod tests {
                 message_subject: "Some commit subject".into(),
                 message_body: "".into(),
             },
-            "[autosync] Some commit subject",
+            "[smithy-rs] Some commit subject",
         );
-        expect_successful_sync(
+        expect_successful_smithyrs_sync(
             &mut mocks,
             &mut seq,
             Commit {
@@ -570,10 +684,97 @@ mod tests {
                 message_subject: "Another commit subject".into(),
                 message_body: "This one has a body\n\n- bullet\n- bullet\n\nmore".into(),
             },
-            "[autosync] Another commit subject\n\nThis one has a body\n\n- bullet\n- bullet\n\nmore",
+            "[smithy-rs] Another commit subject\n\nThis one has a body\n\n- bullet\n- bullet\n\nmore",
+        );
+
+        expect_successful_example_sync(
+            &mut mocks,
+            &mut seq,
+            "old-examples-hash",
+            &[
+                Commit {
+                    hash: "hash2".into(),
+                    author_name: "Some Example Writer".into(),
+                    author_email: "someexamplewriter@example.com".into(),
+                    message_subject: "More examples".into(),
+                    message_body: "".into(),
+                },
+                Commit {
+                    hash: "hash1".into(),
+                    author_name: "Another Example Writer".into(),
+                    author_email: "anotherexamplewriter@example.com".into(),
+                    message_subject: "Another example".into(),
+                    message_body: "This one has a body\n\n- bullet\n- bullet\n\nmore".into(),
+                },
+            ],
         );
 
         let sync = mocks.into_sync();
         sync.sync().expect("success");
+    }
+
+    // Wish this was in std...
+    fn trim_indent(value: &str) -> String {
+        let lines: Vec<&str> = value.split('\n').collect();
+        let min_indent = value
+            .split('\n')
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.find(|c: char| !c.is_ascii_whitespace()).unwrap())
+            .min()
+            .unwrap();
+        let mut result = String::new();
+        for line in lines {
+            if line.len() > min_indent {
+                result.push_str(&line[min_indent..]);
+            } else {
+                result.push_str(line);
+            }
+            result.push('\n');
+        }
+        result
+    }
+
+    #[test]
+    fn test_format_example_commit() {
+        let commits = vec![
+            Commit {
+                hash: "hash3".into(),
+                author_name: "Some Dev".into(),
+                author_email: "somedev@example.com".into(),
+                message_subject: "Some commit subject".into(),
+                message_body: "".into(),
+            },
+            Commit {
+                hash: "hash2".into(),
+                author_name: "Some Dev".into(),
+                author_email: "somedev@example.com".into(),
+                message_subject: "Doesn't matter".into(),
+                message_body: "".into(),
+            },
+            Commit {
+                hash: "hash1".into(),
+                author_name: "Another Dev".into(),
+                author_email: "anotherdev@example.com".into(),
+                message_subject: "Another commit subject".into(),
+                message_body: "This one has a body\n\n- bullet\n- bullet\n\nmore".into(),
+            },
+        ];
+
+        let actual = Sync::format_example_commit_message(&commits);
+        pretty_assertions::assert_str_eq!(
+            trim_indent(
+                r#"
+                [examples] Sync SDK examples from `awsdocs/aws-doc-sdk-examples`
+
+                Includes commit(s):
+                  hash1
+                  hash2
+                  hash3
+
+                Co-authored-by: Another Dev <anotherdev@example.com>
+                Co-authored-by: Some Dev <somedev@example.com>"#
+            ),
+            format!("\n{}", actual)
+        )
     }
 }

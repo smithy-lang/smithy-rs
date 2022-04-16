@@ -20,5 +20,5 @@ toml = "0.5"
 
 [dev-dependencies]
 mockall = "0.11"
-pretty_assertions = "1"
+pretty_assertions = "1.2"
 tempdir = "0.3"

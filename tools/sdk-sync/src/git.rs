@@ -72,13 +72,17 @@ pub trait Git {
         message: &str,
     ) -> Result<()>;
 
+    /// Commits staged files.
+    fn commit(&self, name: &str, email: &str, message: &str) -> Result<()>;
+
     /// Returns a list of commit hashes in reverse chronological order starting with
     /// `start_inclusive_revision` and ending before `end_exclusive_revision`. Both of
     /// these arguments can be any kind of Git revision (e.g., HEAD, HEAD~2, commit hash, etc).
-    fn rev_list(
+    fn rev_list<'a>(
         &self,
         start_inclusive_revision: &str,
         end_exclusive_revision: &str,
+        path: Option<&'a Path>,
     ) -> Result<Vec<CommitHash>>;
 
     /// Returns information about a given revision.
@@ -197,10 +201,27 @@ impl Git for GitCLI {
         Ok(())
     }
 
+    fn commit(&self, name: &str, email: &str, message: &str) -> Result<()> {
+        let mut command = Command::new(&self.binary_name);
+        command.arg("-c");
+        command.arg(format!("user.name={}", name));
+        command.arg("-c");
+        command.arg(format!("user.email={}", email));
+        command.arg("commit");
+        command.arg("-m");
+        command.arg(message);
+        command.current_dir(&self.repo_path);
+
+        let output = command.output()?;
+        handle_failure("commit", &output)?;
+        Ok(())
+    }
+
     fn rev_list(
         &self,
         start_inclusive_revision: &str,
         end_exclusive_revision: &str,
+        path: Option<&Path>,
     ) -> Result<Vec<CommitHash>> {
         let mut command = Command::new(&self.binary_name);
         command.arg("rev-list");
@@ -208,6 +229,10 @@ impl Git for GitCLI {
             "{}..{}",
             end_exclusive_revision, start_inclusive_revision
         ));
+        if let Some(path) = path {
+            command.arg("--");
+            command.arg(path);
+        }
         command.current_dir(&self.repo_path);
 
         let output = command.output()?;
