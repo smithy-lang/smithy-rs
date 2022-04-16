@@ -148,7 +148,7 @@ impl Fs for DefaultFs {
 ///
 /// for a .handwritten_files that looks like this:
 ///
-/// ```
+/// ```ignore
 /// # Only paths referring to siblings of the .handwritten_files file are valid
 ///
 /// # this file will be protected
@@ -157,10 +157,10 @@ impl Fs for DefaultFs {
 /// folder1/
 /// ```
 ///
-/// ```rust
+/// ```ignore
 ///   let handwritten_files = HandwrittenFiles::from_dotfile(
 ///       Path::new("/Users/zelda/project/.handwritten_files")
-///     ).unwrap();
+///   ).unwrap();
 ///
 ///   assert!(handwritten_files.is_handwritten(Path::new("file.txt")));
 ///   assert!(handwritten_files.is_handwritten(Path::new("folder1/")));
