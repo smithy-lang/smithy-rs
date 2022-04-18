@@ -70,7 +70,7 @@ impl Path {
 
     /// Returns the span (file + beginning and end positions) of the last [`Component`] in the stack.
     pub fn last_span(&self) -> Option<&Span> {
-        self.stack.last().map(|c| c.span.as_ref()).flatten()
+        self.stack.last().and_then(|c| c.span.as_ref())
     }
 
     /// Returns the [`ComponentType`] of the last [`Component`] in the path.

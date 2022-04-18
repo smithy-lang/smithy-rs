@@ -23,6 +23,7 @@ val defaultRustFlags: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
+val crateHasherToolPath = rootProject.projectDir.resolve("tools/crate-hasher")
 val publisherToolPath = rootProject.projectDir.resolve("tools/publisher")
 val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/sdk-versioner")
 val outputDir = buildDir.resolve("aws-sdk")
@@ -314,6 +315,32 @@ tasks.register<ExecRustBuildTool>("hydrateReadme") {
     )
 }
 
+tasks.register<RequireRustBuildTool>("requireCrateHasher") {
+    description = "Ensures the crate-hasher tool is available"
+    inputs.dir(crateHasherToolPath)
+    toolPath = crateHasherToolPath
+}
+
+tasks.register<ExecRustBuildTool>("generateVersionManifest") {
+    description = "Generate the SDK version.toml file"
+    dependsOn("requireCrateHasher")
+    dependsOn("fixManifests")
+
+    inputs.dir(publisherToolPath)
+
+    toolPath = publisherToolPath
+    binaryName = "publisher"
+    arguments = listOf(
+        "generate-version-manifest",
+        "--location",
+        outputDir.absolutePath,
+        "--smithy-build",
+        outputDir.resolve("../../smithy-build.json").normalize().absolutePath,
+        "--examples-revision",
+        properties.get("aws.sdk.examples.revision") ?: "missing"
+    )
+}
+
 task("finalizeSdk") {
     dependsOn("assemble")
     outputs.upToDateWhen { false }
@@ -325,9 +352,15 @@ task("finalizeSdk") {
         "generateIndexMd",
         "fixManifests",
         "hydrateReadme",
-        "relocateChangelog"
+        "relocateChangelog",
+        "generateVersionManifest"
     )
 }
+
+tasks.register<Delete>("deleteSdk") {
+    delete = setOf(outputDir)
+}
+tasks["clean"].dependsOn("deleteSdk")
 
 tasks["smithyBuildJar"].apply {
     inputs.file(projectDir.resolve("smithy-build.json"))
@@ -337,6 +370,7 @@ tasks["smithyBuildJar"].apply {
     outputs.upToDateWhen { false }
 }
 tasks["assemble"].apply {
+    dependsOn("deleteSdk")
     dependsOn("smithyBuildJar")
     finalizedBy("finalizeSdk")
 }

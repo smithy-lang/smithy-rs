@@ -43,8 +43,8 @@ COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
 CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
 
-def running_in_github_actions():
-    return os.environ.get("GITHUB_ACTIONS") == "true"
+def running_in_docker_build():
+    return os.environ.get("SMITHY_RS_DOCKER_BUILD_IMAGE") == "1"
 
 
 def main():
@@ -62,7 +62,7 @@ def main():
         eprint("working tree is not clean. aborting")
         sys.exit(1)
 
-    if running_in_github_actions():
+    if running_in_docker_build():
         eprint(f"Fetching base revision {base_commit_sha} from GitHub...")
         run(f"git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin {base_commit_sha}")
 
@@ -80,7 +80,7 @@ def main():
     write_to_file(f"{OUTPUT_PATH}/bot-message", bot_message)
 
     # Clean-up that's only really useful when testing the script in local-dev
-    if not running_in_github_actions():
+    if not running_in_docker_build():
         run("git checkout main")
         run(f"git branch -D {BASE_BRANCH_NAME}")
         run(f"git branch -D {HEAD_BRANCH_NAME}")

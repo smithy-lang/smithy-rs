@@ -4,37 +4,38 @@
  */
 
 use anyhow::bail;
+use clap::Parser;
 use smithy_rs_tool_common::package::{PackageCategory, SDK_PREFIX};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use structopt::StructOpt;
 use toml::value::{Table, Value};
 
-#[derive(StructOpt, Debug)]
-#[structopt(
+#[derive(Parser, Debug)]
+#[clap(
     name = "sdk-versioner",
-    about = "CLI tool to recursively update SDK/Smithy crate references in Cargo.toml files"
+    about = "CLI tool to recursively update SDK/Smithy crate references in Cargo.toml files",
+    version
 )]
-struct Opt {
+struct Args {
     /// Path(s) to recursively update Cargo.toml files in
-    #[structopt()]
+    #[clap()]
     crate_paths: Vec<PathBuf>,
 
     /// SDK version to point to
-    #[structopt(long)]
+    #[clap(long)]
     sdk_version: Option<String>,
     /// Smithy version to point to
-    #[structopt(long)]
+    #[clap(long)]
     smithy_version: Option<String>,
 
     /// Path to generated SDK to point to
-    #[structopt(long)]
+    #[clap(long)]
     sdk_path: Option<PathBuf>,
 }
 
-impl Opt {
+impl Args {
     fn validate(self) -> anyhow::Result<Self> {
         if self.crate_paths.is_empty() {
             bail!("Must provide at least one crate path to recursively update");
@@ -50,7 +51,7 @@ impl Opt {
 }
 
 fn main() -> anyhow::Result<()> {
-    let opt = Opt::from_args().validate()?;
+    let opt = Args::parse().validate()?;
 
     let start_time = Instant::now();
     let mut manifest_paths = Vec::new();
@@ -66,7 +67,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn update_manifest(manifest_path: &Path, opt: &Opt) -> anyhow::Result<()> {
+fn update_manifest(manifest_path: &Path, opt: &Args) -> anyhow::Result<()> {
     println!("Updating {:?}...", manifest_path);
 
     let mut metadata: Value = toml::from_slice(&fs::read(manifest_path)?)?;
@@ -91,7 +92,7 @@ fn update_manifest(manifest_path: &Path, opt: &Opt) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn update_dependencies(dependencies: &mut Table, opt: &Opt) -> anyhow::Result<bool> {
+fn update_dependencies(dependencies: &mut Table, opt: &Args) -> anyhow::Result<bool> {
     let mut changed = false;
     for (key, value) in dependencies.iter_mut() {
         let category = PackageCategory::from_package_name(key);
@@ -117,7 +118,7 @@ fn crate_path_name(name: &str) -> &str {
     }
 }
 
-fn update_dependency_value(crate_name: &str, value: &mut Table, opt: &Opt) {
+fn update_dependency_value(crate_name: &str, value: &mut Table, opt: &Args) {
     let is_sdk_crate = matches!(
         PackageCategory::from_package_name(crate_name),
         PackageCategory::AwsSdk | PackageCategory::AwsRuntime,
@@ -181,7 +182,7 @@ fn discover_manifests(manifests: &mut Vec<PathBuf>, path: impl AsRef<Path>) -> a
 
 #[cfg(test)]
 mod tests {
-    use crate::{update_manifest, Opt};
+    use crate::{update_manifest, Args};
     use pretty_assertions::assert_eq;
     use toml::Value;
 
@@ -199,7 +200,7 @@ mod tests {
     "#;
 
     #[track_caller]
-    fn test_with_opt(opt: Opt, expected: &[u8]) {
+    fn test_with_opt(opt: Args, expected: &[u8]) {
         let manifest_file = tempfile::NamedTempFile::new().unwrap();
         let manifest_path = manifest_file.into_temp_path();
         std::fs::write(&manifest_path, TEST_MANIFEST).unwrap();
@@ -215,7 +216,7 @@ mod tests {
     #[test]
     fn update_dependencies_with_versions() {
         test_with_opt(
-            Opt {
+            Args {
                 crate_paths: Vec::new(),
                 sdk_path: None,
                 sdk_version: Some("0.5.0".to_string()),
@@ -239,7 +240,7 @@ mod tests {
     #[test]
     fn update_dependencies_with_paths() {
         test_with_opt(
-            Opt {
+            Args {
                 crate_paths: Vec::new(),
                 sdk_path: Some("/foo/asdf/".into()),
                 sdk_version: None,
@@ -263,7 +264,7 @@ mod tests {
     #[test]
     fn update_dependencies_with_versions_and_paths() {
         test_with_opt(
-            Opt {
+            Args {
                 crate_paths: Vec::new(),
                 sdk_path: Some("/foo/asdf/".into()),
                 sdk_version: Some("0.5.0".to_string()),

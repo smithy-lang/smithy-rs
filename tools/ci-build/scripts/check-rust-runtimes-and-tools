@@ -33,12 +33,13 @@ function test_tool {
 
     echo -e "${C_YELLOW}Testing ${tool_path}...${C_RESET}"
     pushd "${tool_path}" &>/dev/null
-    cargo clippy --all-features
+    cargo +"${rust_version}" clippy --all-features
     cargo +"${rust_version}" test --all-features
     popd &>/dev/null
 }
 
 test_tool "tools/api-linter" "${RUST_NIGHTLY_VERSION}"
+test_tool "tools/crate-hasher" "${RUST_STABLE_VERSION}"
 test_tool "tools/publisher" "${RUST_STABLE_VERSION}"
 test_tool "tools/sdk-lints" "${RUST_STABLE_VERSION}"
 test_tool "tools/sdk-versioner" "${RUST_STABLE_VERSION}"

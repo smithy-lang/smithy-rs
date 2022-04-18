@@ -59,7 +59,7 @@ fn check_copyright_header(path: impl AsRef<Path>) -> Vec<LintError> {
 }
 
 fn needs_copyright_header(path: &Path) -> bool {
-    let mut need_extensions = NEEDS_HEADER.iter().map(|s| OsStr::new(s));
+    let mut need_extensions = NEEDS_HEADER.iter().map(OsStr::new);
     need_extensions.any(|extension| path.extension().unwrap_or_default() == extension)
 }
 
