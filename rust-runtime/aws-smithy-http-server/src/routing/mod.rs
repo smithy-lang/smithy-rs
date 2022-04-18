@@ -21,6 +21,7 @@ use tower::{Service, ServiceBuilder};
 use tower_http::map_response_body::MapResponseBodyLayer;
 
 mod future;
+mod into_make_lambda_service;
 mod into_make_service;
 
 #[doc(hidden)]
@@ -28,7 +29,7 @@ pub mod request_spec;
 
 mod route;
 
-pub use self::{into_make_service::IntoMakeService, route::Route};
+pub use self::{into_make_lambda_service::IntoMakeLambdaService, into_make_service::IntoMakeService, route::Route};
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
 /// based on the request's URI and HTTP method, adhering to the [Smithy specification].
@@ -103,6 +104,10 @@ where
     /// [`MakeService`]: tower::make::MakeService
     pub fn into_make_service(self) -> IntoMakeService<Self> {
         IntoMakeService::new(self)
+    }
+
+    pub fn into_make_lambda_service<'a>(self) -> IntoMakeLambdaService<'a, Self> {
+        IntoMakeLambdaService::new(self)
     }
 
     /// Apply a [`tower::Layer`] to the router.
