@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.ErrorTrait
-import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -28,7 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.Structured
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /*
- * AwsJson 1.0 and 1.1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGeneror]
+ * AwsJson 1.0 and 1.1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGenerator]
  * with AwsJson specific configurations.
  */
 class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator> {
@@ -57,7 +56,7 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenera
 
 /**
  * AwsJson requires errors to be serialized with an additional "__type" field. This
- * custimization writes the right field depending on the version of the AwsJson protocol.
+ * customization writes the right field depending on the version of the AwsJson protocol.
  */
 class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCustomization() {
     override fun section(section: JsonSection): Writable = when (section) {
@@ -79,7 +78,7 @@ class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCusto
 
 /**
  * AwsJson requires errors to be serialized with an additional "__type" field. This class
- * customize [JsonSerializerGenerator] to add this functionality.
+ * customizes [JsonSerializerGenerator] to add this functionality.
  */
 class ServerAwsJsonSerializerGenerator(
     private val codegenContext: CodegenContext,
@@ -93,8 +92,6 @@ class ServerAwsJson(
     private val codegenContext: CodegenContext,
     private val awsJsonVersion: AwsJsonVersion
 ) : AwsJson(codegenContext, awsJsonVersion) {
-    private val jsonDeserModule = RustModule.private("json_deser")
-
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         ServerAwsJsonSerializerGenerator(codegenContext, httpBindingResolver, awsJsonVersion)
 }

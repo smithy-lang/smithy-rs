@@ -183,6 +183,4 @@ open class AwsJson(
         }
 }
 
-fun awsJsonFieldName(member: MemberShape): String {
-    return member.memberName
-}
+fun awsJsonFieldName(member: MemberShape): String = member.memberName

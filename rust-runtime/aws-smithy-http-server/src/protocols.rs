@@ -22,7 +22,7 @@ macro_rules! impl_content_type_validation {
     ($name:literal, $type: literal, $subtype:literal, $rejection:path) => {
         paste! {
             #[doc = concat!("Validates that the request has the standard `", $type, "/", $subtype, "` content-type header.")]
-            pub fn [<check_ $name:lower _content_type>]<B>(req: &RequestParts<B>) -> Result<(), RequestRejection> {
+            pub fn [<check_ $name _content_type>]<B>(req: &RequestParts<B>) -> Result<(), RequestRejection> {
                 let mime = req
                     .headers()
                     .ok_or($rejection)?
