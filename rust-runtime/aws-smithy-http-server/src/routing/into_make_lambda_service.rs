@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+// This code was copied and then modified from https://github.com/hanabu/lambda-web
+
 use lambda_http::{Error as LambdaError, Request, Response};
 use std::{
     convert::Infallible,
