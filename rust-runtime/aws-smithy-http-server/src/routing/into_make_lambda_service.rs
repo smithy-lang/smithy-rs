@@ -5,6 +5,7 @@
 
 // This code was copied and then modified from https://github.com/hanabu/lambda-web
 
+use crate::{runtime_error::RuntimeErrorKind};
 use lambda_http::{Body, Error as LambdaError, Request, Response};
 use std::{
     convert::Infallible,
@@ -42,9 +43,9 @@ where
     B: hyper::body::HttpBody + Debug,
     <B as hyper::body::HttpBody>::Error: std::error::Error + Send + Sync + 'static,
 {
-    type Error = LambdaError;
+    type Error = RuntimeErrorKind;
     type Response = Response<Body>;
-    type Future = Pin<Box<dyn Future<Output = Result<Response<Body>, Self::Error>>>>;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
@@ -54,7 +55,6 @@ where
     /// Parse Lambda event as hyper request,
     /// serialize hyper response to Lambda JSON response
     fn call(&mut self, event: Request) -> Self::Future {
-        println!("Lambda request {:?}", event);
         // Parse request
         let hyper_request = lambda_to_hyper_request(event);
 
@@ -64,12 +64,25 @@ where
         let fut = async move {
             match svc_call {
                 Ok(svc_fut) => {
-                    let response = svc_fut.await?;
-                    hyper_to_lambda_response(response).await
+                    // Request parsing succeeded
+                    match empty_response() {
+                        Ok(response) => Ok(response),
+                        Err(response_err) => Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
+                    }
+                    // match svc_fut {
+                    //     Ok(response) => {
+                    //         // Returns as Lambda response
+                    //         hyper_to_lambda_response(response).await
+                    //     }
+                    //     Err(response_err) => {
+                    //         // Some hyper error -> 500 Internal Server Error
+                    //         Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
+                    //     }
+                    // }
                 }
                 Err(request_err) => {
                     // Request parsing error
-                    Err(request_err)
+                    Err(RuntimeErrorKind::Serialization(crate::Error::new(request_err)))
                 }
             }
         };
@@ -77,7 +90,7 @@ where
     }
 }
 
-fn lambda_to_hyper_request(event: Request) -> Result<HyperRequest, LambdaError> {
+fn lambda_to_hyper_request(event: Request) -> Result<HyperRequest, hyper::Error> {
     println!("Lambda request {:?}", event);
     let (parts, body) = event.into_parts();
     let body = match body {
@@ -88,6 +101,10 @@ fn lambda_to_hyper_request(event: Request) -> Result<HyperRequest, LambdaError> 
     let req = hyper::Request::from_parts(parts, body);
     println!("Hyper request {:?}", req);
     Ok(req)
+}
+
+fn empty_response() -> Result<Response<Body>, http::Error> {
+    Response::builder().body(Body::Empty)
 }
 
 async fn hyper_to_lambda_response<B>(response: HyperResponse<B>) -> Result<Response<Body>, LambdaError>
