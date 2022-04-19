@@ -8,6 +8,7 @@
 use lambda_http::{Error as LambdaError, Request, Response};
 use std::{
     convert::Infallible,
+    fmt::Debug,
     future::Future,
     marker::PhantomData,
     pin::Pin,
@@ -38,7 +39,7 @@ impl<'a, S, B> Service<Request> for IntoMakeLambdaService<'a, S>
 where
     S: hyper::service::Service<HyperRequest, Response = HyperResponse<B>, Error = Infallible>
         + 'static,
-    B: hyper::body::HttpBody,
+    B: hyper::body::HttpBody + Debug,
     <B as hyper::body::HttpBody>::Error: std::error::Error + Send + Sync + 'static,
 {
     type Error = LambdaError;
@@ -53,8 +54,9 @@ where
     /// Parse Lambda event as hyper request,
     /// serialize hyper response to Lambda JSON response
     fn call(&mut self, event: Request) -> Self::Future {
+        println!("Lambda request {:?}", event);
         // Parse request
-        let hyper_request = hyper_from_lambda_request(event);
+        let hyper_request = lambda_to_hyper_request(event);
 
         // Call hyper service when request parsing succeeded
         let svc_call = hyper_request.map(|req| self.service.call(req));
@@ -63,7 +65,7 @@ where
             match svc_call {
                 Ok(svc_fut) => {
                     let response = svc_fut.await?;
-                    lambda_from_hyper_response(response).await
+                    hyper_to_lambda_response(response).await
                 }
                 Err(request_err) => {
                     // Request parsing error
@@ -75,7 +77,8 @@ where
     }
 }
 
-fn hyper_from_lambda_request(event: Request) -> Result<HyperRequest, LambdaError> {
+fn lambda_to_hyper_request(event: Request) -> Result<HyperRequest, LambdaError> {
+    println!("Lambda request {:?}", event);
     let (parts, body) = event.into_parts();
     let body = match body {
         lambda_http::Body::Empty => hyper::Body::empty(),
@@ -83,18 +86,21 @@ fn hyper_from_lambda_request(event: Request) -> Result<HyperRequest, LambdaError
         lambda_http::Body::Binary(v) => hyper::Body::from(v),
     };
     let req = hyper::Request::from_parts(parts, body);
+    println!("Hyper request {:?}", req);
     Ok(req)
 }
 
-async fn lambda_from_hyper_response<B>(response: HyperResponse<B>) -> Result<Response<B>, LambdaError>
+async fn hyper_to_lambda_response<B>(response: HyperResponse<B>) -> Result<Response<B>, LambdaError>
 where
-    B: hyper::body::HttpBody,
+    B: hyper::body::HttpBody + Debug,
     <B as hyper::body::HttpBody>::Error: std::error::Error + Send + Sync + 'static,
 {
+    println!("Hyper response {:?}", response);
     // Divide resonse into headers and body
     let (parts, body) = response.into_parts();
-    let response = Response::from_parts(parts, body);
-    Ok(response)
+    let res = Response::from_parts(parts, body);
+    println!("Lambda response {:?}", res);
+    Ok(res)
 }
 
 #[cfg(test)]
