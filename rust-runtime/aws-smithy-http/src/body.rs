@@ -13,6 +13,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use crate::callback::BodyCallback;
+use crate::header::append_merge_header_maps;
+
 pub type Error = Box<dyn StdError + Send + Sync>;
 
 /// SdkBody type
@@ -32,6 +35,9 @@ pub struct SdkBody {
     /// In the event of retry, this function will be called to generate a new body. See
     /// [`try_clone()`](SdkBody::try_clone)
     rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
+    /// A list of callbacks that will be called at various points of this `SdkBody`'s lifecycle
+    #[pin]
+    callbacks: Vec<Box<dyn BodyCallback>>,
 }
 
 impl Debug for SdkBody {
@@ -74,6 +80,7 @@ impl SdkBody {
         Self {
             inner: Inner::Dyn(body),
             rebuild: None,
+            callbacks: Vec::new(),
         }
     }
 
@@ -90,6 +97,7 @@ impl SdkBody {
         SdkBody {
             inner: initial.inner,
             rebuild: Some(Arc::new(move || f().inner)),
+            callbacks: Vec::new(),
         }
     }
 
@@ -97,6 +105,7 @@ impl SdkBody {
         Self {
             inner: Inner::Taken,
             rebuild: None,
+            callbacks: Vec::new(),
         }
     }
 
@@ -104,6 +113,7 @@ impl SdkBody {
         Self {
             inner: Inner::Once(None),
             rebuild: Some(Arc::new(|| Inner::Once(None))),
+            callbacks: Vec::new(),
         }
     }
 
@@ -111,7 +121,8 @@ impl SdkBody {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Bytes, Error>>> {
-        match self.project().inner.project() {
+        let mut this = self.project();
+        let polling_result = match this.inner.project() {
             InnerProj::Once(ref mut opt) => {
                 let data = opt.take();
                 match data {
@@ -125,7 +136,29 @@ impl SdkBody {
             InnerProj::Taken => {
                 Poll::Ready(Some(Err("A `Taken` body should never be polled".into())))
             }
+        };
+
+        match &polling_result {
+            // When we get some bytes back from polling, pass those bytes to each callback in turn
+            Poll::Ready(Some(Ok(bytes))) => {
+                for callback in this.callbacks.iter_mut() {
+                    // Callbacks can run into errors when reading bytes. They'll be surfaced here
+                    callback.update(bytes)?;
+                }
+            }
+            // When we're done polling for bytes, run each callback's `trailers()` method. If any calls to
+            // `trailers()` return an error, propagate that error up. Otherwise, continue.
+            Poll::Ready(None) => {
+                for callback_result in this.callbacks.iter().map(BodyCallback::trailers) {
+                    if let Err(e) = callback_result {
+                        return Poll::Ready(Some(Err(e)));
+                    }
+                }
+            }
+            _ => (),
         }
+
+        polling_result
     }
 
     /// If possible, return a reference to this body as `&[u8]`
@@ -143,15 +176,23 @@ impl SdkBody {
     pub fn try_clone(&self) -> Option<Self> {
         self.rebuild.as_ref().map(|rebuild| {
             let next = rebuild();
-            SdkBody {
+            let callbacks = self.callbacks.iter().map(BodyCallback::make_new).collect();
+
+            Self {
                 inner: next,
                 rebuild: self.rebuild.clone(),
+                callbacks,
             }
         })
     }
 
     pub fn content_length(&self) -> Option<u64> {
         self.size_hint().exact()
+    }
+
+    pub fn with_callback(&mut self, callback: Box<dyn BodyCallback>) -> &mut Self {
+        self.callbacks.push(callback);
+        self
     }
 }
 
@@ -166,6 +207,7 @@ impl From<Bytes> for SdkBody {
         SdkBody {
             inner: Inner::Once(Some(bytes.clone())),
             rebuild: Some(Arc::new(move || Inner::Once(Some(bytes.clone())))),
+            callbacks: Vec::new(),
         }
     }
 }
@@ -175,6 +217,7 @@ impl From<hyper::Body> for SdkBody {
         SdkBody {
             inner: Inner::Streaming(body),
             rebuild: None,
+            callbacks: Vec::new(),
         }
     }
 }
@@ -212,7 +255,30 @@ impl http_body::Body for SdkBody {
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
     ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        Poll::Ready(Ok(None))
+        let mut callback_errors = Vec::new();
+        let header_map = self
+            .callbacks
+            .iter()
+            .filter_map(|callback| {
+                match callback.trailers() {
+                    Ok(optional_header_map) => optional_header_map,
+                    // early return if a callback encountered an error
+                    Err(e) => {
+                        callback_errors.push(e);
+
+                        None
+                    }
+                }
+            })
+            // Merge any `HeaderMap`s from the last step together, one by one.
+            .reduce(append_merge_header_maps);
+
+        if callback_errors.is_empty() {
+            Poll::Ready(Ok(header_map))
+        } else {
+            // TODO What's the most useful way to surface multiple errors?
+            Poll::Ready(Err(callback_errors.pop().unwrap()))
+        }
     }
 
     fn is_end_stream(&self) -> bool {
@@ -296,10 +362,9 @@ mod test {
         let _ = format!("{:?}", body);
     }
 
-    fn is_send<T: Send + Sync>() {}
-
     #[test]
     fn sdk_body_is_send() {
+        fn is_send<T: Send>() {}
         is_send::<SdkBody>()
     }
 }

@@ -97,6 +97,7 @@
 //! ```
 
 use crate::body::SdkBody;
+use crate::callback::BodyCallback;
 use bytes::Buf;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
@@ -293,6 +294,14 @@ impl ByteStream {
         ));
         Ok(ByteStream::new(body))
     }
+
+    /// Set a callback on this `ByteStream`. The callback's methods will be called at various points
+    /// throughout this `ByteStream`'s life cycle. See the [`BodyCallback`](BodyCallback) trait for
+    /// more information.
+    pub fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
+        self.0.with_body_callback(body_callback);
+        self
+    }
 }
 
 impl Default for ByteStream {
@@ -416,10 +425,11 @@ struct Inner<B> {
 }
 
 impl<B> Inner<B> {
-    pub fn new(body: B) -> Self {
+    fn new(body: B) -> Self {
         Self { body }
     }
-    pub async fn collect(self) -> Result<AggregatedBytes, B::Error>
+
+    async fn collect(self) -> Result<AggregatedBytes, B::Error>
     where
         B: http_body::Body<Data = Bytes>,
     {
@@ -430,6 +440,13 @@ impl<B> Inner<B> {
             output.push(buf?);
         }
         Ok(AggregatedBytes(output))
+    }
+}
+
+impl Inner<SdkBody> {
+    fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
+        self.body.with_callback(body_callback);
+        self
     }
 }
 
