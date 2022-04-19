@@ -27,9 +27,9 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
