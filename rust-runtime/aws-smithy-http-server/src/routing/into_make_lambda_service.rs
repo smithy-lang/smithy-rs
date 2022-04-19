@@ -5,7 +5,7 @@
 
 // This code was copied and then modified from https://github.com/hanabu/lambda-web
 
-use lambda_http::{Error as LambdaError, Request, Response};
+use lambda_http::{Body, Error as LambdaError, Request, Response};
 use std::{
     convert::Infallible,
     fmt::Debug,
@@ -43,8 +43,8 @@ where
     <B as hyper::body::HttpBody>::Error: std::error::Error + Send + Sync + 'static,
 {
     type Error = LambdaError;
-    type Response = HyperResponse<B>;
-    type Future = Pin<Box<dyn Future<Output = Result<Response<B>, Self::Error>>>>;
+    type Response = Response<Body>;
+    type Future = Pin<Box<dyn Future<Output = Result<Response<Body>, Self::Error>>>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
@@ -90,7 +90,7 @@ fn lambda_to_hyper_request(event: Request) -> Result<HyperRequest, LambdaError> 
     Ok(req)
 }
 
-async fn hyper_to_lambda_response<B>(response: HyperResponse<B>) -> Result<Response<B>, LambdaError>
+async fn hyper_to_lambda_response<B>(response: HyperResponse<B>) -> Result<Response<Body>, LambdaError>
 where
     B: hyper::body::HttpBody + Debug,
     <B as hyper::body::HttpBody>::Error: std::error::Error + Send + Sync + 'static,
@@ -98,7 +98,8 @@ where
     println!("Hyper response {:?}", response);
     // Divide resonse into headers and body
     let (parts, body) = response.into_parts();
-    let res = Response::from_parts(parts, body);
+    let body = hyper::body::to_bytes(body).await?;
+    let res = Response::from_parts(parts, Body::from(body.as_ref()));
     println!("Lambda response {:?}", res);
     Ok(res)
 }
