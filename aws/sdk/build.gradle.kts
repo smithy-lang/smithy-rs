@@ -357,6 +357,11 @@ task("finalizeSdk") {
     )
 }
 
+tasks.register<Delete>("deleteSdk") {
+    delete = setOf(outputDir)
+}
+tasks["clean"].dependsOn("deleteSdk")
+
 tasks["smithyBuildJar"].apply {
     inputs.file(projectDir.resolve("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
@@ -365,6 +370,7 @@ tasks["smithyBuildJar"].apply {
     outputs.upToDateWhen { false }
 }
 tasks["assemble"].apply {
+    dependsOn("deleteSdk")
     dependsOn("smithyBuildJar")
     finalizedBy("finalizeSdk")
 }
