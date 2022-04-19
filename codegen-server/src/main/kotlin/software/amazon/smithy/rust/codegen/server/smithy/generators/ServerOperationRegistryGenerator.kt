@@ -264,14 +264,14 @@ class ServerOperationRegistryGenerator(
     private fun OperationShape.requestSpec(): String =
         when (protocol) {
             RestJson1Trait.ID, RestXmlTrait.ID -> restRequestSpec()
-            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> awsJsonRequestSpec()
+            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> awsJsonOperationName()
             else -> TODO("Protocol $protocol not supported yet")
         }
 
     /*
      * Returns an AwsJson specific runtime `RequestSpec`.
      */
-    private fun OperationShape.awsJsonRequestSpec(): String {
+    private fun OperationShape.awsJsonOperationName(): String {
         val operationName = symbolProvider.toSymbol(this).name
         // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
         return """String::from("$serviceName.$operationName")"""
