@@ -40,6 +40,7 @@ pub trait Fs {
     fn recursive_copy(&self, source: &Path, destination: &Path) -> Result<()>;
 }
 
+#[derive(Debug, Default)]
 pub struct DefaultFs;
 
 impl DefaultFs {

@@ -105,7 +105,7 @@ impl Sync {
             self.copy_original_examples().context(here!())?;
             self.build_and_copy_sdk(&versions.aws_doc_sdk_examples_revision)
                 .context("failed to generate the SDK")?;
-            self.commit("[smithy-rs]", &commit)
+            self.commit_sdk_changes("[smithy-rs]", &commit)
                 .context("couldn't commit SDK changes to aws-sdk-rust")?;
         }
 
@@ -245,24 +245,30 @@ impl Sync {
     }
 
     /// Commit the changes to aws-sdk-rust reflecting the info from a commit in another repository.
-    fn commit(&self, prefix: &str, based_on_commit: &Commit) -> Result<()> {
-        eprintln!("\tcommitting...");
+    fn commit_sdk_changes(&self, prefix: &str, based_on_commit: &Commit) -> Result<()> {
+        if self.aws_sdk_rust.has_changes().context(here!())? {
+            eprintln!("\tcommitting...");
 
-        self.aws_sdk_rust
-            .stage(&PathBuf::from("."))
-            .context(here!())?;
+            self.aws_sdk_rust
+                .stage(&PathBuf::from("."))
+                .context(here!())?;
 
-        self.aws_sdk_rust.commit_on_behalf(
-            BOT_NAME,
-            BOT_EMAIL,
-            &based_on_commit.author_name,
-            &based_on_commit.author_email,
-            &format!("{} {}", prefix, &based_on_commit.message()),
-        )?;
+            self.aws_sdk_rust.commit_on_behalf(
+                BOT_NAME,
+                BOT_EMAIL,
+                &based_on_commit.author_name,
+                &based_on_commit.author_email,
+                &format!("{} {}", prefix, &based_on_commit.message()),
+            )?;
 
-        let commit_hash = self.aws_sdk_rust.get_head_revision()?;
-        eprintln!("\tsuccessfully committed {}", commit_hash);
-
+            let commit_hash = self.aws_sdk_rust.get_head_revision()?;
+            eprintln!("\tsuccessfully committed {}", commit_hash);
+        } else {
+            eprintln!(
+                "No changes to the SDK found for commit: {}. Skipping.",
+                based_on_commit.hash
+            );
+        }
         Ok(())
     }
 
@@ -309,6 +315,10 @@ impl Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fs::MockFs;
+    use crate::git::MockGit;
+    use crate::gradle::MockGradle;
+    use crate::versions::MockVersions;
 
     // Wish this was in std...
     fn trim_indent(value: &str) -> String {
@@ -373,5 +383,97 @@ mod tests {
             ),
             format!("\n{}", actual)
         )
+    }
+
+    // When there are no changes to the SDK, it should NOT commit anything
+    #[test]
+    fn test_commit_sdk_changes_no_changes() {
+        let mut aws_sdk_rust = MockGit::new();
+
+        // Say there are no changes when asked
+        aws_sdk_rust
+            .expect_has_changes()
+            .once()
+            .returning(|| Ok(false));
+
+        // No staging or committing should occur
+        aws_sdk_rust.expect_stage().never();
+        aws_sdk_rust.expect_commit_on_behalf().never();
+
+        let sync = Sync::new_with(
+            MockGit::new(),
+            aws_sdk_rust,
+            MockGit::new(),
+            MockGradle::new(),
+            MockFs::new(),
+            MockVersions::new(),
+        );
+        assert!(sync
+            .commit_sdk_changes(
+                "[test]",
+                &Commit {
+                    hash: "hash".into(),
+                    author_name: "Some Dev".into(),
+                    author_email: "somedev@example.com".into(),
+                    message_subject: "Some commit".into(),
+                    message_body: "".into(),
+                },
+            )
+            .is_ok());
+    }
+
+    // When there are changes to the SDK, it should commit them
+    #[test]
+    fn test_commit_sdk_changes_changes() {
+        let mut aws_sdk_rust = MockGit::new();
+
+        // Say there are changes when asked
+        aws_sdk_rust
+            .expect_has_changes()
+            .once()
+            .returning(|| Ok(true));
+
+        // Expect staging and a commit
+        aws_sdk_rust
+            .expect_stage()
+            .withf(|p| p == &PathBuf::from("."))
+            .once()
+            .returning(|_| Ok(()));
+        aws_sdk_rust
+            .expect_commit_on_behalf()
+            .withf(|name, email, author_name, author_email, message| {
+                name == BOT_NAME
+                    && email == BOT_EMAIL
+                    && author_name == "Some Dev"
+                    && author_email == "somedev@example.com"
+                    && message == "[test] Some commit"
+            })
+            .once()
+            .returning(|_, _, _, _, _| Ok(()));
+        aws_sdk_rust
+            .expect_get_head_revision()
+            .once()
+            .returning(|| Ok(CommitHash::from("new-commit-hash")));
+
+        let sync = Sync::new_with(
+            MockGit::new(),
+            aws_sdk_rust,
+            MockGit::new(),
+            MockGradle::new(),
+            MockFs::new(),
+            MockVersions::new(),
+        );
+        assert!(sync
+            .commit_sdk_changes(
+                "[test]",
+                &Commit {
+                    hash: "hash".into(),
+                    author_name: "Some Dev".into(),
+                    author_email: "somedev@example.com".into(),
+                    message_subject: "Some commit".into(),
+                    message_body: "".into(),
+                },
+            )
+            .is_ok());
     }
 }

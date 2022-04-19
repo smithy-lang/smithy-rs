@@ -49,6 +49,7 @@ mockall::mock! {
         ) -> Result<Vec<CommitHash>>;
         fn show(&self, revision: &str) -> Result<Commit>;
         fn hard_reset(&self, revision: &str) -> Result<()>;
+        fn has_changes(&self) -> Result<bool>;
     }
 }
 
@@ -100,6 +101,13 @@ fn expect_stage(repo: &mut MockGit, seq: &mut Sequence, path: &'static str) {
         .once()
         .in_sequence(seq)
         .returning(|_| Ok(()));
+}
+
+fn expect_has_changes(repo: &mut MockGit, seq: &mut Sequence, result: bool) {
+    repo.expect_has_changes()
+        .once()
+        .in_sequence(seq)
+        .returning(move || Ok(result));
 }
 
 #[derive(Default)]
@@ -254,6 +262,7 @@ fn expect_successful_smithyrs_sync(
     expect_codegen(mocks, seq, "old-examples-hash");
 
     // Commit generated SDK
+    expect_has_changes(&mut mocks.aws_sdk_rust, seq, true);
     expect_stage(&mut mocks.aws_sdk_rust, seq, ".");
     let expected_commit_message = expected_commit_message.to_string();
     mocks

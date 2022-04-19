@@ -20,6 +20,7 @@ pub trait Versions {
     fn load(&self, aws_sdk_rust_path: &Path) -> Result<VersionsManifest>;
 }
 
+#[derive(Debug, Default)]
 pub struct DefaultVersions;
 
 impl DefaultVersions {
