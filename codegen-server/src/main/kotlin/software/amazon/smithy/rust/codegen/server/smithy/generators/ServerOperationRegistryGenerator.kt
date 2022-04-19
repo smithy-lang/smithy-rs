@@ -11,6 +11,7 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -22,6 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
@@ -35,7 +37,8 @@ class ServerOperationRegistryGenerator(
     private val protocol = codegenContext.protocol
     private val symbolProvider = codegenContext.symbolProvider
     private val serviceName = codegenContext.serviceShape.toShapeId().name
-    private val operationNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
+    private val model = codegenContext.model
+    private val operationNames = operations.map { RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(it).name.toSnakeCase()) }
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
@@ -203,9 +206,10 @@ class ServerOperationRegistryGenerator(
         // A lot of things can become pretty complex in this type as it will hold 2 generics per operation.
         val operationsTraitBounds = operations
             .mapIndexed { i, operation ->
-                val operationName = symbolProvider.toSymbol(operation).name
-                """Op$i: #{ServerOperationHandler}::Handler<B, In$i, crate::input::${operationName}Input>,
-                In$i: 'static + Send"""
+                """
+                Op$i: #{ServerOperationHandler}::Handler<B, In$i, ${symbolProvider.toSymbol(operation.inputShape(model)).fullName}>,
+                In$i: 'static + Send
+                """
             }.joinToString(separator = ",\n")
         Attribute.Custom("allow(clippy::all)").render(writer)
         writer.rustBlockTemplate(
