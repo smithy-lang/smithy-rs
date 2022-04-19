@@ -243,7 +243,7 @@ impl RequestSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::req;
+    use super::super::rest_tests::req;
     use super::*;
     use http::Method;
 
@@ -295,7 +295,7 @@ mod tests {
             (Method::GET, "/mg/a/z/z/z"),
         ];
         for (method, uri) in &hits {
-            assert_eq!(Match::Yes, spec.matches(&req(method, uri)));
+            assert_eq!(Match::Yes, spec.matches(&req(method, uri, None)));
         }
     }
 
@@ -309,7 +309,7 @@ mod tests {
             (Method::DELETE, "/?foo&foo"),
         ];
         for (method, uri) in &hits {
-            assert_eq!(Match::Yes, spec.matches(&req(method, uri)));
+            assert_eq!(Match::Yes, spec.matches(&req(method, uri, None)));
         }
     }
 
@@ -325,7 +325,7 @@ mod tests {
     fn repeated_query_keys_same_values_match() {
         assert_eq!(
             Match::Yes,
-            key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=bar"))
+            key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=bar", None))
         );
     }
 
@@ -333,7 +333,7 @@ mod tests {
     fn repeated_query_keys_distinct_values_does_not_match() {
         assert_eq!(
             Match::No,
-            key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=baz"))
+            key_value_spec().matches(&req(&Method::DELETE, "/?foo=bar&foo=baz", None))
         );
     }
 
@@ -354,11 +354,11 @@ mod tests {
 
     #[test]
     fn empty_segments_in_the_middle_do_matter() {
-        assert_eq!(Match::Yes, ab_spec().matches(&req(&Method::GET, "/a/b")));
+        assert_eq!(Match::Yes, ab_spec().matches(&req(&Method::GET, "/a/b", None)));
 
         let misses = vec![(Method::GET, "/a//b"), (Method::GET, "//////a//b")];
         for (method, uri) in &misses {
-            assert_eq!(Match::No, ab_spec().matches(&req(method, uri)));
+            assert_eq!(Match::No, ab_spec().matches(&req(method, uri, None)));
         }
     }
 
@@ -379,10 +379,10 @@ mod tests {
             (Method::GET, "/a//b"), // Label is bound to `""`.
         ];
         for (method, uri) in &hits {
-            assert_eq!(Match::Yes, label_spec.matches(&req(method, uri)));
+            assert_eq!(Match::Yes, label_spec.matches(&req(method, uri, None)));
         }
 
-        assert_eq!(Match::No, label_spec.matches(&req(&Method::GET, "/a///b")));
+        assert_eq!(Match::No, label_spec.matches(&req(&Method::GET, "/a///b", None)));
     }
 
     #[test]
@@ -403,7 +403,7 @@ mod tests {
             (Method::GET, "/a///a//b///suffix"),
         ];
         for (method, uri) in &hits {
-            assert_eq!(Match::Yes, greedy_label_spec.matches(&req(method, uri)));
+            assert_eq!(Match::Yes, greedy_label_spec.matches(&req(method, uri, None)));
         }
     }
 
@@ -418,7 +418,7 @@ mod tests {
             (Method::GET, "//a//b////"),
         ];
         for (method, uri) in &misses {
-            assert_eq!(Match::No, ab_spec().matches(&req(method, uri)));
+            assert_eq!(Match::No, ab_spec().matches(&req(method, uri, None)));
         }
     }
 
@@ -432,13 +432,13 @@ mod tests {
 
         let misses = vec![(Method::GET, "/a"), (Method::GET, "/a//"), (Method::GET, "/a///")];
         for (method, uri) in &misses {
-            assert_eq!(Match::No, label_spec.matches(&req(method, uri)));
+            assert_eq!(Match::No, label_spec.matches(&req(method, uri, None)));
         }
 
         // In the second example, the label is bound to `""`.
         let hits = vec![(Method::GET, "/a/label"), (Method::GET, "/a/")];
         for (method, uri) in &hits {
-            assert_eq!(Match::Yes, label_spec.matches(&req(method, uri)));
+            assert_eq!(Match::Yes, label_spec.matches(&req(method, uri, None)));
         }
     }
 }
