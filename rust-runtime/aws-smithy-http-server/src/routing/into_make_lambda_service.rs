@@ -5,7 +5,7 @@
 
 // This code was copied and then modified from https://github.com/hanabu/lambda-web
 
-use crate::{runtime_error::RuntimeErrorKind};
+use crate::{BoxError, runtime_error::RuntimeErrorKind};
 use hyper::{
     service::Service as HyperService,
     body::HttpBody as HyperHttpBody,
@@ -42,7 +42,7 @@ impl<'a, S> IntoMakeLambdaService<'a, S>{
 
 impl<'a, S, B> Service<Request> for IntoMakeLambdaService<'a, S>
 where
-    S: HyperService<HyperRequest, Response = HyperResponse<B>, Error = Infallible>
+    S: HyperService<HyperRequest, Response = HyperResponse<B>, Error = BoxError>
         + 'static,
     B: HyperHttpBody + Debug,
     <B as HyperHttpBody>::Error: StdError + Send + Sync + 'static,
@@ -66,38 +66,39 @@ where
         let svc_call = hyper_request.map(|req| self.service.call(req));
 
         let fut = async move {
-            let svc_fut = svc_call.expect("Request parsing error");
-            let response = svc_fut.await.expect("Some hyper error");
-            hyper_to_lambda_response(response).await
-            // match svc_call {
-            //     Ok(svc_fut) => {
-            //         // Request parsing succeeded
-            //         // empty_response().unwrap()
-            //         // match empty_response() {
-            //         //     Ok(response) => {
-            //         //         Ok(response)
-            //         //     }
-            //         //     Err(response_err) => {
-            //         //         Err(response_err.get_ref())//Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
-            //         //     }
-            //         // }
-            //         match svc_fut.await {
-            //             Ok(response) => {
-            //                 // Returns as Lambda response
-            //                 hyper_to_lambda_response(response).await
-            //             }
-            //             Err(response_err) => {
-            //                 // Some hyper error -> 500 Internal Server Error
-            //                 Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
-            //             }
-            //         }
-            //     }
-            //     Err(request_err) => {
-            //         // Request parsing error
-            //         Err(request_err)
-            //         // Err(RuntimeErrorKind::Serialization(crate::Error::new(request_err)))
-            //     }
-            // }
+            // let svc_fut = svc_call.expect("Request parsing error");
+            // let response = svc_fut.await.expect("Some hyper error");
+            // hyper_to_lambda_response(response).await
+            match svc_call {
+                Ok(svc_fut) => {
+                    // Request parsing succeeded
+                    // empty_response().unwrap()
+                    // match empty_response() {
+                    //     Ok(response) => {
+                    //         Ok(response)
+                    //     }
+                    //     Err(response_err) => {
+                    //         Err(response_err.get_ref())//Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
+                    //     }
+                    // }
+                    match svc_fut.await {
+                        Ok(response) => {
+                            // Returns as Lambda response
+                            hyper_to_lambda_response(response).await
+                        }
+                        Err(response_err) => {
+                            // Some hyper error -> 500 Internal Server Error
+                            Err(response_err)
+                            // Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
+                        }
+                    }
+                }
+                Err(request_err) => {
+                    // Request parsing error
+                    Err(request_err.into())
+                    // Err(RuntimeErrorKind::Serialization(crate::Error::new(request_err)))
+                }
+            }
         };
         Box::pin(fut)
     }
