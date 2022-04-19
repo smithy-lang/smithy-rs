@@ -82,7 +82,7 @@ val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS)
  */
 fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
     val cargoCommandsOverride = properties.get("cargoCommands")?.split(",")?.map { it.trim() }?.map {
-        when(it) {
+        when (it) {
             "check" -> Cargo.CHECK
             "test" -> Cargo.TEST
             "docs" -> Cargo.DOCS
