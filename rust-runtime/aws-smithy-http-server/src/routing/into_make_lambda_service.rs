@@ -43,7 +43,7 @@ where
     B: hyper::body::HttpBody + Debug,
     <B as hyper::body::HttpBody>::Error: std::error::Error + Send + Sync + 'static,
 {
-    type Error = RuntimeErrorKind;
+    type Error = LambdaError;
     type Response = Response<Body>;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
@@ -62,29 +62,38 @@ where
         let svc_call = hyper_request.map(|req| self.service.call(req));
 
         let fut = async move {
-            match svc_call {
-                Ok(svc_fut) => {
-                    // Request parsing succeeded
-                    match empty_response() {
-                        Ok(response) => Ok(response),
-                        Err(response_err) => Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
-                    }
-                    // match svc_fut {
-                    //     Ok(response) => {
-                    //         // Returns as Lambda response
-                    //         hyper_to_lambda_response(response).await
-                    //     }
-                    //     Err(response_err) => {
-                    //         // Some hyper error -> 500 Internal Server Error
-                    //         Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
-                    //     }
-                    // }
-                }
-                Err(request_err) => {
-                    // Request parsing error
-                    Err(RuntimeErrorKind::Serialization(crate::Error::new(request_err)))
-                }
-            }
+            let svc_fut = svc_call.expect("Request parsing error");
+            let response = svc_fut.await.expect("Some hyper error");
+            hyper_to_lambda_response(response).await
+            // match svc_call {
+            //     Ok(svc_fut) => {
+            //         // Request parsing succeeded
+            //         // empty_response().unwrap()
+            //         // match empty_response() {
+            //         //     Ok(response) => {
+            //         //         Ok(response)
+            //         //     }
+            //         //     Err(response_err) => {
+            //         //         Err(response_err.get_ref())//Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
+            //         //     }
+            //         // }
+            //         match svc_fut.await {
+            //             Ok(response) => {
+            //                 // Returns as Lambda response
+            //                 hyper_to_lambda_response(response).await
+            //             }
+            //             Err(response_err) => {
+            //                 // Some hyper error -> 500 Internal Server Error
+            //                 Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
+            //             }
+            //         }
+            //     }
+            //     Err(request_err) => {
+            //         // Request parsing error
+            //         Err(request_err)
+            //         // Err(RuntimeErrorKind::Serialization(crate::Error::new(request_err)))
+            //     }
+            // }
         };
         Box::pin(fut)
     }
@@ -101,10 +110,6 @@ fn lambda_to_hyper_request(event: Request) -> Result<HyperRequest, hyper::Error>
     let req = hyper::Request::from_parts(parts, body);
     println!("Hyper request {:?}", req);
     Ok(req)
-}
-
-fn empty_response() -> Result<Response<Body>, http::Error> {
-    Response::builder().body(Body::Empty)
 }
 
 async fn hyper_to_lambda_response<B>(response: HyperResponse<B>) -> Result<Response<Body>, LambdaError>
