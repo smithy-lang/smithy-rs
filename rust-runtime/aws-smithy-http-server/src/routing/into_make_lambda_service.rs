@@ -6,16 +6,20 @@
 // This code was copied and then modified from https://github.com/hanabu/lambda-web
 
 use crate::{runtime_error::RuntimeErrorKind};
-use lambda_http::{Body, Error as LambdaError, Request, Response};
+use hyper::{
+    service::Service as HyperService,
+    body::HttpBody as HyperHttpBody,
+};
+use lambda_http::{Body, Error as LambdaError, Request, Response, Service};
 use std::{
     convert::Infallible,
+    error::Error as StdError,
     fmt::Debug,
     future::Future,
     marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
 };
-use tower::Service;
 
 type HyperRequest = hyper::Request<hyper::Body>;
 type HyperResponse<B> = hyper::Response<B>;
@@ -38,10 +42,10 @@ impl<'a, S> IntoMakeLambdaService<'a, S>{
 
 impl<'a, S, B> Service<Request> for IntoMakeLambdaService<'a, S>
 where
-    S: hyper::service::Service<HyperRequest, Response = HyperResponse<B>, Error = Infallible>
+    S: HyperService<HyperRequest, Response = HyperResponse<B>, Error = Infallible>
         + 'static,
-    B: hyper::body::HttpBody + Debug,
-    <B as hyper::body::HttpBody>::Error: std::error::Error + Send + Sync + 'static,
+    B: HyperHttpBody + Debug,
+    <B as HyperHttpBody>::Error: StdError + Send + Sync + 'static,
 {
     type Error = LambdaError;
     type Response = Response<Body>;
@@ -114,8 +118,8 @@ fn lambda_to_hyper_request(event: Request) -> Result<HyperRequest, hyper::Error>
 
 async fn hyper_to_lambda_response<B>(response: HyperResponse<B>) -> Result<Response<Body>, LambdaError>
 where
-    B: hyper::body::HttpBody + Debug,
-    <B as hyper::body::HttpBody>::Error: std::error::Error + Send + Sync + 'static,
+    B: HyperHttpBody + Debug,
+    <B as HyperHttpBody>::Error: StdError + Send + Sync + 'static,
 {
     println!("Hyper response {:?}", response);
     // Divide resonse into headers and body
