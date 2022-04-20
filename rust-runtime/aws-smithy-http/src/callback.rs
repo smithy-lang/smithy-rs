@@ -93,9 +93,9 @@ mod tests {
         // Assert that the body that went in is the same as the body coming out.
         assert_eq!(body, "test");
 
+        // Test that all callbacks were called.
         assert!(logs_contain("callback A was called"));
         assert!(logs_contain("callback B was called"));
-        assert!(!logs_contain("callback was called"));
     }
 
     struct TestCallback {

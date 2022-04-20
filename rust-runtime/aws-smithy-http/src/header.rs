@@ -327,7 +327,7 @@ pub fn quote_header_value<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 /// // Will print 'some_key: ["lhs value", "rhs value"]'
 /// println!("{}: {:?}", header_name.as_str(), merged_values);
 /// ```
-pub fn append_merge_header_maps(
+pub(crate) fn append_merge_header_maps(
     mut lhs: HeaderMap<HeaderValue>,
     rhs: HeaderMap<HeaderValue>,
 ) -> HeaderMap<HeaderValue> {
@@ -620,7 +620,7 @@ mod test {
     }
 
     #[test]
-    fn test_append_merge_header_maps() {
+    fn test_append_merge_header_maps_with_shared_key() {
         let header_name = HeaderName::from_static("some_key");
         let left_header_value = HeaderValue::from_static("lhs value");
         let right_header_value = HeaderValue::from_static("rhs value");
@@ -639,6 +639,57 @@ mod test {
             .collect();
 
         let expected_merged_values = vec![left_header_value, right_header_value];
+
+        assert_eq!(actual_merged_values, expected_merged_values);
+    }
+
+    #[test]
+    fn test_append_merge_header_maps_with_multiple_values_in_left_hand_map() {
+        let header_name = HeaderName::from_static("some_key");
+        let left_header_value_1 = HeaderValue::from_static("lhs value 1");
+        let left_header_value_2 = HeaderValue::from_static("lhs_value 2");
+        let right_header_value = HeaderValue::from_static("rhs value");
+
+        let mut left_hand_side_headers = HeaderMap::new();
+        left_hand_side_headers.insert(header_name.clone(), left_header_value_1.clone());
+        left_hand_side_headers.append(header_name.clone(), left_header_value_2.clone());
+
+        let mut right_hand_side_headers = HeaderMap::new();
+        right_hand_side_headers.insert(header_name.clone(), right_header_value.clone());
+
+        let merged_header_map =
+            append_merge_header_maps(left_hand_side_headers, right_hand_side_headers);
+        let actual_merged_values: Vec<_> = merged_header_map
+            .get_all(header_name.clone())
+            .into_iter()
+            .collect();
+
+        let expected_merged_values =
+            vec![left_header_value_1, left_header_value_2, right_header_value];
+
+        assert_eq!(actual_merged_values, expected_merged_values);
+    }
+
+    #[test]
+    fn test_append_merge_header_maps_with_empty_left_hand_map() {
+        let header_name = HeaderName::from_static("some_key");
+        let right_header_value_1 = HeaderValue::from_static("rhs value 1");
+        let right_header_value_2 = HeaderValue::from_static("rhs_value 2");
+
+        let left_hand_side_headers = HeaderMap::new();
+
+        let mut right_hand_side_headers = HeaderMap::new();
+        right_hand_side_headers.insert(header_name.clone(), right_header_value_1.clone());
+        right_hand_side_headers.append(header_name.clone(), right_header_value_2.clone());
+
+        let merged_header_map =
+            append_merge_header_maps(left_hand_side_headers, right_hand_side_headers);
+        let actual_merged_values: Vec<_> = merged_header_map
+            .get_all(header_name.clone())
+            .into_iter()
+            .collect();
+
+        let expected_merged_values = vec![right_header_value_1, right_header_value_2];
 
         assert_eq!(actual_merged_values, expected_merged_values);
     }
