@@ -5,7 +5,7 @@
 
 // This code was copied and then modified from https://github.com/hanabu/lambda-web
 
-use crate::{BoxError, runtime_error::RuntimeErrorKind};
+use crate::{runtime_error::RuntimeErrorKind};
 use hyper::{
     service::Service as HyperService,
     body::HttpBody as HyperHttpBody,
@@ -42,7 +42,7 @@ impl<'a, S> IntoMakeLambdaService<'a, S>{
 
 impl<'a, S, B> Service<Request> for IntoMakeLambdaService<'a, S>
 where
-    S: HyperService<HyperRequest, Response = HyperResponse<B>, Error = BoxError>
+    S: HyperService<HyperRequest, Response = HyperResponse<B>, Error = Infallible>
         + Send + 'static,
     S::Future: Send + 'a,
     B: HyperHttpBody + Debug,
@@ -73,17 +73,20 @@ where
             match svc_call {
                 Ok(svc_fut) => {
                     // Request parsing succeeded
-                    match svc_fut.await {
-                        Ok(response) => {
-                            // Returns as Lambda response
-                            hyper_to_lambda_response(response).await
-                        }
-                        Err(response_err) => {
-                            // Some hyper error -> 500 Internal Server Error
-                            Err(response_err)
-                            // Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
-                        }
-                    }
+                    let response = svc_fut.await.expect("It should not fail");
+                    // Returns as Lambda response
+                    hyper_to_lambda_response(response).await
+                    // match svc_fut.await {
+                    //     Ok(response) => {
+                    //         // Returns as Lambda response
+                    //         hyper_to_lambda_response(response).await
+                    //     }
+                    //     Err(response_err) => {
+                    //         // Some hyper error -> 500 Internal Server Error
+                    //         Err(response_err)
+                    //         // Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
+                    //     }
+                    // }
                 }
                 Err(request_err) => {
                     // Request parsing error
