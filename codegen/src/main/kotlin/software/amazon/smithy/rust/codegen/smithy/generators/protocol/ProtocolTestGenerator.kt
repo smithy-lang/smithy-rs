@@ -494,10 +494,7 @@ class ProtocolTestGenerator(
         private val RestXml = "aws.protocoltests.restxml#RestXml"
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
-        private val ExpectFail = setOf<FailingTest>(
-            // TODO(https://github.com/awslabs/smithy/pull/1049): Remove this once the test case in Smithy is fixed
-            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
-        )
+        private val ExpectFail = setOf<FailingTest>()
         private val RunOnly: Set<String>? = null
 
         // These tests are not even attempted to be generated, either because they will not compile
