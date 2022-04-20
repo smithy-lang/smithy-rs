@@ -652,7 +652,6 @@ class ServerProtocolTestGenerator(
         private val ExpectFail = setOf<FailingTest>(
             // Headers.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
-            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", TestType.Response),
 
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
