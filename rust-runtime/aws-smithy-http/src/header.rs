@@ -296,37 +296,6 @@ pub fn quote_header_value<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 
 /// Given two [`HeaderMap`][HeaderMap]s, merge them together and return the merged `HeaderMap`. If the
 /// two `HeaderMap`s share any keys, values from the right `HeaderMap` be appended to the left `HeaderMap`.
-///
-/// # Example
-///
-/// ```rust
-/// use http::header::{HeaderMap, HeaderName, HeaderValue};
-/// use aws_smithy_http::header::append_merge_header_maps;
-///
-/// let header_name = HeaderName::from_static("some_key");
-///
-/// let mut left_hand_side_headers = HeaderMap::new();
-/// left_hand_side_headers.insert(
-///     header_name.clone(),
-///     HeaderValue::from_str("lhs value").unwrap(),
-/// );
-///
-/// let mut right_hand_side_headers = HeaderMap::new();
-/// right_hand_side_headers.insert(
-///     header_name.clone(),
-///     HeaderValue::from_str("rhs value").unwrap(),
-/// );
-///
-/// let merged_header_map =
-///     append_merge_header_maps(left_hand_side_headers, right_hand_side_headers);
-/// let merged_values: Vec<_> = merged_header_map
-///     .get_all(header_name.clone())
-///     .into_iter()
-///     .collect();
-///
-/// // Will print 'some_key: ["lhs value", "rhs value"]'
-/// println!("{}: {:?}", header_name.as_str(), merged_values);
-/// ```
 pub(crate) fn append_merge_header_maps(
     mut lhs: HeaderMap<HeaderValue>,
     rhs: HeaderMap<HeaderValue>,
