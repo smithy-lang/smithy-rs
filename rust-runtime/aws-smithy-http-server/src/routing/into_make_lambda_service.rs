@@ -5,19 +5,22 @@
 
 // This code was copied and then modified from https://github.com/hanabu/lambda-web
 
+use crate::BoxError;
+use aws_lambda_events::encodings::Body;
 use futures_util::future::BoxFuture;
-use hyper::{body::HttpBody as HyperHttpBody, service::Service as HyperService};
-use lambda_http::{Body, Error as LambdaError, Request, Response, Service};
+use http::Response;
+use http_body::Body as HttpBody;
 use std::{
     convert::Infallible,
-    error::Error as StdError,
+    error::Error,
     fmt::Debug,
     marker::PhantomData,
     task::{Context, Poll},
 };
+use tower::Service;
 
-type HyperRequest = hyper::Request<hyper::Body>;
-type HyperResponse<B> = hyper::Response<B>;
+type Request = http::Request<Body>;
+type HyperRequest = http::Request<hyper::Body>;
 
 #[doc(hidden)]
 #[derive(Debug, Clone)]
@@ -37,13 +40,13 @@ impl<'a, S> IntoMakeLambdaService<'a, S> {
 
 impl<'a, S, B> Service<Request> for IntoMakeLambdaService<'a, S>
 where
-    S: HyperService<HyperRequest, Response = HyperResponse<B>, Error = Infallible> + Send + Clone + 'static,
+    S: Service<HyperRequest, Response = Response<B>, Error = Infallible> + Send + Clone + 'static,
     S::Future: Send + 'a,
-    B: HyperHttpBody + Send + Debug,
-    <B as HyperHttpBody>::Error: StdError + Send + Sync + 'static,
-    <B as HyperHttpBody>::Data: Send,
+    B: HttpBody + Send + Debug,
+    <B as HttpBody>::Error: Error + Send + Sync + 'static,
+    <B as HttpBody>::Data: Send,
 {
-    type Error = LambdaError;
+    type Error = BoxError;
     type Response = Response<Body>;
     type Future = MakeRouteLambdaServiceFuture;
 
@@ -73,33 +76,33 @@ where
 
 opaque_future! {
     /// Response future for [`IntoMakeLambdaService`] services.
-    pub type MakeRouteLambdaServiceFuture = BoxFuture<'static, Result<Response<Body>, LambdaError>>;
+    pub type MakeRouteLambdaServiceFuture = BoxFuture<'static, Result<Response<Body>, BoxError>>;
 }
 
-fn lambda_to_hyper_request(event: Request) -> HyperRequest {
-    println!("Lambda request {:?}", event);
-    let (parts, body) = event.into_parts();
+fn lambda_to_hyper_request(request: Request) -> HyperRequest {
+    tracing::debug!("Converting Lambda to Hyper request...");
+    let (parts, body) = request.into_parts();
     let body = match body {
-        lambda_http::Body::Empty => hyper::Body::empty(),
-        lambda_http::Body::Text(s) => hyper::Body::from(s),
-        lambda_http::Body::Binary(v) => hyper::Body::from(v),
+        Body::Empty => hyper::Body::empty(),
+        Body::Text(s) => hyper::Body::from(s),
+        Body::Binary(v) => hyper::Body::from(v),
     };
     let req = hyper::Request::from_parts(parts, body);
-    println!("Hyper request {:?}", req);
+    tracing::debug!("Hyper request converted successfully.");
     req
 }
 
-async fn hyper_to_lambda_response<B>(response: HyperResponse<B>) -> Result<Response<Body>, LambdaError>
+async fn hyper_to_lambda_response<B>(response: Response<B>) -> Result<Response<Body>, BoxError>
 where
-    B: HyperHttpBody + Debug,
-    <B as HyperHttpBody>::Error: StdError + Send + Sync + 'static,
+    B: HttpBody + Debug,
+    <B as HttpBody>::Error: Error + Send + Sync + 'static,
 {
-    println!("Hyper response {:?}", response);
-    // Divide resonse into headers and body
+    tracing::debug!("Converting Hyper to Lambda response...");
+    // Divide response into headers and body
     let (parts, body) = response.into_parts();
     let body = hyper::body::to_bytes(body).await?;
     let res = Response::from_parts(parts, Body::from(body.as_ref()));
-    println!("Lambda response {:?}", res);
+    tracing::debug!("Lambda response converted successfully.");
     Ok(res)
 }
 
