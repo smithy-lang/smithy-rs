@@ -6,7 +6,7 @@
 use anyhow::Result;
 use mockall::{predicate::*, Sequence};
 use sdk_sync::git::{Commit, CommitHash};
-use sdk_sync::sync::{Sync, BOT_EMAIL, BOT_NAME};
+use sdk_sync::sync::{Sync, BOT_EMAIL, BOT_NAME, MODEL_STASH_BRANCH_NAME};
 use sdk_sync::versions::VersionsManifest;
 use std::path::{Path, PathBuf};
 
@@ -50,6 +50,9 @@ mockall::mock! {
         fn show(&self, revision: &str) -> Result<Commit>;
         fn hard_reset(&self, revision: &str) -> Result<()>;
         fn has_changes(&self) -> Result<bool>;
+        fn current_branch_name(&self) -> Result<String>;
+        fn create_branch(&self, branch_name: &str, revision: &str) -> Result<()>;
+        fn fast_forward_merge(&self, branch_name: &str) -> Result<()>;
     }
 }
 
@@ -72,8 +75,10 @@ fn set_path(mock_git: &mut MockGit, path: &str) {
     mock_git.expect_path().return_const(PathBuf::from(path));
 }
 
-fn set_head(repo: &mut MockGit, head: &'static str) {
+fn expect_get_head_revision(repo: &mut MockGit, seq: &mut Sequence, head: &'static str) {
     repo.expect_get_head_revision()
+        .once()
+        .in_sequence(seq)
         .returning(move || Ok(CommitHash::from(head)));
 }
 
@@ -342,8 +347,83 @@ fn expect_successful_example_sync(
         .returning(|_, _, _| Ok(()));
 }
 
+fn expect_model_changes(mocks: &mut Mocks, seq: &mut Sequence, models_changed: bool) {
+    let (old_hash, new_hash) = if models_changed {
+        ("with-new-models", "without-new-models")
+    } else {
+        ("no-new-models", "no-new-models")
+    };
+    expect_get_head_revision(&mut mocks.smithy_rs, seq, old_hash);
+
+    mocks
+        .smithy_rs
+        .expect_create_branch()
+        .with(eq(MODEL_STASH_BRANCH_NAME), eq("HEAD"))
+        .once()
+        .in_sequence(seq)
+        .returning(|_, _| Ok(()));
+
+    mocks
+        .smithy_rs
+        .expect_current_branch_name()
+        .once()
+        .in_sequence(seq)
+        .returning(|| Ok("main".to_string()));
+
+    expect_hard_reset(&mut mocks.smithy_rs, seq, "origin/main");
+    expect_get_head_revision(&mut mocks.smithy_rs, seq, new_hash);
+}
+
+fn expect_sync_model_changes(mocks: &mut Mocks, seq: &mut Sequence) {
+    // Expect merge of the models back into the main branch
+    mocks
+        .smithy_rs
+        .expect_fast_forward_merge()
+        .with(eq(MODEL_STASH_BRANCH_NAME))
+        .once()
+        .in_sequence(seq)
+        .returning(|_| Ok(()));
+
+    // HEAD has the model changes; set the commit info for it
+    expect_show_commit(
+        &mut mocks.smithy_rs,
+        seq,
+        Commit {
+            hash: "HEAD".into(),
+            author_name: BOT_NAME.into(),
+            author_email: BOT_EMAIL.into(),
+            message_subject: "Some model changes".into(),
+            message_body: "".into(),
+        },
+    );
+
+    // Examples sync
+    mocks.expect_remove_dir_all_idempotent(seq, "/p2/smithy-rs/aws/sdk/examples");
+    mocks.expect_recursive_copy(
+        seq,
+        "/p2/aws-sdk-rust/examples",
+        "/p2/smithy-rs/aws/sdk/examples",
+    );
+
+    // Codegen
+    expect_codegen(mocks, seq, "old-examples-hash");
+
+    // Commit generated SDK
+    expect_has_changes(&mut mocks.aws_sdk_rust, seq, true);
+    expect_stage(&mut mocks.aws_sdk_rust, seq, ".");
+    mocks
+        .aws_sdk_rust
+        .expect_commit()
+        .withf(|name, email, message| {
+            name == BOT_NAME && email == BOT_EMAIL && message.starts_with("Some model changes")
+        })
+        .once()
+        .in_sequence(seq)
+        .returning(|_, _, _| Ok(()));
+}
+
 #[test]
-fn mocked_e2e() {
+fn mocked_e2e_without_model_changes() {
     let mut mocks = Mocks::default();
     let mut seq = Sequence::new();
 
@@ -364,7 +444,8 @@ fn mocked_e2e() {
         });
     mocks
         .set_smithyrs_commits_to_sync("some-previous-commit-hash", &["hash-newest", "hash-oldest"]);
-    set_head(&mut mocks.aws_doc_sdk_examples, "examples-head");
+
+    expect_model_changes(&mut mocks, &mut seq, false);
 
     expect_successful_smithyrs_sync(
         &mut mocks,
@@ -390,6 +471,84 @@ fn mocked_e2e() {
         },
         "[smithy-rs] Another commit subject\n\nThis one has a body\n\n- bullet\n- bullet\n\nmore",
     );
+
+    expect_successful_example_sync(
+        &mut mocks,
+        &mut seq,
+        "old-examples-hash",
+        &[
+            Commit {
+                hash: "hash2".into(),
+                author_name: "Some Example Writer".into(),
+                author_email: "someexamplewriter@example.com".into(),
+                message_subject: "More examples".into(),
+                message_body: "".into(),
+            },
+            Commit {
+                hash: "hash1".into(),
+                author_name: "Another Example Writer".into(),
+                author_email: "anotherexamplewriter@example.com".into(),
+                message_subject: "Another example".into(),
+                message_body: "This one has a body\n\n- bullet\n- bullet\n\nmore".into(),
+            },
+        ],
+    );
+
+    let sync = mocks.into_sync();
+    sync.sync().expect("success");
+}
+
+#[test]
+fn mocked_e2e_with_model_changes() {
+    let mut mocks = Mocks::default();
+    let mut seq = Sequence::new();
+
+    set_path(&mut mocks.aws_doc_sdk_examples, "/p2/aws-doc-sdk-examples");
+    set_path(&mut mocks.aws_sdk_rust, "/p2/aws-sdk-rust");
+    set_path(&mut mocks.smithy_rs, "/p2/smithy-rs");
+
+    mocks
+        .versions
+        .expect_load()
+        .withf(|p| p.to_string_lossy() == "/p2/aws-sdk-rust")
+        .once()
+        .returning(|_| {
+            Ok(VersionsManifest {
+                smithy_rs_revision: "some-previous-commit-hash".into(),
+                aws_doc_sdk_examples_revision: "old-examples-hash".into(),
+            })
+        });
+    mocks
+        .set_smithyrs_commits_to_sync("some-previous-commit-hash", &["hash-newest", "hash-oldest"]);
+
+    expect_model_changes(&mut mocks, &mut seq, true);
+
+    expect_successful_smithyrs_sync(
+        &mut mocks,
+        &mut seq,
+        Commit {
+            hash: "hash-oldest".into(),
+            author_name: "Some Dev".into(),
+            author_email: "somedev@example.com".into(),
+            message_subject: "Some commit subject".into(),
+            message_body: "".into(),
+        },
+        "[smithy-rs] Some commit subject",
+    );
+    expect_successful_smithyrs_sync(
+        &mut mocks,
+        &mut seq,
+        Commit {
+            hash: "hash-newest".into(),
+            author_name: "Another Dev".into(),
+            author_email: "anotherdev@example.com".into(),
+            message_subject: "Another commit subject".into(),
+            message_body: "This one has a body\n\n- bullet\n- bullet\n\nmore".into(),
+        },
+        "[smithy-rs] Another commit subject\n\nThis one has a body\n\n- bullet\n- bullet\n\nmore",
+    );
+
+    expect_sync_model_changes(&mut mocks, &mut seq);
 
     expect_successful_example_sync(
         &mut mocks,

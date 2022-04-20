@@ -15,6 +15,7 @@ use std::time::Instant;
 
 pub const BOT_NAME: &str = "AWS SDK Rust Bot";
 pub const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
+pub const MODEL_STASH_BRANCH_NAME: &str = "__sdk_sync__models_";
 
 pub struct Sync {
     aws_doc_sdk_examples: Box<dyn Git>,
@@ -65,8 +66,62 @@ impl Sync {
             .load(self.aws_sdk_rust.path())
             .context("load versions.toml")?;
 
+        let has_model_changes = self.stash_model_changes().context("stash model changes")?;
         self.sync_smithy_rs(&versions).context("sync smithy-rs")?;
+        if has_model_changes {
+            self.sync_model_changes(&versions)
+                .context("sync model changes")?;
+        }
         self.sync_examples(&versions).context("sync examples")?;
+
+        Ok(())
+    }
+
+    /// Stores model changes in another branch so that the smithy-rs sync and example sync
+    /// can be done with the old models to keep the changes isolated to their individual commits.
+    /// Returns `true` if there are model changes.
+    fn stash_model_changes(&self) -> Result<bool> {
+        let original_revision = self.smithy_rs.get_head_revision().context(here!())?;
+
+        // Create a branch to hold the model changes without switching to it
+        self.smithy_rs
+            .create_branch(MODEL_STASH_BRANCH_NAME, "HEAD")
+            .context(here!())?;
+        // Get the name of the current branch
+        let branch_name = self.smithy_rs.current_branch_name().context(here!())?;
+        // Reset the start branch to what's in origin
+        self.smithy_rs
+            .hard_reset(&format!("origin/{}", branch_name))
+            .context(here!())?;
+
+        let head = self.smithy_rs.get_head_revision().context(here!())?;
+        Ok(head != original_revision)
+    }
+
+    /// Restore the model changes and generate code based on them.
+    fn sync_model_changes(&self, versions: &VersionsManifest) -> Result<()> {
+        eprintln!("Syncing model changes...");
+
+        // Restore the model changes
+        self.smithy_rs
+            .fast_forward_merge(MODEL_STASH_BRANCH_NAME)
+            .context(here!())?;
+        let model_change_commit = self.smithy_rs.show("HEAD").context(here!())?;
+
+        // Generate with the original examples
+        self.copy_original_examples().context(here!())?;
+        self.build_and_copy_sdk(&versions.aws_doc_sdk_examples_revision)
+            .context(here!("failed to generate the SDK"))?;
+
+        // Commit changes if there are any
+        if self.aws_sdk_rust.has_changes().context(here!())? {
+            self.aws_sdk_rust
+                .stage(&PathBuf::from("."))
+                .context(here!())?;
+            self.aws_sdk_rust
+                .commit(BOT_NAME, BOT_EMAIL, &model_change_commit.message())
+                .context(here!())?;
+        }
 
         Ok(())
     }
@@ -92,12 +147,15 @@ impl Sync {
 
         // Run through all the new commits, syncing them one by one
         for (i, rev) in commits.iter().enumerate() {
+            eprintln!("[{}]\tsyncing {}...", i + 1, rev);
             let commit = self
                 .smithy_rs
                 .show(rev.as_ref())
                 .with_context(|| format!("couldn't find commit {} in smithy-rs", rev))?;
 
-            eprintln!("[{}]\tsyncing {}...", i + 1, rev);
+            // It's OK to `git reset --hard` in this case since the model changes were
+            // stashed, and we will ultimately reset to the latest smithy-rs commit
+            // by the end of this loop.
             self.smithy_rs
                 .hard_reset(commit.hash.as_ref())
                 .with_context(|| format!("failed to reset to {} in smithy-rs", rev,))?;

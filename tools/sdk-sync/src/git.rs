@@ -93,6 +93,15 @@ pub trait Git {
 
     /// Returns true if the repository has local changes.
     fn has_changes(&self) -> Result<bool>;
+
+    /// Returns the name of the current branch.
+    fn current_branch_name(&self) -> Result<String>;
+
+    /// Creates a branch at the given revision.
+    fn create_branch(&self, branch_name: &str, revision: &str) -> Result<()>;
+
+    /// Fast-forward merges a branch.
+    fn fast_forward_merge(&self, branch_name: &str) -> Result<()>;
 }
 
 enum CommitInfo {
@@ -303,5 +312,42 @@ impl Git for GitCLI {
 
     fn has_changes(&self) -> Result<bool> {
         Ok(self.has_changed_files()? || self.has_untracked_files()?)
+    }
+
+    fn current_branch_name(&self) -> Result<String> {
+        let mut command = Command::new(&self.binary_name);
+        command.arg("rev-parse");
+        command.arg("--abbrev-ref");
+        command.arg("HEAD");
+        command.current_dir(&self.repo_path);
+
+        let output = command.output()?;
+        handle_failure("current_branch_name", &output)?;
+        let (stdout, _) = output_text(&output);
+        Ok(stdout.trim().into())
+    }
+
+    fn create_branch(&self, branch_name: &str, revision: &str) -> Result<()> {
+        let mut command = Command::new(&self.binary_name);
+        command.arg("branch");
+        command.arg(branch_name);
+        command.arg(revision);
+        command.current_dir(&self.repo_path);
+
+        let output = command.output()?;
+        handle_failure("create_branch", &output)?;
+        Ok(())
+    }
+
+    fn fast_forward_merge(&self, branch_name: &str) -> Result<()> {
+        let mut command = Command::new(&self.binary_name);
+        command.arg("merge");
+        command.arg("--ff-only");
+        command.arg(branch_name);
+        command.current_dir(&self.repo_path);
+
+        let output = command.output()?;
+        handle_failure("fast_forward_merge", &output)?;
+        Ok(())
     }
 }
