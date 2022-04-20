@@ -497,9 +497,6 @@ class ProtocolTestGenerator(
         private val ExpectFail = setOf<FailingTest>(
             // TODO(https://github.com/awslabs/smithy/pull/1049): Remove this once the test case in Smithy is fixed
             FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", Action.Response),
-            // TODO(https://github.com/awslabs/smithy/pull/1042): Remove this once the test case in Smithy is fixed
-            FailingTest(RestJson, "RestJsonInputUnionWithUnitMember", Action.Request),
-            FailingTest("${RestJson}Extras", "RestJsonInputUnionWithUnitMember", Action.Request),
         )
         private val RunOnly: Set<String>? = null
 
