@@ -457,10 +457,7 @@ class RustWriter private constructor(
         return listOfNotNull(preheader, header, useDecls, contents).joinToString(separator = "\n", postfix = "\n")
     }
 
-    fun format(r: Any):
-        String {
-        return formatter.apply(r, "")
-    }
+    fun format(r: Any) = formatter.apply(r, "")
 
     fun addDepsRecursively(symbol: Symbol) {
         addDependency(symbol)
