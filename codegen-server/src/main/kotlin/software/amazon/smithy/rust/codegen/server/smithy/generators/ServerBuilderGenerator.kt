@@ -30,8 +30,8 @@ import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.targetNeedsValidation
-import software.amazon.smithy.rust.codegen.smithy.isBoxed
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
@@ -197,7 +197,7 @@ class ServerBuilderGenerator(
         val symbol = symbolProvider.toSymbol(member)
         val memberName = symbolProvider.toMemberName(member)
 
-        val hasBox = symbol.mapRustType { it.stripOuter<RustType.Option>() }.isBoxed()
+        val hasBox = symbol.mapRustType { it.stripOuter<RustType.Option>() }.isRustBoxed()
 
         writer.documentShape(member, model)
         writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
@@ -387,7 +387,7 @@ class ServerBuilderGenerator(
             // Strip the `Option` in case the member is not `required`.
             .mapRustType { it.stripOuter<RustType.Option>() }
 
-        val hadBox = strippedOption.isBoxed()
+        val hadBox = strippedOption.isRustBoxed()
         return strippedOption
             // Strip the `Box` in case the member can reach itself recursively.
             .mapRustType { it.stripOuter<RustType.Box>() }
@@ -423,7 +423,7 @@ class ServerBuilderGenerator(
                         // TODO Remove `TryInto` import when we switch to 2021 edition.
                         val hasBox = builderMemberSymbol(member)
                             .mapRustType { it.stripOuter<RustType.Option>() }
-                            .isBoxed()
+                            .isRustBoxed()
                         if (hasBox) {
                             rustTemplate(
                                 """

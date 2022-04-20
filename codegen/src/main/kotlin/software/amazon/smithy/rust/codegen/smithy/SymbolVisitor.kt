@@ -110,6 +110,23 @@ fun Symbol.makeOptional(): Symbol =
             .build()
     }
 
+/**
+ * Make the Rust type of a symbol boxed (hold `Box<T>`).
+ *
+ * This is idempotent and will have no change if the type is already boxed.
+ */
+fun Symbol.makeRustBoxed(): Symbol =
+    if (isRustBoxed()) {
+        this
+    } else {
+        val rustType = RustType.Box(this.rustType())
+        Symbol.builder()
+            .rustType(rustType)
+            .addReference(this)
+            .name(rustType.name)
+            .build()
+    }
+
 // TODO This can be written in terms of `mapRustType`.
 fun Symbol.wrapValidated(): Symbol {
     val rustType = RustType.Validated(this.rustType())
@@ -239,17 +256,10 @@ class SymbolVisitor(
      *
      * See `RecursiveShapeBoxer.kt` for the model transformation pass that annotates model shapes with [RustBoxTrait].
      */
-    private fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol {
-        return if (shape.hasTrait<RustBoxTrait>()) {
-            val rustType = RustType.Box(symbol.rustType())
-            with(Symbol.builder()) {
-                rustType(rustType)
-                addReference(symbol)
-                name(rustType.name)
-                build()
-            }
+    private fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
+        if (shape.hasTrait<RustBoxTrait>()) {
+            symbol.makeRustBoxed()
         } else symbol
-    }
 
     private fun simpleShape(shape: SimpleShape): Symbol {
         return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).setDefault(Default.RustDefault).build()

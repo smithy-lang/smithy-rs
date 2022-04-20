@@ -18,13 +18,11 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.testRustSettings
-import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
@@ -43,7 +41,7 @@ val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
 fun serverTestCodegenContext(
     model: Model,
     serviceShape: ServiceShape? = null,
-    settings: RustSettings = testRustSettings(model),
+    settings: RustSettings = testRustSettings(),
     mode: CodegenMode = CodegenMode.Client
 ): CodegenContext = CodegenContext(
     model,
