@@ -255,30 +255,30 @@ impl http_body::Body for SdkBody {
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
     ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        let mut callback_errors = Vec::new();
-        let header_map = self
-            .callbacks
-            .iter()
-            .filter_map(|callback| {
-                match callback.trailers() {
-                    Ok(optional_header_map) => optional_header_map,
-                    // early return if a callback encountered an error
-                    Err(e) => {
-                        callback_errors.push(e);
-
-                        None
-                    }
+        let mut header_map = None;
+        // Iterate over all callbacks, checking each for any `HeaderMap`s
+        for callback in &self.callbacks {
+            match callback.trailers() {
+                // If this is the first `HeaderMap` we've encountered, save it
+                Ok(Some(right_header_map)) if header_map.is_none() => {
+                    header_map = Some(right_header_map);
                 }
-            })
-            // Merge any `HeaderMap`s from the last step together, one by one.
-            .reduce(append_merge_header_maps);
-
-        if callback_errors.is_empty() {
-            Poll::Ready(Ok(header_map))
-        } else {
-            // TODO What's the most useful way to surface multiple errors?
-            Poll::Ready(Err(callback_errors.pop().unwrap()))
+                // If this is **not** the first `HeaderMap` we've encountered, merge it
+                Ok(Some(right_header_map)) if header_map.is_some() => {
+                    header_map = Some(append_merge_header_maps(
+                        header_map.unwrap(),
+                        right_header_map,
+                    ));
+                }
+                // Early return if a callback encountered an error.
+                Err(e) => {
+                    return Poll::Ready(Err(e));
+                }
+                // Otherwise, continue on to the next iteration of the loop.
+                _ => continue,
+            }
         }
+        Poll::Ready(Ok(header_map))
     }
 
     fn is_end_stream(&self) -> bool {

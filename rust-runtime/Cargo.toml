@@ -4,6 +4,7 @@ members = [
     "inlineable",
     "aws-smithy-async",
     "aws-smithy-client",
+    "aws-smithy-checksum-callbacks",
     "aws-smithy-eventstream",
     "aws-smithy-http",
     "aws-smithy-http-tower",

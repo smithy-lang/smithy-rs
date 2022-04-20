@@ -5,8 +5,7 @@
 
 //! Checksum calculation and verification callbacks
 
-use super::BodyCallback;
-
+use aws_smithy_http::callback::BodyCallback;
 use aws_smithy_types::base64;
 
 use http::header::{HeaderMap, HeaderName, HeaderValue};
@@ -18,19 +17,21 @@ const CRC_32_C_NAME: &str = "x-amz-checksum-crc32c";
 const SHA_1_NAME: &str = "x-amz-checksum-sha1";
 const SHA_256_NAME: &str = "x-amz-checksum-sha256";
 
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
 #[derive(Debug, Default)]
 struct Crc32ChecksumCallback {
     hasher: crc32fast::Hasher,
 }
 
 impl Crc32ChecksumCallback {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), super::BoxError> {
+    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.hasher.update(bytes);
 
         Ok(())
     }
 
-    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, super::BoxError> {
+    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         let mut header_map = HeaderMap::new();
         let key = HeaderName::from_static(CRC_32_NAME);
         // We clone the hasher because `Hasher::finalize` consumes `self`
@@ -45,11 +46,11 @@ impl Crc32ChecksumCallback {
 }
 
 impl BodyCallback for Crc32ChecksumCallback {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), super::BoxError> {
+    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.update(bytes)
     }
 
-    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, super::BoxError> {
+    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         self.trailers()
     }
 
@@ -64,7 +65,7 @@ struct Crc32CastagnoliChecksumCallback {
 }
 
 impl Crc32CastagnoliChecksumCallback {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), super::BoxError> {
+    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.state = match self.state {
             Some(crc) => Some(crc32c::crc32c_append(crc, bytes)),
             None => Some(crc32c::crc32c(bytes)),
@@ -73,10 +74,9 @@ impl Crc32CastagnoliChecksumCallback {
         Ok(())
     }
 
-    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, super::BoxError> {
+    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         let mut header_map = HeaderMap::new();
         let key = HeaderName::from_static(CRC_32_C_NAME);
-        // TODO should we send checksums for empty bodies?
         // If no data was provided to this callback and no CRC was ever calculated, return zero as the checksum.
         let hash = self.state.unwrap_or_default();
         let value = HeaderValue::from_str(&base64::encode(u32::to_be_bytes(hash)))
@@ -89,11 +89,11 @@ impl Crc32CastagnoliChecksumCallback {
 }
 
 impl BodyCallback for Crc32CastagnoliChecksumCallback {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), super::BoxError> {
+    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.update(bytes)
     }
 
-    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, super::BoxError> {
+    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         self.trailers()
     }
 
@@ -108,13 +108,13 @@ struct Sha1ChecksumCallback {
 }
 
 impl Sha1ChecksumCallback {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), super::BoxError> {
+    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.hasher.write_all(bytes)?;
 
         Ok(())
     }
 
-    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, super::BoxError> {
+    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         let mut header_map = HeaderMap::new();
         let key = HeaderName::from_static(SHA_1_NAME);
         // We clone the hasher because `Hasher::finalize` consumes `self`
@@ -129,11 +129,11 @@ impl Sha1ChecksumCallback {
 }
 
 impl BodyCallback for Sha1ChecksumCallback {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), super::BoxError> {
+    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.update(bytes)
     }
 
-    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, super::BoxError> {
+    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         self.trailers()
     }
 
@@ -148,13 +148,13 @@ struct Sha256ChecksumCallback {
 }
 
 impl Sha256ChecksumCallback {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), super::BoxError> {
+    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.hasher.write_all(bytes)?;
 
         Ok(())
     }
 
-    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, super::BoxError> {
+    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         let mut header_map = HeaderMap::new();
         let key = HeaderName::from_static(SHA_256_NAME);
         // We clone the hasher because `Hasher::finalize` consumes `self`
@@ -169,11 +169,11 @@ impl Sha256ChecksumCallback {
 }
 
 impl BodyCallback for Sha256ChecksumCallback {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), super::BoxError> {
+    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.update(bytes)
     }
 
-    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, super::BoxError> {
+    fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         self.trailers()
     }
 

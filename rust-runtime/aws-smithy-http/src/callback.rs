@@ -5,18 +5,18 @@
 
 //! A module for traits that define callbacks that will be called at specific points in an HTTP request's lifecycle.
 
-mod checksum;
-
 use http::{HeaderMap, HeaderValue};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 /// A callback that, when inserted into a request body, will be called for corresponding lifecycle events.
-pub trait BodyCallback: Send {
+pub trait BodyCallback: Send + Sync {
     /// This lifecycle function is called for each chunk **successfully** read. If an error occurs while reading a chunk,
     /// this method will not be called. This method takes `&mut self` so that implementors may modify an implementing
     /// struct/enum's internal state. Implementors may return an error.
-    fn update(&mut self, #[allow(unused_variables)] bytes: &[u8]) -> Result<(), BoxError> {
+    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
+        // "Use" bytes so that the compiler won't complain.
+        let _ = bytes;
         Ok(())
     }
 
