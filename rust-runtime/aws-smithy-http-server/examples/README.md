@@ -15,17 +15,31 @@ can be used directly.
 
 `make distclean` can be used for a complete cleanup of all artefacts.
 
-## Run
+## On Hyper server
+
+### Run
 
 `cargo run` can be used to start the Pokémon service on
 `http://localhost:13734`.
 
-## Test
+### Test
 
 `cargo test` can be used to spawn the service and run some simple integration
 tests against it.
 
 More info can be found in the `tests` folder of `pokemon_service` package.
+
+## On Lambda
+
+### Run
+
+`make lambda_watch` can be used to start the Pokémon service using the
+Lambda emulator provided by https://github.com/cargo-lambda/cargo-lambda.
+
+### Test
+
+`make lambda_invoke` can be used to run some simple request based on a
+API Gateway sample payload.
 
 ## Benchmarks
 

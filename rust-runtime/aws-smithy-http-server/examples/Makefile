@@ -23,6 +23,12 @@ run: codegen
 doc-open: codegen
 	cargo doc --no-deps --open
 
+lambda_watch:
+	cargo lambda watch
+
+lambda_invoke:
+	cargo lambda invoke bootstrap --data-file pokemon_service/tests/fixtures/example-apigw-request.json
+
 clean:
 	cargo clean || echo "Unable to run cargo clean"
 

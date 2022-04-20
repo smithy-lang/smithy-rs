@@ -12,6 +12,11 @@ use pokemon_service_sdk::operation_registry::OperationRegistryBuilder;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
+/// Returns true if it is running on AWS Lambda
+pub fn is_running_on_lambda() -> bool {
+    std::env::var("AWS_LAMBDA_RUNTIME_API").is_ok()
+}
+
 #[tokio::main]
 pub async fn main() {
     setup_tracing();
@@ -36,11 +41,15 @@ pub async fn main() {
             .layer(AddExtensionLayer::new(shared_state)),
     );
 
-    // Start the [`hyper::Server`].
-    let server = hyper::Server::bind(&"0.0.0.0:13734".parse().unwrap()).serve(app.into_make_service());
-
-    // Run forever-ish...
-    if let Err(err) = server.await {
-        eprintln!("server error: {}", err);
+    if is_running_on_lambda() {
+        // Start Lambda
+        lambda_http::run(app.into_make_lambda_service()).await.unwrap();
+    } else {
+        // Start the [`hyper::Server`].
+        let server = hyper::Server::bind(&"0.0.0.0:13734".parse().unwrap()).serve(app.into_make_service());
+        // Run forever-ish...
+        if let Err(err) = server.await {
+            eprintln!("server error: {}", err);
+        }
     }
 }

@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 hyper = {version = "0.14", features = ["server"] }
+lambda_http = "0.5"
 tokio = "1"
 tower = "0.4"
 tower-http = { version = "0.2", features = ["trace"] }
@@ -24,3 +25,7 @@ wrk-api-bench = "0.0.7"
 # Local paths
 aws-smithy-client  = { path = "../../../aws-smithy-client/", features = ["rustls"] }
 pokemon_service_client = { path = "../pokemon_service_client/" }
+
+[[bin]]
+name = "bootstrap"
+path = "src/main.rs"
