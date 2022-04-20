@@ -6,11 +6,8 @@
 // This code was copied and then modified from https://github.com/hanabu/lambda-web
 
 use futures_util::future::BoxFuture;
-use hyper::{
-    service::Service as HyperService,
-    body::HttpBody as HyperHttpBody,
-};
-use lambda_http::{Body, Error as LambdaError, IntoResponse, Request, Response, Service};
+use hyper::{body::HttpBody as HyperHttpBody, service::Service as HyperService};
+use lambda_http::{Body, Error as LambdaError, Request, Response, Service};
 use std::{
     convert::Infallible,
     error::Error as StdError,
@@ -40,8 +37,7 @@ impl<'a, S> IntoMakeLambdaService<'a, S> {
 
 impl<'a, S, B> Service<Request> for IntoMakeLambdaService<'a, S>
 where
-    S: HyperService<HyperRequest, Response = HyperResponse<B>, Error = Infallible>
-        + Send + Clone + 'static,
+    S: HyperService<HyperRequest, Response = HyperResponse<B>, Error = Infallible> + Send + Clone + 'static,
     S::Future: Send + 'a,
     B: HyperHttpBody + Send + Debug,
     <B as HyperHttpBody>::Error: StdError + Send + Sync + 'static,
@@ -56,28 +52,20 @@ where
     }
 
     /// Lambda handler function
-    /// Parse Lambda event as hyper request,
-    /// serialize hyper response to Lambda JSON response
+    /// Parse Lambda request as hyper request,
+    /// serialize hyper response to Lambda response
     fn call(&mut self, event: Request) -> Self::Future {
         // Parse request
         let hyper_request = lambda_to_hyper_request(event);
 
         // Call hyper service when request parsing succeeded
-        let svc_call = hyper_request.map(|req| Service::call(&mut self.service.clone(), req));
+        let svc_call = Service::call(&mut self.service.clone(), hyper_request);
 
         let fut = async move {
-            match svc_call {
-                Ok(svc_fut) => {
-                    // Request parsing succeeded
-                    let response = svc_fut.await.expect("It should not fail");
-                    // Returns as Lambda response
-                    hyper_to_lambda_response(response).await
-                }
-                Err(request_err) => {
-                    // Request parsing error
-                    Err(request_err.into())
-                }
-            }
+           // Request parsing succeeded
+           let response = svc_call.await.expect("It should not fail");
+           // Returns as Lambda response
+           hyper_to_lambda_response(response).await
         };
         MakeRouteLambdaServiceFuture::new(Box::pin(fut))
     }
@@ -88,7 +76,7 @@ opaque_future! {
     pub type MakeRouteLambdaServiceFuture = BoxFuture<'static, Result<Response<Body>, LambdaError>>;
 }
 
-fn lambda_to_hyper_request(event: Request) -> Result<HyperRequest, hyper::Error> {
+fn lambda_to_hyper_request(event: Request) -> HyperRequest {
     println!("Lambda request {:?}", event);
     let (parts, body) = event.into_parts();
     let body = match body {
@@ -98,7 +86,7 @@ fn lambda_to_hyper_request(event: Request) -> Result<HyperRequest, hyper::Error>
     };
     let req = hyper::Request::from_parts(parts, body);
     println!("Hyper request {:?}", req);
-    Ok(req)
+    req
 }
 
 async fn hyper_to_lambda_response<B>(response: HyperResponse<B>) -> Result<Response<Body>, LambdaError>
@@ -112,7 +100,7 @@ where
     let body = hyper::body::to_bytes(body).await?;
     let res = Response::from_parts(parts, Body::from(body.as_ref()));
     println!("Lambda response {:?}", res);
-    Ok(res.into_response())
+    Ok(res)
 }
 
 #[cfg(test)]
