@@ -5,6 +5,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use sdk_sync::init_tracing;
 use sdk_sync::sync::Sync;
 use smithy_rs_tool_common::macros::here;
 use std::path::PathBuf;
@@ -42,6 +43,7 @@ struct Args {
 ///   --smithy-rs /Users/zhessler/Documents/smithy-rs-test
 /// ```
 fn main() -> Result<()> {
+    init_tracing();
     let args = Args::parse();
 
     let sync = Sync::new(

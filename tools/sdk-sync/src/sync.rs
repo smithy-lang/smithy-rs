@@ -11,7 +11,8 @@ use anyhow::{bail, Context, Result};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use tracing::info;
+use tracing_attributes::instrument;
 
 pub const BOT_NAME: &str = "AWS SDK Rust Bot";
 pub const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
@@ -60,11 +61,14 @@ impl Sync {
         }
     }
 
+    #[instrument(skip(self))]
     pub fn sync(&self) -> Result<()> {
+        info!("Loading versions.toml...");
         let versions = self
             .versions
             .load(self.aws_sdk_rust.path())
             .context("load versions.toml")?;
+        info!("{:?}", versions);
 
         let has_model_changes = self.stash_model_changes().context("stash model changes")?;
         self.sync_smithy_rs(&versions).context("sync smithy-rs")?;
@@ -80,8 +84,14 @@ impl Sync {
     /// Stores model changes in another branch so that the smithy-rs sync and example sync
     /// can be done with the old models to keep the changes isolated to their individual commits.
     /// Returns `true` if there are model changes.
+    #[instrument(skip(self))]
     fn stash_model_changes(&self) -> Result<bool> {
+        info!("Stashing model changes...");
         let original_revision = self.smithy_rs.get_head_revision().context(here!())?;
+        info!(
+            "smithy-rs revision with model changes: {}",
+            original_revision
+        );
 
         // Create a branch to hold the model changes without switching to it
         self.smithy_rs
@@ -95,12 +105,16 @@ impl Sync {
             .context(here!())?;
 
         let head = self.smithy_rs.get_head_revision().context(here!())?;
-        Ok(head != original_revision)
+        info!("smithy-rs revision without model changes: {}", head);
+        let has_model_changes = head != original_revision;
+        info!("smithy-rs has model changes: {}", has_model_changes);
+        Ok(has_model_changes)
     }
 
     /// Restore the model changes and generate code based on them.
+    #[instrument(skip(self))]
     fn sync_model_changes(&self, versions: &VersionsManifest) -> Result<()> {
-        eprintln!("Syncing model changes...");
+        info!("Syncing model changes...");
 
         // Restore the model changes
         self.smithy_rs
@@ -127,8 +141,9 @@ impl Sync {
     }
 
     /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
+    #[instrument(skip(self, versions))]
     fn sync_smithy_rs(&self, versions: &VersionsManifest) -> Result<()> {
-        eprintln!(
+        info!(
             "Checking for smithy-rs commits in range HEAD..{}",
             versions.smithy_rs_revision
         );
@@ -139,15 +154,15 @@ impl Sync {
         commits.reverse(); // Order the revs from earliest to latest
 
         if commits.is_empty() {
-            eprintln!("There are no new commits to be applied, have a nice day.");
+            info!("There are no new commits to be applied, have a nice day.");
             return Ok(());
         }
 
-        eprintln!("Syncing {} commit(s)...", commits.len());
+        info!("Syncing {} commit(s)...", commits.len());
 
         // Run through all the new commits, syncing them one by one
         for (i, rev) in commits.iter().enumerate() {
-            eprintln!("[{}]\tsyncing {}...", i + 1, rev);
+            info!("[{}] Syncing {}...", i + 1, rev);
             let commit = self
                 .smithy_rs
                 .show(rev.as_ref())
@@ -167,7 +182,7 @@ impl Sync {
                 .context("couldn't commit SDK changes to aws-sdk-rust")?;
         }
 
-        eprintln!(
+        info!(
             "Successfully synced {} smithy-rs commit(s) to aws-sdk-rust",
             commits.len(),
         );
@@ -178,6 +193,7 @@ impl Sync {
     /// Aggregate the commits made to Rust SDK examples into one while maintaining attribution.
     /// We squash all the example commits since the examples repo does merges rather than squash merges,
     /// and we prefer squash merges in aws-sdk-rust.
+    #[instrument(skip(self, versions))]
     fn sync_examples(&self, versions: &VersionsManifest) -> Result<()> {
         // Only consider revisions on the `rust_dev_preview/` directory since
         // copying over changes to other language examples is pointless
@@ -190,20 +206,20 @@ impl Sync {
             )
             .context(here!())?;
         if example_revisions.is_empty() {
-            eprintln!("No example changes to copy over.");
+            info!("No example changes to copy over.");
             return Ok(());
         }
         let examples_head = example_revisions.iter().cloned().next().unwrap();
 
         let from = self.aws_doc_sdk_examples.path().join("rust_dev_preview");
 
-        eprintln!("\tcleaning examples...");
+        info!("Cleaning examples...");
         self.fs
             .remove_dir_all_idempotent(&self.smithy_rs.path().join("aws/sdk/examples"))
             .context(here!())?;
 
-        eprintln!(
-            "\tcopying examples from {:?} to 'smithy-rs/aws/sdk/examples'...",
+        info!(
+            "Copying examples from {:?} to 'smithy-rs/aws/sdk/examples'...",
             from
         );
         self.fs
@@ -253,9 +269,9 @@ impl Sync {
     }
 
     /// Generate an SDK and copy it into `aws-sdk-rust`.
+    #[instrument(skip(self))]
     fn build_and_copy_sdk(&self, aws_doc_sdk_examples_revision: &CommitHash) -> Result<()> {
-        eprintln!("\tbuilding the SDK...");
-        let start = Instant::now();
+        info!("Generating the SDK...");
 
         // The output of running these commands isn't logged anywhere unless they fail
         self.smithy_rs_gradle.aws_sdk_clean().context(here!())?;
@@ -264,7 +280,7 @@ impl Sync {
             .context(here!())?;
 
         let build_artifact_path = self.smithy_rs.path().join("aws/sdk/build/aws-sdk");
-        eprintln!("\tsuccessfully generated the SDK in {:?}", start.elapsed());
+        info!("Successfully generated the SDK");
 
         self.clean_out_existing_sdk()
             .context("couldn't clean out existing SDK from aws-sdk-rust")?;
@@ -285,15 +301,16 @@ impl Sync {
     }
 
     /// Copies current examples in aws-sdk-rust back into smithy-rs.
+    #[instrument(skip(self))]
     fn copy_original_examples(&self) -> Result<()> {
-        eprintln!("\tcleaning examples...");
+        info!("Cleaning examples...");
         self.fs
             .remove_dir_all_idempotent(&self.smithy_rs.path().join("aws/sdk/examples"))
             .context(here!())?;
 
         let from = self.aws_sdk_rust.path().join("examples");
-        eprintln!(
-            "\tcopying examples from {:?} to 'smithy-rs/aws/sdk/examples'...",
+        info!(
+            "Copying examples from {:?} to 'smithy-rs/aws/sdk/examples'...",
             from
         );
         self.fs
@@ -303,9 +320,10 @@ impl Sync {
     }
 
     /// Commit the changes to aws-sdk-rust reflecting the info from a commit in another repository.
+    #[instrument(skip(self))]
     fn commit_sdk_changes(&self, prefix: &str, based_on_commit: &Commit) -> Result<()> {
         if self.aws_sdk_rust.has_changes().context(here!())? {
-            eprintln!("\tcommitting...");
+            info!("Committing generated SDK...");
 
             self.aws_sdk_rust
                 .stage(&PathBuf::from("."))
@@ -320,9 +338,9 @@ impl Sync {
             )?;
 
             let commit_hash = self.aws_sdk_rust.get_head_revision()?;
-            eprintln!("\tsuccessfully committed {}", commit_hash);
+            info!("Successfully committed {}", commit_hash);
         } else {
-            eprintln!(
+            info!(
                 "No changes to the SDK found for commit: {}. Skipping.",
                 based_on_commit.hash
             );
@@ -331,23 +349,20 @@ impl Sync {
     }
 
     /// Delete any current SDK files in aws-sdk-rust. Run this before copying over new files.
+    #[instrument(skip(self))]
     fn clean_out_existing_sdk(&self) -> Result<()> {
-        eprintln!("\tcleaning out previously built SDK...");
-        let start = Instant::now();
+        info!("Cleaning out previously generated SDK...");
         self.fs
             .delete_all_generated_files_and_folders(self.aws_sdk_rust.path())
             .context(here!())?;
-        eprintln!(
-            "\tsuccessfully cleaned out previously built SDK in {:?}",
-            start.elapsed()
-        );
         Ok(())
     }
 
     /// Recursively copy all files and folders from the smithy-rs build artifacts folder
     /// to the aws-sdk-rust repo folder. Paths passed in must be absolute.
+    #[instrument(skip(self))]
     fn copy_sdk(&self, from_path: &Path, to_path: &Path) -> Result<()> {
-        eprintln!("\tcopying built SDK...");
+        info!("Copying generated SDK...");
 
         assert!(
             from_path.is_absolute(),
@@ -365,7 +380,7 @@ impl Sync {
             .recursive_copy(&from_path.join("."), to_path)
             .context(here!())?;
 
-        eprintln!("\tsuccessfully copied built SDK");
+        info!("Successfully copied generated SDK");
         Ok(())
     }
 }

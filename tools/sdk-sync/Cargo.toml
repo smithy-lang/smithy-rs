@@ -15,14 +15,18 @@ publish = false
 opt-level = 0
 
 [dependencies]
-anyhow = "1"
+anyhow = "1.0.56"
 clap = { version = "3.1.8", features = ["derive"] }
-gitignore = "1"
-serde = { version = "1", features = ["derive"] }
+gitignore = "1.0.7"
+serde = { version = "1.0.136", features = ["derive"] }
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
-toml = "0.5"
+toml = "0.5.9"
+tracing = "0.1.34"
+tracing-attributes = "0.1.20"
+tracing-subscriber = { version = "0.3.11", features = ["env-filter"] }
 
 [dev-dependencies]
-mockall = "0.11"
-pretty_assertions = "1.2"
-tempdir = "0.3"
+mockall = "0.11.0"
+once_cell = "1.10.0"
+pretty_assertions = "1.2.1"
+tempdir = "0.3.7"

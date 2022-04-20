@@ -11,6 +11,7 @@ use std::error::Error;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tracing::{info, warn};
 
 static HANDWRITTEN_DOTFILE: &str = ".handwritten";
 
@@ -51,9 +52,7 @@ impl DefaultFs {
 
 impl Fs for DefaultFs {
     fn delete_all_generated_files_and_folders(&self, directory: &Path) -> Result<()> {
-        eprintln!("\tchecking for 'generated' files and folders in the current SDK...");
         let dotfile_path = directory.join(HANDWRITTEN_DOTFILE);
-        eprintln!("\tloading dotfile at {}", dotfile_path.display());
         let handwritten_files =
             HandwrittenFiles::from_dotfile(&dotfile_path, directory).context(here!())?;
         let generated_files = handwritten_files
@@ -73,8 +72,8 @@ impl Fs for DefaultFs {
             };
         }
 
-        eprintln!(
-            "\tdeleted {} 'generated' files and {} folders in the current SDK folder",
+        info!(
+            "Deleted {} generated files and {} entire generated directories",
             file_count, folder_count
         );
 
@@ -86,9 +85,7 @@ impl Fs for DefaultFs {
         aws_sdk_path: &Path,
         build_artifacts_path: &Path,
     ) -> Result<Vec<PathBuf>> {
-        eprintln!("\tchecking for 'handwritten' files and folders in the generated SDK folder...");
         let dotfile_path = aws_sdk_path.join(HANDWRITTEN_DOTFILE);
-        eprintln!("\tloading dotfile at {}", dotfile_path.display());
         let handwritten_files =
             HandwrittenFiles::from_dotfile(&dotfile_path, build_artifacts_path).context(here!())?;
 
@@ -97,8 +94,8 @@ impl Fs for DefaultFs {
             .context(here!())?
             .collect();
 
-        eprintln!(
-            "\tfound {} 'handwritten' files and folders in the generated SDK folder",
+        info!(
+            "Found {} handwritten files and folders in aws-sdk-rust",
             files.len()
         );
 
@@ -189,8 +186,8 @@ impl HandwrittenFiles {
         let dotfile_kind = handwritten_files.file_kind(&root.join(HANDWRITTEN_DOTFILE));
 
         if dotfile_kind == FileKind::Generated {
-            eprintln!(
-                "warning: your handwritten dotfile at {} isn't marked as handwritten, is this intentional?",
+            warn!(
+                "Your handwritten dotfile at {} isn't marked as handwritten, is this intentional?",
                 dotfile_path.display()
             );
         }

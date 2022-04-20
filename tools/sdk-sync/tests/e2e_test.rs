@@ -5,10 +5,17 @@
 
 use anyhow::Result;
 use mockall::{predicate::*, Sequence};
+use once_cell::sync::Lazy;
 use sdk_sync::git::{Commit, CommitHash};
+use sdk_sync::init_tracing;
 use sdk_sync::sync::{Sync, BOT_EMAIL, BOT_NAME, MODEL_STASH_BRANCH_NAME};
 use sdk_sync::versions::VersionsManifest;
 use std::path::{Path, PathBuf};
+
+static INIT_TRACING: Lazy<bool> = Lazy::new(|| {
+    init_tracing();
+    true
+});
 
 mockall::mock! {
     Fs {}
@@ -424,6 +431,7 @@ fn expect_sync_model_changes(mocks: &mut Mocks, seq: &mut Sequence) {
 
 #[test]
 fn mocked_e2e_without_model_changes() {
+    assert!(*INIT_TRACING);
     let mut mocks = Mocks::default();
     let mut seq = Sequence::new();
 
@@ -500,6 +508,7 @@ fn mocked_e2e_without_model_changes() {
 
 #[test]
 fn mocked_e2e_with_model_changes() {
+    assert!(*INIT_TRACING);
     let mut mocks = Mocks::default();
     let mut seq = Sequence::new();
 

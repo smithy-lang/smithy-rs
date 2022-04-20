@@ -9,6 +9,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tracing::debug;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommitHash(String);
@@ -153,7 +154,7 @@ impl GitCLI {
         ));
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("extract_commit_info", &output)?;
         let (stdout, _) = output_text(&output);
         Ok(stdout.trim().into())
@@ -165,7 +166,7 @@ impl GitCLI {
         command.arg("--quiet");
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         match output.status.code() {
             Some(0) => Ok(false),
             Some(1) => Ok(true),
@@ -183,7 +184,7 @@ impl GitCLI {
         command.arg("--others");
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("has_untracked_files", &output)?;
         let (stdout, _) = output_text(&output);
         // If there was output at all, then there are untracked files
@@ -202,7 +203,7 @@ impl Git for GitCLI {
         command.arg("HEAD");
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("get_head_revision", &output)?;
         let (stdout, _) = output_text(&output);
         Ok(CommitHash(stdout.trim().into()))
@@ -214,7 +215,7 @@ impl Git for GitCLI {
         command.arg(path);
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("stage", &output)?;
         Ok(())
     }
@@ -239,7 +240,7 @@ impl Git for GitCLI {
         command.arg(format!("{} <{}>", author_name, author_email));
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("commit_on_behalf", &output)?;
         Ok(())
     }
@@ -255,7 +256,7 @@ impl Git for GitCLI {
         command.arg(message);
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("commit", &output)?;
         Ok(())
     }
@@ -278,7 +279,7 @@ impl Git for GitCLI {
         }
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("rev_list", &output)?;
         let (stdout, _) = output_text(&output);
         Ok(stdout
@@ -305,7 +306,7 @@ impl Git for GitCLI {
         command.arg(revision);
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("rev_list", &output)?;
         Ok(())
     }
@@ -321,7 +322,7 @@ impl Git for GitCLI {
         command.arg("HEAD");
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("current_branch_name", &output)?;
         let (stdout, _) = output_text(&output);
         Ok(stdout.trim().into())
@@ -334,7 +335,7 @@ impl Git for GitCLI {
         command.arg(revision);
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("create_branch", &output)?;
         Ok(())
     }
@@ -346,8 +347,22 @@ impl Git for GitCLI {
         command.arg(branch_name);
         command.current_dir(&self.repo_path);
 
-        let output = command.output()?;
+        let output = log_command(command).output()?;
         handle_failure("fast_forward_merge", &output)?;
         Ok(())
     }
+}
+
+fn log_command(command: Command) -> Command {
+    let mut message = String::new();
+    if let Some(cwd) = command.get_current_dir() {
+        message.push_str(&format!("[in {:?}]: ", cwd));
+    }
+    message.push_str(command.get_program().to_str().expect("valid str"));
+    for arg in command.get_args() {
+        message.push(' ');
+        message.push_str(arg.to_str().expect("valid str"));
+    }
+    debug!("{}", message);
+    command
 }
