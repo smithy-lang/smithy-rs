@@ -5,7 +5,7 @@
 
 import org.gradle.api.Project
 import java.io.File
-import java.util.*
+import java.util.Properties
 
 class PropertyRetriever(private val rootProject: Project, private val project: Project) {
     /** Get a project property by name if it exists (including from local.properties) */
