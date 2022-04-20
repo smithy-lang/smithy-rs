@@ -43,7 +43,8 @@ impl<'a, S> IntoMakeLambdaService<'a, S>{
 impl<'a, S, B> Service<Request> for IntoMakeLambdaService<'a, S>
 where
     S: HyperService<HyperRequest, Response = HyperResponse<B>, Error = BoxError>
-        + 'static,
+        + Send + 'static,
+    S::Future: Send + 'a,
     B: HyperHttpBody + Debug,
     <B as HyperHttpBody>::Error: StdError + Send + Sync + 'static,
 {
@@ -72,15 +73,6 @@ where
             match svc_call {
                 Ok(svc_fut) => {
                     // Request parsing succeeded
-                    // empty_response().unwrap()
-                    // match empty_response() {
-                    //     Ok(response) => {
-                    //         Ok(response)
-                    //     }
-                    //     Err(response_err) => {
-                    //         Err(response_err.get_ref())//Err(RuntimeErrorKind::InternalFailure(crate::Error::new(response_err)))
-                    //     }
-                    // }
                     match svc_fut.await {
                         Ok(response) => {
                             // Returns as Lambda response
