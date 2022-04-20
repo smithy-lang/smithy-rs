@@ -87,7 +87,7 @@ private fun <T : CodeWriter, U> T.withTemplate(
 ): U {
     val contents = transformTemplate(template, scope)
     pushState()
-    this.putContext(scope.toMap().mapKeys { (k, _) -> k.toLowerCase() })
+    this.putContext(scope.toMap().mapKeys { (k, _) -> k.lowercase() })
     val out = f(contents)
     this.popState()
     return out
@@ -135,7 +135,7 @@ fun <T : CodeWriter> T.rust(
 
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
-    check(scope.distinctBy { it.first.toLowerCase() }.size == scope.size) { "Duplicate cased keys not supported" }
+    check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
     return template.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult ->
         val keyName = matchResult.groupValues[1]
         if (!scope.toMap().keys.contains(keyName)) {
@@ -145,7 +145,7 @@ private fun transformTemplate(template: String, scope: Array<out Pair<String, An
                 }"
             )
         }
-        "#{${keyName.toLowerCase()}:T}"
+        "#{${keyName.lowercase()}:T}"
     }.trim()
 }
 
@@ -459,8 +459,8 @@ class RustWriter private constructor(
 
     fun format(r: Any):
         String {
-            return formatter.apply(r, "")
-        }
+        return formatter.apply(r, "")
+    }
 
     fun addDepsRecursively(symbol: Symbol) {
         addDependency(symbol)
