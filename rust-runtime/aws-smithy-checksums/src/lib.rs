@@ -20,11 +20,11 @@ const SHA_256_NAME: &str = "x-amz-checksum-sha256";
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug, Default)]
-struct Crc32ChecksumCallback {
+struct Crc32callback {
     hasher: crc32fast::Hasher,
 }
 
-impl Crc32ChecksumCallback {
+impl Crc32callback {
     fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.hasher.update(bytes);
 
@@ -45,7 +45,7 @@ impl Crc32ChecksumCallback {
     }
 }
 
-impl BodyCallback for Crc32ChecksumCallback {
+impl BodyCallback for Crc32callback {
     fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.update(bytes)
     }
@@ -55,16 +55,16 @@ impl BodyCallback for Crc32ChecksumCallback {
     }
 
     fn make_new(&self) -> Box<dyn BodyCallback> {
-        Box::new(Crc32ChecksumCallback::default())
+        Box::new(Crc32callback::default())
     }
 }
 
 #[derive(Debug, Default)]
-struct Crc32CastagnoliChecksumCallback {
+struct Crc32cCallback {
     state: Option<u32>,
 }
 
-impl Crc32CastagnoliChecksumCallback {
+impl Crc32cCallback {
     fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.state = match self.state {
             Some(crc) => Some(crc32c::crc32c_append(crc, bytes)),
@@ -88,7 +88,7 @@ impl Crc32CastagnoliChecksumCallback {
     }
 }
 
-impl BodyCallback for Crc32CastagnoliChecksumCallback {
+impl BodyCallback for Crc32cCallback {
     fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.update(bytes)
     }
@@ -98,16 +98,16 @@ impl BodyCallback for Crc32CastagnoliChecksumCallback {
     }
 
     fn make_new(&self) -> Box<dyn BodyCallback> {
-        Box::new(Crc32CastagnoliChecksumCallback::default())
+        Box::new(Crc32cCallback::default())
     }
 }
 
 #[derive(Debug, Default)]
-struct Sha1ChecksumCallback {
+struct Sha1Callback {
     hasher: sha1::Sha1,
 }
 
-impl Sha1ChecksumCallback {
+impl Sha1Callback {
     fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.hasher.write_all(bytes)?;
 
@@ -128,7 +128,7 @@ impl Sha1ChecksumCallback {
     }
 }
 
-impl BodyCallback for Sha1ChecksumCallback {
+impl BodyCallback for Sha1Callback {
     fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.update(bytes)
     }
@@ -138,16 +138,16 @@ impl BodyCallback for Sha1ChecksumCallback {
     }
 
     fn make_new(&self) -> Box<dyn BodyCallback> {
-        Box::new(Sha1ChecksumCallback::default())
+        Box::new(Sha1Callback::default())
     }
 }
 
 #[derive(Debug, Default)]
-struct Sha256ChecksumCallback {
+struct Sha256Callback {
     hasher: sha2::Sha256,
 }
 
-impl Sha256ChecksumCallback {
+impl Sha256Callback {
     fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.hasher.write_all(bytes)?;
 
@@ -168,7 +168,7 @@ impl Sha256ChecksumCallback {
     }
 }
 
-impl BodyCallback for Sha256ChecksumCallback {
+impl BodyCallback for Sha256Callback {
     fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
         self.update(bytes)
     }
@@ -178,15 +178,15 @@ impl BodyCallback for Sha256ChecksumCallback {
     }
 
     fn make_new(&self) -> Box<dyn BodyCallback> {
-        Box::new(Sha256ChecksumCallback::default())
+        Box::new(Sha256Callback::default())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        Crc32CastagnoliChecksumCallback, Crc32ChecksumCallback, Sha1ChecksumCallback,
-        Sha256ChecksumCallback, CRC_32_C_NAME, CRC_32_NAME, SHA_1_NAME, SHA_256_NAME,
+        Crc32cCallback, Crc32callback, Sha1Callback, Sha256Callback, CRC_32_C_NAME, CRC_32_NAME,
+        SHA_1_NAME, SHA_256_NAME,
     };
 
     use aws_smithy_types::base64;
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_crc32_checksum() {
-        let mut checksum_callback = Crc32ChecksumCallback::default();
+        let mut checksum_callback = Crc32callback::default();
         checksum_callback.update(TEST_DATA.as_bytes()).unwrap();
         let checksum_callback_result = checksum_callback.trailers().unwrap().unwrap();
         let encoded_checksum = checksum_callback_result.get(CRC_32_NAME).unwrap();
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_crc32c_checksum() {
-        let mut checksum_callback = Crc32CastagnoliChecksumCallback::default();
+        let mut checksum_callback = Crc32cCallback::default();
         checksum_callback.update(TEST_DATA.as_bytes()).unwrap();
         let checksum_callback_result = checksum_callback.trailers().unwrap().unwrap();
         let encoded_checksum = checksum_callback_result.get(CRC_32_C_NAME).unwrap();
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_sha1_checksum() {
-        let mut checksum_callback = Sha1ChecksumCallback::default();
+        let mut checksum_callback = Sha1Callback::default();
         checksum_callback.update(TEST_DATA.as_bytes()).unwrap();
         let checksum_callback_result = checksum_callback.trailers().unwrap().unwrap();
         let encoded_checksum = checksum_callback_result.get(SHA_1_NAME).unwrap();
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_sha256_checksum() {
-        let mut checksum_callback = Sha256ChecksumCallback::default();
+        let mut checksum_callback = Sha256Callback::default();
         checksum_callback.update(TEST_DATA.as_bytes()).unwrap();
         let checksum_callback_result = checksum_callback.trailers().unwrap().unwrap();
         let encoded_checksum = checksum_callback_result.get(SHA_256_NAME).unwrap();
