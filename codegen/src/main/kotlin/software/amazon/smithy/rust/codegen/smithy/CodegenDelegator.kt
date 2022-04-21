@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.codegen.core.SymbolProvider
-import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
+import software.amazon.smithy.codegen.core.WriterDelegator
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -47,7 +47,7 @@ open class RustCrate(
      */
     baseModules: Map<String, RustModule>
 ) {
-    private val inner = CodegenWriterDelegator(fileManifest, symbolProvider, RustWriter.Factory)
+    private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.Factory)
     private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
     private val features: MutableSet<Feature> = mutableSetOf()
 
@@ -164,7 +164,7 @@ val DefaultPublicModules = setOf(
  * - inlining inline dependencies that have been used
  * - generating (and writing) a Cargo.toml based on the settings & the required dependencies
  */
-fun CodegenWriterDelegator<RustWriter>.finalize(
+fun WriterDelegator<RustWriter>.finalize(
     settings: RustSettings,
     model: Model,
     manifestCustomizations: ManifestCustomizations,
