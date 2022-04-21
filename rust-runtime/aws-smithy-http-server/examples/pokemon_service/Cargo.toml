@@ -31,4 +31,4 @@ name = "bootstrap"
 path = "src/main.rs"
 
 [package.metadata.lambda.env]
-RUST_LOG = "smithy_http_tower::dispatch=trace,smithy_http::middleware=trace,aws_smithy_http_server=trace"
+RUST_LOG = "smithy_http_tower::dispatch=debug,smithy_http::middleware=debug,aws_smithy_http_server=debug"

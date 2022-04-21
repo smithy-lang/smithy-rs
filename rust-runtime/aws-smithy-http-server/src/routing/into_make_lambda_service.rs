@@ -83,6 +83,7 @@ opaque_future! {
 
 fn lambda_to_hyper_request(request: Request) -> HyperRequest {
     tracing::debug!("Converting Lambda to Hyper request...");
+    tracing::debug!("{:?}", request.request_context());
     // Raw HTTP path without any stage information 
     let raw_path = request.raw_http_path();
     let (parts, body) = request.into_parts();
