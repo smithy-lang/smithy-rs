@@ -328,7 +328,7 @@ impl ByteStream {
     /// NOTE: This will NOT result in a retryable ByteStream. For a ByteStream that can be retried in the case of
     /// upstream failures, use [`ByteStream::from_path`](ByteStream::from_path)
     #[deprecated(
-        since = "0.40",
+        since = "0.40.0",
         note = "Prefer the more extensible ByteStream::read_from() API"
     )]
     #[cfg(feature = "rt-tokio")]

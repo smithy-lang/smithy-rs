@@ -84,6 +84,12 @@ pub struct FsBuilder {
     buffer_size: usize,
 }
 
+impl Default for FsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FsBuilder {
     /// Create a new [`FsBuilder`] (using a default read buffer of 4096 bytes).
     ///
