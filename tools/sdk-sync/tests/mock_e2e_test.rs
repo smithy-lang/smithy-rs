@@ -66,7 +66,6 @@ mockall::mock! {
 mockall::mock! {
     Gradle {}
     impl sdk_sync::gradle::Gradle for Gradle {
-        fn aws_sdk_clean(&self) -> Result<()>;
         fn aws_sdk_assemble(&self, examples_revision: &CommitHash) -> Result<()>;
     }
 }
@@ -191,11 +190,6 @@ impl Mocks {
     }
 
     fn expect_build(&mut self, seq: &mut Sequence, examples_head: &str) {
-        self.smithy_rs_gradle
-            .expect_aws_sdk_clean()
-            .once()
-            .in_sequence(seq)
-            .returning(|| Ok(()));
         let examples_head = examples_head.to_string();
         self.smithy_rs_gradle
             .expect_aws_sdk_assemble()
