@@ -14,89 +14,54 @@ service SimpleService {
 
 @http(uri: "/operation", method: "GET")
 operation AnOperation {
-    // input: RecursiveShapesInputOutput,
-    // output: RecursiveShapesInputOutput,
     input: AnOperationInput,
     output: AnOperationOutput,
 }
 
 structure AnOperationInput {
     @required
-    conA: ConA
+    setA: SetA,
+
+    setC: SetC,
+
+    setD: SetD,
+
+    setE: SetE
 }
 
 structure AnOperationOutput {
-    conA: ConA
+    set: SetA
 }
 
-structure ConA {
-    @required
-    // conB: ConB,
-
-    // optConB: ConB,
-
-    // conBList: ConBList,
-
-    conBSet: ConBSet,
-
-    // conBMap: ConBMap
+set SetA {
+    member: SetB
 }
 
-structure ConB {
-    @required
-    nice: String,
-    @required
-    int: Integer,
-
-    optNice: String,
-    optInt: Integer
-}
-
-// structure RecursiveShapesInputOutput {
-//     nested: RecursiveShapesInputOutputNested1
-// }
-//
-// structure RecursiveShapesInputOutputNested1 {
-//     @required
-//     recursiveMember: RecursiveShapesInputOutputNested2
-// }
-//
-// structure RecursiveShapesInputOutputNested2 {
-//     @required
-//     recursiveMember: RecursiveShapesInputOutputNested1,
-// }
-
-// list ValidList {
-//     member: RecursiveShapesInputOutput
-// }
-//
-// structure RecursiveShapesInputOutput {
-//     @required
-//     foo: ValidList
-// }
-
-list ConBList {
-    member: AnotherList
-}
-
-list AnotherList {
-    member: ConB
-}
-
-set ConBSet {
-    member: AnotherSet
-}
-
-set AnotherSet {
+set SetB {
     member: String
 }
 
-map ConBMap {
-    key: String,
-    value: AnotherMap
+set SetC {
+    member: MapA
 }
 
-map AnotherMap {
+set SetD {
+    member: ListA
+}
+
+set SetE {
+    member: StructureA
+}
+
+list ListA {
+    member: SetA
+}
+
+map MapA {
     key: String,
-    value: ConBList
+    value: String
+}
+
+structure StructureA {
+    string: String
 }
