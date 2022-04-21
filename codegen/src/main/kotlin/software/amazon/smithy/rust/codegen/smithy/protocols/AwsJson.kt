@@ -128,7 +128,7 @@ class AwsJsonSerializerGenerator(
     }
 }
 
-class AwsJson(
+open class AwsJson(
     private val codegenContext: CodegenContext,
     awsJsonVersion: AwsJsonVersion
 ) : Protocol {
@@ -183,6 +183,4 @@ class AwsJson(
         }
 }
 
-private fun awsJsonFieldName(member: MemberShape): String {
-    return member.memberName
-}
+fun awsJsonFieldName(member: MemberShape): String = member.memberName
