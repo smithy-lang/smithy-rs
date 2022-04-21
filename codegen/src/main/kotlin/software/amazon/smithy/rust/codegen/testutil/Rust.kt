@@ -92,7 +92,7 @@ object TestWorkspace {
     }
 
     @Suppress("NAME_SHADOWING")
-    fun testProject(symbolProvider: RustSymbolProvider? = null): TestWriterDelegator {
+    fun testProject(symbolProvider: RustSymbolProvider? = null, debugMode: Boolean = false): TestWriterDelegator {
         val subprojectDir = subproject()
         val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
             override fun config(): SymbolVisitorConfig {
@@ -109,7 +109,8 @@ object TestWorkspace {
         }
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
-            symbolProvider
+            symbolProvider,
+            CodegenConfig(debugMode = debugMode)
         )
     }
 }
@@ -175,8 +176,8 @@ fun RustWriter.unitTest(
  *
  * This exposes both the base directory and a list of [generatedFiles] for test purposes
  */
-class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider: RustSymbolProvider) :
-    RustCrate(fileManifest, symbolProvider, DefaultPublicModules) {
+class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider: RustSymbolProvider, val codegenConfig: CodegenConfig) :
+    RustCrate(fileManifest, symbolProvider, DefaultPublicModules, codegenConfig) {
     val baseDir: Path = fileManifest.baseDir
 
     fun generatedFiles(): List<Path> = fileManifest.files.toList().sorted()
@@ -228,7 +229,7 @@ fun TestWriterDelegator.rustSettings() =
         moduleDescription = "test",
         moduleRepository = null,
         runtimeConfig = TestRuntimeConfig,
-        codegenConfig = CodegenConfig(),
+        codegenConfig = this.codegenConfig,
         license = null
     )
 

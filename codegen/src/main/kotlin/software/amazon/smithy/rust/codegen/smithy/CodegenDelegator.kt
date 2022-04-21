@@ -45,9 +45,10 @@ open class RustCrate(
      * For core modules like `input`, `output`, and `error`, we need to specify whether these modules should be public or
      * private as well as any other metadata. [baseModules] enables configuring this. See [DefaultPublicModules].
      */
-    baseModules: Map<String, RustModule>
+    baseModules: Map<String, RustModule>,
+    codegenConfig: CodegenConfig
 ) {
-    private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.Factory)
+    private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(codegenConfig.debugMode))
     private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
     private val features: MutableSet<Feature> = mutableSetOf()
 

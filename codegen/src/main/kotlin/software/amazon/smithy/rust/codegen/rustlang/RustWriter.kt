@@ -207,7 +207,12 @@ fun <T : AbstractCodeWriter<T>> T.rustBlock(
 /**
  * Generate a RustDoc comment for [shape]
  */
-fun <T : AbstractCodeWriter<T>> T.documentShape(shape: Shape, model: Model, autoSuppressMissingDocs: Boolean = true, note: String? = null): T {
+fun <T : AbstractCodeWriter<T>> T.documentShape(
+    shape: Shape,
+    model: Model,
+    autoSuppressMissingDocs: Boolean = true,
+    note: String? = null
+): T {
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
     when (docTrait?.value?.isNotBlank()) {
@@ -259,7 +264,8 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
 }
 
 /** Escape the [expressionStart] character to avoid problems during formatting */
-fun <T : AbstractCodeWriter<T>> T.escape(text: String): String = text.replace("$expressionStart", "$expressionStart$expressionStart")
+fun <T : AbstractCodeWriter<T>> T.escape(text: String): String =
+    text.replace("$expressionStart", "$expressionStart$expressionStart")
 
 /** Parse input as HTML and normalize it */
 fun normalizeHtml(input: String): String {
@@ -314,7 +320,9 @@ class RustWriter private constructor(
     private val filename: String,
     val namespace: String,
     private val commentCharacter: String = "//",
-    private val printWarning: Boolean = true
+    private val printWarning: Boolean = true,
+    /** Insert comments indicating where code was generated */
+    private val debugMode: Boolean = false,
 ) :
     SymbolWriter<RustWriter, UseDeclarations>(UseDeclarations(namespace)) {
     companion object {
@@ -325,17 +333,44 @@ class RustWriter private constructor(
             RustWriter("$module.rs", "crate::$module")
         }
 
-        val Factory: Factory<RustWriter> = Factory { fileName: String, namespace: String ->
+        fun factory(debugMode: Boolean): Factory<RustWriter> = Factory { fileName: String, namespace: String ->
             when {
-                fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#")
-                fileName.endsWith(".md") -> rawWriter(fileName)
-                fileName == "LICENSE" -> rawWriter(fileName)
-                else -> RustWriter(fileName, namespace)
+                fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
+                fileName.endsWith(".md") -> rawWriter(fileName, debugMode = debugMode)
+                fileName == "LICENSE" -> rawWriter(fileName, debugMode = debugMode)
+                else -> RustWriter(fileName, namespace, debugMode = debugMode)
             }
         }
 
-        private fun rawWriter(fileName: String): RustWriter =
-            RustWriter(fileName, namespace = "ignore", commentCharacter = "ignore", printWarning = false)
+        private fun rawWriter(fileName: String, debugMode: Boolean): RustWriter =
+            RustWriter(
+                fileName,
+                namespace = "ignore",
+                commentCharacter = "ignore",
+                printWarning = false,
+                debugMode = debugMode
+            )
+    }
+
+    override fun write(content: Any?, vararg args: Any?): RustWriter {
+        if (debugMode) {
+            val location = Thread.currentThread().stackTrace
+            location.first { it.isRelevant() }?.let { "/* ${it.fileName}:${it.lineNumber} */" }
+                ?.also { super.writeInline(it) }
+        }
+
+        return super.write(content, *args)
+    }
+
+    /** Helper function to determine if a stack frame is relevant for debug purposes */
+    private fun StackTraceElement.isRelevant(): Boolean {
+        if (this.className.contains("AbstractCodeWriter") || this.className.startsWith("java.lang")) {
+            return false
+        }
+        if (this.fileName == "RustWriter.kt") {
+            return false
+        }
+        return true
     }
 
     private val preamble = mutableListOf<Writable>()
