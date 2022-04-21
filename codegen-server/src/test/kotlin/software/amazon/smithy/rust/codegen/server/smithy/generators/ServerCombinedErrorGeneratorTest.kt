@@ -10,12 +10,10 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.lookup
 
@@ -59,7 +57,7 @@ class ServerCombinedErrorGeneratorTest {
             writer.unitTest(
                 name = "generates_combined_error_enums",
                 test = """
-                    let variant = InvalidGreeting::builder().message("an error").build();
+                    let variant = InvalidGreeting { message: String::from("an error") };
                     assert_eq!(format!("{}", variant), "InvalidGreeting: an error");
                     assert_eq!(variant.message(), "an error");
                     assert_eq!(
