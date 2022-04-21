@@ -8,8 +8,11 @@
 use crate::BoxError;
 use aws_lambda_events::encodings::Body;
 use futures_util::future::BoxFuture;
-use http::Response;
+use http::{Response, uri};
 use http_body::Body as HttpBody;
+use hyper::Body as HyperBody;
+#[allow(unused_imports)]
+use lambda_http::{Request, RequestExt as _};
 use std::{
     convert::Infallible,
     error::Error,
@@ -19,21 +22,20 @@ use std::{
 };
 use tower::Service;
 
-type Request = http::Request<Body>;
-type HyperRequest = http::Request<hyper::Body>;
+type HyperRequest = http::Request<HyperBody>;
 
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct IntoMakeLambdaService<'a, S> {
     service: S,
-    _marker: PhantomData<&'a ()>,
+    _phantom: PhantomData<&'a ()>,
 }
 
 impl<'a, S> IntoMakeLambdaService<'a, S> {
     pub(super) fn new(service: S) -> Self {
         Self {
             service,
-            _marker: PhantomData,
+            _phantom: PhantomData,
         }
     }
 }
@@ -65,10 +67,10 @@ where
         let svc_call = Service::call(&mut self.service.clone(), hyper_request);
 
         let fut = async move {
-           // Request parsing succeeded
-           let response = svc_call.await.expect("It should not fail");
-           // Returns as Lambda response
-           hyper_to_lambda_response(response).await
+            // Request parsing succeeded
+            let response = svc_call.await.expect("It should not fail");
+            // Returns as Lambda response
+            hyper_to_lambda_response(response).await
         };
         MakeRouteLambdaServiceFuture::new(Box::pin(fut))
     }
@@ -81,14 +83,40 @@ opaque_future! {
 
 fn lambda_to_hyper_request(request: Request) -> HyperRequest {
     tracing::debug!("Converting Lambda to Hyper request...");
+    // Raw HTTP path without any stage information 
+    let raw_path = request.raw_http_path();
     let (parts, body) = request.into_parts();
+    let mut uri: uri::Uri = parts.uri;
+    let mut path = String::from(uri.path());
+    if raw_path != path {
+        tracing::debug!("Recreating URI from raw HTTP path.");
+        let uri_parts: uri::Parts = uri.into();
+        let path_and_query = uri_parts.path_and_query.unwrap();
+        if let Some(query) = path_and_query.query() {
+            path.push('?');
+            path.push_str(query);
+        }
+        uri = uri::Uri::builder()
+            .authority(uri_parts.authority.unwrap())
+            .scheme(uri_parts.scheme.unwrap())
+            .path_and_query(path)
+            .build().unwrap();
+    }
+
     let body = match body {
-        Body::Empty => hyper::Body::empty(),
-        Body::Text(s) => hyper::Body::from(s),
-        Body::Binary(v) => hyper::Body::from(v),
+        Body::Empty => HyperBody::empty(),
+        Body::Text(s) => HyperBody::from(s),
+        Body::Binary(v) => HyperBody::from(v),
     };
-    let req = hyper::Request::from_parts(parts, body);
+    let mut req = http::Request::builder()
+        .method(parts.method)
+        .uri(uri)
+        .body(body)
+        .unwrap();
+    // No builder method that sets headers in batch
+    let _ = std::mem::replace(req.headers_mut(), parts.headers);
     tracing::debug!("Hyper request converted successfully.");
+    tracing::debug!("{:?}", req);
     req
 }
 

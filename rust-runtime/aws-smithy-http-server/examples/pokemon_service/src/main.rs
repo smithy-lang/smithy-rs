@@ -7,13 +7,15 @@
 use std::sync::Arc;
 
 use aws_smithy_http_server::{AddExtensionLayer, Router};
+#[allow(unused_imports)]
+use lambda_http::{run as run_on_lambda, RequestExt as _};
 use pokemon_service::{empty_operation, get_pokemon_species, get_server_statistics, setup_tracing, State};
 use pokemon_service_sdk::operation_registry::OperationRegistryBuilder;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
 /// Returns true if it is running on AWS Lambda
-pub fn is_running_on_lambda() -> bool {
+pub fn is_lambda_environment() -> bool {
     std::env::var("AWS_LAMBDA_RUNTIME_API").is_ok()
 }
 
@@ -41,9 +43,9 @@ pub async fn main() {
             .layer(AddExtensionLayer::new(shared_state)),
     );
 
-    if is_running_on_lambda() {
+    if is_lambda_environment() {
         // Start Lambda
-        lambda_http::run(app.into_make_lambda_service()).await.unwrap();
+        run_on_lambda(app.into_make_lambda_service()).await.unwrap();
     } else {
         // Start the [`hyper::Server`].
         let server = hyper::Server::bind(&"0.0.0.0:13734".parse().unwrap()).serve(app.into_make_service());
