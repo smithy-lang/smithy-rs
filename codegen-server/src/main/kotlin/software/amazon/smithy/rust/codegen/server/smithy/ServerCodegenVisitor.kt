@@ -88,7 +88,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
 
         codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, mode = CodegenMode.Server)
 
-        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules)
+        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
