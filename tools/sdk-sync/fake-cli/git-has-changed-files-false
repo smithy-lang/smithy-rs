@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+import os
+import sys
+
+expected = ["/tmp", ["diff-files", "--quiet"]]
+actual = [os.getcwd(), sys.argv[1:]]
+if expected != actual:
+    print(f"ERROR\nExpect: {expected}\nActual: {actual}")
+    sys.exit(127)
+
+sys.exit(0)  # status 0 = false

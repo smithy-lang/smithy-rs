@@ -32,7 +32,7 @@ impl fmt::Display for CommitHash {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Commit {
     pub hash: CommitHash,
     pub author_name: String,
@@ -365,4 +365,162 @@ fn log_command(command: Command) -> Command {
     }
     debug!("{}", message);
     command
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    fn bin_path(script: &'static str) -> PathBuf {
+        dbg!(env::current_dir()
+            .expect("current_dir")
+            .join("fake-cli")
+            .join(script))
+        .canonicalize()
+        .expect("canonicalize")
+    }
+    fn cli(script: &'static str) -> GitCLI {
+        GitCLI::with_binary(&PathBuf::from("/tmp"), &bin_path(script).to_string_lossy())
+    }
+
+    #[test]
+    fn extract_commit_info() {
+        let result = cli("git-extract-commit-info")
+            .extract_commit_info("test_revision", CommitInfo::CommitHash)
+            .expect("successful invocation");
+        assert_eq!("success", result);
+    }
+
+    #[test]
+    fn has_changed_files() {
+        assert!(cli("git-has-changed-files-true")
+            .has_changed_files()
+            .expect("successful invocation"));
+        assert!(!cli("git-has-changed-files-false")
+            .has_changed_files()
+            .expect("successful invocation"));
+    }
+
+    #[test]
+    fn has_untracked_files() {
+        assert!(cli("git-has-untracked-files-true")
+            .has_untracked_files()
+            .expect("successful invocation"));
+        assert!(!cli("git-has-untracked-files-false")
+            .has_untracked_files()
+            .expect("successful invocation"));
+    }
+
+    #[test]
+    fn get_head_revision() {
+        assert_eq!(
+            "some-commit-hash",
+            cli("git-get-head-revision")
+                .get_head_revision()
+                .expect("successful invocation")
+                .as_ref()
+        );
+    }
+
+    #[test]
+    fn stage() {
+        cli("git-stage")
+            .stage(&PathBuf::from("test-path"))
+            .expect("successful invocation");
+    }
+
+    #[test]
+    fn commit_on_behalf() {
+        cli("git-commit-on-behalf")
+            .commit_on_behalf(
+                "Bot Name",
+                "bot@example.com",
+                "Some Author",
+                "author@example.com",
+                "Test message",
+            )
+            .expect("successful invocation");
+    }
+
+    #[test]
+    fn commit() {
+        cli("git-commit")
+            .commit("Some Author", "author@example.com", "Test message")
+            .expect("successful invocation");
+    }
+
+    #[test]
+    fn rev_list() {
+        assert_eq!(
+            vec![
+                CommitHash::from("second-commit"),
+                CommitHash::from("initial-commit")
+            ],
+            cli("git-rev-list")
+                .rev_list("start_inclusive", "end_exclusive", None)
+                .expect("successful invocation")
+        );
+        assert_eq!(
+            vec![
+                CommitHash::from("third-commit"),
+                CommitHash::from("second-commit"),
+                CommitHash::from("initial-commit")
+            ],
+            cli("git-rev-list-path")
+                .rev_list(
+                    "start_inclusive",
+                    "end_exclusive",
+                    Some(&PathBuf::from("some-path"))
+                )
+                .expect("successful invocation")
+        );
+    }
+
+    #[test]
+    fn show() {
+        assert_eq!(
+            Commit {
+                hash: "some-commit-hash".into(),
+                author_name: "Some Author".into(),
+                author_email: "author@example.com".into(),
+                message_subject: "Some message subject".into(),
+                message_body: "Message body\n  with multiple lines".into()
+            },
+            cli("git-show")
+                .show("test_revision")
+                .expect("successful invocation")
+        );
+    }
+
+    #[test]
+    fn hard_reset() {
+        cli("git-reset-hard")
+            .hard_reset("some-revision")
+            .expect("successful invocation");
+    }
+
+    #[test]
+    fn current_branch_name() {
+        assert_eq!(
+            "some-branch-name",
+            cli("git-current-branch-name")
+                .current_branch_name()
+                .expect("successful invocation")
+        );
+    }
+
+    #[test]
+    fn create_branch() {
+        cli("git-create-branch")
+            .create_branch("test-branch-name", "test-revision")
+            .expect("successful invocation");
+    }
+
+    #[test]
+    fn fast_forward_merge() {
+        cli("git-ff-merge")
+            .fast_forward_merge("test-branch-name")
+            .expect("successful invocation");
+    }
 }
