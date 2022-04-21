@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvid
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.util.lookup
-import java.lang.IllegalStateException
 
 class UnconstrainedShapeSymbolProviderTest {
     private val baseModelString =
@@ -73,8 +72,8 @@ class UnconstrainedShapeSymbolProviderTest {
         val structureCShape = model.lookup<StructureShape>("test#StructureC")
         val structureCType = symbolProvider.toSymbol(structureCShape).rustType()
 
-        listAType shouldBe RustType.Opaque("ListAUnconstrained", "crate::validation::list_a_unconstrained")
-        listBType shouldBe RustType.Opaque("ListBUnconstrained", "crate::validation::list_b_unconstrained")
+        listAType shouldBe RustType.Opaque("ListAUnconstrained", "crate::unconstrained::list_a_unconstrained")
+        listBType shouldBe RustType.Opaque("ListBUnconstrained", "crate::unconstrained::list_b_unconstrained")
         structureCType shouldBe RustType.Opaque("Builder", "crate::model::structure_c")
     }
 

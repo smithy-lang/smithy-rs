@@ -113,8 +113,8 @@ class InlineDependency(
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forRustFile("rest_xml_unwrapped_errors", CargoDependency.smithyXml(runtimeConfig))
 
-        fun validation(): InlineDependency =
-            forRustFile("validation")
+        fun constrained(): InlineDependency =
+            forRustFile("constrained")
     }
 }
 

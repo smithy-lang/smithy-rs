@@ -29,13 +29,13 @@ class UnconstrainedShapeSymbolProvider(
         check(shape is CollectionShape || shape.isMapShape)
 
         val name = "${shape.id.getName(serviceShape).toPascalCase()}Unconstrained"
-        val namespace = "crate::${Validation.namespace}::${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}"
+        val namespace = "crate::${Unconstrained.namespace}::${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}"
         val rustType = RustType.Opaque(name, namespace)
         return Symbol.builder()
             .rustType(rustType)
             .name(rustType.name)
             .namespace(rustType.namespace, "::")
-            .definitionFile(Validation.filename)
+            .definitionFile(Unconstrained.filename)
             .build()
     }
 

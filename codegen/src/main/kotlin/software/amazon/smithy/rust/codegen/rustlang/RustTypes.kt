@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.rustlang
 
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 
@@ -105,8 +104,8 @@ sealed class RustType {
         }
     }
 
-    data class Validated(override val member: RustType): RustType(), Container {
-        val runtimeType: RuntimeType = RuntimeType.Validated()
+    data class MaybeConstrained(override val member: RustType): RustType(), Container {
+        val runtimeType: RuntimeType = RuntimeType.MaybeConstrained()
         override val name = runtimeType.name!!
         override val namespace = runtimeType.namespace
     }
@@ -194,7 +193,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
         is RustType.Opaque -> this.name
-        is RustType.Validated -> "${this.name}<${this.member.render(fullyQualified)}>"
+        is RustType.MaybeConstrained -> "${this.name}<${this.member.render(fullyQualified)}>"
     }
     return "$namespace$base"
 }

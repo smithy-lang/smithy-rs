@@ -11,11 +11,11 @@ import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.wrapValidated
+import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
 
 // TODO Docs
 // TODO Can we reuse this generator for sets?
@@ -43,8 +43,8 @@ class UnconstrainedListGenerator(
         val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
-        // TODO Strictly, `ValidateTrait` only needs to be implemented if this list is a struct member.
-        // TODO The implementation of the Validate trait is probably not for the correct type. There might be more than
+        // TODO Strictly, `ConstrainedTrait` only needs to be implemented if this list is a struct member.
+        // TODO The implementation of the Constrained trait is probably not for the correct type. There might be more than
         //    one "path" to an e.g. Vec<Vec<StructA>> with different constraint traits along the path, because constraint
         //    traits can be applied to members, or simply because the model might have two different lists holding `StructA`.
         //    So we might have to newtype things.
@@ -54,13 +54,13 @@ class UnconstrainedListGenerator(
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) Vec<#{InnerUnconstrainedSymbol}>);
                 
-                impl #{ValidateTrait} for #{ConstrainedSymbol}  {
-                    type Unvalidated = $name;
+                impl #{ConstrainedTrait} for #{ConstrainedSymbol}  {
+                    type Unconstrained = $name;
                 }
                 
-                impl From<$name> for #{Validated} {
+                impl From<$name> for #{MaybeConstrained} {
                     fn from(value: $name) -> Self {
-                        Self::Unvalidated(value)
+                        Self::Unconstrained(value)
                     }
                 }
                 
@@ -79,15 +79,15 @@ class UnconstrainedListGenerator(
                                 inner.try_into()
                             })
                             .collect();
-                        res.map_err(|err| ValidationFailure(err))
+                        res.map_err(|err| ConstraintViolation(err))
                     }
                 }
                 """,
                 "InnerUnconstrainedSymbol" to innerSymbol,
                 "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
                 "ConstrainedSymbol" to constrainedSymbol,
-                "Validated" to constrainedSymbol.wrapValidated(),
-                "ValidateTrait" to RuntimeType.ValidateTrait(),
+                "MaybeConstrained" to constrainedSymbol.wrapMaybeConstrained(),
+                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             )
         }
     }

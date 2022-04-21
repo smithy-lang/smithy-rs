@@ -71,7 +71,7 @@ class UnconstrainedMapGeneratorTest {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, writer)
         }
 
-        project.withModule(RustModule.public("validation")) { writer ->
+        project.withModule(RustModule.private("unconstrained")) { writer ->
             val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
             val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
             listOf(mapA, mapB).forEach {
@@ -85,35 +85,36 @@ class UnconstrainedMapGeneratorTest {
                 ).render()
             }
 
-            writer.unitTest(
-                name = "map_a_unconstrained_fail_to_constrain_with_first_error",
-                test = """
-                    let c_builder1 = crate::model::StructureC::builder().int(69);
-                    let c_builder2 = crate::model::StructureC::builder().string(String::from("david"));
-                    let map_b_unconstrained = map_b_unconstrained::MapBUnconstrained(
-                        std::collections::HashMap::from([
-                            (String::from("KeyB1"), c_builder1),
-                            (String::from("KeyB2"), c_builder2),
-                        ])
-                    );
-                    let map_a_unconstrained = map_a_unconstrained::MapAUnconstrained(
-                        std::collections::HashMap::from([
-                            (String::from("KeyA"), map_b_unconstrained),
-                        ])
-                    );
-
-                    let expected_err =
-                        map_a_unconstrained::ValidationFailure::Value(map_b_unconstrained::ValidationFailure::Value(
-                            crate::model::structure_c::ValidationFailure::MissingString,
-                        ));
-
-                    use std::convert::TryFrom;
-                    assert_eq!(
-                        expected_err,
-                        std::collections::HashMap::<String, std::collections::HashMap<String, crate::model::StructureC>>::try_from(map_a_unconstrained).unwrap_err()
-                    );
-                """
-            )
+            // TODO This test is flaky because it depends on the order in which the `HashMap` is visited.
+//            writer.unitTest(
+//                name = "map_a_unconstrained_fail_to_constrain_with_first_error",
+//                test = """
+//                    let c_builder1 = crate::model::StructureC::builder().int(69);
+//                    let c_builder2 = crate::model::StructureC::builder().string(String::from("david"));
+//                    let map_b_unconstrained = map_b_unconstrained::MapBUnconstrained(
+//                        std::collections::HashMap::from([
+//                            (String::from("KeyB1"), c_builder1),
+//                            (String::from("KeyB2"), c_builder2),
+//                        ])
+//                    );
+//                    let map_a_unconstrained = map_a_unconstrained::MapAUnconstrained(
+//                        std::collections::HashMap::from([
+//                            (String::from("KeyA"), map_b_unconstrained),
+//                        ])
+//                    );
+//
+//                    let expected_err =
+//                        map_a_unconstrained::ConstraintViolation::Value(map_b_unconstrained::ConstraintViolation::Value(
+//                            crate::model::structure_c::ConstraintViolation::MissingString,
+//                        ));
+//
+//                    use std::convert::TryFrom;
+//                    assert_eq!(
+//                        expected_err,
+//                        std::collections::HashMap::<String, std::collections::HashMap<String, crate::model::StructureC>>::try_from(map_a_unconstrained).unwrap_err()
+//                    );
+//                """
+//            )
 
             writer.unitTest(
                 name = "map_a_unconstrained_succeed_to_constrain",
@@ -148,7 +149,7 @@ class UnconstrainedMapGeneratorTest {
             )
 
             writer.unitTest(
-                name = "map_a_unconstrained_converts_into_validated",
+                name = "map_a_unconstrained_converts_into_constrained",
                 test = """
                     let c_builder = crate::model::StructureC::builder();
                     let map_b_unconstrained = map_b_unconstrained::MapBUnconstrained(
@@ -162,7 +163,7 @@ class UnconstrainedMapGeneratorTest {
                         ])
                     );
 
-                    let _map_a: Validated<std::collections::HashMap<String, std::collections::HashMap<String, crate::model::StructureC>>> = map_a_unconstrained.into();
+                    let _map_a: crate::constrained::MaybeConstrained<std::collections::HashMap<String, std::collections::HashMap<String, crate::model::StructureC>>> = map_a_unconstrained.into();
                 """
             )
 

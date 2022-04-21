@@ -9,8 +9,10 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -55,39 +57,14 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
 }
 
 // TODO Perhaps move these into `StructureGenerator`?
-
-fun MemberShape.targetNeedsValidation(model: Model, symbolProvider: SymbolProvider): Boolean {
-    val targetShape = model.expectShape(this.target)
-
-//    val memberSymbol = symbolProvider.toSymbol(this)
-//    val targetSymbol = symbolProvider.toSymbol(targetShape)
-//    val hasRustBoxTrait = this.hasTrait<RustBoxTrait>()
-//    println("hasRustBoxTrait = $hasRustBoxTrait")
-//    println(symbol.name)
-
-    // TODO We have a problem with recursion. In the case of recursive shapes whose members are all not `@required`, this
-    // function recurses indefinitely, but it should return the current member _does not_ require validation.
-    // We can detect recursion by checking the `RustBoxTrait` on the member, but we can't inspect the cycle.
-    // An easy way to determine whether a shape member requires validation would be if we defined  the "closure of a shape `S`"
-    // as all the shapes reachable from `S`. Then a member shape whose target is a structure shape `S` requires
-    // validation if and only if any of the shapes in its closure is `@required` (or is a constrained shape, when we implement those).
-    //
-    // I see `TopologicalIndex.java` in Smithy allows me to get the _recursive_ closure of a shape, but I need its entire
-    // closure.
-    // Perhaps I can simply do `PathFinder.search(shape, "")` with an empty selector.
-    val symbol = symbolProvider.toSymbol(targetShape)
-//    if (symbol.name == "RecursiveShapesInputOutputNested1") {
-//        return false
-//    }
-
-    return when {
-        targetShape.isListShape -> targetShape.asListShape().get().canReachConstrainedShape(model, symbolProvider)
-        targetShape.isSetShape -> targetShape.asSetShape().get().canReachConstrainedShape(model, symbolProvider)
-        targetShape.isMapShape -> targetShape.asMapShape().get().canReachConstrainedShape(model, symbolProvider)
-        targetShape.isStructureShape -> targetShape.asStructureShape().get().canReachConstrainedShape(model, symbolProvider)
+fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
+    when (val targetShape = model.expectShape(this.target)) {
+        is ListShape -> targetShape.asListShape().get().canReachConstrainedShape(model, symbolProvider)
+        is SetShape -> targetShape.asSetShape().get().canReachConstrainedShape(model, symbolProvider)
+        is MapShape -> targetShape.asMapShape().get().canReachConstrainedShape(model, symbolProvider)
+        is StructureShape -> targetShape.asStructureShape().get().canReachConstrainedShape(model, symbolProvider)
         else -> false
     }
-}
 
 /**
  * The name of the builder's setter the server deserializer should use.
@@ -190,14 +167,14 @@ class StructureGenerator(
         }
     }
 
-    private fun renderValidateImpl() {
+    private fun renderConstrainedTraitImpl() {
         writer.rust(
             """
             impl #T for $name {
-                type Unvalidated = #T;
+                type Unconstrained = #T;
             }
             """,
-            RuntimeType.ValidateTrait(),
+            RuntimeType.ConstrainedTrait(),
             shape.builderSymbol(symbolProvider)
         )
     }
@@ -249,8 +226,8 @@ class StructureGenerator(
         renderDebugImpl()
 
         // TODO This only needs to be called in the server, for structures that are reachable from operation input AND
-        //     that require validation. It's probably best that we move it to an entirely different class.
-        renderValidateImpl()
+        //     that are constrained. It's probably best that we move it to an entirely different class.
+        renderConstrainedTraitImpl()
     }
 
     private fun RustWriter.forEachMember(

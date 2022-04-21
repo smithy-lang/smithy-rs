@@ -19,11 +19,10 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedListGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedListGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
-import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenMode
@@ -33,6 +32,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
@@ -71,6 +71,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     private val codegenContext: CodegenContext
     private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
     private val protocolGenerator: ProtocolGenerator
+    private val unconstrainedModule = RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")
 
     init {
         val symbolVisitorConfig =
@@ -191,8 +192,15 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         if (shape.canReachConstrainedShape(model, symbolProvider)) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for list $shape")
 
-            rustCrate.withModule(RustModule.private("validation")) { writer ->
-                UnconstrainedListGenerator(model, symbolProvider, unconstrainedShapeSymbolProvider, constraintViolationSymbolProvider, writer, shape).render()
+            rustCrate.withModule(unconstrainedModule) { writer ->
+                UnconstrainedListGenerator(
+                    model,
+                    symbolProvider,
+                    unconstrainedShapeSymbolProvider,
+                    constraintViolationSymbolProvider,
+                    writer,
+                    shape
+                ).render()
             }
         }
     }
@@ -203,8 +211,15 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         if (shape.canReachConstrainedShape(model, symbolProvider)) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for map $shape")
 
-            rustCrate.withModule(RustModule.private("validation")) { writer ->
-                UnconstrainedMapGenerator(model, symbolProvider, unconstrainedShapeSymbolProvider, constraintViolationSymbolProvider, writer, shape).render()
+            rustCrate.withModule(unconstrainedModule) { writer ->
+                UnconstrainedMapGenerator(
+                    model,
+                    symbolProvider,
+                    unconstrainedShapeSymbolProvider,
+                    constraintViolationSymbolProvider,
+                    writer,
+                    shape
+                ).render()
             }
         }
     }

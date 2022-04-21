@@ -90,8 +90,7 @@ val Operations = SymbolLocation("operation")
 val Serializers = SymbolLocation("serializer")
 val Inputs = SymbolLocation("input")
 val Outputs = SymbolLocation("output")
-// TODO Rename to constraints?
-val Validation = SymbolLocation("validation")
+val Unconstrained = SymbolLocation("unconstrained")
 
 /**
  * Make the Rust type of a symbol optional (hold `Option<T>`)
@@ -128,11 +127,11 @@ fun Symbol.makeRustBoxed(): Symbol =
     }
 
 // TODO This can be written in terms of `mapRustType`.
-fun Symbol.wrapValidated(): Symbol {
-    val rustType = RustType.Validated(this.rustType())
+// TODO isMaybeConstrained. Make it like the others.
+fun Symbol.wrapMaybeConstrained(): Symbol {
+    val rustType = RustType.MaybeConstrained(this.rustType())
     return Symbol.builder()
         .rustType(rustType)
-        // TODO This is a bug. Grep for all `addReference(this)`, they are probably bugs.
         .addReference(this)
         .name(rustType.name)
         .build()
@@ -143,6 +142,7 @@ fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
     val newType = f(this.rustType())
     return Symbol.builder()
         .rustType(newType)
+        // TODO This is a bug. Grep for all `addReference(this)`, maybe they are too.
         .addReference(this)
         .name(newType.name)
         .build()

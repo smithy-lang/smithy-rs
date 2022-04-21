@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.util.orNull
-import java.util.Optional
+import java.util.*
 
 /**
  * Location of the runtime crates (aws-smithy-http, aws-smithy-types etc.)
@@ -226,8 +226,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
                 func, CargoDependency.SmithyProtocolTestHelpers(runtimeConfig), "aws_smithy_protocol_test"
             )
 
-        fun ValidateTrait() = RuntimeType("Validate", InlineDependency.validation(), namespace = "crate::validation")
-        fun Validated() = RuntimeType("Validated", InlineDependency.validation(), namespace = "crate::validation")
+        fun ConstrainedTrait() = RuntimeType("Constrained", InlineDependency.constrained(), namespace = "crate::constrained")
+        fun MaybeConstrained() = RuntimeType("MaybeConstrained", InlineDependency.constrained(), namespace = "crate::constrained")
 
         val http = CargoDependency.Http.asType()
         fun Http(path: String): RuntimeType =

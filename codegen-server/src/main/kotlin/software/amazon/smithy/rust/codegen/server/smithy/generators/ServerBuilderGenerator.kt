@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.targetNeedsValidation
+import software.amazon.smithy.rust.codegen.smithy.generators.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -37,7 +37,7 @@ import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.wrapValidated
+import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -70,17 +70,17 @@ class ServerBuilderGenerator(
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
             // TODO(): `#[non_exhaustive] until we commit to making builders of builders public.
             Attribute.NonExhaustive.render(writer)
-            writer.rustBlock("pub enum ValidationFailure") {
-                validationFailures().forEach { renderValidationFailure(this, it) }
+            writer.rustBlock("pub enum ConstraintViolation") {
+                constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 
-            renderImplDisplayValidationFailure(writer)
-            writer.rust("impl std::error::Error for ValidationFailure { }")
+            renderImplDisplayConstraintViolation(writer)
+            writer.rust("impl std::error::Error for ConstraintViolation { }")
 
             // TODO This only needs to be generated for operation input shapes.
-            renderImplFromValidationFailureForRequestRejection(writer)
+            renderImplFromConstraintViolationForRequestRejection(writer)
 
-            renderImplFromBuilderForValidated(writer)
+            renderImplFromBuilderForMaybeConstrained(writer)
 
             renderTryFromBuilderImpl(writer)
         } else {
@@ -101,7 +101,7 @@ class ServerBuilderGenerator(
             for (member in members) {
                 renderBuilderMemberFn(this, member)
 
-                if (member.targetNeedsValidation(model, symbolProvider)) {
+                if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
                     renderBuilderMemberSetterFn(this, member)
                 }
             }
@@ -110,28 +110,28 @@ class ServerBuilderGenerator(
     }
 
     // TODO This impl does not take into account sensitive trait.
-    private fun renderImplDisplayValidationFailure(writer: RustWriter) {
-        writer.rustBlock("impl std::fmt::Display for ValidationFailure") {
+    private fun renderImplDisplayConstraintViolation(writer: RustWriter) {
+        writer.rustBlock("impl std::fmt::Display for ConstraintViolation") {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 rustBlock("match self") {
-                    validationFailures().forEach {
+                    constraintViolations().forEach {
                         val arm = if (it.hasInner()) {
-                            "ValidationFailure::${it.name()}(_)"
+                            "ConstraintViolation::${it.name()}(_)"
                         } else {
-                            "ValidationFailure::${it.name()}"
+                            "ConstraintViolation::${it.name()}"
                         }
-                        rust("""$arm => write!(f, "${validationFailureErrorMessage(it)}"),""")
+                        rust("""$arm => write!(f, "${constraintViolationMessage(it)}"),""")
                     }
                 }
             }
         }
     }
 
-    private fun renderImplFromValidationFailureForRequestRejection(writer: RustWriter) {
+    private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl From<ValidationFailure> for #{RequestRejection} {
-                fn from(value: ValidationFailure) -> Self {
+            impl From<ConstraintViolation> for #{RequestRejection} {
+                fn from(value: ConstraintViolation) -> Self {
                     Self::BuildV2(value.into())
                 }
             }
@@ -140,23 +140,23 @@ class ServerBuilderGenerator(
         )
     }
 
-    private fun renderImplFromBuilderForValidated(writer: RustWriter) {
+    private fun renderImplFromBuilderForMaybeConstrained(writer: RustWriter) {
         writer.rust(
             """
             impl From<Builder> for #{T} {
                 fn from(builder: Builder) -> Self {
-                    Self::Unvalidated(builder)
+                    Self::Unconstrained(builder)
                 }
             }
             """,
-            structureSymbol.wrapValidated()
+            structureSymbol.wrapMaybeConstrained()
         )
     }
 
     private fun renderBuildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)
         val returnType = when (fallibleBuilder) {
-            true -> "Result<${implBlockWriter.format(structureSymbol)}, ValidationFailure>"
+            true -> "Result<${implBlockWriter.format(structureSymbol)}, ConstraintViolation>"
             false -> implBlockWriter.format(structureSymbol)
         }
         // TODO Document when builder can fail.
@@ -203,20 +203,20 @@ class ServerBuilderGenerator(
         writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
-                if (member.targetNeedsValidation(model, symbolProvider)) {
-                    val validatedType = "${symbol.wrapValidated().rustType().namespace}::Validated::Validated"
+                if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
+                    val constrainedType = "${symbol.wrapMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
                     if (symbol.isOptional()) {
                         if (hasBox) {
-                            write("input.map(|v| Box::new($validatedType(*v)))")
+                            write("input.map(|v| Box::new($constrainedType(*v)))")
                         } else {
-                            write("input.map(|v| $validatedType(v))")
+                            write("input.map(|v| $constrainedType(v))")
                         }
                     } else {
                         if (hasBox) {
                             // TODO Add a protocol test testing this branch.
-                            write("Box::new($validatedType(*input))")
+                            write("Box::new($constrainedType(*input))")
                         } else {
-                            write("$validatedType(input)")
+                            write("$constrainedType(input)")
                         }
                     }
                 } else {
@@ -262,77 +262,77 @@ class ServerBuilderGenerator(
     }
 
     /**
-     * The kinds of validation failures that can occur when building the builder.
+     * The kinds of constraint violations that can occur when building the builder.
      */
-    enum class ValidationFailureKind {
+    enum class ConstraintViolationKind {
         // A field is required but was not provided.
         MISSING_MEMBER,
         // An unconstrained type was provided for a field targeting a constrained shape, but it failed to convert into the constrained type.
         CONSTRAINED_SHAPE_FAILURE,
     }
 
-    data class ValidationFailure(val forMember: MemberShape, val kind: ValidationFailureKind) {
+    data class ConstraintViolation(val forMember: MemberShape, val kind: ConstraintViolationKind) {
         fun name() = when (kind) {
-            ValidationFailureKind.MISSING_MEMBER -> "Missing${forMember.memberName.toPascalCase()}"
-            ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE -> "${forMember.memberName.toPascalCase()}ValidationFailure"
+            ConstraintViolationKind.MISSING_MEMBER -> "Missing${forMember.memberName.toPascalCase()}"
+            ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> "${forMember.memberName.toPascalCase()}ConstraintViolation"
         }
 
         /**
-         * Whether the validation failure is a Rust tuple struct with one element.
+         * Whether the constraint violation is a Rust tuple struct with one element.
          */
-        fun hasInner() = kind == ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE
+        fun hasInner() = kind == ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE
     }
 
-    private fun renderValidationFailure(writer: RustWriter, validationFailure: ValidationFailure) {
-        if (validationFailure.kind == ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE) {
+    private fun renderConstraintViolation(writer: RustWriter, constraintViolation: ConstraintViolation) {
+        if (constraintViolation.kind == ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE) {
             // TODO(): `#[doc(hidden)]` until we commit to making builders of builders public.
             Attribute.DocHidden.render(writer)
         }
 
         // TODO Add Rust docs.
 
-        when (validationFailure.kind) {
-            ValidationFailureKind.MISSING_MEMBER -> writer.rust("${validationFailure.name()},")
-            ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE -> {
-                val targetShape = model.expectShape(validationFailure.forMember.target)
+        when (constraintViolation.kind) {
+            ConstraintViolationKind.MISSING_MEMBER -> writer.rust("${constraintViolation.name()},")
+            ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> {
+                val targetShape = model.expectShape(constraintViolation.forMember.target)
 
                 // TODO I guess the RustBoxTrait logic could be handled by the symbol provider.
                 val constraintViolationSymbol =
                     constraintViolationSymbolProvider.toSymbol(targetShape)
-                        .letIf(validationFailure.forMember.hasTrait<RustBoxTrait>()) {
+                        .letIf(constraintViolation.forMember.hasTrait<RustBoxTrait>()) {
                             it.makeRustBoxed()
                         }
 
-                // Note we cannot express the inner validation failure as `<T as TryFrom<T>>::Error`, because `T` might
+                // Note we cannot express the inner constraint violation as `<T as TryFrom<T>>::Error`, because `T` might
                 // be `pub(crate)` and that would leak `T` in a public interface.
-                writer.rust("${validationFailure.name()}(#T),", constraintViolationSymbol)
+                writer.rust("${constraintViolation.name()}(#T),", constraintViolationSymbol)
             }
         }
     }
 
-    private fun validationFailureErrorMessage(validationFailure: ValidationFailure): String {
-        val memberName = symbolProvider.toMemberName(validationFailure.forMember)
+    private fun constraintViolationMessage(constraintViolation: ConstraintViolation): String {
+        val memberName = symbolProvider.toMemberName(constraintViolation.forMember)
         // TODO $structureSymbol here is not quite right because it's printing the full namespace: crate:: in the context of the user will surely be different.
-        return when (validationFailure.kind) {
-            ValidationFailureKind.MISSING_MEMBER -> "`$memberName` was not specified but it is required when building `$structureSymbol`"
+        return when (constraintViolation.kind) {
+            ConstraintViolationKind.MISSING_MEMBER -> "`$memberName` was not specified but it is required when building `$structureSymbol`"
             // TODO Nest errors.
-            ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE -> "validation failure occurred building member `$memberName` when building `$structureSymbol`"
+            ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> "constraint violation occurred building member `$memberName` when building `$structureSymbol`"
         }
     }
 
-    private fun validationFailures() = members.flatMap { member ->
+    private fun constraintViolations() = members.flatMap { member ->
         listOfNotNull(
             builderMissingFieldForMember(member),
-            builderValidationFailureForMember(member),
+            builderConstraintViolationForMember(member),
         )
     }
 
     /**
-     * Returns the builder failure associated with the `member` field if its target requires validation.
+     * Returns the builder failure associated with the `member` field if its target is constrained.
      */
-    private fun builderValidationFailureForMember(member: MemberShape) =
-        if (member.targetNeedsValidation(model, symbolProvider)) {
-            ValidationFailure(member, ValidationFailureKind.CONSTRAINED_SHAPE_FAILURE)
+    private fun builderConstraintViolationForMember(member: MemberShape) =
+        if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
+            ConstraintViolation(member, ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE)
         } else {
             null
         }
@@ -346,7 +346,7 @@ class ServerBuilderGenerator(
         if (symbolProvider.toSymbol(member).isOptional()) {
             null
         } else {
-            ValidationFailure(member, ValidationFailureKind.MISSING_MEMBER)
+            ConstraintViolation(member, ConstraintViolationKind.MISSING_MEMBER)
         }
 
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
@@ -354,7 +354,7 @@ class ServerBuilderGenerator(
         writer.rustTemplate(
             """
             impl std::convert::TryFrom<Builder> for #{Structure} {
-                type Error = ValidationFailure;
+                type Error = ConstraintViolation;
                 
                 fn try_from(builder: Builder) -> Result<Self, Self::Error> {
                     builder.build()
@@ -380,7 +380,7 @@ class ServerBuilderGenerator(
 
     /**
      * Returns the symbol for a builder's member.
-     * All builder members are optional, but only some are `Option<T>`s where `T` needs to be validated.
+     * All builder members are optional, but only some are `Option<T>`s where `T` needs to be constrained.
      */
     private fun builderMemberSymbol(member: MemberShape): Symbol {
         val strippedOption = symbolProvider.toSymbol(member)
@@ -391,8 +391,8 @@ class ServerBuilderGenerator(
         return strippedOption
             // Strip the `Box` in case the member can reach itself recursively.
             .mapRustType { it.stripOuter<RustType.Box>() }
-            // Wrap it in the Cow-like `validation::Validated` type in case the target member shape needs validation.
-            .letIf(member.targetNeedsValidation(model, symbolProvider)) { it.wrapValidated() }
+            // Wrap it in the Cow-like `constrained::Constrained` type in case the target member shape can reach a constrained shape.
+            .letIf(member.targetCanReachConstrainedShape(model, symbolProvider)) { it.wrapMaybeConstrained() }
             // Box it in case the member can reach itself recursively.
             .letIf(hadBox) { it.makeRustBoxed() }
             // Ensure we always end up with an `Option`.
@@ -419,7 +419,7 @@ class ServerBuilderGenerator(
 
                 withBlock("$memberName: self.$memberName", ",") {
                     // Write the modifier(s).
-                    builderValidationFailureForMember(member)?.also { validationFailure ->
+                    builderConstraintViolationForMember(member)?.also { constraintViolation ->
                         // TODO Remove `TryInto` import when we switch to 2021 edition.
                         val hasBox = builderMemberSymbol(member)
                             .mapRustType { it.stripOuter<RustType.Option>() }
@@ -428,36 +428,36 @@ class ServerBuilderGenerator(
                             rustTemplate(
                                 """
                                 .map(|v| match *v {
-                                    #{Validated}::Validated(x) => Ok(Box::new(x)),
-                                    #{Validated}::Unvalidated(x) => {
+                                    #{MaybeConstrained}::Constrained(x) => Ok(Box::new(x)),
+                                    #{MaybeConstrained}::Unconstrained(x) => {
                                         use std::convert::TryInto;
                                         Ok(Box::new(x.try_into()?))
                                     }
                                 })
-                                .map(|v| v.map_err(|err| ValidationFailure::${validationFailure.name()}(Box::new(err))))
+                                .map(|v| v.map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err))))
                                 .transpose()?
                                 """,
-                                "Validated" to RuntimeType.Validated()
+                                "MaybeConstrained" to RuntimeType.MaybeConstrained()
                             )
                         } else {
                             rustTemplate(
                                 """
                                 .map(|v| match v {
-                                    #{Validated}::Validated(x) => Ok(x),
-                                    #{Validated}::Unvalidated(x) => {
+                                    #{MaybeConstrained}::Constrained(x) => Ok(x),
+                                    #{MaybeConstrained}::Unconstrained(x) => {
                                         use std::convert::TryInto;
                                         x.try_into()
                                     }
                                 })
-                                .map(|v| v.map_err(|err| ValidationFailure::${validationFailure.name()}(err)))
+                                .map(|v| v.map_err(|err| ConstraintViolation::${constraintViolation.name()}(err)))
                                 .transpose()?
                                 """,
-                                "Validated" to RuntimeType.Validated()
+                                "MaybeConstrained" to RuntimeType.MaybeConstrained()
                             )
                         }
                     }
                     builderMissingFieldForMember(member)?.also {
-                        rust(".ok_or(ValidationFailure::${it.name()})?")
+                        rust(".ok_or(ConstraintViolation::${it.name()})?")
                     }
                 }
             }

@@ -69,7 +69,7 @@ class UnconstrainedListGeneratorTest {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, writer)
         }
 
-        project.withModule(RustModule.public("validation")) { writer ->
+        project.withModule(RustModule.private("unconstrained")) { writer ->
             val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
             val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
             listOf(listA, listB).forEach {
@@ -92,8 +92,8 @@ class UnconstrainedListGeneratorTest {
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
                     let expected_err =
-                        list_a_unconstrained::ValidationFailure(list_b_unconstrained::ValidationFailure(
-                            crate::model::structure_c::ValidationFailure::MissingString,
+                        list_a_unconstrained::ConstraintViolation(list_b_unconstrained::ConstraintViolation(
+                            crate::model::structure_c::ConstraintViolation::MissingString,
                         ));
 
                     use std::convert::TryFrom;
@@ -125,13 +125,13 @@ class UnconstrainedListGeneratorTest {
             )
 
             writer.unitTest(
-                name = "list_a_unconstrained_converts_into_validated",
+                name = "list_a_unconstrained_converts_into_constrained",
                 test = """
                     let c_builder = crate::model::StructureC::builder();
                     let list_b_unconstrained = list_b_unconstrained::ListBUnconstrained(vec![c_builder]);
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
-                    let _list_a: Validated<Vec<Vec<crate::model::StructureC>>> = list_a_unconstrained.into();
+                    let _list_a: crate::constrained::MaybeConstrained<Vec<Vec<crate::model::StructureC>>> = list_a_unconstrained.into();
                 """
             )
 
