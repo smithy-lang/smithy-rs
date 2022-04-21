@@ -8,8 +8,10 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
@@ -18,7 +20,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-fun unconstrainedTypeNameForCollectionOrMapShape(shape: Shape, serviceShape: ServiceShape): String {
+fun unconstrainedTypeNameForListOrMapShape(shape: Shape, serviceShape: ServiceShape): String {
     check(shape is CollectionShape || shape.isMapShape)
     return "${shape.id.getName(serviceShape).toPascalCase()}Unconstrained"
 }
@@ -29,9 +31,9 @@ class UnconstrainedShapeSymbolProvider(
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
     private fun unconstrainedSymbolForCollectionOrMapShape(shape: Shape): Symbol {
-        check(shape is CollectionShape || shape.isMapShape)
+        check(shape is ListShape || shape is MapShape)
 
-        val name = unconstrainedTypeNameForCollectionOrMapShape(shape, serviceShape)
+        val name = unconstrainedTypeNameForListOrMapShape(shape, serviceShape)
         val namespace = "crate::${Unconstrained.namespace}::${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}"
         val rustType = RustType.Opaque(name, namespace)
         return Symbol.builder()
@@ -44,11 +46,14 @@ class UnconstrainedShapeSymbolProvider(
 
     override fun toSymbol(shape: Shape): Symbol =
         when (shape) {
-            is CollectionShape -> {
+            is SetShape -> {
+                TODO("Set shapes can only contain some simple shapes, but constraint traits on simple shapes are not implemented")
+            }
+            is ListShape -> {
                 check(shape.canReachConstrainedShape(model, base))
 
                 if (shape.isConstrained(base)) {
-                    TODO("The `length` constraint trait on collection shapes is currently not implemented")
+                    TODO("The `length` constraint trait on list shapes is currently not implemented")
                 } else {
                     unconstrainedSymbolForCollectionOrMapShape(shape)
                 }

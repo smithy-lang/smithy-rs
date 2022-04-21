@@ -31,13 +31,15 @@ structure AnOperationOutput {
 
 structure ConA {
     @required
-    conB: ConB,
+    // conB: ConB,
 
-    optConB: ConB,
+    // optConB: ConB,
 
-    conBList: ConBList,
+    // conBList: ConBList,
 
-    conBMap: ConBMap
+    conBSet: ConBSet,
+
+    // conBMap: ConBMap
 }
 
 structure ConB {
@@ -79,6 +81,14 @@ list ConBList {
 
 list AnotherList {
     member: ConB
+}
+
+set ConBSet {
+    member: AnotherSet
+}
+
+set AnotherSet {
+    member: String
 }
 
 map ConBMap {
