@@ -8,10 +8,8 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
@@ -23,7 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.isConstrained
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.util.toPascalCase
+import software.amazon.smithy.rust.codegen.smithy.unconstrainedTypeNameForCollectionOrMapShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 // TODO Unit tests.
@@ -34,11 +32,10 @@ class ConstraintViolationSymbolProvider(
 ) : WrappingSymbolProvider(base) {
     private val constraintViolationName = "ConstraintViolation"
 
-    private fun unconstrainedSymbolForUnconstrainedSetListMapShape(shape: Shape): Symbol {
+    private fun unconstrainedSymbolForCollectionOrMapShape(shape: Shape): Symbol {
         check(shape is CollectionShape || shape.isMapShape)
 
-        // TODO This name is common in `UnconstrainedShapeSymbolProvider`, extract somewhere.
-        val unconstrainedTypeName = "${shape.id.getName(serviceShape).toPascalCase()}Unconstrained"
+        val unconstrainedTypeName = unconstrainedTypeNameForCollectionOrMapShape(shape, serviceShape)
         val namespace = "crate::${Unconstrained.namespace}::${RustReservedWords.escapeIfNeeded(unconstrainedTypeName.toSnakeCase())}"
         val rustType = RustType.Opaque(constraintViolationName, namespace)
         return Symbol.builder()
@@ -51,26 +48,22 @@ class ConstraintViolationSymbolProvider(
 
     override fun toSymbol(shape: Shape): Symbol =
         when (shape) {
-            is ListShape -> {
+            is CollectionShape -> {
                 check(shape.canReachConstrainedShape(model, base))
 
                 if (shape.isConstrained(base)) {
-                    TODO("Constraint traits on list shapes are currently not implemented")
+                    TODO("The `length` constraint trait on collection shapes is currently not implemented")
                 } else {
-                    unconstrainedSymbolForUnconstrainedSetListMapShape(shape)
+                    unconstrainedSymbolForCollectionOrMapShape(shape)
                 }
-            }
-            // TODO I can just check is CollectionShape and merge with previous arm
-            is SetShape -> {
-                TODO()
             }
             is MapShape -> {
                 check(shape.canReachConstrainedShape(model, base))
 
                 if (shape.isConstrained(base)) {
-                    TODO("Constraint traits on map shapes are currently not implemented")
+                    TODO("The `length` constraint trait on map shapes is currently not implemented")
                 } else {
-                    unconstrainedSymbolForUnconstrainedSetListMapShape(shape)
+                    unconstrainedSymbolForCollectionOrMapShape(shape)
                 }
             }
             is StructureShape -> {
@@ -87,7 +80,7 @@ class ConstraintViolationSymbolProvider(
                     .definitionFile(Unconstrained.filename)
                     .build()
             }
-            // TODO Simple shapes can have constraint traits.
+            // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Simple shapes can have constraint traits.
             else -> base.toSymbol(shape)
         }
 }
