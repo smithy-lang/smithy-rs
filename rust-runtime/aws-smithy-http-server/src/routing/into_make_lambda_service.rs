@@ -89,8 +89,9 @@ fn lambda_to_hyper_request(request: Request) -> HyperRequest {
     let (parts, body) = request.into_parts();
     let mut uri: uri::Uri = parts.uri;
     let mut path = String::from(uri.path());
-    if raw_path != path {
+    if !raw_path.is_empty() && raw_path != path {
         tracing::debug!("Recreating URI from raw HTTP path.");
+        path = raw_path;
         let uri_parts: uri::Parts = uri.into();
         let path_and_query = uri_parts.path_and_query.unwrap();
         if let Some(query) = path_and_query.query() {
