@@ -2,10 +2,12 @@
 import os
 import sys
 
-expected = ["/tmp", ["diff-files", "--quiet"]]
+expected = ["/tmp", ["diff", "--name-only"]]
 actual = [os.getcwd(), sys.argv[1:]]
 if expected != actual:
     print(f"ERROR\nExpect: {expected}\nActual: {actual}")
     sys.exit(127)
 
-sys.exit(0)  # status 0 = false
+print("some/file")
+print("some-other-file")
+print("some/file with spaces.txt")

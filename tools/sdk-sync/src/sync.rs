@@ -11,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use tracing::info;
+use tracing::{debug, info};
 use tracing_attributes::instrument;
 
 pub const BOT_NAME: &str = "AWS SDK Rust Bot";
@@ -128,7 +128,7 @@ impl Sync {
             .context(here!("failed to generate the SDK"))?;
 
         // Commit changes if there are any
-        if self.aws_sdk_rust.has_changes().context(here!())? {
+        if self.sdk_has_changes().context(here!())? {
             self.aws_sdk_rust
                 .stage(&PathBuf::from("."))
                 .context(here!())?;
@@ -274,7 +274,6 @@ impl Sync {
         info!("Generating the SDK...");
 
         // The output of running these commands isn't logged anywhere unless they fail
-        self.smithy_rs_gradle.aws_sdk_clean().context(here!())?;
         self.smithy_rs_gradle
             .aws_sdk_assemble(aws_doc_sdk_examples_revision)
             .context(here!())?;
@@ -291,9 +290,9 @@ impl Sync {
             .find_handwritten_files_and_folders(self.aws_sdk_rust.path(), &build_artifact_path)?;
         if !handwritten_files_in_generated_sdk_folder.is_empty() {
             bail!(
-                    "found one or more 'handwritten' files/folders in generated code: {:#?}\nhint: if this file is newly generated, remove it from .handwritten",
-                    handwritten_files_in_generated_sdk_folder
-                );
+                "found one or more 'handwritten' files/folders in generated code: {:#?}\nhint: if this file is newly generated, remove it from .handwritten",
+                handwritten_files_in_generated_sdk_folder
+            );
         }
 
         self.copy_sdk(&build_artifact_path, self.aws_sdk_rust.path())?;
@@ -319,10 +318,30 @@ impl Sync {
         Ok(())
     }
 
+    /// Returns true if the aws-sdk-rust repo has changes (excluding changes to versions.toml).
+    /// The versions.toml shouldn't be considered since there's a high probability it is only
+    /// a `smithy_rs_revision` change. It can also safely be ignored since any changes to version
+    /// numbers will show up in individual crate manifests.
+    #[instrument(skip(self))]
+    fn sdk_has_changes(&self) -> Result<bool> {
+        let untracked_files = self.aws_sdk_rust.untracked_files()?;
+        let changed_files = self.aws_sdk_rust.changed_files()?;
+        let has_changes = !untracked_files.is_empty()
+            || !changed_files.is_empty()
+                && (changed_files.len() != 1 || changed_files[0].to_str() != Some("versions.toml"));
+        debug!("aws-sdk-rust untracked files: {:?}", untracked_files);
+        debug!("aws-sdk-rust changed files: {:?}", changed_files);
+        info!(
+            "aws-sdk-rust has changes (not considering versions.toml): {}",
+            has_changes
+        );
+        Ok(has_changes)
+    }
+
     /// Commit the changes to aws-sdk-rust reflecting the info from a commit in another repository.
     #[instrument(skip(self))]
     fn commit_sdk_changes(&self, prefix: &str, based_on_commit: &Commit) -> Result<()> {
-        if self.aws_sdk_rust.has_changes().context(here!())? {
+        if self.sdk_has_changes()? {
             info!("Committing generated SDK...");
 
             self.aws_sdk_rust
@@ -414,6 +433,19 @@ mod tests {
         result
     }
 
+    fn expect_has_changes(repo: &mut MockGit, changes: bool) {
+        repo.expect_untracked_files()
+            .once()
+            .returning(move || Ok(Vec::new()));
+        repo.expect_changed_files().once().returning(move || {
+            Ok(if changes {
+                vec![PathBuf::from("some-file")]
+            } else {
+                Vec::new()
+            })
+        });
+    }
+
     #[test]
     fn test_format_example_commit() {
         let commits = vec![
@@ -464,10 +496,7 @@ mod tests {
         let mut aws_sdk_rust = MockGit::new();
 
         // Say there are no changes when asked
-        aws_sdk_rust
-            .expect_has_changes()
-            .once()
-            .returning(|| Ok(false));
+        expect_has_changes(&mut aws_sdk_rust, false);
 
         // No staging or committing should occur
         aws_sdk_rust.expect_stage().never();
@@ -501,10 +530,7 @@ mod tests {
         let mut aws_sdk_rust = MockGit::new();
 
         // Say there are changes when asked
-        aws_sdk_rust
-            .expect_has_changes()
-            .once()
-            .returning(|| Ok(true));
+        expect_has_changes(&mut aws_sdk_rust, true);
 
         // Expect staging and a commit
         aws_sdk_rust
@@ -548,5 +574,112 @@ mod tests {
                 },
             )
             .is_ok());
+    }
+
+    #[test]
+    fn test_sdk_has_changes_no_changes_at_all() {
+        let mut aws_sdk_rust = MockGit::new();
+        aws_sdk_rust
+            .expect_untracked_files()
+            .once()
+            .returning(move || Ok(Vec::new()));
+        aws_sdk_rust
+            .expect_changed_files()
+            .once()
+            .returning(move || Ok(Vec::new()));
+
+        let sync = Sync::new_with(
+            MockGit::new(),
+            aws_sdk_rust,
+            MockGit::new(),
+            MockGradle::new(),
+            MockFs::new(),
+            MockVersions::new(),
+        );
+
+        assert!(
+            !sync.sdk_has_changes().unwrap(),
+            "it should not have changes"
+        );
+    }
+
+    #[test]
+    fn test_sdk_has_changes_only_versions_toml_changed() {
+        let mut aws_sdk_rust = MockGit::new();
+        aws_sdk_rust
+            .expect_untracked_files()
+            .once()
+            .returning(move || Ok(Vec::new()));
+        aws_sdk_rust
+            .expect_changed_files()
+            .once()
+            .returning(move || Ok(vec![PathBuf::from("versions.toml")]));
+
+        let sync = Sync::new_with(
+            MockGit::new(),
+            aws_sdk_rust,
+            MockGit::new(),
+            MockGradle::new(),
+            MockFs::new(),
+            MockVersions::new(),
+        );
+
+        assert!(
+            !sync.sdk_has_changes().unwrap(),
+            "it should not have changes"
+        );
+    }
+
+    #[test]
+    fn test_sdk_has_changes_untracked_files() {
+        let mut aws_sdk_rust = MockGit::new();
+        aws_sdk_rust
+            .expect_untracked_files()
+            .once()
+            .returning(move || Ok(vec![PathBuf::from("some-new-file")]));
+        aws_sdk_rust
+            .expect_changed_files()
+            .once()
+            .returning(move || Ok(vec![PathBuf::from("versions.toml")]));
+
+        let sync = Sync::new_with(
+            MockGit::new(),
+            aws_sdk_rust,
+            MockGit::new(),
+            MockGradle::new(),
+            MockFs::new(),
+            MockVersions::new(),
+        );
+
+        assert!(sync.sdk_has_changes().unwrap(), "it should have changes");
+    }
+
+    #[test]
+    fn test_sdk_has_changes_changed_files() {
+        let mut aws_sdk_rust = MockGit::new();
+        aws_sdk_rust
+            .expect_untracked_files()
+            .once()
+            .returning(move || Ok(Vec::new()));
+        aws_sdk_rust
+            .expect_changed_files()
+            .once()
+            .returning(move || {
+                Ok(vec![
+                    PathBuf::from("versions.toml"),
+                    PathBuf::from("something-else"),
+                ])
+            });
+
+        let sync = Sync::new_with(
+            MockGit::new(),
+            aws_sdk_rust,
+            MockGit::new(),
+            MockGradle::new(),
+            MockFs::new(),
+            MockVersions::new(),
+        );
+
+        assert!(sync.sdk_has_changes().unwrap(), "it should have changes");
     }
 }

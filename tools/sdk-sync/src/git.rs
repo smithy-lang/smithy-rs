@@ -92,9 +92,6 @@ pub trait Git {
     /// Hard resets to the given revision.
     fn hard_reset(&self, revision: &str) -> Result<()>;
 
-    /// Returns true if the repository has local changes.
-    fn has_changes(&self) -> Result<bool>;
-
     /// Returns the name of the current branch.
     fn current_branch_name(&self) -> Result<String>;
 
@@ -103,6 +100,12 @@ pub trait Git {
 
     /// Fast-forward merges a branch.
     fn fast_forward_merge(&self, branch_name: &str) -> Result<()>;
+
+    /// Returns list of untracked files.
+    fn untracked_files(&self) -> Result<Vec<PathBuf>>;
+
+    /// Returns list of changed files.
+    fn changed_files(&self) -> Result<Vec<PathBuf>>;
 }
 
 enum CommitInfo {
@@ -158,37 +161,6 @@ impl GitCLI {
         handle_failure("extract_commit_info", &output)?;
         let (stdout, _) = output_text(&output);
         Ok(stdout.trim().into())
-    }
-
-    fn has_changed_files(&self) -> Result<bool> {
-        let mut command = Command::new(&self.binary_name);
-        command.arg("diff-files");
-        command.arg("--quiet");
-        command.current_dir(&self.repo_path);
-
-        let output = log_command(command).output()?;
-        match output.status.code() {
-            Some(0) => Ok(false),
-            Some(1) => Ok(true),
-            Some(code) => bail!("unrecognized exit status {} from `git diff-files`", code),
-            None => {
-                bail!("failed to determine if the repository had changes; process killed by signal")
-            }
-        }
-    }
-
-    fn has_untracked_files(&self) -> Result<bool> {
-        let mut command = Command::new(&self.binary_name);
-        command.arg("ls-files");
-        command.arg("--exclude-standard");
-        command.arg("--others");
-        command.current_dir(&self.repo_path);
-
-        let output = log_command(command).output()?;
-        handle_failure("has_untracked_files", &output)?;
-        let (stdout, _) = output_text(&output);
-        // If there was output at all, then there are untracked files
-        Ok(!stdout.is_empty())
     }
 }
 
@@ -311,10 +283,6 @@ impl Git for GitCLI {
         Ok(())
     }
 
-    fn has_changes(&self) -> Result<bool> {
-        Ok(self.has_changed_files()? || self.has_untracked_files()?)
-    }
-
     fn current_branch_name(&self) -> Result<String> {
         let mut command = Command::new(&self.binary_name);
         command.arg("rev-parse");
@@ -351,6 +319,43 @@ impl Git for GitCLI {
         handle_failure("fast_forward_merge", &output)?;
         Ok(())
     }
+
+    fn untracked_files(&self) -> Result<Vec<PathBuf>> {
+        let mut command = Command::new(&self.binary_name);
+        command.arg("ls-files");
+        command.arg("--exclude-standard");
+        command.arg("--others");
+        command.current_dir(&self.repo_path);
+
+        let output = log_command(command).output()?;
+        handle_failure("untracked_files", &output)?;
+        let (stdout, _) = output_text(&output);
+        Ok(split_file_names(&stdout))
+    }
+
+    fn changed_files(&self) -> Result<Vec<PathBuf>> {
+        let mut command = Command::new(&self.binary_name);
+        command.arg("diff");
+        command.arg("--name-only");
+        command.current_dir(&self.repo_path);
+
+        let output = log_command(command).output()?;
+        handle_failure("changed_files", &output)?;
+        let (stdout, _) = output_text(&output);
+        Ok(split_file_names(&stdout))
+    }
+}
+
+fn is_newline(c: char) -> bool {
+    c == '\r' || c == '\n'
+}
+
+fn split_file_names(value: &str) -> Vec<PathBuf> {
+    value
+        .split(is_newline)
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .collect::<Vec<_>>()
 }
 
 fn log_command(command: Command) -> Command {
@@ -373,12 +378,12 @@ mod tests {
     use std::env;
 
     fn bin_path(script: &'static str) -> PathBuf {
-        dbg!(env::current_dir()
+        env::current_dir()
             .expect("current_dir")
             .join("fake-cli")
-            .join(script))
-        .canonicalize()
-        .expect("canonicalize")
+            .join(script)
+            .canonicalize()
+            .expect("canonicalize")
     }
     fn cli(script: &'static str) -> GitCLI {
         GitCLI::with_binary(&PathBuf::from("/tmp"), &bin_path(script).to_string_lossy())
@@ -393,23 +398,43 @@ mod tests {
     }
 
     #[test]
-    fn has_changed_files() {
-        assert!(cli("git-has-changed-files-true")
-            .has_changed_files()
-            .expect("successful invocation"));
-        assert!(!cli("git-has-changed-files-false")
-            .has_changed_files()
-            .expect("successful invocation"));
+    fn changed_files() {
+        assert_eq!(
+            vec![
+                PathBuf::from("some/file"),
+                PathBuf::from("some-other-file"),
+                PathBuf::from("some/file with spaces.txt"),
+            ],
+            cli("git-changed-files")
+                .changed_files()
+                .expect("successful invocation")
+        );
+        assert_eq!(
+            Vec::<PathBuf>::new(),
+            cli("git-changed-files-empty")
+                .changed_files()
+                .expect("successful invocation")
+        );
     }
 
     #[test]
-    fn has_untracked_files() {
-        assert!(cli("git-has-untracked-files-true")
-            .has_untracked_files()
-            .expect("successful invocation"));
-        assert!(!cli("git-has-untracked-files-false")
-            .has_untracked_files()
-            .expect("successful invocation"));
+    fn untracked_files() {
+        assert_eq!(
+            vec![
+                PathBuf::from("some-untracked-file"),
+                PathBuf::from("another-untracked-file"),
+                PathBuf::from("some/file with spaces.txt"),
+            ],
+            cli("git-untracked-files")
+                .untracked_files()
+                .expect("successful invocation")
+        );
+        assert_eq!(
+            Vec::<PathBuf>::new(),
+            cli("git-untracked-files-empty")
+                .untracked_files()
+                .expect("successful invocation")
+        );
     }
 
     #[test]

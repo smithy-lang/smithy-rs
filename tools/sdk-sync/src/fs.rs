@@ -53,8 +53,8 @@ impl DefaultFs {
 impl Fs for DefaultFs {
     fn delete_all_generated_files_and_folders(&self, directory: &Path) -> Result<()> {
         let dotfile_path = directory.join(HANDWRITTEN_DOTFILE);
-        let handwritten_files =
-            HandwrittenFiles::from_dotfile(&dotfile_path, directory).context(here!())?;
+        let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path, directory)
+            .context(here!("loading .handwritten"))?;
         let generated_files = handwritten_files
             .generated_files_and_folders_iter()
             .context(here!())?;
@@ -64,10 +64,10 @@ impl Fs for DefaultFs {
 
         for path in generated_files {
             if path.is_file() {
-                std::fs::remove_file(path)?;
+                std::fs::remove_file(path).context(here!())?;
                 file_count += 1;
             } else if path.is_dir() {
-                std::fs::remove_dir_all(path)?;
+                std::fs::remove_dir_all(path).context(here!())?;
                 folder_count += 1;
             };
         }
@@ -86,8 +86,8 @@ impl Fs for DefaultFs {
         build_artifacts_path: &Path,
     ) -> Result<Vec<PathBuf>> {
         let dotfile_path = aws_sdk_path.join(HANDWRITTEN_DOTFILE);
-        let handwritten_files =
-            HandwrittenFiles::from_dotfile(&dotfile_path, build_artifacts_path).context(here!())?;
+        let handwritten_files = HandwrittenFiles::from_dotfile(&dotfile_path, build_artifacts_path)
+            .context(here!("loading .handwritten"))?;
 
         let files: Vec<_> = handwritten_files
             .handwritten_files_and_folders_iter()
@@ -282,10 +282,10 @@ mod tests {
     use super::{DefaultFs, Fs, HANDWRITTEN_DOTFILE};
     use pretty_assertions::assert_eq;
     use std::fs::File;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
 
     fn create_test_dir_and_handwritten_files_dotfile(handwritten_files: &[&str]) -> TempDir {
-        let dir = TempDir::new("smithy-rs-sync_test-fs").unwrap();
+        let dir = TempDir::new().unwrap();
         let file_path = dir.path().join(HANDWRITTEN_DOTFILE);
         // two newlines to test
         let handwritten_files = handwritten_files.join("\n\n");

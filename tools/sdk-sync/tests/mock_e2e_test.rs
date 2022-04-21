@@ -56,10 +56,11 @@ mockall::mock! {
         ) -> Result<Vec<CommitHash>>;
         fn show(&self, revision: &str) -> Result<Commit>;
         fn hard_reset(&self, revision: &str) -> Result<()>;
-        fn has_changes(&self) -> Result<bool>;
         fn current_branch_name(&self) -> Result<String>;
         fn create_branch(&self, branch_name: &str, revision: &str) -> Result<()>;
         fn fast_forward_merge(&self, branch_name: &str) -> Result<()>;
+        fn untracked_files(&self) -> Result<Vec<PathBuf>>;
+        fn changed_files(&self) -> Result<Vec<PathBuf>>;
     }
 }
 
@@ -114,11 +115,21 @@ fn expect_stage(repo: &mut MockGit, seq: &mut Sequence, path: &'static str) {
         .returning(|_| Ok(()));
 }
 
-fn expect_has_changes(repo: &mut MockGit, seq: &mut Sequence, result: bool) {
-    repo.expect_has_changes()
+fn expect_has_changes(repo: &mut MockGit, seq: &mut Sequence, changes: bool) {
+    repo.expect_untracked_files()
         .once()
         .in_sequence(seq)
-        .returning(move || Ok(result));
+        .returning(move || Ok(Vec::new()));
+    repo.expect_changed_files()
+        .once()
+        .in_sequence(seq)
+        .returning(move || {
+            Ok(if changes {
+                vec![PathBuf::from("some-file")]
+            } else {
+                Vec::new()
+            })
+        });
 }
 
 #[derive(Default)]
