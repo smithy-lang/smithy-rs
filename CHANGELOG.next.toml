@@ -28,3 +28,9 @@ message = "Add new trait for HTTP body callbacks. This is the first step to enab
 references = ["smithy-rs#1307"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Upgrade to Smithy 1.21.0"
+references = ["smithy-rs#1330"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
