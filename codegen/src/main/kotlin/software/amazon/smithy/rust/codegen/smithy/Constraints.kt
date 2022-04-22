@@ -11,13 +11,14 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
+import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
 // TODO Unit test these functions and then refactor to use a `Walker` instead of hand-rolling our own DFS.
 
-// TODO This will work fine if we include RequiredTrait too won't it?
 fun Shape.hasConstraintTrait() =
-    this.hasTrait<LengthTrait>() ||
+    this.hasTrait<RequiredTrait>() ||
+            this.hasTrait<LengthTrait>() ||
             this.hasTrait<RangeTrait>() ||
             // `uniqueItems` is deprecated, so we ignore it.
             // this.hasTrait<UniqueItemsTrait>() ||
