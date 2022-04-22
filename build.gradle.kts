@@ -29,7 +29,12 @@ allprojects {
 
 apply(from = rootProject.file("gradle/maincodecoverage.gradle"))
 
-val ktlint by configurations.creating
+val ktlint by configurations.creating {
+    // https://github.com/pinterest/ktlint/issues/1114#issuecomment-805793163
+    attributes {
+        attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
+    }
+}
 val ktlintVersion: String by project
 
 dependencies {

@@ -290,7 +290,15 @@ class SymbolVisitor(
     }
 
     override fun operationShape(shape: OperationShape): Symbol {
-        return symbolBuilder(shape, RustType.Opaque(shape.contextName().capitalize())).locatedIn(Operations).build()
+        return symbolBuilder(
+            shape,
+            RustType.Opaque(
+                shape.contextName()
+                    .replaceFirstChar { it.uppercase() }
+            )
+        )
+            .locatedIn(Operations)
+            .build()
     }
 
     override fun resourceShape(shape: ResourceShape?): Symbol {
