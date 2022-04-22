@@ -73,6 +73,7 @@ class ServerBuilderGenerator(
         if (isBuilderFallible) {
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
             // TODO(): `#[non_exhaustive] unless we commit to making builders of builders public.
+            writer.docs("Holds one variant for each of the ways the builder can fail.")
             Attribute.NonExhaustive.render(writer)
             writer.rustBlock("pub enum ConstraintViolation") {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
@@ -300,16 +301,12 @@ class ServerBuilderGenerator(
         fun hasInner() = kind == ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE
     }
 
-    private fun renderConstraintViolation(writer: RustWriter, constraintViolation: ConstraintViolation) {
-        if (constraintViolation.kind == ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE) {
-            // TODO(): `#[doc(hidden)]` unless we commit to making builders of builders public.
-            Attribute.DocHidden.render(writer)
-        }
-
-        // TODO Add Rust docs.
-
+    private fun renderConstraintViolation(writer: RustWriter, constraintViolation: ConstraintViolation) =
         when (constraintViolation.kind) {
-            ConstraintViolationKind.MISSING_MEMBER -> writer.rust("${constraintViolation.name()},")
+            ConstraintViolationKind.MISSING_MEMBER -> {
+                writer.docs("${constraintViolationMessage(constraintViolation).capitalize()}.")
+                writer.rust("${constraintViolation.name()},")
+            }
             ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> {
                 val targetShape = model.expectShape(constraintViolation.forMember.target)
 
@@ -322,18 +319,22 @@ class ServerBuilderGenerator(
 
                 // Note we cannot express the inner constraint violation as `<T as TryFrom<T>>::Error`, because `T` might
                 // be `pub(crate)` and that would leak `T` in a public interface.
+                writer.docs("${constraintViolationMessage(constraintViolation)}.")
+                // TODO: `#[doc(hidden)]` unless we commit to making builders of builders public.
+                Attribute.DocHidden.render(writer)
                 writer.rust("${constraintViolation.name()}(#T),", constraintViolationSymbol)
             }
         }
-    }
 
+    /**
+     * A message for a `ConstraintViolation` variant. This is used in both Rust documentation and the `Display` trait implementation.
+     */
     private fun constraintViolationMessage(constraintViolation: ConstraintViolation): String {
         val memberName = symbolProvider.toMemberName(constraintViolation.forMember)
-        // TODO $structureSymbol here is not quite right because it's printing the full namespace: crate:: in the context of the user will surely be different.
         return when (constraintViolation.kind) {
-            ConstraintViolationKind.MISSING_MEMBER -> "`$memberName` was not specified but it is required when building `$structureSymbol`"
+            ConstraintViolationKind.MISSING_MEMBER -> "`$memberName` was not provided but it is required when building `${structureSymbol.name}`"
             // TODO Nest errors.
-            ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> "constraint violation occurred building member `$memberName` when building `$structureSymbol`"
+            ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> "constraint violation occurred building member `$memberName` when building `${structureSymbol.name}`"
         }
     }
 
