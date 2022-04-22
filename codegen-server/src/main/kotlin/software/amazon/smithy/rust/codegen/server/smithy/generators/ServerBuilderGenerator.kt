@@ -72,7 +72,7 @@ class ServerBuilderGenerator(
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
-            // TODO(): `#[non_exhaustive] if/until we commit to making builders of builders public.
+            // TODO(): `#[non_exhaustive] unless we commit to making builders of builders public.
             Attribute.NonExhaustive.render(writer)
             writer.rustBlock("pub enum ConstraintViolation") {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
@@ -248,6 +248,8 @@ class ServerBuilderGenerator(
 
     /**
      * Render a `set_foo` method. This method is able to take in builders of structure shape types.
+     *
+     * This method is only used by deserializers at the moment and is therefore `pub(crate)`.
      */
     private fun renderBuilderMemberSetterFn(
         writer: RustWriter,
@@ -258,10 +260,7 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
-        // TODO: This method is only used by deserializers, so it will remain unused for shapes that are not (transitively)
-        //     part of an operation input. We therefore `[allow(dead_code)]` here.
-        Attribute.AllowDeadCode.render(writer)
-        // TODO(): `pub(crate)` until we commit to making builders of builders public.
+        // TODO: `pub(crate)` unless we commit to making builders of builders public.
         // Setter names will never hit a reserved word and therefore never need escaping.
         writer.rustBlock("pub(crate) fn set_${memberName.toSnakeCase()}(mut self, input: $inputType) -> Self") {
             rust(
@@ -303,7 +302,7 @@ class ServerBuilderGenerator(
 
     private fun renderConstraintViolation(writer: RustWriter, constraintViolation: ConstraintViolation) {
         if (constraintViolation.kind == ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE) {
-            // TODO(): `#[doc(hidden)]` until we commit to making builders of builders public.
+            // TODO(): `#[doc(hidden)]` unless we commit to making builders of builders public.
             Attribute.DocHidden.render(writer)
         }
 
