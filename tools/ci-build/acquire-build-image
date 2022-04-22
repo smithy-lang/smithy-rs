@@ -28,8 +28,9 @@ def announce(message):
 class DockerPullResult(Enum):
     SUCCESS = 1
     ERROR_THROTTLED = 2
-    NOT_FOUND = 3
-    UNKNOWN_ERROR = 4
+    RETRYABLE_ERROR = 3
+    NOT_FOUND = 4
+    UNKNOWN_ERROR = 5
 
 
 # Script context
@@ -81,6 +82,7 @@ class Shell:
 
         not_found_message = "not found: manifest unknown"
         throttle_message = "toomanyrequests: Rate exceeded"
+        retryable_messages = ["net/http: TLS handshake timeout"]
         if status == 0:
             return DockerPullResult.SUCCESS
         elif throttle_message in stdout or throttle_message in stderr:
@@ -88,7 +90,10 @@ class Shell:
         elif not_found_message in stdout or not_found_message in stderr:
             return DockerPullResult.NOT_FOUND
         else:
-            return DockerPullResult.UNKNOWN_ERROR
+            for message in retryable_messages:
+                if message in stdout or message in stderr:
+                    return DockerPullResult.RETRYABLE_ERROR
+        return DockerPullResult.UNKNOWN_ERROR
 
     # Builds the base image with the Dockerfile in `path` and tags with with `image_tag`
     def docker_build_base_image(self, image_tag, path):
@@ -111,13 +116,16 @@ class Shell:
 
 
 # Pulls a Docker image and retries if it gets throttled
-def docker_pull_with_retry(shell, image_name, image_tag, sleep_time=30):
+def docker_pull_with_retry(shell, image_name, image_tag, throttle_sleep_time=45, retryable_error_sleep_time=1):
     for attempt in range(1, 5):
         announce(f"Attempting to pull remote image {image_name}:{image_tag} (attempt {attempt})...")
         result = shell.docker_pull(image_name, image_tag)
         if result == DockerPullResult.ERROR_THROTTLED:
             announce("Docker pull failed due to throttling. Waiting and trying again...")
-            time.sleep(sleep_time)
+            time.sleep(throttle_sleep_time)
+        elif result == DockerPullResult.RETRYABLE_ERROR:
+            announce("A retryable error occurred. Trying again...")
+            time.sleep(retryable_error_sleep_time)
         else:
             return result
     # Hit max retries; the image probably exists, but we are getting throttled hard. Fail.
@@ -204,7 +212,13 @@ class SelfTest(unittest.TestCase):
         shell.docker_pull.side_effect = [DockerPullResult.SUCCESS]
         self.assertEqual(
             DockerPullResult.SUCCESS,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     def test_retry_immediate_not_found(self):
@@ -212,7 +226,13 @@ class SelfTest(unittest.TestCase):
         shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND]
         self.assertEqual(
             DockerPullResult.NOT_FOUND,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     def test_retry_immediate_unknown_error(self):
@@ -220,7 +240,13 @@ class SelfTest(unittest.TestCase):
         shell.docker_pull.side_effect = [DockerPullResult.UNKNOWN_ERROR]
         self.assertEqual(
             DockerPullResult.UNKNOWN_ERROR,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     def test_retry_throttling_then_success(self):
@@ -232,7 +258,32 @@ class SelfTest(unittest.TestCase):
         ]
         self.assertEqual(
             DockerPullResult.SUCCESS,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
+        )
+
+    def test_retry_throttling_and_retryable_error_then_success(self):
+        shell = self.mock_shell()
+        shell.docker_pull.side_effect = [
+            DockerPullResult.ERROR_THROTTLED,
+            DockerPullResult.RETRYABLE_ERROR,
+            DockerPullResult.ERROR_THROTTLED,
+            DockerPullResult.SUCCESS
+        ]
+        self.assertEqual(
+            DockerPullResult.SUCCESS,
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     def test_retry_throttling_then_not_found(self):
@@ -243,7 +294,13 @@ class SelfTest(unittest.TestCase):
         ]
         self.assertEqual(
             DockerPullResult.NOT_FOUND,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     def test_retry_max_attempts(self):
@@ -257,7 +314,13 @@ class SelfTest(unittest.TestCase):
         ]
         self.assertEqual(
             DockerPullResult.ERROR_THROTTLED,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     # When: the base image already exists locally with the right image tag

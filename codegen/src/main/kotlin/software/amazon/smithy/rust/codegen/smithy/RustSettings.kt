@@ -43,6 +43,8 @@ data class CodegenConfig(
     val includeFluentClient: Boolean = true,
     val addMessageToErrors: Boolean = true,
     val formatTimeoutSeconds: Int = 20,
+    /** Generate comments in the generated code indicating where code was generated from */
+    val debugMode: Boolean = false,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
     val eventStreamAllowList: Set<String> = emptySet(),
 ) {
@@ -54,6 +56,7 @@ data class CodegenConfig(
                     node.get().getBooleanMemberOrDefault("includeFluentClient", true),
                     node.get().getBooleanMemberOrDefault("addMessageToErrors", true),
                     node.get().getNumberMemberOrDefault("formatTimeoutSeconds", 20).toInt(),
+                    node.get().getBooleanMemberOrDefault("debugMode", false),
                     node.get().getArrayMember("eventStreamAllowList")
                         .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
                         .orNull()?.toSet() ?: emptySet()
