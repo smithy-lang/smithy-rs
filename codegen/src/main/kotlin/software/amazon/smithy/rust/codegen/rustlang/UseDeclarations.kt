@@ -5,8 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.rustlang
 
+import software.amazon.smithy.codegen.core.ImportContainer
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.writer.ImportContainer
 
 class UseDeclarations(private val namespace: String) : ImportContainer {
     private val imports: MutableSet<UseStatement> = mutableSetOf()
