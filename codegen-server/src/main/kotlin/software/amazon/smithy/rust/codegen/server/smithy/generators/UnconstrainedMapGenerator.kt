@@ -33,9 +33,7 @@ class UnconstrainedMapGenerator(
 ) {
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
-        // TODO Unit test that this is pub(crate).
 
-        // TODO Some of these can become private properties.
         val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
         val name = symbol.name
@@ -51,7 +49,7 @@ class UnconstrainedMapGenerator(
         } else {
             symbolProvider.toSymbol(valueShape)
         }
-        // TODO: We will need a `ConstrainedSymbolProvider` when we have constraint traits.
+        // TODO(https://github.com/awslabs/smithy-rs/pull/1199): We will need a `ConstrainedSymbolProvider` when we have constraint traits.
         val constrainedSymbol = symbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
         val constraintViolationCodegenScope = listOfNotNull(
@@ -67,11 +65,10 @@ class UnconstrainedMapGenerator(
             },
         ).toTypedArray()
 
-        // TODO Strictly, `ConstrainedTrait` only needs to be implemented if this list is a struct member.
-        // TODO The implementation of the Constrained trait is probably not for the correct type. There might be more than
-        //    one "path" to an e.g. Vec<Vec<StructA>> with different constraint traits along the path, because constraint
-        //    traits can be applied to members, or simply because the model might have two different lists holding `StructA`.
-        //    So we might have to newtype things.
+        // TODO The implementation of the `Constrained` trait is probably not for the correct type. There might be more than
+        //    one "path" to an e.g. HashMap<HashMap<StructA>> with different constraint traits along the path, because constraint
+        //    traits can be applied to members, or simply because the model might have two different maps holding `StructA`.
+        //    So we will have to newtype things.
         writer.withModule(module, RustMetadata(public = false, pubCrate = true)) {
             rustTemplate(
                 """
@@ -127,7 +124,7 @@ class UnconstrainedMapGenerator(
         is StructureShape -> shape.canReachConstrainedShape(model, symbolProvider)
         is CollectionShape -> shape.canReachConstrainedShape(model, symbolProvider)
         is MapShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        // TODO Constraint traits on simple shapes.
+        // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Constraint traits on simple shapes.
         else -> false
     }
 }

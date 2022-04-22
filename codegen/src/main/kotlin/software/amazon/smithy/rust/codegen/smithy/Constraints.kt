@@ -13,8 +13,7 @@ import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
-// TODO Find a better place for these primitives. Probably rust.codegen.util
-// TODO Unit test these functions.
+// TODO Unit test these functions and then refactor to use a `Walker` instead of hand-rolling our own DFS.
 
 // TODO This will work fine if we include RequiredTrait too won't it?
 fun Shape.hasConstraintTrait() =
@@ -77,18 +76,13 @@ private fun unconstrainedShapeCanReachConstrainedShape(shape: Shape, model: Mode
         return false
     }
 
-//    // TODO
-//    if (shape.id.name == "RecursiveShapesInputOutputNested1") {
-//        return false
-//    }
-
     val newVisited = setOf(shape).plus(visited)
 
     return when (shape) {
         is StructureShape -> shape.canReachConstrainedShape(model, symbolProvider, newVisited)
         is CollectionShape -> shape.canReachConstrainedShape(model, symbolProvider, newVisited)
         is MapShape -> shape.canReachConstrainedShape(model, symbolProvider, newVisited)
-        // TODO Constraint traits on simple shapes.
+        // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Constraint traits on simple shapes.
         else -> false
     }
 }

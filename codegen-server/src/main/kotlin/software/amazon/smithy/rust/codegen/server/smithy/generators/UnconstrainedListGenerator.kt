@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
 
 // TODO Docs
-// TODO Can we reuse this generator for sets?
 class UnconstrainedListGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
@@ -30,24 +29,20 @@ class UnconstrainedListGenerator(
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
-        // TODO Unit test that this is pub(crate).
-
-        // TODO Some of these can become private properties.
         val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
         val name = symbol.name
         val innerShape = model.expectShape(shape.member.target)
         val innerSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
-        // TODO: We will need a `ConstrainedSymbolProvider` when we have constraint traits.
+        // TODO(https://github.com/awslabs/smithy-rs/pull/1199): We will need a `ConstrainedSymbolProvider` when we have constraint traits.
         val constrainedSymbol = symbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
-        // TODO Strictly, `ConstrainedTrait` only needs to be implemented if this list is a struct member.
-        // TODO The implementation of the Constrained trait is probably not for the correct type. There might be more than
+        // TODO The implementation of the `Constrained` trait is probably not for the correct type. There might be more than
         //    one "path" to an e.g. Vec<Vec<StructA>> with different constraint traits along the path, because constraint
         //    traits can be applied to members, or simply because the model might have two different lists holding `StructA`.
-        //    So we might have to newtype things.
+        //    So we will have to newtype things.
         writer.withModule(module, RustMetadata(public = false, pubCrate = true)) {
             rustTemplate(
                 """
