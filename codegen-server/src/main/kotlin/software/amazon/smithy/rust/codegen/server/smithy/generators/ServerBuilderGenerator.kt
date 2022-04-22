@@ -72,7 +72,7 @@ class ServerBuilderGenerator(
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
-            // TODO(): `#[non_exhaustive] until we commit to making builders of builders public.
+            // TODO(): `#[non_exhaustive] if/until we commit to making builders of builders public.
             Attribute.NonExhaustive.render(writer)
             writer.rustBlock("pub enum ConstraintViolation") {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
@@ -167,9 +167,19 @@ class ServerBuilderGenerator(
             true -> "Result<${implBlockWriter.format(structureSymbol)}, ConstraintViolation>"
             false -> implBlockWriter.format(structureSymbol)
         }
-        // TODO Document when builder can fail.
-        // TODO Document it returns the first error.
-        implBlockWriter.docs("Consumes the builder and constructs a #D.", structureSymbol)
+        implBlockWriter.docs("""Consumes the builder and constructs a #D.""", structureSymbol)
+        if (isBuilderFallible) {
+            implBlockWriter.docs(
+                """
+                The builder fails to construct a #D if you do not provide a value for all non-`Option`al members.
+                """,
+                structureSymbol
+            )
+
+            if (constraintViolations().size > 1) {
+                implBlockWriter.docs("If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].")
+            }
+        }
         implBlockWriter.rustBlock("pub fn build(self) -> $returnType") {
             conditionalBlock("Ok(", ")", conditional = isBuilderFallible) {
                 coreBuilder(this)
