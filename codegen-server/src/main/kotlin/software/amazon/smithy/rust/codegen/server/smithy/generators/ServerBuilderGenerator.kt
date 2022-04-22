@@ -310,9 +310,9 @@ class ServerBuilderGenerator(
             ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> {
                 val targetShape = model.expectShape(constraintViolation.forMember.target)
 
-                // TODO I guess the RustBoxTrait logic could be handled by the symbol provider.
                 val constraintViolationSymbol =
                     constraintViolationSymbolProvider.toSymbol(targetShape)
+                        // If the corresponding structure's member is boxed, box this constraint violation symbol too.
                         .letIf(constraintViolation.forMember.hasTrait<RustBoxTrait>()) {
                             it.makeRustBoxed()
                         }
@@ -359,8 +359,8 @@ class ServerBuilderGenerator(
      * Returns the builder failure associated with the `member` field if it is `required`.
      */
     private fun builderMissingFieldForMember(member: MemberShape) =
-        // TODO: We go through the symbol provider because non-`required` blob streaming members are interpreted as `required`,
-        //     so we can't use `member.isOptional`. See https://github.com/awslabs/smithy-rs/issues/1302.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): We go through the symbol provider because
+        //     non-`required` blob streaming members are interpreted as `required`, so we can't use `member.isOptional`.
         if (symbolProvider.toSymbol(member).isOptional()) {
             null
         } else {
@@ -368,7 +368,7 @@ class ServerBuilderGenerator(
         }
 
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
-        // TODO `TryFrom` is in Rust 2021's prelude.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1332) `TryFrom` is in Rust 2021's prelude.
         writer.rustTemplate(
             """
             impl std::convert::TryFrom<Builder> for #{Structure} {
@@ -431,7 +431,7 @@ class ServerBuilderGenerator(
      *     a) `Option<T>`; or
      *     b) `T`.
      *
-     * For each member, this function first unwraps case 1. into 2., and then converts into b) if necessary.
+     * For each member, this function first safely unwraps case 1. into 2., and then converts into b) if necessary.
      */
     private fun coreBuilder(writer: RustWriter) {
         writer.rustBlock("#T", structureSymbol) {
@@ -441,11 +441,11 @@ class ServerBuilderGenerator(
                 withBlock("$memberName: self.$memberName", ",") {
                     // Write the modifier(s).
                     builderConstraintViolationForMember(member)?.also { constraintViolation ->
-                        // TODO Remove `TryInto` import when we switch to 2021 edition.
                         val hasBox = builderMemberSymbol(member)
                             .mapRustType { it.stripOuter<RustType.Option>() }
                             .isRustBoxed()
                         if (hasBox) {
+                            // TODO(https://github.com/awslabs/smithy-rs/issues/1332) `TryInto` is in Rust 2021's prelude.
                             rustTemplate(
                                 """
                                 .map(|v| match *v {
