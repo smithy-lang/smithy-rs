@@ -29,6 +29,7 @@ internal class InlineDependencyTest {
     fun `locate dependencies from the inlineable module`() {
         val dep = InlineDependency.idempotencyToken()
         val testWriter = RustWriter.root()
+        testWriter.compileAndTest()
         testWriter.addDependency(CargoDependency.FastRand)
         testWriter.withModule(dep.module.name) {
             dep.renderer(this)

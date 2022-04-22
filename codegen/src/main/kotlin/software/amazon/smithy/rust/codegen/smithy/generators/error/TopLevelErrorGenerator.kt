@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -46,7 +47,7 @@ class TopLevelErrorGenerator(codegenContext: CodegenContext, private val operati
 
     private val sdkError = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType().member("result::SdkError")
     fun render(crate: RustCrate) {
-        crate.withModule(RustModule.default("error_meta", false)) { writer ->
+        crate.withModule(RustModule.default("error_meta", visibility = Visibility.PRIVATE)) { writer ->
             writer.renderDefinition()
             writer.renderImplDisplay()
             // Every operation error can be converted into service::Error
@@ -102,7 +103,7 @@ class TopLevelErrorGenerator(codegenContext: CodegenContext, private val operati
         rust("/// All possible error types for this service.")
         RustMetadata(
             additionalAttributes = listOf(Attribute.NonExhaustive),
-            public = true
+            visibility = Visibility.PUBLIC
         ).withDerives(RuntimeType.Debug).render(this)
         rustBlock("enum Error") {
             allErrors.forEach { error ->
