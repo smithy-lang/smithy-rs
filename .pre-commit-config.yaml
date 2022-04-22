@@ -26,5 +26,5 @@ repos:
   - id: pretty-format-yaml
     args: [--autofix, --indent, '2']
   - id: pretty-format-rust
-    entry: rustfmt --edition 2018
+    entry: rustfmt --edition 2021
     files: ^.*\.rs$

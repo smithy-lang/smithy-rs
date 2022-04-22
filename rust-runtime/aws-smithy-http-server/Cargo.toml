@@ -29,6 +29,7 @@ http-body = "0.4"
 hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp", "stream"] }
 mime = "0.3"
 nom = "7"
+paste = "1"
 pin-project-lite = "0.2"
 regex = "1.0"
 serde_urlencoded = "0.7"
