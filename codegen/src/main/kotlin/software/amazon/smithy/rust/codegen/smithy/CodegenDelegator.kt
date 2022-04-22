@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
@@ -94,7 +95,7 @@ open class RustCrate(
     ) {
         injectInlineDependencies()
         val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
-            .map { modules[it] ?: RustModule.default(it, false) }
+            .map { modules[it] ?: RustModule.default(it, visibility = Visibility.PRIVATE) }
         inner.finalize(
             settings,
             model,
