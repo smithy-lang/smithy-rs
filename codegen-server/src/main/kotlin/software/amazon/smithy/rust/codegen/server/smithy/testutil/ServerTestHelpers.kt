@@ -47,7 +47,7 @@ fun serverTestCodegenContext(
     model,
     serverTestSymbolProvider(model),
     TestRuntimeConfig,
-    // TODO We should not fabricate a service shape out of thin air here, but rather look it up in the model.
+    // TODO(https://github.com/awslabs/smithy-rs/pull/1340) We should not fabricate a service shape out of thin air here, but rather look it up in the model.
     serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
     ShapeId.from("test#Protocol"),
     settings,
