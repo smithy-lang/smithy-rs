@@ -80,7 +80,9 @@ fun testCodegenContext(
     model,
     testSymbolProvider(model),
     TestRuntimeConfig,
-    serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
+    serviceShape ?:
+        model.serviceShapes.firstOrNull() ?:
+        ServiceShape.builder().version("test").id("test#Service").build(),
     ShapeId.from("test#Protocol"),
     settings, mode
 )
