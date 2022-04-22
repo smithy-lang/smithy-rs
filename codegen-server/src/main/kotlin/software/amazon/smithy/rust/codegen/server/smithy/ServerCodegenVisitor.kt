@@ -21,6 +21,7 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedListGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
@@ -191,6 +192,10 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             builderGenerator.render(writer)
             writer.implBlock(shape, symbolProvider) {
                 builderGenerator.renderConvenienceMethod(this)
+            }
+
+            if (shapesReachableFromOperationInputs.contains(shape)) {
+                ServerStructureConstrainedTraitImpl(symbolProvider, shape, writer).render()
             }
         }
     }

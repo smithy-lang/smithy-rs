@@ -175,18 +175,6 @@ class StructureGenerator(
         }
     }
 
-    private fun renderConstrainedTraitImpl() {
-        writer.rust(
-            """
-            impl #T for $name {
-                type Unconstrained = #T;
-            }
-            """,
-            RuntimeType.ConstrainedTrait(),
-            shape.builderSymbol(symbolProvider)
-        )
-    }
-
     private fun renderStructureImpl() {
         if (accessorMembers.isEmpty()) {
             return
@@ -232,10 +220,6 @@ class StructureGenerator(
 
         renderStructureImpl()
         renderDebugImpl()
-
-        // TODO This only needs to be called in the server, for structures that are reachable from operation input AND
-        //     that are constrained. It's probably best that we move it to an entirely different class and unit test it.
-        renderConstrainedTraitImpl()
     }
 
     private fun RustWriter.forEachMember(

@@ -83,7 +83,9 @@ class ServerBuilderGenerator(
             // TODO This only needs to be generated for operation input shapes.
             renderImplFromConstraintViolationForRequestRejection(writer)
 
-            renderImplFromBuilderForMaybeConstrained(writer)
+            if (takeInUnconstrainedTypes) {
+                renderImplFromBuilderForMaybeConstrained(writer)
+            }
 
             renderTryFromBuilderImpl(writer)
         } else {
