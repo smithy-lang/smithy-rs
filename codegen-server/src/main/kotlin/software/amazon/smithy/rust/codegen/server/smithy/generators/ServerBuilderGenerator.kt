@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
@@ -50,7 +51,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 class ServerBuilderGenerator(
     private val codegenContext: CodegenContext,
     private val shape: StructureShape,
-    private val takeInUnconstrainedTypes: Boolean = false
+    private val takeInUnconstrainedTypes: Boolean = false,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -80,8 +81,11 @@ class ServerBuilderGenerator(
             renderImplDisplayConstraintViolation(writer)
             writer.rust("impl std::error::Error for ConstraintViolation { }")
 
-            // TODO This only needs to be generated for operation input shapes.
-            renderImplFromConstraintViolationForRequestRejection(writer)
+            // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
+            // an operation input shape.
+            if (shape.hasTrait<SyntheticInputTrait>()) {
+                renderImplFromConstraintViolationForRequestRejection(writer)
+            }
 
             if (takeInUnconstrainedTypes) {
                 renderImplFromBuilderForMaybeConstrained(writer)
