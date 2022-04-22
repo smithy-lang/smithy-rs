@@ -118,13 +118,21 @@ class StructureGenerator(
                     .map { symbolProvider.toSymbol(it) }.any {
                         // If any members are not optional && we can't use a default, we need to
                         // generate a fallible builder.
+                        // TODO Won't canUseDefault suffice?
                         !it.isOptional() && !it.canUseDefault()
                     }
 
         // TODO Ensure server subproject uses this function
         // TODO Not quite right. @box not taken into account. Also shape builders / constrained shapes
-        fun serverHasFallibleBuilder(structureShape: StructureShape, model: Model, symbolProvider: SymbolProvider) =
-            structureShape.canReachConstrainedShape(model, symbolProvider)
+        fun serverHasFallibleBuilder(structureShape: StructureShape, model: Model, symbolProvider: SymbolProvider, takeInUnconstrainedTypes: Boolean) =
+            if (takeInUnconstrainedTypes) {
+                structureShape.canReachConstrainedShape(model, symbolProvider)
+            } else {
+                structureShape
+                    .members()
+                    .map { symbolProvider.toSymbol(it) }
+                    .any { !it.isOptional() }
+            }
     }
 
     /**
@@ -226,7 +234,7 @@ class StructureGenerator(
         renderDebugImpl()
 
         // TODO This only needs to be called in the server, for structures that are reachable from operation input AND
-        //     that are constrained. It's probably best that we move it to an entirely different class.
+        //     that are constrained. It's probably best that we move it to an entirely different class and unit test it.
         renderConstrainedTraitImpl()
     }
 

@@ -26,20 +26,22 @@ structure AnOperationInput {
 }
 
 structure AnOperationOutput {
-    conA: ConA
+    conA: ConA,
+
+    conCList: ConCList,
 }
 
 structure ConA {
     @required
-    // conB: ConB,
+    conB: ConB,
 
-    // optConB: ConB,
+    optConB: ConB,
 
-    // conBList: ConBList,
+    conBList: ConBList,
 
-    conBSet: ConBSet,
+    // conBSet: ConBSet,
 
-    // conBMap: ConBMap
+    conBMap: ConBMap
 }
 
 structure ConB {
@@ -76,6 +78,10 @@ structure ConB {
 // }
 
 list ConBList {
+    member: AnotherList
+}
+
+list ConCList {
     member: AnotherList
 }
 

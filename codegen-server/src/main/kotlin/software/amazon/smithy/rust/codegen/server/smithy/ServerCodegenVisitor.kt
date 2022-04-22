@@ -72,6 +72,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
     private val protocolGenerator: ProtocolGenerator
     private val unconstrainedModule = RustModule.private("unconstrained", "Unconstrained types for constrained shapes.")
+    private val shapesReachableFromOperationInputs: Set<Shape>
 
     init {
         val symbolVisitorConfig =
@@ -102,6 +103,10 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
+
+        val walker = Walker(model)
+        val inputShapes = model.operationShapes.map { model.expectShape(it.inputShape, StructureShape::class.java) }
+        shapesReachableFromOperationInputs = inputShapes.flatMap { walker.walkShapes(it) }.toSet()
     }
 
     /**
@@ -178,7 +183,11 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
-            val builderGenerator = ServerBuilderGenerator(codegenContext, shape)
+            val builderGenerator = ServerBuilderGenerator(
+                codegenContext,
+                shape,
+                takeInUnconstrainedTypes = shapesReachableFromOperationInputs.contains(shape)
+            )
             builderGenerator.render(writer)
             writer.implBlock(shape, symbolProvider) {
                 builderGenerator.renderConvenienceMethod(this)
@@ -187,9 +196,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     }
 
     override fun listShape(shape: ListShape) {
-        // TODO We only have to generate this for lists that are reachable from operation
-        //  input AND from which you can reach a shape that is constrained.
-        if (shape.canReachConstrainedShape(model, symbolProvider)) {
+        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(model, symbolProvider)) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for list $shape")
 
             rustCrate.withModule(unconstrainedModule) { writer ->
@@ -206,9 +213,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     }
 
     override fun mapShape(shape: MapShape) {
-        // TODO We only have to generate this for maps that are reachable from operation
-        //  input AND from which you can reach a shape that is constrained.
-        if (shape.canReachConstrainedShape(model, symbolProvider)) {
+        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(model, symbolProvider)) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for map $shape")
 
             rustCrate.withModule(unconstrainedModule) { writer ->

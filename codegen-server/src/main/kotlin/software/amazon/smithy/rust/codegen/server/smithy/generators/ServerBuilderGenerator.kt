@@ -46,9 +46,11 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 //     - This one takes in codegenContext.
 //     - Unlike in `BuilderGenerator.kt`, we don't add helper methods to add items to vectors and hash maps.
 //     - This builder is not `PartialEq`.
+//     - Always implements either From<Builder> for Structure or TryFrom<Builder> for Structure.
 class ServerBuilderGenerator(
     private val codegenContext: CodegenContext,
-    private val shape: StructureShape
+    private val shape: StructureShape,
+    private val takeInUnconstrainedTypes: Boolean = false
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -57,6 +59,7 @@ class ServerBuilderGenerator(
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val moduleName = shape.builderSymbol(symbolProvider).namespace.split("::").last()
+    private val isBuilderFallible = StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
 
     fun render(writer: RustWriter) {
         writer.docs("See #D.", structureSymbol)
@@ -66,7 +69,7 @@ class ServerBuilderGenerator(
     }
 
     private fun renderBuilder(writer: RustWriter) {
-        if (StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)) {
+        if (isBuilderFallible) {
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
             // TODO(): `#[non_exhaustive] until we commit to making builders of builders public.
             Attribute.NonExhaustive.render(writer)
@@ -101,7 +104,7 @@ class ServerBuilderGenerator(
             for (member in members) {
                 renderBuilderMemberFn(this, member)
 
-                if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
+                if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
                     renderBuilderMemberSetterFn(this, member)
                 }
             }
@@ -154,8 +157,7 @@ class ServerBuilderGenerator(
     }
 
     private fun renderBuildFn(implBlockWriter: RustWriter) {
-        val fallibleBuilder = StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)
-        val returnType = when (fallibleBuilder) {
+        val returnType = when (isBuilderFallible) {
             true -> "Result<${implBlockWriter.format(structureSymbol)}, ConstraintViolation>"
             false -> implBlockWriter.format(structureSymbol)
         }
@@ -163,7 +165,7 @@ class ServerBuilderGenerator(
         // TODO Document it returns the first error.
         implBlockWriter.docs("Consumes the builder and constructs a #D.", structureSymbol)
         implBlockWriter.rustBlock("pub fn build(self) -> $returnType") {
-            conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
+            conditionalBlock("Ok(", ")", conditional = isBuilderFallible) {
                 coreBuilder(this)
             }
         }
@@ -203,7 +205,7 @@ class ServerBuilderGenerator(
         writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
-                if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
+                if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
                     val constrainedType = "${symbol.wrapMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
                     if (symbol.isOptional()) {
                         if (hasBox) {
@@ -331,7 +333,7 @@ class ServerBuilderGenerator(
      * Returns the builder failure associated with the `member` field if its target is constrained.
      */
     private fun builderConstraintViolationForMember(member: MemberShape) =
-        if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
+        if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
             ConstraintViolation(member, ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE)
         } else {
             null
@@ -382,22 +384,25 @@ class ServerBuilderGenerator(
      * Returns the symbol for a builder's member.
      * All builder members are optional, but only some are `Option<T>`s where `T` needs to be constrained.
      */
-    private fun builderMemberSymbol(member: MemberShape): Symbol {
-        val strippedOption = symbolProvider.toSymbol(member)
-            // Strip the `Option` in case the member is not `required`.
-            .mapRustType { it.stripOuter<RustType.Option>() }
+    private fun builderMemberSymbol(member: MemberShape): Symbol =
+        if (takeInUnconstrainedTypes) {
+            val strippedOption = symbolProvider.toSymbol(member)
+                // Strip the `Option` in case the member is not `required`.
+                .mapRustType { it.stripOuter<RustType.Option>() }
 
-        val hadBox = strippedOption.isRustBoxed()
-        return strippedOption
-            // Strip the `Box` in case the member can reach itself recursively.
-            .mapRustType { it.stripOuter<RustType.Box>() }
-            // Wrap it in the Cow-like `constrained::Constrained` type in case the target member shape can reach a constrained shape.
-            .letIf(member.targetCanReachConstrainedShape(model, symbolProvider)) { it.wrapMaybeConstrained() }
-            // Box it in case the member can reach itself recursively.
-            .letIf(hadBox) { it.makeRustBoxed() }
-            // Ensure we always end up with an `Option`.
-            .makeOptional()
-    }
+            val hadBox = strippedOption.isRustBoxed()
+            strippedOption
+                // Strip the `Box` in case the member can reach itself recursively.
+                .mapRustType { it.stripOuter<RustType.Box>() }
+                // Wrap it in the Cow-like `constrained::Constrained` type in case the target member shape can reach a constrained shape.
+                .letIf(member.targetCanReachConstrainedShape(model, symbolProvider)) { it.wrapMaybeConstrained() }
+                // Box it in case the member can reach itself recursively.
+                .letIf(hadBox) { it.makeRustBoxed() }
+                // Ensure we always end up with an `Option`.
+                .makeOptional()
+        } else {
+            symbolProvider.toSymbol(member).makeOptional()
+        }
 
     /**
      * Writes the code to instantiate the struct the builder builds.

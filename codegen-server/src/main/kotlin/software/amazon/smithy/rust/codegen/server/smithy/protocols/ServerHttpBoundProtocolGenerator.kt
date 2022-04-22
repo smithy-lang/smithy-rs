@@ -626,7 +626,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         serverRenderUriPathParser(this, operationShape)
         serverRenderQueryStringParser(this, operationShape)
 
-        val err = if (StructureGenerator.serverHasFallibleBuilder(inputShape, model, symbolProvider)) {
+        val err = if (StructureGenerator.serverHasFallibleBuilder(inputShape, model, symbolProvider, takeInUnconstrainedTypes = false)) {
             "?"
         } else ""
         rustTemplate("input.build()$err", *codegenScope)

@@ -53,7 +53,7 @@ import software.amazon.smithy.rust.codegen.util.isStreaming
 /**
  * Instantiator generates code to instantiate a given Shape given a `Node` representing the value
  *
- * This is primarily used during Protocol test generation
+ * This is only used during protocol test generation.
  */
 class Instantiator(
     private val symbolProvider: RustSymbolProvider,
@@ -275,7 +275,7 @@ class Instantiator(
         }
         writer.write(".build()")
         // TODO Client
-        if (StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider)) {
+        if (StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes = false)) {
             writer.write(".unwrap()")
         }
     }
