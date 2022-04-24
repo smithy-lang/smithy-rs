@@ -3,73 +3,72 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-// This code was copied and then modified from https://github.com/hanabu/lambda-web
+// This code was heavily inspired by https://github.com/hanabu/lambda-web
 
 use crate::BoxError;
-use aws_lambda_events::encodings::Body;
 use futures_util::future::BoxFuture;
-use http::{Response, uri};
-use http_body::Body as HttpBody;
+use http::{uri, Response};
+use http_body::Body;
 use hyper::Body as HyperBody;
 #[allow(unused_imports)]
-use lambda_http::{Request, RequestExt as _};
+use lambda_http::{Body as LambdaBody, Request, RequestExt as _};
 use std::{
     convert::Infallible,
     error::Error,
     fmt::Debug,
-    marker::PhantomData,
     task::{Context, Poll},
 };
 use tower::Service;
 
 type HyperRequest = http::Request<HyperBody>;
 
-#[doc(hidden)]
+/// A [`MakeService`] that produces AWS Lambda compliant services.
+///
+/// [`MakeService`]: tower::make::MakeService
 #[derive(Debug, Clone)]
-pub struct IntoMakeLambdaService<'a, S> {
+pub struct IntoMakeLambdaService<S> {
     service: S,
-    _phantom: PhantomData<&'a ()>,
 }
 
-impl<'a, S> IntoMakeLambdaService<'a, S> {
+impl<S> IntoMakeLambdaService<S> {
     pub(super) fn new(service: S) -> Self {
-        Self {
-            service,
-            _phantom: PhantomData,
-        }
+        Self { service }
     }
 }
 
-impl<'a, S, B> Service<Request> for IntoMakeLambdaService<'a, S>
+impl<S, B> Service<Request> for IntoMakeLambdaService<S>
 where
-    S: Service<HyperRequest, Response = Response<B>, Error = Infallible> + Send + Clone + 'static,
-    S::Future: Send + 'a,
-    B: HttpBody + Send + Debug,
-    <B as HttpBody>::Error: Error + Send + Sync + 'static,
-    <B as HttpBody>::Data: Send,
+    S: Service<HyperRequest, Response = Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    B: Body + Send + Debug,
+    <B as Body>::Error: Error + Send + Sync + 'static,
+    <B as Body>::Data: Send,
 {
     type Error = BoxError;
-    type Response = Response<Body>;
+    type Response = Response<LambdaBody>;
     type Future = MakeRouteLambdaServiceFuture;
 
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+    #[inline]
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.service.poll_ready(cx).map_err(|err| err.into())
     }
 
     /// Lambda handler function
     /// Parse Lambda request as hyper request,
     /// serialize hyper response to Lambda response
     fn call(&mut self, event: Request) -> Self::Future {
-        // Parse request
-        let hyper_request = lambda_to_hyper_request(event);
-
-        // Call hyper service when request parsing succeeded
-        let svc_call = Service::call(&mut self.service.clone(), hyper_request);
+        // As recommended in https://github.com/tower-rs/tower/issues/547
+        let clone = self.service.clone();
+        let mut inner = std::mem::replace(&mut self.service, clone);
 
         let fut = async move {
-            // Request parsing succeeded
-            let response = svc_call.await.expect("It should not fail");
-            // Returns as Lambda response
+            // Parse request
+            let hyper_request = lambda_to_hyper_request(event)?;
+
+            // Call Hyper service when request parsing succeeded
+            let response = inner.call(hyper_request).await?;
+
+            // Return Lambda response after finished calling inner service
             hyper_to_lambda_response(response).await
         };
         MakeRouteLambdaServiceFuture::new(Box::pin(fut))
@@ -78,12 +77,12 @@ where
 
 opaque_future! {
     /// Response future for [`IntoMakeLambdaService`] services.
-    pub type MakeRouteLambdaServiceFuture = BoxFuture<'static, Result<Response<Body>, BoxError>>;
+    pub type MakeRouteLambdaServiceFuture = BoxFuture<'static, Result<Response<LambdaBody>, BoxError>>;
 }
 
-fn lambda_to_hyper_request(request: Request) -> HyperRequest {
+fn lambda_to_hyper_request(request: Request) -> Result<HyperRequest, BoxError> {
     tracing::debug!("Converting Lambda to Hyper request...");
-    // Raw HTTP path without any stage information 
+    // Raw HTTP path without any stage information
     let raw_path = request.raw_http_path();
     let (parts, body) = request.into_parts();
     let mut uri: uri::Uri = parts.uri;
@@ -101,35 +100,36 @@ fn lambda_to_hyper_request(request: Request) -> HyperRequest {
             .authority(uri_parts.authority.unwrap())
             .scheme(uri_parts.scheme.unwrap())
             .path_and_query(path)
-            .build().unwrap();
+            .build()
+            .unwrap();
     }
 
     let body = match body {
-        Body::Empty => HyperBody::empty(),
-        Body::Text(s) => HyperBody::from(s),
-        Body::Binary(v) => HyperBody::from(v),
+        LambdaBody::Empty => HyperBody::empty(),
+        LambdaBody::Text(s) => HyperBody::from(s),
+        LambdaBody::Binary(v) => HyperBody::from(v),
     };
     let mut req = http::Request::builder()
         .method(parts.method)
         .uri(uri)
         .body(body)
         .unwrap();
-    // No builder method that sets headers in batch
+    // There is no builder method that sets headers in batch
     let _ = std::mem::replace(req.headers_mut(), parts.headers);
     tracing::debug!("Hyper request converted successfully.");
-    req
+    Ok(req)
 }
 
-async fn hyper_to_lambda_response<B>(response: Response<B>) -> Result<Response<Body>, BoxError>
+async fn hyper_to_lambda_response<B>(response: Response<B>) -> Result<Response<LambdaBody>, BoxError>
 where
-    B: HttpBody + Debug,
-    <B as HttpBody>::Error: Error + Send + Sync + 'static,
+    B: Body + Debug,
+    <B as Body>::Error: Error + Send + Sync + 'static,
 {
     tracing::debug!("Converting Hyper to Lambda response...");
     // Divide response into headers and body
     let (parts, body) = response.into_parts();
     let body = hyper::body::to_bytes(body).await?;
-    let res = Response::from_parts(parts, Body::from(body.as_ref()));
+    let res = Response::from_parts(parts, LambdaBody::from(body.as_ref()));
     tracing::debug!("Lambda response converted successfully.");
     Ok(res)
 }

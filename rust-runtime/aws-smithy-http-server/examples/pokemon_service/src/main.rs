@@ -45,7 +45,10 @@ pub async fn main() {
 
     if is_lambda_environment() {
         // Start Lambda
-        run_on_lambda(app.into_make_lambda_service()).await.unwrap();
+        let lambda = run_on_lambda(app.into_make_lambda_service());
+        if let Err(err) = lambda.await {
+            eprintln!("lambda error: {}", err);
+        }
     } else {
         // Start the [`hyper::Server`].
         let server = hyper::Server::bind(&"0.0.0.0:13734".parse().unwrap()).serve(app.into_make_service());

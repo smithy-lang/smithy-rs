@@ -106,7 +106,15 @@ where
         IntoMakeService::new(self)
     }
 
-    pub fn into_make_lambda_service<'a>(self) -> IntoMakeLambdaService<'a, Self> {
+    /// Convert this router into a [`MakeService`], that is a [`Service`] whose
+    /// response is another service.
+    ///
+    /// This is useful when running your application with AWS Lambda's
+    /// [`run`].
+    ///
+    /// [`run`]: lambda_http::run
+    /// [`MakeService`]: tower::make::MakeService
+    pub fn into_make_lambda_service(self) -> IntoMakeLambdaService<Self> {
         IntoMakeLambdaService::new(self)
     }
 
