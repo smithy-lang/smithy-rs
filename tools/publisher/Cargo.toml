@@ -9,6 +9,10 @@ publish = false
 
 [workspace]
 
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
 [dependencies]
 anyhow = "1.0"
 async-recursion = "0.3.2"

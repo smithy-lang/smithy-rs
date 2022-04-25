@@ -70,7 +70,7 @@ import java.util.logging.Logger
 /*
  * Implement operations' input parsing and output serialization. Protocols can plug their own implementations
  * and overrides by creating a protocol factory inheriting from this class and feeding it to the [ServerProtocolLoader].
- * See `ServerRestJson.kt` for more info.
+ * See `ServerRestJsonFactory.kt` for more info.
  */
 class ServerHttpBoundProtocolGenerator(
     codegenContext: CodegenContext,

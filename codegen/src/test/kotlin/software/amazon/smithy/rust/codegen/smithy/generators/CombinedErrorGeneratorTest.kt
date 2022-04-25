@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.lookup
 
-class ServerCombinedErrorGeneratorTest {
+class CombinedErrorGeneratorTest {
     private val baseModel = """
         namespace error
         
