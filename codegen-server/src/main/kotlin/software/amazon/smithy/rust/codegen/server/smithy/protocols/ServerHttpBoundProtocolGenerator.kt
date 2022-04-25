@@ -604,7 +604,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rust(
                     """
                     {
-                        input = input.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(${
+                        input = input.${member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(${
                             if (symbolProvider.toSymbol(binding.member).isOptional()) {
                                 "Some(value)"
                             } else {
@@ -762,10 +762,16 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         val deserializer = generateParsePercentEncodedStrFn(binding)
                         rustTemplate(
                             """
-                            input = input.${binding.member.deserializerBuilderSetterName(model, symbolProvider, mode)}(
+                            input = input.${
+                                binding.member.deserializerBuilderSetterName(
+                                    model,
+                                    symbolProvider,
+                                    codegenContext.mode
+                                )
+                            }(
                                 #{deserializer}(m$index)?
                             );
-                            """.trimIndent(),
+                            """,
                             *codegenScope,
                             "deserializer" to deserializer,
                         )
@@ -859,7 +865,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     rustTemplate(
                         """
                         if !seen_$memberName && k == "${it.locationName}" {
-                            input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider, mode)}(
+                            input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(
                                 #{deserializer}(&v)?
                             );
                             seen_$memberName = true;
@@ -935,7 +941,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rust("input = input.${queryParamsBinding.member.deserializerBuilderSetterName(
                     model,
                     symbolProvider,
-                    mode
+                    codegenContext.mode
                 )}(${
                     if (symbolProvider.toSymbol(queryParamsBinding.member).isOptional()) {
                         "Some(query_params)"
@@ -949,7 +955,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     if !$memberName.is_empty() {
-                        input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider, mode)}(${
+                        input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(${
                             if (symbolProvider.toSymbol(it.member).isOptional()) {
                                 "Some($memberName)"
                             } else {

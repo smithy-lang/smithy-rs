@@ -58,7 +58,8 @@ import software.amazon.smithy.rust.codegen.util.isStreaming
 class Instantiator(
     private val symbolProvider: RustSymbolProvider,
     private val model: Model,
-    private val runtimeConfig: RuntimeConfig
+    private val runtimeConfig: RuntimeConfig,
+    private val forWhom: CodegenTarget = CodegenTarget.CLIENT
 ) {
     data class Ctx(
         // The Rust HTTP library lower cases headers but Smithy protocol tests
@@ -157,12 +158,14 @@ class Instantiator(
         } else {
             writer.conditionalBlock(
                 "Some(", ")",
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `ctx.builder` condition is superfluous
-                //  except in the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider]
-                //  always generates a non `Option`al target type: in all other cases the client generates `Option`al
-                //  types.
-                conditional = ctx.builder || symbol.isOptional()
-//                conditional = symbol.isOptional()
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1302): The `ctx.builder` condition in the case of
+                //  the client is superfluous except in the case where the shape is a `@streaming` blob, because
+                //  [StreamingTraitSymbolProvider] always generates a non `Option`al target type: in all other cases the
+                //  client generates `Option`al types.
+                conditional = when (forWhom) {
+                    CodegenTarget.CLIENT -> ctx.builder || symbol.isOptional()
+                    CodegenTarget.SERVER -> symbol.isOptional()
+                }
             ) {
                 writer.conditionalBlock(
                     "Box::new(",
@@ -266,21 +269,24 @@ class Instantiator(
      * MyStruct::builder().field_1("hello").field_2(5).build()
      * ```
      */
-    // TODO I wonder if we can create a renderStructure that does not use the builder.
     private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, ctx: Ctx) {
         writer.write("#T::builder()", symbolProvider.toSymbol(shape))
         data.members.forEach { (key, value) ->
             val memberShape = shape.expectMember(key.value)
-            // TODO Client uses setter name.
-            writer.withBlock(".${memberShape.setterName()}(", ")") {
-//            writer.withBlock(".${symbolProvider.toMemberName(memberShape)}(", ")") {
+            val setterName = when (forWhom) {
+                CodegenTarget.CLIENT -> memberShape.setterName()
+                CodegenTarget.SERVER -> symbolProvider.toMemberName(memberShape)
+            }
+            writer.withBlock(".$setterName(", ")") {
                 renderMember(this, memberShape, value, ctx)
             }
         }
         writer.write(".build()")
-        // TODO Client
-        if (StructureGenerator.hasFallibleBuilder(shape, symbolProvider)) {
-//        if (StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes = false)) {
+        val hasFallibleBuilder = when (forWhom) {
+            CodegenTarget.CLIENT -> StructureGenerator.hasFallibleBuilder(shape, symbolProvider)
+            CodegenTarget.SERVER -> StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes = false)
+        }
+        if (hasFallibleBuilder) {
             writer.write(".unwrap()")
         }
     }
