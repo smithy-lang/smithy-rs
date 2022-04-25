@@ -219,11 +219,13 @@ class JsonParserGenerator(
                         } else {
                             rust("if let Some(v) = ")
                             deserializeMember(member)
-                            rust("""
+                            rust(
+                                """
                                 {
                                     builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(v);
                                 }
-                            """)
+                            """
+                            )
                         }
                     }
                 }

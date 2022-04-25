@@ -267,11 +267,11 @@ class ServerBuilderGenerator(
             rust(
                 """
                 self.$memberName = ${
-                    if (member.isOptional) {
-                        "input.map(|v| v.into())"
-                    } else {
-                        "Some(input.into())"
-                    }
+                if (member.isOptional) {
+                    "input.map(|v| v.into())"
+                } else {
+                    "Some(input.into())"
+                }
                 };
                 self
                 """

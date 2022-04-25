@@ -19,11 +19,11 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 
 fun Shape.hasConstraintTrait() =
     this.hasTrait<RequiredTrait>() ||
-            this.hasTrait<LengthTrait>() ||
-            this.hasTrait<RangeTrait>() ||
-            // `uniqueItems` is deprecated, so we ignore it.
-            // this.hasTrait<UniqueItemsTrait>() ||
-            this.hasTrait<PatternTrait>()
+        this.hasTrait<LengthTrait>() ||
+        this.hasTrait<RangeTrait>() ||
+        // `uniqueItems` is deprecated, so we ignore it.
+        // this.hasTrait<UniqueItemsTrait>() ||
+        this.hasTrait<PatternTrait>()
 
 fun Shape.isConstrained(symbolProvider: SymbolProvider) = when (this) {
     is StructureShape -> {

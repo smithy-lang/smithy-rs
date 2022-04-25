@@ -104,7 +104,7 @@ sealed class RustType {
         }
     }
 
-    data class MaybeConstrained(override val member: RustType): RustType(), Container {
+    data class MaybeConstrained(override val member: RustType) : RustType(), Container {
         val runtimeType: RuntimeType = RuntimeType.MaybeConstrained()
         override val name = runtimeType.name!!
         override val namespace = runtimeType.namespace

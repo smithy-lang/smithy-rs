@@ -605,12 +605,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     """
                     {
                         input = input.${member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(${
-                            if (symbolProvider.toSymbol(binding.member).isOptional()) {
-                                "Some(value)"
-                            } else {
-                                "value"
-                            }
-                        });
+                    if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                        "Some(value)"
+                    } else {
+                        "value"
+                    }
+                    });
                     }
                     """
                 )
@@ -763,11 +763,11 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         rustTemplate(
                             """
                             input = input.${
-                                binding.member.deserializerBuilderSetterName(
-                                    model,
-                                    symbolProvider,
-                                    codegenContext.mode
-                                )
+                            binding.member.deserializerBuilderSetterName(
+                                model,
+                                symbolProvider,
+                                codegenContext.mode
+                            )
                             }(
                                 #{deserializer}(m$index)?
                             );
@@ -938,17 +938,19 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
             if (queryParamsBinding != null) {
-                rust("input = input.${queryParamsBinding.member.deserializerBuilderSetterName(
-                    model,
-                    symbolProvider,
-                    codegenContext.mode
-                )}(${
+                rust(
+                    "input = input.${queryParamsBinding.member.deserializerBuilderSetterName(
+                        model,
+                        symbolProvider,
+                        codegenContext.mode
+                    )}(${
                     if (symbolProvider.toSymbol(queryParamsBinding.member).isOptional()) {
                         "Some(query_params)"
                     } else {
                         "query_params"
                     }
-                });")
+                    });"
+                )
             }
             queryBindingsTargettingCollection.forEach {
                 val memberName = symbolProvider.toMemberName(it.member)
@@ -956,12 +958,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     """
                     if !$memberName.is_empty() {
                         input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(${
-                            if (symbolProvider.toSymbol(it.member).isOptional()) {
-                                "Some($memberName)"
-                            } else {
-                                memberName
-                            }
-                        });
+                    if (symbolProvider.toSymbol(it.member).isOptional()) {
+                        "Some($memberName)"
+                    } else {
+                        memberName
+                    }
+                    });
                     }
                     """.trimIndent()
                 )
