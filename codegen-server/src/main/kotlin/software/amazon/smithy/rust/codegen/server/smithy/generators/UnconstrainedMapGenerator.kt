@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -69,7 +70,7 @@ class UnconstrainedMapGenerator(
         //    one "path" to an e.g. HashMap<HashMap<StructA>> with different constraint traits along the path, because constraint
         //    traits can be applied to members, or simply because the model might have two different maps holding `StructA`.
         //    So we will have to newtype things.
-        writer.withModule(module, RustMetadata(public = false, pubCrate = true)) {
+        writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]

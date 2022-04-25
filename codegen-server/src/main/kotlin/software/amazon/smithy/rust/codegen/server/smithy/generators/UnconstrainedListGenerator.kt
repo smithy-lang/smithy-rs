@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -43,7 +44,7 @@ class UnconstrainedListGenerator(
         //    one "path" to an e.g. Vec<Vec<StructA>> with different constraint traits along the path, because constraint
         //    traits can be applied to members, or simply because the model might have two different lists holding `StructA`.
         //    So we will have to newtype things.
-        writer.withModule(module, RustMetadata(public = false, pubCrate = true)) {
+        writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
