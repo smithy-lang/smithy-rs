@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -180,7 +181,7 @@ class StructureGeneratorTest {
             .withModule(
                 "model",
                 // By attaching this lint, any missing documentation becomes a compiler error
-                RustMetadata(additionalAttributes = listOf(Attribute.Custom("deny(missing_docs)")), public = true)
+                RustMetadata(additionalAttributes = listOf(Attribute.Custom("deny(missing_docs)")), visibility = Visibility.PUBLIC)
             ) {
                 StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()
                 StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct")).render()
