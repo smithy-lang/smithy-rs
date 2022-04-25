@@ -9,10 +9,8 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -27,6 +25,7 @@ import software.amazon.smithy.rust.codegen.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
@@ -57,10 +56,14 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
 }
 
 /**
- * The name of the builder's setter the server deserializer should use.
+ * The name of the builder's setter the deserializer should use.
  * Setter names will never hit a reserved word and therefore never need escaping.
  */
-fun MemberShape.deserializerBuilderSetterName(model: Model, symbolProvider: SymbolProvider): String {
+fun MemberShape.deserializerBuilderSetterName(model: Model, symbolProvider: SymbolProvider, mode: CodegenMode): String {
+    if (mode == CodegenMode.Client) {
+        return this.setterName()
+    }
+
     val canReachConstrainedShape = when (val targetShape = model.expectShape(this.target)) {
         is CollectionShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
         is MapShape -> targetShape.canReachConstrainedShape(model, symbolProvider)

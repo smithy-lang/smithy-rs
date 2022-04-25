@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
@@ -42,6 +43,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -210,8 +212,8 @@ class JsonParserGenerator(
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
                     rustBlock("${jsonName(member).dq()} =>") {
-                        if (member.isOptional) {
-                            withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider)}(", ");") {
+                        if (symbolProvider.toSymbol(member).isOptional()) {
+                            withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(", ");") {
                                 deserializeMember(member)
                             }
                         } else {
@@ -219,7 +221,7 @@ class JsonParserGenerator(
                             deserializeMember(member)
                             rust("""
                                 {
-                                    builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider)}(v);
+                                    builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(v);
                                 }
                             """)
                         }
@@ -246,8 +248,10 @@ class JsonParserGenerator(
         }
         val symbol = symbolProvider.toSymbol(memberShape)
         if (symbol.isRustBoxed()) {
-            // Before boxing, convert into `Validated`.
-            rust(".map(|x| x.into())")
+            if (mode == CodegenMode.Server) {
+                // Before boxing, convert into `Validated`.
+                rust(".map(|x| x.into())")
+            }
             rust(".map(Box::new)")
         }
     }
@@ -285,7 +289,7 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val returnUnconstrainedType = shape.canReachConstrainedShape(model, symbolProvider)
+        val returnUnconstrainedType = mode == CodegenMode.Server && shape.canReachConstrainedShape(model, symbolProvider)
         val returnType = if (returnUnconstrainedType) {
             unconstrainedShapeSymbolProvider.toSymbol(shape)
         } else {
@@ -341,7 +345,7 @@ class JsonParserGenerator(
         val keyTarget = model.expectShape(shape.key.target) as StringShape
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val returnUnconstrainedType = shape.canReachConstrainedShape(model, symbolProvider)
+        val returnUnconstrainedType = mode == CodegenMode.Server && shape.canReachConstrainedShape(model, symbolProvider)
         val returnType = if (returnUnconstrainedType) {
             unconstrainedShapeSymbolProvider.toSymbol(shape)
         } else {
@@ -390,7 +394,7 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
-        val returnBuilder = shape.canReachConstrainedShape(model, symbolProvider)
+        val returnBuilder = mode == CodegenMode.Server && shape.canReachConstrainedShape(model, symbolProvider)
         val returnType = if (returnBuilder) {
             unconstrainedShapeSymbolProvider.toSymbol(shape)
         } else {
