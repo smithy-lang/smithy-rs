@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -37,6 +36,7 @@ import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.hasTrait

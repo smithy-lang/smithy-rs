@@ -56,16 +56,6 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
     }
 }
 
-// TODO Perhaps move these into `StructureGenerator`?
-fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
-    when (val targetShape = model.expectShape(this.target)) {
-        is ListShape -> targetShape.asListShape().get().canReachConstrainedShape(model, symbolProvider)
-        is SetShape -> targetShape.asSetShape().get().canReachConstrainedShape(model, symbolProvider)
-        is MapShape -> targetShape.asMapShape().get().canReachConstrainedShape(model, symbolProvider)
-        is StructureShape -> targetShape.asStructureShape().get().canReachConstrainedShape(model, symbolProvider)
-        else -> false
-    }
-
 /**
  * The name of the builder's setter the server deserializer should use.
  * Setter names will never hit a reserved word and therefore never need escaping.

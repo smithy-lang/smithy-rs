@@ -5,6 +5,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -69,6 +70,16 @@ fun MapShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvid
 
     return key.isConstrained(symbolProvider) || value.isConstrained(symbolProvider) || unconstrainedShapeCanReachConstrainedShape(value, model, symbolProvider, visited)
 }
+
+// TODO Perhaps move these into `StructureGenerator`?
+fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
+    when (val targetShape = model.expectShape(this.target)) {
+        is ListShape -> targetShape.asListShape().get().canReachConstrainedShape(model, symbolProvider)
+        is SetShape -> targetShape.asSetShape().get().canReachConstrainedShape(model, symbolProvider)
+        is MapShape -> targetShape.asMapShape().get().canReachConstrainedShape(model, symbolProvider)
+        is StructureShape -> targetShape.asStructureShape().get().canReachConstrainedShape(model, symbolProvider)
+        else -> false
+    }
 
 private fun unconstrainedShapeCanReachConstrainedShape(shape: Shape, model: Model, symbolProvider: SymbolProvider, visited: Set<Shape>): Boolean {
     check(!shape.isConstrained(symbolProvider)) { "This function can only be called with unconstrained shapes" }
