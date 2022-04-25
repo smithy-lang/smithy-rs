@@ -303,7 +303,9 @@ object EventStreamTestModels {
                 </Response>
             """.trimIndent(),
         ) { Ec2QueryProtocol(it) },
-    ).flatMap { listOf(it, it.copy(mode = CodegenMode.Server)) }
+    )
+    // TODO This is wrong: server tests should be run from the server subproject, and use `serverTestSymbolProvider()`
+    // .flatMap { listOf(it, it.copy(mode = CodegenMode.Server)) }
 
     class UnmarshallTestCasesProvider : ArgumentsProvider {
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
