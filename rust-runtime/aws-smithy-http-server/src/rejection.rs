@@ -181,13 +181,10 @@ pub enum RequestRejection {
     FloatParse(crate::Error),
     BoolParse(crate::Error),
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1243): In theory, we could get rid of this
-    // error, but it would be a lot of effort for comparatively low benefit.
-    /// Used when consuming the input struct builder.
-    Build(crate::Error),
-
-    // TODO Use the above one.
-    BuildV2(Box<dyn std::error::Error + Send + Sync>),
+    /// Used when consuming the input struct builder, and a constraint violation occurs.
+    // This is the only error that doesn't take in `crate::Error`, since it is constructed directly
+    // in the code-generated SDK instead of in this crate.
+    Build(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl std::error::Error for RequestRejection {}
@@ -200,7 +197,6 @@ impl std::error::Error for RequestRejection {}
 
 convert_to_request_rejection!(aws_smithy_json::deserialize::Error, JsonDeserialize);
 convert_to_request_rejection!(aws_smithy_xml::decode::XmlError, XmlDeserialize);
-convert_to_request_rejection!(aws_smithy_http::operation::BuildError, Build);
 convert_to_request_rejection!(aws_smithy_http::header::ParseError, HeaderParse);
 convert_to_request_rejection!(aws_smithy_types::date_time::DateTimeParseError, DateTimeParse);
 convert_to_request_rejection!(aws_smithy_types::primitive::PrimitiveParseError, PrimitiveParse);

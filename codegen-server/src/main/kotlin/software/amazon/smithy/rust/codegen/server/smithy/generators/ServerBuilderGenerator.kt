@@ -142,7 +142,7 @@ class ServerBuilderGenerator(
             """
             impl From<ConstraintViolation> for #{RequestRejection} {
                 fn from(value: ConstraintViolation) -> Self {
-                    Self::BuildV2(value.into())
+                    Self::Build(value.into())
                 }
             }
             """,
