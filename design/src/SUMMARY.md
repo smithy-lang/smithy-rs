@@ -24,3 +24,4 @@
   - [RFC-0009: Example Consolidation](./rfcs/rfc0009_example_consolidation.md)
   - [RFC-0010: Waiters](./rfcs/rfc0010_waiters.md)
   - [RFC-0011: Publishing Alpha to Crates.io](./rfcs/rfc0011_crates_io_alpha_publishing.md)
+  - [RFC-0012: SDK Body Callback APIs](./rfcs/rfc0012_body_callback_apis.md)
