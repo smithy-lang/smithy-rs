@@ -157,9 +157,12 @@ class Instantiator(
         } else {
             writer.conditionalBlock(
                 "Some(", ")",
-//                conditional = ctx.builder || symbol.isOptional()
-                // TODO Client builder
-                conditional = symbol.isOptional()
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `ctx.builder` condition is superfluous
+                //  except in the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider]
+                //  always generates a non `Option`al target type: in all other cases the client generates `Option`al
+                //  types.
+                conditional = ctx.builder || symbol.isOptional()
+//                conditional = symbol.isOptional()
             ) {
                 writer.conditionalBlock(
                     "Box::new(",
@@ -269,13 +272,15 @@ class Instantiator(
         data.members.forEach { (key, value) ->
             val memberShape = shape.expectMember(key.value)
             // TODO Client uses setter name.
-            writer.withBlock(".${symbolProvider.toMemberName(memberShape)}(", ")") {
+            writer.withBlock(".${memberShape.setterName()}(", ")") {
+//            writer.withBlock(".${symbolProvider.toMemberName(memberShape)}(", ")") {
                 renderMember(this, memberShape, value, ctx)
             }
         }
         writer.write(".build()")
         // TODO Client
-        if (StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes = false)) {
+        if (StructureGenerator.hasFallibleBuilder(shape, symbolProvider)) {
+//        if (StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes = false)) {
             writer.write(".unwrap()")
         }
     }

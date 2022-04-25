@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asArgument
+import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
@@ -129,16 +130,23 @@ class BuilderGenerator(
         }
     }
 
+    /**
+     * Render a `set_foo` method. This is useful as a target for code generation, because the argument type
+     * is the same as the resulting member type, and is always optional.
+     */
     private fun renderBuilderMemberSetterFn(
         writer: RustWriter,
         outerType: RustType,
         member: MemberShape,
         memberName: String
     ) {
-        // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
-        // is the same as the resulting member type, and is always optional.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
+        //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
+        //  a non `Option`al target type: in all other cases the client generates `Option`al types.
+        val inputType = outerType.asOptional()
+
         writer.documentShape(member, model)
-        writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${outerType.render()}) -> Self") {
+        writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
             rust("self.$memberName = input; self")
         }
     }
