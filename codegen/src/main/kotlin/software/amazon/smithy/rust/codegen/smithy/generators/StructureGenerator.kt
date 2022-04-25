@@ -108,9 +108,11 @@ class StructureGenerator(
     }
 
     companion object {
-        /** Returns whether a structure shape requires a fallible builder to be generated. */
-        // TODO Rename to `hasFallibleBuilder`.
-        fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
+        /**
+         * Returns whether a structure shape, whose builder has been generated with [BuilderGenerator], requires a
+         * fallible builder to be constructed.
+         */
+        fun hasFallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
             // All operation inputs should have fallible builders in case a new required field is added in the future.
             structureShape.hasTrait<SyntheticInputTrait>() ||
                 structureShape
@@ -122,8 +124,11 @@ class StructureGenerator(
                         !it.isOptional() && !it.canUseDefault()
                     }
 
-        // TODO Ensure server subproject uses this function
         // TODO Not quite right. @box not taken into account. Also shape builders / constrained shapes
+        /**
+         * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGenerator], requires a
+         * fallible builder to be constructed.
+         */
         fun serverHasFallibleBuilder(structureShape: StructureShape, model: Model, symbolProvider: SymbolProvider, takeInUnconstrainedTypes: Boolean) =
             if (takeInUnconstrainedTypes) {
                 structureShape.canReachConstrainedShape(model, symbolProvider)
