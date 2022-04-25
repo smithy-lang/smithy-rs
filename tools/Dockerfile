@@ -38,7 +38,7 @@ RUN set -eux; \
 # Rust & Tools Installation Stage
 #
 FROM bare_base_image AS install_rust
-ARG rust_stable_version=1.56.1
+ARG rust_stable_version=1.58.1
 ARG rust_nightly_version=nightly-2022-03-29
 ARG cargo_udeps_version=0.1.27
 ARG cargo_hack_version=0.5.12
@@ -73,7 +73,7 @@ RUN set -eux; \
     rustup --version; \
     rustup component add rustfmt; \
     rustup component add clippy; \
-    rustup install ${rust_nightly_version}; \
+    rustup toolchain install ${rust_nightly_version} --component clippy; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
 COPY . tools/
@@ -86,7 +86,9 @@ RUN set -eux; \
     fi; \
     cargo install --path tools/publisher; \
     cargo +${rust_nightly_version} install --path tools/api-linter; \
+    cargo install --path tools/crate-hasher; \
     cargo install --path tools/sdk-lints; \
+    cargo install --path tools/sdk-sync; \
     cargo install --path tools/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
 
@@ -94,7 +96,7 @@ RUN set -eux; \
 # Final image
 #
 FROM bare_base_image AS final_image
-ARG rust_stable_version=1.56.1
+ARG rust_stable_version=1.58.1
 ARG rust_nightly_version=nightly-2022-03-29
 RUN set -eux; \
     yum -y updateinfo; \
@@ -103,6 +105,7 @@ RUN set -eux; \
         gcc \
         git \
         java-11-amazon-corretto-headless \
+        make \
         openssl-devel \
         pkgconfig \
         python3 \
@@ -126,6 +129,7 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     RUSTDOCFLAGS="-D warnings" \
     RUSTFLAGS="-D warnings" \
     SMITHY_RS_DOCKER_BUILD_IMAGE=1
+RUN npm install -g diff2html-cli@5.1.11
 WORKDIR /home/build
 COPY ci-build/scripts/sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test

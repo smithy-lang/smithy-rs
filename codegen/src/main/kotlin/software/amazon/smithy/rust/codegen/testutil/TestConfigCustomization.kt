@@ -21,20 +21,21 @@ fun stubConfigCustomization(name: String): ConfigCustomization {
     return object : ConfigCustomization() {
         override fun section(section: ServiceConfig): Writable = writable {
             when (section) {
-                ServiceConfig.ConfigStruct -> rust("$name: u64,")
+                ServiceConfig.ConfigStruct -> rust("_$name: u64,")
                 ServiceConfig.ConfigImpl -> emptySection
-                ServiceConfig.BuilderStruct -> rust("$name: Option<u64>,")
+                ServiceConfig.BuilderStruct -> rust("_$name: Option<u64>,")
                 ServiceConfig.BuilderImpl -> rust(
                     """
+                    /// docs!
                     pub fn $name(mut self, $name: u64) -> Self {
-                            self.$name = Some($name);
+                            self._$name = Some($name);
                         self
                     }
                     """
                 )
                 ServiceConfig.BuilderBuild -> rust(
                     """
-                    $name: self.$name.unwrap_or(123),
+                    _$name: self._$name.unwrap_or(123),
                     """
                 )
                 else -> emptySection

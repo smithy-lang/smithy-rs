@@ -5,12 +5,14 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -30,13 +32,15 @@ class ServerOperationRegistryGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     private val operations: List<OperationShape>,
 ) {
+    private val protocol = codegenContext.protocol
     private val symbolProvider = codegenContext.symbolProvider
+    private val serviceName = codegenContext.serviceShape.toShapeId().name
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
+        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "Phantom" to ServerRuntimeType.Phantom,
         "StdError" to RuntimeType.StdError
@@ -225,7 +229,7 @@ class ServerOperationRegistryGenerator(
                 rustTemplate(
                     """
                     $requestSpecs
-                    #{Router}::from_box_clone_service_iter($towerServices)
+                    #{Router}::${runtimeRouterConstructor()}($towerServices)
                     """.trimIndent(),
                     *codegenScope
                 )
@@ -243,12 +247,42 @@ class ServerOperationRegistryGenerator(
     }
 
     /*
-     * Generate the `RequestSpec`s for an operation based on its HTTP-bound route.
+     * Finds the runtime function to construct a new `Router` based on the Protocol.
      */
-    private fun OperationShape.requestSpec(): String {
+    private fun runtimeRouterConstructor(): String =
+        when (protocol) {
+            RestJson1Trait.ID -> "new_rest_json_router"
+            RestXmlTrait.ID -> "new_rest_xml_router"
+            AwsJson1_0Trait.ID -> "new_aws_json_10_router"
+            AwsJson1_1Trait.ID -> "new_aws_json_11_router"
+            else -> TODO("Protocol $protocol not supported yet")
+        }
+
+    /*
+     * Returns the `RequestSpec`s for an operation based on its HTTP-bound route.
+     */
+    private fun OperationShape.requestSpec(): String =
+        when (protocol) {
+            RestJson1Trait.ID, RestXmlTrait.ID -> restRequestSpec()
+            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> awsJsonOperationName()
+            else -> TODO("Protocol $protocol not supported yet")
+        }
+
+    /*
+     * Returns an AwsJson specific runtime `RequestSpec`.
+     */
+    private fun OperationShape.awsJsonOperationName(): String {
+        val operationName = symbolProvider.toSymbol(this).name
+        // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait: https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait
+        return """String::from("$serviceName.$operationName")"""
+    }
+
+    /*
+     * Generates a REST (RestJson1, RestXml) specific runtime `RequestSpec`.
+     */
+    private fun OperationShape.restRequestSpec(): String {
         val httpTrait = httpBindingResolver.httpTrait(this)
         val namespace = ServerRuntimeType.RequestSpecModule(runtimeConfig).fullyQualifiedName()
-
         // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
         val pathSegments = httpTrait.uri.segments.map {
             "$namespace::PathSegment::" +
@@ -270,7 +304,7 @@ class ServerOperationRegistryGenerator(
                         $namespace::PathSpec::from_vector_unchecked(vec![${pathSegments.joinToString()}]),
                         $namespace::QuerySpec::from_vector_unchecked(vec![${querySegments.joinToString()}])
                     )
-                )
+                ),
             )
         """.trimIndent()
     }
