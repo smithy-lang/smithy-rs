@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -107,7 +108,7 @@ class ProtocolTestGenerator(
             val operationName = operationSymbol.name
             val testModuleName = "${operationName.toSnakeCase()}_request_test"
             val moduleMeta = RustMetadata(
-                public = false,
+                visibility = Visibility.PRIVATE,
                 additionalAttributes = listOf(
                     Attribute.Cfg("test"),
                     Attribute.Custom("allow(unreachable_code, unused_variables)")
