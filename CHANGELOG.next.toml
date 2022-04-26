@@ -22,3 +22,15 @@ message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-ve
 references = ["smithy-rs#1318"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Add new trait for HTTP body callbacks. This is the first step to enabling us to implement optional checksum verification of requests and responses."
+references = ["smithy-rs#1307"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Upgrade to Smithy 1.21.0"
+references = ["smithy-rs#1330"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"

@@ -11,6 +11,10 @@ publish = false
 [features]
 async-shell = ["tokio"]
 
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"

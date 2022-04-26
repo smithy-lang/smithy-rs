@@ -3,15 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-pluginManagement {
-    repositories {
-        mavenCentral()
-        maven("https://plugins.gradle.org/m2/")
-        google()
-        gradlePluginPortal()
-    }
-}
-
 rootProject.name = "software.amazon.smithy.rust.codegen.smithy-rs"
 enableFeaturePreview("GRADLE_METADATA")
 

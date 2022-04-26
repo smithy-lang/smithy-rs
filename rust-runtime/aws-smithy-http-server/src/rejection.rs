@@ -134,8 +134,10 @@ pub enum RequestRejection {
     HttpBody(crate::Error),
 
     // These are used when checking the `Content-Type` header.
-    MissingJsonContentType,
-    MissingXmlContentType,
+    MissingRestJson1ContentType,
+    MissingAwsJson10ContentType,
+    MissingAwsJson11ContentType,
+    MissingRestXmlContentType,
     MimeParse,
 
     /// Used when failing to deserialize the HTTP body's bytes into a JSON document conforming to
