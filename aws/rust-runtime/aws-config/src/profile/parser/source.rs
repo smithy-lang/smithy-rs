@@ -183,10 +183,8 @@ fn expand_home(
 /// [Lambdas set many environment variables](https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html#configuration-envvars-runtime)
 /// that we can check.
 fn check_is_likely_running_on_a_lambda(environment: &aws_types::os_shim_internal::Env) -> bool {
-    // LAMBDA_TASK_ROOT – The path to your Lambda function code.
-    // AWS_LAMBDA_RUNTIME_API - Double-check because LAMBDA_TASK_ROOT is redacted to any code running in Extensions
-    // https://docs.aws.amazon.com/lambda/latest/dg/runtimes-extensions-api.html
-    environment.get("LAMBDA_TASK_ROOT").is_ok() || environment.get("AWS_LAMBDA_RUNTIME_API").is_ok()
+    // AWS_LAMBDA_FUNCTION_NAME – The name of the running Lambda function. Available both in Functions and Extensions
+    environment.get("AWS_LAMBDA_FUNCTION_NAME").is_ok()
 }
 
 #[cfg(test)]
