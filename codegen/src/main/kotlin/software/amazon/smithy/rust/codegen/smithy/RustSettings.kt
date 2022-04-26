@@ -26,6 +26,7 @@ private const val MODULE_REPOSITORY = "moduleRepository"
 private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val LICENSE = "license"
 private const val EXAMPLES = "examples"
+private const val CUSTOMIZATION_CONFIG = "customizationConfig"
 const val CODEGEN_SETTINGS = "codegen"
 
 /**
@@ -81,7 +82,8 @@ class RustSettings(
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
     val license: String?,
-    val examplesUri: String? = null
+    val examplesUri: String? = null,
+    val customizationConfig: ObjectNode? = null
 ) {
 
     /**
@@ -135,7 +137,8 @@ class RustSettings(
                     RUNTIME_CONFIG,
                     CODEGEN_SETTINGS,
                     EXAMPLES,
-                    LICENSE
+                    LICENSE,
+                    CUSTOMIZATION_CONFIG
                 )
             )
 
@@ -154,7 +157,8 @@ class RustSettings(
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
                 codegenConfig,
                 license = config.getStringMember(LICENSE).orNull()?.value,
-                examplesUri = config.getStringMember(EXAMPLES).orNull()?.value
+                examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
+                customizationConfig = config.getObjectMember(CUSTOMIZATION_CONFIG).orNull()
             )
         }
 
