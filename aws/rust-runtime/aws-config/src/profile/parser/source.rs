@@ -184,7 +184,9 @@ fn expand_home(
 /// that we can check.
 fn check_is_likely_running_on_a_lambda(environment: &aws_types::os_shim_internal::Env) -> bool {
     // LAMBDA_TASK_ROOT – The path to your Lambda function code.
-    environment.get("LAMBDA_TASK_ROOT").is_ok()
+    // AWS_LAMBDA_RUNTIME_API - Double-check because LAMBDA_TASK_ROOT is redacted to any code running in Extensions
+    // https://docs.aws.amazon.com/lambda/latest/dg/runtimes-extensions-api.html
+    environment.get("LAMBDA_TASK_ROOT").is_ok() || environment.get("AWS_LAMBDA_RUNTIME_API").is_ok()
 }
 
 #[cfg(test)]
