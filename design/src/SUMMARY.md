@@ -27,4 +27,4 @@
   - [RFC-0011: Publishing Alpha to Crates.io](./rfcs/rfc0011_crates_io_alpha_publishing.md)
   - [RFC-0012: Independent Crate Versioning](./rfcs/rfc0012_independent_crate_versioning.md)
   - [RFC-0013: Body Callback APIs](./rfcs/rfc0013_body_callback_apis.md)
-  - [RFC-0015: User-friendly Configurable Connectors](./rfcs/rfc0002_http_versions.mdrfc0015_user_friendly_configurable_connectors)
+  - [RFC-0015: User-friendly Configurable Connectors](./rfcs/rfc0015_user_friendly_configurable_connectors.md)
