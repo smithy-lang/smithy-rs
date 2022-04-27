@@ -22,7 +22,8 @@ Smithy based service (pending protocol support), including those outside of AWS.
 
 1. **Compilation time:** `serde` makes heavy use of [several crates](https://crates.io/crates/serde_derive/1.0.136/dependencies)
    *(`proc-macro2`, `quote`, and `syn`)* that are very expensive to compile. Several service crates are already quite large
-   and adding a `serde` dependency would increase compile times beyond what we consider acceptable.
+   and adding a `serde` dependency would increase compile times beyond what we consider acceptable. When we last checked,
+   adding `serde` derives made compilation 23% slower.
 
 2. **Misleading results:** We can't use `serde` for serializing requests to AWS or deserializing responses from AWS because
    both sides of that process would require too much customization. Adding serialize/deserialize impls for operations has
