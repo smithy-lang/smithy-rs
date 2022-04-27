@@ -1,7 +1,7 @@
 RFC: Fine-grained timeout configuration
 =======================================
 
-> Status: RFC
+> Status: Implemented
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
@@ -23,7 +23,7 @@ There's a lot of terminology to define, so I've broken it up into three sections
 ### HTTP stack terms
 
 - **Service**: A trait defined in the [`tower-service` crate][tower_service::Service]. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.
-- **Layer**: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services within services, but Layers allow us to do it in a maintainable, flexible, and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service. Layers can be thought of as middleware.
+- **Layer**: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services within services, but Layers allow us to do it in a flexible and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service. Layers can be thought of as middleware. *NOTE: The use of [Layers can produce compiler errors] that are difficult to interpret and defining a layer requires a large amount of boilerplate code.*
 - **Middleware**: a term with several meanings,
   - Generically speaking, middleware are similar to Services and Layers in that they modify requests and responses.
   - In the SDK, "Middleware" refers to a layer that can be wrapped around a `DispatchService`. In practice, this means that the resulting `Service` (and the inner service) must meet the bound `T: where T: Service<operation::Request, Response=operation::Response, Error=SendOperationError>`.
@@ -92,8 +92,6 @@ Prior Art
 
 Behind the scenes
 -----------------
-
-// TODO This is just Zelda thinking out loud and working backwards.
 
 Timeouts are achieved by racing a future against a `tokio::time::Sleep` future. The question, then, is "how can I create a future that represents a condition I want to watch for?". For example, in the case of a `ConnectTimeout`, how do we watch an ongoing request to see if it's completed the connect-handshake? Our current stack of Middleware acts on requests at different levels of granularity. The timeout Middlewares will be no different.
 
@@ -239,24 +237,20 @@ Changes are broken into to sections:
 
 ### Implementing HTTP request timeouts
 
-- [ ] Add `TimeoutConfig` to `smithy-types`
-- [ ] Add `TimeoutConfigProvider` to `aws-config`
-  - [ ] Add provider that fetches config from environment variables
-  - [ ] Add provider that fetches config from profile
-- [ ] Add `timeout` method to `aws_types::Config` for setting timeout configuration
-- [ ] Add `timeout` method to generated `Config`s too
-- [ ] Create a generic `TimeoutService` and accompanying `Layer`
-  - [ ] `TimeoutLayer` should accept a `sleep` function so that it doesn't have a hard dependency on `tokio`
-- [ ] insert a `TimeoutLayer` before the `RetryPolicy` to handle timeouts for multiple-attempt requests
-- [ ] insert a `TimeoutLayer` after the `RetryPolicy` to handle timeouts for single-attempt requests
-- [ ] Add tests for timeout behavior
-  - [ ] test multi-request timeout triggers after 3 slow retries
-  - [ ] test single-request timeout triggers correctly
-  - [ ] test single-request timeout doesn't trigger if request completes in time
-
-### Implementing other timeouts
-
-TODO
+- [x] Add `TimeoutConfig` to `smithy-types`
+- [x] Add `TimeoutConfigProvider` to `aws-config`
+  - [x] Add provider that fetches config from environment variables
+  - [x] Add provider that fetches config from profile
+- [x] Add `timeout` method to `aws_types::Config` for setting timeout configuration
+- [x] Add `timeout` method to generated `Config`s too
+- [x] Create a generic `TimeoutService` and accompanying `Layer`
+  - [x] `TimeoutLayer` should accept a `sleep` function so that it doesn't have a hard dependency on `tokio`
+- [x] insert a `TimeoutLayer` before the `RetryPolicy` to handle timeouts for multiple-attempt requests
+- [x] insert a `TimeoutLayer` after the `RetryPolicy` to handle timeouts for single-attempt requests
+- [x] Add tests for timeout behavior
+  - [x] test multi-request timeout triggers after 3 slow retries
+  - [x] test single-request timeout triggers correctly
+  - [x] test single-request timeout doesn't trigger if request completes in time
 
 <!--- Links -->
 
@@ -275,3 +269,4 @@ TODO
 [Connect]: https://docs.rs/hyper/0.14.14/hyper/client/connect/trait.Connect.html
 [tower::layer::util::Stack]: https://docs.rs/tower/0.4.10/tower/layer/util/struct.Stack.html
 [aws_smithy_client::Client::call_raw]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175
+[Layers can produce compiler errors]: https://github.com/awslabs/smithy-rs/issues/634
