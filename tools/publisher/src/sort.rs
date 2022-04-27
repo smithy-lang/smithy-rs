@@ -6,7 +6,7 @@
 //! Logic for topological sorting packages by dependencies.
 
 use crate::package::{Package, PackageHandle};
-use anyhow::Result;
+use anyhow::{anyhow, bail, Result};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Determines the dependency order of the given packages.
@@ -42,27 +42,28 @@ pub fn dependency_order(packages: Vec<Package>) -> Result<Vec<Package>> {
         .collect())
 }
 
-#[derive(Debug, thiserror::Error)]
-enum Error {
-    #[error("dependency cycle detected")]
-    DependencyCycle,
-}
-
 fn dependency_order_visit(
     package_handle: &PackageHandle,
     packages: &BTreeMap<PackageHandle, Package>,
     stack: &mut BTreeSet<PackageHandle>,
     visited: &mut BTreeSet<PackageHandle>,
     result: &mut Vec<PackageHandle>,
-) -> Result<(), Error> {
+) -> Result<()> {
     if visited.contains(package_handle) {
         return Ok(());
     }
     if stack.contains(package_handle) {
-        return Err(Error::DependencyCycle);
+        tracing::error!(stack = ?stack, handle = ?package_handle, "dependency cycle!");
+        bail!("dependency cycle detected");
     }
     stack.insert(package_handle.clone());
-    let local_dependencies = &packages[package_handle].local_dependencies;
+    let local_dependencies = &packages
+        .get(package_handle)
+        .ok_or_else(|| {
+            dbg!(packages);
+            anyhow!("packages to publish doesn't contain {:?}", package_handle)
+        })?
+        .local_dependencies;
     for dependency in local_dependencies {
         dependency_order_visit(dependency, packages, stack, visited, result)?;
     }
@@ -75,6 +76,7 @@ fn dependency_order_visit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::package::Publish;
     use semver::Version;
 
     fn package(name: &str, dependencies: &[&str]) -> Package {
@@ -85,6 +87,7 @@ mod tests {
                 .iter()
                 .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").unwrap()))
                 .collect(),
+            Publish::Allowed,
         )
     }
 

@@ -216,7 +216,6 @@ pub(crate) fn update_changelogs(
         update.push('\n');
         update.push_str(&render(entries, version, date));
         let current = std::fs::read_to_string(path)?.replace(USE_UPDATE_CHANGELOGS, "");
-        update.push('\n');
         update.push_str(&current);
         std::fs::write(path, update)?;
     }
@@ -244,7 +243,7 @@ fn render(mut entries: Vec<ChangelogEntry>, version: &str, date: &str) -> String
         out.push_str("**Breaking Changes:**\n");
         for change in breaking {
             change.render(&mut out);
-            out.push_str("\n");
+            out.push('\n');
         }
         out.push('\n')
     }
@@ -253,7 +252,7 @@ fn render(mut entries: Vec<ChangelogEntry>, version: &str, date: &str) -> String
         out.push_str("**New this release:**\n");
         for change in non_breaking {
             change.render(&mut out);
-            out.push_str("\n");
+            out.push('\n');
         }
         out.push('\n');
     }

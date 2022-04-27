@@ -1,7 +1,7 @@
 RFC: Examples Consolidation
 ===========================
 
-> Status: RFC
+> Status: Implemented
 
 Currently, the AWS Rust SDK's examples are duplicated across
 [`awslabs/aws-sdk-rust`](https://github.com/awslabs/aws-sdk-rust),
@@ -115,8 +115,8 @@ that tooling is even necessary).
 Changes Checklist
 -----------------
 
-- [ ] Add example CI job to `smithy-rs`
-- [ ] Diff examples in `smithy-rs` and `aws-doc-sdk-examples` and move desired differences into `aws-doc-sdk-examples`
-- [ ] Apply example fix PRs from `aws-sdk-rust` into `aws-doc-sdk-examples`
-- [ ] Update `smithy-rs` CI to copy examples from `aws-doc-sdk-examples` rather than from smithy-rs
-- [ ] Delete examples from `smithy-rs`
+- [x] Add example CI job to `smithy-rs`
+- [x] Diff examples in `smithy-rs` and `aws-doc-sdk-examples` and move desired differences into `aws-doc-sdk-examples`
+- [x] Apply example fix PRs from `aws-sdk-rust` into `aws-doc-sdk-examples`
+- [x] Update `smithy-rs` CI to copy examples from `aws-doc-sdk-examples` rather than from smithy-rs
+- [x] Delete examples from `smithy-rs`

@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
+import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -66,6 +67,7 @@ private fun RustSymbolProvider.shapeFunctionName(prefix: String, shape: Shape): 
         is SetShape -> "set_${shape.id.toRustIdentifier()}"
         is StructureShape -> "structure_$symbolNameSnakeCase"
         is UnionShape -> "union_$symbolNameSnakeCase"
+        is DocumentShape -> "document"
         else -> PANIC("SerializerFunctionNamer.name: $shape")
     }
 }

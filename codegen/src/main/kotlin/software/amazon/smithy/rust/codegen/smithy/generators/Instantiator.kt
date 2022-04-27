@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
@@ -42,6 +41,7 @@ import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -56,7 +56,7 @@ import software.amazon.smithy.rust.codegen.util.isStreaming
  * This is primarily used during Protocol test generation
  */
 class Instantiator(
-    private val symbolProvider: SymbolProvider,
+    private val symbolProvider: RustSymbolProvider,
     private val model: Model,
     private val runtimeConfig: RuntimeConfig
 ) {
@@ -155,7 +155,10 @@ class Instantiator(
             ) { "A null node was provided for $shape but the symbol was not optional. This is invalid input data." }
             writer.write("None")
         } else {
-            writer.conditionalBlock("Some(", ")", conditional = ctx.builder || symbol.isOptional()) {
+            writer.conditionalBlock(
+                "Some(", ")",
+                conditional = ctx.builder || symbol.isOptional()
+            ) {
                 writer.conditionalBlock(
                     "Box::new(",
                     ")",

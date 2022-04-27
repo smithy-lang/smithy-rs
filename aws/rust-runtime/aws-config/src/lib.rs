@@ -10,7 +10,7 @@
 //! [`from_env`]/[`ConfigLoader`] or ad-hoc individual credential and region providers.
 //!
 //! [`ConfigLoader`](ConfigLoader) can combine different configuration sources into an AWS shared-config:
-//! [`Config`](aws_types::config::Config). [`Config`](aws_types::config::Config) can be used configure
+//! [`SdkConfig`](aws_types::SdkConfig). [`SdkConfig`](aws_types::SdkConfig) can be used configure
 //! an AWS service client.
 //!
 //! # Examples
@@ -20,7 +20,7 @@
 //! # mod aws_sdk_dynamodb {
 //! #   pub struct Client;
 //! #   impl Client {
-//! #     pub fn new(config: &aws_types::config::Config) -> Self { Client }
+//! #     pub fn new(config: &aws_types::SdkConfig) -> Self { Client }
 //! #   }
 //! # }
 //! # async fn docs() {
@@ -34,7 +34,7 @@
 //! # mod aws_sdk_dynamodb {
 //! #   pub struct Client;
 //! #   impl Client {
-//! #     pub fn new(config: &aws_types::config::Config) -> Self { Client }
+//! #     pub fn new(config: &aws_types::SdkConfig) -> Self { Client }
 //! #   }
 //! # }
 //! # async fn docs() {
@@ -42,6 +42,45 @@
 //! let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
 //! let config = aws_config::from_env().region(region_provider).load().await;
 //! let client = aws_sdk_dynamodb::Client::new(&config);
+//! # }
+//! ```
+//!
+//! Override configuration after construction of `SdkConfig`:
+//!
+//! ```no_run
+//! # use aws_types::SdkConfig;
+//! # mod aws_sdk_dynamodb {
+//! #   pub mod config {
+//! #     pub struct Builder;
+//! #     impl Builder {
+//! #       pub fn credentials_provider(
+//! #         self,
+//! #         credentials_provider: impl aws_types::credentials::ProvideCredentials + 'static) -> Self { self }
+//! #       pub fn build(self) -> Builder { self }
+//! #     }
+//! #     impl From<&aws_types::SdkConfig> for Builder {
+//! #       fn from(_: &aws_types::SdkConfig) -> Self {
+//! #           todo!()
+//! #       }
+//! #     }
+//! #   }
+//! #   pub struct Client;
+//! #   impl Client {
+//! #     pub fn from_conf(conf: config::Builder) -> Self { Client }
+//! #     pub fn new(config: &aws_types::SdkConfig) -> Self { Client }
+//! #   }
+//! # }
+//! # async fn docs() {
+//! # use aws_config::meta::region::RegionProviderChain;
+//! # fn custom_provider(base: &SdkConfig) -> impl aws_types::credentials::ProvideCredentials {
+//! #   base.credentials_provider().unwrap().clone()
+//! # }
+//! let sdk_config = aws_config::load_from_env().await;
+//! let custom_credentials_provider = custom_provider(&sdk_config);
+//! let dynamo_config = aws_sdk_dynamodb::config::Builder::from(&sdk_config)
+//!   .credentials_provider(custom_credentials_provider)
+//!   .build();
+//! let client = aws_sdk_dynamodb::Client::from_conf(dynamo_config);
 //! # }
 //! ```
 
@@ -77,16 +116,21 @@ pub mod imds;
 mod json_credentials;
 
 mod fs_util;
-mod http_provider;
+
+mod http_credential_provider;
+
 pub mod sso;
+
+pub mod connector;
+
+pub(crate) mod parsing;
 
 // Re-export types from smithy-types
 pub use aws_smithy_types::retry::RetryConfig;
-pub use aws_smithy_types::timeout::TimeoutConfig;
+pub use aws_smithy_types::timeout;
 
 // Re-export types from aws-types
 pub use aws_types::app_name::{AppName, InvalidAppName};
-pub use aws_types::config::Config;
 
 /// Create an environment loader for AWS Configuration
 ///
@@ -104,7 +148,7 @@ pub fn from_env() -> ConfigLoader {
 /// Load a default configuration from the environment
 ///
 /// Convenience wrapper equivalent to `aws_config::from_env().load().await`
-pub async fn load_from_env() -> aws_types::config::Config {
+pub async fn load_from_env() -> aws_types::SdkConfig {
     from_env().load().await
 }
 
@@ -114,18 +158,21 @@ pub use loader::ConfigLoader;
 mod loader {
     use std::sync::Arc;
 
+    use crate::connector::default_connector;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
+    use aws_smithy_client::http_connector::{HttpConnector, HttpSettings};
     use aws_smithy_types::retry::RetryConfig;
-    use aws_smithy_types::timeout::TimeoutConfig;
+    use aws_smithy_types::timeout;
     use aws_types::app_name::AppName;
-    use aws_types::config::Config;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    use aws_types::endpoint::ResolveAwsEndpoint;
+    use aws_types::SdkConfig;
 
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
     use crate::provider_config::ProviderConfig;
 
-    /// Load a cross-service [`Config`](aws_types::config::Config) from the environment
+    /// Load a cross-service [`SdkConfig`](aws_types::SdkConfig) from the environment
     ///
     /// This builder supports overriding individual components of the generated config. Overriding a component
     /// will skip the standard resolution chain from **for that component**. For example,
@@ -135,15 +182,17 @@ mod loader {
     pub struct ConfigLoader {
         app_name: Option<AppName>,
         credentials_provider: Option<SharedCredentialsProvider>,
+        endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
         region: Option<Box<dyn ProvideRegion>>,
         retry_config: Option<RetryConfig>,
         sleep: Option<Arc<dyn AsyncSleep>>,
-        timeout_config: Option<TimeoutConfig>,
+        timeout_config: Option<timeout::Config>,
         provider_config: Option<ProviderConfig>,
+        http_connector: Option<HttpConnector>,
     }
 
     impl ConfigLoader {
-        /// Override the region used to build [`Config`](aws_types::config::Config).
+        /// Override the region used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
         /// ```no_run
@@ -159,7 +208,7 @@ mod loader {
             self
         }
 
-        /// Override the retry_config used to build [`Config`](aws_types::config::Config).
+        /// Override the retry_config used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
         /// ```no_run
@@ -175,23 +224,26 @@ mod loader {
             self
         }
 
-        /// Override the timeout config used to build [`Config`](aws_types::config::Config).
+        /// Override the timeout config used to build [`SdkConfig`](aws_types::SdkConfig).
         /// **Note: This only sets timeouts for calls to AWS services.** Timeouts for the credentials
         /// provider chain are configured separately.
         ///
         /// # Examples
         /// ```no_run
         /// # use std::time::Duration;
-        /// # use aws_smithy_types::timeout::TimeoutConfig;
         /// # async fn create_config() {
-        ///  let timeout_config = TimeoutConfig::new().with_api_call_timeout(Some(Duration::from_secs(1)));
+        ///  use aws_smithy_types::{timeout, tristate::TriState};
+        ///
+        ///  let api_timeout_config = timeout::Api::new()
+        ///     .with_call_timeout(TriState::Set(Duration::from_secs(1)));
+        ///  let timeout_config = timeout::Config::new().with_api_timeouts(api_timeout_config);
         ///  let config = aws_config::from_env()
         ///     .timeout_config(timeout_config)
         ///     .load()
         ///     .await;
         /// # }
         /// ```
-        pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
+        pub fn timeout_config(mut self, timeout_config: timeout::Config) -> Self {
             self.timeout_config = Some(timeout_config);
             self
         }
@@ -204,7 +256,13 @@ mod loader {
             self
         }
 
-        /// Override the credentials provider used to build [`Config`](aws_types::config::Config).
+        /// Override the [`HttpConnector`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        pub fn http_connector(mut self, http_connector: HttpConnector) -> Self {
+            self.http_connector = Some(http_connector);
+            self
+        }
+
+        /// Override the credentials provider used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
         ///
@@ -229,10 +287,34 @@ mod loader {
             self
         }
 
+        /// Override the endpoint resolver used for **all** AWS Services
+        ///
+        /// This method will override the endpoint resolver used for **all** AWS services. This mainly
+        /// exists to set a static endpoint for tools like `LocalStack`. For live traffic, AWS services
+        /// require the service-specific endpoint resolver they load by default.
+        ///
+        /// # Examples
+        ///
+        /// Use a static endpoint for all services
+        /// ```no_run
+        /// # async fn doc() {
+        /// use aws_smithy_http::endpoint::Endpoint;
+        /// let sdk_config = aws_config::from_env()
+        ///   .endpoint_resolver(Endpoint::immutable("http://localhost:1234".parse().expect("valid URI")))
+        ///   .load().await;
+        /// # }
+        pub fn endpoint_resolver(
+            mut self,
+            endpoint_resolver: impl ResolveAwsEndpoint + 'static,
+        ) -> Self {
+            self.endpoint_resolver = Some(Arc::new(endpoint_resolver));
+            self
+        }
+
         /// Set configuration for all sub-loaders (credentials, region etc.)
         ///
         /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
-        /// the HTTPs` connector used or to stub in an in memory `Env` or `Fs` for testing.
+        /// the HTTPs connector used or to stub in an in memory `Env` or `Fs` for testing.
         ///
         /// # Examples
         /// ```no_run
@@ -260,8 +342,8 @@ mod loader {
         ///
         /// NOTE: When an override is provided, the default implementation is **not** used as a fallback.
         /// This means that if you provide a region provider that does not return a region, no region will
-        /// be set in the resulting [`Config`](aws_types::config::Config)
-        pub async fn load(self) -> aws_types::config::Config {
+        /// be set in the resulting [`SdkConfig`](aws_types::SdkConfig)
+        pub async fn load(self) -> SdkConfig {
             let conf = self.provider_config.unwrap_or_default();
             let region = if let Some(provider) = self.region {
                 provider.region().await
@@ -291,15 +373,6 @@ mod loader {
                     .await
             };
 
-            let timeout_config = if let Some(timeout_config) = self.timeout_config {
-                timeout_config
-            } else {
-                timeout_config::default_provider()
-                    .configure(&conf)
-                    .timeout_config()
-                    .await
-            };
-
             let sleep_impl = if self.sleep.is_none() {
                 if default_async_sleep().is_none() {
                     tracing::warn!(
@@ -315,6 +388,26 @@ mod loader {
                 self.sleep
             };
 
+            let http_connector = if let Some(http_connector) = self.http_connector {
+                http_connector
+            } else {
+                let timeouts = self.timeout_config.clone().unwrap_or_default();
+                let settings = HttpSettings::default()
+                    .with_http_timeout_config(timeouts.http_timeouts())
+                    .with_tcp_timeout_config(timeouts.tcp_timeouts());
+                let sleep_impl = sleep_impl.clone();
+                HttpConnector::Prebuilt(default_connector(&settings, sleep_impl))
+            };
+
+            let timeout_config = if let Some(timeout_config) = self.timeout_config {
+                timeout_config
+            } else {
+                timeout_config::default_provider()
+                    .configure(&conf)
+                    .timeout_config()
+                    .await
+            };
+
             let credentials_provider = if let Some(provider) = self.credentials_provider {
                 provider
             } else {
@@ -323,12 +416,16 @@ mod loader {
                 SharedCredentialsProvider::new(builder.build().await)
             };
 
-            let mut builder = Config::builder()
+            let endpoint_resolver = self.endpoint_resolver;
+
+            let mut builder = SdkConfig::builder()
                 .region(region)
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)
-                .credentials_provider(credentials_provider);
+                .credentials_provider(credentials_provider)
+                .http_connector(http_connector);
 
+            builder.set_endpoint_resolver(endpoint_resolver);
             builder.set_app_name(app_name);
             builder.set_sleep_impl(sleep_impl);
             builder.build()
@@ -373,66 +470,5 @@ mod loader {
                 "akid"
             );
         }
-    }
-}
-
-mod connector {
-
-    // create a default connector given the currently enabled cargo features.
-    // rustls  | native tls | result
-    // -----------------------------
-    // yes     | yes        | rustls
-    // yes     | no         | rustls
-    // no      | yes        | native_tls
-    // no      | no         | no default
-
-    use crate::provider_config::HttpSettings;
-    use aws_smithy_async::rt::sleep::AsyncSleep;
-    use aws_smithy_client::erase::DynConnector;
-    use std::sync::Arc;
-
-    // unused when all crate features are disabled
-    #[allow(dead_code)]
-    pub(crate) fn expect_connector(connector: Option<DynConnector>) -> DynConnector {
-        connector.expect("A connector was not available. Either set a custom connector or enable the `rustls` and `native-tls` crate features.")
-    }
-
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
-    fn base(
-        settings: &HttpSettings,
-        sleep: Option<Arc<dyn AsyncSleep>>,
-    ) -> aws_smithy_client::hyper_ext::Builder {
-        let mut hyper =
-            aws_smithy_client::hyper_ext::Adapter::builder().timeout(&settings.timeout_settings);
-        if let Some(sleep) = sleep {
-            hyper = hyper.sleep_impl(sleep);
-        }
-        hyper
-    }
-
-    #[cfg(feature = "rustls")]
-    pub(crate) fn default_connector(
-        settings: &HttpSettings,
-        sleep: Option<Arc<dyn AsyncSleep>>,
-    ) -> Option<DynConnector> {
-        let hyper = base(settings, sleep).build(aws_smithy_client::conns::https());
-        Some(DynConnector::new(hyper))
-    }
-
-    #[cfg(all(not(feature = "rustls"), feature = "native-tls"))]
-    pub(crate) fn default_connector(
-        settings: &HttpSettings,
-        sleep: Option<Arc<dyn AsyncSleep>>,
-    ) -> Option<DynConnector> {
-        let hyper = base(settings, sleep).build(aws_smithy_client::conns::native_tls());
-        Some(DynConnector::new(hyper))
-    }
-
-    #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
-    pub(crate) fn default_connector(
-        _settings: &HttpSettings,
-        _sleep: Option<Arc<dyn AsyncSleep>>,
-    ) -> Option<DynConnector> {
-        None
     }
 }

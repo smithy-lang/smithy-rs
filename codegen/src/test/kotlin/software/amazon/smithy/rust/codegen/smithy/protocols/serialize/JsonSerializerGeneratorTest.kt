@@ -107,7 +107,7 @@ class JsonSerializerGeneratorTest {
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
             ::restJsonFieldName
         )
-        val operationGenerator = parserSerializer.operationSerializer(model.lookup("test#Op"))
+        val operationGenerator = parserSerializer.operationInputSerializer(model.lookup("test#Op"))
         val documentGenerator = parserSerializer.documentSerializer()
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
@@ -150,10 +150,6 @@ class JsonSerializerGeneratorTest {
         project.withModule(RustModule.public("input")) {
             model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/json_ser.rs")
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/operation_ser.rs")
         project.compileAndTest()
     }
 }

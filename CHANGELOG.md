@@ -1,4 +1,152 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+0.40.2 (April 14th, 2022)
+=========================
+
+**Breaking Changes:**
+- ⚠ ([aws-sdk-rust#490](https://github.com/awslabs/aws-sdk-rust/issues/490)) Update all runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)
+
+**New this release:**
+- ([smithy-rs#1262](https://github.com/awslabs/smithy-rs/issues/1262), @liubin) Fix link to Developer Guide in crate's README.md
+- ([smithy-rs#1301](https://github.com/awslabs/smithy-rs/issues/1301), @benesch) Update urlencoding crate to v2.1.0
+
+**Contributors**
+Thank you for your contributions! ❤
+- @benesch ([smithy-rs#1301](https://github.com/awslabs/smithy-rs/issues/1301))
+- @liubin ([smithy-rs#1262](https://github.com/awslabs/smithy-rs/issues/1262))
+
+0.39.0 (March 17, 2022)
+=======================
+**Breaking Changes:**
+- ⚠ ([aws-sdk-rust#406](https://github.com/awslabs/aws-sdk-rust/issues/406)) `aws_types::config::Config` has been renamed to `aws_types:sdk_config::SdkConfig`. This is to better differentiate it
+    from service-specific configs like `aws_s3_sdk::Config`. If you were creating shared configs with
+    `aws_config::load_from_env()`, then you don't have to do anything. If you were directly referring to a shared config,
+    update your `use` statements and `struct` names.
+
+    _Before:_
+    ```rust
+    use aws_types::config::Config;
+
+    fn main() {
+        let config = Config::builder()
+        // config builder methods...
+        .build()
+        .await;
+    }
+    ```
+
+    _After:_
+    ```rust
+    use aws_types::SdkConfig;
+
+    fn main() {
+        let config = SdkConfig::builder()
+        // config builder methods...
+        .build()
+        .await;
+    }
+    ```
+- ⚠ ([smithy-rs#724](https://github.com/awslabs/smithy-rs/issues/724)) Timeout configuration has been refactored a bit. If you were setting timeouts through environment variables or an AWS
+    profile, then you shouldn't need to change anything. Take note, however, that we don't currently support HTTP connect,
+    read, write, or TLS negotiation timeouts. If you try to set any of those timeouts in your profile or environment, we'll
+    log a warning explaining that those timeouts don't currently do anything.
+
+    If you were using timeouts programmatically,
+    you'll need to update your code. In previous versions, timeout configuration was stored in a single `TimeoutConfig`
+    struct. In this new version, timeouts have been broken up into several different config structs that are then collected
+    in a `timeout::Config` struct. As an example, to get the API per-attempt timeout in previous versions you would access
+    it with `<your TimeoutConfig>.api_call_attempt_timeout()` and in this new version you would access it with
+    `<your timeout::Config>.api.call_attempt_timeout()`. We also made some unimplemented timeouts inaccessible in order to
+    avoid giving users the impression that setting them had an effect. We plan to re-introduce them once they're made
+    functional in a future update.
+
+**New this release:**
+- ([smithy-rs#1225](https://github.com/awslabs/smithy-rs/issues/1225)) `DynMiddleware` is now `clone`able
+- ([smithy-rs#1257](https://github.com/awslabs/smithy-rs/issues/1257)) HTTP request property bag now contains list of desired HTTP versions to use when making requests. This list is not currently used but will be in an upcoming update.
+
+
+0.38.0 (Februrary 24, 2022)
+===========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#1197](https://github.com/awslabs/smithy-rs/issues/1197)) `aws_smithy_types::retry::RetryKind` had its `NotRetryable` variant split into `UnretryableFailure` and `Unnecessary`. If you implement the `ClassifyResponse`, then successful responses need to return `Unnecessary`, and failures that shouldn't be retried need to return `UnretryableFailure`.
+- ⚠ ([smithy-rs#1209](https://github.com/awslabs/smithy-rs/issues/1209)) `aws_smithy_types::primitive::Encoder` is now a struct rather than an enum, but its usage remains the same.
+- ⚠ ([smithy-rs#1217](https://github.com/awslabs/smithy-rs/issues/1217)) `ClientBuilder` helpers `rustls()` and `native_tls()` now return `DynConnector` and use dynamic dispatch rather than returning their concrete connector type that would allow static dispatch. If static dispatch is desired, then manually construct a connector to give to the builder. For example, for rustls: `builder.connector(Adapter::builder().build(aws_smithy_client::conns::https()))` (where `Adapter` is in `aws_smithy_client::hyper_ext`).
+
+**New this release:**
+- 🐛 ([smithy-rs#1197](https://github.com/awslabs/smithy-rs/issues/1197)) Fixed a bug that caused clients to eventually stop retrying. The cross-request retry allowance wasn't being reimbursed upon receiving a successful response, so once this allowance reached zero, no further retries would ever be attempted.
+
+
+0.37.0 (February 18th, 2022)
+============================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#1144](https://github.com/awslabs/smithy-rs/issues/1144)) Some APIs required that timeout configuration be specified with an `aws_smithy_client::timeout::Settings` struct while
+    others required an `aws_smithy_types::timeout::TimeoutConfig` struct. Both were equivalent. Now `aws_smithy_types::timeout::TimeoutConfig`
+    is used everywhere and `aws_smithy_client::timeout::Settings` has been removed. Here's how to migrate code your code that
+    depended on `timeout::Settings`:
+
+    The old way:
+    ```rust
+    let timeout = timeout::Settings::new()
+        .with_connect_timeout(Duration::from_secs(1))
+        .with_read_timeout(Duration::from_secs(2));
+    ```
+
+    The new way:
+    ```rust
+    // This example is passing values, so they're wrapped in `Option::Some`. You can disable a timeout by passing `None`.
+    let timeout = TimeoutConfig::new()
+        .with_connect_timeout(Some(Duration::from_secs(1)))
+        .with_read_timeout(Some(Duration::from_secs(2)));
+    ```
+- ⚠ ([smithy-rs#1085](https://github.com/awslabs/smithy-rs/issues/1085)) Moved the following re-exports into a `types` module for all services:
+    - `<service>::AggregatedBytes` -> `<service>::types::AggregatedBytes`
+    - `<service>::Blob` -> `<service>::types::Blob`
+    - `<service>::ByteStream` -> `<service>::types::ByteStream`
+    - `<service>::DateTime` -> `<service>::types::DateTime`
+    - `<service>::SdkError` -> `<service>::types::SdkError`
+- ⚠ ([smithy-rs#1085](https://github.com/awslabs/smithy-rs/issues/1085)) `AggregatedBytes` and `ByteStream` are now only re-exported if the service has streaming operations,
+    and `Blob`/`DateTime` are only re-exported if the service uses them.
+- ⚠ ([smithy-rs#1130](https://github.com/awslabs/smithy-rs/issues/1130)) MSRV increased from `1.54` to `1.56.1` per our 2-behind MSRV policy.
+
+**New this release:**
+- ([smithy-rs#1144](https://github.com/awslabs/smithy-rs/issues/1144)) `MakeConnectorFn`, `HttpConnector`, and `HttpSettings` have been moved from `aws_config::provider_config` to
+    `aws_smithy_client::http_connector`. This is in preparation for a later update that will change how connectors are
+    created and configured.
+- ([smithy-rs#1123](https://github.com/awslabs/smithy-rs/issues/1123)) Refactor `Document` shape parser generation
+- ([smithy-rs#1085](https://github.com/awslabs/smithy-rs/issues/1085)) The `Client` and `Config` re-exports now have their documentation inlined in the service docs
+
+
+0.36.0 (January 26, 2022)
+=========================
+**New this release:**
+- ([smithy-rs#1087](https://github.com/awslabs/smithy-rs/issues/1087)) Improve docs on `Endpoint::{mutable, immutable}`
+- ([smithy-rs#1118](https://github.com/awslabs/smithy-rs/issues/1118)) SDK examples now come from [`awsdocs/aws-doc-sdk-examples`](https://github.com/awsdocs/aws-doc-sdk-examples) rather than from `smithy-rs`
+- ([smithy-rs#1114](https://github.com/awslabs/smithy-rs/issues/1114), @mchoicpe-amazon) Provide SigningService creation via owned String
+
+**Contributors**
+Thank you for your contributions! ❤
+- @mchoicpe-amazon ([smithy-rs#1114](https://github.com/awslabs/smithy-rs/issues/1114))
+
+
+0.35.2 (January 20th, 2022)
+===========================
+_Changes only impact generated AWS SDK_
+
+v0.35.1 (January 19th, 2022)
+============================
+_Changes only impact generated AWS SDK_
+
+
+0.35.0 (January 19, 2022)
+=========================
+**New this release:**
+- ([smithy-rs#1053](https://github.com/awslabs/smithy-rs/issues/1053)) Upgraded Smithy to 1.16.1
+- 🐛 ([smithy-rs#1069](https://github.com/awslabs/smithy-rs/issues/1069)) Fix broken link to `RetryMode` in client docs
+- 🐛 ([smithy-rs#1069](https://github.com/awslabs/smithy-rs/issues/1069)) Fix several doc links to raw identifiers (identifiers excaped with `r#`)
+- 🐛 ([smithy-rs#1069](https://github.com/awslabs/smithy-rs/issues/1069)) Reduce dependency recompilation in local dev
+- 🐛 ([aws-sdk-rust#405](https://github.com/awslabs/aws-sdk-rust/issues/405), [smithy-rs#1083](https://github.com/awslabs/smithy-rs/issues/1083)) Fixed paginator bug impacting EC2 describe VPCs (and others)
+
+
+
 v0.34.1 (January 10, 2022)
 ==========================
 **New this release:**

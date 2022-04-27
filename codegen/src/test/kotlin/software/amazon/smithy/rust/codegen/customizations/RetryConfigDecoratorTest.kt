@@ -36,7 +36,7 @@ internal class RetryConfigDecoratorTest {
     fun `generates a valid config`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val project = TestWorkspace.testProject()
-        val codegenContext = testCodegenContext(model, settings = project.rustSettings(model))
+        val codegenContext = testCodegenContext(model, settings = project.rustSettings())
 
         validateConfigCustomizations(RetryConfigProviderConfig(codegenContext), project)
     }

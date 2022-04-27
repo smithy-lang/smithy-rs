@@ -26,9 +26,10 @@ class IntegrationTestDecorator : RustCodegenDecorator {
         codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        val integrationTestPath = Paths.get("aws/sdk/integration-tests")
+        val integrationTestPath = Paths.get(SdkSettings.from(codegenContext.settings).integrationTestPath)
         check(Files.exists(integrationTestPath)) {
-            "IntegrationTestDecorator expects to be run from the smithy-rs package root"
+            "Failed to find the AWS SDK integration tests. Make sure the integration test path is configured " +
+                "correctly in the smithy-build.json."
         }
 
         val moduleName = codegenContext.moduleName.substring("aws-sdk-".length)
@@ -55,7 +56,7 @@ class IntegrationTestDependencies(
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
-        LibRsSection.Body -> writable {
+        is LibRsSection.Body -> writable {
             if (hasTests) {
                 val smithyClient = CargoDependency.SmithyClient(runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)

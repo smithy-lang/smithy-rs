@@ -110,8 +110,8 @@ class AwsJsonSerializerGenerator(
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
 
-    override fun operationSerializer(operationShape: OperationShape): RuntimeType {
-        var serializer = jsonSerializerGenerator.operationSerializer(operationShape)
+    override fun operationInputSerializer(operationShape: OperationShape): RuntimeType {
+        var serializer = jsonSerializerGenerator.operationInputSerializer(operationShape)
         if (serializer == null) {
             val inputShape = operationShape.inputShape(codegenContext.model)
             val fnName = codegenContext.symbolProvider.serializeFunctionName(operationShape)
@@ -128,7 +128,7 @@ class AwsJsonSerializerGenerator(
     }
 }
 
-class AwsJson(
+open class AwsJson(
     private val codegenContext: CodegenContext,
     awsJsonVersion: AwsJsonVersion
 ) : Protocol {
@@ -148,7 +148,7 @@ class AwsJson(
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
-    override fun additionalHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+    override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
@@ -183,6 +183,4 @@ class AwsJson(
         }
 }
 
-private fun awsJsonFieldName(member: MemberShape): String {
-    return member.memberName
-}
+fun awsJsonFieldName(member: MemberShape): String = member.memberName

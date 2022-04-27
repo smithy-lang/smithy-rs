@@ -3,17 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use crate::cargo::{self, CargoOperation};
 use crate::fs::Fs;
 use crate::package::{
-    continue_batches_from, discover_package_batches, Package, PackageBatch, PackageHandle,
-    PackageStats,
+    discover_and_validate_package_batches, Package, PackageBatch, PackageHandle, PackageStats,
 };
+use crate::repo::{resolve_publish_location, Repository};
 use crate::CRATE_OWNER;
-use anyhow::Result;
+use crate::{cargo, SDK_REPO_NAME};
+use anyhow::{bail, Result};
 use crates_io_api::{AsyncClient, Error};
 use dialoguer::Confirm;
 use lazy_static::lazy_static;
+use smithy_rs_tool_common::shell::ShellOperation;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
@@ -27,20 +29,18 @@ lazy_static! {
     .expect("valid client");
 }
 
-pub async fn subcommand_publish(location: &str, continue_from: Option<&str>) -> Result<()> {
+pub async fn subcommand_publish(location: &Path) -> Result<()> {
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
+    let location = resolve_publish_location(location);
+
     info!("Discovering crates to publish...");
-    let (mut batches, mut stats) = discover_package_batches(Fs::Real, &location).await?;
-    if let Some(continue_from) = continue_from {
-        info!(
-            "Filtering batches so that publishing starts from {}.",
-            continue_from
-        );
-        continue_batches_from(continue_from, &mut batches, &mut stats)?;
-    }
+    let (batches, stats) = discover_and_validate_package_batches(Fs::Real, &location).await?;
     info!("Finished crate discovery.");
+
+    // Sanity check the repository tag if publishing from `aws-sdk-rust`
+    confirm_correct_tag(&batches, &location).await?;
 
     // Don't proceed unless the user confirms the plan
     confirm_plan(&batches, stats)?;
@@ -60,7 +60,7 @@ pub async fn subcommand_publish(location: &str, continue_from: Option<&str>) -> 
                 // Only publish if it hasn't been published yet.
                 if !is_published(&package.handle).await? {
                     info!("Publishing `{}`...", package.handle);
-                    cargo::Publish::new(&package.handle, &package.crate_path)
+                    cargo::Publish::new(package.handle.clone(), &package.crate_path)
                         .spawn()
                         .await?;
                     // Sometimes it takes a little bit of time for the new package version
@@ -83,6 +83,27 @@ pub async fn subcommand_publish(location: &str, continue_from: Option<&str>) -> 
         tokio::time::sleep(Duration::from_secs(30)).await;
     }
 
+    Ok(())
+}
+
+async fn confirm_correct_tag(batches: &[Vec<Package>], location: &Path) -> Result<()> {
+    let aws_config_version = batches
+        .iter()
+        .flat_map(|batch| batch.iter().find(|p| p.handle.name == "aws-config"))
+        .map(|package| &package.handle.version)
+        .next();
+    if let Some(aws_config_version) = aws_config_version {
+        let expected_tag = format!("v{}", aws_config_version);
+        let repository = Repository::new(SDK_REPO_NAME, location)?;
+        let current_tag = repository.current_tag().await?;
+        if expected_tag != current_tag {
+            bail!(
+                "Current tag `{}` in the local `aws-sdk-rust` repository didn't match expected release tag `{}`",
+                current_tag,
+                expected_tag
+            );
+        }
+    }
     Ok(())
 }
 
@@ -134,13 +155,12 @@ fn confirm_plan(batches: &[PackageBatch], stats: PackageStats) -> Result<()> {
     let mut full_plan = Vec::new();
     for batch in batches {
         for package in batch {
-            full_plan.push(
-                cargo::Publish::new(&package.handle, &package.crate_path)
-                    .plan()
-                    .unwrap(),
-            );
+            full_plan.push(format!(
+                "Publish version `{}` of `{}`",
+                package.handle.version, package.handle.name
+            ));
         }
-        full_plan.push("wait".into());
+        full_plan.push("-- wait --".into());
     }
 
     info!("Publish plan:");
@@ -167,7 +187,6 @@ fn confirm_plan(batches: &[PackageBatch], stats: PackageStats) -> Result<()> {
 
 #[cfg(test)]
 mod test {
-
     use super::*;
     use crate::package::PackageHandle;
 

@@ -3,14 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-import { Match, Template } from "@aws-cdk/assertions";
-import * as cdk from "@aws-cdk/core";
-import { Stack } from "@aws-cdk/core";
+import { Match, Template } from "aws-cdk-lib/assertions";
+import { App, Stack } from "aws-cdk-lib";
 import { GitHubOidcRole } from "../../lib/constructs/github-oidc-role";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
 
 test("it should have an OIDC access role", () => {
-    const app = new cdk.App();
+    const app = new App();
     const oidcStack = new OidcProviderStack(app, "oidc-provider-stack", {});
     const stack = new Stack(app, "test-stack");
 

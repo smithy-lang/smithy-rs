@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-use super::here;
 use anyhow::Context;
 use gitignore::Pattern;
+use smithy_rs_tool_common::macros::here;
 use std::error::Error;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -64,6 +64,18 @@ pub fn find_handwritten_files_and_folders(
     );
 
     Ok(files)
+}
+
+/// Similar to [`std::fs::remove_dir_all`] except that it doesn't error out if
+/// the directory to be removed doesn't exist.
+pub fn remove_dir_all_idempotent(path: impl AsRef<Path>) -> anyhow::Result<()> {
+    match std::fs::remove_dir_all(path.as_ref()) {
+        Ok(_) => Ok(()),
+        Err(err) => match err.kind() {
+            std::io::ErrorKind::NotFound => Ok(()),
+            _ => Err(err).context(here!()),
+        },
+    }
 }
 
 /// A struct with methods that help when checking to see if a file is handwritten or
@@ -218,7 +230,7 @@ mod tests {
         let dir = TempDir::new("smithy-rs-sync_test-fs").unwrap();
         let file_path = dir.path().join(HANDWRITTEN_DOTFILE);
         // two newlines to test
-        let mut handwritten_files = handwritten_files.join("\n\n");
+        let handwritten_files = handwritten_files.join("\n\n");
         std::fs::write(file_path, handwritten_files).expect("failed to write");
         dir
     }

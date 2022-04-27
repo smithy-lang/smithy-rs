@@ -120,7 +120,6 @@ class JsonParserGeneratorTest {
             ::restJsonFieldName
         )
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
-        val documentGenerator = parserGenerator.documentParser(model.lookup("test#Op"))
         val payloadGenerator = parserGenerator.payloadParser(model.lookup("test#OpOutput\$top"))
         val errorParser = parserGenerator.errorParser(model.lookup("test#Error"))
 
@@ -132,7 +131,6 @@ class JsonParserGeneratorTest {
                 use model::Choice;
 
                 // Generate the document serializer even though it's not tested directly
-                // ${writer.format(documentGenerator)}
                 // ${writer.format(payloadGenerator)}
 
                 let json = br#"
@@ -202,10 +200,6 @@ class JsonParserGeneratorTest {
         project.withModule(RustModule.public("error")) {
             model.lookup<StructureShape>("test#Error").renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/json_deser.rs")
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/output.rs")
         project.compileAndTest()
     }
 }

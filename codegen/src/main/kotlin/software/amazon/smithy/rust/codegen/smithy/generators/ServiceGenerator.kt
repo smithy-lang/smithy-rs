@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -70,6 +71,7 @@ class ServiceGenerator(
         }
 
         rustCrate.lib {
+            Attribute.DocInline.render(it)
             it.write("pub use config::Config;")
         }
     }

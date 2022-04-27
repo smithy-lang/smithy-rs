@@ -103,11 +103,11 @@ class XmlBindingTraitSerializerGenerator(
     private fun Ctx.Scope.scopedTo(member: MemberShape) =
         this.copy(input = "$input.${symbolProvider.toMemberName(member)}")
 
-    override fun operationSerializer(operationShape: OperationShape): RuntimeType? {
+    override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
         val fnName = symbolProvider.serializeFunctionName(operationShape)
         val inputShape = operationShape.inputShape(model)
-        val xmlMembers = operationShape.operationXmlMembers()
-        if (!xmlMembers.isNotEmpty()) {
+        val xmlMembers = operationShape.requestBodyMembers()
+        if (xmlMembers.isEmpty()) {
             return null
         }
         val operationXmlName = xmlIndex.operationInputShapeName(operationShape)
@@ -183,18 +183,22 @@ class XmlBindingTraitSerializerGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
             writer.rustTemplate(
                 """
-                pub fn $fnName() -> std::vec::Vec<u8> {
-                    vec![]
+                pub fn $fnName() -> #{ByteSlab} {
+                    Vec::new()
                 }
-                """
+                """,
+                "ByteSlab" to RuntimeType.ByteSlab
             )
         }
     }
 
-    override fun serverOutputSerializer(operationShape: OperationShape): RuntimeType {
+    override fun operationOutputSerializer(operationShape: OperationShape): RuntimeType? {
         val fnName = symbolProvider.serializeFunctionName(operationShape)
         val outputShape = operationShape.outputShape(model)
-        val xmlMembers = operationShape.operationXmlMembers()
+        val xmlMembers = operationShape.responseBodyMembers()
+        if (xmlMembers.isEmpty()) {
+            return null
+        }
         val operationXmlName = xmlIndex.operationOutputShapeName(operationShape)
             ?: throw CodegenException("operation must have a name if it has members")
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
@@ -466,8 +470,11 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
-    private fun OperationShape.operationXmlMembers(): XmlMemberIndex =
+    private fun OperationShape.requestBodyMembers(): XmlMemberIndex =
         XmlMemberIndex.fromMembers(httpBindingResolver.requestMembers(this, HttpLocation.DOCUMENT))
+
+    private fun OperationShape.responseBodyMembers(): XmlMemberIndex =
+        XmlMemberIndex.fromMembers(httpBindingResolver.responseMembers(this, HttpLocation.DOCUMENT))
 
     private fun Shape.xmlNamespace(root: Boolean): XmlNamespaceTrait? {
         return this.getTrait<XmlNamespaceTrait>().letIf(root) { it ?: rootNamespace }

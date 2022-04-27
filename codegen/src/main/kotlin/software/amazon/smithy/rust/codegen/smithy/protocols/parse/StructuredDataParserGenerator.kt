@@ -48,15 +48,6 @@ interface StructuredDataParserGenerator {
     fun errorParser(errorShape: StructureShape): RuntimeType?
 
     /**
-     * ```rust
-     * fn parse_document(inp: &[u8]) -> Result<Document, Error> {
-     *   ...
-     * }
-     * ```
-     */
-    fun documentParser(operationShape: OperationShape): RuntimeType
-
-    /**
      * Generate a parser for a server operation input structure
      * ```rust
      * fn deser_operation_crate_operation_my_operation_input(

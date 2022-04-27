@@ -72,7 +72,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
-            DefaultPublicModules
+            DefaultPublicModules,
+            codegenContext.settings.codegenConfig
         )
         httpGenerator = protocolGenerator.buildProtocolGenerator(codegenContext)
     }

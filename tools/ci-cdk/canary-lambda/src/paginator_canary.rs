@@ -6,11 +6,10 @@
 use crate::canary::Clients;
 
 use crate::mk_canary;
-use anyhow::{bail, Context};
+use anyhow::bail;
 
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ec2::model::InstanceType;
-use std::env;
 
 use crate::CanaryEnv;
 use tokio_stream::StreamExt;

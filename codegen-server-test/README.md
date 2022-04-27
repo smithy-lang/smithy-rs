@@ -1,8 +1,6 @@
-# Codegen Integration Test
-This module defines an integration test of the code generation machinery. `.build.gradle.kts` will generate a `smithy-build.json` file as part of the build. The Smithy build plugin then invokes our codegen machinery and generates Rust crates.
+# Server Codegen Integration Tests
 
-The `test` task will run `cargo check` and `cargo clippy` to validate that the generated Rust compiles and is idiomatic.
-## Usage
-```
-../gradlew test
-```
+Refer to `../codegen-test/README.md` for documentation on how to use this
+module. This module is analogous to the `codegen-test` one, but it's named
+`codegen-server-test` and it runs the `rust-server-codegen` Smithy build
+plugin instead.

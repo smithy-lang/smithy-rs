@@ -41,7 +41,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.smithy.isBoxed
+import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
@@ -80,7 +80,7 @@ class JsonParserGenerator(
         "skip_value" to smithyJson.member("deserialize::token::skip_value"),
         "skip_to_end" to smithyJson.member("deserialize::token::skip_to_end"),
         "Token" to smithyJson.member("deserialize::Token"),
-        "or_empty" to orEmptyJson()
+        "or_empty" to orEmptyJson(),
     )
 
     /**
@@ -118,7 +118,7 @@ class JsonParserGenerator(
 
     override fun payloadParser(member: MemberShape): RuntimeType {
         val shape = model.expectShape(member.target)
-        check(shape is UnionShape || shape is StructureShape) { "payload parser should only be used on structures & unions" }
+        check(shape is UnionShape || shape is StructureShape || shape is DocumentShape) { "payload parser should only be used on structures & unions" }
         val fnName = symbolProvider.deserializeFunctionName(shape) + "_payload"
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
@@ -126,9 +126,15 @@ class JsonParserGenerator(
                 *codegenScope,
                 "Shape" to symbolProvider.toSymbol(shape)
             ) {
+                val input = if (shape is DocumentShape) {
+                    "input"
+                } else {
+                    "#{or_empty}(input)"
+                }
+
                 rustTemplate(
                     """
-                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(input)).peekable();
+                    let mut tokens_owned = #{json_token_iter}($input).peekable();
                     let tokens = &mut tokens_owned;
                     """,
                     *codegenScope
@@ -159,28 +165,6 @@ class JsonParserGenerator(
         }
         val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_json_err"
         return structureParser(fnName, errorShape, errorShape.members().toList())
-    }
-
-    override fun documentParser(operationShape: OperationShape): RuntimeType {
-        val fnName = "parse_document"
-        return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
-            it.rustBlockTemplate(
-                "pub fn $fnName(input: &[u8]) -> Result<#{Document}, #{Error}>",
-                "Document" to RuntimeType.Document(runtimeConfig),
-                *codegenScope,
-            ) {
-                rustTemplate(
-                    """
-                    let mut tokens_owned = #{json_token_iter}(input).peekable();
-                    let tokens = &mut tokens_owned;
-                    """,
-                    *codegenScope
-                )
-                rustTemplate("let result = #{expect_document}(tokens);", *codegenScope)
-                expectEndOfTokenStream()
-                rust("result")
-            }
-        }
     }
 
     private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", jsonDeserModule) {
@@ -246,7 +230,7 @@ class JsonParserGenerator(
             else -> PANIC("unexpected shape: $target")
         }
         val symbol = symbolProvider.toSymbol(memberShape)
-        if (symbol.isBoxed()) {
+        if (symbol.isRustBoxed()) {
             rust(".map(Box::new)")
         }
     }
@@ -385,8 +369,9 @@ class JsonParserGenerator(
                     withBlock("Ok(Some(builder.build()", "))") {
                         if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
                             rustTemplate(
-                                ".map_err(|err| #{Error}::new(#{ErrorReason}::Custom(" +
-                                    "format!(\"{}\", err).into()), None))?",
+                                """.map_err(|err| #{Error}::new(
+                                #{ErrorReason}::Custom(format!("{}", err).into()), None)
+                                )?""",
                                 *codegenScope
                             )
                         }

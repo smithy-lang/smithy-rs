@@ -16,6 +16,7 @@ service SimpleService {
     ],
     operations: [
         Healthcheck,
+        StoreServiceBlob,
     ],
 }
 
@@ -50,7 +51,9 @@ resource Service {
         id: "RegisterServiceRequestTest",
         protocol: "aws.protocols#restJson1",
         uri: "/service/1",
-        bodyMediaType: "application/json",
+        headers: {
+            "Content-Type": "application/json",
+        },
         params: { id: "1", name: "TestService" },
         body: "{\"name\":\"TestService\"}",
         method: "PUT",
@@ -101,5 +104,28 @@ structure HealthcheckInputRequest {
 
 @documentation("Service healthcheck input structure")
 structure HealthcheckOutputResponse {
+
+}
+
+@readonly
+@http(method: "GET", uri: "/service/{id}/blob")
+@documentation("Stores a blob for a service id")
+operation StoreServiceBlob {
+    input: StoreServiceBlobInput,
+    output: StoreServiceBlobOutput
+}
+
+@documentation("Store a blob for a service id input structure")
+structure StoreServiceBlobInput {
+    @required
+    @httpLabel
+    id: ServiceId,
+    @required
+    @httpPayload
+    content: Blob,
+}
+
+@documentation("Store a blob for a service id output structure")
+structure StoreServiceBlobOutput {
 
 }

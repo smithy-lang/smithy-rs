@@ -15,7 +15,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent, UserAgentStage};
-use aws_smithy_client::{erase::DynConnector, timeout, SdkSuccess};
+use aws_smithy_client::{erase::DynConnector, SdkSuccess};
 use aws_smithy_client::{retry, SdkError};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::endpoint::Endpoint;
@@ -27,26 +27,28 @@ use aws_smithy_http_tower::map_request::{
     AsyncMapRequestLayer, AsyncMapRequestService, MapRequestLayer, MapRequestService,
 };
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
-use aws_smithy_types::timeout::TimeoutConfig;
+use aws_smithy_types::timeout;
 use aws_types::os_shim_internal::{Env, Fs};
+
 use bytes::Bytes;
 use http::uri::InvalidUri;
 use http::{Response, Uri};
+use tokio::sync::OnceCell;
 
 use crate::connector::expect_connector;
 use crate::imds::client::token::TokenMiddleware;
 use crate::profile::ProfileParseError;
-use crate::provider_config::{HttpSettings, ProviderConfig};
+use crate::provider_config::ProviderConfig;
 use crate::{profile, PKG_VERSION};
-use tokio::sync::OnceCell;
+use aws_smithy_client::http_connector::HttpSettings;
 
 mod token;
 
 // 6 hours
 const DEFAULT_TOKEN_TTL: Duration = Duration::from_secs(21_600);
 const DEFAULT_ATTEMPTS: u32 = 4;
-const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
-const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(1);
+const DEFAULT_CONNECT_TIMEOUT: Option<Duration> = Some(Duration::from_secs(1));
+const DEFAULT_READ_TIMEOUT: Option<Duration> = Some(Duration::from_secs(1));
 
 fn user_agent() -> AwsUserAgent {
     AwsUserAgent::new_from_environment(Env::real(), ApiMetadata::new("imds", PKG_VERSION))
@@ -533,12 +535,11 @@ impl Builder {
     /// Build an IMDSv2 Client
     pub async fn build(self) -> Result<Client, BuildError> {
         let config = self.config.unwrap_or_default();
-        let timeout_config = timeout::Settings::default()
-            .with_connect_timeout(self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
-            .with_read_timeout(self.read_timeout.unwrap_or(DEFAULT_READ_TIMEOUT));
-        let connector = expect_connector(config.connector(&HttpSettings {
-            timeout_settings: timeout_config,
-        }));
+        let http_timeout_config = timeout::Http::new()
+            .with_connect_timeout(self.connect_timeout.or(DEFAULT_CONNECT_TIMEOUT).into())
+            .with_read_timeout(self.read_timeout.or(DEFAULT_READ_TIMEOUT).into());
+        let http_settings = HttpSettings::default().with_http_timeout_config(http_timeout_config);
+        let connector = expect_connector(config.connector(&http_settings));
         let endpoint_source = self
             .endpoint
             .unwrap_or_else(|| EndpointSource::Env(config.env(), config.fs()));
@@ -546,7 +547,7 @@ impl Builder {
         let endpoint = Endpoint::immutable(endpoint);
         let retry_config = retry::Config::default()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
-        let timeout_config = TimeoutConfig::default();
+        let timeout_config = timeout::Config::default();
         let token_loader = token::TokenMiddleware::new(
             connector.clone(),
             config.time_source(),
@@ -692,7 +693,8 @@ impl ImdsErrorPolicy {
             _ if status.is_server_error() => RetryKind::Error(ErrorKind::ServerError),
             // 401 indicates that the token has expired, this is retryable
             _ if status.as_u16() == 401 => RetryKind::Error(ErrorKind::ServerError),
-            _ => RetryKind::NotRetryable,
+            // This catch-all includes successful responses that fail to parse. These should not be retried.
+            _ => RetryKind::UnretryableFailure,
         }
     }
 }
@@ -709,11 +711,11 @@ impl ImdsErrorPolicy {
 impl<T, E> ClassifyResponse<SdkSuccess<T>, SdkError<E>> for ImdsErrorPolicy {
     fn classify(&self, response: Result<&SdkSuccess<T>, &SdkError<E>>) -> RetryKind {
         match response {
-            Ok(_) => RetryKind::NotRetryable,
+            Ok(_) => RetryKind::Unnecessary,
             Err(SdkError::ResponseError { raw, .. }) | Err(SdkError::ServiceError { raw, .. }) => {
                 ImdsErrorPolicy::classify(raw)
             }
-            _ => RetryKind::NotRetryable,
+            _ => RetryKind::UnretryableFailure,
         }
     }
 }
@@ -722,20 +724,24 @@ impl<T, E> ClassifyResponse<SdkSuccess<T>, SdkError<E>> for ImdsErrorPolicy {
 pub(crate) mod test {
     use std::collections::HashMap;
     use std::error::Error;
+    use std::io;
     use std::time::{Duration, UNIX_EPOCH};
 
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::{capture_request, TestConnection};
+    use aws_smithy_client::{SdkError, SdkSuccess};
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::operation;
+    use aws_smithy_types::retry::RetryKind;
     use aws_types::os_shim_internal::{Env, Fs, ManualTimeSource, TimeSource};
+    use http::header::USER_AGENT;
     use http::Uri;
     use serde::Deserialize;
     use tracing_test::traced_test;
 
-    use crate::imds::client::{Client, EndpointMode};
+    use crate::imds::client::{Client, EndpointMode, ImdsErrorPolicy};
     use crate::provider_config::ProviderConfig;
-    use http::header::USER_AGENT;
 
     const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
     const TOKEN_B: &str = "alternatetoken==";
@@ -974,6 +980,35 @@ pub(crate) mod test {
         let err = client.get("/latest/metadata").await.expect_err("no token");
         assert!(format!("{}", err).contains("forbidden"), "{}", err);
         connection.assert_requests_match(&[]);
+    }
+
+    /// Successful responses should classify as `RetryKind::Unnecessary`
+    #[test]
+    fn successful_response_properly_classified() {
+        use aws_smithy_http::retry::ClassifyResponse;
+
+        let policy = ImdsErrorPolicy;
+        fn response_200() -> operation::Response {
+            operation::Response::new(imds_response("").map(|_| SdkBody::empty()))
+        }
+        let success = SdkSuccess {
+            raw: response_200(),
+            parsed: (),
+        };
+        assert_eq!(
+            RetryKind::Unnecessary,
+            policy.classify(Ok::<_, &SdkError<()>>(&success))
+        );
+
+        // Emulate a failure to parse the response body (using an io error since it's easy to construct in a test)
+        let failure = SdkError::<()>::ResponseError {
+            err: Box::new(io::Error::new(io::ErrorKind::BrokenPipe, "fail to parse")),
+            raw: response_200(),
+        };
+        assert_eq!(
+            RetryKind::UnretryableFailure,
+            policy.classify(Err::<&SdkSuccess<()>, _>(&failure))
+        );
     }
 
     // since tokens are sent as headers, the tokens need to be valid header values

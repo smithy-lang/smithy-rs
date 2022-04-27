@@ -16,7 +16,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -28,6 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
@@ -67,7 +67,8 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         val symbolVisitorConfig =
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
-                codegenConfig = settings.codegenConfig
+                codegenConfig = settings.codegenConfig,
+                handleRequired = true
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -87,7 +88,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
 
         codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, mode = CodegenMode.Server)
 
-        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules)
+        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
@@ -134,7 +135,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             model,
             codegenDecorator.crateManifestCustomizations(codegenContext),
             codegenDecorator.libRsCustomizations(codegenContext, listOf()),
-            // TODO: Remove `requireDocs` and always require them once the server codegen is far enough along
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
             requireDocs = false
         )
         try {
@@ -164,7 +165,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     override fun structureShape(shape: StructureShape) {
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
-            StructureGenerator(model, symbolProvider, writer, shape).renderServer()
+            StructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
             val builderGenerator =
                 BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
             builderGenerator.render(writer)
@@ -219,7 +220,6 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             protocolGeneratorFactory.support(),
             protocolGeneratorFactory.protocol(codegenContext).httpBindingResolver,
             codegenContext,
-            codegenDecorator
         )
             .render()
     }

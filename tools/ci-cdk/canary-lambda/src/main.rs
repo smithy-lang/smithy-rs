@@ -13,7 +13,10 @@ use std::pin::Pin;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::{info, info_span, Instrument};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::EnvFilter;
+use tracing_texray::TeXRayLayer;
 
 /// Conditionally include the module based on the $version feature gate
 ///
@@ -47,11 +50,22 @@ mod transcribe_canary;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    tracing_subscriber::fmt::init();
+    let subscriber = tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(tracing_subscriber::fmt::layer())
+        .with(
+            TeXRayLayer::new()
+                // by default, all metadata fields will be printed. If this is too noisy,
+                // filter only the fields you care about
+                //.only_show_fields(&["name", "operation", "service"]),
+        );
+    tracing::subscriber::set_global_default(subscriber).unwrap();
     let local = env::args().any(|arg| arg == "--local");
     let main_handler = LambdaMain::new().await;
     if local {
-        let result = lambda_main(main_handler.clients).await?;
+        let result = lambda_main(main_handler.clients)
+            .instrument(tracing_texray::examine(info_span!("run_canaries")))
+            .await?;
         if result
             .as_object()
             .expect("is object")
@@ -126,7 +140,7 @@ async fn lambda_main(clients: canary::Clients) -> Result<Value, Error> {
 
 async fn canary_result(handle: JoinHandle<anyhow::Result<()>>) -> Result<(), String> {
     match timeout(Duration::from_secs(20), handle).await {
-        Err(_timeout) => Err(format!("canary timed out")),
+        Err(_timeout) => Err("canary timed out".into()),
         Ok(Ok(result)) => match result {
             Ok(_) => Ok(()),
             Err(err) => Err(format!("{:?}", err)),

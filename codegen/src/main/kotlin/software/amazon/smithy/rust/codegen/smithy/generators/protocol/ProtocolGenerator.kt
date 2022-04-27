@@ -8,52 +8,54 @@ package software.amazon.smithy.rust.codegen.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docLink
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
-import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 /**
- * Request Body Generator
+ * Payload Body Generator.
+ *
+ * Used to generate payloads that will go into HTTP bodies for HTTP requests (used by clients)
+ * and responses (used by servers).
  *
  * **Note:** There is only one real implementation of this interface. The other implementation is test only.
  * All protocols use the same class.
  *
- * Different protocols (e.g. JSON vs. XML) need to use different functionality to generate request bodies.
+ * Different protocols (e.g. JSON vs. XML) need to use different functionality to generate payload bodies.
  */
-interface ProtocolBodyGenerator {
-    data class BodyMetadata(val takesOwnership: Boolean)
+interface ProtocolPayloadGenerator {
+    data class PayloadMetadata(val takesOwnership: Boolean)
 
     /**
-     * Code generation needs to handle whether or not `generateBody` takes ownership of the input for a given operation shape
+     * Code generation needs to handle whether or not [generatePayload] takes ownership of the input or output
+     * for a given operation shape.
      *
-     * Most operations will parse the HTTP body as a reference, but for operations that will consume the entire stream later,
-     * they will need to take ownership and different code needs to be generated.
+     * Most operations will use the HTTP payload as a reference, but for operations that will consume the entire stream
+     * later,they will need to take ownership and different code needs to be generated.
      */
-    fun bodyMetadata(operationShape: OperationShape): BodyMetadata
+    fun payloadMetadata(operationShape: OperationShape): PayloadMetadata
 
     /**
-     * Write the body into [writer]
+     * Write the payload into [writer].
      *
-     * This should be an expression that returns an `SdkBody`
+     * [self] is the name of the variable binding for the Rust struct that is to be serialized into the payload.
+     *
+     * This should be an expression that returns bytes:
+     *     - a `Vec<u8>` for non-streaming operations; or
+     *     - a `ByteStream` for streaming operations.
      */
-    fun generateBody(writer: RustWriter, self: String, operationShape: OperationShape)
+    fun generatePayload(writer: RustWriter, self: String, operationShape: OperationShape)
 }
 
 /**
@@ -93,21 +95,8 @@ open class ProtocolGenerator(
      */
     private val traitGenerator: ProtocolTraitImplGenerator,
 ) {
-    private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
-
-    private val codegenScope = arrayOf(
-        "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
-        "OpBuildError" to codegenContext.runtimeConfig.operationBuildError(),
-        "Request" to RuntimeType.Http("request::Request"),
-        "RequestBuilder" to RuntimeType.HttpRequestBuilder,
-        "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-        "config" to RuntimeType.Config,
-        "header_util" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType().member("header"),
-        "http" to RuntimeType.http,
-        "operation" to RuntimeType.operationModule(runtimeConfig),
-    )
 
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
@@ -138,27 +127,6 @@ open class ProtocolGenerator(
                 OperationSection.InputImpl(customizations, operationShape, inputShape, protocol)
             )
             makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
-            rustBlockTemplate(
-                "fn assemble(builder: #{RequestBuilder}, body: #{SdkBody}) -> #{Request}<#{SdkBody}>",
-                *codegenScope
-            ) {
-                if (needsContentLength(operationShape)) {
-                    rustTemplate(
-                        """
-                        let mut builder = builder;
-                        if let Some(content_length) = body.content_length() {
-                            builder = #{header_util}::set_header_if_absent(
-                                        builder,
-                                        #{http}::header::CONTENT_LENGTH,
-                                        content_length
-                            );
-                        }
-                        """,
-                        *codegenScope
-                    )
-                }
-                rust("""builder.body(body).expect("should be valid request")""")
-            }
 
             // pub fn builder() -> ... { }
             builderGenerator.renderConvenienceMethod(this)
@@ -194,41 +162,14 @@ open class ProtocolGenerator(
     }
 
     /**
-     * Render all code required for serializing responses and deserializing requests for an operation.
-     *
-     * This primarily relies on the [traitGenerator] to generate implementations of the `ParseHttpRequest`,
-     * `SerializeHttpResponse` and `SerializeHttpError` traits for the operations.
+     * The server implementation uses this method to generate implementations of the `FromRequest` and `IntoResponse`
+     * traits for operation input and output shapes, respectively.
      */
     fun serverRenderOperation(
         operationWriter: RustWriter,
         operationShape: OperationShape,
-        customizations: List<OperationCustomization>
     ) {
-        val operationName = symbolProvider.toSymbol(operationShape).name
-        operationWriter.rust(
-            """
-            /// Operation shape for `$operationName`.
-            """
-        )
-        Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
-        operationWriter.rustBlock("pub struct $operationName") {
-            write("_private: ()")
-        }
-        operationWriter.implBlock(operationShape, symbolProvider) {
-            rust("/// Creates a new `$operationName` operation.")
-            rustBlock("pub fn new() -> Self") {
-                rust("Self { _private: () }")
-            }
-
-            writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
-        }
-        // Render all operation traits
         traitGenerator.generateTraitImpls(operationWriter, operationShape)
-    }
-
-    private fun needsContentLength(operationShape: OperationShape): Boolean {
-        return protocol.httpBindingResolver.requestBindings(operationShape)
-            .any { it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD }
     }
 
     private fun renderTypeAliases(

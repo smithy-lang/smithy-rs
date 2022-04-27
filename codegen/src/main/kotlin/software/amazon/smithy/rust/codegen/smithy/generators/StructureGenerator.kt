@@ -65,24 +65,17 @@ class StructureGenerator(
     }
     private val name = symbolProvider.toSymbol(shape).name
 
-    fun render() {
+    fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
         errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render()
-        }
-    }
-
-    fun renderServer() {
-        renderStructure()
-        errorTrait?.also { errorTrait ->
-            ErrorGenerator(symbolProvider, writer, shape, errorTrait).renderServer()
+            ErrorGenerator(symbolProvider, writer, shape, errorTrait).render(forWhom)
         }
     }
 
     companion object {
         /** Returns whether a structure shape requires a fallible builder to be generated. */
         fun fallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
-            // All inputs should have fallible builders in case a new required field is added in the future
+            // All operation inputs should have fallible builders in case a new required field is added in the future.
             structureShape.hasTrait<SyntheticInputTrait>() ||
                 structureShape
                     .allMembers
@@ -144,6 +137,7 @@ class StructureGenerator(
                 val returnType = when {
                     memberType.isCopy() -> memberType
                     memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
+                    memberType.isDeref() -> memberType.asDeref().asRef()
                     else -> memberType.asRef()
                 }
                 rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
@@ -151,7 +145,7 @@ class StructureGenerator(
                         memberType.isCopy() -> rust("self.$memberName")
                         memberType is RustType.Option && memberType.member.isDeref() -> rust("self.$memberName.as_deref()")
                         memberType is RustType.Option -> rust("self.$memberName.as_ref()")
-                        memberType.isDeref() -> rust("self.$memberName.deref()")
+                        memberType.isDeref() -> rust("use std::ops::Deref; self.$memberName.deref()")
                         else -> rust("&self.$memberName")
                     }
                 }

@@ -1421,6 +1421,22 @@
                 ]
             }
         },
+        "com.amazonaws.mediaconvert#Av1BitDepth": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Specify the Bit depth (Av1BitDepth). You can choose 8-bit (BIT_8) or 10-bit (BIT_10).",
+                "smithy.api#enum": [
+                    {
+                        "value": "BIT_8",
+                        "name": "BIT_8"
+                    },
+                    {
+                        "value": "BIT_10",
+                        "name": "BIT_10"
+                    }
+                ]
+            }
+        },
         "com.amazonaws.mediaconvert#Av1FramerateControl": {
             "type": "string",
             "traits": {
@@ -1499,6 +1515,13 @@
                     "traits": {
                         "smithy.api#documentation": "Specify the strength of any adaptive quantization filters that you enable. The value that you choose here applies to Spatial adaptive quantization (spatialAdaptiveQuantization).",
                         "smithy.api#jsonName": "adaptiveQuantization"
+                    }
+                },
+                "BitDepth": {
+                    "target": "com.amazonaws.mediaconvert#Av1BitDepth",
+                    "traits": {
+                        "smithy.api#documentation": "Specify the Bit depth (Av1BitDepth). You can choose 8-bit (BIT_8) or 10-bit (BIT_10).",
+                        "smithy.api#jsonName": "bitDepth"
                     }
                 },
                 "FramerateControl": {
@@ -3401,6 +3424,22 @@
                 ]
             }
         },
+        "com.amazonaws.mediaconvert#CmfcKlvMetadata": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Applies to CMAF outputs. Use this setting to specify whether the service inserts the KLV metadata from the input in this output.",
+                "smithy.api#enum": [
+                    {
+                        "value": "PASSTHROUGH",
+                        "name": "PASSTHROUGH"
+                    },
+                    {
+                        "value": "NONE",
+                        "name": "NONE"
+                    }
+                ]
+            }
+        },
         "com.amazonaws.mediaconvert#CmfcScte35Esam": {
             "type": "string",
             "traits": {
@@ -3478,6 +3517,13 @@
                         "smithy.api#jsonName": "iFrameOnlyManifest"
                     }
                 },
+                "KlvMetadata": {
+                    "target": "com.amazonaws.mediaconvert#CmfcKlvMetadata",
+                    "traits": {
+                        "smithy.api#documentation": "Applies to CMAF outputs. Use this setting to specify whether the service inserts the KLV metadata from the input in this output.",
+                        "smithy.api#jsonName": "klvMetadata"
+                    }
+                },
                 "Scte35Esam": {
                     "target": "com.amazonaws.mediaconvert#CmfcScte35Esam",
                     "traits": {
@@ -3491,10 +3537,33 @@
                         "smithy.api#documentation": "Ignore this setting unless you have SCTE-35 markers in your input video file. Choose Passthrough (PASSTHROUGH) if you want SCTE-35 markers that appear in your input to also appear in this output. Choose None (NONE) if you don't want those SCTE-35 markers in this output.",
                         "smithy.api#jsonName": "scte35Source"
                     }
+                },
+                "TimedMetadata": {
+                    "target": "com.amazonaws.mediaconvert#CmfcTimedMetadata",
+                    "traits": {
+                        "smithy.api#documentation": "To include ID3 metadata in this output: Set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH). Specify this ID3 metadata in Custom ID3 metadata inserter (timedMetadataInsertion). MediaConvert writes each instance of ID3 metadata in a separate Event Message (eMSG) box. To exclude this ID3 metadata: Set ID3 metadata to None (NONE) or leave blank.",
+                        "smithy.api#jsonName": "timedMetadata"
+                    }
                 }
             },
             "traits": {
                 "smithy.api#documentation": "These settings relate to the fragmented MP4 container for the segments in your CMAF outputs."
+            }
+        },
+        "com.amazonaws.mediaconvert#CmfcTimedMetadata": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "To include ID3 metadata in this output: Set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH). Specify this ID3 metadata in Custom ID3 metadata inserter (timedMetadataInsertion). MediaConvert writes each instance of ID3 metadata in a separate Event Message (eMSG) box. To exclude this ID3 metadata: Set ID3 metadata to None (NONE) or leave blank.",
+                "smithy.api#enum": [
+                    {
+                        "value": "PASSTHROUGH",
+                        "name": "PASSTHROUGH"
+                    },
+                    {
+                        "value": "NONE",
+                        "name": "NONE"
+                    }
+                ]
             }
         },
         "com.amazonaws.mediaconvert#ColorCorrector": {
@@ -6690,6 +6759,22 @@
                 ]
             }
         },
+        "com.amazonaws.mediaconvert#EmbeddedTimecodeOverride": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Set Embedded timecode override (embeddedTimecodeOverride) to Use MDPM (USE_MDPM) when your AVCHD input contains timecode tag data in the Modified Digital Video Pack Metadata (MDPM). When you do, we recommend you also set Timecode source (inputTimecodeSource) to Embedded (EMBEDDED). Leave Embedded timecode override blank, or set to None (NONE), when your input does not contain MDPM timecode.",
+                "smithy.api#enum": [
+                    {
+                        "value": "NONE",
+                        "name": "NONE"
+                    },
+                    {
+                        "value": "USE_MDPM",
+                        "name": "USE_MDPM"
+                    }
+                ]
+            }
+        },
         "com.amazonaws.mediaconvert#Endpoint": {
             "type": "structure",
             "members": {
@@ -8127,7 +8212,7 @@
         "com.amazonaws.mediaconvert#H265AdaptiveQuantization": {
             "type": "string",
             "traits": {
-                "smithy.api#documentation": "Specify the strength of any adaptive quantization filters that you enable. The value that you choose here applies to the following settings: Flicker adaptive quantization (flickerAdaptiveQuantization), Spatial adaptive quantization (spatialAdaptiveQuantization), and Temporal adaptive quantization (temporalAdaptiveQuantization).",
+                "smithy.api#documentation": "When you set Adaptive Quantization (H265AdaptiveQuantization) to Auto (AUTO), or leave blank, MediaConvert automatically applies quantization to improve the video quality of your output. Set Adaptive Quantization to Low (LOW), Medium (MEDIUM), High (HIGH), Higher (HIGHER), or Max (MAX) to manually control the strength of the quantization filter. When you do, you can specify a value for Spatial Adaptive Quantization (H265SpatialAdaptiveQuantization), Temporal Adaptive Quantization (H265TemporalAdaptiveQuantization), and Flicker Adaptive Quantization (H265FlickerAdaptiveQuantization), to further control the quantization filter. Set Adaptive Quantization to Off (OFF) to apply no quantization to your output.",
                 "smithy.api#enum": [
                     {
                         "value": "OFF",
@@ -8152,6 +8237,10 @@
                     {
                         "value": "MAX",
                         "name": "MAX"
+                    },
+                    {
+                        "value": "AUTO",
+                        "name": "AUTO"
                     }
                 ]
             }
@@ -8555,7 +8644,7 @@
                 "AdaptiveQuantization": {
                     "target": "com.amazonaws.mediaconvert#H265AdaptiveQuantization",
                     "traits": {
-                        "smithy.api#documentation": "Specify the strength of any adaptive quantization filters that you enable. The value that you choose here applies to the following settings: Flicker adaptive quantization (flickerAdaptiveQuantization), Spatial adaptive quantization (spatialAdaptiveQuantization), and Temporal adaptive quantization (temporalAdaptiveQuantization).",
+                        "smithy.api#documentation": "When you set Adaptive Quantization (H265AdaptiveQuantization) to Auto (AUTO), or leave blank, MediaConvert automatically applies quantization to improve the video quality of your output. Set Adaptive Quantization to Low (LOW), Medium (MEDIUM), High (HIGH), Higher (HIGHER), or Max (MAX) to manually control the strength of the quantization filter. When you do, you can specify a value for Spatial Adaptive Quantization (H265SpatialAdaptiveQuantization), Temporal Adaptive Quantization (H265TemporalAdaptiveQuantization), and Flicker Adaptive Quantization (H265FlickerAdaptiveQuantization), to further control the quantization filter. Set Adaptive Quantization to Off (OFF) to apply no quantization to your output.",
                         "smithy.api#jsonName": "adaptiveQuantization"
                     }
                 },
@@ -9232,6 +9321,22 @@
                 ]
             }
         },
+        "com.amazonaws.mediaconvert#HlsCaptionSegmentLengthControl": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Set Caption segment length control (CaptionSegmentLengthControl) to Match video (MATCH_VIDEO) to create caption segments that align with the video segments from the first video output in this output group. For example, if the video segments are 2 seconds long, your WebVTT segments will also be 2 seconds long. Keep the default setting, Large segments (LARGE_SEGMENTS) to create caption segments that are 300 seconds long.",
+                "smithy.api#enum": [
+                    {
+                        "value": "LARGE_SEGMENTS",
+                        "name": "LARGE_SEGMENTS"
+                    },
+                    {
+                        "value": "MATCH_VIDEO",
+                        "name": "MATCH_VIDEO"
+                    }
+                ]
+            }
+        },
         "com.amazonaws.mediaconvert#HlsClientCache": {
             "type": "string",
             "traits": {
@@ -9414,6 +9519,13 @@
                         "smithy.api#jsonName": "captionLanguageSetting"
                     }
                 },
+                "CaptionSegmentLengthControl": {
+                    "target": "com.amazonaws.mediaconvert#HlsCaptionSegmentLengthControl",
+                    "traits": {
+                        "smithy.api#documentation": "Set Caption segment length control (CaptionSegmentLengthControl) to Match video (MATCH_VIDEO) to create caption segments that align with the video segments from the first video output in this output group. For example, if the video segments are 2 seconds long, your WebVTT segments will also be 2 seconds long. Keep the default setting, Large segments (LARGE_SEGMENTS) to create caption segments that are 300 seconds long.",
+                        "smithy.api#jsonName": "captionSegmentLengthControl"
+                    }
+                },
                 "ClientCache": {
                     "target": "com.amazonaws.mediaconvert#HlsClientCache",
                     "traits": {
@@ -9564,14 +9676,14 @@
                 "TimedMetadataId3Frame": {
                     "target": "com.amazonaws.mediaconvert#HlsTimedMetadataId3Frame",
                     "traits": {
-                        "smithy.api#documentation": "Indicates ID3 frame that has the timecode.",
+                        "smithy.api#documentation": "Specify the type of the ID3 frame (timedMetadataId3Frame) to use for ID3 timestamps (timedMetadataId3Period) in your output. To include ID3 timestamps: Specify PRIV (PRIV) or TDRL (TDRL) and set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH). To exclude ID3 timestamps: Set ID3 timestamp frame type to None (NONE).",
                         "smithy.api#jsonName": "timedMetadataId3Frame"
                     }
                 },
                 "TimedMetadataId3Period": {
                     "target": "com.amazonaws.mediaconvert#__integerMinNegative2147483648Max2147483647",
                     "traits": {
-                        "smithy.api#documentation": "Timed Metadata interval in seconds.",
+                        "smithy.api#documentation": "Specify the interval in seconds to write ID3 timestamps in your output. The first timestamp starts at the output timecode and date, and increases incrementally with each ID3 timestamp. To use the default interval of 10 seconds: Leave blank. To include this metadata in your output: Set ID3 timestamp frame type (timedMetadataId3Frame) to PRIV (PRIV) or TDRL (TDRL), and set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH).",
                         "smithy.api#jsonName": "timedMetadataId3Period"
                     }
                 },
@@ -9958,7 +10070,7 @@
         "com.amazonaws.mediaconvert#HlsTimedMetadataId3Frame": {
             "type": "string",
             "traits": {
-                "smithy.api#documentation": "Indicates ID3 frame that has the timecode.",
+                "smithy.api#documentation": "Specify the type of the ID3 frame (timedMetadataId3Frame) to use for ID3 timestamps (timedMetadataId3Period) in your output. To include ID3 timestamps: Specify PRIV (PRIV) or TDRL (TDRL) and set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH). To exclude ID3 timestamps: Set ID3 timestamp frame type to None (NONE).",
                 "smithy.api#enum": [
                     {
                         "value": "NONE",
@@ -10010,7 +10122,7 @@
                 "Id3": {
                     "target": "com.amazonaws.mediaconvert#__stringPatternAZaZ0902",
                     "traits": {
-                        "smithy.api#documentation": "Use ID3 tag (Id3) to provide a tag value in base64-encode format.",
+                        "smithy.api#documentation": "Use ID3 tag (Id3) to provide a fully formed ID3 tag in base64-encode format.",
                         "smithy.api#jsonName": "id3"
                     }
                 },
@@ -10041,9 +10153,32 @@
                 "smithy.api#documentation": "Use the image inserter feature to include a graphic overlay on your video. Enable or disable this feature for each input or output individually. For more information, see https://docs.aws.amazon.com/mediaconvert/latest/ug/graphic-overlay.html. This setting is disabled by default."
             }
         },
+        "com.amazonaws.mediaconvert#ImscAccessibilitySubs": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Set Accessibility subtitles (Accessibility) to Enabled (ENABLED) if the ISMC or WebVTT captions track is intended to provide accessibility for people who are deaf or hard of hearing. When you enable this feature, MediaConvert adds the following attributes under EXT-X-MEDIA in the HLS or CMAF manifest for this track: CHARACTERISTICS=\"public.accessibility.describes-spoken-dialog,public.accessibility.describes-music-and-sound\" and AUTOSELECT=\"YES\". Keep the default value, Disabled (DISABLED), if the captions track is not intended to provide such accessibility. MediaConvert will not add the above attributes.",
+                "smithy.api#enum": [
+                    {
+                        "value": "DISABLED",
+                        "name": "DISABLED"
+                    },
+                    {
+                        "value": "ENABLED",
+                        "name": "ENABLED"
+                    }
+                ]
+            }
+        },
         "com.amazonaws.mediaconvert#ImscDestinationSettings": {
             "type": "structure",
             "members": {
+                "Accessibility": {
+                    "target": "com.amazonaws.mediaconvert#ImscAccessibilitySubs",
+                    "traits": {
+                        "smithy.api#documentation": "Set Accessibility subtitles (Accessibility) to Enabled (ENABLED) if the ISMC or WebVTT captions track is intended to provide accessibility for people who are deaf or hard of hearing. When you enable this feature, MediaConvert adds the following attributes under EXT-X-MEDIA in the HLS or CMAF manifest for this track: CHARACTERISTICS=\"public.accessibility.describes-spoken-dialog,public.accessibility.describes-music-and-sound\" and AUTOSELECT=\"YES\". Keep the default value, Disabled (DISABLED), if the captions track is not intended to provide such accessibility. MediaConvert will not add the above attributes.",
+                        "smithy.api#jsonName": "accessibility"
+                    }
+                },
                 "StylePassthrough": {
                     "target": "com.amazonaws.mediaconvert#ImscStylePassthrough",
                     "traits": {
@@ -10122,6 +10257,13 @@
                     "traits": {
                         "smithy.api#documentation": "Enable Denoise (InputDenoiseFilter) to filter noise from the input.  Default is disabled. Only applicable to MPEG2, H.264, H.265, and uncompressed video inputs.",
                         "smithy.api#jsonName": "denoiseFilter"
+                    }
+                },
+                "DolbyVisionMetadataXml": {
+                    "target": "com.amazonaws.mediaconvert#__stringMin14PatternS3XmlXMLHttpsXmlXML",
+                    "traits": {
+                        "smithy.api#documentation": "Use this setting only when your video source has Dolby Vision studio mastering metadata that is carried in a separate XML file. Specify the Amazon S3 location for the metadata XML file. MediaConvert uses this file to provide global and frame-level metadata for Dolby Vision preprocessing. When you specify a file here and your input also has interleaved global and frame level metadata, MediaConvert ignores the interleaved metadata and uses only the the metadata from this external XML file. Note that your IAM service role must grant MediaConvert read permissions to this file. For more information, see https://docs.aws.amazon.com/mediaconvert/latest/ug/iam-role.html.",
+                        "smithy.api#jsonName": "dolbyVisionMetadataXml"
                     }
                 },
                 "FileInput": {
@@ -10469,6 +10611,13 @@
                     "traits": {
                         "smithy.api#documentation": "Enable Denoise (InputDenoiseFilter) to filter noise from the input.  Default is disabled. Only applicable to MPEG2, H.264, H.265, and uncompressed video inputs.",
                         "smithy.api#jsonName": "denoiseFilter"
+                    }
+                },
+                "DolbyVisionMetadataXml": {
+                    "target": "com.amazonaws.mediaconvert#__stringMin14PatternS3XmlXMLHttpsXmlXML",
+                    "traits": {
+                        "smithy.api#documentation": "Use this setting only when your video source has Dolby Vision studio mastering metadata that is carried in a separate XML file. Specify the Amazon S3 location for the metadata XML file. MediaConvert uses this file to provide global and frame-level metadata for Dolby Vision preprocessing. When you specify a file here and your input also has interleaved global and frame level metadata, MediaConvert ignores the interleaved metadata and uses only the the metadata from this external XML file. Note that your IAM service role must grant MediaConvert read permissions to this file. For more information, see https://docs.aws.amazon.com/mediaconvert/latest/ug/iam-role.html.",
+                        "smithy.api#jsonName": "dolbyVisionMetadataXml"
                     }
                 },
                 "FilterEnable": {
@@ -10984,7 +11133,7 @@
                 "TimedMetadataInsertion": {
                     "target": "com.amazonaws.mediaconvert#TimedMetadataInsertion",
                     "traits": {
-                        "smithy.api#documentation": "Enable Timed metadata insertion (TimedMetadataInsertion) to include ID3 tags in any HLS outputs. To include timed metadata, you must enable it here, enable it in each output container, and specify tags and timecodes in ID3 insertion (Id3Insertion) objects.",
+                        "smithy.api#documentation": "Insert user-defined custom ID3 metadata (id3) at timecodes (timecode) that you specify. In each output that you want to include this metadata, you must set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH).",
                         "smithy.api#jsonName": "timedMetadataInsertion"
                     }
                 }
@@ -11225,7 +11374,7 @@
                 "TimedMetadataInsertion": {
                     "target": "com.amazonaws.mediaconvert#TimedMetadataInsertion",
                     "traits": {
-                        "smithy.api#documentation": "Enable Timed metadata insertion (TimedMetadataInsertion) to include ID3 tags in any HLS outputs. To include timed metadata, you must enable it here, enable it in each output container, and specify tags and timecodes in ID3 insertion (Id3Insertion) objects.",
+                        "smithy.api#documentation": "Insert user-defined custom ID3 metadata (id3) at timecodes (timecode) that you specify. In each output that you want to include this metadata, you must set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH).",
                         "smithy.api#jsonName": "timedMetadataInsertion"
                     }
                 }
@@ -12101,6 +12250,10 @@
                     {
                         "value": "TNG",
                         "name": "TNG"
+                    },
+                    {
+                        "value": "SRP",
+                        "name": "SRP"
                     }
                 ]
             }
@@ -12696,6 +12849,22 @@
                 ]
             }
         },
+        "com.amazonaws.mediaconvert#M2tsKlvMetadata": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Applies to MPEG-TS outputs. Use this setting to specify whether the service inserts the KLV metadata from the input in this output.",
+                "smithy.api#enum": [
+                    {
+                        "value": "PASSTHROUGH",
+                        "name": "PASSTHROUGH"
+                    },
+                    {
+                        "value": "NONE",
+                        "name": "NONE"
+                    }
+                ]
+            }
+        },
         "com.amazonaws.mediaconvert#M2tsNielsenId3": {
             "type": "string",
             "traits": {
@@ -12943,6 +13112,13 @@
                     "traits": {
                         "smithy.api#documentation": "The length, in seconds, of each fragment. Only used with EBP markers.",
                         "smithy.api#jsonName": "fragmentTime"
+                    }
+                },
+                "KlvMetadata": {
+                    "target": "com.amazonaws.mediaconvert#M2tsKlvMetadata",
+                    "traits": {
+                        "smithy.api#documentation": "Applies to MPEG-TS outputs. Use this setting to specify whether the service inserts the KLV metadata from the input in this output.",
+                        "smithy.api#jsonName": "klvMetadata"
                     }
                 },
                 "MaxPcrInterval": {
@@ -13288,14 +13464,14 @@
                 "TimedMetadata": {
                     "target": "com.amazonaws.mediaconvert#TimedMetadata",
                     "traits": {
-                        "smithy.api#documentation": "Applies only to HLS outputs. Use this setting to specify whether the service inserts the ID3 timed metadata from the input in this output.",
+                        "smithy.api#documentation": "Set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH) to include ID3 metadata in this output. This includes ID3 metadata from the following features: ID3 timestamp period (timedMetadataId3Period), and Custom ID3 metadata inserter (timedMetadataInsertion). To exclude this ID3 metadata in this output: set ID3 metadata to None (NONE) or leave blank.",
                         "smithy.api#jsonName": "timedMetadata"
                     }
                 },
                 "TimedMetadataPid": {
                     "target": "com.amazonaws.mediaconvert#__integerMin32Max8182",
                     "traits": {
-                        "smithy.api#documentation": "Packet Identifier (PID) of the timed metadata stream in the transport stream.",
+                        "smithy.api#documentation": "Packet Identifier (PID) of the ID3 metadata stream in the transport stream.",
                         "smithy.api#jsonName": "timedMetadataPid"
                     }
                 },
@@ -13906,6 +14082,22 @@
                 ]
             }
         },
+        "com.amazonaws.mediaconvert#MpdKlvMetadata": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Applies to DASH ISO outputs. Use this setting to specify whether the service inserts the KLV metadata from the input in this output.",
+                "smithy.api#enum": [
+                    {
+                        "value": "NONE",
+                        "name": "NONE"
+                    },
+                    {
+                        "value": "PASSTHROUGH",
+                        "name": "PASSTHROUGH"
+                    }
+                ]
+            }
+        },
         "com.amazonaws.mediaconvert#MpdScte35Esam": {
             "type": "string",
             "traits": {
@@ -13962,6 +14154,13 @@
                         "smithy.api#jsonName": "captionContainerType"
                     }
                 },
+                "KlvMetadata": {
+                    "target": "com.amazonaws.mediaconvert#MpdKlvMetadata",
+                    "traits": {
+                        "smithy.api#documentation": "Applies to DASH ISO outputs. Use this setting to specify whether the service inserts the KLV metadata from the input in this output.",
+                        "smithy.api#jsonName": "klvMetadata"
+                    }
+                },
                 "Scte35Esam": {
                     "target": "com.amazonaws.mediaconvert#MpdScte35Esam",
                     "traits": {
@@ -13975,10 +14174,33 @@
                         "smithy.api#documentation": "Ignore this setting unless you have SCTE-35 markers in your input video file. Choose Passthrough (PASSTHROUGH) if you want SCTE-35 markers that appear in your input to also appear in this output. Choose None (NONE) if you don't want those SCTE-35 markers in this output.",
                         "smithy.api#jsonName": "scte35Source"
                     }
+                },
+                "TimedMetadata": {
+                    "target": "com.amazonaws.mediaconvert#MpdTimedMetadata",
+                    "traits": {
+                        "smithy.api#documentation": "To include ID3 metadata in this output: Set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH). Specify this ID3 metadata in Custom ID3 metadata inserter (timedMetadataInsertion). MediaConvert writes each instance of ID3 metadata in a separate Event Message (eMSG) box. To exclude this ID3 metadata: Set ID3 metadata to None (NONE) or leave blank.",
+                        "smithy.api#jsonName": "timedMetadata"
+                    }
                 }
             },
             "traits": {
                 "smithy.api#documentation": "These settings relate to the fragmented MP4 container for the segments in your DASH outputs."
+            }
+        },
+        "com.amazonaws.mediaconvert#MpdTimedMetadata": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "To include ID3 metadata in this output: Set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH). Specify this ID3 metadata in Custom ID3 metadata inserter (timedMetadataInsertion). MediaConvert writes each instance of ID3 metadata in a separate Event Message (eMSG) box. To exclude this ID3 metadata: Set ID3 metadata to None (NONE) or leave blank.",
+                "smithy.api#enum": [
+                    {
+                        "value": "PASSTHROUGH",
+                        "name": "PASSTHROUGH"
+                    },
+                    {
+                        "value": "NONE",
+                        "name": "NONE"
+                    }
+                ]
             }
         },
         "com.amazonaws.mediaconvert#Mpeg2AdaptiveQuantization": {
@@ -15023,7 +15245,7 @@
         "com.amazonaws.mediaconvert#NoiseFilterPostTemporalSharpening": {
             "type": "string",
             "traits": {
-                "smithy.api#documentation": "When you set Noise reducer (noiseReducer) to Temporal (TEMPORAL), the sharpness of your output is reduced. You can optionally use Post temporal sharpening (PostTemporalSharpening) to apply sharpening to the edges of your output. The default behavior, Auto (AUTO), allows the transcoder to determine whether to apply sharpening, depending on your input type and quality. When you set Post temporal sharpening to Enabled (ENABLED), specify how much sharpening is applied using Post temporal sharpening strength (PostTemporalSharpeningStrength). Set Post temporal sharpening to Disabled (DISABLED) to not apply sharpening.",
+                "smithy.api#documentation": "When you set Noise reducer (noiseReducer) to Temporal (TEMPORAL), the bandwidth and sharpness of your output is reduced. You can optionally use Post temporal sharpening (postTemporalSharpening) to apply sharpening to the edges of your output. Note that Post temporal sharpening will also make the bandwidth reduction from the Noise reducer smaller. The default behavior, Auto (AUTO), allows the transcoder to determine whether to apply sharpening, depending on your input type and quality. When you set Post temporal sharpening to Enabled (ENABLED), specify how much sharpening is applied using Post temporal sharpening strength (postTemporalSharpeningStrength). Set Post temporal sharpening to Disabled (DISABLED) to not apply sharpening.",
                 "smithy.api#enum": [
                     {
                         "value": "DISABLED",
@@ -15043,7 +15265,7 @@
         "com.amazonaws.mediaconvert#NoiseFilterPostTemporalSharpeningStrength": {
             "type": "string",
             "traits": {
-                "smithy.api#documentation": "Use Post temporal sharpening strength (PostTemporalSharpeningStrength) to define the amount of sharpening the transcoder applies to your output. Set Post temporal sharpening strength to Low (LOW), or leave blank, to apply a low amount of sharpening. Set Post temporal sharpening strength to Medium (MEDIUM) to apply medium amount of sharpening. Set Post temporal sharpening strength to High (HIGH) to apply a high amount of sharpening.",
+                "smithy.api#documentation": "Use Post temporal sharpening strength (postTemporalSharpeningStrength) to define the amount of sharpening the transcoder applies to your output. Set Post temporal sharpening strength to Low (LOW), Medium (MEDIUM), or High (HIGH) to indicate the amount of sharpening.",
                 "smithy.api#enum": [
                     {
                         "value": "LOW",
@@ -15193,14 +15415,14 @@
                 "PostTemporalSharpening": {
                     "target": "com.amazonaws.mediaconvert#NoiseFilterPostTemporalSharpening",
                     "traits": {
-                        "smithy.api#documentation": "When you set Noise reducer (noiseReducer) to Temporal (TEMPORAL), the sharpness of your output is reduced. You can optionally use Post temporal sharpening (PostTemporalSharpening) to apply sharpening to the edges of your output. The default behavior, Auto (AUTO), allows the transcoder to determine whether to apply sharpening, depending on your input type and quality. When you set Post temporal sharpening to Enabled (ENABLED), specify how much sharpening is applied using Post temporal sharpening strength (PostTemporalSharpeningStrength). Set Post temporal sharpening to Disabled (DISABLED) to not apply sharpening.",
+                        "smithy.api#documentation": "When you set Noise reducer (noiseReducer) to Temporal (TEMPORAL), the bandwidth and sharpness of your output is reduced. You can optionally use Post temporal sharpening (postTemporalSharpening) to apply sharpening to the edges of your output. Note that Post temporal sharpening will also make the bandwidth reduction from the Noise reducer smaller. The default behavior, Auto (AUTO), allows the transcoder to determine whether to apply sharpening, depending on your input type and quality. When you set Post temporal sharpening to Enabled (ENABLED), specify how much sharpening is applied using Post temporal sharpening strength (postTemporalSharpeningStrength). Set Post temporal sharpening to Disabled (DISABLED) to not apply sharpening.",
                         "smithy.api#jsonName": "postTemporalSharpening"
                     }
                 },
                 "PostTemporalSharpeningStrength": {
                     "target": "com.amazonaws.mediaconvert#NoiseFilterPostTemporalSharpeningStrength",
                     "traits": {
-                        "smithy.api#documentation": "Use Post temporal sharpening strength (PostTemporalSharpeningStrength) to define the amount of sharpening the transcoder applies to your output. Set Post temporal sharpening strength to Low (LOW), or leave blank, to apply a low amount of sharpening. Set Post temporal sharpening strength to Medium (MEDIUM) to apply medium amount of sharpening. Set Post temporal sharpening strength to High (HIGH) to apply a high amount of sharpening.",
+                        "smithy.api#documentation": "Use Post temporal sharpening strength (postTemporalSharpeningStrength) to define the amount of sharpening the transcoder applies to your output. Set Post temporal sharpening strength to Low (LOW), Medium (MEDIUM), or High (HIGH) to indicate the amount of sharpening.",
                         "smithy.api#jsonName": "postTemporalSharpeningStrength"
                     }
                 },
@@ -16509,7 +16731,7 @@
                     }
                 },
                 "KmsKeyArn": {
-                    "target": "com.amazonaws.mediaconvert#__stringPatternArnAwsUsGovCnKmsAZ26EastWestCentralNorthSouthEastWest1912D12KeyAFAF098AFAF094AFAF094AFAF094AFAF0912",
+                    "target": "com.amazonaws.mediaconvert#__stringPatternArnAwsUsGovCnKmsAZ26EastWestCentralNorthSouthEastWest1912D12KeyAFAF098AFAF094AFAF094AFAF094AFAF0912MrkAFAF0932",
                     "traits": {
                         "smithy.api#documentation": "Optionally, specify the customer master key (CMK) that you want to use to encrypt the data key that AWS uses to encrypt your output content. Enter the Amazon Resource Name (ARN) of the CMK. To use this setting, you must also set Server-side encryption (S3ServerSideEncryptionType) to AWS KMS (SERVER_SIDE_ENCRYPTION_KMS). If you set Server-side encryption to AWS KMS but don't specify a CMK here, AWS uses the AWS managed CMK associated with Amazon S3.",
                         "smithy.api#jsonName": "kmsKeyArn"
@@ -17124,7 +17346,7 @@
         "com.amazonaws.mediaconvert#TimedMetadata": {
             "type": "string",
             "traits": {
-                "smithy.api#documentation": "Applies only to HLS outputs. Use this setting to specify whether the service inserts the ID3 timed metadata from the input in this output.",
+                "smithy.api#documentation": "Set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH) to include ID3 metadata in this output. This includes ID3 metadata from the following features: ID3 timestamp period (timedMetadataId3Period), and Custom ID3 metadata inserter (timedMetadataInsertion). To exclude this ID3 metadata in this output: set ID3 metadata to None (NONE) or leave blank.",
                 "smithy.api#enum": [
                     {
                         "value": "PASSTHROUGH",
@@ -17149,7 +17371,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "Enable Timed metadata insertion (TimedMetadataInsertion) to include ID3 tags in any HLS outputs. To include timed metadata, you must enable it here, enable it in each output container, and specify tags and timecodes in ID3 insertion (Id3Insertion) objects."
+                "smithy.api#documentation": "Insert user-defined custom ID3 metadata (id3) at timecodes (timecode) that you specify. In each output that you want to include this metadata, you must set ID3 metadata (timedMetadata) to Passthrough (PASSTHROUGH)."
             }
         },
         "com.amazonaws.mediaconvert#Timing": {
@@ -18177,6 +18399,13 @@
                         "smithy.api#jsonName": "colorSpaceUsage"
                     }
                 },
+                "EmbeddedTimecodeOverride": {
+                    "target": "com.amazonaws.mediaconvert#EmbeddedTimecodeOverride",
+                    "traits": {
+                        "smithy.api#documentation": "Set Embedded timecode override (embeddedTimecodeOverride) to Use MDPM (USE_MDPM) when your AVCHD input contains timecode tag data in the Modified Digital Video Pack Metadata (MDPM). When you do, we recommend you also set Timecode source (inputTimecodeSource) to Embedded (EMBEDDED). Leave Embedded timecode override blank, or set to None (NONE), when your input does not contain MDPM timecode.",
+                        "smithy.api#jsonName": "embeddedTimecodeOverride"
+                    }
+                },
                 "Hdr10Metadata": {
                     "target": "com.amazonaws.mediaconvert#Hdr10Metadata",
                     "traits": {
@@ -18700,13 +18929,36 @@
                 "smithy.api#documentation": "Required when you set (Codec) under (AudioDescriptions)>(CodecSettings) to the value WAV."
             }
         },
+        "com.amazonaws.mediaconvert#WebvttAccessibilitySubs": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Set Accessibility subtitles (Accessibility) to Enabled (ENABLED) if the ISMC or WebVTT captions track is intended to provide accessibility for people who are deaf or hard of hearing. When you enable this feature, MediaConvert adds the following attributes under EXT-X-MEDIA in the HLS or CMAF manifest for this track: CHARACTERISTICS=\"public.accessibility.describes-spoken-dialog,public.accessibility.describes-music-and-sound\" and AUTOSELECT=\"YES\". Keep the default value, Disabled (DISABLED), if the captions track is not intended to provide such accessibility. MediaConvert will not add the above attributes.",
+                "smithy.api#enum": [
+                    {
+                        "value": "DISABLED",
+                        "name": "DISABLED"
+                    },
+                    {
+                        "value": "ENABLED",
+                        "name": "ENABLED"
+                    }
+                ]
+            }
+        },
         "com.amazonaws.mediaconvert#WebvttDestinationSettings": {
             "type": "structure",
             "members": {
+                "Accessibility": {
+                    "target": "com.amazonaws.mediaconvert#WebvttAccessibilitySubs",
+                    "traits": {
+                        "smithy.api#documentation": "Set Accessibility subtitles (Accessibility) to Enabled (ENABLED) if the ISMC or WebVTT captions track is intended to provide accessibility for people who are deaf or hard of hearing. When you enable this feature, MediaConvert adds the following attributes under EXT-X-MEDIA in the HLS or CMAF manifest for this track: CHARACTERISTICS=\"public.accessibility.describes-spoken-dialog,public.accessibility.describes-music-and-sound\" and AUTOSELECT=\"YES\". Keep the default value, Disabled (DISABLED), if the captions track is not intended to provide such accessibility. MediaConvert will not add the above attributes.",
+                        "smithy.api#jsonName": "accessibility"
+                    }
+                },
                 "StylePassthrough": {
                     "target": "com.amazonaws.mediaconvert#WebvttStylePassthrough",
                     "traits": {
-                        "smithy.api#documentation": "Set Style passthrough (StylePassthrough) to ENABLED to use the available style, color, and position information from your input captions. MediaConvert uses default settings for any missing style and position information in your input captions. Set Style passthrough to DISABLED, or leave blank, to ignore the style and position information from your input captions and use simplified output captions.",
+                        "smithy.api#documentation": "To use the available style, color, and position information from your input captions: Set Style passthrough (stylePassthrough) to Enabled (ENABLED). MediaConvert uses default settings when style and position information is missing from your input captions. To recreate the input captions exactly: Set Style passthrough to Strict (STRICT). MediaConvert automatically applies timing adjustments, including adjustments for frame rate conversion, ad avails, and input clipping. Your input captions format must be WebVTT. To ignore the style and position information from your input captions and use simplified output captions: Set Style passthrough to Disabled (DISABLED), or leave blank.",
                         "smithy.api#jsonName": "stylePassthrough"
                     }
                 }
@@ -18747,7 +18999,7 @@
         "com.amazonaws.mediaconvert#WebvttStylePassthrough": {
             "type": "string",
             "traits": {
-                "smithy.api#documentation": "Set Style passthrough (StylePassthrough) to ENABLED to use the available style, color, and position information from your input captions. MediaConvert uses default settings for any missing style and position information in your input captions. Set Style passthrough to DISABLED, or leave blank, to ignore the style and position information from your input captions and use simplified output captions.",
+                "smithy.api#documentation": "To use the available style, color, and position information from your input captions: Set Style passthrough (stylePassthrough) to Enabled (ENABLED). MediaConvert uses default settings when style and position information is missing from your input captions. To recreate the input captions exactly: Set Style passthrough to Strict (STRICT). MediaConvert automatically applies timing adjustments, including adjustments for frame rate conversion, ad avails, and input clipping. Your input captions format must be WebVTT. To ignore the style and position information from your input captions and use simplified output captions: Set Style passthrough to Disabled (DISABLED), or leave blank.",
                 "smithy.api#enum": [
                     {
                         "value": "ENABLED",
@@ -18756,6 +19008,10 @@
                     {
                         "value": "DISABLED",
                         "name": "DISABLED"
+                    },
+                    {
+                        "value": "STRICT",
+                        "name": "STRICT"
                     }
                 ]
             }
@@ -20632,6 +20888,15 @@
                 "smithy.api#pattern": "^((s3://(.*?)\\.(scc|SCC|ttml|TTML|dfxp|DFXP|stl|STL|srt|SRT|xml|XML|smi|SMI|vtt|VTT|webvtt|WEBVTT))|(https?://(.*?)\\.(scc|SCC|ttml|TTML|dfxp|DFXP|stl|STL|srt|SRT|xml|XML|smi|SMI|vtt|VTT|webvtt|WEBVTT)(\\?([^&=]+=[^&]+&)*[^&=]+=[^&]+)?))$"
             }
         },
+        "com.amazonaws.mediaconvert#__stringMin14PatternS3XmlXMLHttpsXmlXML": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 14
+                },
+                "smithy.api#pattern": "^((s3://(.*?)\\.(xml|XML))|(https?://(.*?)\\.(xml|XML)(\\?([^&=]+=[^&]+&)*[^&=]+=[^&]+)?))$"
+            }
+        },
         "com.amazonaws.mediaconvert#__stringMin16Max24PatternAZaZ0922AZaZ0916": {
             "type": "string",
             "traits": {
@@ -20828,10 +21093,10 @@
                 "smithy.api#pattern": "^arn:aws(-us-gov)?:acm:$"
             }
         },
-        "com.amazonaws.mediaconvert#__stringPatternArnAwsUsGovCnKmsAZ26EastWestCentralNorthSouthEastWest1912D12KeyAFAF098AFAF094AFAF094AFAF094AFAF0912": {
+        "com.amazonaws.mediaconvert#__stringPatternArnAwsUsGovCnKmsAZ26EastWestCentralNorthSouthEastWest1912D12KeyAFAF098AFAF094AFAF094AFAF094AFAF0912MrkAFAF0932": {
             "type": "string",
             "traits": {
-                "smithy.api#pattern": "^arn:aws(-us-gov|-cn)?:kms:[a-z-]{2,6}-(east|west|central|((north|south)(east|west)?))-[1-9]{1,2}:\\d{12}:key/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
+                "smithy.api#pattern": "^arn:aws(-us-gov|-cn)?:kms:[a-z-]{2,6}-(east|west|central|((north|south)(east|west)?))-[1-9]{1,2}:\\d{12}:key/([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}|mrk-[a-fA-F0-9]{32})$"
             }
         },
         "com.amazonaws.mediaconvert#__stringPatternDD": {

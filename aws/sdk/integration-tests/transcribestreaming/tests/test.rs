@@ -11,7 +11,8 @@ use aws_sdk_transcribestreaming::model::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
 };
 use aws_sdk_transcribestreaming::output::StartStreamTranscriptionOutput;
-use aws_sdk_transcribestreaming::{Blob, Client, Config, Credentials, Region, SdkError};
+use aws_sdk_transcribestreaming::types::{Blob, SdkError};
+use aws_sdk_transcribestreaming::{Client, Config, Credentials, Region};
 use aws_smithy_client::dvr::{Event, ReplayingConnection};
 use aws_smithy_eventstream::frame::{DecodedFrame, HeaderValue, Message, MessageFrameDecoder};
 use aws_smithy_http::event_stream::BoxError;
@@ -38,7 +39,7 @@ async fn test_success() {
         match event {
             TranscriptResultStream::TranscriptEvent(transcript_event) => {
                 let transcript = transcript_event.transcript.unwrap();
-                for result in transcript.results.unwrap_or_else(|| Vec::new()) {
+                for result in transcript.results.unwrap_or_else(Vec::new) {
                     if !result.is_partial {
                         let first_alternative = &result.alternatives.as_ref().unwrap()[0];
                         full_message += first_alternative.transcript.as_ref().unwrap();

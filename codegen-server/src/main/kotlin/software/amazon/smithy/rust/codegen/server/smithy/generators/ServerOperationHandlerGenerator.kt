@@ -9,16 +9,18 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
+import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 /**
  * ServerOperationHandlerGenerator
@@ -30,6 +32,7 @@ class ServerOperationHandlerGenerator(
     private val serverCrate = "aws_smithy_http_server"
     private val service = codegenContext.serviceShape
     private val model = codegenContext.model
+    private val protocol = codegenContext.protocol
     private val symbolProvider = codegenContext.symbolProvider
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name }
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -39,10 +42,10 @@ class ServerOperationHandlerGenerator(
         "PinProjectLite" to ServerCargoDependency.PinProjectLite.asType(),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
-        "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
-        "SmithyRejection" to ServerHttpProtocolGenerator.smithyRejection(runtimeConfig),
+        "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "Phantom" to ServerRuntimeType.Phantom,
-        "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
+        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
         "http" to RuntimeType.http,
     )
 
@@ -59,20 +62,13 @@ class ServerOperationHandlerGenerator(
         operations.map { operation ->
             val operationName = symbolProvider.toSymbol(operation).name
             val inputName = "crate::input::${operationName}Input"
-            val inputWrapperName = "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
-            val outputWrapperName = "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+            val inputWrapperName = "crate::operation::$operationName${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
+            val outputWrapperName = "crate::operation::$operationName${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
             val fnSignature = if (state) {
                 "impl<B, Fun, Fut, S> #{ServerOperationHandler}::Handler<B, $serverCrate::Extension<S>, $inputName> for Fun"
             } else {
                 "impl<B, Fun, Fut> #{ServerOperationHandler}::Handler<B, (), $inputName> for Fun"
             }
-            val storeErrorInExtensions = """{
-                let error = aws_smithy_http_server::ExtensionRejection::new(r.to_string());
-                let mut response = r.into_response();
-                response.extensions_mut().insert(error);
-                return response.map($serverCrate::boxed);
-                }
-            """.trimIndent()
             writer.rustBlockTemplate(
                 """
                 ##[#{AsyncTrait}::async_trait]
@@ -83,30 +79,49 @@ class ServerOperationHandlerGenerator(
                 *codegenScope
             ) {
                 val callImpl = if (state) {
-                    """let state = match $serverCrate::Extension::<S>::from_request(&mut req).await {
-                    Ok(v) => v,
-                    Err(r) => $storeErrorInExtensions
+                    """
+                    let state = match $serverCrate::extension::extract_extension(&mut req).await {
+                        Ok(v) => v,
+                        Err(extension_not_found_rejection) => {
+                            let extension = $serverCrate::extension::RuntimeErrorExtension::new(extension_not_found_rejection.to_string());
+                            let runtime_error = $serverCrate::runtime_error::RuntimeError {
+                                protocol: #{SmithyHttpServer}::protocols::Protocol::${protocol.name.toPascalCase()},
+                                kind: extension_not_found_rejection.into(),
+                            };
+                            let mut response = runtime_error.into_response();
+                            response.extensions_mut().insert(extension);
+                            return response.map($serverCrate::body::boxed);
+                        }
                     };
                     let input_inner = input_wrapper.into();
-                    let output_inner = self(input_inner, state).await;"""
+                    let output_inner = self(input_inner, state).await;
+                    """.trimIndent()
                 } else {
-                    """let input_inner = input_wrapper.into();
-                        let output_inner = self(input_inner).await;"""
+                    """
+                    let input_inner = input_wrapper.into();
+                    let output_inner = self(input_inner).await;
+                    """.trimIndent()
                 }
                 rustTemplate(
                     """
                     type Sealed = #{ServerOperationHandler}::sealed::Hidden;
-                    async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::BoxBody> {
+                    async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::body::BoxBody> {
                         let mut req = #{AxumCore}::extract::RequestParts::new(req);
                         use #{AxumCore}::extract::FromRequest;
                         use #{AxumCore}::response::IntoResponse;
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
-                            Err(r) => $storeErrorInExtensions
+                            Err(runtime_error) => {
+                                return runtime_error.into_response().map($serverCrate::body::boxed);
+                            }
                         };
                         $callImpl
                         let output_wrapper: $outputWrapperName = output_inner.into();
-                        output_wrapper.into_response().map(#{SmithyHttpServer}::boxed)
+                        let mut response = output_wrapper.into_response();
+                        response.extensions_mut().insert(
+                            #{SmithyHttpServer}::extension::OperationExtension::new("${operation.id.namespace}", "$operationName")
+                        );
+                        response.map(#{SmithyHttpServer}::body::boxed)
                     }
                     """,
                     *codegenScope
@@ -132,13 +147,17 @@ class ServerOperationHandlerGenerator(
         } else {
             symbolProvider.toSymbol(operation.outputShape(model)).fullName
         }
+        val streamingBodyTraitBounds = if (operation.inputShape(model).hasStreamingMember(model)) {
+            "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
+        } else {
+            ""
+        }
         return """
             $inputFn
             Fut: std::future::Future<Output = $outputType> + Send,
-            B: $serverCrate::HttpBody + Send + 'static,
+            B: $serverCrate::body::HttpBody + Send + 'static, $streamingBodyTraitBounds
             B::Data: Send,
-            B::Error: Into<$serverCrate::BoxError>,
-            $serverCrate::rejection::SmithyRejection: From<<B as $serverCrate::HttpBody>::Error>
-        """
+            $serverCrate::rejection::RequestRejection: From<<B as $serverCrate::body::HttpBody>::Error>
+        """.trimIndent()
     }
 }
