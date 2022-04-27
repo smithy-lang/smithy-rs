@@ -128,7 +128,14 @@ so all model changes will result in a `minor` version bump during this phase.
 
 Overall, determining a generated crate's version number looks as follows:
 
-![Phase 1: How to version a generated crate](rfc0012_independent_crate_versioning/phase1_generated_crate_version.svg)
+```mermaid
+flowchart TD
+    start[Generate crate version] --> smithyrschanged{A. smithy-rs changed?}
+    smithyrschanged -- Yes --> minor1[Minor version bump]
+    smithyrschanged -- No --> modelchanged{B. model changed?}
+    modelchanged -- Yes --> minor2[Minor version bump]
+    modelchanged -- No --> keep[Keep current version]
+```
 
 - __A: smithy-rs changed?__: Compare the `smithy_rs_version` in the previous `versions.toml` with the
   next `versions.toml` file, and if the values are different, consider [smithy-rs] to have changed.
@@ -146,8 +153,20 @@ and repeated when merging into `aws-sdk-rust/main`.
 
 The following checks need to be run for runtime crates:
 
-![Phase 1: How to validate a runtime version bump](rfc0012_independent_crate_versioning/phase1_runtime_crate_version_checks.svg)
-
+```mermaid
+flowchart TD
+    A[Check runtime crate] --> B{A. Crate has changed?}
+    B -- Yes --> C{B. Minor bumped?}
+    B -- No --> H{C. Version changed?}
+    C -- Yes --> K[Pass]
+    C -- No --> E{D. Patch bumped?}
+    E -- Yes --> F{E. Semverver passes?}
+    E -- No --> L[Fail]
+    F -- Yes --> D[Pass]
+    F -- No --> G[Fail]
+    H -- Yes --> I[Fail]
+    H -- No --> J[Pass]
+```
 - __A: Crate has changed?__ The crate's source files and manifest will be hashed for the previous version
   and the next version. If these hashes match, then the crate is considered unchanged.
 - __B: Minor bumped?__ The previous version is compared against the next version to see if the minor version
@@ -200,7 +219,7 @@ When stabilizing to 1.x, the version process will stay the same, but the minor v
 bumping runtime crates, updating models, or changing the code generator will be candidate for automatic upgrade
 per semver. At that point, no further API breaking changes can be made without a major version bump.
 
-- [aws-sdk-rust]: https://github.com/awslabs/aws-sdk-rust
-- [rust-semverver]: https://github.com/rust-lang/rust-semverver
-- [semver]: https://semver.org/
-- [smithy-rs]: https://github.com/awslabs/smithy-rs
+[aws-sdk-rust]: https://github.com/awslabs/aws-sdk-rust
+[rust-semverver]: https://github.com/rust-lang/rust-semverver
+[semver]: https://semver.org/
+[smithy-rs]: https://github.com/awslabs/smithy-rs
