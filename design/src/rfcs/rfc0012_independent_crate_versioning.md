@@ -219,7 +219,7 @@ When stabilizing to 1.x, the version process will stay the same, but the minor v
 bumping runtime crates, updating models, or changing the code generator will be candidate for automatic upgrade
 per semver. At that point, no further API breaking changes can be made without a major version bump.
 
-- [aws-sdk-rust]: https://github.com/awslabs/aws-sdk-rust
-- [rust-semverver]: https://github.com/rust-lang/rust-semverver
-- [semver]: https://semver.org/
-- [smithy-rs]: https://github.com/awslabs/smithy-rs
+[aws-sdk-rust]: https://github.com/awslabs/aws-sdk-rust
+[rust-semverver]: https://github.com/rust-lang/rust-semverver
+[semver]: https://semver.org/
+[smithy-rs]: https://github.com/awslabs/smithy-rs
