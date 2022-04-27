@@ -9,4 +9,4 @@ title = "AWS Rust SDK Design"
 command = "mdbook-mermaid"
 
 [output.html]
-additional-js = ["mermaid.min.js", "mermaid-init.js"]
+additional-js = ["static/mermaid.min.js", "static/mermaid-init.js"]
