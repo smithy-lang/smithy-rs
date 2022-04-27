@@ -1,0 +1,332 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Backwards Compatibility - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html" class="active"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">6.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">6.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">6.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">6.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">6.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">6.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">6.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">6.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">6.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">6.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">6.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">6.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">6.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">6.13.</strong> RFC-0013: Body Callback APIs</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="backwards-compatibility"><a class="header" href="#backwards-compatibility">Backwards Compatibility</a></h1>
+<p>AWS SDKs require that clients can evolve in a backwards compatible way as new fields and operations are added. The types
+generated by <code>smithy-rs</code> are specifically designed to meet these requirements. Specifically, the following
+transformations must not break compilation when upgrading to a new version:</p>
+<ul>
+<li><a href="#new-operation-added">New operation added</a></li>
+<li><a href="#new-member-added-to-structure">New member added to structure</a></li>
+<li><a href="#new-union-variant-added">New union variant added</a></li>
+<li>New error added (todo)</li>
+<li>New enum variant added (todo)</li>
+</ul>
+<p>However, the following changes are <em>not</em> backwards compatible:</p>
+<ul>
+<li>Error <strong>removed</strong> from operation.</li>
+</ul>
+<p>In general, the best tool in Rust to solve these issues in the <code>#[non_exhaustive]</code> attribute which will be explored in
+detail below.</p>
+<h2 id="new-operation-added"><a class="header" href="#new-operation-added">New Operation Added</a></h2>
+<p><strong>Before</strong></p>
+<pre><code class="language-smithy">$version: &quot;1&quot;
+namespace s3
+
+service S3 {
+    operations: [GetObject]
+}
+</code></pre>
+<p><strong>After</strong></p>
+<pre><code class="language-smithy">$version: &quot;1&quot;
+namespace s3
+
+service S3 {
+    operations: [GetObject, PutObject]
+}
+</code></pre>
+<p>Adding support for a new operation is backwards compatible because SDKs to not expose any sort of &quot;service trait&quot; that
+provides an interface over an entire service. This <em>prevents</em> clients from inheriting or implementing an interface that
+would be broken by the addition of a new operation.</p>
+<h2 id="new-member-added-to-structure"><a class="header" href="#new-member-added-to-structure">New member added to structure</a></h2>
+<h3 id="summary"><a class="header" href="#summary">Summary</a></h3>
+<ul>
+<li>Structures are marked <code>#[non_exhaustive]</code></li>
+<li>Structures must be instantiated using builders</li>
+<li>Structures must not derive <code>Default</code> in the event that required fields are added in the future.</li>
+</ul>
+<p>In general, adding a new <code>public</code> member to a structure in Rust is not backwards compatible. However, by applying
+the <code>#[non_exhaustive]</code> to the structures generated by the Rust SDK, the Rust compiler will prevent users from using our
+structs in ways that prevent new fields from being added in the future. <strong>Note</strong>: in this context, the optionality of
+the fields is irrelevant.</p>
+<p>Specifically, <a href="https://doc.rust-lang.org/reference/attributes/type_system.html"><code>#[non_exhaustive]</code></a> prohibits the
+following patterns:</p>
+<ol>
+<li>
+<p>Direct structure instantiation:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">fn foo() {
+</span>let ip_addr = IpAddress { addr: &quot;192.168.1.1&quot; };
+<span class="boring">}
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>If a new member <code>is_local: boolean</code> was added to the IpAddress structure, this code would not compile. To enable
+users to still construct
+our structures while maintaining backwards compatibility, all structures expose a builder, accessible
+at <code>SomeStruct::Builder</code>:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">fn foo() {
+</span>let ip_addr = IpAddress::builder().addr(&quot;192.168.1.1&quot;).build();
+<span class="boring">}
+</span><span class="boring">}
+</span></code></pre></pre>
+</li>
+<li>
+<p>Structure destructuring:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">fn foo() {
+</span>let IpAddress { addr } = some_ip_addr();
+<span class="boring">}
+</span><span class="boring">}
+</span></code></pre></pre>
+<p>This will also fail to compile if a new member is added, however, by adding <code>#[non_exhaustive]</code>, the <code>..</code> multifield
+wildcard MUST be added to support new fields being added in the future:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">fn foo() {
+</span>let IpAddress { addr, .. } = some_ip_addr();
+<span class="boring">}
+</span><span class="boring">}
+</span></code></pre></pre>
+</li>
+</ol>
+<h3 id="validation--required-members"><a class="header" href="#validation--required-members">Validation &amp; Required Members</a></h3>
+<p><strong>Adding a required member to a structure is <em>not</em> considered backwards compatible.</strong> When a required member is added to
+a structure:</p>
+<ol>
+<li>The builder will change to become fallible, meaning that instead of returning <code>T</code> it will
+return <code>Result&lt;T, BuildError&gt;</code>.</li>
+<li>Previous builder invocations that did not set the new field will still stop compiling if this was the first required
+field.</li>
+<li>Previous builder invocations will now return a <code>BuildError</code> because the required field is unset.</li>
+</ol>
+<h2 id="new-union-variant-added"><a class="header" href="#new-union-variant-added">New union variant added</a></h2>
+<p>Similar to structures, <code>#[non_exhaustive]</code> also applies to unions. In order to allow new union variants to be added in
+the future, all unions (<code>enum</code> in Rust) generated by the Rust SDK must be marked with <code>#[non_exhaustive]</code>. <strong>Note</strong>:
+because new fields cannot be added to union variants, the union variants themselves do <strong>not</strong> need
+to be <code>#[non_exhaustive]</code>. To support new variants from services, each union contains an <code>Unknown</code> variant. By
+marking <code>Unknown</code> as non_exhaustive, we prevent customers from instantiating it directly.</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[non_exhaustive]
+#[derive(std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
+pub enum AttributeValue {
+    B(aws_smithy_types::Blob),
+    Bool(bool),
+    Bs(std::vec::Vec&lt;aws_smithy_types::Blob&gt;),
+    L(std::vec::Vec&lt;crate::model::AttributeValue&gt;),
+    M(std::collections::HashMap&lt;std::string::String, crate::model::AttributeValue&gt;),
+    N(std::string::String),
+    Ns(std::vec::Vec&lt;std::string::String&gt;),
+    Null(bool),
+    S(std::string::String),
+    Ss(std::vec::Vec&lt;std::string::String&gt;),
+
+    // By marking `Unknown` as non_exhaustive, we prevent client code from instantiating it directly.
+    #[non_exhaustive]
+    Unknown,
+}
+<span class="boring">}
+</span></code></pre></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../smithy/endpoint.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../rfcs/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../smithy/endpoint.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../rfcs/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        <script type="text/javascript" src="../static/mermaid.min.js"></script>
+        <script type="text/javascript" src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>
