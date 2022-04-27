@@ -34,3 +34,9 @@ message = "Upgrade to Smithy 1.21.0"
 references = ["smithy-rs#1330"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Suppress irrelevant `$HOME` expansion warning when running in a Lambda Extension"
+references = ["smithy-rs#1344"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ryansb"
