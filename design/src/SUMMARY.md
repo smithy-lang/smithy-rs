@@ -3,14 +3,15 @@
 - [Tenets](./tenets.md)
 - [Design FAQ](./faq.md)
 - [Transport](transport/overview.md)
-  - [Http Operations](transport/operation.md)
-  - [HTTP middleware](transport/middleware.md)
+  - [HTTP Operations](transport/operation.md)
+  - [HTTP Middleware](transport/middleware.md)
 
 - [Smithy](./smithy/overview.md)
     - [Simple Shapes](./smithy/simple_shapes.md)
     - [Recursive Shapes](./smithy/recursive_shapes.md)
     - [Aggregate Shapes](./smithy/aggregate_shapes.md)
     - [Endpoint Resolution](smithy/endpoint.md)
+    - [Backwards Compatibility](smithy/backwards-compat.md)
 
 - [RFCs](./rfcs/overview.md)
   - [RFC-0001: Sharing configuration between multiple clients](./rfcs/rfc0001_shared_config.md)
@@ -24,3 +25,5 @@
   - [RFC-0009: Example Consolidation](./rfcs/rfc0009_example_consolidation.md)
   - [RFC-0010: Waiters](./rfcs/rfc0010_waiters.md)
   - [RFC-0011: Publishing Alpha to Crates.io](./rfcs/rfc0011_crates_io_alpha_publishing.md)
+  - [RFC-0012: Independent Crate Versioning](./rfcs/rfc0012_independent_crate_versioning.md)
+  - [RFC-0013: Body Callback APIs](./rfcs/rfc0013_body_callback_apis.md)

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#![feature(generic_associated_types)]
 #![allow(dead_code)]
 
 //! This crate is used to test the api-linter by exercising the all possible exposure
@@ -122,4 +123,12 @@ pub trait SomeTraitWithExternalDefaultTypes {
     >;
 
     fn something(&self, input: Self::Thing) -> Self::OtherThing;
+}
+
+pub trait SomeTraitWithGenericAssociatedType {
+    type MyGAT<T>
+    where
+        T: SimpleTrait;
+
+    fn some_fn<T: SimpleTrait>(&self, thing: Self::MyGAT<T>);
 }

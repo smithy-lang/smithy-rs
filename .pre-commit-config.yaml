@@ -22,9 +22,9 @@ repos:
   rev: v1.6.1
   hooks:
   - id: pretty-format-kotlin
-    args: [--autofix, --ktlint-version, 0.40.0]
+    args: [--autofix, --ktlint-version, 0.45.2]
   - id: pretty-format-yaml
     args: [--autofix, --indent, '2']
   - id: pretty-format-rust
-    entry: rustfmt --edition 2018
+    entry: rustfmt --edition 2021
     files: ^.*\.rs$

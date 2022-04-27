@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
@@ -67,7 +67,7 @@ class ServerProtocolTestGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val operationSymbol = symbolProvider.toSymbol(operationShape)
     private val operationIndex = OperationIndex.of(codegenContext.model)
-    private val operationImplementationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+    private val operationImplementationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
     private val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
     private val instantiator = with(codegenContext) {
@@ -80,7 +80,7 @@ class ServerProtocolTestGenerator(
         "Http" to CargoDependency.Http.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
         "AxumCore" to ServerCargoDependency.AxumCore.asType(),
-        "SmithyHttpServer" to CargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
         "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!")
     )
 
@@ -90,21 +90,21 @@ class ServerProtocolTestGenerator(
         abstract val protocol: ShapeId
         abstract val testType: TestType
 
-        data class RequestTest(val testCase: HttpRequestTestCase): TestCase() {
+        data class RequestTest(val testCase: HttpRequestTestCase) : TestCase() {
             override val id: String = testCase.id
             override val documentation: String? = testCase.documentation.orNull()
             override val protocol: ShapeId = testCase.protocol
             override val testType: TestType = TestType.Request
         }
 
-        data class ResponseTest(val testCase: HttpResponseTestCase, val targetShape: StructureShape): TestCase() {
+        data class ResponseTest(val testCase: HttpResponseTestCase, val targetShape: StructureShape) : TestCase() {
             override val id: String = testCase.id
             override val documentation: String? = testCase.documentation.orNull()
             override val protocol: ShapeId = testCase.protocol
             override val testType: TestType = TestType.Response
         }
 
-        data class MalformedRequestTest(val testCase: HttpMalformedRequestTestCase): TestCase() {
+        data class MalformedRequestTest(val testCase: HttpMalformedRequestTestCase) : TestCase() {
             override val id: String = testCase.id
             override val documentation: String? = testCase.documentation.orNull()
             override val protocol: ShapeId = testCase.protocol
@@ -239,7 +239,7 @@ class ServerProtocolTestGenerator(
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
-        with (httpRequestTestCase) {
+        with(httpRequestTestCase) {
             renderHttpRequest(uri, headers, body.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
@@ -308,12 +308,12 @@ class ServerProtocolTestGenerator(
      * with the given response.
      */
     private fun RustWriter.renderHttpMalformedRequestTestCase(testCase: HttpMalformedRequestTestCase) {
-        with (testCase.request) {
+        with(testCase.request) {
             // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
             renderHttpRequest(uri.get(), headers, body.orNull(), queryParams, host.orNull())
         }
 
-        val operationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
+        val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustTemplate(
             """
             use #{AxumCore}::extract::FromRequest;
@@ -348,18 +348,18 @@ class ServerProtocolTestGenerator(
         rustTemplate(
             """
             .body(${
-                if (body != null) {
-                    // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
-                    // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
-                    //
-                    // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
-                    // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
-                    // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
-                    // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
-                    "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static(b${body.replace("\u000c", "\\u{000c}").dq()}))"
-                } else {
-                    "#{SmithyHttpServer}::body::Body::empty()"
-                }
+            if (body != null) {
+                // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
+                // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
+                //
+                // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
+                // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
+                // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
+                // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
+                "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static(${body.replace("\u000c", "\\u{000c}").dq()}.as_bytes()))"
+            } else {
+                "#{SmithyHttpServer}::body::Body::empty()"
+            }
             }).unwrap();
             """,
             *codegenScope
@@ -378,7 +378,7 @@ class ServerProtocolTestGenerator(
         instantiator.render(rustWriter, inputShape, httpRequestTestCase.params)
         rustWriter.write(";")
 
-        val operationName = "${operationSymbol.name}${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
+        val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustWriter.rustTemplate(
             """
             use #{AxumCore}::extract::FromRequest;
@@ -437,8 +437,8 @@ class ServerProtocolTestGenerator(
                         else -> {
                             rustWriter.rustTemplate(
                                 """
-                                    #{AssertEq}(parsed.$memberName, expected.$memberName, "Unexpected value for `$memberName`");
-                                    """,
+                                #{AssertEq}(parsed.$memberName, expected.$memberName, "Unexpected value for `$memberName`");
+                                """,
                                 *codegenScope
                             )
                         }
@@ -652,13 +652,13 @@ class ServerProtocolTestGenerator(
         private val ExpectFail = setOf<FailingTest>(
             // Headers.
             FailingTest(RestJson, "RestJsonHttpWithHeadersButNoPayload", TestType.Request),
-            FailingTest(RestJson, "RestJsonInputAndOutputWithQuotedStringHeaders", TestType.Response),
 
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
             FailingTest(RestJson, "RestJsonStreamingTraitsRequireLengthWithBlob", TestType.Response),
             FailingTest(RestJson, "RestJsonHttpWithEmptyBlobPayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
+            FailingTest(RestJson, "RestJsonHttpResponseCodeDefaultsToModeledCode", TestType.Response),
 
             FailingTest(RestJson, "RestJsonWithBodyExpectsApplicationJsonAccept", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedAccept", TestType.MalformedRequest),
@@ -708,6 +708,7 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsUTCOffsets", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case13", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
+            FailingTest(RestJson, "RestJsonMalformedSetDuplicateBlobs", TestType.MalformedRequest),
 
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),
@@ -727,6 +728,7 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapOverride_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthStringOverride_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthStringOverride_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthStringOverride_case2", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlob_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthBlob_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthList_case0", TestType.MalformedRequest),
@@ -741,6 +743,7 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthMapValue_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthString_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedLengthString_case1", TestType.MalformedRequest),
+            FailingTest(RestJsonValidation, "RestJsonMalformedLengthString_case2", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternListOverride_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternListOverride_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedPatternMapKeyOverride_case0", TestType.MalformedRequest),
@@ -798,6 +801,18 @@ class ServerProtocolTestGenerator(
             FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostAccelerateAddressing", TestType.Request),
             FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostDualstackAccelerateAddressing", TestType.Request),
             FailingTest("com.amazonaws.s3#AmazonS3", "S3OperationAddressingPreferred", TestType.Request),
+
+            // AwsJson1.0 failing tests.
+            FailingTest("aws.protocoltests.json10#JsonRpc10", "AwsJson10EndpointTraitWithHostLabel", TestType.Request),
+            FailingTest("aws.protocoltests.json10#JsonRpc10", "AwsJson10EndpointTrait", TestType.Request),
+
+            // AwsJson1.1 failing tests.
+            FailingTest("aws.protocoltests.json#JsonProtocol", "AwsJson11EndpointTraitWithHostLabel", TestType.Request),
+            FailingTest("aws.protocoltests.json#JsonProtocol", "AwsJson11EndpointTrait", TestType.Request),
+            FailingTest("aws.protocoltests.json#JsonProtocol", "parses_httpdate_timestamps", TestType.Response),
+            FailingTest("aws.protocoltests.json#JsonProtocol", "parses_iso8601_timestamps", TestType.Response),
+            FailingTest("aws.protocoltests.json#JsonProtocol", "parses_the_request_id_from_the_response", TestType.Response),
+
         )
         private val RunOnly: Set<String>? = null
 
@@ -914,7 +929,7 @@ class ServerProtocolTestGenerator(
 
         // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
         // This is because they have not been written from a server perspective, and as such the expected `params` field is incomplete.
-        // TODO Contribute a PR to fix them upstream and remove them from this list once the fixes get published in the next Smithy release.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1288): Contribute a PR to fix them upstream.
         private val BrokenRequestTests = mapOf(
             // https://github.com/awslabs/smithy/pull/1040
             Pair(RestJson, "RestJsonSupportsNaNFloatQueryValues") to ::fixRestJsonSupportsNaNFloatQueryValues,

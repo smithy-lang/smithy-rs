@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -43,9 +43,9 @@ class ServerOperationHandlerGenerator(
         "Tower" to ServerCargoDependency.Tower.asType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
-        "SmithyHttpServer" to CargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "Phantom" to ServerRuntimeType.Phantom,
-        "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
+        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
         "http" to RuntimeType.http,
     )
 
@@ -62,8 +62,8 @@ class ServerOperationHandlerGenerator(
         operations.map { operation ->
             val operationName = symbolProvider.toSymbol(operation).name
             val inputName = "crate::input::${operationName}Input"
-            val inputWrapperName = "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
-            val outputWrapperName = "crate::operation::$operationName${ServerHttpProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+            val inputWrapperName = "crate::operation::$operationName${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
+            val outputWrapperName = "crate::operation::$operationName${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
             val fnSignature = if (state) {
                 "impl<B, Fun, Fut, S> #{ServerOperationHandler}::Handler<B, $serverCrate::Extension<S>, $inputName> for Fun"
             } else {

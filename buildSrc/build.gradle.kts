@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import java.util.Properties
 
 plugins {
@@ -10,7 +11,8 @@ plugins {
     jacoco
 }
 repositories {
-    maven("https://plugins.gradle.org/m2")
+    mavenCentral()
+    google()
 }
 
 // Load properties manually to avoid hard coding smithy version
@@ -19,12 +21,6 @@ val props = Properties().apply {
 }
 
 val smithyVersion = props["smithyVersion"]
-
-buildscript {
-    repositories {
-        mavenCentral()
-    }
-}
 
 dependencies {
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
@@ -41,6 +37,10 @@ tasks.test {
     useJUnitPlatform()
     testLogging {
         events("passed", "skipped", "failed")
+        exceptionFormat = TestExceptionFormat.FULL
+        showCauses = true
+        showExceptions = true
+        showStackTraces = true
         showStandardStreams = true
     }
 }

@@ -41,7 +41,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.smithy.isBoxed
+import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
@@ -230,7 +230,7 @@ class JsonParserGenerator(
             else -> PANIC("unexpected shape: $target")
         }
         val symbol = symbolProvider.toSymbol(memberShape)
-        if (symbol.isBoxed()) {
+        if (symbol.isRustBoxed()) {
             rust(".map(Box::new)")
         }
     }
@@ -370,7 +370,7 @@ class JsonParserGenerator(
                         if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
                             rustTemplate(
                                 """.map_err(|err| #{Error}::new(
-                                #{ErrorReason}::Custom(format!({}, err).into()), None)
+                                #{ErrorReason}::Custom(format!("{}", err).into()), None)
                                 )?""",
                                 *codegenScope
                             )

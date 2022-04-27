@@ -49,7 +49,7 @@ open class MakeOperationGenerator(
     protected val httpBindingResolver = protocol.httpBindingResolver
 
     private val sdkId =
-        codegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.toLowerCase()?.replace(" ", "")
+        codegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")
             ?: codegenContext.serviceShape.id.getName(codegenContext.serviceShape)
 
     private val codegenScope = arrayOf(

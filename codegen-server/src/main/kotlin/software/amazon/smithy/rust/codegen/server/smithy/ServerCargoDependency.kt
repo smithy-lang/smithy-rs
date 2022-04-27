@@ -22,6 +22,8 @@ object ServerCargoDependency {
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val SerdeUrlEncoded: CargoDependency = CargoDependency("serde_urlencoded", CratesIo("0.7"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
+
+    fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
 }
 
 /**
@@ -39,7 +41,7 @@ object ServerInlineDependency {
     fun serverOperationHandler(runtimeConfig: RuntimeConfig): InlineDependency =
         InlineDependency.forRustFile(
             "server_operation_handler_trait",
-            CargoDependency.SmithyHttpServer(runtimeConfig),
+            ServerCargoDependency.SmithyHttpServer(runtimeConfig),
             CargoDependency.Http,
             ServerCargoDependency.PinProjectLite,
             ServerCargoDependency.Tower,

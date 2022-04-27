@@ -42,6 +42,7 @@ val allCodegenTests = listOf(
     CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
     CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
     CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extras"),
+    CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
     CodegenTest(
         "aws.protocoltests.restxml#RestXml", "rest_xml",
         extraConfig = """, "codegen": { "addMessageToErrors": false } """
