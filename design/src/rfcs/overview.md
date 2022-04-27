@@ -12,3 +12,4 @@
 - [RFC-0010: Waiters](./rfc0010_waiters.md)
 - [RFC-0011: Publishing Alpha to Crates.io](./rfc0011_crates_io_alpha_publishing.md)
 - [RFC-0012: Independent Crate Versioning](./rfc0012_independent_crate_versioning.md)
+- [RFC-0013: Body Callback APIs](./rfc0013_body_callback_apis.md)
