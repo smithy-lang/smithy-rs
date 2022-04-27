@@ -15,7 +15,7 @@ internal class StringsTest {
         "abc".doubleQuote() shouldBe "\"abc\""
         """{"some": "json"}""".doubleQuote() shouldBe """"{\"some\": \"json\"}""""
         """{"nested": "{\"nested\": 5}"}"}""".doubleQuote() shouldBe """
-           "{\"nested\": \"{\\\"nested\\\": 5}\"}\"}"
+        "{\"nested\": \"{\\\"nested\\\": 5}\"}\"}"
         """.trimIndent().trim()
     }
 }

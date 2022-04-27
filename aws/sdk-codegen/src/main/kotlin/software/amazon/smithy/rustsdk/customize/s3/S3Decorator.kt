@@ -55,11 +55,6 @@ class S3Decorator : RustCodegenDecorator {
             it + S3PubUse()
         }
     }
-
-    // TODO: Uncomment once https://github.com/awslabs/smithy/pull/900 is merged and
-    // the latest Smithy is pulled in.
-    // override fun transformModel(service: ServiceShape, model: Model): Model =
-    //     S3CorrectSizeIntegerType().transform(model)
 }
 
 class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {

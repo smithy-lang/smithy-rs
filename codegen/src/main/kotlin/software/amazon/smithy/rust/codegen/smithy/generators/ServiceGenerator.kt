@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -21,7 +22,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 /**
  * ServiceGenerator
  *
- * Service generator is the main codegeneration entry point for Smithy services. Individual structures and unions are
+ * Service generator is the main code generation entry point for Smithy services. Individual structures and unions are
  * generated in codegen visitor, but this class handles all protocol-specific code generation.
  */
 class ServiceGenerator(
@@ -34,9 +35,8 @@ class ServiceGenerator(
     private val index = TopDownIndex.of(config.model)
 
     /**
-     * Render Service Specific code. Code will end up in different files via `useShapeWriter`. See `SymbolVisitor.kt`
+     * Render Service-specific code. Code will end up in different files via `useShapeWriter`. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
-     *
      */
     fun render() {
         val operations = index.getContainedOperations(config.serviceShape).sortedBy { it.id }
@@ -71,6 +71,7 @@ class ServiceGenerator(
         }
 
         rustCrate.lib {
+            Attribute.DocInline.render(it)
             it.write("pub use config::Config;")
         }
     }

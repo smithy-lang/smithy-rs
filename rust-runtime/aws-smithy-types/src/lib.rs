@@ -7,7 +7,7 @@
 
 #![warn(
     missing_docs,
-    missing_crate_level_docs,
+    rustdoc::missing_crate_level_docs,
     missing_debug_implementations,
     rust_2018_idioms,
     unreachable_pub
@@ -16,11 +16,13 @@
 use std::collections::HashMap;
 
 pub mod base64;
-pub mod instant;
+pub mod date_time;
 pub mod primitive;
 pub mod retry;
+pub mod timeout;
+pub mod tristate;
 
-pub use crate::instant::Instant;
+pub use crate::date_time::DateTime;
 
 /// Binary Blob Type
 ///
@@ -87,8 +89,10 @@ pub enum Number {
 }
 
 macro_rules! to_num_fn {
-    ($name:ident, $typ:ident) => {
-        /// Converts to a `$typ`. This conversion may be lossy.
+    ($name:ident, $typ:ident, $styp:expr) => {
+        #[doc = "Converts to a `"]
+        #[doc = $styp]
+        #[doc = "`. This conversion may be lossy."]
         pub fn $name(self) -> $typ {
             match self {
                 Number::PosInt(val) => val as $typ,
@@ -96,6 +100,10 @@ macro_rules! to_num_fn {
                 Number::Float(val) => val as $typ,
             }
         }
+    };
+
+    ($name:ident, $typ:ident) => {
+        to_num_fn!($name, $typ, stringify!($typ));
     };
 }
 

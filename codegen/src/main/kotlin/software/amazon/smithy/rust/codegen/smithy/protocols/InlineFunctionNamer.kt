@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
+import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -15,7 +16,14 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
+
+fun RustSymbolProvider.lensName(prefix: String, root: Shape, path: List<MemberShape>): String {
+    val base = shapeFunctionName("${prefix}lens", root)
+    val rest = path.joinToString("_") { toMemberName(it) }
+    return "${base}_$rest"
+}
 
 /**
  * Creates a unique name for a serialization function.
@@ -59,6 +67,7 @@ private fun RustSymbolProvider.shapeFunctionName(prefix: String, shape: Shape): 
         is SetShape -> "set_${shape.id.toRustIdentifier()}"
         is StructureShape -> "structure_$symbolNameSnakeCase"
         is UnionShape -> "union_$symbolNameSnakeCase"
-        else -> TODO("SerializerFunctionNamer.name: $shape")
+        is DocumentShape -> "document"
+        else -> PANIC("SerializerFunctionNamer.name: $shape")
     }
 }

@@ -3,12 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.smithy
+package software.amazon.smithy.rust.codegen.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
@@ -61,7 +64,6 @@ fn test_1() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<Config>();
 }
-
  */
 
 class RetryConfigDecorator : RustCodegenDecorator {
@@ -85,8 +87,7 @@ class RetryConfigDecorator : RustCodegenDecorator {
 
 class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
     private val retryConfig = smithyTypesRetry(codegenContext.runtimeConfig)
-    private val moduleName = codegenContext.moduleName
-    private val moduleUseName = moduleName.replace("-", "_")
+    private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf("RetryConfig" to retryConfig.member("RetryConfig"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
@@ -100,48 +101,49 @@ class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomiz
             ServiceConfig.BuilderImpl ->
                 rustTemplate(
                     """
-            /// Set the retry_config for the builder
-            ///
-            /// ## Examples
-            /// ```rust
-            /// use $moduleUseName::config::Config;
-            /// use #{RetryConfig};
-            ///
-            /// let retry_config = RetryConfig::new().with_max_attempts(5);
-            /// let config = Config::builder().retry_config(retry_config).build();
-            /// ```
-            pub fn retry_config(mut self, retry_config: #{RetryConfig}) -> Self {
-                self.set_retry_config(Some(retry_config));
-                self
-            }
+                    /// Set the retry_config for the builder
+                    ///
+                    /// ## Examples
+                    /// ```no_run
+                    /// use $moduleUseName::config::Config;
+                    /// use #{RetryConfig};
+                    ///
+                    /// let retry_config = RetryConfig::new().with_max_attempts(5);
+                    /// let config = Config::builder().retry_config(retry_config).build();
+                    /// ```
+                    pub fn retry_config(mut self, retry_config: #{RetryConfig}) -> Self {
+                        self.set_retry_config(Some(retry_config));
+                        self
+                    }
 
-            /// Set the retry_config for the builder
-            ///
-            /// ## Examples
-            /// ```rust
-            /// use $moduleUseName::config::{Builder, Config};
-            /// use #{RetryConfig};
-            ///
-            /// fn disable_retries(builder: &mut Builder) {
-            ///     let retry_config = RetryConfig::new().with_max_attempts(1);
-            ///     builder.set_retry_config(Some(retry_config));
-            /// }
-            ///
-            /// let mut builder = Config::builder();
-            /// disable_retries(&mut builder);
-            /// let config = builder.build();
-            /// ```
-            pub fn set_retry_config(&mut self, retry_config: Option<#{RetryConfig}>) -> &mut Self {
-                self.retry_config = retry_config;
-                self
-            }
-            """,
+                    /// Set the retry_config for the builder
+                    ///
+                    /// ## Examples
+                    /// ```no_run
+                    /// use $moduleUseName::config::{Builder, Config};
+                    /// use #{RetryConfig};
+                    ///
+                    /// fn disable_retries(builder: &mut Builder) {
+                    ///     let retry_config = RetryConfig::new().with_max_attempts(1);
+                    ///     builder.set_retry_config(Some(retry_config));
+                    /// }
+                    ///
+                    /// let mut builder = Config::builder();
+                    /// disable_retries(&mut builder);
+                    /// let config = builder.build();
+                    /// ```
+                    pub fn set_retry_config(&mut self, retry_config: Option<#{RetryConfig}>) -> &mut Self {
+                        self.retry_config = retry_config;
+                        self
+                    }
+                    """,
                     *codegenScope
                 )
             ServiceConfig.BuilderBuild -> rustTemplate(
                 """retry_config: self.retry_config,""",
                 *codegenScope
             )
+            else -> emptySection
         }
     }
 }
@@ -149,7 +151,9 @@ class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomiz
 class PubUseRetryConfig(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.Body -> writable { rust("pub use #T::RetryConfig;", smithyTypesRetry(runtimeConfig)) }
+            is LibRsSection.Body -> writable {
+                rust("pub use #T::RetryConfig;", smithyTypesRetry(runtimeConfig))
+            }
             else -> emptySection
         }
     }

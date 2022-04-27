@@ -30,12 +30,12 @@ class RetryPolicyDecorator : RustCodegenDecorator {
 }
 
 class RetryPolicyFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
-    override fun retryType(): RuntimeType = runtimeConfig.awsHttp().asType().copy(name = "AwsErrorRetryPolicy")
+    override fun retryType(): RuntimeType = runtimeConfig.awsHttp().asType().member("retry::AwsErrorRetryPolicy")
     override fun section(section: OperationSection) = when (section) {
         is OperationSection.FinalizeOperation -> writable {
             rust(
-                "let ${section.operation} = ${section.operation}.with_retry_policy(#T::AwsErrorRetryPolicy::new());",
-                runtimeConfig.awsHttp().asType()
+                "let ${section.operation} = ${section.operation}.with_retry_policy(#T::new());",
+                retryType()
             )
         }
         else -> emptySection

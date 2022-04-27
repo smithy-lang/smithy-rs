@@ -77,6 +77,7 @@ impl ProvideCredentials for LazyCachingCredentialsProvider {
         future::ProvideCredentials::new(async move {
             // Attempt to get cached credentials, or clear the cache if they're expired
             if let Some(credentials) = cache.yield_or_clear_if_expired(now).await {
+                tracing::debug!("loaded credentials from cache");
                 Ok(credentials)
             } else {
                 // If we didn't get credentials from the cache, then we need to try and load.
@@ -128,7 +129,7 @@ mod builder {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// use aws_types::Credentials;
     /// use aws_config::meta::credentials::provide_credentials_fn;
     /// use aws_config::meta::credentials::LazyCachingCredentialsProvider;
@@ -136,7 +137,7 @@ mod builder {
     /// let provider = LazyCachingCredentialsProvider::builder()
     ///     .load(provide_credentials_fn(|| async {
     ///         // An async process to retrieve credentials would go here:
-    ///         Ok(Credentials::from_keys("example", "example", None))
+    ///         Ok(Credentials::new("example", "example", None, None, "my_provider_name"))
     ///     }))
     ///     .build();
     /// ```
@@ -166,41 +167,101 @@ mod builder {
         /// An implementation of [`ProvideCredentials`] that will be used to load
         /// the cached credentials once they're expired.
         pub fn load(mut self, loader: impl ProvideCredentials + 'static) -> Self {
-            self.load = Some(Arc::new(loader));
+            self.set_load(Some(loader));
             self
         }
 
-        /// Implementation of [`AsyncSleep`] to use for timeouts. This enables use of
-        /// the `LazyCachingCredentialsProvider` with other async runtimes.
+        /// An implementation of [`ProvideCredentials`] that will be used to load
+        /// the cached credentials once they're expired.
+        pub fn set_load(&mut self, loader: Option<impl ProvideCredentials + 'static>) -> &mut Self {
+            self.load = loader.map(|l| Arc::new(l) as Arc<dyn ProvideCredentials>);
+            self
+        }
+
+        /// Implementation of [`AsyncSleep`] to use for timeouts.
+        ///
+        /// This enables use of the `LazyCachingCredentialsProvider` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
         /// [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep).
         pub fn sleep(mut self, sleep: impl AsyncSleep + 'static) -> Self {
-            self.sleep = Some(Arc::new(sleep));
+            self.set_sleep(Some(sleep));
             self
         }
 
-        /// (Optional) Timeout for the given [`ProvideCredentials`] implementation.
+        /// Implementation of [`AsyncSleep`] to use for timeouts.
+        ///
+        /// This enables use of the `LazyCachingCredentialsProvider` with other async runtimes.
+        /// If using Tokio as the async runtime, this should be set to an instance of
+        /// [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep).
+        pub fn set_sleep(&mut self, sleep: Option<impl AsyncSleep + 'static>) -> &mut Self {
+            self.sleep = sleep.map(|s| Arc::new(s) as Arc<dyn AsyncSleep>);
+            self
+        }
+
+        /// Timeout for the given [`ProvideCredentials`] implementation.
+        ///
         /// Defaults to 5 seconds.
         pub fn load_timeout(mut self, timeout: Duration) -> Self {
-            self.load_timeout = Some(timeout);
+            self.set_load_timeout(Some(timeout));
             self
         }
 
-        /// (Optional) Amount of time before the actual credential expiration time
-        /// where credentials are considered expired. For example, if credentials are expiring
-        /// in 15 minutes, and the buffer time is 10 seconds, then any requests made after
-        /// 14 minutes and 50 seconds will load new credentials. Defaults to 10 seconds.
+        /// Timeout for the given [`ProvideCredentials`] implementation.
+        ///
+        /// Defaults to 5 seconds.
+        pub fn set_load_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
+            self.load_timeout = timeout;
+            self
+        }
+
+        /// Amount of time before the actual credential expiration time
+        /// where credentials are considered expired.
+        ///
+        /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
+        /// then any requests made after 14 minutes and 50 seconds will load new credentials.
+        ///
+        /// Defaults to 10 seconds.
         pub fn buffer_time(mut self, buffer_time: Duration) -> Self {
-            self.buffer_time = Some(buffer_time);
+            self.set_buffer_time(Some(buffer_time));
             self
         }
 
-        /// (Optional) Default expiration time to set on credentials if they don't
-        /// have an expiration time. This is only used if the given [`ProvideCredentials`]
-        /// returns [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
+        /// Amount of time before the actual credential expiration time
+        /// where credentials are considered expired.
+        ///
+        /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
+        /// then any requests made after 14 minutes and 50 seconds will load new credentials.
+        ///
+        /// Defaults to 10 seconds.
+        pub fn set_buffer_time(&mut self, buffer_time: Option<Duration>) -> &mut Self {
+            self.buffer_time = buffer_time;
+            self
+        }
+
+        /// Default expiration time to set on credentials if they don't have an expiration time.
+        ///
+        /// This is only used if the given [`ProvideCredentials`] returns
+        /// [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
         /// This must be at least 15 minutes.
+        ///
+        /// Defaults to 15 minutes.
         pub fn default_credential_expiration(mut self, duration: Duration) -> Self {
-            self.default_credential_expiration = Some(duration);
+            self.set_default_credential_expiration(Some(duration));
+            self
+        }
+
+        /// Default expiration time to set on credentials if they don't have an expiration time.
+        ///
+        /// This is only used if the given [`ProvideCredentials`] returns
+        /// [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
+        /// This must be at least 15 minutes.
+        ///
+        /// Defaults to 15 minutes.
+        pub fn set_default_credential_expiration(
+            &mut self,
+            duration: Option<Duration>,
+        ) -> &mut Self {
+            self.default_credential_expiration = duration;
             self
         }
 
@@ -225,8 +286,8 @@ mod builder {
                 }),
                 self.load.expect("load implementation is required"),
                 self.load_timeout.unwrap_or(DEFAULT_LOAD_TIMEOUT),
-                self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
                 default_credential_expiration,
+                self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
             )
         }
     }
@@ -411,7 +472,7 @@ mod tests {
             TimeSource::manual(&time),
             Arc::new(TokioSleep::new()),
             Arc::new(provide_credentials_fn(|| async {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                aws_smithy_async::future::never::Never::new().await;
                 Ok(credentials(1000))
             })),
             Duration::from_millis(5),

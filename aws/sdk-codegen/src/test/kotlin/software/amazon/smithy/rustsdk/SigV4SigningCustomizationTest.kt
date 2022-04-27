@@ -25,6 +25,7 @@ internal class SigV4SigningCustomizationTest {
         )
         project.lib {
             it.unitTest(
+                "signing_service_override",
                 """
                 let conf = crate::config::Config::builder().build();
                 assert_eq!(conf.signing_service(), "test-service");

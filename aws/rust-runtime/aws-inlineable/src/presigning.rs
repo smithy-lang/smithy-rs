@@ -151,6 +151,11 @@ pub mod request {
     use std::fmt::{Debug, Formatter};
 
     /// Represents a presigned request. This only includes the HTTP request method, URI, and headers.
+    ///
+    /// **This struct has conversion convenience functions:**
+    ///
+    /// - [`PresignedRequest::to_http_request<B>`][Self::to_http_request] returns an [`http::Request<B>`](https://docs.rs/http/0.2.6/http/request/struct.Request.html)
+    /// - [`PresignedRequest::into`](#impl-From<PresignedRequest>) returns an [`http::request::Builder`](https://docs.rs/http/0.2.6/http/request/struct.Builder.html)
     #[non_exhaustive]
     pub struct PresignedRequest(http::Request<()>);
 
@@ -175,6 +180,13 @@ pub mod request {
         pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
             self.0.headers()
         }
+
+        /// Given a body, convert this `PresignedRequest` into an `http::Request`
+        pub fn to_http_request<B>(self, body: B) -> Result<http::Request<B>, http::Error> {
+            let builder: http::request::Builder = self.into();
+
+            builder.body(body)
+        }
     }
 
     impl Debug for PresignedRequest {
@@ -186,6 +198,20 @@ pub mod request {
                 .finish()
         }
     }
+
+    impl From<PresignedRequest> for http::request::Builder {
+        fn from(req: PresignedRequest) -> Self {
+            let mut builder = http::request::Builder::new()
+                .uri(req.uri())
+                .method(req.method());
+
+            if let Some(headers) = builder.headers_mut() {
+                *headers = req.headers().clone();
+            }
+
+            builder
+        }
+    }
 }
 
 /// Tower middleware service for creating presigned requests
@@ -193,7 +219,7 @@ pub mod request {
 pub(crate) mod service {
     use crate::presigning::request::PresignedRequest;
     use aws_smithy_http::operation;
-    use http::header::{CONTENT_LENGTH, CONTENT_TYPE, USER_AGENT};
+    use http::header::USER_AGENT;
     use std::future::{ready, Ready};
     use std::marker::PhantomData;
     use std::task::{Context, Poll};
@@ -235,12 +261,6 @@ pub(crate) mod service {
 
         fn call(&mut self, req: operation::Request) -> Self::Future {
             let (mut req, _) = req.into_parts();
-
-            // Remove headers from input serialization that shouldn't be part of the presigned
-            // request since the request body is unsigned and left up to the person making the final
-            // HTTP request.
-            req.headers_mut().remove(CONTENT_LENGTH);
-            req.headers_mut().remove(CONTENT_TYPE);
 
             // Remove user agent headers since the request will not be executed by the AWS Rust SDK.
             req.headers_mut().remove(USER_AGENT);

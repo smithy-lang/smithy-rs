@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.generators
 
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
@@ -42,6 +41,7 @@ import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -49,7 +49,6 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.isStreaming
-import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 /**
  * Instantiator generates code to instantiate a given Shape given a `Node` representing the value
@@ -57,7 +56,7 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
  * This is primarily used during Protocol test generation
  */
 class Instantiator(
-    private val symbolProvider: SymbolProvider,
+    private val symbolProvider: RustSymbolProvider,
     private val model: Model,
     private val runtimeConfig: RuntimeConfig
 ) {
@@ -91,8 +90,8 @@ class Instantiator(
 
             // Wrapped Shapes
             is TimestampShape -> writer.write(
-                "#T::from_epoch_seconds(${(arg as NumberNode).value})",
-                RuntimeType.Instant(runtimeConfig)
+                "#T::from_secs(${(arg as NumberNode).value})",
+                RuntimeType.DateTime(runtimeConfig)
             )
 
             /**
@@ -156,7 +155,10 @@ class Instantiator(
             ) { "A null node was provided for $shape but the symbol was not optional. This is invalid input data." }
             writer.write("None")
         } else {
-            writer.conditionalBlock("Some(", ")", conditional = ctx.builder || symbol.isOptional()) {
+            writer.conditionalBlock(
+                "Some(", ")",
+                conditional = ctx.builder || symbol.isOptional()
+            ) {
                 writer.conditionalBlock(
                     "Box::new(",
                     ")",
@@ -223,8 +225,7 @@ class Instantiator(
         val variant = data.members.iterator().next()
         val memberName = variant.key.value
         val member = shape.expectMember(memberName)
-        // TODO: refactor this detail into UnionGenerator
-        writer.write("#T::${memberName.toPascalCase()}", unionSymbol)
+        writer.write("#T::${symbolProvider.toMemberName(member)}", unionSymbol)
         // unions should specify exactly one member
         writer.withBlock("(", ")") {
             renderMember(this, member, variant.value, ctx)

@@ -15,13 +15,13 @@ use ErrorReason::*;
 
 /// JSON token parser as a Rust iterator
 ///
-/// This parser will parse and yield exactly one [Token] per iterator `next()` call.
+/// This parser will parse and yield exactly one [`Token`] per iterator `next()` call.
 /// Validation is done on the fly, so it is possible for it to parse an invalid JSON document
-/// until it gets to the first [Error].
+/// until it gets to the first [`Error`].
 ///
-/// JSON string values are left escaped in the [Token::ValueString] as an [EscapedStr],
+/// JSON string values are left escaped in the [`Token::ValueString`] as an [`EscapedStr`],
 /// which is a new type around a slice of original `input` bytes so that the caller can decide
-/// when to unescape and allocate into a [String].
+/// when to unescape and allocate into a [`String`].
 ///
 /// The parser *will* accept multiple valid JSON values. For example, `b"null true"` will
 /// yield `ValueNull` and `ValueTrue`. It is the responsibility of the caller to handle this for
@@ -324,7 +324,7 @@ impl<'a> JsonTokenIterator<'a> {
             offset,
             value: if floating {
                 Number::Float(
-                    f64::from_str(&number_str)
+                    f64::from_str(number_str)
                         .map_err(|_| self.error_at(start, InvalidNumber))
                         .and_then(|f| {
                             must_be_finite(f).map_err(|_| self.error_at(start, InvalidNumber))
@@ -342,7 +342,7 @@ impl<'a> JsonTokenIterator<'a> {
                 }
             } else {
                 Number::PosInt(
-                    u64::from_str(&number_str).map_err(|_| self.error_at(start, InvalidNumber))?,
+                    u64::from_str(number_str).map_err(|_| self.error_at(start, InvalidNumber))?,
                 )
             },
         })

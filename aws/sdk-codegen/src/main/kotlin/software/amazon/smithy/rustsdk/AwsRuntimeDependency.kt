@@ -45,7 +45,24 @@ object AwsRuntimeType {
     val Presigning by lazy {
         RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", public = true))
     }
+
+    fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
+        InlineAwsDependency.forRustFile(
+            "middleware", public = true,
+            CargoDependency.SmithyHttp(this),
+            CargoDependency.SmithyHttpTower(this),
+            CargoDependency.SmithyClient(this),
+            CargoDependency.Tower,
+            awsHttp(),
+            awsEndpoint(),
+        )
+    ).member("DefaultMiddleware")
 }
 
 fun RuntimeConfig.awsRuntimeDependency(name: String, features: Set<String> = setOf()): CargoDependency =
     CargoDependency(name, awsRoot().crateLocation(), features = features)
+
+fun RuntimeConfig.awsHttp(): CargoDependency = awsRuntimeDependency("aws-http")
+fun RuntimeConfig.awsTypes(): CargoDependency = awsRuntimeDependency("aws-types")
+fun RuntimeConfig.awsConfig(): CargoDependency = awsRuntimeDependency("aws-config")
+fun RuntimeConfig.awsEndpoint() = awsRuntimeDependency("aws-endpoint")

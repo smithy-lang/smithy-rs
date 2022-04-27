@@ -2,7 +2,18 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+
 //! A Hyper-based Smithy service client.
+//!
+//! | Feature           | Description |
+//! |-------------------|-------------|
+//! | `event-stream`    | Provides Sender/Receiver implementations for Event Stream codegen. |
+//! | `rt-tokio`        | Run async code with the `tokio` runtime |
+//! | `test-util`       | Include various testing utils |
+//! | `native-tls`      | Use `native-tls` as the HTTP client's TLS implementation |
+//! | `rustls`          | Use `rustls` as the HTTP client's TLS implementation |
+//! | `client-hyper`    | Use `hyper` to handle HTTP requests |
+
 #![warn(
     missing_debug_implementations,
     missing_docs,
@@ -24,15 +35,10 @@ pub mod dvr;
 #[cfg(feature = "test-util")]
 pub mod test_connection;
 
-#[cfg(feature = "hyper")]
-mod hyper_impls;
+pub mod http_connector;
 
-/// Re-export HyperAdapter
-#[cfg(feature = "hyper")]
-pub mod hyper_ext {
-    pub use crate::hyper_impls::Builder;
-    pub use crate::hyper_impls::HyperAdapter as Adapter;
-}
+#[cfg(feature = "client-hyper")]
+pub mod hyper_ext;
 
 // The types in this module are only used to write the bounds in [`Client::check`]. Customers will
 // not need them. But the module and its types must be public so that we can call `check` from
@@ -42,12 +48,12 @@ pub mod static_tests;
 
 pub mod never;
 pub mod timeout;
+pub use timeout::TimeoutLayer;
 
 /// Type aliases for standard connection types.
-#[cfg(feature = "hyper")]
+#[cfg(feature = "client-hyper")]
 #[allow(missing_docs)]
 pub mod conns {
-
     #[cfg(feature = "rustls")]
     pub type Https = hyper_rustls::HttpsConnector<hyper::client::HttpConnector>;
 
@@ -74,11 +80,16 @@ pub mod conns {
     pub type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
 
     #[cfg(feature = "rustls")]
-    pub type Rustls = crate::hyper_impls::HyperAdapter<
-        hyper_rustls::HttpsConnector<hyper::client::HttpConnector>,
-    >;
+    pub type Rustls =
+        crate::hyper_ext::Adapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
 }
 
+use std::error::Error;
+use std::sync::Arc;
+use tower::{Layer, Service, ServiceBuilder, ServiceExt};
+
+use crate::timeout::generate_timeout_service_params_from_timeout_config;
+use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::response::ParseHttpResponse;
@@ -87,13 +98,11 @@ use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_http_tower::dispatch::DispatchLayer;
 use aws_smithy_http_tower::parse_response::ParseResponseLayer;
 use aws_smithy_types::retry::ProvideErrorKind;
-use std::error::Error;
-
-use tower::{Layer, Service, ServiceBuilder, ServiceExt};
+use aws_smithy_types::tristate::TriState;
 
 /// Smithy service client.
 ///
-/// The service client is customizeable in a number of ways (see [`Builder`]), but most customers
+/// The service client is customizable in a number of ways (see [`Builder`]), but most customers
 /// can stick with the standard constructor provided by [`Client::new`]. It takes only a single
 /// argument, which is the middleware that fills out the [`http::Request`] for each higher-level
 /// operation so that it can ultimately be sent to the remote host. The middleware is responsible
@@ -119,6 +128,8 @@ pub struct Client<
     connector: Connector,
     middleware: Middleware,
     retry_policy: RetryPolicy,
+    timeout_config: aws_smithy_types::timeout::Config,
+    sleep_impl: TriState<Arc<dyn AsyncSleep>>,
 }
 
 // Quick-create for people who just want "the default".
@@ -126,12 +137,14 @@ impl<C, M> Client<C, M>
 where
     M: Default,
 {
-    /// Create a Smithy client that the given connector, a middleware default, and the [standard
-    /// retry policy](crate::retry::Standard).
+    /// Create a Smithy client from the given `connector`, a middleware default, the [standard
+    /// retry policy](crate::retry::Standard), and the [`default_async_sleep`](aws_smithy_async::rt::sleep::default_async_sleep)
+    /// sleep implementation.
     pub fn new(connector: C) -> Self {
         Builder::new()
             .connector(connector)
             .middleware(M::default())
+            .default_async_sleep()
             .build()
     }
 }
@@ -149,6 +162,39 @@ impl<C, M> Client<C, M> {
     }
 }
 
+impl<C, M, R> Client<C, M, R> {
+    /// Set the client's timeout configuration.
+    pub fn set_timeout_config(&mut self, timeout_config: aws_smithy_types::timeout::Config) {
+        self.timeout_config = timeout_config;
+    }
+
+    /// Set the client's timeout configuration.
+    pub fn with_timeout_config(
+        mut self,
+        timeout_config: aws_smithy_types::timeout::Config,
+    ) -> Self {
+        self.set_timeout_config(timeout_config);
+        self
+    }
+
+    /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
+    ///
+    /// *Note: If `None` is passed, this will prevent the client from using retries or timeouts.*
+    pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) {
+        self.sleep_impl = sleep_impl.clone().into();
+    }
+
+    /// Set the [`AsyncSleep`] function that the client will use to create things like timeout futures.
+    pub fn with_sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
+        self.set_sleep_impl(Some(sleep_impl));
+        self
+    }
+}
+
+fn check_send_sync<T: Send + Sync>(t: T) -> T {
+    t
+}
+
 impl<C, M, R> Client<C, M, R>
 where
     C: bounds::SmithyConnector,
@@ -161,6 +207,8 @@ where
     /// access the raw response use `call_raw`.
     pub async fn call<O, T, E, Retry>(&self, input: Operation<O, Retry>) -> Result<T, SdkError<E>>
     where
+        O: Send + Sync,
+        Retry: Send + Sync,
         R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
         bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
@@ -177,6 +225,8 @@ where
         input: Operation<O, Retry>,
     ) -> Result<SdkSuccess<T>, SdkError<E>>
     where
+        O: Send + Sync,
+        Retry: Send + Sync,
         R::Policy: bounds::SmithyRetryPolicy<O, T, E, Retry>,
         // This bound is not _technically_ inferred by all the previous bounds, but in practice it
         // is because _we_ know that there is only implementation of Service for Parsed
@@ -187,17 +237,36 @@ where
         bounds::Parsed<<M as bounds::SmithyMiddleware<C>>::Service, O, Retry>:
             Service<Operation<O, Retry>, Response = SdkSuccess<T>, Error = SdkError<E>> + Clone,
     {
+        if matches!(&self.sleep_impl, TriState::Unset) {
+            // during requests, debug log (a warning is emitted during client construction)
+            tracing::debug!(
+                "Client does not have a sleep implementation. Timeouts and retry \
+                will not work without this. {}",
+                MISSING_SLEEP_IMPL_RECOMMENDATION
+            );
+        }
         let connector = self.connector.clone();
-        let mut svc = ServiceBuilder::new()
-            // Create a new request-scoped policy
-            .retry(self.retry_policy.new_request_policy())
+
+        let timeout_service_params = generate_timeout_service_params_from_timeout_config(
+            &self.timeout_config.api,
+            self.sleep_impl.clone().into(),
+        );
+
+        let svc = ServiceBuilder::new()
+            .layer(TimeoutLayer::new(timeout_service_params.api_call))
+            .retry(
+                self.retry_policy
+                    .new_request_policy(self.sleep_impl.clone().into()),
+            )
+            .layer(TimeoutLayer::new(timeout_service_params.api_call_attempt))
             .layer(ParseResponseLayer::<O, Retry>::new())
-            // These layers can be considered as occuring in order. That is, first invoke the
+            // These layers can be considered as occurring in order. That is, first invoke the
             // customer-provided middleware, then dispatch dispatch over the wire.
             .layer(&self.middleware)
             .layer(DispatchLayer::new())
             .service(connector);
-        svc.ready().await?.call(input).await
+
+        check_send_sync(svc).ready().await?.call(input).await
     }
 
     /// Statically check the validity of a `Client` without a request to send.
@@ -219,3 +288,10 @@ where
         };
     }
 }
+
+pub(crate) const MISSING_SLEEP_IMPL_RECOMMENDATION: &str =
+    "If this was intentional, you can suppress this message with `Client::set_sleep_impl(None). \
+     Otherwise, unless you have a good reason to use the low-level service \
+     client API, consider using the `aws-config` crate to load a shared config from \
+     the environment, and construct a fluent client from that. If you need to use the low-level \
+     service client API, then pass in a sleep implementation to make timeouts and retry work.";

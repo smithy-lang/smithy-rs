@@ -6,14 +6,18 @@ description = """
 The modules of this crate are intended to be inlined directly into the SDK as needed. The dependencies here
 are to allow this crate to be compilable and testable in isolation, no client code actually takes these dependencies.
 """
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 publish = false
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
+aws-http = { path = "../aws-http" }
+aws-endpoint = { path = "../aws-endpoint" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+aws-smithy-http-tower= { path = "../../../rust-runtime/aws-smithy-http-tower" }
 aws-types = { path = "../../rust-runtime/aws-types" }
 aws-sig-auth = { path = "../../rust-runtime/aws-sig-auth" }
 http = "0.2.4"
@@ -29,3 +33,11 @@ hex = "0.4.3"
 
 [dev-dependencies]
 temp-file = "0.1.6"
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
+aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

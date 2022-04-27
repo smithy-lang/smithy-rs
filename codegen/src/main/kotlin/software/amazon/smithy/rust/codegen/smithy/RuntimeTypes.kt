@@ -27,7 +27,6 @@ import java.util.Optional
  *
  * This can be configured via the `runtimeConfig.version` field in smithy-build.json
  */
-
 data class RuntimeCrateLocation(val path: String?, val version: String?) {
     init {
         check(path != null || version != null) {
@@ -146,7 +145,6 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         return "$namespace$postFix"
     }
 
-    // TODO: refactor to be RuntimeTypeProvider a la Symbol provider that packages the `RuntimeConfig` state.
     /**
      * The companion object contains commonly used RuntimeTypes
      */
@@ -177,8 +175,8 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
         val String = RuntimeType("String", dependency = null, namespace = "std::string")
 
-        fun Instant(runtimeConfig: RuntimeConfig) =
-            RuntimeType("Instant", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
+        fun DateTime(runtimeConfig: RuntimeConfig) =
+            RuntimeType("DateTime", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
 
         fun GenericError(runtimeConfig: RuntimeConfig) =
             RuntimeType("Error", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
@@ -219,7 +217,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             return RuntimeType(
                 timestampFormat,
                 CargoDependency.SmithyTypes(runtimeConfig),
-                "${runtimeConfig.crateSrcPrefix}_types::instant::Format"
+                "${runtimeConfig.crateSrcPrefix}_types::date_time::Format"
             )
         }
 
@@ -266,7 +264,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType("SdkBody", dependency = CargoDependency.SmithyHttp(runtimeConfig), "aws_smithy_http::body")
 
-        fun parseStrict(runtimeConfig: RuntimeConfig) = RuntimeType(
+        fun parseStrictResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ParseStrictResponse",
             dependency = CargoDependency.SmithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::response"

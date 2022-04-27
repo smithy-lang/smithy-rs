@@ -10,7 +10,9 @@ import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.customizations.ClientCustomizations
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -31,7 +33,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
-        val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context)
+        val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context, ClientCustomizations())
 
         // CodegenVisitor is the main driver of code generation that traverses the model and generates code
         CodegenVisitor(context, codegenDecorator).execute()
@@ -41,7 +43,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
         /** SymbolProvider
          * When generating code, smithy types need to be converted into Rust types—that is the core role of the symbol provider
          *
-         * The Symbol provider is composed of a base `SymbolVisitor` which handles the core funcitonality, then is layered
+         * The Symbol provider is composed of a base `SymbolVisitor` which handles the core functionality, then is layered
          * with other symbol providers, documented inline, to handle the full scope of Smithy types.
          */
         fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) =
@@ -51,11 +53,11 @@ class RustCodegenPlugin : SmithyBuildPlugin {
                 // Generate `ByteStream` instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it) }
+                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(NonExhaustive)) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)
                 .let { StreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it) }
+                .let { RustReservedWordSymbolProvider(it, model) }
     }
 }

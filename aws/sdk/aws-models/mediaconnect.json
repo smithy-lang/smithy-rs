@@ -374,6 +374,30 @@
                 }
             }
         },
+        "com.amazonaws.mediaconnect#AddMaintenance": {
+            "type": "structure",
+            "members": {
+                "MaintenanceDay": {
+                    "target": "com.amazonaws.mediaconnect#MaintenanceDay",
+                    "traits": {
+                        "smithy.api#documentation": "A day of a week when the maintenance will happen. Use Monday/Tuesday/Wednesday/Thursday/Friday/Saturday/Sunday.",
+                        "smithy.api#jsonName": "maintenanceDay",
+                        "smithy.api#required": {}
+                    }
+                },
+                "MaintenanceStartHour": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "UTC time when the maintenance will happen. Use 24-hour HH:MM format. Minutes must be 00. Example: 13:00. The default value is 02:00.",
+                        "smithy.api#jsonName": "maintenanceStartHour",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Create maintenance setting for a flow"
+            }
+        },
         "com.amazonaws.mediaconnect#AddMediaStreamRequest": {
             "type": "structure",
             "members": {
@@ -468,7 +492,7 @@
                 "MaxLatency": {
                     "target": "com.amazonaws.mediaconnect#__integer",
                     "traits": {
-                        "smithy.api#documentation": "The maximum latency in milliseconds for Zixi-based streams.",
+                        "smithy.api#documentation": "The maximum latency in milliseconds. This parameter applies only to RIST-based, Zixi-based, and Fujitsu-based streams.",
                         "smithy.api#jsonName": "maxLatency"
                     }
                 },
@@ -513,6 +537,13 @@
                     "traits": {
                         "smithy.api#documentation": "The remote ID for the Zixi-pull output stream.",
                         "smithy.api#jsonName": "remoteId"
+                    }
+                },
+                "SenderControlPort": {
+                    "target": "com.amazonaws.mediaconnect#__integer",
+                    "traits": {
+                        "smithy.api#documentation": "The port that the flow uses to send outbound requests to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderControlPort"
                     }
                 },
                 "SmoothingLatency": {
@@ -730,6 +761,12 @@
                     "traits": {
                         "smithy.api#documentation": "The VPC interfaces you want on the flow.",
                         "smithy.api#jsonName": "vpcInterfaces"
+                    }
+                },
+                "Maintenance": {
+                    "target": "com.amazonaws.mediaconnect#AddMaintenance",
+                    "traits": {
+                        "smithy.api#jsonName": "maintenance"
                     }
                 }
             },
@@ -1500,7 +1537,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "The settings for source failover"
+                "smithy.api#documentation": "The settings for source failover."
             }
         },
         "com.amazonaws.mediaconnect#FailoverMode": {
@@ -1614,6 +1651,12 @@
                     "traits": {
                         "smithy.api#documentation": "The VPC Interfaces for this flow.",
                         "smithy.api#jsonName": "vpcInterfaces"
+                    }
+                },
+                "Maintenance": {
+                    "target": "com.amazonaws.mediaconnect#Maintenance",
+                    "traits": {
+                        "smithy.api#jsonName": "maintenance"
                     }
                 }
             },
@@ -2465,10 +2508,87 @@
                         "smithy.api#jsonName": "status",
                         "smithy.api#required": {}
                     }
+                },
+                "Maintenance": {
+                    "target": "com.amazonaws.mediaconnect#Maintenance",
+                    "traits": {
+                        "smithy.api#jsonName": "maintenance"
+                    }
                 }
             },
             "traits": {
                 "smithy.api#documentation": "Provides a summary of a flow, including its ARN, Availability Zone, and source type."
+            }
+        },
+        "com.amazonaws.mediaconnect#Maintenance": {
+            "type": "structure",
+            "members": {
+                "MaintenanceDay": {
+                    "target": "com.amazonaws.mediaconnect#MaintenanceDay",
+                    "traits": {
+                        "smithy.api#documentation": "A day of a week when the maintenance will happen. Use Monday/Tuesday/Wednesday/Thursday/Friday/Saturday/Sunday.",
+                        "smithy.api#jsonName": "maintenanceDay"
+                    }
+                },
+                "MaintenanceDeadline": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "The Maintenance has to be performed before this deadline in ISO UTC format. Example: 2021-01-30T08:30:00Z.",
+                        "smithy.api#jsonName": "maintenanceDeadline"
+                    }
+                },
+                "MaintenanceScheduledDate": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "A scheduled date in ISO UTC format when the maintenance will happen. Use YYYY-MM-DD format. Example: 2021-01-30.",
+                        "smithy.api#jsonName": "maintenanceScheduledDate"
+                    }
+                },
+                "MaintenanceStartHour": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "UTC time when the maintenance will happen. Use 24-hour HH:MM format. Minutes must be 00. Example: 13:00. The default value is 02:00.",
+                        "smithy.api#jsonName": "maintenanceStartHour"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "The maintenance setting of a flow"
+            }
+        },
+        "com.amazonaws.mediaconnect#MaintenanceDay": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "Monday",
+                        "name": "Monday"
+                    },
+                    {
+                        "value": "Tuesday",
+                        "name": "Tuesday"
+                    },
+                    {
+                        "value": "Wednesday",
+                        "name": "Wednesday"
+                    },
+                    {
+                        "value": "Thursday",
+                        "name": "Thursday"
+                    },
+                    {
+                        "value": "Friday",
+                        "name": "Friday"
+                    },
+                    {
+                        "value": "Saturday",
+                        "name": "Saturday"
+                    },
+                    {
+                        "value": "Sunday",
+                        "name": "Sunday"
+                    }
+                ]
             }
         },
         "com.amazonaws.mediaconnect#MaxResults": {
@@ -2482,6 +2602,21 @@
         },
         "com.amazonaws.mediaconnect#MediaConnect": {
             "type": "service",
+            "traits": {
+                "aws.api#service": {
+                    "sdkId": "MediaConnect",
+                    "arnNamespace": "mediaconnect",
+                    "cloudFormationName": "MediaConnect",
+                    "cloudTrailEventSource": "mediaconnect.amazonaws.com",
+                    "endpointPrefix": "mediaconnect"
+                },
+                "aws.auth#sigv4": {
+                    "name": "mediaconnect"
+                },
+                "aws.protocols#restJson1": {},
+                "smithy.api#documentation": "API for AWS Elemental MediaConnect",
+                "smithy.api#title": "AWS MediaConnect"
+            },
             "version": "2018-11-14",
             "operations": [
                 {
@@ -2574,22 +2709,7 @@
                 {
                     "target": "com.amazonaws.mediaconnect#UpdateFlowSource"
                 }
-            ],
-            "traits": {
-                "aws.api#service": {
-                    "sdkId": "MediaConnect",
-                    "arnNamespace": "mediaconnect",
-                    "cloudFormationName": "MediaConnect",
-                    "cloudTrailEventSource": "mediaconnect.amazonaws.com",
-                    "endpointPrefix": "mediaconnect"
-                },
-                "aws.auth#sigv4": {
-                    "name": "mediaconnect"
-                },
-                "aws.protocols#restJson1": {},
-                "smithy.api#documentation": "API for AWS Elemental MediaConnect",
-                "smithy.api#title": "AWS MediaConnect"
-            }
+            ]
         },
         "com.amazonaws.mediaconnect#MediaStream": {
             "type": "structure",
@@ -3129,6 +3249,10 @@
                     {
                         "value": "srt-listener",
                         "name": "srt_listener"
+                    },
+                    {
+                        "value": "fujitsu-qos",
+                        "name": "fujitsu_qos"
                     }
                 ]
             }
@@ -3872,7 +3996,7 @@
                 "MaxLatency": {
                     "target": "com.amazonaws.mediaconnect#__integer",
                     "traits": {
-                        "smithy.api#documentation": "The maximum latency in milliseconds. This parameter applies only to RIST-based and Zixi-based streams.",
+                        "smithy.api#documentation": "The maximum latency in milliseconds. This parameter applies only to RIST-based, Zixi-based, and Fujitsu-based streams.",
                         "smithy.api#jsonName": "maxLatency"
                     }
                 },
@@ -3909,6 +4033,20 @@
                     "traits": {
                         "smithy.api#documentation": "The protocol that is used by the source.",
                         "smithy.api#jsonName": "protocol"
+                    }
+                },
+                "SenderControlPort": {
+                    "target": "com.amazonaws.mediaconnect#__integer",
+                    "traits": {
+                        "smithy.api#documentation": "The port that the flow uses to send outbound requests to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderControlPort"
+                    }
+                },
+                "SenderIpAddress": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "The IP address that the flow communicates with to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderIpAddress"
                     }
                 },
                 "StreamId": {
@@ -3995,6 +4133,20 @@
                         "smithy.api#documentation": "The name of the source.",
                         "smithy.api#jsonName": "name",
                         "smithy.api#required": {}
+                    }
+                },
+                "SenderControlPort": {
+                    "target": "com.amazonaws.mediaconnect#__integer",
+                    "traits": {
+                        "smithy.api#documentation": "The port that the flow uses to send outbound requests to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderControlPort"
+                    }
+                },
+                "SenderIpAddress": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "The IP address that the flow communicates with to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderIpAddress"
                     }
                 },
                 "SourceArn": {
@@ -4381,7 +4533,7 @@
                 "MaxLatency": {
                     "target": "com.amazonaws.mediaconnect#__integer",
                     "traits": {
-                        "smithy.api#documentation": "The maximum latency in milliseconds. This parameter applies only to RIST-based and Zixi-based streams.",
+                        "smithy.api#documentation": "The maximum latency in milliseconds. This parameter applies only to RIST-based, Zixi-based, and Fujitsu-based streams.",
                         "smithy.api#jsonName": "maxLatency"
                     }
                 },
@@ -4412,6 +4564,20 @@
                     "traits": {
                         "smithy.api#documentation": "The remote ID for the Zixi-pull stream.",
                         "smithy.api#jsonName": "remoteId"
+                    }
+                },
+                "SenderControlPort": {
+                    "target": "com.amazonaws.mediaconnect#__integer",
+                    "traits": {
+                        "smithy.api#documentation": "The port that the flow uses to send outbound requests to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderControlPort"
+                    }
+                },
+                "SenderIpAddress": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "The IP address that the flow communicates with to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderIpAddress"
                     }
                 },
                 "SmoothingLatency": {
@@ -4582,7 +4748,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "The settings for source failover"
+                "smithy.api#documentation": "The settings for source failover."
             }
         },
         "com.amazonaws.mediaconnect#UpdateFlow": {
@@ -4925,7 +5091,7 @@
                 "MaxLatency": {
                     "target": "com.amazonaws.mediaconnect#__integer",
                     "traits": {
-                        "smithy.api#documentation": "The maximum latency in milliseconds for Zixi-based streams.",
+                        "smithy.api#documentation": "The maximum latency in milliseconds. This parameter applies only to RIST-based, Zixi-based, and Fujitsu-based streams.",
                         "smithy.api#jsonName": "maxLatency"
                     }
                 },
@@ -4970,6 +5136,20 @@
                     "traits": {
                         "smithy.api#documentation": "The remote ID for the Zixi-pull stream.",
                         "smithy.api#jsonName": "remoteId"
+                    }
+                },
+                "SenderControlPort": {
+                    "target": "com.amazonaws.mediaconnect#__integer",
+                    "traits": {
+                        "smithy.api#documentation": "The port that the flow uses to send outbound requests to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderControlPort"
+                    }
+                },
+                "SenderIpAddress": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "The IP address that the flow communicates with to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderIpAddress"
                     }
                 },
                 "SmoothingLatency": {
@@ -5032,6 +5212,12 @@
                     "target": "com.amazonaws.mediaconnect#UpdateFailoverConfig",
                     "traits": {
                         "smithy.api#jsonName": "sourceFailoverConfig"
+                    }
+                },
+                "Maintenance": {
+                    "target": "com.amazonaws.mediaconnect#UpdateMaintenance",
+                    "traits": {
+                        "smithy.api#jsonName": "maintenance"
                     }
                 }
             },
@@ -5136,7 +5322,7 @@
                 "MaxLatency": {
                     "target": "com.amazonaws.mediaconnect#__integer",
                     "traits": {
-                        "smithy.api#documentation": "The maximum latency in milliseconds. This parameter applies only to RIST-based and Zixi-based streams.",
+                        "smithy.api#documentation": "The maximum latency in milliseconds. This parameter applies only to RIST-based, Zixi-based, and Fujitsu-based streams.",
                         "smithy.api#jsonName": "maxLatency"
                     }
                 },
@@ -5166,6 +5352,20 @@
                     "traits": {
                         "smithy.api#documentation": "The protocol that is used by the source.",
                         "smithy.api#jsonName": "protocol"
+                    }
+                },
+                "SenderControlPort": {
+                    "target": "com.amazonaws.mediaconnect#__integer",
+                    "traits": {
+                        "smithy.api#documentation": "The port that the flow uses to send outbound requests to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderControlPort"
+                    }
+                },
+                "SenderIpAddress": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "The IP address that the flow communicates with to initiate connection with the sender.",
+                        "smithy.api#jsonName": "senderIpAddress"
                     }
                 },
                 "SourceArn": {
@@ -5221,13 +5421,42 @@
                 }
             }
         },
+        "com.amazonaws.mediaconnect#UpdateMaintenance": {
+            "type": "structure",
+            "members": {
+                "MaintenanceDay": {
+                    "target": "com.amazonaws.mediaconnect#MaintenanceDay",
+                    "traits": {
+                        "smithy.api#documentation": "A day of a week when the maintenance will happen. use Monday/Tuesday/Wednesday/Thursday/Friday/Saturday/Sunday.",
+                        "smithy.api#jsonName": "maintenanceDay"
+                    }
+                },
+                "MaintenanceScheduledDate": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "A scheduled date in ISO UTC format when the maintenance will happen. Use YYYY-MM-DD format. Example: 2021-01-30.",
+                        "smithy.api#jsonName": "maintenanceScheduledDate"
+                    }
+                },
+                "MaintenanceStartHour": {
+                    "target": "com.amazonaws.mediaconnect#__string",
+                    "traits": {
+                        "smithy.api#documentation": "UTC time when the maintenance will happen. Use 24-hour HH:MM format. Minutes must be 00. Example: 13:00. The default value is 02:00.",
+                        "smithy.api#jsonName": "maintenanceStartHour"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Update maintenance setting for a flow"
+            }
+        },
         "com.amazonaws.mediaconnect#VpcInterface": {
             "type": "structure",
             "members": {
                 "Name": {
                     "target": "com.amazonaws.mediaconnect#__string",
                     "traits": {
-                        "smithy.api#documentation": "Immutable and has to be a unique against other VpcInterfaces in this Flow",
+                        "smithy.api#documentation": "Immutable and has to be a unique against other VpcInterfaces in this Flow.",
                         "smithy.api#jsonName": "name",
                         "smithy.api#required": {}
                     }

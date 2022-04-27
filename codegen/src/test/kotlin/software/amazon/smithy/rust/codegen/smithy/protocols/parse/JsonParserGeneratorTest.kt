@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolContentTypes
+import software.amazon.smithy.rust.codegen.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -115,30 +116,31 @@ class JsonParserGeneratorTest {
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = JsonParserGenerator(
             testCodegenContext(model),
-            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json"))
+            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
+            ::restJsonFieldName
         )
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
-        val documentGenerator = parserGenerator.documentParser(model.lookup("test#Op"))
         val payloadGenerator = parserGenerator.payloadParser(model.lookup("test#OpOutput\$top"))
         val errorParser = parserGenerator.errorParser(model.lookup("test#Error"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
+                "json_parser",
                 """
                 use model::Choice;
 
                 // Generate the document serializer even though it's not tested directly
-                // ${writer.format(documentGenerator)}
                 // ${writer.format(payloadGenerator)}
 
                 let json = br#"
                     { "top":
                         { "extra": 45,
                           "field": "something",
-                          "choice":
-                              { "int": 5 },
-                          "empty": { "not_empty": true }}}
+                          "choice": { "int": 5 },
+                          "empty": { "not_empty": true }
+                        }
+                    }
                 "#;
 
                 let output = ${writer.format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
@@ -146,16 +148,40 @@ class JsonParserGeneratorTest {
                 assert_eq!(Some(45), top.extra);
                 assert_eq!(Some("something".to_string()), top.field);
                 assert_eq!(Some(Choice::Int(5)), top.choice);
-                let output = ${writer.format(operationGenerator!!)}(b"", output::op_output::Builder::default()).unwrap().build();
+                """
+            )
+            writer.unitTest(
+                "empty_body",
+                """
+                // empty body
+                let output = ${writer.format(operationGenerator)}(b"", output::op_output::Builder::default()).unwrap().build();
                 assert_eq!(output.top, None);
+                """
+            )
+            writer.unitTest(
+                "unknown_variant",
+                """
+                // unknown variant
+                let input = br#"{ "top": { "choice": { "somenewvariant": "data" } } }"#;
+                let output = ${writer.format(operationGenerator)}(input, output::op_output::Builder::default()).unwrap().build();
+                assert!(output.top.unwrap().choice.unwrap().is_unknown());
+                """
+            )
 
-
+            writer.unitTest(
+                "empty_error",
+                """
                 // empty error
                 let error_output = ${writer.format(errorParser!!)}(b"", error::error::Builder::default()).unwrap().build();
                 assert_eq!(error_output.message, None);
+                """
+            )
 
+            writer.unitTest(
+                "error_with_message",
+                """
                 // error with message
-                let error_output = ${writer.format(errorParser!!)}(br#"{"message": "hello"}"#, error::error::Builder::default()).unwrap().build();
+                let error_output = ${writer.format(errorParser)}(br#"{"message": "hello"}"#, error::error::Builder::default()).unwrap().build();
                 assert_eq!(error_output.message.expect("message should be set"), "hello");
                 """
             )
@@ -174,10 +200,6 @@ class JsonParserGeneratorTest {
         project.withModule(RustModule.public("error")) {
             model.lookup<StructureShape>("test#Error").renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/json_deser.rs")
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/output.rs")
         project.compileAndTest()
     }
 }

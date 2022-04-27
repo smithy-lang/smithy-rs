@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.docs
@@ -34,13 +35,20 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): RuntimeType {
-    val symbol = symbolProvider.toSymbol(this)
-    val builderNamespace = RustReservedWords.escapeIfNeeded(symbol.name.toSnakeCase())
-    return RuntimeType("Builder", null, "${symbol.namespace}::$builderNamespace")
+fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
+    val structureSymbol = symbolProvider.toSymbol(this)
+    val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase())
+    val rustType = RustType.Opaque("Builder", "${structureSymbol.namespace}::$builderNamespace")
+    return Symbol.builder()
+        .rustType(rustType)
+        .name(rustType.name)
+        .namespace(rustType.namespace, "::")
+        .definitionFile(structureSymbol.definitionFile)
+        .build()
 }
 
 fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("BuildError")
+fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).member("SerializationError")
 
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
     fun missingField(w: RustWriter, field: String, details: String) = "${w.format(runtimeConfig.operationBuildError())}::MissingField { field: ${field.dq()}, details: ${details.dq()} }"
@@ -62,7 +70,6 @@ class BuilderGenerator(
 
     fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
-        // TODO: figure out exactly what docs we want on a the builder module
         writer.docs("See #D", symbol)
         val segments = shape.builderSymbol(symbolProvider).namespace.split("::")
         writer.withModule(segments.last()) {
@@ -107,9 +114,10 @@ class BuilderGenerator(
     }
 
     // TODO(EventStream): [DX] Consider updating builders to take EventInputStream as Into<EventInputStream>
-    private fun renderBuilderMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+    private fun renderBuilderMember(writer: RustWriter, memberName: String, memberSymbol: Symbol) {
         // builder members are crate-public to enable using them
-        // directly in serializers/deserializers
+        // directly in serializers/deserializers. During XML deserialization, `builder.<field>.take` is used to append to
+        // lists and maps
         writer.write("pub(crate) $memberName: #T,", memberSymbol)
     }
 
@@ -117,23 +125,13 @@ class BuilderGenerator(
         writer: RustWriter,
         coreType: RustType,
         member: MemberShape,
-        memberName: String,
-        memberSymbol: Symbol
+        memberName: String
     ) {
-        fun builderConverter(coreType: RustType) = when (coreType) {
-            is RustType.String,
-            is RustType.Box -> "input.into()"
-            else -> "input"
-        }
+        val input = coreType.asArgument("input")
 
-        val signature = when (coreType) {
-            is RustType.String,
-            is RustType.Box -> "(mut self, input: impl Into<${coreType.render(true)}>) -> Self"
-            else -> "(mut self, input: ${coreType.render(true)}) -> Self"
-        }
         writer.documentShape(member, model)
-        writer.rustBlock("pub fn $memberName$signature") {
-            write("self.$memberName = Some(${builderConverter(coreType)});")
+        writer.rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
+            write("self.$memberName = Some(${input.value});")
             write("self")
         }
     }
@@ -142,8 +140,7 @@ class BuilderGenerator(
         writer: RustWriter,
         outerType: RustType,
         member: MemberShape,
-        memberName: String,
-        memberSymbol: Symbol
+        memberName: String
     ) {
         // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
         // is the same as the resulting member type, and is always optional.
@@ -169,7 +166,7 @@ class BuilderGenerator(
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
-                renderBuilderMember(this, member, memberName, memberSymbol)
+                renderBuilderMember(this, memberName, memberSymbol)
             }
         }
 
@@ -185,10 +182,10 @@ class BuilderGenerator(
                 when (coreType) {
                     is RustType.Vec -> renderVecHelper(member, memberName, coreType)
                     is RustType.HashMap -> renderMapHelper(member, memberName, coreType)
-                    else -> renderBuilderMemberFn(this, coreType, member, memberName, memberSymbol)
+                    else -> renderBuilderMemberFn(this, coreType, member, memberName)
                 }
 
-                renderBuilderMemberSetterFn(this, outerType, member, memberName, memberSymbol)
+                renderBuilderMemberSetterFn(this, outerType, member, memberName)
             }
             buildFn(this)
         }
@@ -200,11 +197,13 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
-        rustBlock("pub fn $memberName(mut self, input: impl Into<${coreType.member.render(true)}>) -> Self") {
+        val input = coreType.member.asArgument("input")
+
+        rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
             rust(
                 """
                 let mut v = self.$memberName.unwrap_or_default();
-                v.push(input.into());
+                v.push(${input.value});
                 self.$memberName = Some(v);
                 self
                 """
@@ -218,17 +217,16 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
+        val k = coreType.key.asArgument("k")
+        val v = coreType.member.asArgument("v")
+
         rustBlock(
-            "pub fn $memberName(mut self, k: impl Into<${coreType.key.render(true)}>, v: impl Into<${
-            coreType.member.render(
-                true
-            )
-            }>) -> Self"
+            "pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self"
         ) {
             rust(
                 """
                 let mut hash_map = self.$memberName.unwrap_or_default();
-                hash_map.insert(k.into(), v.into());
+                hash_map.insert(${k.value}, ${v.value});
                 self.$memberName = Some(hash_map);
                 self
                 """

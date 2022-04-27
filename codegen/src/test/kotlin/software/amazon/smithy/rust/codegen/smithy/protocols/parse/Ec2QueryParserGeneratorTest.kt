@@ -53,8 +53,8 @@ class Ec2QueryParserGeneratorTest {
 
         project.lib { writer ->
             writer.unitTest(
-                name = "valid_input",
-                test = """
+                "valid_input",
+                """
                 let xml = br#"
                 <SomeOperationResponse someAttribute="5">
                     <someVal>Some value</someVal>
@@ -75,10 +75,6 @@ class Ec2QueryParserGeneratorTest {
             model.lookup<OperationShape>("test#SomeOperation").outputShape(model)
                 .renderWithModelBuilder(model, symbolProvider, it)
         }
-        println("file:///${project.baseDir}/src/lib.rs")
-        println("file:///${project.baseDir}/src/model.rs")
-        println("file:///${project.baseDir}/src/output.rs")
-        println("file:///${project.baseDir}/src/xml_deser.rs")
         project.compileAndTest()
     }
 }

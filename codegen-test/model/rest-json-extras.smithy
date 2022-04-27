@@ -64,6 +64,8 @@ service RestJsonExtras {
         NullInNonSparse,
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
+        // TODO(https://github.com/awslabs/smithy/pull/1042): Remove this once the test case in Smithy is fixed
+        PostPlayerAction
     ],
     errors: [ExtraError]
 }

@@ -30,43 +30,43 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 
 class ResponseBindingGeneratorTest {
     private val baseModel = """
-            namespace smithy.example
+        namespace smithy.example
 
-            @idempotent
-            @http(method: "PUT", uri: "/", code: 200)
-            operation PutObject {
-                output: PutObjectResponse
-            }
+        @idempotent
+        @http(method: "PUT", uri: "/", code: 200)
+        operation PutObject {
+            output: PutObjectResponse
+        }
 
-            list Extras {
-                member: Integer
-            }
+        list Extras {
+            member: Integer
+        }
 
-            list Dates {
-                member: Timestamp
-            }
+        list Dates {
+            member: Timestamp
+        }
 
-            @mediaType("video/quicktime")
-            string Video
+        @mediaType("video/quicktime")
+        string Video
 
-            structure PutObjectResponse {
-                // Sent in the X-Dates header
-                @httpHeader("X-Dates")
-                dateHeaderList: Dates,
+        structure PutObjectResponse {
+            // Sent in the X-Dates header
+            @httpHeader("X-Dates")
+            dateHeaderList: Dates,
 
-                @httpHeader("X-Ints")
-                intList: Extras,
+            @httpHeader("X-Ints")
+            intList: Extras,
 
-                @httpHeader("X-MediaType")
-                mediaType: Video,
+            @httpHeader("X-MediaType")
+            mediaType: Video,
 
-                // Sent in the body
-                data: Blob,
+            // Sent in the body
+            data: Blob,
 
-                // Sent in the body
-                additional: String,
-            }
-        """.asSmithyModel()
+            // Sent in the body
+            additional: String,
+        }
+    """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val symbolProvider = testSymbolProvider(model)
@@ -96,6 +96,7 @@ class ResponseBindingGeneratorTest {
         testProject.withModule(RustModule.public("output")) {
             it.renderOperation()
             it.unitTest(
+                "http_header_deser",
                 """
                 use crate::http_serde;
                 let resp = http::Response::builder()
@@ -108,7 +109,7 @@ class ResponseBindingGeneratorTest {
                 assert_eq!(http_serde::deser_header_put_object_put_object_output_int_list(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
                 assert_eq!(http_serde::deser_header_put_object_put_object_output_media_type(resp.headers()).expect("valid").unwrap(), "smithy-rs");
                 assert_eq!(http_serde::deser_header_put_object_put_object_output_date_header_list(resp.headers()).unwrap().unwrap().len(), 3);
-            """
+                """
             )
         }
         testProject.compileAndTest()

@@ -3,18 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+//! Utilities for writing Smithy values into a query string.
+//!
+//! Formatting values into the query string as specified in
+//! [httpQuery](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait)
+
 use crate::urlencode::BASE_SET;
-/// Formatting values into the query string as specified in
-/// [httpQuery](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait)
-use aws_smithy_types::Instant;
+use aws_smithy_types::date_time::{DateTimeFormatError, Format};
+use aws_smithy_types::DateTime;
 use percent_encoding::utf8_percent_encode;
 
 pub fn fmt_string<T: AsRef<str>>(t: T) -> String {
     utf8_percent_encode(t.as_ref(), BASE_SET).to_string()
 }
 
-pub fn fmt_timestamp(t: &Instant, format: aws_smithy_types::instant::Format) -> String {
-    fmt_string(t.fmt(format))
+pub fn fmt_timestamp(t: &DateTime, format: Format) -> Result<String, DateTimeFormatError> {
+    Ok(fmt_string(t.fmt(format)?))
 }
 
 /// Simple abstraction to enable appending params to a string as query params
@@ -55,6 +59,8 @@ impl<'a> Writer<'a> {
 #[cfg(test)]
 mod test {
     use crate::query::{fmt_string, Writer};
+    use http::Uri;
+    use proptest::proptest;
 
     #[test]
     fn url_encode() {
@@ -74,5 +80,12 @@ mod test {
         writer.push_v("a");
         writer.push_kv("b", "c");
         assert_eq!(out, "?a&b=c");
+    }
+
+    proptest! {
+        #[test]
+        fn test_encode_request(s: String) {
+            let _: Uri = format!("http://host.example.com/?{}", fmt_string(&s)).parse().expect("all strings should be encoded properly");
+        }
     }
 }

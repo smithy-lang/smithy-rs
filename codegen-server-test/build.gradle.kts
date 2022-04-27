@@ -4,7 +4,6 @@
  */
 
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Server :: Test"
-
 extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.test"
 
 tasks["jar"].enabled = false
@@ -12,6 +11,19 @@ tasks["jar"].enabled = false
 plugins { id("software.amazon.smithy").version("0.5.3") }
 
 val smithyVersion: String by project
+val defaultRustFlags: String by project
+val defaultRustDocFlags: String by project
+val properties = PropertyRetriever(rootProject, project)
+
+val pluginName = "rust-server-codegen"
+val workingDirUnderBuildDir = "smithyprojections/codegen-server-test/"
+
+buildscript {
+    val smithyVersion: String by project
+    dependencies {
+        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
+    }
+}
 
 dependencies {
     implementation(project(":codegen-server"))
@@ -20,107 +32,71 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
-data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
-
-val CodegenTests = listOf(
+val allCodegenTests = listOf(
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("com.amazonaws.ebs#Ebs", "ebs")
+    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
+    CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation"),
+    CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
+    CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
+    CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
+    CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+    CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
+    CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
 )
-
-/**
- * The fluent client is generated to prevent warnings in RustDoc since the client is
- * referenced by multiple documentations.
- * TODO: review client generation in the future.
- */
-fun generateSmithyBuild(tests: List<CodegenTest>): String {
-    val projections =
-        tests.joinToString(",\n") {
-            """
-            "${it.module}": {
-                "plugins": {
-                    "rust-server-codegen": {
-                      "codegen": {
-                        "includeFluentClient": true
-                      },
-                      "runtimeConfig": {
-                        "relativePath": "${rootProject.projectDir.absolutePath}/rust-runtime"
-                      },
-                      "service": "${it.service}",
-                      "module": "${it.module}",
-                      "moduleVersion": "0.0.1",
-                      "moduleDescription": "test",
-                      "moduleAuthors": ["protocoltest@example.com"]
-                      ${it.extraConfig ?: ""}
-                 }
-               }
-            }
-            """.trimIndent()
-        }
-    return """
-    {
-        "version": "1.0",
-        "projections": { $projections }
-    }
-    """
-}
 
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
-    doFirst { projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodegenTests)) }
-}
-
-fun generateCargoWorkspace(tests: List<CodegenTest>): String {
-    return """
-    [workspace]
-    members = [
-        ${tests.joinToString(",") { "\"${it.module}/rust-server-codegen\"" }}
-    ]
-    """.trimIndent()
+    doFirst {
+        projectDir.resolve("smithy-build.json")
+            .writeText(
+                generateSmithyBuild(
+                    rootProject.projectDir.absolutePath,
+                    pluginName,
+                    codegenTests(properties, allCodegenTests)
+                )
+            )
+    }
 }
 
 task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
-        buildDir.resolve("smithyprojections/codegen-server-test/Cargo.toml")
-            .writeText(generateCargoWorkspace(CodegenTests))
+        buildDir.resolve("$workingDirUnderBuildDir/Cargo.toml")
+            .writeText(generateCargoWorkspace(pluginName, codegenTests(properties, allCodegenTests)))
     }
 }
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
-tasks["assemble"].dependsOn("smithyBuildJar")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
-tasks.register<Exec>("cargoCheck") {
-    workingDir("build/smithyprojections/codegen-server-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+tasks.register<Exec>(Cargo.CHECK.toString) {
+    workingDir("$buildDir/$workingDirUnderBuildDir")
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "check")
     dependsOn("assemble")
 }
 
-tasks.register<Exec>("cargoTest") {
-    workingDir("build/smithyprojections/codegen-server-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+tasks.register<Exec>(Cargo.TEST.toString) {
+    workingDir("$buildDir/$workingDirUnderBuildDir")
+    environment("RUSTFLAGS", defaultRustFlags)
     commandLine("cargo", "test")
     dependsOn("assemble")
 }
 
-tasks.register<Exec>("cargoDocs") {
-    workingDir("build/smithyprojections/codegen-server-test/")
-    // disallow warnings
-    environment("RUSTFLAGS", "-D warnings")
+tasks.register<Exec>(Cargo.DOCS.toString) {
+    workingDir("$buildDir/$workingDirUnderBuildDir")
+    environment("RUSTDOCFLAGS", defaultRustDocFlags)
     commandLine("cargo", "doc", "--no-deps")
     dependsOn("assemble")
 }
 
-tasks.register<Exec>("cargoClippy") {
-    workingDir("build/smithyprojections/codegen-server-test/")
-    // disallow warnings
-    commandLine("cargo", "clippy", "--", "-D", "warnings")
+tasks.register<Exec>(Cargo.CLIPPY.toString) {
+    workingDir("$buildDir/$workingDirUnderBuildDir")
+    environment("RUSTFLAGS", defaultRustFlags)
+    commandLine("cargo", "clippy")
     dependsOn("assemble")
 }
 
-tasks["test"].finalizedBy("cargoCheck", "cargoClippy", "cargoTest", "cargoDocs")
+tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 
 tasks["clean"].doFirst { delete("smithy-build.json") }

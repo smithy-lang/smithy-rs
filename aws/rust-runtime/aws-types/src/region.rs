@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+//! Region type for determining the endpoint to send requests to.
+
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
@@ -34,9 +36,12 @@ impl Display for Region {
 }
 
 impl Region {
+    /// Creates a new `Region` from the given string.
     pub fn new(region: impl Into<Cow<'static, str>>) -> Self {
         Self(region.into())
     }
+
+    /// Const function that creates a new `Region` from a static str.
     pub const fn from_static(region: &'static str) -> Self {
         Self(Cow::Borrowed(region))
     }
@@ -60,8 +65,15 @@ impl From<Region> for SigningRegion {
     }
 }
 
+impl From<&'static str> for SigningRegion {
+    fn from(region: &'static str) -> Self {
+        Self::from_static(region)
+    }
+}
+
 impl SigningRegion {
-    pub fn from_static(region: &'static str) -> Self {
+    /// Creates a `SigningRegion` from a static str.
+    pub const fn from_static(region: &'static str) -> Self {
         SigningRegion(Cow::Borrowed(region))
     }
 }

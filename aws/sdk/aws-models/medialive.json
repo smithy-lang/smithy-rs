@@ -2654,6 +2654,13 @@
                         "smithy.api#jsonName": "logLevel"
                     }
                 },
+                "Maintenance": {
+                    "target": "com.amazonaws.medialive#MaintenanceStatus",
+                    "traits": {
+                        "smithy.api#documentation": "Maintenance settings for this channel.",
+                        "smithy.api#jsonName": "maintenance"
+                    }
+                },
                 "Name": {
                     "target": "com.amazonaws.medialive#__string",
                     "traits": {
@@ -2854,6 +2861,13 @@
                     "traits": {
                         "smithy.api#documentation": "The log level being written to CloudWatch Logs.",
                         "smithy.api#jsonName": "logLevel"
+                    }
+                },
+                "Maintenance": {
+                    "target": "com.amazonaws.medialive#MaintenanceStatus",
+                    "traits": {
+                        "smithy.api#documentation": "Maintenance settings for this channel.",
+                        "smithy.api#jsonName": "maintenance"
                     }
                 },
                 "Name": {
@@ -3093,6 +3107,13 @@
                     "traits": {
                         "smithy.api#documentation": "The log level to write to CloudWatch Logs.",
                         "smithy.api#jsonName": "logLevel"
+                    }
+                },
+                "Maintenance": {
+                    "target": "com.amazonaws.medialive#MaintenanceCreateSettings",
+                    "traits": {
+                        "smithy.api#documentation": "Maintenance settings for this channel.",
+                        "smithy.api#jsonName": "maintenance"
                     }
                 },
                 "Name": {
@@ -3831,6 +3852,13 @@
                     "traits": {
                         "smithy.api#documentation": "The log level being written to CloudWatch Logs.",
                         "smithy.api#jsonName": "logLevel"
+                    }
+                },
+                "Maintenance": {
+                    "target": "com.amazonaws.medialive#MaintenanceStatus",
+                    "traits": {
+                        "smithy.api#documentation": "Maintenance settings for this channel.",
+                        "smithy.api#jsonName": "maintenance"
                     }
                 },
                 "Name": {
@@ -4835,6 +4863,13 @@
                     "traits": {
                         "smithy.api#documentation": "The log level being written to CloudWatch Logs.",
                         "smithy.api#jsonName": "logLevel"
+                    }
+                },
+                "Maintenance": {
+                    "target": "com.amazonaws.medialive#MaintenanceStatus",
+                    "traits": {
+                        "smithy.api#documentation": "Maintenance settings for this channel.",
+                        "smithy.api#jsonName": "maintenance"
                     }
                 },
                 "Name": {
@@ -7243,7 +7278,7 @@
                 "CopyrightHolder": {
                     "target": "com.amazonaws.medialive#__stringMax1000",
                     "traits": {
-                        "smithy.api#documentation": "Applies only if you plan to convert these source captions to EBU-TT-D or TTML in an output. Complete this field if you want to include the name of the copyright holder in the copyright metadata tag in the TTML",
+                        "smithy.api#documentation": "Complete this field if you want to include the name of the copyright holder in the copyright tag in the captions metadata.",
                         "smithy.api#jsonName": "copyrightHolder"
                     }
                 },
@@ -9862,8 +9897,15 @@
                 "ProgramDateTime": {
                     "target": "com.amazonaws.medialive#HlsProgramDateTime",
                     "traits": {
-                        "smithy.api#documentation": "Includes or excludes EXT-X-PROGRAM-DATE-TIME tag in .m3u8 manifest files. The value is calculated as follows: either the program date and time are initialized using the input timecode source, or the time is initialized using the input timecode source and the date is initialized using the timestampOffset.",
+                        "smithy.api#documentation": "Includes or excludes EXT-X-PROGRAM-DATE-TIME tag in .m3u8 manifest files. The value is calculated using the program date time clock.",
                         "smithy.api#jsonName": "programDateTime"
+                    }
+                },
+                "ProgramDateTimeClock": {
+                    "target": "com.amazonaws.medialive#HlsProgramDateTimeClock",
+                    "traits": {
+                        "smithy.api#documentation": "Specifies the algorithm used to drive the HLS EXT-X-PROGRAM-DATE-TIME clock. Options include:\n\nINITIALIZE_FROM_OUTPUT_TIMECODE: The PDT clock is initialized as a function of the first output timecode, then incremented by the EXTINF duration of each encoded segment.\n\nSYSTEM_CLOCK: The PDT clock is initialized as a function of the UTC wall clock, then incremented by the EXTINF duration of each encoded segment. If the PDT clock diverges from the wall clock by more than 500ms, it is resynchronized to the wall clock.",
+                        "smithy.api#jsonName": "programDateTimeClock"
                     }
                 },
                 "ProgramDateTimePeriod": {
@@ -10252,6 +10294,22 @@
                     {
                         "value": "INCLUDE",
                         "name": "INCLUDE"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.medialive#HlsProgramDateTimeClock": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Hls Program Date Time Clock",
+                "smithy.api#enum": [
+                    {
+                        "value": "INITIALIZE_FROM_OUTPUT_TIMECODE",
+                        "name": "INITIALIZE_FROM_OUTPUT_TIMECODE"
+                    },
+                    {
+                        "value": "SYSTEM_CLOCK",
+                        "name": "SYSTEM_CLOCK"
                     }
                 ]
             }
@@ -11707,6 +11765,13 @@
                     "traits": {
                         "smithy.api#documentation": "Input settings.",
                         "smithy.api#jsonName": "networkInputSettings"
+                    }
+                },
+                "Scte35Pid": {
+                    "target": "com.amazonaws.medialive#__integerMin32Max8191",
+                    "traits": {
+                        "smithy.api#documentation": "PID from which to read SCTE-35 messages. If left undefined, EML will select the first SCTE-35 PID found in the input.",
+                        "smithy.api#jsonName": "scte35Pid"
                     }
                 },
                 "Smpte2038DataPreference": {
@@ -13922,6 +13987,129 @@
                 ]
             }
         },
+        "com.amazonaws.medialive#MaintenanceCreateSettings": {
+            "type": "structure",
+            "members": {
+                "MaintenanceDay": {
+                    "target": "com.amazonaws.medialive#MaintenanceDay",
+                    "traits": {
+                        "smithy.api#documentation": "Choose one day of the week for maintenance. The chosen day is used for all future maintenance windows.",
+                        "smithy.api#jsonName": "maintenanceDay"
+                    }
+                },
+                "MaintenanceStartTime": {
+                    "target": "com.amazonaws.medialive#__stringPattern010920300",
+                    "traits": {
+                        "smithy.api#documentation": "Choose the hour that maintenance will start. The chosen time is used for all future maintenance windows.",
+                        "smithy.api#jsonName": "maintenanceStartTime"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Placeholder documentation for MaintenanceCreateSettings"
+            }
+        },
+        "com.amazonaws.medialive#MaintenanceDay": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "The currently selected maintenance day.",
+                "smithy.api#enum": [
+                    {
+                        "value": "MONDAY",
+                        "name": "MONDAY"
+                    },
+                    {
+                        "value": "TUESDAY",
+                        "name": "TUESDAY"
+                    },
+                    {
+                        "value": "WEDNESDAY",
+                        "name": "WEDNESDAY"
+                    },
+                    {
+                        "value": "THURSDAY",
+                        "name": "THURSDAY"
+                    },
+                    {
+                        "value": "FRIDAY",
+                        "name": "FRIDAY"
+                    },
+                    {
+                        "value": "SATURDAY",
+                        "name": "SATURDAY"
+                    },
+                    {
+                        "value": "SUNDAY",
+                        "name": "SUNDAY"
+                    }
+                ]
+            }
+        },
+        "com.amazonaws.medialive#MaintenanceStatus": {
+            "type": "structure",
+            "members": {
+                "MaintenanceDay": {
+                    "target": "com.amazonaws.medialive#MaintenanceDay",
+                    "traits": {
+                        "smithy.api#documentation": "The currently selected maintenance day.",
+                        "smithy.api#jsonName": "maintenanceDay"
+                    }
+                },
+                "MaintenanceDeadline": {
+                    "target": "com.amazonaws.medialive#__string",
+                    "traits": {
+                        "smithy.api#documentation": "Maintenance is required by the displayed date and time. Date and time is in ISO.",
+                        "smithy.api#jsonName": "maintenanceDeadline"
+                    }
+                },
+                "MaintenanceScheduledDate": {
+                    "target": "com.amazonaws.medialive#__string",
+                    "traits": {
+                        "smithy.api#documentation": "The currently scheduled maintenance date and time. Date and time is in ISO.",
+                        "smithy.api#jsonName": "maintenanceScheduledDate"
+                    }
+                },
+                "MaintenanceStartTime": {
+                    "target": "com.amazonaws.medialive#__string",
+                    "traits": {
+                        "smithy.api#documentation": "The currently selected maintenance start time. Time is in UTC.",
+                        "smithy.api#jsonName": "maintenanceStartTime"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Placeholder documentation for MaintenanceStatus"
+            }
+        },
+        "com.amazonaws.medialive#MaintenanceUpdateSettings": {
+            "type": "structure",
+            "members": {
+                "MaintenanceDay": {
+                    "target": "com.amazonaws.medialive#MaintenanceDay",
+                    "traits": {
+                        "smithy.api#documentation": "Choose one day of the week for maintenance. The chosen day is used for all future maintenance windows.",
+                        "smithy.api#jsonName": "maintenanceDay"
+                    }
+                },
+                "MaintenanceScheduledDate": {
+                    "target": "com.amazonaws.medialive#__string",
+                    "traits": {
+                        "smithy.api#documentation": "Choose a specific date for maintenance to occur. The chosen date is used for the next maintenance window only.",
+                        "smithy.api#jsonName": "maintenanceScheduledDate"
+                    }
+                },
+                "MaintenanceStartTime": {
+                    "target": "com.amazonaws.medialive#__stringPattern010920300",
+                    "traits": {
+                        "smithy.api#documentation": "Choose the hour that maintenance will start. The chosen time is used for all future maintenance windows.",
+                        "smithy.api#jsonName": "maintenanceStartTime"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Placeholder documentation for MaintenanceUpdateSettings"
+            }
+        },
         "com.amazonaws.medialive#MaxResults": {
             "type": "integer",
             "traits": {
@@ -13964,6 +14152,21 @@
         },
         "com.amazonaws.medialive#MediaLive": {
             "type": "service",
+            "traits": {
+                "aws.api#service": {
+                    "sdkId": "MediaLive",
+                    "arnNamespace": "medialive",
+                    "cloudFormationName": "MediaLive",
+                    "cloudTrailEventSource": "medialive.amazonaws.com",
+                    "endpointPrefix": "medialive"
+                },
+                "aws.auth#sigv4": {
+                    "name": "medialive"
+                },
+                "aws.protocols#restJson1": {},
+                "smithy.api#documentation": "API for AWS Elemental MediaLive",
+                "smithy.api#title": "AWS Elemental MediaLive"
+            },
             "version": "2017-10-14",
             "operations": [
                 {
@@ -14137,22 +14340,7 @@
                 {
                     "target": "com.amazonaws.medialive#UpdateReservation"
                 }
-            ],
-            "traits": {
-                "aws.api#service": {
-                    "sdkId": "MediaLive",
-                    "arnNamespace": "medialive",
-                    "cloudFormationName": "MediaLive",
-                    "cloudTrailEventSource": "medialive.amazonaws.com",
-                    "endpointPrefix": "medialive"
-                },
-                "aws.auth#sigv4": {
-                    "name": "medialive"
-                },
-                "aws.protocols#restJson1": {},
-                "smithy.api#documentation": "API for AWS Elemental MediaLive",
-                "smithy.api#title": "AWS Elemental MediaLive"
-            }
+            ]
         },
         "com.amazonaws.medialive#MediaPackageGroupSettings": {
             "type": "structure",
@@ -15834,7 +16022,7 @@
                 "Name": {
                     "target": "com.amazonaws.medialive#__stringMax32",
                     "traits": {
-                        "smithy.api#documentation": "Custom output group name optionally defined by the user.  Only letters, numbers, and the underscore character allowed; only 32 characters allowed.",
+                        "smithy.api#documentation": "Custom output group name optionally defined by the user.",
                         "smithy.api#jsonName": "name"
                     }
                 },
@@ -17892,6 +18080,13 @@
                         "smithy.api#jsonName": "logLevel"
                     }
                 },
+                "Maintenance": {
+                    "target": "com.amazonaws.medialive#MaintenanceStatus",
+                    "traits": {
+                        "smithy.api#documentation": "Maintenance settings for this channel.",
+                        "smithy.api#jsonName": "maintenance"
+                    }
+                },
                 "Name": {
                     "target": "com.amazonaws.medialive#__string",
                     "traits": {
@@ -18350,6 +18545,13 @@
                     "traits": {
                         "smithy.api#documentation": "The log level being written to CloudWatch Logs.",
                         "smithy.api#jsonName": "logLevel"
+                    }
+                },
+                "Maintenance": {
+                    "target": "com.amazonaws.medialive#MaintenanceStatus",
+                    "traits": {
+                        "smithy.api#documentation": "Maintenance settings for this channel.",
+                        "smithy.api#jsonName": "maintenance"
                     }
                 },
                 "Name": {
@@ -18914,7 +19116,7 @@
                 "StyleControl": {
                     "target": "com.amazonaws.medialive#TtmlDestinationStyleControl",
                     "traits": {
-                        "smithy.api#documentation": "When set to passthrough, passes through style and position information from a TTML-like input source (TTML, SMPTE-TT, CFF-TT) to the CFF-TT output or TTML output.",
+                        "smithy.api#documentation": "This field is not currently supported and will not affect the output styling. Leave the default value.",
                         "smithy.api#jsonName": "styleControl"
                     }
                 }
@@ -19244,6 +19446,13 @@
                     "traits": {
                         "smithy.api#documentation": "The log level to write to CloudWatch Logs.",
                         "smithy.api#jsonName": "logLevel"
+                    }
+                },
+                "Maintenance": {
+                    "target": "com.amazonaws.medialive#MaintenanceUpdateSettings",
+                    "traits": {
+                        "smithy.api#documentation": "Maintenance settings for this channel.",
+                        "smithy.api#jsonName": "maintenance"
                     }
                 },
                 "Name": {
@@ -20847,6 +21056,16 @@
                 }
             }
         },
+        "com.amazonaws.medialive#__integerMin32Max8191": {
+            "type": "integer",
+            "traits": {
+                "smithy.api#documentation": "Placeholder documentation for __integerMin32Max8191",
+                "smithy.api#range": {
+                    "min": 32,
+                    "max": 8191
+                }
+            }
+        },
         "com.amazonaws.medialive#__integerMin4Max20": {
             "type": "integer",
             "traits": {
@@ -21537,6 +21756,13 @@
                     "min": 6,
                     "max": 6
                 }
+            }
+        },
+        "com.amazonaws.medialive#__stringPattern010920300": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Placeholder documentation for __stringPattern010920300",
+                "smithy.api#pattern": "^([0,1]?[0-9]|2[0-3]):00$"
             }
         },
         "com.amazonaws.medialive#__timestamp": {

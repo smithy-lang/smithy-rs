@@ -71,8 +71,11 @@ pub enum RetryKind {
     /// Note: The specified `Duration` is considered a suggestion and may be replaced or ignored.
     Explicit(Duration),
 
-    /// The response associated with this variant should not be retried.
-    NotRetryable,
+    /// The response was a failure that should _not_ be retried.
+    UnretryableFailure,
+
+    /// The response was successful, so no retry is necessary.
+    Unnecessary,
 }
 
 /// Specifies how failed requests should be retried.
@@ -116,7 +119,7 @@ impl FromStr for RetryMode {
         // eq_ignore_ascii_case is OK here because the only strings we need to check for are ASCII
         if string.eq_ignore_ascii_case("standard") {
             Ok(RetryMode::Standard)
-        // TODO we can uncomment this once this issue is addressed: https://github.com/awslabs/aws-sdk-rust/issues/247
+        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/247): adaptive retries
         // } else if string.eq_ignore_ascii_case("adaptive") {
         //     Ok(RetryMode::Adaptive)
         } else {
@@ -173,13 +176,13 @@ impl RetryConfigBuilder {
     /// # use aws_smithy_types::retry::{RetryMode, RetryConfigBuilder};
     /// let a = RetryConfigBuilder::new().max_attempts(1);
     /// let b = RetryConfigBuilder::new().max_attempts(5).mode(RetryMode::Adaptive);
-    /// let retry_config = a.merge_with(b).build();
+    /// let retry_config = a.take_unset_from(b).build();
     /// // A's value take precedence over B's value
     /// assert_eq!(retry_config.max_attempts(), 1);
     /// // A never set a retry mode so B's value was used
     /// assert_eq!(retry_config.mode(), RetryMode::Adaptive);
     /// ```
-    pub fn merge_with(self, other: Self) -> Self {
+    pub fn take_unset_from(self, other: Self) -> Self {
         Self {
             mode: self.mode.or(other.mode),
             max_attempts: self.max_attempts.or(other.max_attempts),
@@ -324,7 +327,7 @@ mod tests {
         let other_builder = RetryConfigBuilder::new()
             .max_attempts(5)
             .mode(RetryMode::Standard);
-        let retry_config = self_builder.merge_with(other_builder).build();
+        let retry_config = self_builder.take_unset_from(other_builder).build();
 
         assert_eq!(retry_config.max_attempts, 1);
         assert_eq!(retry_config.mode, RetryMode::Adaptive);

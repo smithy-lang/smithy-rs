@@ -76,9 +76,13 @@ sealed class ServiceConfig(name: String) : Section(name) {
      *  ```
      */
     object BuilderBuild : ServiceConfig("BuilderBuild")
+
+    /**
+     * A section for extra functionality that needs to be defined with the config module
+     */
+    object Extras : ServiceConfig("Extras")
 }
 
-// TODO: if this becomes hot, it may need to be cached in a knowledge index
 fun ServiceShape.needsIdempotencyToken(model: Model): Boolean {
     val operationIndex = OperationIndex.of(model)
     val topDownIndex = TopDownIndex.of(model)
@@ -172,6 +176,9 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
                     }
                 }
             }
+        }
+        customizations.forEach {
+            it.section(ServiceConfig.Extras)(writer)
         }
     }
 }

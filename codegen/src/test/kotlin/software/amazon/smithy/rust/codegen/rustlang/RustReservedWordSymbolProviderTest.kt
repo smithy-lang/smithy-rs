@@ -14,13 +14,15 @@ import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 internal class RustReservedWordSymbolProviderTest {
     class Stub : RustSymbolProvider {
         override fun config(): SymbolVisitorConfig {
-            TODO("Not yet implemented")
+            PANIC("")
         }
 
         override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
@@ -34,7 +36,13 @@ internal class RustReservedWordSymbolProviderTest {
 
     @Test
     fun `member names are escaped`() {
-        val provider = RustReservedWordSymbolProvider(Stub())
+        val model = """
+            namespace namespace
+            structure container {
+                async: String
+            }
+        """.trimMargin().asSmithyModel()
+        val provider = RustReservedWordSymbolProvider(Stub(), model)
         provider.toMemberName(
             MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build()
         ) shouldBe "r##async"
@@ -57,7 +65,8 @@ internal class RustReservedWordSymbolProviderTest {
     }
 
     private fun expectEnumRename(original: String, expected: MaybeRenamed) {
-        val provider = RustReservedWordSymbolProvider(Stub())
+        val model = "namespace foo".asSmithyModel()
+        val provider = RustReservedWordSymbolProvider(Stub(), model)
         provider.toEnumVariantName(EnumDefinition.builder().name(original).value("foo").build()) shouldBe expected
     }
 }

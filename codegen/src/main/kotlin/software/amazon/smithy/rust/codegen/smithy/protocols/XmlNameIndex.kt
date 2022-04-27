@@ -19,6 +19,9 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
+/**
+ * KnowledgeIndex to determine the name for a given shape based on the XmlName trait and the shape's id.
+ */
 class XmlNameIndex(private val model: Model) : KnowledgeIndex {
     companion object {
         fun of(model: Model): XmlNameIndex {
@@ -63,5 +66,6 @@ data class XmlMemberIndex(val dataMembers: List<MemberShape>, val attributeMembe
         }
     }
 
-    fun isNotEmpty() = dataMembers.isNotEmpty() || attributeMembers.isNotEmpty()
+    fun isEmpty() = dataMembers.isEmpty() && attributeMembers.isEmpty()
+    fun isNotEmpty() = !isEmpty()
 }

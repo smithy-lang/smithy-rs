@@ -48,14 +48,17 @@
 //! }
 //! ```
 
+use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use pin_project_lite::pin_project;
 
+/// Boxed future type alias
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+#[derive(Debug)]
 /// Zero sized type for using NowOrLater when no future variant exists.
 pub enum OnlyReady {}
 
@@ -69,6 +72,17 @@ pin_project! {
     }
 }
 
+impl<T, F> fmt::Debug for NowOrLater<T, F>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NowOrLater")
+            .field("inner", &self.inner)
+            .finish()
+    }
+}
+
 pin_project! {
     #[project = NowOrLaterProj]
     enum Inner<T, F> {
@@ -79,13 +93,30 @@ pin_project! {
     }
 }
 
+impl<T, F> fmt::Debug for Inner<T, F>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Now { value } => f.debug_struct("Now").field("value", value).finish(),
+            Self::Later { .. } => f
+                .debug_struct("Later")
+                .field("future", &"<future>")
+                .finish(),
+        }
+    }
+}
+
 impl<T, F> NowOrLater<T, F> {
+    /// Creates a future that will resolve when `future` resolves
     pub fn new(future: F) -> Self {
         Self {
             inner: Inner::Later { future },
         }
     }
 
+    /// Creates a future that immediately resolves to `value`
     pub fn ready(value: T) -> NowOrLater<T, F> {
         let value = Some(value);
         Self {

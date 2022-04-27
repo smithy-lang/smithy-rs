@@ -1,0 +1,33 @@
+{
+  "name": "ci-cdk",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "rust-sdk-ci-cdk": "bin/ci-cdk.js"
+  },
+  "scripts": {
+    "format": "prettier --write '**/*.ts'",
+    "lint": "eslint --ext .ts lib",
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/jest": "^27.0.0",
+    "@types/node": "^17.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.12.0",
+    "@typescript-eslint/parser": "^5.12.0",
+    "aws-cdk": "^2.0.0",
+    "aws-cdk-lib": "^2.0.0",
+    "constructs": "^10.0.0",
+    "eslint": "^8.9.0",
+    "eslint-config-prettier": "^8.4.0",
+    "jest": "^27.0.0",
+    "prettier": "^2.5.0",
+    "source-map-support": "^0.5.16",
+    "ts-jest": "^27.0.0",
+    "ts-node": "^10.0.0",
+    "typescript": "~4.5.5"
+  }
+}

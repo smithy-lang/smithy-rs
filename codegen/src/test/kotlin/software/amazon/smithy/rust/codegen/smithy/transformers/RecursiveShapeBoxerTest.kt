@@ -37,11 +37,11 @@ internal class RecursiveShapeBoxerTest {
     @Test
     fun `add the box trait to simple recursive shapes`() {
         val model = """
-        namespace com.example
-        structure Recursive {
-            RecursiveStruct: Recursive,
-            anotherField: Boolean
-        }
+            namespace com.example
+            structure Recursive {
+                RecursiveStruct: Recursive,
+                anotherField: Boolean
+            }
         """.asSmithyModel()
         val transformed = RecursiveShapeBoxer.transform(model)
         val member: MemberShape = transformed.lookup("com.example#Recursive\$RecursiveStruct")
@@ -51,25 +51,25 @@ internal class RecursiveShapeBoxerTest {
     @Test
     fun `add the box trait to complex structures`() {
         val model = """
-       namespace com.example
-       structure Expr {
-            left: Atom,
-            right: Atom
-       }
+            namespace com.example
+            structure Expr {
+                 left: Atom,
+                 right: Atom
+            }
 
-       union Atom {
-            add: Expr,
-            sub: Expr,
-            literal: Integer,
-            more: SecondTree
-       }
+            union Atom {
+                 add: Expr,
+                 sub: Expr,
+                 literal: Integer,
+                 more: SecondTree
+            }
 
-       structure SecondTree {
-            member: Expr,
-            otherMember: Atom,
-            third: SecondTree
-       }
-       """.asSmithyModel()
+            structure SecondTree {
+                 member: Expr,
+                 otherMember: Atom,
+                 third: SecondTree
+            }
+        """.asSmithyModel()
         val transformed = RecursiveShapeBoxer.transform(model)
         val boxed = transformed.shapes().filter { it.hasTrait<RustBoxTrait>() }.toList()
         boxed.map { it.id.toString().removePrefix("com.example#") }.toSet() shouldBe setOf(

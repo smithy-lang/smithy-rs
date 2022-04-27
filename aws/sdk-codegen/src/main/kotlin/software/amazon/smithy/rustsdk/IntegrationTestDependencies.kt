@@ -26,9 +26,10 @@ class IntegrationTestDecorator : RustCodegenDecorator {
         codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        val integrationTestPath = Paths.get("aws/sdk/integration-tests")
+        val integrationTestPath = Paths.get(SdkSettings.from(codegenContext.settings).integrationTestPath)
         check(Files.exists(integrationTestPath)) {
-            "IntegrationTestDecorator expects to be run from the smithy-rs package root"
+            "Failed to find the AWS SDK integration tests. Make sure the integration test path is configured " +
+                "correctly in the smithy-build.json."
         }
 
         val moduleName = codegenContext.moduleName.substring("aws-sdk-".length)
@@ -55,14 +56,17 @@ class IntegrationTestDependencies(
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
-        LibRsSection.Body -> writable {
+        is LibRsSection.Body -> writable {
             if (hasTests) {
                 val smithyClient = CargoDependency.SmithyClient(runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 addDependency(smithyClient)
+                addDependency(CargoDependency.SmithyProtocolTestHelpers(runtimeConfig))
                 addDependency(SerdeJson)
                 addDependency(Tokio)
                 addDependency(FuturesUtil)
+                addDependency(Tracing)
+                addDependency(TracingSubscriber)
             }
             if (hasBenches) {
                 addDependency(Criterion)
@@ -95,3 +99,5 @@ private val Hound = CargoDependency("hound", CratesIo("3.4"), DependencyScope.De
 private val SerdeJson = CargoDependency("serde_json", CratesIo("1"), features = emptySet(), scope = DependencyScope.Dev)
 private val Tokio = CargoDependency("tokio", CratesIo("1"), features = setOf("macros", "test-util"), scope = DependencyScope.Dev)
 private val FuturesUtil = CargoDependency("futures-util", CratesIo("0.3"), scope = DependencyScope.Dev)
+private val Tracing = CargoDependency("tracing", CratesIo("0.1"), scope = DependencyScope.Dev)
+private val TracingSubscriber = CargoDependency("tracing-subscriber", CratesIo("0.2"), scope = DependencyScope.Dev)

@@ -21,13 +21,13 @@ fn sanitize_error_code(error_code: &str) -> &str {
     // Trim a trailing URL from the error code, beginning with a `:`
     let error_code = match error_code.find(':') {
         Some(idx) => &error_code[..idx],
-        None => &error_code,
+        None => error_code,
     };
 
     // Trim a prefixing namespace from the error code, beginning with a `#`
     match error_code.find('#') {
         Some(idx) => &error_code[idx + 1..],
-        None => &error_code,
+        None => error_code,
     }
 }
 
@@ -98,7 +98,7 @@ pub fn parse_generic_error(
     if let Some(code) = error_type_from_header(headers)
         .map_err(|_| DeserializeError::custom("X-Amzn-Errortype header was not valid UTF-8"))?
         .or_else(|| code.as_deref())
-        .map(|c| sanitize_error_code(c))
+        .map(sanitize_error_code)
     {
         err_builder.code(code);
     }

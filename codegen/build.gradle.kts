@@ -2,6 +2,9 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
 plugins {
     kotlin("jvm")
     id("org.jetbrains.dokka")
@@ -22,6 +25,7 @@ val kotestVersion: String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
+    implementation("org.jsoup:jsoup:1.14.3")
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
     api("com.moandjiezana.toml:toml4j:0.7.2")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
@@ -81,6 +85,10 @@ tasks.test {
     useJUnitPlatform()
     testLogging {
         events("passed", "skipped", "failed")
+        exceptionFormat = TestExceptionFormat.FULL
+        showCauses = true
+        showExceptions = true
+        showStackTraces = true
         showStandardStreams = true
     }
 }
@@ -112,9 +120,5 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories {
-        maven {
-            url = uri("$buildDir/repository")
-        }
-    }
+    repositories { maven { url = uri("$buildDir/repository") } }
 }

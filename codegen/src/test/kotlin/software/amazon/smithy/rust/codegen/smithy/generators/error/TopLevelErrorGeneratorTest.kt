@@ -19,27 +19,27 @@ internal class TopLevelErrorGeneratorTest {
     @Test
     fun `top level errors are send + sync`() {
         val model = """
-        namespace com.example
+            namespace com.example
 
-        use aws.protocols#restJson1
+            use aws.protocols#restJson1
 
-        @restJson1
-        service HelloService {
-            operations: [SayHello],
-            version: "1"
-        }
+            @restJson1
+            service HelloService {
+                operations: [SayHello],
+                version: "1"
+            }
 
-        @http(uri: "/", method: "POST")
-        operation SayHello {
-            errors: [SorryBusy, CanYouRepeatThat]
+            @http(uri: "/", method: "POST")
+            operation SayHello {
+                errors: [SorryBusy, CanYouRepeatThat]
 
-        }
+            }
 
-        @error("server")
-        structure SorryBusy { }
+            @error("server")
+            structure SorryBusy { }
 
-        @error("client")
-        structure CanYouRepeatThat { }
+            @error("client")
+            structure CanYouRepeatThat { }
         """.asSmithyModel()
 
         val (pluginContext, testDir) = generatePluginContext(model)
@@ -53,7 +53,7 @@ internal class TopLevelErrorGeneratorTest {
             fn tl_errors_are_send_sync() {
                 check_send_sync::<$moduleName::Error>()
             }
-        """
+            """
         )
         "cargo test".runCommand(testDir)
     }

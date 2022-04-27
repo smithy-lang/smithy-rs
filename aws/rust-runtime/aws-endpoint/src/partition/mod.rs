@@ -5,7 +5,7 @@
 
 pub mod endpoint;
 
-use crate::{AwsEndpoint, BoxError, ResolveAwsEndpoint};
+use aws_types::endpoint::{AwsEndpoint, BoxError, ResolveAwsEndpoint};
 use aws_types::region::Region;
 use regex::Regex;
 use std::collections::HashMap;
@@ -19,6 +19,7 @@ use std::iter;
 ///
 /// Once a partition has been identified, endpoint resolution is delegated to the underlying
 /// partition.
+#[derive(Debug)]
 pub struct PartitionResolver {
     /// Base partition used if no partitions match the region regex
     base: Partition,
@@ -51,7 +52,7 @@ impl ResolveAwsEndpoint for PartitionResolver {
 
 #[derive(Debug)]
 pub struct Partition {
-    id: &'static str,
+    _id: &'static str,
     region_regex: Regex,
     partition_endpoint: Option<Region>,
     regionalized: Regionalized,
@@ -114,7 +115,7 @@ impl Builder {
         let default_endpoint = self.default_endpoint?;
         let endpoints = self.endpoints.into_iter().collect();
         Some(Partition {
-            id: self.id?,
+            _id: self.id?,
             region_regex: self.region_regex?,
             partition_endpoint: self.partition_endpoint,
             regionalized: self.regionalized.unwrap_or_default(),
@@ -156,7 +157,7 @@ impl ResolveAwsEndpoint for Partition {
             Regionalized::Regionalized => Some(region),
         };
         let endpoint_for_region = resolved_region
-            .and_then(|region| self.endpoints.get(&region))
+            .and_then(|region| self.endpoints.get(region))
             .unwrap_or(&self.default_endpoint);
         endpoint_for_region.resolve_endpoint(region)
     }
@@ -200,10 +201,10 @@ mod test {
                 Metadata {
                     uri_template: "service-alt.us-west-1.amazonaws.com",
                     protocol: Http,
-                    credential_scope: CredentialScope {
-                        region: Some(SigningRegion::from_static("us-west-1")),
-                        service: Some(SigningService::from_static("foo")),
-                    },
+                    credential_scope: CredentialScope::builder()
+                        .region(SigningRegion::from_static("us-west-1"))
+                        .service(SigningService::from_static("foo"))
+                        .build(),
                     signature_versions: V4,
                 },
             )
@@ -218,10 +219,9 @@ mod test {
             .default_endpoint(Metadata {
                 uri_template: "service.{region}.amazonaws.com",
                 protocol: Https,
-                credential_scope: CredentialScope {
-                    service: Some(SigningService::from_static("foo")),
-                    ..Default::default()
-                },
+                credential_scope: CredentialScope::builder()
+                    .service(SigningService::from_static("foo"))
+                    .build(),
                 signature_versions: SignatureVersion::V4,
             })
             .partition_endpoint("partition")
@@ -231,10 +231,10 @@ mod test {
                 Metadata {
                     uri_template: "some-global-thing.amazonaws.cn",
                     protocol: Https,
-                    credential_scope: CredentialScope {
-                        region: Some(SigningRegion::from_static("cn-east-1")),
-                        service: Some(SigningService::from_static("foo")),
-                    },
+                    credential_scope: CredentialScope::builder()
+                        .region(SigningRegion::from_static("cn-east-1"))
+                        .service(SigningService::from_static("foo"))
+                        .build(),
                     signature_versions: SignatureVersion::V4,
                 },
             )
@@ -243,10 +243,9 @@ mod test {
                 Metadata {
                     uri_template: "fips.amazonaws.cn",
                     protocol: Https,
-                    credential_scope: CredentialScope {
-                        region: Some(SigningRegion::from_static("cn-fips")),
-                        service: None,
-                    },
+                    credential_scope: CredentialScope::builder()
+                        .region(SigningRegion::from_static("cn-fips"))
+                        .build(),
                     signature_versions: SignatureVersion::V4,
                 },
             )
@@ -269,10 +268,9 @@ mod test {
                 uri_template: "service.{region}.amazonaws.com",
                 protocol: Https,
                 signature_versions: V4,
-                credential_scope: CredentialScope {
-                    service: Some(SigningService::from_static("foo")),
-                    ..Default::default()
-                },
+                credential_scope: CredentialScope::builder()
+                    .service(SigningService::from_static("foo"))
+                    .build(),
             })
             .build()
             .expect("valid partition")
@@ -378,12 +376,15 @@ mod test {
         endpoint.set_endpoint(&mut test_uri, None);
         assert_eq!(test_uri, Uri::from_static(test_case.uri));
         assert_eq!(
-            endpoint.credential_scope.region,
-            Some(SigningRegion::from_static(test_case.signing_region))
+            endpoint.credential_scope().region(),
+            Some(&SigningRegion::from_static(test_case.signing_region))
         );
         assert_eq!(
-            endpoint.credential_scope.service,
-            test_case.signing_service.map(SigningService::from_static)
+            endpoint.credential_scope().service(),
+            test_case
+                .signing_service
+                .map(SigningService::from_static)
+                .as_ref()
         )
     }
 }

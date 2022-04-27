@@ -9,9 +9,9 @@ import com.moandjiezana.toml.TomlWriter
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
-import software.amazon.smithy.utils.CodeWriter
 
 /**
  * Customizations to apply to the generated Cargo.toml file.
@@ -43,7 +43,7 @@ typealias ManifestCustomizations = Map<String, Any?>
  */
 class CargoTomlGenerator(
     private val settings: RustSettings,
-    private val writer: CodeWriter,
+    private val writer: RustWriter,
     private val manifestCustomizations: ManifestCustomizations,
     private val dependencies: List<CargoDependency>,
     private val features: List<Feature>

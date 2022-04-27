@@ -130,13 +130,14 @@ class SigV4SigningConfig(
     }
 }
 
-fun needsAmzSha256(service: ServiceShape) = when {
-    service.id == ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+fun needsAmzSha256(service: ServiceShape) = when (service.id) {
+    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+    ShapeId.from("com.amazonaws.s3control#AWSS3ControlServiceV20180820") -> true
     else -> false
 }
 
-fun disableDoubleEncode(service: ServiceShape) = when {
-    service.id == ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+fun disableDoubleEncode(service: ServiceShape) = when (service.id) {
+    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
     else -> false
 }
 
@@ -156,10 +157,7 @@ class SigV4SigningFeature(
         return when (section) {
             is OperationSection.MutateRequest -> writable {
                 rustTemplate(
-                    """
-                    ##[allow(unused_mut)]
-                    let mut signing_config = #{sig_auth}::signer::OperationSigningConfig::default_config();
-                    """,
+                    "let mut signing_config = #{sig_auth}::signer::OperationSigningConfig::default_config();",
                     *codegenScope
                 )
                 if (needsAmzSha256(service)) {

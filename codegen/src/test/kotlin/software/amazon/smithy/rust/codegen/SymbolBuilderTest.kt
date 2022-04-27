@@ -221,8 +221,8 @@ class SymbolBuilderTest {
             .unwrap()
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(member)
-        sym.rustType().render(false) shouldBe "Option<Instant>"
-        sym.referenceClosure().map { it.name } shouldContain "Instant"
+        sym.rustType().render(false) shouldBe "Option<DateTime>"
+        sym.referenceClosure().map { it.name } shouldContain "DateTime"
         sym.references[0].dependencies.shouldNotBeEmpty()
     }
 

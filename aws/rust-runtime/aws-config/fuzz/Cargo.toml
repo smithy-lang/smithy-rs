@@ -4,16 +4,19 @@ name = "aws-types-fuzz"
 version = "0.0.0"
 authors = ["Automatically generated"]
 publish = false
-edition = "2018"
+edition = "2021"
 
 [package.metadata]
 cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+aws-config = { path = ".." }
 
 [dependencies.aws-types]
-path = ".."
+path = "../../../sdk/build/aws-sdk/sdk/aws-types"
+
+
 
 # Prevent this from interfering with workspaces
 [workspace]

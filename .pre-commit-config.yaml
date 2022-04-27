@@ -5,13 +5,26 @@ repos:
   - id: check-yaml
   - id: end-of-file-fixer
   - id: trailing-whitespace
+- repo: local
+  hooks:
+  - id: kotlin-block-quotes
+    name: Kotlin Block Quotes
+    entry: ./.pre-commit-hooks/kotlin-block-quotes.py
+    language: python
+    files: ^.*\.kt$
+  - id: license-header-check
+    name: License Header Check
+    entry: ./.pre-commit-hooks/license-header.sh
+    language: system
+    files: ^.*$
+    pass_filenames: false
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
   rev: v1.6.1
   hooks:
   - id: pretty-format-kotlin
-    args: [--autofix, --ktlint-version, 0.40.0]
+    args: [--autofix, --ktlint-version, 0.45.2]
   - id: pretty-format-yaml
     args: [--autofix, --indent, '2']
   - id: pretty-format-rust
-    entry: rustfmt --edition 2018
+    entry: rustfmt --edition 2021
     files: ^.*\.rs$

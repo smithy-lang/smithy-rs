@@ -13,9 +13,9 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
@@ -26,7 +26,7 @@ import java.util.logging.Logger
  * [RustCodegenDecorator] allows downstream users to customize code generation.
  *
  * For example, AWS-specific code generation generates customizations required to support
- * AWS services. A different downstream customer way wish to add a different set of derive
+ * AWS services. A different downstream customer may wish to add a different set of derive
  * attributes to the generated classes.
  */
 interface RustCodegenDecorator {
@@ -139,15 +139,15 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
         return orderedDecorators.forEach { it.extras(codegenContext, rustCrate) }
     }
 
-    override fun transformModel(service: ServiceShape, baseModel: Model): Model {
-        return orderedDecorators.foldRight(baseModel) { decorator, model ->
-            decorator.transformModel(service, model)
+    override fun transformModel(service: ServiceShape, model: Model): Model {
+        return orderedDecorators.foldRight(model) { decorator, otherModel ->
+            decorator.transformModel(service, otherModel)
         }
     }
 
     companion object {
         private val logger = Logger.getLogger("RustCodegenSPILoader")
-        fun fromClasspath(context: PluginContext): CombinedCodegenDecorator {
+        fun fromClasspath(context: PluginContext, vararg extras: RustCodegenDecorator): CombinedCodegenDecorator {
             val decorators = ServiceLoader.load(
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader)
@@ -155,7 +155,7 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
                 .onEach {
                     logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                 }.toList()
-            return CombinedCodegenDecorator(decorators + RequiredCustomizations() + FluentClientDecorator())
+            return CombinedCodegenDecorator(decorators + RequiredCustomizations() + FluentClientDecorator() + extras)
         }
     }
 }

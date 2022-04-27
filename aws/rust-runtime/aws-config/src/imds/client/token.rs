@@ -14,13 +14,16 @@
 //! - Retry token loading when it fails
 //! - Attach the token to the request in the `x-aws-ec2-metadata-token` header
 
+use std::fmt::{Debug, Formatter};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use aws_http::user_agent::UserAgentStage;
+use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_client::erase::DynConnector;
+use aws_smithy_client::retry;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::endpoint::Endpoint;
 use aws_smithy_http::middleware::AsyncMapRequest;
@@ -29,13 +32,13 @@ use aws_smithy_http::operation::Operation;
 use aws_smithy_http::operation::{Metadata, Request};
 use aws_smithy_http::response::ParseStrictResponse;
 use aws_smithy_http_tower::map_request::MapRequestLayer;
+use aws_smithy_types::timeout;
 use aws_types::os_shim_internal::TimeSource;
+
 use http::{HeaderValue, Uri};
 
 use crate::cache::ExpiringCache;
 use crate::imds::client::{ImdsError, ImdsErrorPolicy, TokenError};
-use aws_smithy_client::retry;
-use std::fmt::{Debug, Formatter};
 
 /// Token Refresh Buffer
 ///
@@ -82,9 +85,15 @@ impl TokenMiddleware {
         endpoint: Endpoint,
         token_ttl: Duration,
         retry_config: retry::Config,
+        timeout_config: timeout::Config,
+        sleep_impl: Option<Arc<dyn AsyncSleep>>,
     ) -> Self {
-        let inner_client =
-            aws_smithy_client::Client::new(connector).with_retry_config(retry_config);
+        let inner_client = aws_smithy_client::Builder::new()
+            .connector(connector)
+            .sleep_impl(sleep_impl)
+            .build()
+            .with_retry_config(retry_config)
+            .with_timeout_config(timeout_config);
         let client = Arc::new(inner_client);
         Self {
             client,
@@ -131,7 +140,7 @@ impl TokenMiddleware {
             .body(SdkBody::empty())
             .expect("valid HTTP request");
         let mut request = operation::Request::new(request);
-        request.properties_mut().insert(super::USER_AGENT);
+        request.properties_mut().insert(super::user_agent());
 
         let operation = Operation::new(request, self.token_parser.clone())
             .with_retry_policy(ImdsErrorPolicy)

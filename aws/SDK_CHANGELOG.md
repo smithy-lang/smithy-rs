@@ -1,14 +1,421 @@
-vNext (Month Day, Year)
-=======================
+<!-- Do not manually edit this file, use `update-changelogs` -->
+0.10.1 (April 14th, 2022)
+=========================
+
+**Breaking Changes:**
+- ⚠ ([aws-sdk-rust#490](https://github.com/awslabs/aws-sdk-rust/issues/490)) Update all SDK and runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)
+
+**New this release:**
+- ([smithy-rs#1262](https://github.com/awslabs/smithy-rs/issues/1262), @liubin) Fix link to Developer Guide in crate's README.md
+- 🐛 ([aws-sdk-rust#1271](https://github.com/awslabs/aws-sdk-rust/issues/1271), @elrob) Treat blank environment variable credentials (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`) as missing instead of attempting to use them to sign requests.
+- ([aws-sdk-rust#479](https://github.com/awslabs/aws-sdk-rust/issues/479), [smithy-rs#1296](https://github.com/awslabs/smithy-rs/issues/1296)) Add support for configuring the session length in [AssumeRoleProvider](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html)
+- ([smithy-rs#1296](https://github.com/awslabs/smithy-rs/issues/1296)) Add caching to [AssumeRoleProvider](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html)
+- ([smithy-rs#1300](https://github.com/awslabs/smithy-rs/issues/1300), @benesch) Add endpoint resolver to SdkConfig. This enables overriding the endpoint resolver for all services build from a single SdkConfig.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @benesch ([smithy-rs#1300](https://github.com/awslabs/smithy-rs/issues/1300))
+- @elrob ([aws-sdk-rust#1271](https://github.com/awslabs/aws-sdk-rust/issues/1271))
+- @liubin ([smithy-rs#1262](https://github.com/awslabs/smithy-rs/issues/1262))
+
+0.9.0 (March 17, 2022)
+======================
+**Breaking Changes:**
+- ⚠ ([aws-sdk-rust#406](https://github.com/awslabs/aws-sdk-rust/issues/406)) `aws_types::config::Config` has been renamed to `aws_types::sdk_config::SdkConfig`. This is to better differentiate it
+    from service-specific configs like `aws_sdk_s3::Config`. If you were creating shared configs with
+    `aws_config::load_from_env()`, then you don't have to do anything. If you were directly referring to a shared config,
+    update your `use` statements and `struct` names.
+
+    _Before:_
+    ```rust
+    use aws_types::config::Config;
+
+    fn main() {
+        let config = Config::builder()
+        // config builder methods...
+        .build()
+        .await;
+    }
+    ```
+
+    _After:_
+    ```rust
+    // We re-export this type from the root module so it's easier to reference
+    use aws_types::SdkConfig;
+
+    fn main() {
+        let config = SdkConfig::builder()
+        // config builder methods...
+        .build()
+        .await;
+    }
+    ```
+- ⚠ ([smithy-rs#724](https://github.com/awslabs/smithy-rs/issues/724)) Timeout configuration has been refactored a bit. If you were setting timeouts through environment variables or an AWS
+    profile, then you shouldn't need to change anything. Take note, however, that we don't currently support HTTP connect,
+    read, write, or TLS negotiation timeouts. If you try to set any of those timeouts in your profile or environment, we'll
+    log a warning explaining that those timeouts don't currently do anything.
+
+    If you were using timeouts programmatically,
+    you'll need to update your code. In previous versions, timeout configuration was stored in a single `TimeoutConfig`
+    struct. In this new version, timeouts have been broken up into several different config structs that are then collected
+    in a `timeout::Config` struct. As an example, to get the API per-attempt timeout in previous versions you would access
+    it with `<your TimeoutConfig>.api_call_attempt_timeout()` and in this new version you would access it with
+    `<your timeout::Config>.api.call_attempt_timeout()`. We also made some unimplemented timeouts inaccessible in order to
+    avoid giving users the impression that setting them had an effect. We plan to re-introduce them once they're made
+    functional in a future update.
+
+**New this release:**
+- 🎉 ([aws-sdk-rust#475](https://github.com/awslabs/aws-sdk-rust/issues/475), [aws-sdk-rust#473](https://github.com/awslabs/aws-sdk-rust/issues/473)) Enable presigning for S3 operations UploadPart and DeleteObject
+
+
+0.8.0 (Februrary 24, 2022)
+==========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#1216](https://github.com/awslabs/smithy-rs/issues/1216)) `aws-sigv4` no longer skips the `content-length` and `content-type` headers when signing with `SignatureLocation::QueryParams`
+
+**New this release:**
+- 🎉 ([smithy-rs#1220](https://github.com/awslabs/smithy-rs/issues/1220), [aws-sdk-rust#462](https://github.com/awslabs/aws-sdk-rust/issues/462)) Made it possible to change settings, such as load timeout, on the credential cache used by the `DefaultCredentialsChain`.
+- 🐛 ([smithy-rs#1197](https://github.com/awslabs/smithy-rs/issues/1197)) Fixed a bug that caused clients to eventually stop retrying. The cross-request retry allowance wasn't being reimbursed upon receiving a successful response, so once this allowance reached zero, no further retries would ever be attempted.
+- 🐛 ([smithy-rs#1217](https://github.com/awslabs/smithy-rs/issues/1217), [aws-sdk-rust#467](https://github.com/awslabs/aws-sdk-rust/issues/467)) `ClientBuilder` helpers `rustls()` and `native_tls()` now return `DynConnector` so that they once again work when constructing clients with custom middleware in the SDK.
+- 🐛 ([smithy-rs#1216](https://github.com/awslabs/smithy-rs/issues/1216), [aws-sdk-rust#466](https://github.com/awslabs/aws-sdk-rust/issues/466)) Fixed a bug in S3 that prevented the `content-length` and `content-type` inputs from being included in a presigned request signature. With this fix, customers can generate presigned URLs that enforce `content-length` and `content-type` for requests to S3.
+
+
+0.7.0 (February 18th, 2022)
+===========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#1144](https://github.com/awslabs/smithy-rs/issues/1144)) The `aws_config::http_provider` module has been renamed to `aws_config::http_credential_provider` to better reflect its purpose.
+- ⚠ ([smithy-rs#1144](https://github.com/awslabs/smithy-rs/issues/1144)) Some APIs required that timeout configuration be specified with an `aws_smithy_client::timeout::Settings` struct while
+    others required an `aws_smithy_types::timeout::TimeoutConfig` struct. Both were equivalent. Now `aws_smithy_types::timeout::TimeoutConfig`
+    is used everywhere and `aws_smithy_client::timeout::Settings` has been removed. Here's how to migrate code your code that
+    depended on `timeout::Settings`:
+
+    The old way:
+    ```rust
+    let timeout = timeout::Settings::new()
+        .with_connect_timeout(Duration::from_secs(1))
+        .with_read_timeout(Duration::from_secs(2));
+    ```
+
+    The new way:
+    ```rust
+    // This example is passing values, so they're wrapped in `Option::Some`. You can disable a timeout by passing `None`.
+    let timeout = TimeoutConfig::new()
+        .with_connect_timeout(Some(Duration::from_secs(1)))
+        .with_read_timeout(Some(Duration::from_secs(2)));
+    ```
+- ⚠ ([smithy-rs#1144](https://github.com/awslabs/smithy-rs/issues/1144)) `MakeConnectorFn`, `HttpConnector`, and `HttpSettings` have been moved from `aws_config::provider_config` to
+    `aws_smithy_client::http_connector`. This is in preparation for a later update that will change how connectors are
+    created and configured.
+
+    If you were using these structs/enums, you can migrate your old code by importing them from their new location.
+- ⚠ ([smithy-rs#1144](https://github.com/awslabs/smithy-rs/issues/1144)) Along with moving `HttpConnector` to `aws_smithy_client`, the `HttpConnector::make_connector` method has been renamed to
+    `HttpConnector::connector`.
+
+    If you were using this method, you can migrate your old code by calling `connector` instead of `make_connector`.
+- ⚠ ([smithy-rs#1085](https://github.com/awslabs/smithy-rs/issues/1085)) Moved the following re-exports into a `types` module for all services:
+    - `aws_sdk_<service>::AggregatedBytes` -> `aws_sdk_<service>::types::AggregatedBytes`
+    - `aws_sdk_<service>::Blob` -> `aws_sdk_<service>::types::Blob`
+    - `aws_sdk_<service>::ByteStream` -> `aws_sdk_<service>::types::ByteStream`
+    - `aws_sdk_<service>::DateTime` -> `aws_sdk_<service>::types::DateTime`
+    - `aws_sdk_<service>::SdkError` -> `aws_sdk_<service>::types::SdkError`
+- ⚠ ([smithy-rs#1085](https://github.com/awslabs/smithy-rs/issues/1085)) `AggregatedBytes` and `ByteStream` are now only re-exported if the service has streaming operations,
+    and `Blob`/`DateTime` are only re-exported if the service uses them.
+- ⚠ ([smithy-rs#1130](https://github.com/awslabs/smithy-rs/issues/1130)) MSRV increased from `1.54` to `1.56.1` per our 2-behind MSRV policy.
+- ⚠ ([smithy-rs#1132](https://github.com/awslabs/smithy-rs/issues/1132)) Fluent clients for all services no longer have generics, and now use `DynConnector` and `DynMiddleware` to allow
+    for connector/middleware customization. This should only break references to the client that specified generic types for it.
+
+    If you customized the AWS client's connector or middleware with something like the following:
+    ```rust
+    let client = aws_sdk_s3::Client::with_config(
+        aws_sdk_s3::client::Builder::new()
+            .connector(my_custom_connector) // Connector customization
+            .middleware(my_custom_middleware) // Middleware customization
+            .default_async_sleep()
+            .build(),
+        config
+    );
+    ```
+    Then you will need to wrap the custom connector or middleware in
+    [`DynConnector`](https://docs.rs/aws-smithy-client/0.36.0/aws_smithy_client/erase/struct.DynConnector.html)
+    and
+    [`DynMiddleware`](https://docs.rs/aws-smithy-client/0.36.0/aws_smithy_client/erase/struct.DynMiddleware.html)
+    respectively:
+    ```rust
+    let client = aws_sdk_s3::Client::with_config(
+        aws_sdk_s3::client::Builder::new()
+            .connector(DynConnector::new(my_custom_connector)) // Now with `DynConnector`
+            .middleware(DynMiddleware::new(my_custom_middleware)) // Now with `DynMiddleware`
+            .default_async_sleep()
+            .build(),
+        config
+    );
+    ```
+
+    If you had functions that took a generic connector, such as the following:
+    ```rust
+    fn some_function<C, E>(conn: C) -> Result<()>
+    where
+        C: aws_smithy_client::bounds::SmithyConnector<Error = E> + Send + 'static,
+        E: Into<aws_smithy_http::result::ConnectorError>
+    {
+        // ...
+    }
+    ```
+
+    Then the generics and trait bounds will no longer be necessary:
+    ```rust
+    fn some_function(conn: DynConnector) -> Result<()> {
+        // ...
+    }
+    ```
+
+    Similarly, functions that took a generic middleware can replace the generic with `DynMiddleware` and
+    remove their trait bounds.
+
+**New this release:**
+- 🐛 ([aws-sdk-rust#443](https://github.com/awslabs/aws-sdk-rust/issues/443)) The `ProfileFileRegionProvider` will now respect regions set in chained profiles
+- ([smithy-rs#1144](https://github.com/awslabs/smithy-rs/issues/1144)) Several modules defined in the `aws_config` crate that used to be declared within another module's file have been moved to their own files. The moved modules are `sts`, `connector`, and `default_providers`. They still have the exact same import paths.
+- 🐛 ([smithy-rs#1129](https://github.com/awslabs/smithy-rs/issues/1129)) Fix some docs links not working because they were escaped when they shouldn't have been
+- ([smithy-rs#1085](https://github.com/awslabs/smithy-rs/issues/1085)) The `Client` and `Config` re-exports now have their documentation inlined in the service docs
+- 🐛 ([smithy-rs#1180](https://github.com/awslabs/smithy-rs/issues/1180)) Fixed example showing how to use hardcoded credentials in `aws-types`
+
+
+0.6.0 (January 26, 2022)
+========================
+**New this release:**
+- ([aws-sdk-rust#423](https://github.com/awslabs/aws-sdk-rust/issues/423)) Added `impl Into<http::request::Builder> for PresignedRequest` and a conversion method for turning `PresignedRequest`s into `http::Request`s.
+- ([smithy-rs#1087](https://github.com/awslabs/smithy-rs/issues/1087)) Convert several `info` spans to `debug` in aws-config
+- ([smithy-rs#1118](https://github.com/awslabs/smithy-rs/issues/1118)) SDK examples now come from [`awsdocs/aws-doc-sdk-examples`](https://github.com/awsdocs/aws-doc-sdk-examples) rather than from `smithy-rs`
+
+
+0.5.2 (January 20th, 2022)
+==========================
+
+**New this release:**
+- 🐛 ([smithy-rs#1100](https://github.com/awslabs/smithy-rs/issues/1100)) _Internal:_ Update sync script to run gradle clean. This fixes an issue where codegen was not triggered when only properties changed.
+
+
+v0.5.1 (January 19th, 2022)
+===========================
+
+**New this release:**
+- 🐛 ([smithy-rs#1089](https://github.com/awslabs/smithy-rs/issues/1089)) Fix dev-dependency cycle between aws-sdk-sso and aws-config
+
+
+0.5.0 (January 19, 2022)
+========================
+**New this release:**
+- 🎉 ([aws-sdk-rust#348](https://github.com/awslabs/aws-sdk-rust/issues/348)) The docs for fluent builders now have easy links to their corresponding Input, Output, and Error structs
+- 🎉 ([smithy-rs#1051](https://github.com/awslabs/smithy-rs/issues/1051), [aws-sdk-rust#4](https://github.com/awslabs/aws-sdk-rust/issues/4)) Add support for SSO credentials
+- 🐛🎉 ([smithy-rs#1065](https://github.com/awslabs/smithy-rs/issues/1065), [aws-sdk-rust#398](https://github.com/awslabs/aws-sdk-rust/issues/398), @nmoutschen) Silence profile credential warnings in Lambda environment
+- 🐛 ([aws-sdk-rust#405](https://github.com/awslabs/aws-sdk-rust/issues/405), [smithy-rs#1083](https://github.com/awslabs/smithy-rs/issues/1083)) Fixed paginator bug impacting EC2 describe VPCs (and others)
+
+**Contributors**
+Thank you for your contributions! ❤
+- @nmoutschen ([aws-sdk-rust#398](https://github.com/awslabs/aws-sdk-rust/issues/398), [smithy-rs#1065](https://github.com/awslabs/smithy-rs/issues/1065))
+
+
+v0.4.1 (January 10, 2022)
+=========================
+**New this release:**
+- 🐛 (smithy-rs#1050, @nmoutschen) Fix typos for X-Ray trace ID environment variable in aws_http::recursion_detection
+- 🐛 (smithy-rs#1054, aws-sdk-rust#391) Fix critical paginator bug where an empty outputToken lead to a never ending stream.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @nmoutschen (smithy-rs#1050)
+
+
+0.4.0 (January 6th, 2022)
+=========================
+**Breaking Changes:**
+- ⚠ (smithy-rs#990) Codegen will no longer produce builders and clients with methods that take `impl Into<T>` except for strings and boxed types.
+- ⚠ (smithy-rs#961) The `meta`, `environment`, and `dns` Cargo feature flags were removed from `aws-config`.
+    The code behind the `dns` flag is now enabled when `rt-tokio` is enabled. The code behind
+    the `meta` and `environment` flags is always enabled now.
+- ⚠ (smithy-rs#1003) `aws_http::AwsErrorRetryPolicy` was moved to `aws_http::retry::AwsErrorRetryPolicy`.
+- ⚠ (smithy-rs#1017, smithy-rs#930) Simplify features in aws-config. All features have been removed from `aws-config` with the exception of: `rt-tokio`, `rustls` and `native-tls`. All other features are now included by default. If you depended on those features specifically, remove them from your features listing.
+
+**New this release:**
+- 🎉 (aws-sdk-rust#47, smithy-rs#1006) Add support for paginators! Paginated APIs now include `.into_paginator()` and (when supported) `.into_paginator().items()` to enable paginating responses automatically. The paginator API should be considered in preview and is subject to change pending customer feedback.
+- (smithy-rs#712) We removed an example 'telephone-game' that was problematic for our CI.
+    The APIs that that example demonstrated are also demonstrated by our Polly
+    and TranscribeStreaming examples so please check those out if you miss it.
+- 🐛 (aws-sdk-rust#357) Generated docs should no longer contain links that don't go anywhere
+- (aws-sdk-rust#254, @jacco) Made fluent operation structs cloneable
+- (smithy-rs#973) Debug implementation of Credentials will print `expiry` in a human readable way.
+- 🐛 (smithy-rs#999, smithy-rs#143, aws-sdk-rust#344) Add Route53 customization to trim `/hostedzone/` prefix prior to serialization. This fixes a bug where round-tripping a hosted zone id resulted in an error.
+- 🐛 (smithy-rs#998, aws-sdk-rust#359) Fix bug where ECS credential provider could not perform retries.
+- (smithy-rs#1003) Add recursion detection middleware to the default stack
+- (smithy-rs#1002, aws-sdk-rust#352) aws_types::Config is now `Clone`
+- (smithy-rs#670, @jacco) Example for Config builder region function added
+- (smithy-rs#1021, @kiiadi) Add function to `aws_config::profile::ProfileSet` that allows listing of loaded profiles by name.
+- 🐛 (smithy-rs#1046, aws-sdk-rust#384) Fix IMDS credentials provider bug where the instance profile name was incorrectly cached.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @jacco (aws-sdk-rust#254, smithy-rs#670)
+- @kiiadi (smithy-rs#1021)
+
+
+v0.3.0 (December 15th, 2021)
+============================
+**Breaking Changes:**
+- ⚠ (smithy-rs#930) If you directly depend on AWS or Smithy runtime crates _(e.g., AWS crates not named `aws-config` or prefixed with `aws-sdk-`)_,
+    the formerly default features from those crates must now be explicitly set in your `Cargo.toml`.
+
+    **Upgrade guide**
+
+    | before                          | after                                                                                            |
+    | ------------------------------- | ------------------------------------------------------------------------------------------------ |
+    | `aws-smithy-async = "VERSION"`  | `aws-smithy-async = { version = "VERSION", features = ["rt-tokio"] }`                            |
+    | `aws-smithy-client = "VERSION"` | `aws-smithy-client = { version = "VERSION", features = ["client-hyper", "rustls", "rt-tokio"] }` |
+    | `aws-smithy-http = "VERSION"`   | `aws-smithy-http = { version = "VERSION", features = ["rt-tokio"] }`                             |
+- ⚠ (smithy-rs#940) `aws_hyper::Client` which was just a re-export of `aws_smithy_types::Client` with generics set has been removed. If you used
+    `aws_hyper::Client` or `aws_hyper::Client::https()` you can update your code to use `aws_smithy_client::Builder::https()`.
+- ⚠ (smithy-rs#947) The features `aws-hyper/rustls` and `aws-hyper/native-tls` have been removed. If you were using these, use the identical features on `aws-smithy-client`.
+- ⚠ (smithy-rs#959, smithy-rs#934) `aws-hyper::AwsMiddleware` is now generated into generated service clients directly. If you used `aws_hyper::Middleware`, use <service>::middleware::DefaultMiddleware` instead.
+
+**New this release:**
+- 🐛 (aws-sdk-rust#330) A bug that occurred when signing certain query strings has been fixed
+- 🐛 (smithy-rs#949, @a-xp) Fix incorrect argument order in the builder for `LazyCachingCredentialsProvider`
+- 🐛 (aws-sdk-rust#304) `aws-config` will now work as intended for users that want to use `native-tls` instead of `rustls`. Previously, it was
+    difficult to ensure that `rustls` was not in use. Also, there is now an example of how to use `native-tls` and a test
+    that ensures `rustls` is not in the dependency tree
+- 🐛 (aws-sdk-rust#317, smithy-rs#907) Removed inaccurate log message when a client was used without a sleep implementation, and
+    improved context and call to action in logged messages around missing sleep implementations.
+- (smithy-rs#923) Use provided `sleep_impl` for retries instead of using Tokio directly.
+- (smithy-rs#920) Fix typos in module documentation for generated crates
+- 🐛 (aws-sdk-rust#301, smithy-rs#892) Avoid serializing repetitive `xmlns` attributes when serializing XML. This reduces the length of serialized requests and should improve compatibility with localstack.
+- 🐛 (smithy-rs#953, aws-sdk-rust#331) Fixed a bug where certain characters caused a panic during URI encoding.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @a-xp (smithy-rs#949)
+
+
+v0.2.0 (December 2nd, 2021)
+===========================
+
+- This release was a version bump to fix a version number conflict in crates.io
+
+v0.1.0 (December 2nd, 2021)
+===========================
+
+**New this release**
+- Add docs.rs metadata section to all crates to document all features
+- [Added a new example showing how to set all currently supported timeouts](./examples/setting_timeouts/src/main.rs)
+- Add a new check so that the SDK doesn't emit an irrelevant `$HOME` dir warning when running in a Lambda (aws-sdk-rust#307)
+- :bug: Don't capture empty session tokens from the `AWS_SESSION_TOKEN` environment variable (aws-sdk-rust#316, smithy-rs#906)
+
+v0.0.26-alpha (November 23rd, 2021)
+===================================
+
+**Breaking Changes**
+- `RetryConfigBuilder::merge_with` has been renamed to `RetryConfigBuilder::take_unset_from`
+- `Credentials::from_keys` is now behind a feature flag named `hardcoded-credentials` in `aws-types`.
+  It is __NOT__ secure to hardcode credentials into your application, and the credentials
+  providers that come with the AWS SDK should be preferred. (smithy-rs#875, smithy-rs#317)
+- (aws-smithy-client): Extraneous `pub use SdkSuccess` removed from `aws_smithy_client::hyper_ext`. (smithy-rs#855)
+- The `add_metadata` function was removed from `AwsUserAgent` in `aws-http`.
+  Use `with_feature_metadata`, `with_config_metadata`, or `with_framework_metadata` now instead. (smithy-rs#865)
+- Several breaking changes around `aws_smithy_types::Instant` were introduced by smithy-rs#849:
+  - `aws_smithy_types::Instant` from was renamed to `DateTime` to avoid confusion with the standard library's monotonically nondecreasing `Instant` type.
+  - `DateParseError` in `aws_smithy_types` has been renamed to `DateTimeParseError` to match the type that's being parsed.
+  - The `chrono-conversions` feature and associated functions have been moved to the `aws-smithy-types-convert` crate.
+    - Calls to `Instant::from_chrono` should be changed to:
+      ```rust
+      use aws_smithy_types::DateTime;
+      use aws_smithy_types_convert::date_time::DateTimeExt;
+
+      // For chrono::DateTime<Utc>
+      let date_time = DateTime::from_chrono_utc(chrono_date_time);
+      // For chrono::DateTime<FixedOffset>
+      let date_time = DateTime::from_chrono_offset(chrono_date_time);
+      ```
+    - Calls to `instant.to_chrono()` should be changed to:
+      ```rust
+      use aws_smithy_types_convert::date_time::DateTimeExt;
+
+      date_time.to_chrono_utc();
+      ```
+  - `Instant::from_system_time` and `Instant::to_system_time` have been changed to `From` trait implementations.
+    - Calls to `from_system_time` should be changed to:
+      ```rust
+      DateTime::from(system_time);
+      // or
+      let date_time: DateTime = system_time.into();
+      ```
+    - Calls to `to_system_time` should be changed to:
+      ```rust
+      SystemTime::from(date_time);
+      // or
+      let system_time: SystemTime = date_time.into();
+      ```
+  - Several functions in `Instant`/`DateTime` were renamed:
+    - `Instant::from_f64` -> `DateTime::from_secs_f64`
+    - `Instant::from_fractional_seconds` -> `DateTime::from_fractional_secs`
+    - `Instant::from_epoch_seconds` -> `DateTime::from_secs`
+    - `Instant::from_epoch_millis` -> `DateTime::from_millis`
+    - `Instant::epoch_fractional_seconds` -> `DateTime::as_secs_f64`
+    - `Instant::has_nanos` -> `DateTime::has_subsec_nanos`
+    - `Instant::epoch_seconds` -> `DateTime::secs`
+    - `Instant::epoch_subsecond_nanos` -> `DateTime::subsec_nanos`
+    - `Instant::to_epoch_millis` -> `DateTime::to_millis`
+  - The `DateTime::fmt` method is now fallible and fails when a `DateTime`'s value is outside what can be represented by the desired date format.
+
+**New this week**
+
+- :warning: MSRV increased from 1.53.0 to 1.54.0 per our 3-behind MSRV policy.
+- Conversions from `aws_smithy_types::DateTime` to `OffsetDateTime` from the `time` crate are now available from the `aws-smithy-types-convert` crate. (smithy-rs#849)
+- Fixed links to Usage Examples (smithy-rs#862, @floric)
+- Added missing features to user agent formatting, and made it possible to configure an app name for the user agent via service config. (smithy-rs#865)
+- :bug: Relaxed profile name validation to allow `@` and other characters (smithy-rs#861, aws-sdk-rust#270)
+- :bug: Fixed signing problem with S3 Control (smithy-rs#858, aws-sd-rust#291)
+- :tada: Timeouts for requests are now configurable. You can set a timeout for each individual request attempt or for all attempts made for a request. (smithy-rs#831)
+  - `SdkError` now includes a variant `TimeoutError` for when a request times out  (smithy-rs#885)
+- Improve docs on `aws-smithy-client` (smithy-rs#855)
+- Fix http-body dependency version (smithy-rs#883, aws-sdk-rust#305)
+
+**Contributions**
+
+Thank you for your contributions! :heart:
+
+- @floric (smithy-rs#862)
+
+v0.0.25-alpha (November 11th, 2021)
+===================================
+
+No changes since last release except for version bumping since older versions
+of the AWS SDK were failing to compile with the `0.27.0-alpha.2` version chosen
+for some of the supporting crates.
+
+v0.0.24-alpha (November 9th, 2021)
+==================================
+**Breaking Changes**
+- Members named `builder` on model structs were renamed to `builder_value` so that their accessors don't conflict with the existing `builder()` methods (smithy-rs#842)
+
+**New this week**
+- Fix epoch seconds date-time parsing bug in `aws-smithy-types` (smithy-rs#834)
+- Omit trailing zeros from fraction when formatting HTTP dates in `aws-smithy-types` (smithy-rs#834)
+- Moved examples into repository root (aws-sdk-rust#181, smithy-rs#843)
+- Model structs now have accessor methods for their members. We recommend updating code to use accessors instead of public fields. A future release will deprecate the public fields before they are made private. (smithy-rs#842)
+- :bug: Fix bug that caused signing to fail for requests where the body length was <=9. (smithy-rs#845)
+
+v0.0.23-alpha (November 3rd, 2021)
+==================================
 **New this week**
 - :tada: Add support for AWS Glacier (smithy-rs#801)
+- :tada: Add support for AWS Panorama
 - :bug: Fix `native-tls` feature in `aws-config` (aws-sdk-rust#265, smithy-rs#803)
 - Add example to aws-sig-auth for generating an IAM Token for RDS (smithy-rs#811, aws-sdk-rust#147)
 - :bug: `hyper::Error(IncompleteMessage)` will now be retried (smithy-rs#815)
+- :bug: S3 request metadata signing now correctly trims headers fixing [problems like this](https://github.com/awslabs/aws-sdk-rust/issues/248) (smithy-rs#761)
+- All unions (eg. `dynamodb::model::AttributeValue`) now include an additional `Unknown` variant. These support cases where a new union variant has been added on the server but the client has not been updated.
+- :bug: Fix generated docs on unions like `dynamodb::AttributeValue`. (smithy-rs#826)
 
 **Breaking Changes**
 - `<operation>.make_operation(&config)` is now an `async` function for all operations. Code should be updated to call `.await`. This will only impact users using the low-level API. (smithy-rs#797)
-- :bug: S3 request metadata signing now correctly trims headers fixing [problems like this](https://github.com/awslabs/aws-sdk-rust/issues/248) (smithy-rs#761)
 
 v0.0.22-alpha (October 20th, 2021)
 ==================================

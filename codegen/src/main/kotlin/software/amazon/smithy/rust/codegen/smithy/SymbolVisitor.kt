@@ -41,14 +41,14 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 import kotlin.reflect.KClass
 
-// TODO: currently, respecting integer types.
-// Should we not? [Go does not]
+/** Map from Smithy Shapes to Rust Types */
 val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     BooleanShape::class to RustType.Bool,
     FloatShape::class to RustType.Float(32),
@@ -63,19 +63,23 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
 data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
-    val handleOptionality: Boolean = true,
-    val handleRustBoxing: Boolean = true
+    val handleRustBoxing: Boolean = true,
+    val handleRequired: Boolean = false
 )
 
-// TODO: consider if this is better handled as a wrapper
 val DefaultConfig =
     SymbolVisitorConfig(
         runtimeConfig = RuntimeConfig(),
-        handleOptionality = true,
         handleRustBoxing = true,
+        handleRequired = false,
         codegenConfig = CodegenConfig()
     )
 
+/**
+ * Container type for the file a symbol should be written to
+ *
+ * Downstream code uses symbol location to determine which file to use acquiring a writer
+ */
 data class SymbolLocation(val namespace: String) {
     val filename = "$namespace.rs"
 }
@@ -87,6 +91,11 @@ val Serializers = SymbolLocation("serializer")
 val Inputs = SymbolLocation("input")
 val Outputs = SymbolLocation("output")
 
+/**
+ * Make the Rust type of a symbol optional (hold `Option<T>`)
+ *
+ * This is idempotent and will have no change if the type is already optional.
+ */
 fun Symbol.makeOptional(): Symbol {
     return if (isOptional()) {
         this
@@ -100,17 +109,16 @@ fun Symbol.makeOptional(): Symbol {
     }
 }
 
-fun Symbol.makeRustBoxed(): Symbol {
-    val symbol = this
-    val rustType = RustType.Box(symbol.rustType())
-    return with(Symbol.builder()) {
-        rustType(rustType)
-        addReference(symbol)
-        name(rustType.name)
-        build()
-    }
+/** Map the RustType of a symbol with [f] */
+fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
+    val newType = f(this.rustType())
+    return Symbol.builder().rustType(newType)
+        .addReference(this)
+        .name(newType.name)
+        .build()
 }
 
+/** Set the symbolLocation for this symbol builder */
 fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder {
     val currentRustType = this.build().rustType()
     check(currentRustType is RustType.Opaque) { "Only Opaque can have their namespace updated" }
@@ -120,13 +128,41 @@ fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder {
         .rustType(newRustType)
 }
 
+/**
+ * Track both the past and current name of a symbol
+ *
+ * When a symbol name conflicts with another name, we need to rename it. This tracks both names enabling us to generate helpful
+ * docs that cover both cases.
+ *
+ * Note that this is only used for enum shapes an enum variant does not have it's own symbol. For structures, the [Symbol.renamedFrom]
+ * field will be set.
+ */
 data class MaybeRenamed(val name: String, val renamedFrom: String?)
 
+/**
+ * SymbolProvider interface that carries both the inner configuration and a function to produce an enum variant name.
+ */
 interface RustSymbolProvider : SymbolProvider {
     fun config(): SymbolVisitorConfig
     fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed?
 }
 
+/**
+ * Make the return [value] optional if the [member] symbol is as well optional.
+ */
+fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) { "Some($value)" }
+/**
+ * Make the return [value] optional if the [member] symbol is not optional.
+ */
+fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) { "Some($value)" }
+
+/**
+ * Base converter from `Shape` to `Symbol`. Shapes are the direct contents of the `Smithy` model. `Symbols` carry information
+ * about Rust types, namespaces, dependencies, metadata as well as other information required to render a symbol.
+ *
+ * This is composed with other symbol visitors to handle behavior like Streaming shapes and determining the correct
+ * derives for a given shape.
+ */
 class SymbolVisitor(
     private val model: Model,
     private val serviceShape: ServiceShape?,
@@ -140,6 +176,10 @@ class SymbolVisitor(
         return shape.accept(this)
     }
 
+    /**
+     * Services can rename their contained shapes. See https://awslabs.github.io/smithy/1.0/spec/core/model.html#service
+     * specifically, `rename`
+     */
     private fun Shape.contextName(): String {
         return if (serviceShape != null) {
             id.getName(serviceShape)
@@ -148,23 +188,39 @@ class SymbolVisitor(
         }
     }
 
+    /**
+     * Return the name of a given `enum` variant. Note that this refers to `enum` in the Smithy context
+     * where enum is a trait that can be applied to [StringShape] and not in the Rust context of an algebraic data type.
+     *
+     * Because enum variants are not member shape, a separate handler is required.
+     */
     override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
         val baseName = definition.name.orNull()?.toPascalCase() ?: return null
         return MaybeRenamed(baseName, null)
     }
 
-    override fun toMemberName(shape: MemberShape): String = shape.memberName.toSnakeCase()
+    override fun toMemberName(shape: MemberShape): String = when (val container = model.expectShape(shape.container)) {
+        is StructureShape -> shape.memberName.toSnakeCase()
+        is UnionShape -> shape.memberName.toPascalCase()
+        else -> error("unexpected container shape: $container")
+    }
 
     override fun blobShape(shape: BlobShape?): Symbol {
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
     }
 
-    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol {
-        return if (nullableIndex.isNullable(member)) {
+    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
+        if (config.handleRequired && member.isRequired) {
+            symbol
+        } else if (nullableIndex.isNullable(member)) {
             symbol.makeOptional()
-        } else symbol
-    }
+        } else {
+            symbol
+        }
 
+    /**
+     * Produce `Box<T>` when the shape has the `RustBoxTrait`
+     */
     private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
         return if (shape.hasTrait<RustBoxTrait>()) {
             val rustType = RustType.Box(symbol.rustType())
@@ -226,23 +282,31 @@ class SymbolVisitor(
     }
 
     override fun bigIntegerShape(shape: BigIntegerShape?): Symbol {
-        TODO("Not yet implemented")
+        TODO("Not yet implemented: https://github.com/awslabs/smithy-rs/issues/312")
     }
 
     override fun bigDecimalShape(shape: BigDecimalShape?): Symbol {
-        TODO("Not yet implemented")
+        TODO("Not yet implemented: https://github.com/awslabs/smithy-rs/issues/312")
     }
 
     override fun operationShape(shape: OperationShape): Symbol {
-        return symbolBuilder(shape, RustType.Opaque(shape.contextName().capitalize())).locatedIn(Operations).build()
+        return symbolBuilder(
+            shape,
+            RustType.Opaque(
+                shape.contextName()
+                    .replaceFirstChar { it.uppercase() }
+            )
+        )
+            .locatedIn(Operations)
+            .build()
     }
 
     override fun resourceShape(shape: ResourceShape?): Symbol {
-        TODO("Not yet implemented")
+        TODO("Not yet implemented: resources are not supported")
     }
 
     override fun serviceShape(shape: ServiceShape?): Symbol {
-        TODO("Not yet implemented")
+        PANIC("symbol visitor should not be invoked in service shapes")
     }
 
     override fun structureShape(shape: StructureShape): Symbol {
@@ -250,8 +314,6 @@ class SymbolVisitor(
         val isInput = shape.hasTrait<SyntheticInputTrait>()
         val isOutput = shape.hasTrait<SyntheticOutputTrait>()
         val name = shape.contextName().toPascalCase().letIf(isError && config.codegenConfig.renameExceptions) {
-            // TODO: Do we want to do this?
-            // https://github.com/awslabs/smithy-rs/issues/77
             it.replace("Exception", "Error")
         }
         val builder = symbolBuilder(shape, RustType.Opaque(name))
@@ -276,13 +338,13 @@ class SymbolVisitor(
         // Handle boxing first so we end up with Option<Box<_>>, not Box<Option<_>>
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
-        }.letIf(config.handleOptionality) {
+        }.let {
             handleOptionality(it, shape)
         }
     }
 
     override fun timestampShape(shape: TimestampShape?): Symbol {
-        return RuntimeType.Instant(config.runtimeConfig).toSymbol()
+        return RuntimeType.DateTime(config.runtimeConfig).toSymbol()
     }
 
     private fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
@@ -299,16 +361,26 @@ class SymbolVisitor(
 private const val RUST_TYPE_KEY = "rusttype"
 private const val SHAPE_KEY = "shape"
 private const val SYMBOL_DEFAULT = "symboldefault"
+private const val RENAMED_FROM_KEY = "renamedfrom"
 
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder {
     return this.putProperty(RUST_TYPE_KEY, rustType)
 }
+
+fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
+    return this.putProperty(RENAMED_FROM_KEY, name)
+}
+
+fun Symbol.renamedFrom(): String? = this.getProperty(RENAMED_FROM_KEY, String::class.java).orNull()
 
 fun Symbol.defaultValue(): Default = this.getProperty(SYMBOL_DEFAULT, Default::class.java).orElse(Default.NoDefault)
 fun Symbol.Builder.setDefault(default: Default): Symbol.Builder {
     return this.putProperty(SYMBOL_DEFAULT, default)
 }
 
+/**
+ * Type representing the default value for a given type. (eg. for Strings, this is `""`)
+ */
 sealed class Default {
     /**
      * This symbol has no default value. If the symbol is not optional, this will be an error during builder construction
@@ -334,12 +406,15 @@ fun Symbol.isOptional(): Boolean = when (this.rustType()) {
     else -> false
 }
 
-fun Symbol.isBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is RustType.Box
+fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is RustType.Box
 
 // Symbols should _always_ be created with a Rust type & shape attached
 fun Symbol.rustType(): RustType = this.getProperty(RUST_TYPE_KEY, RustType::class.java).get()
 fun Symbol.shape(): Shape = this.expectProperty(SHAPE_KEY, Shape::class.java)
 
+/**
+ * Utility function similar to `let` that conditionally applies [f] only if [cond] is true.
+ */
 fun <T> T.letIf(cond: Boolean, f: (T) -> T): T {
     return if (cond) {
         f(this)

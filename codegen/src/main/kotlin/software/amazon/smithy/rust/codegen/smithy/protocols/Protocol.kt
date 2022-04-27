@@ -17,6 +17,7 @@ import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -39,8 +40,15 @@ interface Protocol {
     /** The timestamp format that should be used if no override is specified in the model */
     val defaultTimestampFormat: TimestampFormatTrait.Format
 
-    /** Returns additional HTTP headers that should be included for the given operation for this protocol */
-    fun additionalHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
+    /** Returns additional HTTP headers that should be included in HTTP requests for the given operation for this protocol. */
+    fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
+
+    /**
+     * Returns additional HTTP headers that should be included in HTTP responses for the given error shape.
+     * These MUST all be lowercase, or the application will panic, as per
+     * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
+     */
+    fun additionalErrorResponseHeaders(errorShape: StructureShape): List<Pair<String, String>> = emptyList()
 
     /** Returns a deserialization code generator for this protocol */
     fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator

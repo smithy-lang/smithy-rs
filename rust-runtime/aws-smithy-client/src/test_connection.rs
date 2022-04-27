@@ -4,7 +4,7 @@
  */
 //! Module with client connectors useful for testing.
 
-// TODO
+// TODO(docs)
 #![allow(missing_docs)]
 
 use http::header::{HeaderName, CONTENT_TYPE};
@@ -159,7 +159,7 @@ impl ValidateRequest {
 /// The generic parameter `B` is the type of the response body.
 /// For more complex use cases, see [Tower Test](https://docs.rs/tower-test/0.4.0/tower_test/)
 /// Usage example:
-/// ```rust
+/// ```no_run
 /// use aws_smithy_client::test_connection::TestConnection;
 /// use aws_smithy_http::body::SdkBody;
 /// let events = vec![(

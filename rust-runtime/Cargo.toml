@@ -4,6 +4,7 @@ members = [
     "inlineable",
     "aws-smithy-async",
     "aws-smithy-client",
+    "aws-smithy-checksums",
     "aws-smithy-eventstream",
     "aws-smithy-http",
     "aws-smithy-http-tower",
@@ -11,5 +12,7 @@ members = [
     "aws-smithy-protocol-test",
     "aws-smithy-query",
     "aws-smithy-types",
-    "aws-smithy-xml"
+    "aws-smithy-types-convert",
+    "aws-smithy-xml",
+    "aws-smithy-http-server",
 ]

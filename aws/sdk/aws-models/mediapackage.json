@@ -1883,6 +1883,13 @@
                         "smithy.api#jsonName": "encryption"
                     }
                 },
+                "IncludeDvbSubtitles": {
+                    "target": "com.amazonaws.mediapackage#__boolean",
+                    "traits": {
+                        "smithy.api#documentation": "When enabled, MediaPackage passes through digital video broadcasting (DVB) subtitles into the output.",
+                        "smithy.api#jsonName": "includeDvbSubtitles"
+                    }
+                },
                 "IncludeIframeOnlyStream": {
                     "target": "com.amazonaws.mediapackage#__boolean",
                     "traits": {
@@ -2332,6 +2339,21 @@
         },
         "com.amazonaws.mediapackage#MediaPackage": {
             "type": "service",
+            "traits": {
+                "aws.api#service": {
+                    "sdkId": "MediaPackage",
+                    "arnNamespace": "mediapackage",
+                    "cloudFormationName": "MediaPackage",
+                    "cloudTrailEventSource": "mediapackage.amazonaws.com",
+                    "endpointPrefix": "mediapackage"
+                },
+                "aws.auth#sigv4": {
+                    "name": "mediapackage"
+                },
+                "aws.protocols#restJson1": {},
+                "smithy.api#documentation": "AWS Elemental MediaPackage",
+                "smithy.api#title": "AWS Elemental MediaPackage"
+            },
             "version": "2017-10-12",
             "operations": [
                 {
@@ -2391,22 +2413,7 @@
                 {
                     "target": "com.amazonaws.mediapackage#UpdateOriginEndpoint"
                 }
-            ],
-            "traits": {
-                "aws.api#service": {
-                    "sdkId": "MediaPackage",
-                    "arnNamespace": "mediapackage",
-                    "cloudFormationName": "MediaPackage",
-                    "cloudTrailEventSource": "mediapackage.amazonaws.com",
-                    "endpointPrefix": "mediapackage"
-                },
-                "aws.auth#sigv4": {
-                    "name": "mediapackage"
-                },
-                "aws.protocols#restJson1": {},
-                "smithy.api#documentation": "AWS Elemental MediaPackage",
-                "smithy.api#title": "AWS Elemental MediaPackage"
-            }
+            ]
         },
         "com.amazonaws.mediapackage#MssEncryption": {
             "type": "structure",
@@ -2654,6 +2661,10 @@
                     {
                         "value": "HBBTV_1_5",
                         "name": "HBBTV_1_5"
+                    },
+                    {
+                        "value": "HYBRIDCAST",
+                        "name": "HYBRIDCAST"
                     }
                 ]
             }

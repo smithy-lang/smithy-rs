@@ -24,8 +24,10 @@ private const val MODULE_VERSION = "moduleVersion"
 private const val MODULE_AUTHORS = "moduleAuthors"
 private const val MODULE_REPOSITORY = "moduleRepository"
 private const val RUNTIME_CONFIG = "runtimeConfig"
-private const val CODEGEN_SETTINGS = "codegen"
 private const val LICENSE = "license"
+private const val EXAMPLES = "examples"
+private const val CUSTOMIZATION_CONFIG = "customizationConfig"
+const val CODEGEN_SETTINGS = "codegen"
 
 /**
  * Configuration of codegen settings
@@ -42,6 +44,8 @@ data class CodegenConfig(
     val includeFluentClient: Boolean = true,
     val addMessageToErrors: Boolean = true,
     val formatTimeoutSeconds: Int = 20,
+    /** Generate comments in the generated code indicating where code was generated from */
+    val debugMode: Boolean = false,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
     val eventStreamAllowList: Set<String> = emptySet(),
 ) {
@@ -53,6 +57,7 @@ data class CodegenConfig(
                     node.get().getBooleanMemberOrDefault("includeFluentClient", true),
                     node.get().getBooleanMemberOrDefault("addMessageToErrors", true),
                     node.get().getNumberMemberOrDefault("formatTimeoutSeconds", 20).toInt(),
+                    node.get().getBooleanMemberOrDefault("debugMode", false),
                     node.get().getArrayMember("eventStreamAllowList")
                         .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
                         .orNull()?.toSet() ?: emptySet()
@@ -77,7 +82,8 @@ class RustSettings(
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
     val license: String?,
-    private val model: Model
+    val examplesUri: String? = null,
+    val customizationConfig: ObjectNode? = null
 ) {
 
     /**
@@ -105,6 +111,21 @@ class RustSettings(
          * @return Returns the extracted settings
          */
         fun from(model: Model, config: ObjectNode): RustSettings {
+            val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
+            val codegenConfig = CodegenConfig.fromNode(codegenSettings)
+            return fromCodegenConfig(model, config, codegenConfig)
+        }
+
+        /**
+         * Create settings from a configuration object node and CodegenConfig.
+         *
+         * @param model Model to infer the service from (if not explicitly set in config)
+         * @param config Config object to load
+         * @param codegenConfig CodegenConfig object to use
+         * @throws software.amazon.smithy.model.node.ExpectationNotMetException
+         * @return Returns the extracted settings
+         */
+        fun fromCodegenConfig(model: Model, config: ObjectNode, codegenConfig: CodegenConfig): RustSettings {
             config.warnIfAdditionalProperties(
                 arrayListOf(
                     SERVICE,
@@ -115,7 +136,9 @@ class RustSettings(
                     MODULE_REPOSITORY,
                     RUNTIME_CONFIG,
                     CODEGEN_SETTINGS,
-                    LICENSE
+                    EXAMPLES,
+                    LICENSE,
+                    CUSTOMIZATION_CONFIG
                 )
             )
 
@@ -124,7 +147,6 @@ class RustSettings(
                 .orElseGet { inferService(model) }
 
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
-            val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
             return RustSettings(
                 service = service,
                 moduleName = config.expectStringMember(MODULE_NAME).value,
@@ -133,9 +155,10 @@ class RustSettings(
                 moduleDescription = config.getStringMember(MODULE_DESCRIPTION).orNull()?.value,
                 moduleRepository = config.getStringMember(MODULE_REPOSITORY).orNull()?.value,
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
-                codegenConfig = CodegenConfig.fromNode(codegenSettings),
+                codegenConfig,
                 license = config.getStringMember(LICENSE).orNull()?.value,
-                model = model
+                examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
+                customizationConfig = config.getObjectMember(CUSTOMIZATION_CONFIG).orNull()
             )
         }
 

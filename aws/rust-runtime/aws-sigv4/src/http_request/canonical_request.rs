@@ -5,12 +5,12 @@
 
 use super::query_writer::QueryWriter;
 use super::{Error, PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
-use crate::date_fmt::{format_date, format_date_time, parse_date, parse_date_time};
+use crate::date_time::{format_date, format_date_time};
 use crate::http_request::sign::SignableRequest;
+use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::PercentEncodingMode;
 use crate::sign::sha256_hex_string;
-use chrono::{Date, DateTime, Utc};
-use http::header::{HeaderName, CONTENT_LENGTH, CONTENT_TYPE, HOST, USER_AGENT};
+use http::header::{HeaderName, HOST, USER_AGENT};
 use http::{HeaderMap, HeaderValue, Method, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -18,6 +18,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Formatter;
 use std::str::FromStr;
+use std::time::SystemTime;
 
 pub(crate) mod header {
     pub(crate) const X_AMZ_CONTENT_SHA_256: &str = "x-amz-content-sha256";
@@ -82,7 +83,7 @@ impl<'a> SignatureValues<'a> {
 
     pub(super) fn as_headers(&self) -> Option<&HeaderValues<'_>> {
         match self {
-            SignatureValues::Headers(values) => Some(&values),
+            SignatureValues::Headers(values) => Some(values),
             _ => None,
         }
     }
@@ -128,12 +129,12 @@ impl<'a> CanonicalRequest<'a> {
         let path = req.uri().path();
         let path = match params.settings.percent_encoding_mode {
             // The string is already URI encoded, we don't need to encode everything again, just `%`
-            PercentEncodingMode::Double => Cow::Owned(path.replace('%', "%25")),
+            PercentEncodingMode::Double => Cow::Owned(percent_encode_path(path)),
             PercentEncodingMode::Single => Cow::Borrowed(path),
         };
         let payload_hash = Self::payload_hash(req.body());
 
-        let date_time = format_date_time(&params.date_time);
+        let date_time = format_date_time(params.time);
         let (signed_headers, canonical_headers) =
             Self::headers(req, params, &payload_hash, &date_time)?;
         let signed_headers = SignedHeaders::new(signed_headers);
@@ -150,7 +151,7 @@ impl<'a> CanonicalRequest<'a> {
                 credential: format!(
                     "{}/{}/{}/{}/aws4_request",
                     params.access_key,
-                    format_date(&params.date_time.date()),
+                    format_date(params.time),
                     params.region,
                     params.service_name,
                 ),
@@ -194,14 +195,14 @@ impl<'a> CanonicalRequest<'a> {
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
                 HeaderName::from_str(&name.as_str().to_lowercase())?,
-                normalize_header_value(&value),
+                normalize_header_value(value),
             );
         }
 
         Self::insert_host_header(&mut canonical_headers, req.uri());
 
         if params.settings.signature_location == SignatureLocation::Headers {
-            Self::insert_date_header(&mut canonical_headers, &date_time);
+            Self::insert_date_header(&mut canonical_headers, date_time);
 
             if let Some(security_token) = params.security_token {
                 let mut sec_header = HeaderValue::from_str(security_token)?;
@@ -210,7 +211,7 @@ impl<'a> CanonicalRequest<'a> {
             }
 
             if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
-                let header = HeaderValue::from_str(&payload_hash)?;
+                let header = HeaderValue::from_str(payload_hash)?;
                 canonical_headers.insert(header::X_AMZ_CONTENT_SHA_256, header);
             }
         }
@@ -222,11 +223,6 @@ impl<'a> CanonicalRequest<'a> {
                 continue;
             }
             if params.settings.signature_location == SignatureLocation::QueryParams {
-                // Exclude content-length and content-type for query param signatures since the
-                // body is unsigned for these use-cases, and the size is not known up-front.
-                if name == CONTENT_LENGTH || name == CONTENT_TYPE {
-                    continue;
-                }
                 // The X-Amz-User-Agent header should not be signed if this is for a presigned URL
                 if name == HeaderName::from_static(header::X_AMZ_USER_AGENT) {
                     continue;
@@ -363,41 +359,10 @@ fn trim_all(text: &[u8]) -> Cow<'_, [u8]> {
 /// Removes excess spaces before and after a given byte string by returning a subset of those bytes.
 /// Will return an empty slice if a string is composed entirely of whitespace.
 fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
-    if bytes.is_empty() {
-        return bytes;
-    }
-
-    let mut starting_index = 0;
-
-    for i in 0..bytes.len() {
-        // If we get to the end of the array without hitting a non-whitespace char, return empty slice
-        if i == bytes.len() - 1 {
-            // This range equates to an empty slice
-            return &bytes[0..0];
-        // otherwise, skip over each instance of whitespace
-        } else if bytes[i] == b' ' {
-            continue;
-        }
-
-        // return the index of the first non-whitespace character
-        starting_index = i;
-        break;
-    }
-
-    // Now we do the same but in reverse
-    let mut ending_index = 0;
-    for i in (0..bytes.len()).rev() {
-        // skip over each instance of whitespace
-        if bytes[i] == b' ' {
-            continue;
-        }
-
-        // return the index of the first non-whitespace character
-        ending_index = i;
-        break;
-    }
-
-    &bytes[starting_index..=ending_index]
+    let starting_index = bytes.iter().position(|b| *b != b' ').unwrap_or(0);
+    let ending_offset = bytes.iter().rev().position(|b| *b != b' ').unwrap_or(0);
+    let ending_index = bytes.len() - ending_offset;
+    &bytes[starting_index..ending_index]
 }
 
 /// Works just like [trim_all] but acts on HeaderValues instead of bytes
@@ -454,13 +419,13 @@ impl PartialOrd for CanonicalHeaderName {
 
 impl Ord for CanonicalHeaderName {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.0.as_str().cmp(&other.0.as_str())
+        self.0.as_str().cmp(other.0.as_str())
     }
 }
 
 #[derive(PartialEq, Debug, Clone)]
 pub(super) struct SigningScope<'a> {
-    pub(super) date: Date<Utc>,
+    pub(super) time: SystemTime,
     pub(super) region: &'a str,
     pub(super) service: &'a str,
 }
@@ -470,75 +435,37 @@ impl<'a> fmt::Display for SigningScope<'a> {
         write!(
             f,
             "{}/{}/{}/aws4_request",
-            format_date(&self.date),
+            format_date(self.time),
             self.region,
             self.service
         )
     }
 }
 
-impl<'a> TryFrom<&'a str> for SigningScope<'a> {
-    type Error = Error;
-    fn try_from(s: &'a str) -> Result<SigningScope<'a>, Self::Error> {
-        let mut scopes = s.split('/');
-        let date = parse_date(scopes.next().expect("missing date"))?;
-        let region = scopes.next().expect("missing region");
-        let service = scopes.next().expect("missing service");
-
-        let scope = SigningScope {
-            date,
-            region,
-            service,
-        };
-
-        Ok(scope)
-    }
-}
-
 #[derive(PartialEq, Debug)]
 pub(super) struct StringToSign<'a> {
     pub(super) scope: SigningScope<'a>,
-    pub(super) date: DateTime<Utc>,
+    pub(super) time: SystemTime,
     pub(super) region: &'a str,
     pub(super) service: &'a str,
     pub(super) hashed_creq: &'a str,
 }
 
-impl<'a> TryFrom<&'a str> for StringToSign<'a> {
-    type Error = Error;
-    fn try_from(s: &'a str) -> Result<Self, Self::Error> {
-        let lines = s.lines().collect::<Vec<&str>>();
-        let date = parse_date_time(&lines[1])?;
-        let scope: SigningScope<'_> = TryFrom::try_from(lines[2])?;
-        let hashed_creq = &lines[3];
-
-        let sts = StringToSign {
-            date,
-            region: scope.region,
-            service: scope.service,
-            scope,
-            hashed_creq,
-        };
-
-        Ok(sts)
-    }
-}
-
 impl<'a> StringToSign<'a> {
     pub(crate) fn new(
-        date: DateTime<Utc>,
+        time: SystemTime,
         region: &'a str,
         service: &'a str,
         hashed_creq: &'a str,
     ) -> Self {
         let scope = SigningScope {
-            date: date.date(),
+            time,
             region,
             service,
         };
         Self {
             scope,
-            date,
+            time,
             region,
             service,
             hashed_creq,
@@ -552,8 +479,8 @@ impl<'a> fmt::Display for StringToSign<'a> {
             f,
             "{}\n{}\n{}\n{}",
             HMAC_256,
-            format_date_time(&self.date),
-            self.scope.to_string(),
+            format_date_time(self.time),
+            self.scope,
             self.hashed_creq
         )
     }
@@ -561,19 +488,21 @@ impl<'a> fmt::Display for StringToSign<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::date_fmt::parse_date_time;
+    use crate::date_time::test_parsers::parse_date_time;
     use crate::http_request::canonical_request::{
         normalize_header_value, trim_all, CanonicalRequest, SigningScope, StringToSign,
     };
+    use crate::http_request::query_writer::QueryWriter;
     use crate::http_request::test::{test_canonical_request, test_request, test_sts};
     use crate::http_request::{
         PayloadChecksumKind, SignableBody, SignableRequest, SigningSettings,
     };
     use crate::http_request::{SignatureLocation, SigningParams};
     use crate::sign::sha256_hex_string;
+    use http::HeaderValue;
+    use http::Uri;
     use pretty_assertions::assert_eq;
-    use proptest::{proptest, strategy::Strategy};
-    use std::convert::TryFrom;
+    use proptest::proptest;
     use std::time::Duration;
 
     fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
@@ -583,7 +512,7 @@ mod tests {
             security_token: None,
             region: "test-region",
             service_name: "testservicename",
-            date_time: parse_date_time("20210511T154045Z").unwrap(),
+            time: parse_date_time("20210511T154045Z").unwrap(),
             settings,
         }
     }
@@ -655,9 +584,8 @@ mod tests {
     #[test]
     fn test_generate_scope() {
         let expected = "20150830/us-east-1/iam/aws4_request\n";
-        let date = parse_date_time("20150830T123600Z").unwrap();
         let scope = SigningScope {
-            date: date.date(),
+            time: parse_date_time("20150830T123600Z").unwrap(),
             region: "us-east-1",
             service: "iam",
         };
@@ -666,19 +594,13 @@ mod tests {
 
     #[test]
     fn test_string_to_sign() {
-        let date = parse_date_time("20150830T123600Z").unwrap();
+        let time = parse_date_time("20150830T123600Z").unwrap();
         let creq = test_canonical_request("get-vanilla-query-order-key-case");
         let expected_sts = test_sts("get-vanilla-query-order-key-case");
         let encoded = sha256_hex_string(creq.as_bytes());
 
-        let actual = StringToSign::new(date, "us-east-1", "service", &encoded);
+        let actual = StringToSign::new(time, "us-east-1", "service", &encoded);
         assert_eq!(expected_sts, actual.to_string());
-    }
-
-    #[test]
-    fn read_sts() {
-        let sts = test_sts("get-vanilla-query-order-key-case");
-        StringToSign::try_from(sts.as_ref()).unwrap();
     }
 
     #[test]
@@ -687,6 +609,18 @@ mod tests {
         let expected = "816cd5b414d056048ba4f7c5386d6e0533120fb1fcfa93762cf0fc39e2cf19e0";
         let actual = sha256_hex_string(creq.as_bytes());
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_double_url_encode_path() {
+        let req = test_request("double-encode-path");
+        let req = SignableRequest::from(&req);
+        let signing_params = signing_params(SigningSettings::default());
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
+
+        let expected = test_canonical_request("double-encode-path");
+        let actual = format!("{}", creq);
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -714,7 +648,29 @@ mod tests {
         );
     }
 
-    // It should exclude user-agent, content-type, content-length, and x-amz-user-agent headers from presigning
+    #[test]
+    fn test_signing_urls_with_percent_encoded_query_strings() {
+        let all_printable_ascii_chars: String = (32u8..127).map(char::from).collect();
+        let uri = Uri::from_static("https://s3.us-east-1.amazonaws.com/my-bucket");
+
+        let mut query_writer = QueryWriter::new(&uri);
+        query_writer.insert("list-type", "2");
+        query_writer.insert("prefix", &all_printable_ascii_chars);
+
+        let req = http::Request::builder()
+            .uri(query_writer.build_uri())
+            .body("")
+            .unwrap();
+        let req = SignableRequest::from(&req);
+        let signing_params = signing_params(SigningSettings::default());
+        let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
+
+        let expected = "list-type=2&prefix=%20%21%22%23%24%25%26%27%28%29%2A%2B%2C-.%2F0123456789%3A%3B%3C%3D%3E%3F%40ABCDEFGHIJKLMNOPQRSTUVWXYZ%5B%5C%5D%5E_%60abcdefghijklmnopqrstuvwxyz%7B%7C%7D~";
+        let actual = creq.params.unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    // It should exclude user-agent and x-amz-user-agent headers from presigning
     #[test]
     fn presigning_header_exclusion() {
         let request = http::Request::builder()
@@ -727,15 +683,20 @@ mod tests {
             .unwrap();
         let request = SignableRequest::from(&request);
 
-        let mut settings = SigningSettings::default();
-        settings.signature_location = SignatureLocation::QueryParams;
-        settings.expires_in = Some(Duration::from_secs(30));
+        let settings = SigningSettings {
+            signature_location: SignatureLocation::QueryParams,
+            expires_in: Some(Duration::from_secs(30)),
+            ..Default::default()
+        };
 
         let signing_params = signing_params(settings);
         let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
 
         let values = canonical.values.into_query_params().unwrap();
-        assert_eq!("host", values.signed_headers.as_str());
+        assert_eq!(
+            "content-length;content-type;host",
+            values.signed_headers.as_str()
+        );
     }
 
     #[test]
@@ -757,19 +718,27 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
+    #[test]
+    fn trim_spaces_works_on_single_characters() {
+        assert_eq!(trim_all(b"2").as_ref(), b"2");
+    }
+
     proptest! {
         #[test]
         fn test_trim_all_doesnt_elongate_strings(s in ".*") {
             assert!(trim_all(s.as_bytes()).len() <= s.len())
         }
 
-        // TODO: Using filter map is not ideal here but I wasn't sure how to define a range that covers
-        //       the extended ASCII chars above \x7F. It would be better to define a generator for
-        //       chars in the range of [\x21-\x7E\x80-\xFF] and then prop_map those into HeaderValues.
-        //       _(\x7F is the largest value accepted currently)_
         #[test]
-        fn test_normalize_header_value_doesnt_panic(v in (".*").prop_filter_map("Must be a valid HeaderValue", |v| http::HeaderValue::from_maybe_shared(v).ok())) {
-            let _ = normalize_header_value(&v);
+        fn test_normalize_header_value_doesnt_panic(v in (".*")) {
+            if let Ok(header_value) = HeaderValue::from_maybe_shared(v) {
+                let _ = normalize_header_value(&header_value);
+            }
+        }
+
+        #[test]
+        fn test_trim_all_does_nothing_when_there_are_no_spaces(s in "[^ ]*") {
+            assert_eq!(trim_all(s.as_bytes()).as_ref(), s.as_bytes());
         }
     }
 }

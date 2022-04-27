@@ -5,12 +5,12 @@
 
 use aws_sdk_dynamodb as dynamodb;
 
-use aws_http::AwsErrorRetryPolicy;
-use aws_hyper::{SdkError, SdkSuccess};
+use aws_http::retry::AwsErrorRetryPolicy;
 use aws_sdk_dynamodb::input::CreateTableInput;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::operation::Operation;
+use aws_smithy_http::result::{SdkError, SdkSuccess};
 use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_types::retry::RetryKind;
 use dynamodb::error::DescribeTableError;
@@ -28,6 +28,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::Instant;
+
+use aws_sdk_dynamodb::middleware::DefaultMiddleware;
+use aws_smithy_client::Client as CoreClient;
+pub type Client<C> = CoreClient<C, DefaultMiddleware>;
 
 fn create_table(table_name: &str) -> CreateTableInput {
     CreateTable::builder()
@@ -121,8 +125,8 @@ where
         &self,
         response: Result<&SdkSuccess<DescribeTableOutput>, &SdkError<DescribeTableError>>,
     ) -> RetryKind {
-        match self.inner.classify(response.clone()) {
-            RetryKind::NotRetryable => (),
+        match self.inner.classify(response) {
+            RetryKind::UnretryableFailure | RetryKind::Unnecessary => (),
             other => return other,
         };
         match response {
@@ -138,10 +142,10 @@ where
                 {
                     RetryKind::Explicit(Duration::from_secs(1))
                 } else {
-                    RetryKind::NotRetryable
+                    RetryKind::Unnecessary
                 }
             }
-            _ => RetryKind::NotRetryable,
+            _ => RetryKind::UnretryableFailure,
         }
     }
 }
@@ -189,10 +193,16 @@ async fn movies_it() {
     // The waiter will retry 5 times
     tokio::time::pause();
     let conn = movies_it_test_connection(); // RecordingConnection::https();
-    let client = aws_hyper::Client::new(conn.clone());
+    let client = Client::new(conn.clone());
     let conf = dynamodb::Config::builder()
         .region(Region::new("us-east-1"))
-        .credentials_provider(Credentials::from_keys("AKNOTREAL", "NOT_A_SECRET", None))
+        .credentials_provider(Credentials::new(
+            "AKNOTREAL",
+            "NOT_A_SECRET",
+            None,
+            None,
+            "test",
+        ))
         .build();
     client
         .call(

@@ -107,11 +107,11 @@ class EnumGenerator(
                 }
             }
         } else {
-            renderUnamedEnum()
+            renderUnnamedEnum()
         }
     }
 
-    private fun renderUnamedEnum() {
+    private fun renderUnnamedEnum() {
         writer.documentShape(shape, model)
         meta.render(writer)
         writer.write("struct $enumName(String);")

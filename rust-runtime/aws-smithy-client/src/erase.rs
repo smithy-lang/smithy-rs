@@ -36,7 +36,7 @@ where
     ///
     /// In practice, you'll use this method once you've constructed a client to your liking:
     ///
-    /// ```rust
+    /// ```no_run
     /// # #[cfg(feature = "https")]
     /// # fn not_main() {
     /// use aws_smithy_client::{Builder, Client};
@@ -56,6 +56,8 @@ where
             connector: self.connector,
             middleware: DynMiddleware::new(self.middleware),
             retry_policy: self.retry_policy,
+            timeout_config: self.timeout_config,
+            sleep_impl: self.sleep_impl,
         }
     }
 }
@@ -73,7 +75,7 @@ where
     ///
     /// In practice, you'll use this method once you've constructed a client to your liking:
     ///
-    /// ```rust
+    /// ```no_run
     /// # #[cfg(feature = "https")]
     /// # fn not_main() {
     /// # type MyMiddleware = aws_smithy_client::DynMiddleware<aws_smithy_client::DynConnector>;
@@ -94,6 +96,8 @@ where
             connector: DynConnector::new(self.connector),
             middleware: self.middleware,
             retry_policy: self.retry_policy,
+            timeout_config: self.timeout_config,
+            sleep_impl: self.sleep_impl,
         }
     }
 
@@ -107,7 +111,7 @@ where
     ///
     /// In practice, you'll use this method once you've constructed a client to your liking:
     ///
-    /// ```rust
+    /// ```no_run
     /// # #[cfg(feature = "https")]
     /// # fn not_main() {
     /// use aws_smithy_client::{Builder, Client};
@@ -183,13 +187,19 @@ impl Service<http::Request<SdkBody>> for DynConnector {
 /// to matter in all but the highest-performance settings.
 #[non_exhaustive]
 pub struct DynMiddleware<C>(
-    BoxCloneLayer<
+    ArcCloneLayer<
         aws_smithy_http_tower::dispatch::DispatchService<C>,
         aws_smithy_http::operation::Request,
         aws_smithy_http::operation::Response,
         aws_smithy_http_tower::SendOperationError,
     >,
 );
+
+impl<C> Clone for DynMiddleware<C> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 impl<C> fmt::Debug for DynMiddleware<C> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -200,7 +210,7 @@ impl<C> fmt::Debug for DynMiddleware<C> {
 impl<C> DynMiddleware<C> {
     /// Construct a new dynamically-dispatched Smithy middleware.
     pub fn new<M: bounds::SmithyMiddleware<C> + Send + Sync + 'static>(middleware: M) -> Self {
-        Self(BoxCloneLayer::new(middleware))
+        Self(ArcCloneLayer::new(middleware))
     }
 }
 
