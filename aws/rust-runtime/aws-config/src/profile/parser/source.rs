@@ -261,7 +261,7 @@ mod tests {
     #[traced_test]
     #[test]
     fn load_config_file_should_not_emit_warning_on_lambda() {
-        let env = Env::from_slice(&[("LAMBDA_TASK_ROOT", "/")]);
+        let env = Env::from_slice(&[("AWS_LAMBDA_FUNCTION_NAME", "someName")]);
         let fs = Fs::from_slice(&[]);
 
         let _src = load_config_file(FileKind::Config, &None, &fs, &env).now_or_never();
