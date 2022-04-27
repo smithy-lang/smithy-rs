@@ -145,10 +145,6 @@ For an example: Say you have a crate with features `a`, `b`, `c` that all provid
 
 > "When default features are disabled, you must manually set `foo`. Features `b` and `c` active; You can use one of those. See an example of setting a custom `foo` here: *link-to-docs.amazon.com/setting-foo*"
 
-## Proposed changes to SDK and runtime crate features as they exist today
-
-TODO
-
 ## Further reading
 
 - [How to tell what "features" are available per crate?]
