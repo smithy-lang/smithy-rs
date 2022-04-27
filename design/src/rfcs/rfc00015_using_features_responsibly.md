@@ -106,31 +106,6 @@ pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
 }
 ```
 
-In this example, code that calls the `default_async_sleep` function will continue to compile when the `rt-tokio` feature is inactive. This moves the responsibility of handling "missing" functionality out of the places where that functionality is called upon into the place where that functionality is defined. This results in less redundant code. However, once more than one mutually exclusive feature is added, it's better to use the [`cfg!` macro][cfg! macro] with an if-else statement:
-
-```rust
-pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
-  #[cfg(feature = "rt-tokio")]
-  if cfg!(feature = "rt-tokio") {
-    return Some(sleep_tokio());
-  }
-
-  #[cfg(feature = "rt-wasi")]
-  if cfg!(feature = "rt-wasi") {
-    return Some(sleep_wasi());
-  }
-
-  #[cfg(feature = "rt-embedded")]
-  if cfg!(feature = "rt-embedded") {
-    return Some(sleep_embedded());
-  }
-
-  None
-}
-```
-
-While verbose, this code will compile without error no matter what features are active. It also makes the effect of activated features clearer to reason about.
-
 ### Don't default to defining "default features"
 
 Because Cargo will use the union of all features enabled on a dependency when building it, we should be wary of marking features as default. Once we do mark features as default, users that want to exclude code and dependencies brought in by those features will have a difficult time doing so. One need look no further than [this issue][remove rustls from crate graph] submitted by a user that wanted to use Native TLS and struggled to make sure that Rustls was actually disabled *(This issue was resolved in [this PR][remove default features from runtime crates] which removed default features from our runtime crates.)* This is not to say that we should never use them, as having defaults for the most common use cases means less work for those users.
