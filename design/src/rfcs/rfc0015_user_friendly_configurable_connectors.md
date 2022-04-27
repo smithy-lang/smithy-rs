@@ -90,7 +90,7 @@ Calling `client.list_buckets()` creates a Fluent Builder for the ["list buckets"
 
 ### `let bucket_list = resp.buckets().unwrap();`
 
-There's nothing new to be seen here. The previous line sent the request and recieved the response. This line is just looking at the response.
+There's nothing new to be seen here. The previous line sent the request and received the response. This line is just looking at the response.
 
 The inner workings of the Smithy Client Pool
 --------------------------------------------
@@ -105,7 +105,7 @@ Let's look at each in turn, starting with the sole public method.
 
 ### `get_or_create_client<E>`
 
-Smithy Clients are created lazily. If a user never makes a request, than no clients get created. If they only make `HTTP/1.1` requests, then only an `HTTP/1.1` is ever created. When users call `send()` on an Operation, that in turn calls this method. Here's what the implementation could look like:
+Smithy Clients are created lazily. If a user never makes a request, then no clients get created. If they only make `HTTP/1.1` requests, then only an `HTTP/1.1` is ever created. When users call `send()` on an Operation, that in turn calls this method. Here's what the implementation could look like:
 
 ```rust
 pub async fn get_or_create_client<E>(
