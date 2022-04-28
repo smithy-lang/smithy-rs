@@ -1,0 +1,470 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0014: Fine-grained timeout configuration - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">6.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">6.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">6.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">6.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">6.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">6.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">6.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">6.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">6.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">6.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">6.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">6.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">6.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">6.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc00014_timeout_config.html" class="active"><strong aria-hidden="true">6.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc00015_using_features_responsibly.html"><strong aria-hidden="true">6.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-fine-grained-timeout-configuration"><a class="header" href="#rfc-fine-grained-timeout-configuration">RFC: Fine-grained timeout configuration</a></h1>
+<blockquote>
+<p>Status: Implemented</p>
+</blockquote>
+<p>For a summarized list of proposed changes, see the <a href="#changes-checklist">Changes Checklist</a> section.</p>
+<p>While it is currently possible for users to implement request timeouts by racing operation send futures against timeout futures, this RFC proposes a more ergonomic solution that would also enable users to set timeouts for things like TLS negotiation and &quot;time to first byte&quot;.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<p>There's a lot of terminology to define, so I've broken it up into three sections.</p>
+<h3 id="general-terms"><a class="header" href="#general-terms">General terms</a></h3>
+<ul>
+<li><strong>Smithy Client</strong>: A <code>aws_smithy_client::Client&lt;C, M, R&gt;</code> struct that is responsible for gluing together the connector, middleware, and retry policy. This is not generated and lives in the <code>aws-smithy-client</code> crate.</li>
+<li><strong>Fluent Client</strong>: A code-generated <code>Client&lt;C, M, R&gt;</code> that has methods for each service operation on it. A fluent builder is generated alongside it to make construction easier.</li>
+<li><strong>AWS Client</strong>: A specialized Fluent Client that defaults to using a <code>DynConnector</code>, <code>AwsMiddleware</code>, and <code>Standard</code> retry policy.</li>
+<li><strong>Shared Config</strong>: An <code>aws_types::Config</code> struct that is responsible for storing shared configuration data that is used across all services. This is not generated and lives in the <code>aws-types</code> crate.</li>
+<li><strong>Service-specific Config</strong>: A code-generated <code>Config</code> that has methods for setting service-specific configuration. Each <code>Config</code> is defined in the <code>config</code> module of its parent service. For example, the S3-specific config struct  is <code>use</code>able from <code>aws_sdk_s3::config::Config</code> and re-exported as <code>aws_sdk_s3::Config</code>. In this case, &quot;service&quot; refers to an AWS offering like S3.</li>
+</ul>
+<h3 id="http-stack-terms"><a class="header" href="#http-stack-terms">HTTP stack terms</a></h3>
+<ul>
+<li><strong>Service</strong>: A trait defined in the <a href="https://docs.rs/tower-service/0.3.1/tower_service/trait.Service.html"><code>tower-service</code> crate</a>. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.</li>
+<li><strong>Layer</strong>: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services within services, but Layers allow us to do it in a flexible and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service. Layers can be thought of as middleware. <em>NOTE: The use of <a href="https://github.com/awslabs/smithy-rs/issues/634">Layers can produce compiler errors</a> that are difficult to interpret and defining a layer requires a large amount of boilerplate code.</em></li>
+<li><strong>Middleware</strong>: a term with several meanings,
+<ul>
+<li>Generically speaking, middleware are similar to Services and Layers in that they modify requests and responses.</li>
+<li>In the SDK, &quot;Middleware&quot; refers to a layer that can be wrapped around a <code>DispatchService</code>. In practice, this means that the resulting <code>Service</code> (and the inner service) must meet the bound <code>T: where T: Service&lt;operation::Request, Response=operation::Response, Error=SendOperationError&gt;</code>.
+<ul>
+<li><em>Note: This doesn't apply to the middlewares we use when generating presigned request because those don't wrap a <code>DispatchService</code>.</em></li>
+</ul>
+</li>
+<li>The most notable example of a Middleware is the <a href="https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a>. Other notable examples include <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122">MapRequest</a>, <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42">AsyncMapRequest</a>, and <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27">ParseResponse</a>.</li>
+</ul>
+</li>
+<li><strong>DispatchService</strong>: The innermost part of a group of nested services. The Service that actually makes an HTTP call on behalf of a request. Responsible for parsing success and error responses.</li>
+<li><strong>Connector</strong>: a term with several meanings,
+<ul>
+<li>DynConnectors (a struct that implements <a href="https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139">DynConnect</a>) are Services with their specific type erased so that we can do dynamic dispatch.</li>
+<li>A term from <code>hyper</code> for any object that implements the <a href="https://docs.rs/hyper/0.14.14/hyper/client/connect/trait.Connect.html">Connect</a> trait. Really just an alias for <a href="https://docs.rs/tower-service/0.3.1/tower_service/trait.Service.html">tower_service::Service</a>. Sometimes referred to as a <code>Connection</code>.</li>
+</ul>
+</li>
+<li><strong>Stage</strong>: A form of middleware that's not related to <code>tower</code>. These currently function as a way of transforming requests and don't have the ability to transform responses.</li>
+<li><strong>Stack</strong>: higher order abstraction over Layers defined in the <a href="https://docs.rs/tower/0.4.10/tower/layer/util/struct.Stack.html">tower crate</a> e.g. Layers wrap services in one another and Stacks wrap layers within one another.</li>
+</ul>
+<h3 id="timeout-terms"><a class="header" href="#timeout-terms">Timeout terms</a></h3>
+<ul>
+<li><strong>Connect Timeout</strong>: A limit on the amount of time after making an initial connect attempt on a socket to complete the
+connect-handshake.
+<ul>
+<li><em>TODO: the runtime is based on Hyper which reuses connection and doesn't currently have a way of guaranteeing that
+a fresh connection will be use for a given request.</em></li>
+</ul>
+</li>
+<li><strong>TLS Negotiation Timeout</strong>: A limit on the amount of time a TLS handshake takes from when the CLIENT HELLO message is
+sent to the time the client and server have fully negotiated ciphers and exchanged keys.</li>
+<li><strong>Time to First Byte Timeout</strong>: <em>Sometimes referred to as a &quot;read timeout.&quot;</em> A limit on the amount of time an application takes to attempt to read the first byte over
+an established, open connection after write request.</li>
+<li><strong>HTTP Request Timeout For A Single Attempt</strong>: A limit on the amount of time it takes for the first byte to be sent over
+an established, open connection and when the last byte is received from the service.</li>
+<li><strong>HTTP Request Timeout For Multiple Attempts</strong>: This timeout acts like the previous timeout but constrains the total time
+it takes to make a request plus any retries.
+<ul>
+<li><em>NOTE: In a way, this is already possible in that users are free to race requests against timer futures with
+the <a href="https://docs.rs/futures/0.3.17/futures/future/fn.select.html">futures::future::select</a> macro or to use <a href="https://docs.rs/tokio/1.12.0/tokio/time/fn.timeout.html">tokio::time::timeout</a>. See relevant discussion in <a href="https://github.com/hyperium/hyper/issues/1097">hyper#1097</a></em></li>
+</ul>
+</li>
+</ul>
+<h2 id="configuring-timeouts"><a class="header" href="#configuring-timeouts">Configuring timeouts</a></h2>
+<p>Just like with <a href="./rfc0004_retry_behavior.html">Retry Behavior Configuration</a>, these settings can be configured in several places and have the same
+precedence rules <em>(paraphrased here for clarity)</em>.</p>
+<ol>
+<li>Service-specific config builders</li>
+<li>Shared config builders</li>
+<li>Environment variables</li>
+<li>Profile config file (e.g., <code>~/.aws/credentials</code>)</li>
+</ol>
+<p>The above list is in order of decreasing precedence e.g. configuration set in an app will override values from
+environment variables.</p>
+<h3 id="configuration-options"><a class="header" href="#configuration-options">Configuration options</a></h3>
+<p>The table below details the specific ways each timeout can be configured. In all cases, valid values are non-negative floats representing the number of seconds before a timeout is triggered.</p>
+<table><thead><tr><th>Timeout</th><th>Environment Variable</th><th>AWS Config Variable</th><th>Builder Method</th></tr></thead><tbody>
+<tr><td>Connect</td><td>AWS_CONNECT_TIMEOUT</td><td>connect_timeout</td><td>connect_timeout</td></tr>
+<tr><td>TLS Negotiation</td><td>AWS_TLS_NEGOTIATION_TIMEOUT</td><td>tls_negotiation_timeout</td><td>tls_negotiation_timeout</td></tr>
+<tr><td>Time To First Byte</td><td>AWS_READ_TIMEOUT</td><td>read_timeout</td><td>read_timeout</td></tr>
+<tr><td>HTTP Request - single attempt</td><td>AWS_API_CALL_ATTEMPT_TIMEOUT</td><td>api_call_attempt_timeout</td><td>api_call_attempt_timeout</td></tr>
+<tr><td>HTTP Request - all attempts</td><td>AWS_API_CALL_TIMEOUT</td><td>api_call_timeout</td><td>api_call_timeout</td></tr>
+</tbody></table>
+<h3 id="sdk-specific-defaults-set-by-aws-service-teams"><a class="header" href="#sdk-specific-defaults-set-by-aws-service-teams">SDK-specific defaults set by AWS service teams</a></h3>
+<p><em>QUESTION: How does the SDK currently handle these defaults?</em></p>
+<h2 id="prior-art"><a class="header" href="#prior-art">Prior Art</a></h2>
+<ul>
+<li><a href="https://github.com/hjr3/hyper-timeout">hjr3/hyper-timeout</a> is a <code>Connector</code> for hyper that enables setting connect, read, and write timeouts</li>
+<li><a href="https://github.com/sfackler/tokio-io-timeout">sfackler/tokio-io-timeout</a> provides timeouts for tokio IO operations. Used within <code>hyper-timeout</code>.</li>
+<li>[tokio::time::sleep_until] creates a <code>Future</code> that completes after some time has elapsed. Used within <code>tokio-io-timeout</code>.</li>
+</ul>
+<h2 id="behind-the-scenes"><a class="header" href="#behind-the-scenes">Behind the scenes</a></h2>
+<p>Timeouts are achieved by racing a future against a <code>tokio::time::Sleep</code> future. The question, then, is &quot;how can I create a future that represents a condition I want to watch for?&quot;. For example, in the case of a <code>ConnectTimeout</code>, how do we watch an ongoing request to see if it's completed the connect-handshake? Our current stack of Middleware acts on requests at different levels of granularity. The timeout Middlewares will be no different.</p>
+<h3 id="middlewares-for-aws-client-requests"><a class="header" href="#middlewares-for-aws-client-requests">Middlewares for AWS Client requests</a></h3>
+<p><em>View <a href="https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a> in GitHub</em></p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Debug, Default)]
+#[non_exhaustive]
+pub struct AwsMiddleware;
+impl&lt;S&gt; tower::Layer&lt;S&gt; for AwsMiddleware {
+  type Service = &lt;AwsMiddlewareStack as tower::Layer&lt;S&gt;&gt;::Service;
+
+  fn layer(&amp;self, inner: S) -&gt; Self::Service {
+    let credential_provider = AsyncMapRequestLayer::for_mapper(CredentialsStage::new());
+    let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
+    let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
+    let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
+    ServiceBuilder::new()
+            .layer(endpoint_resolver)
+            .layer(user_agent)
+            .layer(credential_provider)
+            .layer(signer)
+            .service(inner)
+  }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The above code is only included for context. This RFC doesn't define any timeouts specific to AWS so <code>AwsMiddleware</code> won't require any changes.</p>
+<h3 id="middlewares-for-smithy-client-requests"><a class="header" href="#middlewares-for-smithy-client-requests">Middlewares for Smithy Client requests</a></h3>
+<p><em>View <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175">aws_smithy_client::Client::call_raw</a> in GitHub</em></p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;C, M, R&gt; Client&lt;C, M, R&gt;
+  where
+          C: bounds::SmithyConnector,
+          M: bounds::SmithyMiddleware&lt;C&gt;,
+          R: retry::NewRequestPolicy,
+{
+  // ...other methods omitted
+  pub async fn call_raw&lt;O, T, E, Retry&gt;(
+    &amp;self,
+    input: Operation&lt;O, Retry&gt;,
+  ) -&gt; Result&lt;SdkSuccess&lt;T&gt;, SdkError&lt;E&gt;&gt;
+    where
+            R::Policy: bounds::SmithyRetryPolicy&lt;O, T, E, Retry&gt;,
+            bounds::Parsed&lt;&lt;M as bounds::SmithyMiddleware&lt;C&gt;&gt;::Service, O, Retry&gt;:
+            Service&lt;Operation&lt;O, Retry&gt;, Response=SdkSuccess&lt;T&gt;, Error=SdkError&lt;E&gt;&gt; + Clone,
+  {
+    let connector = self.connector.clone();
+
+    let mut svc = ServiceBuilder::new()
+            // Create a new request-scoped policy
+            .retry(self.retry_policy.new_request_policy())
+            .layer(ParseResponseLayer::&lt;O, Retry&gt;::new())
+            // These layers can be considered as occurring in order. That is, first invoke the
+            // customer-provided middleware, then dispatch dispatch over the wire.
+            .layer(&amp;self.middleware)
+            .layer(DispatchLayer::new())
+            .service(connector);
+
+    svc.ready().await?.call(input).await
+  }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The Smithy Client creates a new <code>Stack</code> of services to handle each request it sends. Specifically:</p>
+<ul>
+<li>A method <code>retry</code> is used set the retry handler. The configuration for this was set during creation of the <code>Client</code>.</li>
+<li><code>ParseResponseLayer</code> inserts a service for transforming responses into operation-specific outputs or errors. The <code>O</code> generic parameter of <code>input</code> is what decides exactly how the transformation is implemented.</li>
+<li>A middleware stack that was included during <code>Client</code> creation is inserted into the stack. In the case of the AWS SDK, this would be <code>AwsMiddleware</code>.</li>
+<li><code>DispatchLayer</code> inserts a service for transforming an <code>http::Request</code> into an <code>operation::Request</code>. It's also responsible for re-attaching the property bag from the Operation that triggered the request.</li>
+<li>The innermost <code>Service</code> is a <code>DynConnector</code> wrapping a <code>hyper</code> client (which one depends on the TLS implementation was enabled by cargo features.)</li>
+</ul>
+<p>The <strong>HTTP Request Timeout For A Single Attempt</strong> and <strong>HTTP Request Timeout For Multiple Attempts</strong> can be implemented at this level. The same <code>Layer</code> can be used to create both <code>TimeoutService</code>s. The <code>TimeoutLayer</code> would require two inputs:</p>
+<ul>
+<li><code>sleep_fn</code>: A runtime-specific implementation of <code>sleep</code>. The SDK is currently <code>tokio</code>-based and would default to <code>tokio::time::sleep</code> (this default is set in the <code>aws_smithy_async::rt::sleep</code> module.)</li>
+<li>The duration of the timeout as a <code>std::time::Duration</code></li>
+</ul>
+<p>The resulting code would look like this:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl&lt;C, M, R&gt; Client&lt;C, M, R&gt;
+  where
+          C: bounds::SmithyConnector,
+          M: bounds::SmithyMiddleware&lt;C&gt;,
+          R: retry::NewRequestPolicy,
+{
+  // ...other methods omitted
+  pub async fn call_raw&lt;O, T, E, Retry&gt;(
+    &amp;self,
+    input: Operation&lt;O, Retry&gt;,
+  ) -&gt; Result&lt;SdkSuccess&lt;T&gt;, SdkError&lt;E&gt;&gt;
+    where
+            R::Policy: bounds::SmithyRetryPolicy&lt;O, T, E, Retry&gt;,
+            bounds::Parsed&lt;&lt;M as bounds::SmithyMiddleware&lt;C&gt;&gt;::Service, O, Retry&gt;:
+            Service&lt;Operation&lt;O, Retry&gt;, Response=SdkSuccess&lt;T&gt;, Error=SdkError&lt;E&gt;&gt; + Clone,
+  {
+    let connector = self.connector.clone();
+    let sleep_fn = aws_smithy_async::rt::sleep::default_async_sleep();
+
+    let mut svc = ServiceBuilder::new()
+            .layer(TimeoutLayer::new(
+              sleep_fn,
+              self.timeout_config.api_call_timeout(),
+            ))
+            // Create a new request-scoped policy
+            .retry(self.retry_policy.new_request_policy())
+            .layer(TimeoutLayer::new(
+              sleep_fn,
+              self.timeout_config.api_call_attempt_timeout(),
+            ))
+            .layer(ParseResponseLayer::&lt;O, Retry&gt;::new())
+            // These layers can be considered as occurring in order. That is, first invoke the
+            // customer-provided middleware, then dispatch dispatch over the wire.
+            .layer(&amp;self.middleware)
+            .layer(DispatchLayer::new())
+            .service(connector);
+
+    svc.ready().await?.call(input).await
+  }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<!-- TODO where should this note live? -->
+<p><em>Note: Our HTTP client supports multiple TLS implementations. We'll likely have to implement this feature once per library.</em></p>
+<p>Timeouts will be implemented in the following places:</p>
+<ul>
+<li>HTTP request timeout for multiple requests will be implemented as the outermost Layer in <code>Client::call_raw</code>.</li>
+<li>HTTP request timeout for a single request will be implemented within <code>RetryHandler::retry</code>.</li>
+<li>Time to first byte, TLS negotiation, and connect timeouts will be implemented within the central <code>hyper</code> connector.</li>
+</ul>
+<h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes checklist</a></h2>
+<p>Changes are broken into to sections:</p>
+<ul>
+<li>HTTP requests (single or multiple) are implementable as layers within our current stack</li>
+<li>Other timeouts will require changes to our dependencies and may be slower to implement</li>
+</ul>
+<h3 id="implementing-http-request-timeouts"><a class="header" href="#implementing-http-request-timeouts">Implementing HTTP request timeouts</a></h3>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Add <code>TimeoutConfig</code> to <code>smithy-types</code></li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add <code>TimeoutConfigProvider</code> to <code>aws-config</code>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Add provider that fetches config from environment variables</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add provider that fetches config from profile</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add <code>timeout</code> method to <code>aws_types::Config</code> for setting timeout configuration</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add <code>timeout</code> method to generated <code>Config</code>s too</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Create a generic <code>TimeoutService</code> and accompanying <code>Layer</code>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+<code>TimeoutLayer</code> should accept a <code>sleep</code> function so that it doesn't have a hard dependency on <code>tokio</code></li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+insert a <code>TimeoutLayer</code> before the <code>RetryPolicy</code> to handle timeouts for multiple-attempt requests</li>
+<li><input disabled="" type="checkbox" checked=""/>
+insert a <code>TimeoutLayer</code> after the <code>RetryPolicy</code> to handle timeouts for single-attempt requests</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add tests for timeout behavior
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+test multi-request timeout triggers after 3 slow retries</li>
+<li><input disabled="" type="checkbox" checked=""/>
+test single-request timeout triggers correctly</li>
+<li><input disabled="" type="checkbox" checked=""/>
+test single-request timeout doesn't trigger if request completes in time</li>
+</ul>
+</li>
+</ul>
+<!--- Links -->
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0013_body_callback_apis.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../rfcs/rfc00015_using_features_responsibly.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0013_body_callback_apis.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../rfcs/rfc00015_using_features_responsibly.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        <script type="text/javascript" src="../static/mermaid.min.js"></script>
+        <script type="text/javascript" src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>

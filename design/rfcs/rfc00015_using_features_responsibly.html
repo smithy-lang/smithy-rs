@@ -1,0 +1,314 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0015: How Cargo &quot;features&quot; should be used in the SDK and runtime crates - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">6.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">6.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">6.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">6.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">6.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">6.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">6.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">6.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">6.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">6.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">6.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">6.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">6.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">6.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc00014_timeout_config.html"><strong aria-hidden="true">6.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc00015_using_features_responsibly.html" class="active"><strong aria-hidden="true">6.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-how-cargo-features-should-be-used-in-the-sdk-and-runtime-crates"><a class="header" href="#rfc-how-cargo-features-should-be-used-in-the-sdk-and-runtime-crates">RFC: How Cargo &quot;features&quot; should be used in the SDK and runtime crates</a></h1>
+<blockquote>
+<p>Status: RFC</p>
+</blockquote>
+<h2 id="some-background-on-features"><a class="header" href="#some-background-on-features">Some background on features</a></h2>
+<p>What is a feature? Here's a definition from the <a href="https://doc.rust-lang.org/cargo/reference/features.html">Cargo Book section on features</a>:</p>
+<blockquote>
+<p>Cargo &quot;features&quot; provide a mechanism to express conditional compilation and optional dependencies. A package defines a set of named features in the <code>[features]</code> table of <code>Cargo.toml</code>, and each feature can either be enabled or disabled. Features for the package being built can be enabled on the command-line with flags such as <code>--features</code>. Features for dependencies can be enabled in the dependency declaration in <code>Cargo.toml</code>.</p>
+</blockquote>
+<p>We use features in a majority of our runtime crates and in all of our SDK crates. For example, <a href="https://github.com/awslabs/smithy-rs/blob/5a1990791d727652587df51b77df4d1df9058252/aws/rust-runtime/aws-sigv4/Cargo.toml">aws-sigv4</a> uses them to enable event streams. Another common use case is exhibited by <a href="https://github.com/awslabs/aws-sdk-rust/blob/f2b4361b004ee822960ea9791f566fd4eb6d1aba/sdk/s3/Cargo.toml">aws-sdk-s3</a> which uses them to enable the <code>tokio</code> runtime and the TLS implementation used when making requests.</p>
+<h3 id="features-should-be-additive"><a class="header" href="#features-should-be-additive">Features should be additive</a></h3>
+<p>The Cargo book has this to say:</p>
+<blockquote>
+<p>When a dependency is used by multiple packages, Cargo will use the union of all features enabled on that dependency when building it. This helps ensure that only a single copy of the dependency is used.</p>
+</blockquote>
+<blockquote>
+<p>A consequence of this is that features should be <em>additive</em>. That is, enabling a feature should not disable functionality, and it should usually be safe to enable any combination of features. <strong>A feature should not introduce a <a href="https://doc.rust-lang.org/cargo/reference/features.html#semver-compatibility">SemVer-incompatible change</a>.</strong></p>
+</blockquote>
+<h2 id="what-does-this-mean-for-the-sdk"><a class="header" href="#what-does-this-mean-for-the-sdk">What does this mean for the SDK?</a></h2>
+<p>Despite the constraints outlined above, we should use features in the SDKs because of the benefits they bring:</p>
+<ul>
+<li>Features enable users to avoid compiling code that they won't be using. Additionally, features allow both general and specific control of compiled code, serving the needs of both novice and expert users.</li>
+<li>A single feature in a crate can activate or deactivate multiple features exposed by that crate's dependencies, freeing the user from having to specifically activate or deactivate them.</li>
+<li>Features can help users understand what a crate is capable of in the same way that looking at a graph of a crate's modules can.</li>
+</ul>
+<p>When using features, we should adhere to the guidelines outlined below.</p>
+<h3 id="avoid-writing-code-that-relies-on-only-activating-one-feature-from-a-set-of-mutually-exclusive-features"><a class="header" href="#avoid-writing-code-that-relies-on-only-activating-one-feature-from-a-set-of-mutually-exclusive-features">Avoid writing code that relies on only activating one feature from a set of mutually exclusive features.</a></h3>
+<p>As noted earlier in an excerpt from the Cargo book:</p>
+<blockquote>
+<p>enabling a feature should not disable functionality, and it should usually be safe to enable any combination of features. A feature should not introduce a <a href="https://doc.rust-lang.org/cargo/reference/features.html#semver-compatibility">SemVer-incompatible change</a>.</p>
+</blockquote>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(feature = &quot;rustls&quot;)]
+impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
+    /// Connect to the service over HTTPS using Rustls.
+    pub fn tls_adapter(self) -&gt; ClientBuilder&lt;Adapter&lt;crate::conns::Https&gt;, M, R&gt; {
+        self.connector(Adapter::builder().build(crate::conns::https()))
+    }
+}
+
+#[cfg(feature = &quot;native-tls&quot;)]
+impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
+    /// Connect to the service over HTTPS using the native TLS library on your platform.
+    pub fn tls_adapter(
+        self,
+    ) -&gt; ClientBuilder&lt;Adapter&lt;hyper_tls::HttpsConnector&lt;hyper::client::HttpConnector&gt;&gt;, M, R&gt; {
+        self.connector(Adapter::builder().build(crate::conns::native_tls()))
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>When the example code above is compiled with both features enabled, compilation will fail with a &quot;duplicate definitions with name <code>tls_adapter</code>&quot; error. Also, note that the return type of the function differs between the two versions. This is a SemVer-incompatible change.</p>
+<p>Here's an updated version of the example that fixes these issues:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(feature = &quot;rustls&quot;)]
+impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
+    /// Connect to the service over HTTPS using Rustls.
+    pub fn rustls(self) -&gt; ClientBuilder&lt;Adapter&lt;crate::conns::Https&gt;, M, R&gt; {
+        self.connector(Adapter::builder().build(crate::conns::https()))
+    }
+}
+
+#[cfg(feature = &quot;native-tls&quot;)]
+impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
+    /// Connect to the service over HTTPS using the native TLS library on your platform.
+    pub fn native_tls(
+        self,
+    ) -&gt; ClientBuilder&lt;Adapter&lt;hyper_tls::HttpsConnector&lt;hyper::client::HttpConnector&gt;&gt;, M, R&gt; {
+        self.connector(Adapter::builder().build(crate::conns::native_tls()))
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Both features can now be enabled at once without creating a conflict. Since both methods have different names, it's now Ok for them to have different return types.</p>
+<p><a href="https://github.com/awslabs/smithy-rs/blob/2e7ed943513203f1472f2490866dc4fb8a392bd3/rust-runtime/aws-smithy-client/src/hyper_ext.rs#L303"><em>This is real code, see it in context</em></a></p>
+<h3 id="we-should-avoid-using-cfgnotfeature--some-feature"><a class="header" href="#we-should-avoid-using-cfgnotfeature--some-feature">We should avoid using <code>#[cfg(not(feature = &quot;some-feature&quot;))]</code></a></h3>
+<p>At the risk of seeming repetitive, the Cargo book says:</p>
+<blockquote>
+<p>enabling a feature should not disable functionality, and it should usually be safe to enable any combination of features</p>
+</blockquote>
+<p>Conditionally compiling code when a feature is <strong>not</strong> activated can make it hard for users and maintainers to reason about what will happen when they activate a feature. This is also a sign that a feature may not be &quot;additive&quot;.</p>
+<p><em><strong>NOTE</strong></em>: It's ok to use <code>#[cfg(not())]</code> to conditionally compile code based on a user's OS. It's also useful when controlling what code gets rendered when testing or when generating docs.</p>
+<p>One case where using <code>not</code> is acceptable is when providing a fallback when no features are set:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[cfg(feature = &quot;rt-tokio&quot;)]
+pub fn default_async_sleep() -&gt; Option&lt;Arc&lt;dyn AsyncSleep&gt;&gt; {
+    Some(sleep_tokio())
+}
+
+#[cfg(not(feature = &quot;rt-tokio&quot;))]
+pub fn default_async_sleep() -&gt; Option&lt;Arc&lt;dyn AsyncSleep&gt;&gt; {
+    None
+}
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="dont-default-to-defining-default-features"><a class="header" href="#dont-default-to-defining-default-features">Don't default to defining &quot;default features&quot;</a></h3>
+<p>Because Cargo will use the union of all features enabled on a dependency when building it, we should be wary of marking features as default. Once we do mark features as default, users that want to exclude code and dependencies brought in by those features will have a difficult time doing so. One need look no further than <a href="https://github.com/awslabs/aws-sdk-rust/issues/304">this issue</a> submitted by a user that wanted to use Native TLS and struggled to make sure that Rustls was actually disabled <em>(This issue was resolved in <a href="https://github.com/awslabs/smithy-rs/pull/935">this PR</a> which removed default features from our runtime crates.)</em> This is not to say that we should never use them, as having defaults for the most common use cases means less work for those users.</p>
+<h4 id="when-a-default-feature-providing-some-functionality-is-disabled-active-features-must-not-automatically-replace-that-functionality"><a class="header" href="#when-a-default-feature-providing-some-functionality-is-disabled-active-features-must-not-automatically-replace-that-functionality">When a default feature providing some functionality is disabled, active features must not automatically replace that functionality</a></h4>
+<p>As the SDK is currently designed, the TLS implementation in use can change depending on what features are pulled in. Currently, if a user disables <code>default-features</code> (which include <code>rustls</code>) and activates the <code>native-tls</code> feature, then we automatically use <code>native-tls</code> when making requests. For an example of what this looks like from the user's perspective, <a href="https://github.com/awslabs/smithy-rs/tree/bc316a0b81b75a00c389f6281a66eb0f5357172a/aws/sdk/examples/using_native_tls_instead_of_rustls">see this example</a>.</p>
+<p>This RFC proposes that we should have a single default for any configurable functionality and that that functionality depends on a corresponding default feature being active. If <code>default-features</code> are disabled, then so is the corresponding default functionality. In its place would be functionality that fails fast with a message describing why it failed <em>(a default was deactivated but the user didn't set a replacement)</em>, and what the user should do to fix it <em>(with links to documentation and examples where necessary)</em>. We should use <a href="https://doc.rust-lang.org/stable/std/macro.compile_error.html">compile-time errors</a> to communicate failures with users, or <code>panic</code>s for cases that can't be evaluated at compile-time.</p>
+<p>For an example: Say you have a crate with features <code>a</code>, <code>b</code>, <code>c</code> that all provide some version of functionality <code>foo</code>. Feature <code>a</code> is part of <code>default-features</code>. When <code>no-default-features = true</code> but features <code>b</code> and <code>c</code> are active, don't automatically fall back to <code>b</code> or <code>c</code>. Instead, emit an error with a message like this:</p>
+<blockquote>
+<p>&quot;When default features are disabled, you must manually set <code>foo</code>. Features <code>b</code> and <code>c</code> active; You can use one of those. See an example of setting a custom <code>foo</code> here: <em>link-to-docs.amazon.com/setting-foo</em>&quot;</p>
+</blockquote>
+<h2 id="further-reading"><a class="header" href="#further-reading">Further reading</a></h2>
+<ul>
+<li><a href="https://stackoverflow.com/questions/59761045/how-to-tell-what-features-are-available-per-crate">How to tell what &quot;features&quot; are available per crate?</a></li>
+<li><a href="https://stackoverflow.com/questions/40021555/how-do-i-pass-down-feature-flags-to-subdependencies-in-cargo">How do I 'pass down' feature flags to subdependencies in Cargo?</a></li>
+<li>A small selection of feature-related GitHub issues submitted for popular crates
+<ul>
+<li><a href="https://github.com/chyh1990/yaml-rust/issues/44">The feature <code>preserve_order</code> is not &quot;purely additive,&quot; which makes it impossible to use <code>serde_yaml</code> 0.5.0 and <code>clap</code> in the same program</a></li>
+<li><a href="https://github.com/Geal/nom/issues/544">cargo features (verbose-errors may be other?) should be additive</a></li>
+<li><a href="https://github.com/aclysma/profiling/issues/32">Mutually exclusive features are present in profiling-procmacros</a></li>
+<li><a href="https://github.com/KyleMayes/clang-sys/issues/128">Clang-sys features not additive</a></li>
+</ul>
+</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc00014_timeout_config.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc00014_timeout_config.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        <script type="text/javascript" src="../static/mermaid.min.js"></script>
+        <script type="text/javascript" src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>
