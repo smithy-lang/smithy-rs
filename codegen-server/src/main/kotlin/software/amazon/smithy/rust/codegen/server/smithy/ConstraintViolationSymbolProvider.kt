@@ -50,13 +50,15 @@ class ConstraintViolationSymbolProvider(
     override fun toSymbol(shape: Shape): Symbol =
         when (shape) {
             is SetShape -> {
-                TODO("Set shapes can only contain some simple shapes, but constraint traits on simple shapes are not implemented")
+//                TODO("Set shapes can only contain some simple shapes, but constraint traits on simple shapes are not implemented")
+                base.toSymbol(shape)
             }
             is ListShape -> {
                 check(shape.canReachConstrainedShape(model, base))
 
                 if (shape.isConstrained(base)) {
-                    TODO("The `length` constraint trait on list shapes is currently not implemented")
+//                    TODO("The `length` constraint trait on list shapes is currently not implemented")
+                    base.toSymbol(shape)
                 } else {
                     unconstrainedSymbolForListOrMapShape(shape)
                 }
@@ -65,7 +67,8 @@ class ConstraintViolationSymbolProvider(
                 check(shape.canReachConstrainedShape(model, base))
 
                 if (shape.isConstrained(base)) {
-                    TODO("The `length` constraint trait on map shapes is currently not implemented")
+//                    TODO("The `length` constraint trait on map shapes is currently not implemented")
+                    base.toSymbol(shape)
                 } else {
                     unconstrainedSymbolForListOrMapShape(shape)
                 }
