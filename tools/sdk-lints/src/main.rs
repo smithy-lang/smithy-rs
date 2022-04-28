@@ -12,10 +12,12 @@ use crate::todos::TodosHaveContext;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use lazy_static::lazy_static;
+use ordinal::Ordinal;
 use std::env::set_current_dir;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
+use time::OffsetDateTime;
 
 mod anchor;
 mod changelog;
@@ -64,11 +66,11 @@ enum Args {
     },
     UpdateChangelog {
         #[clap(long)]
-        smithy_version: String,
+        smithy_version: Option<String>,
         #[clap(long)]
-        sdk_version: String,
+        sdk_version: Option<String>,
         #[clap(long)]
-        date: String,
+        date: Option<String>,
     },
 }
 
@@ -169,16 +171,53 @@ fn main() -> Result<()> {
             smithy_version,
             sdk_version,
             date,
-        } => changelog::update_changelogs(
-            repo_root().join("CHANGELOG.next.toml"),
-            repo_root().join("CHANGELOG.md"),
-            repo_root().join("aws/SDK_CHANGELOG.md"),
-            &smithy_version,
-            &sdk_version,
-            &date,
-        )?,
+        } => {
+            let auto = auto_changelog_meta()?;
+            changelog::update_changelogs(
+                repo_root().join("CHANGELOG.next.toml"),
+                repo_root().join("CHANGELOG.md"),
+                repo_root().join("aws/SDK_CHANGELOG.md"),
+                &smithy_version.unwrap_or(auto.smithy_version),
+                &sdk_version.unwrap_or(auto.sdk_version),
+                &date.unwrap_or(auto.date),
+            )?
+        }
     }
     Ok(())
+}
+
+struct ChangelogMeta {
+    smithy_version: String,
+    sdk_version: String,
+    date: String,
+}
+
+/// Discover the new version for the changelog from gradle.properties and the date.
+fn auto_changelog_meta() -> Result<ChangelogMeta> {
+    let gradle_props = fs::read_to_string(repo_root().join("gradle.properties"))?;
+    let load_gradle_prop = |key: &str| {
+        let prop = gradle_props
+            .lines()
+            .flat_map(|line| line.strip_prefix(key))
+            .flat_map(|prop| prop.strip_prefix('='))
+            .next();
+        prop.map(|prop| prop.to_string())
+            .ok_or_else(|| anyhow::Error::msg(format!("missing expected gradle property: {key}")))
+    };
+    let smithy_version = load_gradle_prop("smithy.rs.runtime.crate.version")?;
+    let sdk_version = load_gradle_prop("aws.sdk.version")?;
+    let now = OffsetDateTime::now_local()?;
+    let date = format!(
+        "{month} {day}, {year}",
+        month = now.date().month(),
+        day = Ordinal(now.date().day()),
+        year = now.date().year()
+    );
+    Ok(ChangelogMeta {
+        smithy_version,
+        sdk_version,
+        date,
+    })
 }
 
 fn ls(path: impl AsRef<Path>) -> Result<impl Iterator<Item = PathBuf>> {

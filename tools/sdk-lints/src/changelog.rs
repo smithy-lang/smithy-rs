@@ -220,7 +220,7 @@ pub(crate) fn update_changelogs(
         std::fs::write(path, update)?;
     }
     std::fs::write(changelog_next.as_ref(), EXAMPLE_ENTRY.trim())?;
-    eprintln!("Changelogs updated!");
+    eprintln!("Changelogs updated:\n  SDK: {aws_sdk_rust_version}\n  Smithy: {smithy_rs_version}\n  Date: {date}");
     Ok(())
 }
 
