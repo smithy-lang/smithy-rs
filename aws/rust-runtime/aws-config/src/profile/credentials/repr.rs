@@ -223,7 +223,6 @@ mod credential_process {
 const PROVIDER_NAME: &str = "ProfileFile";
 
 fn base_provider(profile: &Profile) -> Result<BaseProvider, ProfileFileError> {
-    dbg!("checking base provider", &profile);
     // the profile must define either a `CredentialsSource` or a concrete set of access keys
     match profile.get(role::CREDENTIAL_SOURCE) {
         Some(source) => Ok(BaseProvider::NamedSource(source)),
