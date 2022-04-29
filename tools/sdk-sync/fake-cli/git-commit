@@ -2,7 +2,7 @@
 import os
 import sys
 
-expected = ["/tmp", [
+expected = [os.path.realpath("/tmp"), [
     "-c", "user.name=Some Author",
     "-c", "user.email=author@example.com",
     "commit", "-m", "Test message",
