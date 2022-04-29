@@ -82,6 +82,13 @@ pub enum BaseProvider<'a> {
         sso_role_name: &'a str,
         sso_start_url: &'a str,
     },
+
+    /// A profile that specifies a `credential_process`
+    /// ```ini
+    /// [profile assume-role]
+    /// credential_process = /opt/bin/awscreds-custom --username helen
+    /// ```
+    CredentialProcess(&'a str),
 }
 
 /// A profile that specifies a role to assume
@@ -209,13 +216,19 @@ mod static_credentials {
     pub const AWS_SECRET_ACCESS_KEY: &str = "aws_secret_access_key";
     pub const AWS_SESSION_TOKEN: &str = "aws_session_token";
 }
+
+mod credential_process {
+    pub const CREDENTIAL_PROCESS: &str = "credential_process";
+}
 const PROVIDER_NAME: &str = "ProfileFile";
 
 fn base_provider(profile: &Profile) -> Result<BaseProvider, ProfileFileError> {
+    dbg!("checking base provider", &profile);
     // the profile must define either a `CredentialsSource` or a concrete set of access keys
     match profile.get(role::CREDENTIAL_SOURCE) {
         Some(source) => Ok(BaseProvider::NamedSource(source)),
-        None => web_identity_token_from_profile(profile)
+        None => credential_process_from_profile(profile)
+            .or_else(|| web_identity_token_from_profile(profile))
             .or_else(|| sso_from_profile(profile))
             .unwrap_or_else(|| Ok(BaseProvider::AccessKey(static_creds_from_profile(profile)?))),
     }
@@ -363,6 +376,21 @@ fn static_creds_from_profile(profile: &Profile) -> Result<Credentials, ProfileFi
     ))
 }
 
+/// Load credentials from `credential_process`
+///
+/// Example:
+/// ```ini
+/// [profile B]
+/// credential_process = /opt/bin/awscreds-custom --username helen
+/// ```
+fn credential_process_from_profile<'a>(
+    profile: &'a Profile,
+) -> Option<Result<BaseProvider, ProfileFileError>> {
+    profile
+        .get(credential_process::CREDENTIAL_PROCESS)
+        .map(|credential_process| Ok(BaseProvider::CredentialProcess(credential_process)))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::profile::credentials::repr::{resolve_chain, BaseProvider, ProfileChain};
@@ -427,6 +455,9 @@ mod tests {
                 secret_access_key: creds.secret_access_key().into(),
                 session_token: creds.session_token().map(|tok| tok.to_string()),
             }),
+            BaseProvider::CredentialProcess(credential_process) => {
+                output.push(Provider::CredentialProcess(credential_process.into()))
+            }
             BaseProvider::WebIdentityTokenRole {
                 role_arn,
                 web_identity_token_file,
@@ -477,6 +508,7 @@ mod tests {
             session_token: Option<String>,
         },
         NamedSource(String),
+        CredentialProcess(String),
         WebIdentityToken {
             role_arn: String,
             web_identity_token_file: String,

@@ -39,6 +39,7 @@ zeroize = "1"
 bytes = "1.1.0"
 http = "0.2.4"
 tower = { version = "0.4.8" }
+shlex = { version = "1.1.0" }
 
 [dev-dependencies]
 futures-util = "0.3.16"
