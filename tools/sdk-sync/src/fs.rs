@@ -16,7 +16,7 @@ use tracing::{info, warn};
 static HANDWRITTEN_DOTFILE: &str = ".handwritten";
 
 #[cfg_attr(test, mockall::automock)]
-pub trait Fs {
+pub trait Fs: Send + Sync {
     /// Deletes generated SDK files from the given path
     fn delete_all_generated_files_and_folders(&self, directory: &Path) -> Result<()>;
 
@@ -34,8 +34,8 @@ pub trait Fs {
     /// Reads a file into a string and returns it.
     fn read_to_string(&self, path: &Path) -> Result<String>;
 
-    /// Deletes a file.
-    fn remove_file(&self, path: &Path) -> Result<()>;
+    /// Deletes a file idempotently.
+    fn remove_file_idempotent(&self, path: &Path) -> Result<()>;
 
     /// Recursively copies files.
     fn recursive_copy(&self, source: &Path, destination: &Path) -> Result<()>;
@@ -118,8 +118,14 @@ impl Fs for DefaultFs {
         Ok(std::fs::read_to_string(path)?)
     }
 
-    fn remove_file(&self, path: &Path) -> Result<()> {
-        Ok(std::fs::remove_file(path)?)
+    fn remove_file_idempotent(&self, path: &Path) -> Result<()> {
+        match std::fs::remove_file(path) {
+            Ok(_) => Ok(()),
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => Ok(()),
+                _ => Err(err).context(here!()),
+            },
+        }
     }
 
     fn recursive_copy(&self, source: &Path, destination: &Path) -> Result<()> {

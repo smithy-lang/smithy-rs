@@ -6,16 +6,33 @@
 use anyhow::Result;
 use mockall::{predicate::*, Sequence};
 use once_cell::sync::Lazy;
+use sdk_sync::fs::Fs;
 use sdk_sync::git::{Commit, CommitHash};
 use sdk_sync::init_tracing;
+use sdk_sync::sync::gen::{GeneratedSdk, SdkGenerator};
 use sdk_sync::sync::{Sync, BOT_EMAIL, BOT_NAME, MODEL_STASH_BRANCH_NAME};
 use sdk_sync::versions::VersionsManifest;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 static INIT_TRACING: Lazy<bool> = Lazy::new(|| {
     init_tracing();
     true
 });
+
+mockall::mock! {
+    CreateSdkGenerator {}
+    impl sdk_sync::sync::CreateSdkGenerator for CreateSdkGenerator {
+        fn create_sdk_generator(
+            &self,
+            aws_doc_sdk_examples_revision: &CommitHash,
+            examples_path: &Path,
+            fs: Arc<dyn Fs>,
+            reset_to_commit: Option<CommitHash>,
+            original_smithy_rs_path: &Path,
+        ) -> Result<Box<dyn SdkGenerator>>;
+    }
+}
 
 mockall::mock! {
     Fs {}
@@ -28,7 +45,7 @@ mockall::mock! {
         ) -> Result<Vec<PathBuf>>;
         fn remove_dir_all_idempotent(&self, path: &Path) -> Result<()>;
         fn read_to_string(&self, path: &Path) -> Result<String>;
-        fn remove_file(&self, path: &Path) -> Result<()>;
+        fn remove_file_idempotent(&self, path: &Path) -> Result<()>;
         fn recursive_copy(&self, source: &Path, destination: &Path) -> Result<()>;
     }
 }
@@ -37,6 +54,7 @@ mockall::mock! {
     Git {}
     impl sdk_sync::git::Git for Git {
         fn path(&self) -> &Path;
+        fn clone_to(&self, path: &Path) -> Result<()>;
         fn get_head_revision(&self) -> Result<CommitHash>;
         fn stage(&self, path: &Path) -> Result<()>;
         fn commit_on_behalf(
@@ -65,9 +83,9 @@ mockall::mock! {
 }
 
 mockall::mock! {
-    Gradle {}
-    impl sdk_sync::gradle::Gradle for Gradle {
-        fn aws_sdk_assemble(&self, examples_revision: &CommitHash) -> Result<()>;
+    SdkGenerator {}
+    impl sdk_sync::sync::gen::SdkGenerator for SdkGenerator {
+        fn generate_sdk(&self) -> Result<GeneratedSdk>;
     }
 }
 
@@ -89,12 +107,11 @@ fn expect_get_head_revision(repo: &mut MockGit, seq: &mut Sequence, head: &'stat
         .returning(move || Ok(CommitHash::from(head)));
 }
 
-fn expect_show_commit(repo: &mut MockGit, seq: &mut Sequence, commit: Commit) {
+fn expect_show_commit(repo: &mut MockGit, commit: Commit) {
     let hash = commit.hash.as_ref().to_string();
     repo.expect_show()
         .withf(move |h| hash == h)
         .once()
-        .in_sequence(seq)
         .returning(move |_| Ok(commit.clone()));
 }
 
@@ -137,9 +154,9 @@ struct Mocks {
     aws_doc_sdk_examples: MockGit,
     aws_sdk_rust: MockGit,
     smithy_rs: MockGit,
-    smithy_rs_gradle: MockGradle,
     fs: MockFs,
     versions: MockVersions,
+    create_sdk_generator: MockCreateSdkGenerator,
 }
 
 impl Mocks {
@@ -148,9 +165,9 @@ impl Mocks {
             self.aws_doc_sdk_examples,
             self.aws_sdk_rust,
             self.smithy_rs,
-            self.smithy_rs_gradle,
             self.fs,
             self.versions,
+            self.create_sdk_generator,
         )
     }
 
@@ -168,15 +185,6 @@ impl Mocks {
             .returning(|_, _, _| Ok(hashes.iter().map(|&hash| CommitHash::from(hash)).collect()));
     }
 
-    fn expect_remove_dir_all_idempotent(&mut self, seq: &mut Sequence, path: &'static str) {
-        self.fs
-            .expect_remove_dir_all_idempotent()
-            .withf(move |p| p.to_string_lossy() == path)
-            .once()
-            .in_sequence(seq)
-            .returning(|_| Ok(()));
-    }
-
     fn expect_recursive_copy(
         &mut self,
         seq: &mut Sequence,
@@ -189,25 +197,6 @@ impl Mocks {
             .once()
             .in_sequence(seq)
             .returning(|_, _| Ok(()));
-    }
-
-    fn expect_remove_file(&mut self, seq: &mut Sequence, path: &'static str) {
-        self.fs
-            .expect_remove_file()
-            .withf(move |p| p.to_string_lossy() == path)
-            .once()
-            .in_sequence(seq)
-            .returning(|_| Ok(()));
-    }
-
-    fn expect_build(&mut self, seq: &mut Sequence, examples_head: &str) {
-        let examples_head = examples_head.to_string();
-        self.smithy_rs_gradle
-            .expect_aws_sdk_assemble()
-            .withf(move |examples_revision| examples_revision.as_ref() == examples_head)
-            .once()
-            .in_sequence(seq)
-            .returning(|_| Ok(()));
     }
 
     fn expect_delete_all_generated_files_and_folders(
@@ -242,20 +231,55 @@ impl Mocks {
     }
 }
 
-fn expect_codegen(mocks: &mut Mocks, seq: &mut Sequence, examples_head: &str) {
-    mocks.expect_build(seq, examples_head);
-    mocks.expect_delete_all_generated_files_and_folders(seq, "/p2/aws-sdk-rust");
+fn expect_copy_sdk(mocks: &mut Mocks) {
+    let mut seq = Sequence::new();
+    mocks.expect_delete_all_generated_files_and_folders(&mut seq, "/p2/aws-sdk-rust");
     mocks.expect_find_handwritten_files_and_folders(
-        seq,
+        &mut seq,
         "/p2/aws-sdk-rust",
-        "/p2/smithy-rs/aws/sdk/build/aws-sdk",
+        "/p2/some-temp-cloned-smithy-rs/aws/sdk/build/aws-sdk",
         &[], // no handwritten files found
     );
     mocks.expect_recursive_copy(
-        seq,
-        "/p2/smithy-rs/aws/sdk/build/aws-sdk/.",
+        &mut seq,
+        "/p2/some-temp-cloned-smithy-rs/aws/sdk/build/aws-sdk/.",
         "/p2/aws-sdk-rust",
     );
+}
+
+fn expect_generate_sdk(
+    mocks: &mut Mocks,
+    expected_examples_revision: &'static str,
+    expected_examples_path: &'static str,
+    expected_reset_to_commit: Option<&str>,
+    expected_original_smithy_rs_path: &'static str,
+) {
+    let expected_reset_to_commit = expected_reset_to_commit.map(|c| CommitHash::from(c));
+    mocks
+        .create_sdk_generator
+        .expect_create_sdk_generator()
+        .withf(
+            move |examples_revision,
+                  examples_path,
+                  _fs,
+                  reset_to_commit,
+                  original_smithy_rs_path| {
+                examples_revision.as_ref() == expected_examples_revision
+                    && examples_path.to_string_lossy() == expected_examples_path
+                    && reset_to_commit == &expected_reset_to_commit
+                    && original_smithy_rs_path.to_string_lossy() == expected_original_smithy_rs_path
+            },
+        )
+        .once()
+        .returning(|_, _, _, _, _| {
+            let mut mock = MockSdkGenerator::new();
+            mock.expect_generate_sdk().once().returning(|| {
+                Ok(GeneratedSdk::new(
+                    "/p2/some-temp-cloned-smithy-rs/aws/sdk/build/aws-sdk",
+                ))
+            });
+            Ok(Box::new(mock))
+        });
 }
 
 fn expect_successful_smithyrs_sync(
@@ -264,19 +288,15 @@ fn expect_successful_smithyrs_sync(
     commit: Commit,
     expected_commit_message: &str,
 ) {
-    expect_show_commit(&mut mocks.smithy_rs, seq, commit.clone());
-    expect_hard_reset(&mut mocks.smithy_rs, seq, commit.hash.as_ref());
-
-    // Examples sync
-    mocks.expect_remove_dir_all_idempotent(seq, "/p2/smithy-rs/aws/sdk/examples");
-    mocks.expect_recursive_copy(
-        seq,
+    expect_show_commit(&mut mocks.smithy_rs, commit.clone());
+    expect_generate_sdk(
+        mocks,
+        "old-examples-hash",
         "/p2/aws-sdk-rust/examples",
-        "/p2/smithy-rs/aws/sdk/examples",
+        Some(commit.hash.as_ref()),
+        "/p2/smithy-rs",
     );
-
-    // Codegen
-    expect_codegen(mocks, seq, "old-examples-hash");
+    expect_copy_sdk(mocks);
 
     // Commit generated SDK
     expect_has_changes(&mut mocks.aws_sdk_rust, seq, true);
@@ -327,24 +347,20 @@ fn expect_successful_example_sync(
             });
     }
 
-    // Example cleaning
-    mocks.expect_remove_dir_all_idempotent(seq, "/p2/smithy-rs/aws/sdk/examples");
-    mocks.expect_recursive_copy(
-        seq,
-        "/p2/aws-doc-sdk-examples/rust_dev_preview",
-        "/p2/smithy-rs/aws/sdk/examples",
-    );
-    mocks.expect_remove_dir_all_idempotent(seq, "/p2/smithy-rs/aws/sdk/examples/.cargo");
-    mocks.expect_remove_file(seq, "/p2/smithy-rs/aws/sdk/examples/Cargo.toml");
-
     // Codegen
-    let examples_head = example_commits.iter().next().unwrap().hash.clone();
-    expect_codegen(mocks, seq, examples_head.as_ref());
+    expect_generate_sdk(
+        mocks,
+        "hash2",
+        "/p2/aws-doc-sdk-examples/rust_dev_preview",
+        None,
+        "/p2/smithy-rs",
+    );
+    expect_copy_sdk(mocks);
 
     // Commit generated SDK
     expect_stage(&mut mocks.aws_sdk_rust, seq, ".");
     for commit in example_commits {
-        expect_show_commit(&mut mocks.aws_doc_sdk_examples, seq, commit.clone());
+        expect_show_commit(&mut mocks.aws_doc_sdk_examples, commit.clone());
     }
     mocks
         .aws_sdk_rust
@@ -399,7 +415,6 @@ fn expect_sync_model_changes(mocks: &mut Mocks, seq: &mut Sequence) {
     // HEAD has the model changes; set the commit info for it
     expect_show_commit(
         &mut mocks.smithy_rs,
-        seq,
         Commit {
             hash: "HEAD".into(),
             author_name: BOT_NAME.into(),
@@ -409,16 +424,15 @@ fn expect_sync_model_changes(mocks: &mut Mocks, seq: &mut Sequence) {
         },
     );
 
-    // Examples sync
-    mocks.expect_remove_dir_all_idempotent(seq, "/p2/smithy-rs/aws/sdk/examples");
-    mocks.expect_recursive_copy(
-        seq,
-        "/p2/aws-sdk-rust/examples",
-        "/p2/smithy-rs/aws/sdk/examples",
-    );
-
     // Codegen
-    expect_codegen(mocks, seq, "old-examples-hash");
+    expect_generate_sdk(
+        mocks,
+        "old-examples-hash",
+        "/p2/aws-sdk-rust/examples",
+        None,
+        "/p2/smithy-rs",
+    );
+    expect_copy_sdk(mocks);
 
     // Commit generated SDK
     expect_has_changes(&mut mocks.aws_sdk_rust, seq, true);

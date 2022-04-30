@@ -9,7 +9,6 @@ use tracing_subscriber::EnvFilter;
 
 pub mod fs;
 pub mod git;
-pub mod gradle;
 pub mod sync;
 pub mod versions;
 
