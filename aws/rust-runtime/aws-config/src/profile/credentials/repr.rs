@@ -226,9 +226,9 @@ fn base_provider(profile: &Profile) -> Result<BaseProvider, ProfileFileError> {
     // the profile must define either a `CredentialsSource` or a concrete set of access keys
     match profile.get(role::CREDENTIAL_SOURCE) {
         Some(source) => Ok(BaseProvider::NamedSource(source)),
-        None => credential_process_from_profile(profile)
-            .or_else(|| web_identity_token_from_profile(profile))
+        None => web_identity_token_from_profile(profile)
             .or_else(|| sso_from_profile(profile))
+            .or_else(|| credential_process_from_profile(profile))
             .unwrap_or_else(|| Ok(BaseProvider::AccessKey(static_creds_from_profile(profile)?))),
     }
 }
