@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add support for `credential_process` in AWS configs for fetching credentials from an external process."
+references = ["smithy-rs#1356"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jszwedko"
+
+[[smithy-rs]]
+message = "Add support for `credential_process` in AWS configs for fetching credentials from an external process."
+references = ["smithy-rs#1356"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jszwedko"
