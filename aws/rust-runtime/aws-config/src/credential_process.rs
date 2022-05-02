@@ -178,5 +178,30 @@ pub(crate) fn parse_credential_process_json_credentials(
 
 #[cfg(test)]
 mod test {
-    // TODO
+    use crate::credential_process::CredentialProcessProvider;
+    use aws_smithy_types::date_time::Format;
+    use aws_smithy_types::DateTime;
+    use aws_types::credentials::ProvideCredentials;
+    use std::time::SystemTime;
+
+    #[tokio::test]
+    async fn test_credential_process() {
+        let provider = CredentialProcessProvider::new(String::from(
+            r#"echo '{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY", "SessionToken": "TESTSESSIONTOKEN", "Expiration": "2022-05-02T18:36:00+00:00" }'"#,
+        ));
+        let creds = provider.provide_credentials().await.expect("valid creds");
+        assert_eq!(creds.access_key_id(), "ASIARTESTID");
+        assert_eq!(creds.secret_access_key(), "TESTSECRETKEY");
+        assert_eq!(creds.session_token(), Some("TESTSESSIONTOKEN"));
+        assert_eq!(
+            creds.expiry(),
+            Some(
+                SystemTime::try_from(
+                    DateTime::from_str("2022-05-02T18:36:00+00:00", Format::DateTime)
+                        .expect("static datetime")
+                )
+                .expect("static datetime")
+            )
+        );
+    }
 }
