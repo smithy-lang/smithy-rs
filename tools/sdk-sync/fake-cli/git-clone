@@ -2,10 +2,10 @@
 import os
 import sys
 
-expected = [os.path.realpath("/tmp"), ["rev-parse", "--abbrev-ref", "HEAD"]]
+expected = [os.path.realpath("/tmp"), [
+    "clone", "/tmp",
+]]
 actual = [os.getcwd(), sys.argv[1:]]
 if expected != actual:
     print(f"ERROR\nExpect: {expected}\nActual: {actual}")
     sys.exit(1)
-
-print("some-branch-name")
