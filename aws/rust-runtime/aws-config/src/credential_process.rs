@@ -13,7 +13,7 @@ use std::process::Command;
 /// Credentials Provider
 #[derive(Debug)]
 pub struct CredentialProcessProvider {
-    credential_process: String,
+    command: String,
 }
 
 impl ProvideCredentials for CredentialProcessProvider {
@@ -27,16 +27,22 @@ impl ProvideCredentials for CredentialProcessProvider {
 
 impl CredentialProcessProvider {
     /// Create new [`CredentialProcessProvider`]
-    pub fn new(credential_process: String) -> Self {
-        Self { credential_process }
+    pub fn new(command: String) -> Self {
+        Self { command }
     }
 
     async fn credentials(&self) -> credentials::Result {
-        tracing::debug!(command = %self.credential_process, "loading credentials from external process");
+        tracing::debug!(command = %self.command, "loading credentials from external process");
 
-        let mut command = parse_command_str(&self.credential_process)?;
-
-        tracing::debug!(command = ?command, "parsed command");
+        let mut command = if cfg!(windows) {
+            let mut command = Command::new("cmd.exe");
+            command.args(&["/C", &self.command]);
+            command
+        } else {
+            let mut command = Command::new("sh");
+            command.args(&["-c", &self.command]);
+            command
+        };
 
         let output = command.output().map_err(|e| {
             CredentialsError::provider_error(format!(
@@ -87,22 +93,6 @@ impl CredentialProcessProvider {
             ))),
         }
     }
-}
-
-fn parse_command_str(s: &str) -> Result<Command, CredentialsError> {
-    let args = shlex::split(s).ok_or_else(|| {
-        CredentialsError::provider_error(
-            "Error retrieving credentials from external process: could not parse provided value as command",
-        )
-    })?;
-    let mut iter = args.iter();
-    let mut command = Command::new(iter.next().ok_or_else(|| {
-        CredentialsError::provider_error(
-            "Error retrieving credentials from external process: provided command empty",
-        )
-    })?);
-    command.args(iter);
-    Ok(command)
 }
 
 #[cfg(test)]
