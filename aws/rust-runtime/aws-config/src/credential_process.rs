@@ -79,7 +79,7 @@ impl CredentialProcessProvider {
                 secret_access_key,
                 Some(session_token.to_string()),
                 expiration.into(),
-                "IMDSv2",
+                "CredentialProcess",
             )),
             Ok(JsonCredentials::Error { code, message }) => {
                 Err(CredentialsError::provider_error(format!(
