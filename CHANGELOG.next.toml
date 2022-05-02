@@ -22,3 +22,9 @@ message = "Log a debug event when a retry is going to be peformed"
 references = ["smithy-rs#1352"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Add support for providing MFA tokens. MFA token providers can now be configured via `.mfa_token()` while building a `DefaultCredentialChain`. The default implementation if none is provided will not resolve an MFA token - you will need to bring your own provider to make use of this feature."
+references = ["smithy-rs#1359", "aws-sdk-rust#527"]
+meta = { "breaking" = false, "tada" = true, "bug" = false}
+author = "jelford"
