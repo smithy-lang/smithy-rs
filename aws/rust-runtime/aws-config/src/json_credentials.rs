@@ -63,15 +63,18 @@ impl Display for InvalidJsonCredentials {
 
 impl Error for InvalidJsonCredentials {}
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct RefreshableCredentials<'a> {
+    pub(crate) access_key_id: Cow<'a, str>,
+    pub(crate) secret_access_key: Cow<'a, str>,
+    pub(crate) session_token: Cow<'a, str>,
+    pub(crate) expiration: SystemTime,
+}
+
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum JsonCredentials<'a> {
-    RefreshableCredentials {
-        access_key_id: Cow<'a, str>,
-        secret_access_key: Cow<'a, str>,
-        session_token: Cow<'a, str>,
-        expiration: SystemTime,
-    },
+    RefreshableCredentials(RefreshableCredentials<'a>),
     Error {
         code: Cow<'a, str>,
         message: Cow<'a, str>,
@@ -115,7 +118,8 @@ pub(crate) fn parse_json_credentials(
     let mut expiration = None;
     let mut message = None;
     json_parse_loop(credentials_response.as_bytes(), |key, value| {
-        match key {
+        dbg!("calling loop with", &key, &value);
+        match (key, value) {
             /*
              "Code": "Success",
              "Type": "AWS-HMAC",
@@ -125,16 +129,32 @@ pub(crate) fn parse_json_credentials(
              "Expiration" : "....",
              "LastUpdated" : "2009-11-23T0:00:00Z"
             */
-            c if c.eq_ignore_ascii_case("Code") => code = Some(value),
-            c if c.eq_ignore_ascii_case("AccessKeyId") => access_key_id = Some(value),
-            c if c.eq_ignore_ascii_case("SecretAccessKey") => secret_access_key = Some(value),
-            c if c.eq_ignore_ascii_case("Token") => session_token = Some(value),
-            c if c.eq_ignore_ascii_case("Expiration") => expiration = Some(value),
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("Code") => {
+                code = Some(value.to_unescaped()?);
+                dbg!("set code to", &code);
+            }
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("AccessKeyId") => {
+                access_key_id = Some(value.to_unescaped()?);
+            }
+            (key, Token::ValueString { value, .. })
+                if key.eq_ignore_ascii_case("SecretAccessKey") =>
+            {
+                secret_access_key = Some(value.to_unescaped()?);
+            }
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("Token") => {
+                session_token = Some(value.to_unescaped()?);
+            }
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("Expiration") => {
+                expiration = Some(value.to_unescaped()?);
+            }
 
             // Error case handling: message will be set
-            c if c.eq_ignore_ascii_case("Message") => message = Some(value),
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("Message") => {
+                message = Some(value.to_unescaped()?);
+            }
             _ => {}
-        }
+        };
+        Ok(())
     })?;
     match code {
         // IMDS does not appear to reply with a `Code` missing, but documentation indicates it
@@ -161,12 +181,14 @@ pub(crate) fn parse_json_credentials(
                     "credential expiration time cannot be represented by a SystemTime".into(),
                 )
             })?;
-            Ok(JsonCredentials::RefreshableCredentials {
-                access_key_id,
-                secret_access_key,
-                session_token,
-                expiration,
-            })
+            Ok(JsonCredentials::RefreshableCredentials(
+                RefreshableCredentials {
+                    access_key_id,
+                    secret_access_key,
+                    session_token,
+                    expiration,
+                },
+            ))
         }
         Some(other) => Ok(JsonCredentials::Error {
             code: other,
@@ -177,7 +199,7 @@ pub(crate) fn parse_json_credentials(
 
 pub(crate) fn json_parse_loop<'a>(
     input: &'a [u8],
-    mut f: impl FnMut(Cow<'a, str>, Cow<'a, str>),
+    mut f: impl FnMut(Cow<'a, str>, &Token<'a>) -> Result<(), InvalidJsonCredentials>,
 ) -> Result<(), InvalidJsonCredentials> {
     let mut tokens = json_token_iter(input).peekable();
     if !matches!(tokens.next().transpose()?, Some(Token::StartObject { .. })) {
@@ -189,10 +211,9 @@ pub(crate) fn json_parse_loop<'a>(
         match tokens.next().transpose()? {
             Some(Token::EndObject { .. }) => break,
             Some(Token::ObjectKey { key, .. }) => {
-                if let Some(Ok(Token::ValueString { value, .. })) = tokens.peek() {
+                if let Some(Ok(token)) = tokens.peek() {
                     let key = key.to_unescaped()?;
-                    let value = value.to_unescaped()?;
-                    f(key, value)
+                    f(key, token)?
                 }
                 skip_value(&mut tokens)?;
             }
@@ -214,7 +235,7 @@ pub(crate) fn json_parse_loop<'a>(
 #[cfg(test)]
 mod test {
     use crate::json_credentials::{
-        parse_json_credentials, InvalidJsonCredentials, JsonCredentials,
+        parse_json_credentials, InvalidJsonCredentials, JsonCredentials, RefreshableCredentials,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -233,12 +254,12 @@ mod test {
         let parsed = parse_json_credentials(response).expect("valid JSON");
         assert_eq!(
             parsed,
-            JsonCredentials::RefreshableCredentials {
+            JsonCredentials::RefreshableCredentials(RefreshableCredentials {
                 access_key_id: "ASIARTEST".into(),
                 secret_access_key: "xjtest".into(),
                 session_token: "IQote///test".into(),
                 expiration: UNIX_EPOCH + Duration::from_secs(1631935916),
-            }
+            })
         )
     }
 
@@ -273,12 +294,12 @@ mod test {
         let parsed = parse_json_credentials(resp).expect("code not required");
         assert_eq!(
             parsed,
-            JsonCredentials::RefreshableCredentials {
+            JsonCredentials::RefreshableCredentials(RefreshableCredentials {
                 access_key_id: "ASIARTEST".into(),
                 secret_access_key: "xjtest".into(),
                 session_token: "IQote///test".into(),
                 expiration: UNIX_EPOCH + Duration::from_secs(1631935916),
-            }
+            })
         )
     }
 
@@ -347,12 +368,12 @@ mod test {
         assert!(
             matches!(
                 &parsed,
-                JsonCredentials::RefreshableCredentials {
+                JsonCredentials::RefreshableCredentials(RefreshableCredentials{
                     access_key_id: Cow::Borrowed("ASIARTEST"),
                     secret_access_key: Cow::Borrowed("SECRETTEST"),
                     session_token,
                     expiration
-                } if session_token.starts_with("token") && *expiration == UNIX_EPOCH + Duration::from_secs(1234567890)
+                }) if session_token.starts_with("token") && *expiration == UNIX_EPOCH + Duration::from_secs(1234567890)
             ),
             "{:?}",
             parsed

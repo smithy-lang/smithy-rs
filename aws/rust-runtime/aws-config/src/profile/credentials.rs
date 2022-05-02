@@ -501,5 +501,5 @@ mod test {
     make_test!(retry_on_error);
     make_test!(invalid_config);
     make_test!(region_override);
-    make_test!(credentials_process);
+    make_test!(credential_process);
 }

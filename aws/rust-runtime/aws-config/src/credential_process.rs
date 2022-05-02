@@ -5,10 +5,14 @@
 
 //! Credentials Provider for external process
 
-use crate::json_credentials::{parse_json_credentials, JsonCredentials};
+use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials, RefreshableCredentials};
+use aws_smithy_json::deserialize::Token;
+use aws_smithy_types::date_time::Format;
+use aws_smithy_types::DateTime;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
 use aws_types::{credentials, Credentials};
 use std::process::Command;
+use std::time::SystemTime;
 
 /// Credentials Provider
 #[derive(Debug)]
@@ -67,8 +71,8 @@ impl CredentialProcessProvider {
             ))
         })?;
 
-        match parse_json_credentials(&output) {
-            Ok(JsonCredentials::RefreshableCredentials {
+        match parse_credential_process_json_credentials(&output) {
+            Ok(RefreshableCredentials {
                 access_key_id,
                 secret_access_key,
                 session_token,
@@ -81,17 +85,94 @@ impl CredentialProcessProvider {
                 expiration.into(),
                 "CredentialProcess",
             )),
-            Ok(JsonCredentials::Error { code, message }) => {
-                Err(CredentialsError::provider_error(format!(
-                    "Error retrieving credentials from external process: {} {}",
-                    code, message
-                )))
-            }
             Err(invalid) => Err(CredentialsError::provider_error(format!(
                 "Error retrieving credentials from external process, could not parse response: {}",
                 invalid
             ))),
         }
+    }
+}
+
+/// Deserialize a credential_process response from a string
+///
+/// Returns an error if the response cannot be successfully parsed or is missing keys.
+///
+/// Keys are case insensitive.
+pub(crate) fn parse_credential_process_json_credentials(
+    credentials_response: &str,
+) -> Result<RefreshableCredentials, InvalidJsonCredentials> {
+    let mut version = None;
+    let mut access_key_id = None;
+    let mut secret_access_key = None;
+    let mut session_token = None;
+    let mut expiration = None;
+    json_parse_loop(credentials_response.as_bytes(), |key, value| {
+        match (key, value) {
+            /*
+             "Version": 1,
+             "AccessKeyId": "ASIARTESTID",
+             "SecretAccessKey": "TESTSECRETKEY",
+             "SessionToken": "TESTSESSIONTOKEN",
+             "Expiration": "2022-05-02T18:36:00+00:00"
+            */
+            (key, Token::ValueNumber { value, .. }) if key.eq_ignore_ascii_case("Version") => {
+                version = Some(value.to_u8())
+            }
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("AccessKeyId") => {
+                access_key_id = Some(value.to_unescaped()?)
+            }
+            (key, Token::ValueString { value, .. })
+                if key.eq_ignore_ascii_case("SecretAccessKey") =>
+            {
+                secret_access_key = Some(value.to_unescaped()?)
+            }
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("SessionToken") => {
+                session_token = Some(value.to_unescaped()?)
+            }
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("Expiration") => {
+                expiration = Some(value.to_unescaped()?)
+            }
+
+            _ => {}
+        };
+        Ok(())
+    })?;
+
+    match version {
+        Some(1) => {
+            let access_key_id =
+                access_key_id.ok_or(InvalidJsonCredentials::MissingField("AccessKeyId"))?;
+            let secret_access_key =
+                secret_access_key.ok_or(InvalidJsonCredentials::MissingField("SecretAccessKey"))?;
+            let session_token =
+                session_token.ok_or(InvalidJsonCredentials::MissingField("Token"))?;
+            let expiration =
+                expiration.ok_or(InvalidJsonCredentials::MissingField("Expiration"))?;
+            let expiration = SystemTime::try_from(
+                DateTime::from_str(expiration.as_ref(), Format::DateTime).map_err(|err| {
+                    InvalidJsonCredentials::InvalidField {
+                        field: "Expiration",
+                        err: err.into(),
+                    }
+                })?,
+            )
+            .map_err(|_| {
+                InvalidJsonCredentials::Other(
+                    "credential expiration time cannot be represented by a SystemTime".into(),
+                )
+            })?;
+            Ok(RefreshableCredentials {
+                access_key_id,
+                secret_access_key,
+                session_token,
+                expiration,
+            })
+        }
+        None => Err(InvalidJsonCredentials::MissingField("Version")),
+        Some(version) => Err(InvalidJsonCredentials::InvalidField {
+            field: "version",
+            err: format!("unknown version number: {}", version).into(),
+        }),
     }
 }
 
