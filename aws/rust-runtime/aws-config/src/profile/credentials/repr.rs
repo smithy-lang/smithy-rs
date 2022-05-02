@@ -97,6 +97,9 @@ pub struct RoleArn<'a> {
 
     /// session name parameter to pass to the assume role provider
     pub session_name: Option<&'a str>,
+
+    /// The identification number of an MFA device to use when assuming a role
+    pub mfa_serial: Option<&'a str>,
 }
 
 /// Resolve a ProfileChain from a ProfileSet or return an error
@@ -188,6 +191,7 @@ mod role {
     pub const ROLE_ARN: &str = "role_arn";
     pub const EXTERNAL_ID: &str = "external_id";
     pub const SESSION_NAME: &str = "role_session_name";
+    pub const MFA_SERIAL: &str = "mfa_serial";
 
     pub const CREDENTIAL_SOURCE: &str = "credential_source";
     pub const SOURCE_PROFILE: &str = "source_profile";
@@ -261,10 +265,12 @@ fn role_arn_from_profile(profile: &Profile) -> Option<RoleArn> {
     let role_arn = profile.get(role::ROLE_ARN)?;
     let session_name = profile.get(role::SESSION_NAME);
     let external_id = profile.get(role::EXTERNAL_ID);
+    let mfa_serial = profile.get(role::MFA_SERIAL);
     Some(RoleArn {
         role_arn,
         external_id,
         session_name,
+        mfa_serial
     })
 }
 

@@ -21,18 +21,24 @@ use aws_smithy_client::erase::DynConnector;
 use aws_types::credentials::{self, CredentialsError, ProvideCredentials};
 
 use std::fmt::Debug;
+use tracing::Instrument;
+use crate::profile::mfa_token::ProvideMfaToken;
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct AssumeRoleProvider {
     role_arn: String,
     external_id: Option<String>,
     session_name: Option<String>,
+    mfa_serial: Option<String>,
 }
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct ClientConfiguration {
     pub(crate) sts_client: aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
     pub(crate) region: Option<Region>,
+    pub(crate) mfa_token_provider: Box<dyn ProvideMfaToken>,
 }
 
 impl AssumeRoleProvider {
@@ -50,10 +56,25 @@ impl AssumeRoleProvider {
             .as_ref()
             .cloned()
             .unwrap_or_else(|| sts::util::default_session_name("assume-role-from-profile"));
+
+        let token = match &self.mfa_serial {
+            Some(mfa_serial) => {
+                client_config.mfa_token_provider
+                    .mfa_token(mfa_serial)
+                    .instrument(tracing::debug_span!("request_mfa_token"))
+                    .await
+                    .map(|t| Some(t.0.clone()))
+                    .map_err(CredentialsError::provider_error)?
+            },
+            None => None
+        };
+
         let operation = AssumeRole::builder()
             .role_arn(&self.role_arn)
             .set_external_id(self.external_id.clone())
             .role_session_name(session_name)
+            .set_serial_number(self.mfa_serial.clone())
+            .set_token_code(token)
             .build()
             .expect("operation is valid")
             .make_operation(&config)
@@ -142,6 +163,7 @@ impl ProviderChain {
                     role_arn: role_arn.role_arn.into(),
                     external_id: role_arn.external_id.map(|id| id.into()),
                     session_name: role_arn.session_name.map(|id| id.into()),
+                    mfa_serial: role_arn.mfa_serial.map(|id| id.into()),
                 }
             })
             .collect();

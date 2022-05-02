@@ -12,6 +12,7 @@ use tracing::Instrument;
 use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
 use crate::meta::credentials::{CredentialsProviderChain, LazyCachingCredentialsProvider};
 use crate::meta::region::ProvideRegion;
+use crate::profile::mfa_token::ProvideMfaToken;
 use crate::provider_config::ProviderConfig;
 
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
@@ -216,6 +217,12 @@ impl Builder {
     pub fn configure(mut self, config: ProviderConfig) -> Self {
         self.region_chain = self.region_chain.configure(&config);
         self.conf = Some(config);
+        self
+    }
+
+    /// MFA token
+    pub fn mfa_token(mut self, mfa_provider: impl ProvideMfaToken + 'static) -> Self {
+        self.profile_file_builder = self.profile_file_builder.mfa_token(mfa_provider);
         self
     }
 

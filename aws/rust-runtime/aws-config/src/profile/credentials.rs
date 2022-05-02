@@ -32,6 +32,7 @@ use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials}
 
 use tracing::Instrument;
 
+use crate::profile::mfa_token::ProvideMfaToken;
 use crate::profile::credentials::exec::named::NamedProviderFactory;
 use crate::profile::credentials::exec::{ClientConfiguration, ProviderChain};
 use crate::profile::parser::ProfileParseError;
@@ -337,6 +338,7 @@ pub struct Builder {
     provider_config: Option<ProviderConfig>,
     profile_override: Option<String>,
     custom_providers: HashMap<Cow<'static, str>, Arc<dyn ProvideCredentials>>,
+    mfa_token_provider: Option<Box<dyn ProvideMfaToken>>,
 }
 
 impl Builder {
@@ -401,6 +403,11 @@ impl Builder {
         self
     }
 
+    pub fn mfa_token(mut self, mfa_token: impl ProvideMfaToken + 'static) -> Self {
+        self.mfa_token_provider = Some(Box::new(mfa_token));
+        self
+    }
+
     /// Builds a [`ProfileFileCredentialsProvider`]
     pub fn build(self) -> ProfileFileCredentialsProvider {
         let build_span = tracing::debug_span!("build_profile_provider");
@@ -437,11 +444,15 @@ impl Builder {
         let factory = exec::named::NamedProviderFactory::new(named_providers);
         let core_client = conf.sts_client();
 
+        let mfa_token_provider =
+            self.mfa_token_provider.unwrap_or_else(|| Box::new(crate::profile::mfa_token::DefaultProvideNoMfaToken::default()));
+
         ProfileFileCredentialsProvider {
             factory,
             client_config: ClientConfiguration {
                 sts_client: core_client,
                 region: conf.region(),
+                mfa_token_provider
             },
             provider_config: conf,
             profile_override: self.profile_override,
