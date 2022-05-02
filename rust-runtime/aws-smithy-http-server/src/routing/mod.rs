@@ -378,7 +378,7 @@ where
 #[cfg(test)]
 mod rest_tests {
     use super::*;
-    use crate::{body::boxed, routing::request_spec::*};
+    use crate::{body::boxed, routing::request_spec::*, test_helpers::get_body_as_string};
     use futures_util::Future;
     use http::{HeaderMap, Method};
     use std::pin::Pin;
@@ -390,17 +390,6 @@ mod rest_tests {
             *r.headers_mut() = headers
         }
         r
-    }
-
-    // Returns a `Response`'s body as a `String`, without consuming the response.
-    pub async fn get_body_as_string<B>(res: &mut Response<B>) -> String
-    where
-        B: http_body::Body + std::marker::Unpin,
-        B::Error: std::fmt::Debug,
-    {
-        let body_mut = res.body_mut();
-        let body_bytes = hyper::body::to_bytes(body_mut).await.unwrap();
-        String::from(std::str::from_utf8(&body_bytes).unwrap())
     }
 
     /// A service that returns its name and the request's URI in the response body.
@@ -505,7 +494,7 @@ mod rest_tests {
             ];
             for (svc_name, method, uri) in &hits {
                 let mut res = router.call(req(method, uri, None)).await.unwrap();
-                let actual_body = get_body_as_string(&mut res).await;
+                let actual_body = get_body_as_string(res.body_mut()).await;
 
                 assert_eq!(format!("{} :: {}", svc_name, uri), actual_body);
             }
@@ -601,9 +590,9 @@ mod rest_tests {
 
 #[cfg(test)]
 mod awsjson_tests {
-    use super::rest_tests::{get_body_as_string, req};
+    use super::rest_tests::req;
     use super::*;
-    use crate::body::boxed;
+    use crate::{body::boxed, test_helpers::get_body_as_string};
     use futures_util::Future;
     use http::{HeaderMap, HeaderValue, Method};
     use pretty_assertions::assert_eq;
@@ -661,7 +650,7 @@ mod awsjson_tests {
                 .call(req(&Method::POST, "/", Some(headers.clone())))
                 .await
                 .unwrap();
-            let actual_body = get_body_as_string(&mut res).await;
+            let actual_body = get_body_as_string(res.body_mut()).await;
             assert_eq!(format!("{} :: {}", "A", "Service.Operation"), actual_body);
 
             // No headers, should return NOT_FOUND.
