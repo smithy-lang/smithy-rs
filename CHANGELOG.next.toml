@@ -12,6 +12,17 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Log a debug event when a retry is going to be peformed"
+references = ["smithy-rs#1352"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Log a debug event when a retry is going to be peformed"
+references = ["smithy-rs#1352"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
 message = "Add support for `credential_process` in AWS configs for fetching credentials from an external process."
 references = ["smithy-rs#1356"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
