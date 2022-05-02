@@ -25,7 +25,6 @@ use tracing::Instrument;
 use crate::profile::mfa_token::ProvideMfaToken;
 
 #[derive(Debug)]
-#[non_exhaustive]
 pub struct AssumeRoleProvider {
     role_arn: String,
     external_id: Option<String>,
@@ -34,7 +33,6 @@ pub struct AssumeRoleProvider {
 }
 
 #[derive(Debug)]
-#[non_exhaustive]
 pub struct ClientConfiguration {
     pub(crate) sts_client: aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
     pub(crate) region: Option<Region>,
