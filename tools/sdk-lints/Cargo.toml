@@ -19,3 +19,6 @@ serde = { version = "1", features = ["derive"]}
 lazy_static = "1.4.0"
 time = { version = "0.3.9", features = ["local-offset"]}
 ordinal = "0.3.2"
+
+[dev-dependencies]
+pretty_assertions = "1.2.1"
