@@ -65,12 +65,9 @@ enum Args {
         dry_run: Option<bool>,
     },
     UpdateChangelog {
+        /// Whether or not independent crate versions are being used (defaults to false)
         #[clap(long)]
-        smithy_version: Option<String>,
-        #[clap(long)]
-        sdk_version: Option<String>,
-        #[clap(long)]
-        date: Option<String>,
+        independent_versioning: bool,
     },
 }
 
@@ -168,19 +165,30 @@ fn main() -> Result<()> {
             }
         }
         Args::UpdateChangelog {
-            smithy_version,
-            sdk_version,
-            date,
+            independent_versioning,
         } => {
-            let auto = auto_changelog_meta()?;
-            changelog::update_changelogs(
-                repo_root().join("CHANGELOG.next.toml"),
-                repo_root().join("CHANGELOG.md"),
-                repo_root().join("aws/SDK_CHANGELOG.md"),
-                &smithy_version.unwrap_or(auto.smithy_version),
-                &sdk_version.unwrap_or(auto.sdk_version),
-                &date.unwrap_or(auto.date),
-            )?
+            let changelog_next_path = repo_root().join("CHANGELOG.next.toml");
+            let changelog_path = repo_root().join("CHANGELOG.md");
+            let aws_changelog_path = repo_root().join("aws/SDK_CHANGELOG.md");
+            if independent_versioning {
+                let header = date_header()?;
+                changelog::update_changelogs(
+                    changelog_next_path,
+                    changelog_path,
+                    aws_changelog_path,
+                    &header,
+                    &header,
+                )?
+            } else {
+                let auto = auto_changelog_meta()?;
+                changelog::update_changelogs(
+                    changelog_next_path,
+                    changelog_path,
+                    aws_changelog_path,
+                    &release_header_sync_versioned(&auto.smithy_version)?,
+                    &release_header_sync_versioned(&auto.sdk_version)?,
+                )?
+            }
         }
     }
     Ok(())
@@ -189,7 +197,24 @@ fn main() -> Result<()> {
 struct ChangelogMeta {
     smithy_version: String,
     sdk_version: String,
-    date: String,
+}
+
+fn date_header() -> Result<String> {
+    let now = OffsetDateTime::now_local()?;
+    Ok(format!(
+        "{month} {day}, {year}",
+        month = now.date().month(),
+        day = Ordinal(now.date().day()),
+        year = now.date().year()
+    ))
+}
+
+fn release_header_sync_versioned(version: &str) -> Result<String> {
+    Ok(format!(
+        "v{version} ({date})",
+        version = version,
+        date = date_header()?
+    ))
 }
 
 /// Discover the new version for the changelog from gradle.properties and the date.
@@ -206,17 +231,9 @@ fn auto_changelog_meta() -> Result<ChangelogMeta> {
     };
     let smithy_version = load_gradle_prop("smithy.rs.runtime.crate.version")?;
     let sdk_version = load_gradle_prop("aws.sdk.version")?;
-    let now = OffsetDateTime::now_local()?;
-    let date = format!(
-        "{month} {day}, {year}",
-        month = now.date().month(),
-        day = Ordinal(now.date().day()),
-        year = now.date().year()
-    );
     Ok(ChangelogMeta {
         smithy_version,
         sdk_version,
-        date,
     })
 }
 
