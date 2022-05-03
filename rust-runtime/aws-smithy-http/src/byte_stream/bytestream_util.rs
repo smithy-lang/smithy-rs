@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::fs::File;
-use tokio::io;
+use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncSeekExt};
 use tokio_util::io::ReaderStream;
 
 use crate::body::SdkBody;
@@ -21,6 +21,8 @@ use super::{ByteStream, Error};
 
 // 4KB corresponds to the default buffer size used by Tokio's ReaderStream
 const DEFAULT_BUFFER_SIZE: usize = 4096;
+// By default, read files from their start
+const DEFAULT_OFFSET: u64 = 0;
 
 /// An HTTP Body designed to wrap files
 ///
@@ -30,23 +32,30 @@ const DEFAULT_BUFFER_SIZE: usize = 4096;
 /// 3. Provide size hint
 struct PathBody {
     state: State,
-    file_size: u64,
+    // The number of bytes to read
+    length: u64,
     buffer_size: usize,
+    // The byte-offset to start reading from
+    offset: Option<u64>,
 }
 
 impl PathBody {
-    fn from_path(path_buf: PathBuf, file_size: u64, buffer_size: usize) -> Self {
+    fn from_path(path_buf: PathBuf, length: u64, buffer_size: usize, offset: Option<u64>) -> Self {
         PathBody {
             state: State::Unloaded(path_buf),
-            file_size,
+            length,
             buffer_size,
+            offset,
         }
     }
-    fn from_file(file: File, file_size: u64, buffer_size: usize) -> Self {
+
+    fn from_file(file: File, length: u64, buffer_size: usize) -> Self {
         PathBody {
-            state: State::Loaded(ReaderStream::with_capacity(file, buffer_size)),
-            file_size,
+            state: State::Loaded(ReaderStream::with_capacity(file.take(length), buffer_size)),
+            length,
             buffer_size,
+            /// The file used to create this `PathBody` should have already had an offset applied
+            offset: None,
         }
     }
 }
@@ -69,7 +78,7 @@ impl PathBody {
 ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
 ///         .buffer_size(32_784)
 ///         // Specify the length of the file used (skips an additional call to retrieve the size)
-///         .file_size(123_456)
+///         .length(123_456)
 ///         .build()
 ///         .await
 ///         .expect("valid path");
@@ -80,8 +89,9 @@ impl PathBody {
 pub struct FsBuilder {
     file: Option<tokio::fs::File>,
     path: Option<PathBuf>,
-    file_size: Option<u64>,
+    length: Option<u64>,
     buffer_size: usize,
+    offset: Option<u64>,
 }
 
 impl Default for FsBuilder {
@@ -96,10 +106,11 @@ impl FsBuilder {
     /// You must then call either [`file`](FsBuilder::file) or [`path`](FsBuilder::path) to specify what to read from.
     pub fn new() -> Self {
         FsBuilder {
-            file: None,
-            path: None,
-            file_size: None,
             buffer_size: DEFAULT_BUFFER_SIZE,
+            file: None,
+            length: None,
+            offset: None,
+            path: None,
         }
     }
 
@@ -122,11 +133,13 @@ impl FsBuilder {
         self
     }
 
-    /// Specify the length of the file to read (in bytes).
+    /// Specify the length to read (in bytes).
     ///
-    /// By pre-specifying the length of the file, this API skips an additional call to retrieve the size from file-system metadata.
-    pub fn file_size(mut self, file_size: u64) -> Self {
-        self.file_size = Some(file_size);
+    /// By pre-specifying the length, this API skips an additional call to retrieve the size from file-system metadata.
+    ///
+    /// When used in conjunction with [`offset`](FsBuilder::offset), allows for reading a single "chunk" of a file.
+    pub fn length(mut self, length: u64) -> Self {
+        self.length = Some(length);
         self
     }
 
@@ -136,6 +149,14 @@ impl FsBuilder {
     /// in CPU usage, at the cost of memory increase.
     pub fn buffer_size(mut self, buffer_size: usize) -> Self {
         self.buffer_size = buffer_size;
+        self
+    }
+
+    /// Specify the offset to start reading from (in bytes)
+    ///
+    /// When used in conjunction with [`length`](FsBuilder::length), allows for reading a single "chunk" of a file.
+    pub fn offset(mut self, offset: u64) -> Self {
+        self.offset = Some(offset);
         self
     }
 
@@ -150,32 +171,54 @@ impl FsBuilder {
         let buffer_size = self.buffer_size;
 
         if let Some(path) = self.path {
-            let path_buf = path.to_path_buf();
-            let file_size = self.file_size.unwrap_or(
-                tokio::fs::metadata(path)
+            let offset = self.offset.unwrap_or(DEFAULT_OFFSET);
+            let length = self.length.unwrap_or({
+                let file_length = tokio::fs::metadata(&path)
                     .await
                     .map_err(|err| Error(err.into()))?
-                    .len(),
-            );
+                    .len();
 
+                // Length should never be less than zero. If the provided offset is greater than
+                // the length of the file, the number of bytes to read will be set to 0.
+                file_length.saturating_sub(offset)
+            });
+
+            let path_buf = path.to_path_buf();
             let body_loader = move || {
+                // If an offset was provided, seeking will be handled in `PathBody::poll_data` each
+                // time the file is loaded.
                 SdkBody::from_dyn(http_body::combinators::BoxBody::new(PathBody::from_path(
                     path_buf.clone(),
-                    file_size,
+                    length,
                     buffer_size,
+                    self.offset,
                 )))
             };
             Ok(ByteStream::new(SdkBody::retryable(body_loader)))
-        } else if let Some(file) = self.file {
-            let file_size = self.file_size.unwrap_or(
-                file.metadata()
+        } else if let Some(mut file) = self.file {
+            let offset = self.offset.unwrap_or(DEFAULT_OFFSET);
+            let length = self.length.unwrap_or({
+                let file_length = file
+                    .metadata()
                     .await
                     .map_err(|err| Error(err.into()))?
-                    .len(),
-            );
+                    .len();
+
+                // Length should never be less than zero. If the provided offset is greater than
+                // the length of the file, the number of bytes to read will be set to 0.
+                file_length.saturating_sub(offset)
+            });
+
+            // When starting from a `File`, we need to do our own seeking
+            if offset != 0 {
+                let _s = file
+                    .seek(std::io::SeekFrom::Start(offset))
+                    .await
+                    .map_err(|err| Error(err.into()))?;
+            }
 
             let body = SdkBody::from_dyn(http_body::combinators::BoxBody::new(
-                PathBody::from_file(file, file_size, buffer_size),
+                PathBody::from_file(file, length, buffer_size),
             ));
 
             Ok(ByteStream::new(body))
@@ -188,7 +231,7 @@ impl FsBuilder {
 enum State {
     Unloaded(PathBuf),
     Loading(Pin<Box<dyn Future<Output = io::Result<File>> + Send + Sync + 'static>>),
-    Loaded(tokio_util::io::ReaderStream<File>),
+    Loaded(tokio_util::io::ReaderStream<io::Take<File>>),
 }
 
 impl Body for PathBody {
@@ -199,20 +242,28 @@ impl Body for PathBody {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+        let offset = self.offset.unwrap_or(DEFAULT_OFFSET);
         loop {
             match self.state {
                 State::Unloaded(ref path_buf) => {
                     let buf = path_buf.clone();
                     self.state = State::Loading(Box::pin(async move {
-                        let file = tokio::fs::File::open(&buf).await?;
+                        let mut file = tokio::fs::File::open(&buf).await?;
+
+                        if offset != 0 {
+                            let _s = file.seek(std::io::SeekFrom::Start(offset)).await?;
+                        }
+
                         Ok(file)
                     }));
                 }
                 State::Loading(ref mut future) => {
                     match ready!(Pin::new(future).poll(cx)) {
                         Ok(file) => {
-                            self.state =
-                                State::Loaded(ReaderStream::with_capacity(file, self.buffer_size));
+                            self.state = State::Loaded(ReaderStream::with_capacity(
+                                file.take(self.length),
+                                self.buffer_size,
+                            ));
                         }
                         Err(e) => return Poll::Ready(Some(Err(e.into()))),
                     };
@@ -236,11 +287,11 @@ impl Body for PathBody {
     }
 
     fn is_end_stream(&self) -> bool {
-        // fast path end-stream for empty files
-        self.file_size == 0
+        // fast path end-stream for empty streams
+        self.length == 0
     }
 
     fn size_hint(&self) -> SizeHint {
-        SizeHint::with_exact(self.file_size)
+        SizeHint::with_exact(self.length)
     }
 }

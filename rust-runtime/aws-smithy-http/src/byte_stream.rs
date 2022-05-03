@@ -111,7 +111,7 @@
 //! async fn bytestream_from_file() -> GetObjectInput {
 //!     let bytestream = ByteStream::read_from().path("docs/some-large-file.csv")
 //!         .buffer_size(32_784)
-//!         .file_size(123_456)
+//!         .length(123_456)
 //!         .build()
 //!         .await
 //!         .expect("valid path");
@@ -280,7 +280,7 @@ impl ByteStream {
     ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
     ///         .buffer_size(32_784)
     ///         // Specify the length of the file used (skips an additional call to retrieve the size)
-    ///         .file_size(123_456)
+    ///         .length(123_456)
     ///         .build()
     ///         .await
     ///         .expect("valid path");
@@ -525,6 +525,7 @@ where
 mod tests {
     use crate::byte_stream::Inner;
     use bytes::Bytes;
+    use std::io::Seek;
 
     #[tokio::test]
     async fn read_from_string_body() {
@@ -609,17 +610,22 @@ mod tests {
         for i in 0..10000 {
             writeln!(file, "Brian was here. Briefly. {}", i)?;
         }
+        let file_length = file
+            .as_file()
+            .metadata()
+            .expect("file metadata is accessible")
+            .len();
+
         let body = ByteStream::read_from()
             .path(&file)
             .buffer_size(16384)
-            // This isn't the right file length - one shouldn't do this in real code
-            .file_size(200)
+            .length(file_length)
             .build()
             .await?
             .into_inner();
 
-        // assert that the file length specified size is used as size hint
-        assert_eq!(body.size_hint().exact(), Some(200));
+        // assert that the specified length is used as size hint
+        assert_eq!(body.size_hint().exact(), Some(file_length));
 
         let mut body1 = body.try_clone().expect("retryable bodies are cloneable");
         // read a little bit from one of the clones
@@ -628,13 +634,73 @@ mod tests {
             .await
             .expect("should have some data")
             .expect("read should not fail");
-        // The size of one read should be equal to that of the buffer size
+        // The size of one read should be equal to that of the length
         assert_eq!(some_data.len(), 16384);
 
         assert_eq!(
             ByteStream::new(body1).collect().await?.remaining(),
-            298890 - some_data.len()
+            file_length as usize - some_data.len()
         );
+
+        Ok(())
+    }
+
+    #[cfg(feature = "rt-tokio")]
+    #[tokio::test]
+    async fn doesnt_read_past_end_of_path_based_bytestreams_with_builder(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use super::ByteStream;
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut file = NamedTempFile::new()?;
+        let line_0 = "Line 0\n";
+        let line_1 = "Line 1\n";
+
+        write!(file, "{}", line_0)?;
+        write!(file, "{}", line_1)?;
+
+        let body = ByteStream::read_from()
+            .path(&file)
+            // We're going to read the first line only
+            .length(line_0.len() as u64)
+            .build()
+            .await?;
+
+        let data = body.collect().await?.into_bytes();
+        let data_str = String::from_utf8(data.to_vec())?;
+
+        assert_eq!(&data_str, line_0);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "rt-tokio")]
+    #[tokio::test]
+    async fn read_from_offset_of_path_based_bytestreams_with_builder(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use super::ByteStream;
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut file = NamedTempFile::new()?;
+        let line_0 = "Line 0\n";
+        let line_1 = "Line 1\n";
+
+        write!(file, "{}", line_0)?;
+        write!(file, "{}", line_1)?;
+
+        let body = ByteStream::read_from()
+            .path(&file)
+            // We're going to skip the first line by using offset
+            .offset(line_0.len() as u64)
+            .build()
+            .await?;
+
+        let data = body.collect().await?.into_bytes();
+        let data_str = String::from_utf8(data.to_vec())?;
+
+        assert_eq!(&data_str, line_1);
 
         Ok(())
     }
