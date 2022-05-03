@@ -662,7 +662,7 @@ mod tests {
 
         let body = ByteStream::read_from()
             .path(&file)
-            // We're going to read the first line only
+            // We're going to read line 0 only
             .length(line_0.len() as u64)
             .build()
             .await?;
@@ -701,6 +701,99 @@ mod tests {
         let data_str = String::from_utf8(data.to_vec())?;
 
         assert_eq!(&data_str, line_1);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "rt-tokio")]
+    #[tokio::test]
+    async fn offset_and_length_play_nicely_in_path_based_bytestreams_with_builder(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use super::ByteStream;
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut file = NamedTempFile::new()?;
+        let line_0 = "Line 0\n";
+        let line_1 = "Line 1\n";
+        let line_2 = "Line 2\n";
+
+        write!(file, "{}", line_0)?;
+        write!(file, "{}", line_1)?;
+        write!(file, "{}", line_2)?;
+
+        let body = ByteStream::read_from()
+            .path(&file)
+            // We're going to skip line 0 by using offset
+            .offset(line_0.len() as u64)
+            // We want to read only line 1 and stop before we get to line 2
+            .length(line_1.len() as u64)
+            .build()
+            .await?;
+
+        let data = body.collect().await?.into_bytes();
+        let data_str = String::from_utf8(data.to_vec())?;
+
+        assert_eq!(&data_str, line_1);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "rt-tokio")]
+    #[tokio::test]
+    async fn offset_greater_than_file_length_means_nothing_is_read_in_path_based_bytestreams_with_builder(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use super::ByteStream;
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut file = NamedTempFile::new()?;
+        let line_0 = "Line 0\n";
+        let line_1 = "Line 1\n";
+
+        write!(file, "{}", line_0)?;
+        write!(file, "{}", line_1)?;
+
+        let body = ByteStream::read_from()
+            .path(&file)
+            // We're going to skip all file contents by setting an offset
+            // much larger than the file size
+            .offset(9000)
+            .build()
+            .await?;
+
+        let data = body.collect().await?.into_bytes();
+        let data_str = String::from_utf8(data.to_vec())?;
+
+        assert_eq!(&data_str, "");
+
+        Ok(())
+    }
+    #[cfg(feature = "rt-tokio")]
+    #[tokio::test]
+    async fn length_greater_than_file_length_means_everything_is_read_in_path_based_bytestreams_with_builder(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use super::ByteStream;
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut file = NamedTempFile::new()?;
+        let line_0 = "Line 0\n";
+        let line_1 = "Line 1\n";
+
+        write!(file, "{}", line_0)?;
+        write!(file, "{}", line_1)?;
+
+        let body = ByteStream::read_from()
+            .path(&file)
+            .length(9000)
+            .build()
+            .await?;
+
+        let data = body.collect().await?.into_bytes();
+        let data_str = String::from_utf8(data.to_vec())?;
+
+        assert_eq!(data_str, format!("{}{}", line_0, line_1));
 
         Ok(())
     }
