@@ -292,7 +292,6 @@ mod test {
     use super::FsBuilder;
     use crate::byte_stream::ByteStream;
     use bytes::Buf;
-    use futures_core::Stream;
     use http_body::Body;
     use std::io::Write;
     use tempfile::NamedTempFile;
