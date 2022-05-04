@@ -53,9 +53,12 @@ impl Commit {
 
 /// Easily mockable interface with Git for testing
 #[cfg_attr(test, mockall::automock)]
-pub trait Git {
+pub trait Git: Send + Sync {
     /// Returns the repository path
     fn path(&self) -> &Path;
+
+    /// Clones the repository to the given path
+    fn clone_to(&self, path: &Path) -> Result<()>;
 
     /// Returns commit hash of HEAD (i.e., `git rev-parse HEAD`)
     fn get_head_revision(&self) -> Result<CommitHash>;
@@ -167,6 +170,17 @@ impl GitCLI {
 impl Git for GitCLI {
     fn path(&self) -> &Path {
         &self.repo_path
+    }
+
+    fn clone_to(&self, path: &Path) -> Result<()> {
+        let mut command = Command::new(&self.binary_name);
+        command.arg("clone");
+        command.arg(&self.repo_path);
+        command.current_dir(path);
+
+        let output = log_command(command).output()?;
+        handle_failure("clone_to", &output)?;
+        Ok(())
     }
 
     fn get_head_revision(&self) -> Result<CommitHash> {
@@ -387,6 +401,13 @@ mod tests {
     }
     fn cli(script: &'static str) -> GitCLI {
         GitCLI::with_binary(&PathBuf::from("/tmp"), &bin_path(script).to_string_lossy())
+    }
+
+    #[test]
+    fn clone_to() {
+        cli("git-clone")
+            .clone_to(&PathBuf::from("/tmp"))
+            .expect("successful invocation");
     }
 
     #[test]

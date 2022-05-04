@@ -2,7 +2,7 @@
 import os
 import sys
 
-expected = ["/tmp", ["add", "test-path"]]
+expected = [os.path.realpath("/tmp"), ["add", "test-path"]]
 actual = [os.getcwd(), sys.argv[1:]]
 if expected != actual:
     print(f"ERROR\nExpect: {expected}\nActual: {actual}")
