@@ -84,38 +84,31 @@ fn lambda_to_hyper_request(request: Request) -> Result<HyperRequest, BoxError> {
     tracing::debug!("Converting Lambda to Hyper request...");
     // Raw HTTP path without any stage information
     let raw_path = request.raw_http_path();
-    let (parts, body) = request.into_parts();
-    let mut uri: uri::Uri = parts.uri;
-    let mut path = String::from(uri.path());
+    let (mut parts, body) = request.into_parts();
+    let mut path = String::from(parts.uri.path());
     if !raw_path.is_empty() && raw_path != path {
         tracing::debug!("Recreating URI from raw HTTP path.");
         path = raw_path;
-        let uri_parts: uri::Parts = uri.into();
+        let uri_parts: uri::Parts = parts.uri.into();
         let path_and_query = uri_parts.path_and_query.unwrap();
         if let Some(query) = path_and_query.query() {
             path.push('?');
             path.push_str(query);
         }
-        uri = uri::Uri::builder()
+        parts.uri = uri::Uri::builder()
             .authority(uri_parts.authority.unwrap())
             .scheme(uri_parts.scheme.unwrap())
             .path_and_query(path)
             .build()
             .unwrap();
     }
-
     let body = match body {
         LambdaBody::Empty => HyperBody::empty(),
         LambdaBody::Text(s) => HyperBody::from(s),
         LambdaBody::Binary(v) => HyperBody::from(v),
     };
-    let mut req = http::Request::builder()
-        .method(parts.method)
-        .uri(uri)
-        .body(body)
-        .unwrap();
-    // There is no builder method that sets headers in batch
-    let _ = std::mem::replace(req.headers_mut(), parts.headers);
+    // We need to maintain all parts including the extensions
+    let req = http::Request::from_parts(parts, body);
     tracing::debug!("Hyper request converted successfully.");
     Ok(req)
 }
@@ -165,6 +158,7 @@ mod tests {
             result.uri(),
             "https://wt6mne2s9k.execute-api.us-west-2.amazonaws.com/hello?name=me"
         );
+        // assert_eq!(result.raw_http_path(), "/hello");
     }
 
     #[tokio::test]
@@ -174,6 +168,13 @@ mod tests {
         let mut result = lambda_to_hyper_request(req).expect("failed to convert to hyper request");
         assert_eq!(result.method(), "POST");
         assert_eq!(result.uri(), "https://id.execute-api.us-east-1.amazonaws.com/my/path?parameter1=value1&parameter1=value2&parameter2=value");
+        assert_eq!(
+            result
+                .headers()
+                .get(CONTENT_TYPE)
+                .map(|h| h.to_str().expect("invalid header")),
+            Some("application/json")
+        );
         let actual_body = get_body_as_string(result.body_mut()).await;
         assert_eq!(actual_body, r##"{"message":"Hello from Lambda"}"##);
     }

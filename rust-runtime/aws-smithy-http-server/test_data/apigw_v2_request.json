@@ -8,6 +8,7 @@
         "cookie2=value2"
     ],
     "headers": {
+        "content-type": "application/json",
         "Header1": "value1",
         "Header2": "value2"
     },
