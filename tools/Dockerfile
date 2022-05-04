@@ -92,6 +92,7 @@ COPY . tools/
 RUN set -eux; \
     cargo +${rust_nightly_version} install cargo-udeps --version ${cargo_udeps_version}; \
     cargo install cargo-hack --version ${cargo_hack_version}; \
+    cargo install cargo-minimal-versions --version ${cargo_minimal_versions_version}; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
         git clone https://github.com/awslabs/smithy-rs.git; \
         cd smithy-rs; \

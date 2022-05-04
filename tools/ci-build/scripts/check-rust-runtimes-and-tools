@@ -23,6 +23,7 @@ do
     cargo clippy --all-features
     cargo test --all-features
     cargo doc --no-deps --document-private-items --all-features
+    cargo minimal-versions check --all-features
     popd &>/dev/null
 done
 

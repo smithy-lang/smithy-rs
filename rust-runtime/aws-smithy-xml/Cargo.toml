@@ -9,7 +9,6 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
 xmlparser = "=0.13.3"
-thiserror = "1"
 
 [dev-dependencies]
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test" }
