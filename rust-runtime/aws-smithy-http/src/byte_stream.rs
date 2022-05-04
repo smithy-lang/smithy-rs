@@ -102,7 +102,7 @@
 //! ```no_run
 //! # #[cfg(feature = "rt-tokio")]
 //! # {
-//! use aws_smithy_http::byte_stream::ByteStream;
+//! use aws_smithy_http::byte_stream::{ByteStream, Length};
 //! use std::path::Path;
 //! struct GetObjectInput {
 //!     body: ByteStream
@@ -111,7 +111,7 @@
 //! async fn bytestream_from_file() -> GetObjectInput {
 //!     let bytestream = ByteStream::read_from().path("docs/some-large-file.csv")
 //!         .buffer_size(32_784)
-//!         .length(123_456)
+//!         .length(Length::Exact(123_456))
 //!         .build()
 //!         .await
 //!         .expect("valid path");
@@ -135,6 +135,8 @@ use std::task::{Context, Poll};
 
 #[cfg(feature = "rt-tokio")]
 mod bytestream_util;
+#[cfg(feature = "rt-tokio")]
+pub use bytestream_util::Length;
 
 #[cfg(feature = "rt-tokio")]
 pub use self::bytestream_util::FsBuilder;
@@ -272,7 +274,7 @@ impl ByteStream {
     /// ```no_run
     /// # #[cfg(feature = "rt-tokio")]
     /// # {
-    /// use aws_smithy_http::byte_stream::ByteStream;
+    /// use aws_smithy_http::byte_stream::{ByteStream, Length};
     ///
     /// async fn bytestream_from_file() -> ByteStream {
     ///     let bytestream = ByteStream::read_from()
@@ -280,7 +282,7 @@ impl ByteStream {
     ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
     ///         .buffer_size(32_784)
     ///         // Specify the length of the file used (skips an additional call to retrieve the size)
-    ///         .length(123_456)
+    ///         .length(Length::Exact(123_456))
     ///         .build()
     ///         .await
     ///         .expect("valid path");

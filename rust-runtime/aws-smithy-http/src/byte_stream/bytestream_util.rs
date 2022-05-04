@@ -66,7 +66,7 @@ impl PathBody {
 /// ```no_run
 /// # #[cfg(feature = "rt-tokio")]
 /// # {
-/// use aws_smithy_http::byte_stream::ByteStream;
+/// use aws_smithy_http::byte_stream::{ByteStream, Length};
 /// use std::path::Path;
 /// struct GetObjectInput {
 ///     body: ByteStream
@@ -78,7 +78,7 @@ impl PathBody {
 ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
 ///         .buffer_size(32_784)
 ///         // Specify the length of the file used (skips an additional call to retrieve the size)
-///         .length(123_456)
+///         .length(Length::UpTo(123_456))
 ///         .build()
 ///         .await
 ///         .expect("valid path");
@@ -89,7 +89,7 @@ impl PathBody {
 pub struct FsBuilder {
     file: Option<tokio::fs::File>,
     path: Option<PathBuf>,
-    length: Option<u64>,
+    length: Option<Length>,
     buffer_size: usize,
     offset: Option<u64>,
 }
@@ -98,6 +98,15 @@ impl Default for FsBuilder {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// The length (in bytes) to read. Determines whether or not a short read counts as an error.
+pub enum Length {
+    /// Read this number of bytes exactly. Returns an error if the file is smaller than expected.
+    Exact(u64),
+    /// Read up to this number of bytes. May read less than the specified amount if the file
+    /// is smaller than expected.
+    UpTo(u64),
 }
 
 impl FsBuilder {
@@ -138,7 +147,7 @@ impl FsBuilder {
     /// By pre-specifying the length, this API skips an additional call to retrieve the size from file-system metadata.
     ///
     /// When used in conjunction with [`offset`](FsBuilder::offset), allows for reading a single "chunk" of a file.
-    pub fn length(mut self, length: u64) -> Self {
+    pub fn length(mut self, length: Length) -> Self {
         self.length = Some(length);
         self
     }
@@ -168,19 +177,23 @@ impl FsBuilder {
 
         let buffer_size = self.buffer_size;
         let offset = self.offset.unwrap_or(DEFAULT_OFFSET);
-        let length = match self.length {
-            Some(length) => length,
-            None => {
-                let file_length = match self.path.as_ref() {
-                    Some(path) => tokio::fs::metadata(path).await,
-                    // If it's not path-based then it's file-based
-                    None => self.file.as_ref().unwrap().metadata().await,
-                }
-                .map_err(|err| Error(err.into()))?
-                .len();
+        // Checking the file length like this does have a cost, but the benefit is that we can
+        // notify users when file/chunk is smaller than expected.
 
-                // Length should never be less than zero. If the provided offset is greater than
-                // the length of the file, the number of bytes to read will be set to 0.
+        let length = match self.length {
+            Some(Length::Exact(length)) => {
+                let file_length = self.get_file_size().await?;
+                if length > file_length.saturating_sub(offset) {
+                    return Err(Error(Box::new(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "value Length::Exact was larger than file size minus read offset",
+                    ))));
+                }
+                length
+            }
+            Some(Length::UpTo(length)) => length,
+            None => {
+                let file_length = self.get_file_size().await?;
                 file_length.saturating_sub(offset)
             }
         };
@@ -215,6 +228,16 @@ impl FsBuilder {
         } else {
             panic!("FsBuilder constructed without a file or a path")
         }
+    }
+
+    async fn get_file_size(&self) -> Result<u64, Error> {
+        match self.path.as_ref() {
+            Some(path) => tokio::fs::metadata(path).await,
+            // If it's not path-based then it's file-based
+            None => self.file.as_ref().unwrap().metadata().await,
+        }
+        .map(|metadata| metadata.len())
+        .map_err(|err| Error(err.into()))
     }
 }
 
@@ -290,7 +313,7 @@ impl Body for PathBody {
 #[cfg(test)]
 mod test {
     use super::FsBuilder;
-    use crate::byte_stream::ByteStream;
+    use crate::byte_stream::{ByteStream, Length};
     use bytes::Buf;
     use http_body::Body;
     use std::io::Write;
@@ -312,7 +335,7 @@ mod test {
         let body = FsBuilder::new()
             .path(&file)
             .buffer_size(16384)
-            .length(file_length)
+            .length(Length::Exact(file_length))
             .build()
             .await?
             .into_inner();
@@ -351,7 +374,7 @@ mod test {
         let body = FsBuilder::new()
             .path(&file)
             // The file is longer than 1 byte, let's see if this is used to generate the size hint
-            .length(1)
+            .length(Length::Exact(1))
             .build()
             .await?
             .into_inner();
@@ -375,7 +398,7 @@ mod test {
         let body = FsBuilder::new()
             .path(&file)
             // We're going to read line 0 only
-            .length(line_0.len() as u64)
+            .length(Length::Exact(line_0.len() as u64))
             .build()
             .await?;
 
@@ -433,7 +456,7 @@ mod test {
             // We're going to skip line 0 by using offset
             .offset(line_0.len() as u64)
             // We want to read only line 1 and stop before we get to line 2
-            .length(line_1.len() as u64)
+            .length(Length::Exact(line_1.len() as u64))
             .build()
             .await?;
 
@@ -487,7 +510,11 @@ mod test {
         // Ensure that the file was written to
         file.flush().expect("flushing is OK");
 
-        let body = FsBuilder::new().path(&file).length(9000).build().await?;
+        let body = FsBuilder::new()
+            .path(&file)
+            .length(Length::UpTo(9000))
+            .build()
+            .await?;
 
         let data = body.collect().await?.into_bytes();
         let data_str = String::from_utf8(data.to_vec())?;
@@ -539,7 +566,7 @@ mod test {
             let byte_stream = FsBuilder::new()
                 .path(&file_path)
                 .offset(i * chunk_size)
-                .length(length)
+                .length(Length::Exact(length))
                 .build()
                 .await?;
 
