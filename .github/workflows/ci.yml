@@ -58,6 +58,8 @@ jobs:
         - action: check-sdk-codegen-unit-tests
         - action: check-server-codegen-integration-tests
         - action: check-server-codegen-unit-tests
+        - action: check-server-codegen-integration-tests-python
+        - action: check-server-codegen-unit-tests-python
         - action: check-server-e2e-test
         - action: check-style-and-lints
     steps:
