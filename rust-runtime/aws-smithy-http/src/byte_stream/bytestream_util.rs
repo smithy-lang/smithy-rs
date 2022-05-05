@@ -320,11 +320,11 @@ mod test {
     use tempfile::NamedTempFile;
 
     #[tokio::test]
-    async fn path_based_bytestreams_with_builder() -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = NamedTempFile::new()?;
+    async fn path_based_bytestreams_with_builder() {
+        let mut file = NamedTempFile::new().unwrap();
 
         for i in 0..10000 {
-            writeln!(file, "Brian was here. Briefly. {}", i)?;
+            writeln!(file, "Brian was here. Briefly. {}", i).unwrap();
         }
         let file_length = file
             .as_file()
@@ -337,7 +337,8 @@ mod test {
             .buffer_size(16384)
             .length(Length::Exact(file_length))
             .build()
-            .await?
+            .await
+            .unwrap()
             .into_inner();
 
         // assert that the specified length is used as size hint
@@ -354,20 +355,19 @@ mod test {
         assert_eq!(some_data.len(), 16384);
 
         assert_eq!(
-            ByteStream::new(body1).collect().await?.remaining(),
+            ByteStream::new(body1).collect().await.unwrap().remaining(),
             file_length as usize - some_data.len()
         );
-
-        Ok(())
     }
 
     #[tokio::test]
-    async fn fsbuilder_length_is_used_as_size_hint() -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = NamedTempFile::new()?;
+    async fn fsbuilder_length_is_used_as_size_hint() {
+        let mut file = NamedTempFile::new().unwrap();
         write!(
             file,
             "A very long sentence that's clearly longer than a single byte."
-        )?;
+        )
+        .unwrap();
         // Ensure that the file was written to
         file.flush().expect("flushing is OK");
 
@@ -376,21 +376,21 @@ mod test {
             // The file is longer than 1 byte, let's see if this is used to generate the size hint
             .length(Length::Exact(1))
             .build()
-            .await?
+            .await
+            .unwrap()
             .into_inner();
 
         assert_eq!(body.size_hint().exact(), Some(1));
-        Ok(())
     }
 
     #[tokio::test]
-    async fn fsbuilder_respects_length() -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = NamedTempFile::new()?;
+    async fn fsbuilder_respects_length() {
+        let mut file = NamedTempFile::new().unwrap();
         let line_0 = "Line 0\n";
         let line_1 = "Line 1\n";
 
-        write!(file, "{}", line_0)?;
-        write!(file, "{}", line_1)?;
+        write!(file, "{}", line_0).unwrap();
+        write!(file, "{}", line_1).unwrap();
 
         // Ensure that the file was written to
         file.flush().expect("flushing is OK");
@@ -400,24 +400,23 @@ mod test {
             // We're going to read line 0 only
             .length(Length::Exact(line_0.len() as u64))
             .build()
-            .await?;
+            .await
+            .unwrap();
 
-        let data = body.collect().await?.into_bytes();
-        let data_str = String::from_utf8(data.to_vec())?;
+        let data = body.collect().await.unwrap().into_bytes();
+        let data_str = String::from_utf8(data.to_vec()).unwrap();
 
         assert_eq!(&data_str, line_0);
-
-        Ok(())
     }
 
     #[tokio::test]
-    async fn fsbuilder_supports_offset() -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = NamedTempFile::new()?;
+    async fn fsbuilder_supports_offset() {
+        let mut file = NamedTempFile::new().unwrap();
         let line_0 = "Line 0\n";
         let line_1 = "Line 1\n";
 
-        write!(file, "{}", line_0)?;
-        write!(file, "{}", line_1)?;
+        write!(file, "{}", line_0).unwrap();
+        write!(file, "{}", line_1).unwrap();
 
         // Ensure that the file was written to
         file.flush().expect("flushing is OK");
@@ -427,26 +426,25 @@ mod test {
             // We're going to skip the first line by using offset
             .offset(line_0.len() as u64)
             .build()
-            .await?;
+            .await
+            .unwrap();
 
-        let data = body.collect().await?.into_bytes();
-        let data_str = String::from_utf8(data.to_vec())?;
+        let data = body.collect().await.unwrap().into_bytes();
+        let data_str = String::from_utf8(data.to_vec()).unwrap();
 
         assert_eq!(&data_str, line_1);
-
-        Ok(())
     }
 
     #[tokio::test]
-    async fn fsbuilder_offset_and_length_work_together() -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = NamedTempFile::new()?;
+    async fn fsbuilder_offset_and_length_work_together() {
+        let mut file = NamedTempFile::new().unwrap();
         let line_0 = "Line 0\n";
         let line_1 = "Line 1\n";
         let line_2 = "Line 2\n";
 
-        write!(file, "{}", line_0)?;
-        write!(file, "{}", line_1)?;
-        write!(file, "{}", line_2)?;
+        write!(file, "{}", line_0).unwrap();
+        write!(file, "{}", line_1).unwrap();
+        write!(file, "{}", line_2).unwrap();
 
         // Ensure that the file was written to
         file.flush().expect("flushing is OK");
@@ -458,25 +456,23 @@ mod test {
             // We want to read only line 1 and stop before we get to line 2
             .length(Length::Exact(line_1.len() as u64))
             .build()
-            .await?;
+            .await
+            .unwrap();
 
-        let data = body.collect().await?.into_bytes();
-        let data_str = String::from_utf8(data.to_vec())?;
+        let data = body.collect().await.unwrap().into_bytes();
+        let data_str = String::from_utf8(data.to_vec()).unwrap();
 
         assert_eq!(&data_str, line_1);
-
-        Ok(())
     }
 
     #[tokio::test]
-    async fn fsbuilder_with_offset_greater_than_file_length_reads_no_bytes(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = NamedTempFile::new()?;
+    async fn fsbuilder_with_offset_greater_than_file_length_reads_no_bytes() {
+        let mut file = NamedTempFile::new().unwrap();
         let line_0 = "Line 0\n";
         let line_1 = "Line 1\n";
 
-        write!(file, "{}", line_0)?;
-        write!(file, "{}", line_1)?;
+        write!(file, "{}", line_0).unwrap();
+        write!(file, "{}", line_1).unwrap();
 
         // Ensure that the file was written to
         file.flush().expect("flushing is OK");
@@ -487,25 +483,23 @@ mod test {
             // much larger than the file size
             .offset(9000)
             .build()
-            .await?;
+            .await
+            .unwrap();
 
-        let data = body.collect().await?.into_bytes();
-        let data_str = String::from_utf8(data.to_vec())?;
+        let data = body.collect().await.unwrap().into_bytes();
+        let data_str = String::from_utf8(data.to_vec()).unwrap();
 
         assert_eq!(&data_str, "");
-
-        Ok(())
     }
 
     #[tokio::test]
-    async fn fsbuilder_with_length_greater_than_file_length_reads_everything(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = NamedTempFile::new()?;
+    async fn fsbuilder_with_length_greater_than_file_length_reads_everything() {
+        let mut file = NamedTempFile::new().unwrap();
         let line_0 = "Line 0\n";
         let line_1 = "Line 1\n";
 
-        write!(file, "{}", line_0)?;
-        write!(file, "{}", line_1)?;
+        write!(file, "{}", line_0).unwrap();
+        write!(file, "{}", line_1).unwrap();
 
         // Ensure that the file was written to
         file.flush().expect("flushing is OK");
@@ -514,32 +508,31 @@ mod test {
             .path(&file)
             .length(Length::UpTo(9000))
             .build()
-            .await?;
+            .await
+            .unwrap();
 
-        let data = body.collect().await?.into_bytes();
-        let data_str = String::from_utf8(data.to_vec())?;
+        let data = body.collect().await.unwrap().into_bytes();
+        let data_str = String::from_utf8(data.to_vec()).unwrap();
 
         assert_eq!(data_str, format!("{}{}", line_0, line_1));
-
-        Ok(())
     }
 
     #[tokio::test]
-    async fn fsbuilder_can_be_used_for_chunking() -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = NamedTempFile::new()?;
+    async fn fsbuilder_can_be_used_for_chunking() {
+        let mut file = NamedTempFile::new().unwrap();
         let mut in_memory_copy_of_file_contents = String::new();
         // I put these two write loops in separate blocks so that the traits wouldn't conflict
         {
             use std::io::Write;
             for i in 0..1000 {
-                writeln!(file, "Line {:04}", i)?;
+                writeln!(file, "Line {:04}", i).unwrap();
             }
         }
 
         {
             use std::fmt::Write;
             for i in 0..1000 {
-                writeln!(in_memory_copy_of_file_contents, "Line {:04}", i)?;
+                writeln!(in_memory_copy_of_file_contents, "Line {:04}", i).unwrap();
             }
             // Check we wrote the lines
             assert!(!in_memory_copy_of_file_contents.is_empty());
@@ -568,7 +561,8 @@ mod test {
                 .offset(i * chunk_size)
                 .length(Length::Exact(length))
                 .build()
-                .await?;
+                .await
+                .unwrap();
 
             byte_streams.push(byte_stream);
         }
@@ -576,15 +570,13 @@ mod test {
         let mut collected_bytes = Vec::new();
 
         for byte_stream in byte_streams.into_iter() {
-            let bytes = byte_stream.collect().await?.into_bytes();
+            let bytes = byte_stream.collect().await.unwrap().into_bytes();
             collected_bytes.push(bytes);
         }
 
         let bytes = collected_bytes.concat();
-        let data_str = String::from_utf8(bytes.to_vec())?;
+        let data_str = String::from_utf8(bytes.to_vec()).unwrap();
 
         assert_eq!(data_str, in_memory_copy_of_file_contents);
-
-        Ok(())
     }
 }
