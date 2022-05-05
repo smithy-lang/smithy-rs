@@ -410,6 +410,41 @@ mod test {
     }
 
     #[tokio::test]
+    async fn fsbuilder_length_exact() {
+        let mut file = NamedTempFile::new().unwrap();
+        let test_sentence = "This sentence is 30 bytes long";
+        assert_eq!(test_sentence.len(), 30);
+        write!(file, "{}", test_sentence).unwrap();
+
+        // Ensure that the file was written to
+        file.flush().expect("flushing is OK");
+
+        assert!(FsBuilder::new()
+            .path(&file)
+            // The file is 30 bytes so this is fine
+            .length(Length::Exact(29))
+            .build()
+            .await
+            .is_ok());
+
+        assert!(FsBuilder::new()
+            .path(&file)
+            // The file is 30 bytes so this is fine
+            .length(Length::Exact(30))
+            .build()
+            .await
+            .is_ok());
+
+        assert!(FsBuilder::new()
+            .path(&file)
+            // Larger than 30 bytes, this will cause an error
+            .length(Length::Exact(31))
+            .build()
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
     async fn fsbuilder_supports_offset() {
         let mut file = NamedTempFile::new().unwrap();
         let line_0 = "Line 0\n";
