@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy
+package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.build.SmithyBuildPlugin
@@ -11,6 +11,7 @@ import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.DefaultConfig
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
@@ -43,7 +44,7 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
         val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context)
 
         // ServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
-        logger.info("Loaded plugin to generate pure Rust bindings for the server SSDK")
+        logger.info("Loaded plugin to generate Rust/Python bindings for the server SSDK")
         ServerCodegenVisitor(context, codegenDecorator).execute()
     }
 
