@@ -212,20 +212,26 @@ class JsonParserGenerator(
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
                     rustBlock("${jsonName(member).dq()} =>") {
-                        if (symbolProvider.toSymbol(member).isOptional()) {
+                        if (mode == CodegenMode.Client) {
                             withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(", ");") {
                                 deserializeMember(member)
                             }
                         } else {
-                            rust("if let Some(v) = ")
-                            deserializeMember(member)
-                            rust(
-                                """
-                                {
-                                    builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(v);
+                            if (symbolProvider.toSymbol(member).isOptional()) {
+                                withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(", ");") {
+                                    deserializeMember(member)
                                 }
-                            """
-                            )
+                            } else {
+                                rust("if let Some(v) = ")
+                                deserializeMember(member)
+                                rust(
+                                    """
+                                    {
+                                        builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(v);
+                                    }
+                                    """
+                                )
+                            }
                         }
                     }
                 }
