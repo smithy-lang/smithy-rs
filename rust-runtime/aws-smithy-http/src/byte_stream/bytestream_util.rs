@@ -179,23 +179,26 @@ impl FsBuilder {
         let offset = self.offset.unwrap_or(DEFAULT_OFFSET);
         // Checking the file length like this does have a cost, but the benefit is that we can
         // notify users when file/chunk is smaller than expected.
+        let file_length = self.get_file_size().await?;
+        if offset > file_length {
+            return Err(Error(Box::new(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "offset must be less than or equal to file size but was greater than",
+            ))));
+        }
 
         let length = match self.length {
             Some(Length::Exact(length)) => {
-                let file_length = self.get_file_size().await?;
-                if length > file_length.saturating_sub(offset) {
+                if length > file_length - offset {
                     return Err(Error(Box::new(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "value Length::Exact was larger than file size minus read offset",
+                        io::ErrorKind::InvalidInput,
+                        "Length::Exact was larger than file size minus read offset",
                     ))));
                 }
                 length
             }
             Some(Length::UpTo(length)) => length,
-            None => {
-                let file_length = self.get_file_size().await?;
-                file_length.saturating_sub(offset)
-            }
+            None => file_length - offset,
         };
 
         if let Some(path) = self.path {
