@@ -55,7 +55,7 @@ class UnconstrainedShapeSymbolProvider(
 
                 if (shape.isConstrained(base)) {
 //                    TODO("The `length` constraint trait on list shapes is currently not implemented")
-                    base.toSymbol(shape)
+                    unconstrainedSymbolForCollectionOrMapShape(shape)
                 } else {
                     unconstrainedSymbolForCollectionOrMapShape(shape)
                 }
@@ -65,7 +65,7 @@ class UnconstrainedShapeSymbolProvider(
 
                 if (shape.isConstrained(base)) {
 //                    TODO("The `length` constraint trait on map shapes is currently not implemented")
-                    base.toSymbol(shape)
+                    unconstrainedSymbolForCollectionOrMapShape(shape)
                 } else {
                     unconstrainedSymbolForCollectionOrMapShape(shape)
                 }

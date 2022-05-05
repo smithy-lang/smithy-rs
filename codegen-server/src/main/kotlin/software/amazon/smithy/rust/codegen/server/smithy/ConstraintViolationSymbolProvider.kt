@@ -58,7 +58,7 @@ class ConstraintViolationSymbolProvider(
 
                 if (shape.isConstrained(base)) {
 //                    TODO("The `length` constraint trait on list shapes is currently not implemented")
-                    base.toSymbol(shape)
+                    unconstrainedSymbolForListOrMapShape(shape)
                 } else {
                     unconstrainedSymbolForListOrMapShape(shape)
                 }
@@ -68,7 +68,7 @@ class ConstraintViolationSymbolProvider(
 
                 if (shape.isConstrained(base)) {
 //                    TODO("The `length` constraint trait on map shapes is currently not implemented")
-                    base.toSymbol(shape)
+                    unconstrainedSymbolForListOrMapShape(shape)
                 } else {
                     unconstrainedSymbolForListOrMapShape(shape)
                 }
