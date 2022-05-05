@@ -15,6 +15,9 @@ NOTE: THIS IS HIGHLY EXPERIMENTAL AND SHOULD NOT BE USED YET.
 # until this is not stable, it is not publishable.
 publish = false
 
+[features]
+python = ["pyo3", "pyo3-asyncio", "socket2"]
+
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-types = { path = "../aws-smithy-types" }
@@ -30,8 +33,11 @@ mime = "0.3"
 nom = "7"
 paste = "1"
 pin-project-lite = "0.2"
+pyo3 = { version = "0.16", features = ["extension-module"], optional = true }
+pyo3-asyncio = { version = "0.16", features = ["attributes", "tokio-runtime"], optional = true }
 regex = "1.0"
 serde_urlencoded = "0.7"
+socket2 = { version = "0.4", optional = true }
 strum_macros = "0.24"
 thiserror = "1"
 tokio = { version = "1.0", features = ["full"] }
