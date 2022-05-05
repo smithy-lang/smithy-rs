@@ -13,7 +13,6 @@ FROM ${base_image} AS bare_base_image
 #
 FROM bare_base_image AS install_node
 ARG node_version=v16.14.0
-ARG node_bundle_sha256=0570b9354959f651b814e56a4ce98d4a067bf2385b9a0e6be075739bc65b0fae
 ENV DEST_PATH=/opt/nodejs \
     PATH=/opt/nodejs/bin:${PATH}
 RUN yum -y updateinfo && \
@@ -25,12 +24,20 @@ RUN yum -y updateinfo && \
     yum clean all
 WORKDIR /root
 RUN set -eux; \
-    curl https://nodejs.org/dist/${node_version}/node-${node_version}-linux-x64.tar.xz --output node.tar.xz; \
-    echo "${node_bundle_sha256}  node.tar.xz" | sha256sum --check; \
+    ARCHITECTURE=""; \
+    if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then \
+        curl "https://nodejs.org/dist/${node_version}/node-${node_version}-linux-arm64.tar.xz" --output node.tar.xz; \
+        echo "5a6e818c302527a4b1cdf61d3188408c8a3e4a1bbca1e3f836c93ea8469826ce  node.tar.xz" | sha256sum --check; \
+        ARCHITECTURE="arm64"; \
+    else \
+        curl "https://nodejs.org/dist/${node_version}/node-${node_version}-linux-x64.tar.xz" --output node.tar.xz; \
+        echo "0570b9354959f651b814e56a4ce98d4a067bf2385b9a0e6be075739bc65b0fae  node.tar.xz" | sha256sum --check; \
+        ARCHITECTURE="x64"; \
+    fi; \
     mkdir -p "${DEST_PATH}"; \
     tar -xJvf node.tar.xz -C "${DEST_PATH}"; \
-    mv "${DEST_PATH}/node-${node_version}-linux-x64/"* "${DEST_PATH}"; \
-    rmdir "${DEST_PATH}"/node-${node_version}-linux-x64; \
+    mv "${DEST_PATH}/node-${node_version}-linux-${ARCHITECTURE}/"* "${DEST_PATH}"; \
+    rmdir "${DEST_PATH}"/node-${node_version}-linux-${ARCHITECTURE}; \
     rm node.tar.xz; \
     node --version
 
@@ -65,8 +72,13 @@ RUN yum -y updateinfo && \
         pkgconfig && \
     yum clean all
 RUN set -eux; \
-    curl https://static.rust-lang.org/rustup/archive/1.24.3/x86_64-unknown-linux-gnu/rustup-init --output rustup-init; \
-    echo "3dc5ef50861ee18657f9db2eeb7392f9c2a6c95c90ab41e45ab4ca71476b4338 rustup-init" | sha256sum --check; \
+    if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then \
+        curl https://static.rust-lang.org/rustup/archive/1.24.3/aarch64-unknown-linux-gnu/rustup-init --output rustup-init; \
+        echo "32a1532f7cef072a667bac53f1a5542c99666c4071af0c9549795bbdb2069ec1 rustup-init" | sha256sum --check; \
+    else \
+        curl https://static.rust-lang.org/rustup/archive/1.24.3/x86_64-unknown-linux-gnu/rustup-init --output rustup-init; \
+        echo "3dc5ef50861ee18657f9db2eeb7392f9c2a6c95c90ab41e45ab4ca71476b4338 rustup-init" | sha256sum --check; \
+    fi; \
     chmod +x rustup-init; \
     ./rustup-init -y --no-modify-path --profile minimal --default-toolchain ${rust_stable_version}; \
     rm rustup-init; \
@@ -121,7 +133,7 @@ COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
-    JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto.x86_64 \
+    JAVA_HOME=/usr/lib/jvm/jre-11-openjdk \
     GRADLE_USER_HOME=/home/build/.gradle \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
