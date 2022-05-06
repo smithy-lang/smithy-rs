@@ -52,7 +52,7 @@ pub async fn main() {
     // Start the [`hyper::Server`].
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)
         .parse()
-        .expect("Unable to parse the server bind address and port");
+        .expect("unable to parse the server bind address and port");
     let server = hyper::Server::bind(&bind).serve(app.into_make_service());
 
     // Run forever-ish...
