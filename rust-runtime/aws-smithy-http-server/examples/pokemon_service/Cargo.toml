@@ -8,7 +8,7 @@ publish = false
 hyper = {version = "0.14", features = ["server"] }
 tokio = "1"
 tower = "0.4"
-tower-http = { version = "0.2", features = ["trace"] }
+tower-http = { version = "0.3", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

@@ -125,6 +125,7 @@ impl Default for State {
 }
 
 /// Retrieves information about a Pokémon species.
+#[tracing::instrument(name = "GetPokemonSpecies", skip(input, state))]
 pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
     state: Extension<Arc<State>>,
@@ -167,6 +168,7 @@ pub async fn get_pokemon_species(
 }
 
 /// Calculates and reports metrics about this server instance.
+#[tracing::instrument(name = "GetServerStatistics", skip(_input, state))]
 pub async fn get_server_statistics(
     _input: input::GetServerStatisticsInput,
     state: Extension<Arc<State>>,
@@ -184,6 +186,7 @@ pub async fn get_server_statistics(
 }
 
 /// Empty operation used to benchmark the service.
+#[tracing::instrument(name = "EmptyOperation", skip(_input))]
 pub async fn empty_operation(_input: input::EmptyOperationInput) -> output::EmptyOperationOutput {
     output::EmptyOperationOutput {}
 }
