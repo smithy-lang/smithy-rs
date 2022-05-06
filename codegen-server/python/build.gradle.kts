@@ -33,10 +33,7 @@ dependencies {
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
-// unlike the client-runtime, software.amazon.smithy.rust.codegen.smithy-kotlin codegen package is
-// not expected to run on Android...we can target 1.8
 tasks.compileKotlin { kotlinOptions.jvmTarget = "1.8" }
-
 tasks.compileTestKotlin { kotlinOptions.jvmTarget = "1.8" }
 
 // Reusable license copySpec

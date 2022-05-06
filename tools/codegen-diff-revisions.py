@@ -101,7 +101,7 @@ def generate_and_commit_generated_code(revision_sha):
     run(f"mkdir {OUTPUT_PATH}")
     run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}")
     run(f"mv codegen-server-test/build/smithyprojections/codegen-server-test {OUTPUT_PATH}")
-    run(f"mv codegen-server-test/python/build/smithyprojections/python {OUTPUT_PATH}/codegen-server-test-python")
+    run(f"mv codegen-server-test/python/build/smithyprojections/codegen-server-test-python {OUTPUT_PATH}")
 
     # Clean up the server-test folder
     run(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")

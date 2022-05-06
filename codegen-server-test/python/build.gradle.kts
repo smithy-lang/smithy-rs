@@ -16,7 +16,11 @@ val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val pluginName = "rust-server-codegen"
-val workingDirUnderBuildDir = "smithyprojections/python/"
+val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-python/"
+
+configure<software.amazon.smithy.gradle.SmithyExtension> {
+    outputDirectory = file("$buildDir/$workingDirUnderBuildDir")
+}
 
 buildscript {
     val smithyVersion: String by project
