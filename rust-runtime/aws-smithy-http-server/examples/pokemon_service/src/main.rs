@@ -21,7 +21,7 @@ struct Args {
     address: String,
     /// Hyper server bind port.
     #[clap(short, long, default_value = "13734")]
-    port: i32,
+    port: u16,
 }
 
 #[tokio::main]
