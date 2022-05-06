@@ -52,6 +52,8 @@ class ServerOperationRegistryGenerator(
     private val operationRegistryBuilderNameWithArguments = "$operationRegistryBuilderName<$genericArguments>"
 
     fun render(writer: RustWriter) {
+        check(operations.isNotEmpty())
+
         renderOperationRegistryStruct(writer)
         renderOperationRegistryBuilderStruct(writer)
         renderOperationRegistryBuilderError(writer)

@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import java.util.logging.Logger
 
 /**
  * ServerServiceGenerator
@@ -28,6 +29,7 @@ class ServerServiceGenerator(
     private val context: CodegenContext,
 ) {
     private val index = TopDownIndex.of(context.model)
+    private val logger = Logger.getLogger(javaClass.name)
 
     /**
      * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
@@ -52,13 +54,17 @@ class ServerServiceGenerator(
                 }
             }
         }
-        rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) { writer ->
-            ServerOperationHandlerGenerator(context, operations)
-                .render(writer)
-        }
-        rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->
-            ServerOperationRegistryGenerator(context, httpBindingResolver, operations)
-                .render(writer)
+        if (operations.isNotEmpty()) {
+            rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) { writer ->
+                ServerOperationHandlerGenerator(context, operations)
+                    .render(writer)
+            }
+            rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->
+                ServerOperationRegistryGenerator(context, httpBindingResolver, operations)
+                    .render(writer)
+            }
+        } else {
+            logger.warning("[rust-server-codegen] There are no operations in the service closure")
         }
     }
 }

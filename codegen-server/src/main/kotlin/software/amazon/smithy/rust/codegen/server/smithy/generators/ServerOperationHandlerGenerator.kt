@@ -50,6 +50,8 @@ class ServerOperationHandlerGenerator(
     )
 
     fun render(writer: RustWriter) {
+        check(operations.isNotEmpty())
+
         renderHandlerImplementations(writer, false)
         renderHandlerImplementations(writer, true)
     }
