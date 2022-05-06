@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+description = "Generates Rust/Python code from Smithy models and runs the protocol tests"
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Server :: Python :: Test"
 extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.python.test"
 
