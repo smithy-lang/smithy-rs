@@ -39,7 +39,7 @@ tasks.register<Copy>("copyRuntimeCrates") {
     into(runtimeOutputDir)
 }
 
-task("fixRuntimeCrateVersions") {
+tasks.register("fixRuntimeCrateVersions") {
     dependsOn("copyRuntimeCrates")
     doLast {
         CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { moduleName ->

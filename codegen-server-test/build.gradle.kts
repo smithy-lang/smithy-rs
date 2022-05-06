@@ -44,7 +44,7 @@ val allCodegenTests = listOf(
     CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
 )
 
-task("generateSmithyBuild") {
+tasks.register("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
         projectDir.resolve("smithy-build.json")
@@ -58,7 +58,7 @@ task("generateSmithyBuild") {
     }
 }
 
-task("generateCargoWorkspace") {
+tasks.register("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
         buildDir.resolve("$workingDirUnderBuildDir/Cargo.toml")
