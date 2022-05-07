@@ -20,6 +20,7 @@ use std::time::Duration;
 use crate::meta::credentials::LazyCachingCredentialsProvider;
 use crate::provider_config::ProviderConfig;
 use tracing::Instrument;
+use crate::profile::mfa_token::MfaToken;
 
 /// Credentials provider that uses credentials provided by another provider to assume a role
 /// through the AWS Security Token Service (STS).
@@ -74,6 +75,8 @@ pub struct AssumeRoleProviderBuilder {
     external_id: Option<String>,
     session_name: Option<String>,
     region: Option<Region>,
+    serial_number: Option<String>,
+    token_code: Option<MfaToken>,
     conf: Option<ProviderConfig>,
     session_length: Option<Duration>,
 }
@@ -93,6 +96,8 @@ impl AssumeRoleProviderBuilder {
             session_name: None,
             session_length: None,
             region: None,
+            serial_number: None,
+            token_code: None,
             conf: None,
         }
     }
@@ -143,6 +148,21 @@ impl AssumeRoleProviderBuilder {
         self
     }
 
+    /// Set the identification number of the MFA device that is associated
+    /// with the user who is making the AssumeRole call.
+    ///
+    /// The MFA device's token code should be supplied via `token_code`
+    pub fn serial_number(mut self, mfa_serial_number: String) -> Self {
+        self.serial_number = Some(mfa_serial_number);
+        self
+    }
+
+    /// The token provided by the MFA device specified by `serial_number`
+    pub fn token_code(mut self, mfa_token_code: MfaToken) -> Self {
+        self.token_code = Some(mfa_token_code);
+        self
+    }
+
     /// If the `rustls` or `nativetls` features are enabled, this field is optional and a default
     /// backing connection will be provided.
     pub fn connection(mut self, conn: impl aws_smithy_client::bounds::SmithyConnector) -> Self {
@@ -188,6 +208,8 @@ impl AssumeRoleProviderBuilder {
             .set_role_arn(Some(self.role_arn))
             .set_external_id(self.external_id)
             .set_role_session_name(Some(session_name))
+            .set_serial_number(self.serial_number)
+            .set_token_code(self.token_code.map(|t| t.0))
             .set_duration_seconds(self.session_length.map(|dur| dur.as_secs() as i32))
             .build()
             .expect("operation is valid");
