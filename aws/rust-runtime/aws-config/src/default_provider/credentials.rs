@@ -220,7 +220,7 @@ impl Builder {
         self
     }
 
-    /// MFA token
+    /// Provide a mechanism to request an MFA token from the user if required for authenticationº
     pub fn mfa_token(mut self, mfa_provider: impl ProvideMfaToken + 'static) -> Self {
         self.profile_file_builder = self.profile_file_builder.mfa_token(mfa_provider);
         self
