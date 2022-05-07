@@ -211,10 +211,10 @@ class HttpBoundProtocolPayloadGenerator(
                 if (symbolProvider.toSymbol(member).isOptional()) {
                     withBlockTemplate(
                         """
-                            let payload = match payload$asRef {
-                                Some(t) => t,
-                                None => return Ok(
-                            """,
+                        let payload = match payload$asRef {
+                            Some(t) => t,
+                            None => return Ok(
+                        """,
                         ")};",
                         *codegenScope
                     ) {

@@ -15,30 +15,30 @@ data class CodegenTest(val service: String, val module: String, val extraConfig:
 fun generateSmithyBuild(projectDir: String, pluginName: String, tests: List<CodegenTest>): String {
     val projections = tests.joinToString(",\n") {
         """
-            "${it.module}": {
-                "plugins": {
-                    "$pluginName": {
-                        "runtimeConfig": {
-                            "relativePath": "$projectDir/rust-runtime"
-                        },
-                        "service": "${it.service}",
-                        "module": "${it.module}",
-                        "moduleVersion": "0.0.1",
-                        "moduleDescription": "test",
-                        "moduleAuthors": ["protocoltest@example.com"]
-                        ${it.extraConfig ?: ""}
-                 }
-               }
-            }
+        "${it.module}": {
+            "plugins": {
+                "$pluginName": {
+                    "runtimeConfig": {
+                        "relativePath": "$projectDir/rust-runtime"
+                    },
+                    "service": "${it.service}",
+                    "module": "${it.module}",
+                    "moduleVersion": "0.0.1",
+                    "moduleDescription": "test",
+                    "moduleAuthors": ["protocoltest@example.com"]
+                    ${it.extraConfig ?: ""}
+             }
+           }
+        }
         """.trimIndent()
     }
     return """
-    {
-        "version": "1.0",
-        "projections": { 
-            $projections 
+        {
+            "version": "1.0",
+            "projections": {
+                $projections
+            }
         }
-    }
     """.trimIndent()
 }
 
