@@ -403,6 +403,7 @@ impl Builder {
         self
     }
 
+    /// Provide a mechanism to resolve an MFA token code if required
     pub fn mfa_token(mut self, mfa_token: impl ProvideMfaToken + 'static) -> Self {
         self.mfa_token_provider = Some(Box::new(mfa_token));
         self
