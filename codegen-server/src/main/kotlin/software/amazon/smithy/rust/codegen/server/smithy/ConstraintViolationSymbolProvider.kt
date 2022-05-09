@@ -36,6 +36,7 @@ class ConstraintViolationSymbolProvider(
     private fun unconstrainedSymbolForListOrMapShape(shape: Shape): Symbol {
         check(shape is ListShape || shape is MapShape)
 
+        // TODO Move ConstraintViolation type to the constrained namespace.
         val unconstrainedTypeName = unconstrainedTypeNameForListOrMapShape(shape, serviceShape)
         val namespace = "crate::${Unconstrained.namespace}::${RustReservedWords.escapeIfNeeded(unconstrainedTypeName.toSnakeCase())}"
         val rustType = RustType.Opaque(constraintViolationName, namespace)

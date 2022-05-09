@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
@@ -48,11 +49,13 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 //     - Unlike in `BuilderGenerator.kt`, we don't add helper methods to add items to vectors and hash maps.
 //     - This builder is not `PartialEq`.
 //     - Always implements either From<Builder> for Structure or TryFrom<Builder> for Structure.
+//     - `constrainedShapeSymbolProvider` only needed if we want the builder to take in unconstrained types.
 class ServerBuilderGenerator(
     private val codegenContext: CodegenContext,
     private val shape: StructureShape,
-    private val takeInUnconstrainedTypes: Boolean = false,
+    private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider? = null,
 ) {
+    private val takeInUnconstrainedTypes = constrainedShapeSymbolProvider != null
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val constraintViolationSymbolProvider =
@@ -223,19 +226,39 @@ class ServerBuilderGenerator(
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
                 if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
-                    val constrainedType = "${symbol.wrapMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
+                    val maybeConstrainedConstrained = "${symbol.wrapMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
+                    val constrainedType = constrainedShapeSymbolProvider!!.toSymbol(member)
+                    val constrainedTypeHoldsFinalType = model.expectShape(member.target).isStructureShape
+                    // TODO Refactor this. 3 conditions (isOptional, hasBox, constrainedTypeHoldsFinalType)
                     if (symbol.isOptional()) {
+                        val innerConstrainedType = constrainedType.mapRustType { it.stripOuter<RustType.Option>() }
                         if (hasBox) {
-                            write("input.map(|v| Box::new($constrainedType(*v)))")
+                            if (constrainedTypeHoldsFinalType) {
+                                rust("input.map(|v| Box::new($maybeConstrainedConstrained(*v)))")
+                            } else {
+                                rust("input.map(|v| Box::new($maybeConstrainedConstrained(#T(*v))))", innerConstrainedType)
+                            }
                         } else {
-                            write("input.map(|v| $constrainedType(v))")
+                            if (constrainedTypeHoldsFinalType) {
+                                rust("input.map(|v| $maybeConstrainedConstrained(v))")
+                            } else {
+                                rust("input.map(|v| $maybeConstrainedConstrained(#T(v)))", innerConstrainedType)
+                            }
                         }
                     } else {
                         if (hasBox) {
                             // TODO Add a protocol test testing this branch.
-                            write("Box::new($constrainedType(*input))")
+                            if (constrainedTypeHoldsFinalType) {
+                                rust("Box::new($maybeConstrainedConstrained(*input))")
+                            } else {
+                                rust("Box::new($maybeConstrainedConstrained(#T(*input)))", constrainedType)
+                            }
                         } else {
-                            write("$constrainedType(input)")
+                            if (constrainedTypeHoldsFinalType) {
+                                rust("$maybeConstrainedConstrained(input)")
+                            } else {
+                                rust("$maybeConstrainedConstrained(#T(input))", constrainedType)
+                            }
                         }
                     }
                 } else {
@@ -248,7 +271,9 @@ class ServerBuilderGenerator(
     }
 
     /**
-     * Render a `set_foo` method. This method is able to take in builders of structure shape types.
+     * Render a `set_foo` method.
+     * This method is able to take in unconstrained types for constrained shapes, like builders of structs in the case
+     * of structure shapes.
      *
      * This method is only used by deserializers at the moment and is therefore `pub(crate)`.
      */
@@ -402,7 +427,7 @@ class ServerBuilderGenerator(
      */
     private fun builderMemberSymbol(member: MemberShape): Symbol =
         if (takeInUnconstrainedTypes) {
-            val strippedOption = symbolProvider.toSymbol(member)
+            val strippedOption = constrainedShapeSymbolProvider!!.toSymbol(member)
                 // Strip the `Option` in case the member is not `required`.
                 .mapRustType { it.stripOuter<RustType.Option>() }
 
@@ -410,7 +435,8 @@ class ServerBuilderGenerator(
             strippedOption
                 // Strip the `Box` in case the member can reach itself recursively.
                 .mapRustType { it.stripOuter<RustType.Box>() }
-                // Wrap it in the Cow-like `constrained::Constrained` type in case the target member shape can reach a constrained shape.
+                // Wrap it in the Cow-like `constrained::MaybeConstrained` type in case the target member shape can
+                // reach a constrained shape.
                 .letIf(member.targetCanReachConstrainedShape(model, symbolProvider)) { it.wrapMaybeConstrained() }
                 // Box it in case the member can reach itself recursively.
                 .letIf(hadBox) { it.makeRustBoxed() }
@@ -424,19 +450,26 @@ class ServerBuilderGenerator(
      * Writes the code to instantiate the struct the builder builds.
      *
      * Builder member types are either:
-     *     1. `Option<Validated<T>>`; or
-     *     2. `Option<T>`.
+     *     1. `Option<MaybeConstrained<U>>`; or
+     *     2. `Option<U>`.
+     *
+     * Where `U` is a constrained type.
      *
      * The structs they build have member types:
      *     a) `Option<T>`; or
      *     b) `T`.
      *
-     * For each member, this function first safely unwraps case 1. into 2., and then converts into b) if necessary.
+     * `U` is equal to `T` when the shape for `U` has a constraint trait or the member shape is a structure shape.
+     * Otherwise, `U` is always a `pub(crate)` tuple newtype holding `T`.
+     *
+     * For each member, this function first safely unwraps case 1. into 2., then converts `U` into `T` if necessary,
+     * and then converts into b) if necessary.
      */
     private fun coreBuilder(writer: RustWriter) {
         writer.rustBlock("#T", structureSymbol) {
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
+                val constrainedTypeHoldsFinalType = model.expectShape(member.target).isStructureShape
 
                 withBlock("$memberName: self.$memberName", ",") {
                     // Write the modifier(s).
@@ -455,7 +488,10 @@ class ServerBuilderGenerator(
                                         Ok(Box::new(x.try_into()?))
                                     }
                                 })
-                                .map(|v| v.map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err))))
+                                .map(|res| 
+                                    res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.0)" }
+                                       .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
+                                )
                                 .transpose()?
                                 """,
                                 "MaybeConstrained" to RuntimeType.MaybeConstrained()
@@ -470,7 +506,10 @@ class ServerBuilderGenerator(
                                         x.try_into()
                                     }
                                 })
-                                .map(|v| v.map_err(|err| ConstraintViolation::${constraintViolation.name()}(err)))
+                                .map(|res| 
+                                    res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.0)" }
+                                       .map_err(|err| ConstraintViolation::${constraintViolation.name()}(err))
+                                )
                                 .transpose()?
                                 """,
                                 "MaybeConstrained" to RuntimeType.MaybeConstrained()

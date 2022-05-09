@@ -26,22 +26,23 @@ structure AnOperationInput {
 }
 
 structure AnOperationOutput {
-    conA: ConA,
+    // conA: ConA,
 
-    conCList: ConCList,
+    // conCList: ConCList,
 }
 
 structure ConA {
-    @required
-    conB: ConB,
+    // @required
+    // conB: ConB,
 
-    optConB: ConB,
+    // optConB: ConB,
 
     conBList: ConBList,
+    conBList2: ConBList2,
 
     // conBSet: ConBSet,
 
-    conBMap: ConBMap
+    // conBMap: ConBMap
 }
 
 structure ConB {
@@ -77,32 +78,40 @@ structure ConB {
 //     foo: ValidList
 // }
 
+// list ConBList {
+//     member: AnotherList
+// }
+
 list ConBList {
-    member: AnotherList
-}
-
-list ConCList {
-    member: AnotherList
-}
-
-list AnotherList {
     member: ConB
 }
 
-set ConBSet {
-    member: AnotherSet
+list ConBList2 {
+    member: ConB
 }
 
-set AnotherSet {
-    member: String
-}
-
-map ConBMap {
-    key: String,
-    value: AnotherMap
-}
-
-map AnotherMap {
-    key: String,
-    value: ConBList
-}
+// list ConCList {
+//     member: AnotherList
+// }
+//
+// list AnotherList {
+//     member: ConB
+// }
+//
+// set ConBSet {
+//     member: AnotherSet
+// }
+//
+// set AnotherSet {
+//     member: String
+// }
+//
+// map ConBMap {
+//     key: String,
+//     value: AnotherMap
+// }
+//
+// map AnotherMap {
+//     key: String,
+//     value: ConBList
+// }

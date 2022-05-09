@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
@@ -23,6 +24,7 @@ class UnconstrainedListGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
+    private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val writer: RustWriter,
     val shape: ListShape
@@ -34,16 +36,13 @@ class UnconstrainedListGenerator(
         val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
         val name = symbol.name
         val innerShape = model.expectShape(shape.member.target)
-        val innerSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
-        // TODO(https://github.com/awslabs/smithy-rs/pull/1199): We will need a `ConstrainedSymbolProvider` when we have constraint traits.
-        val constrainedSymbol = symbolProvider.toSymbol(shape)
+        val innerUnconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
+        val constrainedSymbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
-        // TODO The implementation of the `Constrained` trait is probably not for the correct type. There might be more than
-        //    one "path" to an e.g. Vec<Vec<StructA>> with different constraint traits along the path, because constraint
-        //    traits can be applied to members, or simply because the model might have two different lists holding `StructA`.
-        //    So we will have to newtype things.
+        // TODO Move implementation of ConstrainedTrait to the constrained module.
+        // TODO Don't be lazy and don't use `Result<_, >`.
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
                 """
@@ -67,7 +66,7 @@ class UnconstrainedListGenerator(
                     type Error = $constraintViolationName;
                 
                     fn try_from(value: $name) -> Result<Self, Self::Error> {
-                        let res: Result<Self, #{InnerConstraintViolationSymbol}> = value
+                        let res: Result<_, #{InnerConstraintViolationSymbol}> = value
                             .0
                             .into_iter()
                             .map(|inner| {
@@ -75,11 +74,12 @@ class UnconstrainedListGenerator(
                                 inner.try_into()
                             })
                             .collect();
-                        res.map_err(|err| ConstraintViolation(err))
+                        res.map(|inner| Self(inner))   
+                           .map_err(|err| ConstraintViolation(err))
                     }
                 }
                 """,
-                "InnerUnconstrainedSymbol" to innerSymbol,
+                "InnerUnconstrainedSymbol" to innerUnconstrainedSymbol,
                 "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
                 "ConstrainedSymbol" to constrainedSymbol,
                 "MaybeConstrained" to constrainedSymbol.wrapMaybeConstrained(),

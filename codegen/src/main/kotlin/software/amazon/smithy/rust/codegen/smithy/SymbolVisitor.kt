@@ -91,6 +91,7 @@ val Serializers = SymbolLocation("serializer")
 val Inputs = SymbolLocation("input")
 val Outputs = SymbolLocation("output")
 val Unconstrained = SymbolLocation("unconstrained")
+val Constrained = SymbolLocation("constrained")
 
 /**
  * Make the Rust type of a symbol optional (hold `Option<T>`)
