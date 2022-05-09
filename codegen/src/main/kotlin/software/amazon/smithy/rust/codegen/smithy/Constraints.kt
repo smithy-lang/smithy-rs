@@ -71,7 +71,18 @@ fun MapShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvid
     return key.isConstrained(symbolProvider) || value.isConstrained(symbolProvider) || unconstrainedShapeCanReachConstrainedShape(value, model, symbolProvider, visited)
 }
 
-// TODO Perhaps move these into `StructureGenerator`?
+fun MemberShape.requiresNewtype() =
+    // Note that member shapes whose only constraint trait is `required` do not require a newtype.
+    this.hasTrait<LengthTrait>() ||
+            this.hasTrait<RangeTrait>() ||
+            // `uniqueItems` is deprecated, so we ignore it.
+            // this.hasTrait<UniqueItemsTrait>() ||
+            this.hasTrait<PatternTrait>()
+
+fun MemberShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
+    this.isConstrained(symbolProvider) || this.targetCanReachConstrainedShape(model, symbolProvider)
+
+// TODO Callers should use `MemberShape.canReachConstrainedShape`, and this function should be inlined.
 fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
     when (val targetShape = model.expectShape(this.target)) {
         is ListShape -> targetShape.asListShape().get().canReachConstrainedShape(model, symbolProvider)

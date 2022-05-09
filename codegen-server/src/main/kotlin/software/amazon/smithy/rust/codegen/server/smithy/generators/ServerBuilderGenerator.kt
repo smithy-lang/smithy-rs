@@ -426,7 +426,7 @@ class ServerBuilderGenerator(
      * All builder members are optional, but only some are `Option<T>`s where `T` needs to be constrained.
      */
     private fun builderMemberSymbol(member: MemberShape): Symbol =
-        if (takeInUnconstrainedTypes) {
+        if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
             val strippedOption = constrainedShapeSymbolProvider!!.toSymbol(member)
                 // Strip the `Option` in case the member is not `required`.
                 .mapRustType { it.stripOuter<RustType.Option>() }
@@ -435,9 +435,9 @@ class ServerBuilderGenerator(
             strippedOption
                 // Strip the `Box` in case the member can reach itself recursively.
                 .mapRustType { it.stripOuter<RustType.Box>() }
-                // Wrap it in the Cow-like `constrained::MaybeConstrained` type in case the target member shape can
+                // Wrap it in the Cow-like `constrained::MaybeConstrained` type, since we know the target member shape can
                 // reach a constrained shape.
-                .letIf(member.targetCanReachConstrainedShape(model, symbolProvider)) { it.wrapMaybeConstrained() }
+                .wrapMaybeConstrained()
                 // Box it in case the member can reach itself recursively.
                 .letIf(hadBox) { it.makeRustBoxed() }
                 // Ensure we always end up with an `Option`.

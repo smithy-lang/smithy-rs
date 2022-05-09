@@ -7,13 +7,17 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.SimpleShape
+import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -27,6 +31,8 @@ class ConstrainedShapeSymbolProvider(
     private val model: Model,
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
+    private val nullableIndex = NullableIndex.of(model)
+
     private fun constrainedSymbolForCollectionOrMapShape(shape: Shape): Symbol {
         check(shape is ListShape || shape is MapShape)
 
@@ -40,6 +46,27 @@ class ConstrainedShapeSymbolProvider(
             .definitionFile(Constrained.filename)
             .build()
     }
+
+    // TODO The following two methods have been copied from `SymbolVisitor.kt`.
+    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
+        if (member.isRequired) {
+            symbol
+        } else if (nullableIndex.isNullable(member)) {
+            symbol.makeOptional()
+        } else {
+            symbol
+        }
+
+    /**
+     * Boxes and returns [symbol], the symbol for the target of the member shape [shape], if [shape] is annotated with
+     * [RustBoxTrait]; otherwise returns [symbol] unchanged.
+     *
+     * See `RecursiveShapeBoxer.kt` for the model transformation pass that annotates model shapes with [RustBoxTrait].
+     */
+    private fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
+        if (shape.hasTrait<RustBoxTrait>()) {
+            symbol.makeRustBoxed()
+        } else symbol
 
     override fun toSymbol(shape: Shape): Symbol =
         when (shape) {
@@ -64,18 +91,27 @@ class ConstrainedShapeSymbolProvider(
                 }
             }
             is MemberShape -> {
-                // TODO This only applies really if the member shape is a structure member. We could check in
-                //   the beginning of this case that our containing shape is a structure shape maybe?
-                if (shape.isConstrained(base)) {
-                    // TODO Constraint traits precedence has a role here.
-//                    base.toSymbol(shape)
-                    val targetShape = model.expectShape(shape.target)
-                    this.toSymbol(targetShape)
+                check(shape.canReachConstrainedShape(model, base)) {
+                    shape.id
+                }
+                check(model.expectShape(shape.container).isStructureShape)
+
+                if (shape.requiresNewtype()) {
+                     TODO()
                 } else {
                     val targetShape = model.expectShape(shape.target)
-                    this.toSymbol(targetShape)
-                        // The member shape is not constrained, so it doesn't have `required`.
-                        .makeOptional()
+
+                    if (targetShape is SimpleShape) {
+                        check(shape.hasTrait<RequiredTrait>()) {
+                            "Targeting a simple shape that can reach a constrained shape and does not need a newtype; the member shape must be `required`"
+                        }
+
+                        base.toSymbol(shape)
+                    } else {
+                        val targetSymbol = this.toSymbol(targetShape)
+                        // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
+                        handleOptionality(handleRustBoxing(targetSymbol, shape), shape)
+                    }
                 }
             }
             else -> {
