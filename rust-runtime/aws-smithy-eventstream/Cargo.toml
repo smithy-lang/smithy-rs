@@ -14,7 +14,7 @@ derive-arbitrary = ["arbitrary"]
 arbitrary = { version = "1", optional = true, features = ["derive"] }
 aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
-crc32fast = "1"
+crc32fast = "1.3"
 
 [dev-dependencies]
 bytes-utils = "0.1"
