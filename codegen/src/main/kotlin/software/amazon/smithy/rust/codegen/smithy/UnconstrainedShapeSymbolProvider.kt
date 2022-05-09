@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -21,7 +20,7 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 fun unconstrainedTypeNameForListOrMapShape(shape: Shape, serviceShape: ServiceShape): String {
-    check(shape is CollectionShape || shape.isMapShape)
+    check(shape.isListShape || shape.isMapShape)
     return "${shape.id.getName(serviceShape).toPascalCase()}Unconstrained"
 }
 
