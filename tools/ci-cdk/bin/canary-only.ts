@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 // This CDK app sets up the absolute minimum set of resources to succesfully

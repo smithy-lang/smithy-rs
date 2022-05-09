@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
@@ -211,10 +211,10 @@ class HttpBoundProtocolPayloadGenerator(
                 if (symbolProvider.toSymbol(member).isOptional()) {
                     withBlockTemplate(
                         """
-                            let payload = match payload$asRef {
-                                Some(t) => t,
-                                None => return Ok(
-                            """,
+                        let payload = match payload$asRef {
+                            Some(t) => t,
+                            None => return Ok(
+                        """,
                         ")};",
                         *codegenScope
                     ) {
