@@ -140,7 +140,9 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     CARGO_INCREMENTAL=0 \
     RUSTDOCFLAGS="-D warnings" \
     RUSTFLAGS="-D warnings" \
-    SMITHY_RS_DOCKER_BUILD_IMAGE=1
+    SMITHY_RS_DOCKER_BUILD_IMAGE=1 \
+    LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8
 RUN npm install -g diff2html-cli@5.1.11
 WORKDIR /home/build
 COPY ci-build/scripts/sanity-test /home/build/sanity-test
