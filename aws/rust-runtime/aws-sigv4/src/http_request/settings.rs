@@ -25,6 +25,9 @@ pub struct SigningSettings {
 
     /// For presigned requests, how long the presigned request is valid for
     pub expires_in: Option<Duration>,
+
+    /// For signed requests, which already signed the user-agent header
+    pub allow_signing_user_agent_header: bool,
 }
 
 /// HTTP payload checksum type
@@ -64,6 +67,7 @@ impl Default for SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::NoHeader,
             signature_location: SignatureLocation::Headers,
             expires_in: None,
+            allow_signing_user_agent_header: false,
         }
     }
 }

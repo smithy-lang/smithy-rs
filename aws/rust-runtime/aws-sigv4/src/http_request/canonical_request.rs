@@ -220,8 +220,11 @@ impl<'a> CanonicalRequest<'a> {
         for (name, _) in &canonical_headers {
             // The user agent header should not be signed because it may be altered by proxies
             if name == USER_AGENT {
-                continue;
+                if !params.settings.allow_signing_user_agent_header {
+                    continue;
+                }
             }
+
             if params.settings.signature_location == SignatureLocation::QueryParams {
                 // The X-Amz-User-Agent header should not be signed if this is for a presigned URL
                 if name == HeaderName::from_static(header::X_AMZ_USER_AGENT) {
