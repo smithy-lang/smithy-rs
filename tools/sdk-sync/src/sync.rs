@@ -155,9 +155,19 @@ impl Sync {
     fn sync_model_changes(&self, versions: &VersionsManifest) -> Result<()> {
         info!("Syncing model changes...");
 
-        // Restore the model changes
+        // Restore the model changes. Note: endpoints.json/default config/model changes
+        // may each be in their own commits coming into this, but we want them squashed into
+        // one commit for smithy-rs.
         self.smithy_rs
-            .fast_forward_merge(MODEL_STASH_BRANCH_NAME)
+            .squash_merge(
+                BOT_NAME,
+                BOT_EMAIL,
+                MODEL_STASH_BRANCH_NAME,
+                "Update SDK models",
+            )
+            .context(here!())?;
+        self.smithy_rs
+            .delete_branch(MODEL_STASH_BRANCH_NAME)
             .context(here!())?;
         let model_change_commit = self.smithy_rs.show("HEAD").context(here!())?;
 

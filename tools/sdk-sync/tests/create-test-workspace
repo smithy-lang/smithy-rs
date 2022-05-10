@@ -18,6 +18,8 @@ if [[ $# -eq 1 && "$1" == "--with-model-changes" ]]; then
     INCLUDE_MODEL_CHANGES=1
 fi
 
+ENDPOINTS_JSON_PATH="aws/sdk-codegen/src/main/resources/software/amazon/smithy/rustsdk/endpoints.json"
+
 mkdir aws-doc-sdk-examples
 mkdir aws-sdk-rust
 mkdir smithy-rs
@@ -42,7 +44,9 @@ mkdir -p aws/sdk/aws-models
 mkdir -p aws/sdk/examples
 mkdir -p aws/sdk/build/aws-sdk/examples/s3
 mkdir -p aws/sdk/build/aws-sdk/sdk/s3
+mkdir -p $(dirname "${ENDPOINTS_JSON_PATH}")
 echo "Ancient S3 model" > aws/sdk/aws-models/s3.json
+echo "Old endpoints.json" > "${ENDPOINTS_JSON_PATH}"
 echo "Some S3 client code" > aws/sdk/build/aws-sdk/sdk/s3/fake_content
 cat "${SCRIPT_PATH}/fake-sdk-assemble" > gradlew
 chmod +x gradlew
@@ -65,6 +69,8 @@ if [[ "${INCLUDE_MODEL_CHANGES}" == "1" ]]; then
     pushd smithy-rs
     echo "Updated S3 model" > aws/sdk/aws-models/s3.json
     git -c user.name="Automated Process" -c user.email="bot@example.com" commit -am "Update the S3 model"
+    echo "Updated endpoints.json" > "${ENDPOINTS_JSON_PATH}"
+    git -c user.name="Automated Process" -c user.email="bot@example.com" commit -am "Update endpoints.json"
     popd
 fi
 

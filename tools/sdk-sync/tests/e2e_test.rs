@@ -14,6 +14,9 @@ use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
 
+const ENDPOINTS_JSON_PATH: &str =
+    "aws/sdk-codegen/src/main/resources/software/amazon/smithy/rustsdk/endpoints.json";
+
 static INIT_TRACING: Lazy<bool> = Lazy::new(|| {
     init_tracing();
     true
@@ -238,7 +241,7 @@ fn test_with_model_changes() {
 
     assert_eq!(BOT_NAME, sdk_commits[1].author_name);
     assert_eq!(BOT_EMAIL, sdk_commits[1].author_email);
-    assert_eq!("Update the S3 model", sdk_commits[1].message_subject);
+    assert_eq!("Update SDK models", sdk_commits[1].message_subject);
     assert_eq!("", sdk_commits[1].message_body);
 
     assert_eq!("Another Dev", sdk_commits[2].author_name);
@@ -272,9 +275,13 @@ fn test_with_model_changes() {
         "Some modified S3 example\n",
     );
 
-    // Verify smithy-rs had no changes since we don't have model updates
-    assert_eq!(
+    // Verify smithy-rs has the model updates
+    assert_ne!(
         smithy_rs_start_revision,
         smithy_rs.get_head_revision().unwrap()
+    );
+    assert_file_contents(
+        smithy_rs.path().join(ENDPOINTS_JSON_PATH),
+        "Updated endpoints.json\n",
     );
 }
