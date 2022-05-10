@@ -38,7 +38,7 @@ structure ConA {
     // optConB: ConB,
 
     conBList: ConBList,
-    conBList2: ConBList2,
+    // conBList2: ConBList2,
 
     // conBSet: ConBSet,
 
@@ -78,25 +78,21 @@ structure ConB {
 //     foo: ValidList
 // }
 
-// list ConBList {
-//     member: AnotherList
-// }
-
 list ConBList {
-    member: ConB
+    member: AnotherList
 }
 
-list ConBList2 {
-    member: ConB
-}
+// list ConBList2 {
+//     member: ConB
+// }
 
 // list ConCList {
 //     member: AnotherList
 // }
 //
-// list AnotherList {
-//     member: ConB
-// }
+list AnotherList {
+    member: ConB
+}
 //
 // set ConBSet {
 //     member: AnotherSet

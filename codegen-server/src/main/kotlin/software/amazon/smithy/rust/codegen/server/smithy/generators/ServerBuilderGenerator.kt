@@ -227,22 +227,20 @@ class ServerBuilderGenerator(
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
                 if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
                     val maybeConstrainedConstrained = "${symbol.wrapMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
-                    val constrainedType = constrainedShapeSymbolProvider!!.toSymbol(member)
                     val constrainedTypeHoldsFinalType = model.expectShape(member.target).isStructureShape
                     // TODO Refactor this. 3 conditions (isOptional, hasBox, constrainedTypeHoldsFinalType)
                     if (symbol.isOptional()) {
-                        val innerConstrainedType = constrainedType.mapRustType { it.stripOuter<RustType.Option>() }
                         if (hasBox) {
                             if (constrainedTypeHoldsFinalType) {
                                 rust("input.map(|v| Box::new($maybeConstrainedConstrained(*v)))")
                             } else {
-                                rust("input.map(|v| Box::new($maybeConstrainedConstrained(#T(*v))))", innerConstrainedType)
+                                rust("input.map(|v| Box::new($maybeConstrainedConstrained((*v).into())))")
                             }
                         } else {
                             if (constrainedTypeHoldsFinalType) {
                                 rust("input.map(|v| $maybeConstrainedConstrained(v))")
                             } else {
-                                rust("input.map(|v| $maybeConstrainedConstrained(#T(v)))", innerConstrainedType)
+                                rust("input.map(|v| $maybeConstrainedConstrained(v.into()))")
                             }
                         }
                     } else {
@@ -251,13 +249,13 @@ class ServerBuilderGenerator(
                             if (constrainedTypeHoldsFinalType) {
                                 rust("Box::new($maybeConstrainedConstrained(*input))")
                             } else {
-                                rust("Box::new($maybeConstrainedConstrained(#T(*input)))", constrainedType)
+                                rust("Box::new($maybeConstrainedConstrained((*input).into()))")
                             }
                         } else {
                             if (constrainedTypeHoldsFinalType) {
                                 rust("$maybeConstrainedConstrained(input)")
                             } else {
-                                rust("$maybeConstrainedConstrained(#T(input))", constrainedType)
+                                rust("$maybeConstrainedConstrained(input.into())")
                             }
                         }
                     }
@@ -489,7 +487,7 @@ class ServerBuilderGenerator(
                                     }
                                 })
                                 .map(|res| 
-                                    res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.0)" }
+                                    res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.into())" }
                                        .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
                                 )
                                 .transpose()?
@@ -507,7 +505,7 @@ class ServerBuilderGenerator(
                                     }
                                 })
                                 .map(|res| 
-                                    res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.0)" }
+                                    res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.into())" }
                                        .map_err(|err| ConstraintViolation::${constraintViolation.name()}(err))
                                 )
                                 .transpose()?

@@ -27,11 +27,13 @@ class ConstrainedListGenerator(
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
-        val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
-        val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
-        val name = symbol.name
+        val symbol = symbolProvider.toSymbol(shape)
+        val constrainedSymbol = constrainedShapeSymbolProvider.toSymbol(shape)
+        // TODO Perhaps it's overkill to create this module when the type is pub.
+        val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
+        val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
-        val innerSymbol = constrainedShapeSymbolProvider.toSymbol(innerShape)
+        val innerConstrainedSymbol = constrainedShapeSymbolProvider.toSymbol(innerShape)
 
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
@@ -39,8 +41,20 @@ class ConstrainedListGenerator(
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) Vec<#{InnerConstrainedSymbol}>);
                 
+                impl From<#{Symbol}> for $name {
+                    fn from(v: #{Symbol}) -> Self {
+                        Self(v.into_iter().map(|item| item.into()).collect())
+                    }
+                }
+
+                impl From<$name> for #{Symbol} {
+                    fn from(v: $name) -> Self {
+                        v.0.into_iter().map(|item| item.into()).collect()
+                    }
+                }
                 """,
-                "InnerConstrainedSymbol" to innerSymbol,
+                "InnerConstrainedSymbol" to innerConstrainedSymbol,
+                "Symbol" to symbol,
             )
         }
     }
