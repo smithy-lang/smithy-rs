@@ -17,6 +17,9 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 
 // TODO Unit test these functions and then refactor to use a `Walker` instead of hand-rolling our own DFS.
 
+/**
+ * A shape has a constraint trait if it has one of these traits attached.
+ */
 fun Shape.hasConstraintTrait() =
     this.hasTrait<RequiredTrait>() ||
         this.hasTrait<LengthTrait>() ||
@@ -25,6 +28,17 @@ fun Shape.hasConstraintTrait() =
         // this.hasTrait<UniqueItemsTrait>() ||
         this.hasTrait<PatternTrait>()
 
+/**
+ * A shape is constrained if:
+ *
+ *     - it has a constraint trait, or;
+ *     - in the case of it being an aggregate shape, one of its member shapes has a constraint trait.
+ *
+ * Note that an aggregate shape whose member shapes do not have constraint traits but that has a member whose target is
+ * a constrained shape is _not_ constrained.
+ *
+ * At the moment the only supported constraint trait is `required`, which can only be attached to structure member shapes.
+ */
 fun Shape.isConstrained(symbolProvider: SymbolProvider) = when (this) {
     is StructureShape -> {
         // TODO(https://github.com/awslabs/smithy-rs/issues/1302): The only reason why the functions in this file have
@@ -33,7 +47,7 @@ fun Shape.isConstrained(symbolProvider: SymbolProvider) = when (this) {
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
     else -> {
-//        this.hasConstraintTrait()
+        // this.hasConstraintTrait()
         false
     }
 }
@@ -86,6 +100,7 @@ fun MemberShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolPro
 // TODO Callers should use `MemberShape.canReachConstrainedShape`, and this function should be inlined.
 fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
     when (val targetShape = model.expectShape(this.target)) {
+        // TODO Use is CollectionShape
         is ListShape -> targetShape.asListShape().get().canReachConstrainedShape(model, symbolProvider)
         is SetShape -> targetShape.asSetShape().get().canReachConstrainedShape(model, symbolProvider)
         is MapShape -> targetShape.asMapShape().get().canReachConstrainedShape(model, symbolProvider)
