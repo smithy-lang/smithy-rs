@@ -97,7 +97,19 @@ class ConstrainedShapeSymbolProvider(
                 check(model.expectShape(shape.container).isStructureShape)
 
                 if (shape.requiresNewtype()) {
-                     TODO()
+                    //TODO()
+
+                    // TODO What follows is wrong; here we should refer to an opaque type for the member shape.
+                    //     But for now we add this to not make the validation model crash.
+
+                    val targetShape = model.expectShape(shape.target)
+                    if (targetShape is SimpleShape) {
+                        base.toSymbol(shape)
+                    } else {
+                        val targetSymbol = this.toSymbol(targetShape)
+                        // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
+                        handleOptionality(handleRustBoxing(targetSymbol, shape), shape)
+                    }
                 } else {
                     val targetShape = model.expectShape(shape.target)
 

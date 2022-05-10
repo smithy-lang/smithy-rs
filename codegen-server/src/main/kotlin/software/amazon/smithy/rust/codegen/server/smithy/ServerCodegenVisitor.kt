@@ -20,6 +20,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedListGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
@@ -242,13 +243,23 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
+                    constrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
                     writer,
                     shape
                 ).render()
             }
 
-            // TODO ConstrainedMapGenerator
+            logger.info("[rust-server-codegen] Generating a constrained type for map $shape")
+            rustCrate.withModule(constrainedModule) { writer ->
+                ConstrainedMapGenerator(
+                    model,
+                    symbolProvider,
+                    constrainedShapeSymbolProvider,
+                    writer,
+                    shape
+                ).render()
+            }
         }
     }
 
