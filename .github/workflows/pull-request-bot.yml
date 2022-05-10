@@ -15,7 +15,7 @@ concurrency:
 
 env:
   java_version: 11
-  rust_version: 1.56.1
+  rust_version: 1.58.1
   rust_toolchain_components: clippy,rustfmt
   apt_dependencies: libssl-dev gnuplot jq
 

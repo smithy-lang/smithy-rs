@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::changelog::ChangelogNext;
@@ -12,10 +12,12 @@ use crate::todos::TodosHaveContext;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use lazy_static::lazy_static;
+use ordinal::Ordinal;
 use std::env::set_current_dir;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
+use time::OffsetDateTime;
 
 mod anchor;
 mod changelog;
@@ -63,12 +65,9 @@ enum Args {
         dry_run: Option<bool>,
     },
     UpdateChangelog {
+        /// Whether or not independent crate versions are being used (defaults to false)
         #[clap(long)]
-        smithy_version: String,
-        #[clap(long)]
-        sdk_version: String,
-        #[clap(long)]
-        date: String,
+        independent_versioning: bool,
     },
 }
 
@@ -166,19 +165,76 @@ fn main() -> Result<()> {
             }
         }
         Args::UpdateChangelog {
-            smithy_version,
-            sdk_version,
-            date,
-        } => changelog::update_changelogs(
-            repo_root().join("CHANGELOG.next.toml"),
-            repo_root().join("CHANGELOG.md"),
-            repo_root().join("aws/SDK_CHANGELOG.md"),
-            &smithy_version,
-            &sdk_version,
-            &date,
-        )?,
+            independent_versioning,
+        } => {
+            let changelog_next_path = repo_root().join("CHANGELOG.next.toml");
+            let changelog_path = repo_root().join("CHANGELOG.md");
+            let aws_changelog_path = repo_root().join("aws/SDK_CHANGELOG.md");
+            if independent_versioning {
+                let header = date_header()?;
+                changelog::update_changelogs(
+                    changelog_next_path,
+                    changelog_path,
+                    aws_changelog_path,
+                    &header,
+                    &header,
+                )?
+            } else {
+                let auto = auto_changelog_meta()?;
+                changelog::update_changelogs(
+                    changelog_next_path,
+                    changelog_path,
+                    aws_changelog_path,
+                    &release_header_sync_versioned(&auto.smithy_version)?,
+                    &release_header_sync_versioned(&auto.sdk_version)?,
+                )?
+            }
+        }
     }
     Ok(())
+}
+
+struct ChangelogMeta {
+    smithy_version: String,
+    sdk_version: String,
+}
+
+fn date_header() -> Result<String> {
+    let now = OffsetDateTime::now_local()?;
+    Ok(format!(
+        "{month} {day}, {year}",
+        month = now.date().month(),
+        day = Ordinal(now.date().day()),
+        year = now.date().year()
+    ))
+}
+
+fn release_header_sync_versioned(version: &str) -> Result<String> {
+    Ok(format!(
+        "v{version} ({date})",
+        version = version,
+        date = date_header()?
+    ))
+}
+
+/// Discover the new version for the changelog from gradle.properties and the date.
+fn auto_changelog_meta() -> Result<ChangelogMeta> {
+    let gradle_props = fs::read_to_string(repo_root().join("gradle.properties"))?;
+    let load_gradle_prop = |key: &str| {
+        let prop = gradle_props
+            .lines()
+            .flat_map(|line| line.strip_prefix(key))
+            .flat_map(|prop| prop.strip_prefix('='))
+            .next();
+        prop.map(|prop| prop.to_string())
+            .ok_or_else(|| anyhow::Error::msg(format!("missing expected gradle property: {key}")))
+    };
+    let smithy_version = load_gradle_prop("smithy.rs.runtime.crate.version")?;
+    let sdk_version = load_gradle_prop("aws.sdk.version")?;
+    Ok(ChangelogMeta {
+        smithy_version,
+        sdk_version,
+    })
 }
 
 fn ls(path: impl AsRef<Path>) -> Result<impl Iterator<Item = PathBuf>> {

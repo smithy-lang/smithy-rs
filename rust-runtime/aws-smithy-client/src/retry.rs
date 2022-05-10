@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Retry support for aws-hyper
@@ -313,6 +313,13 @@ impl RetryHandler {
                 return None;
             }
         };
+
+        tracing::debug!(
+            "attempt {} failed with {:?}; retrying after {:?}",
+            self.local.attempts,
+            retry_kind,
+            dur
+        );
         let sleep_future = sleep.sleep(dur);
         let fut = async move {
             sleep_future.await;

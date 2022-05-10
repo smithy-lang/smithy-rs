@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rustsdk
@@ -62,7 +62,7 @@ class UserAgentDecorator : RustCodegenDecorator {
  */
 private class ApiVersionAndPubUse(private val runtimeConfig: RuntimeConfig, serviceTrait: ServiceTrait) :
     LibRsCustomization() {
-    private val serviceId = serviceTrait.sdkId.toLowerCase().replace(" ", "")
+    private val serviceId = serviceTrait.sdkId.lowercase().replace(" ", "")
     override fun section(section: LibRsSection): Writable = when (section) {
         is LibRsSection.Body -> writable {
             // PKG_VERSION comes from CrateVersionGenerator

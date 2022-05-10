@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 import aws.sdk.AwsServices
@@ -15,7 +15,7 @@ extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
 tasks["jar"].enabled = false
 
 plugins {
-    id("software.amazon.smithy").version("0.5.3")
+    id("software.amazon.smithy").version("0.6.0")
 }
 
 val smithyVersion: String by project
@@ -105,7 +105,12 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "moduleDescription": "${service.moduleDescription}",
                         ${service.examplesUri(project)?.let { """"examples": "$it",""" } ?: ""}
                         "moduleRepository": "https://github.com/awslabs/aws-sdk-rust",
-                        "license": "Apache-2.0"
+                        "license": "Apache-2.0",
+                        "customizationConfig": {
+                            "awsSdk": {
+                                "integrationTestPath": "${project.projectDir.resolve("integration-tests")}"
+                            }
+                        }
                         ${service.extraConfig ?: ""}
                     }
                 }
