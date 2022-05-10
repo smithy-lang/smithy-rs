@@ -29,12 +29,14 @@ class ConstrainedListGenerator(
 
         val symbol = symbolProvider.toSymbol(shape)
         val constrainedSymbol = constrainedShapeSymbolProvider.toSymbol(shape)
-        // TODO Perhaps it's overkill to create this module when the type is pub.
         val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
         val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
         val innerConstrainedSymbol = constrainedShapeSymbolProvider.toSymbol(innerShape)
 
+        // The converters are only needed when the constrained type is `pub(crate)`, for the server builder function
+        // member function to work.
+        // Note that unless the list holds an aggregate shape, the `.into()` calls are useless.
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
                 """

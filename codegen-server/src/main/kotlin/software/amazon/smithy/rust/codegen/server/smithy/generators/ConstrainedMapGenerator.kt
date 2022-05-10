@@ -32,9 +32,10 @@ class ConstrainedMapGenerator(
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
-        val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
-        val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
-        val name = symbol.name
+        val symbol = symbolProvider.toSymbol(shape)
+        val constrainedSymbol = constrainedShapeSymbolProvider.toSymbol(shape)
+        val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
+        val name = constrainedSymbol.name
         val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
         val valueShape = model.expectShape(shape.value.target)
         val keySymbol = if (isKeyConstrained(keyShape)) {
@@ -48,14 +49,30 @@ class ConstrainedMapGenerator(
             symbolProvider.toSymbol(valueShape)
         }
 
+        // The converters are only needed when the constrained type is `pub(crate)`, for the server builder function
+        // member function to work.
+        // Note that unless the map holds an aggregate shape as its value shape, the `.into()` calls are useless.
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>);
+                
+                impl From<#{Symbol}> for $name {
+                    fn from(hm: #{Symbol}) -> Self {
+                        Self(hm.into_iter().map(|(k, v)| (k, v.into())).collect())
+                    }
+                }
+
+                impl From<$name> for #{Symbol} {
+                    fn from(wrapper: $name) -> Self {
+                        wrapper.0.into_iter().map(|(k, v)| (k, v.into())).collect()
+                    }
+                }
                 """,
                 "KeySymbol" to keySymbol,
                 "ValueSymbol" to valueSymbol,
+                "Symbol" to symbol,
             )
         }
     }

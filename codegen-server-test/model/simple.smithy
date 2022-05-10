@@ -37,12 +37,12 @@ structure ConA {
 
     // optConB: ConB,
 
-    conBList: ConBList,
+    // conBList: ConBList,
     // conBList2: ConBList2,
 
     // conBSet: ConBSet,
 
-    // conBMap: ConBMap
+    conBMap: ConBMap
 }
 
 structure ConB {
@@ -102,12 +102,13 @@ list AnotherList {
 //     member: String
 // }
 //
-// map ConBMap {
-//     key: String,
-//     value: AnotherMap
-// }
+map ConBMap {
+    key: String,
+    value: AnotherMap
+}
 //
-// map AnotherMap {
-//     key: String,
-//     value: ConBList
-// }
+map AnotherMap {
+    key: String,
+    value: ConBList
+    //value: ConB
+}
