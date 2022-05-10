@@ -142,9 +142,12 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     CARGO_INCREMENTAL=0 \
     RUSTDOCFLAGS="-D warnings" \
     RUSTFLAGS="-D warnings" \
-    SMITHY_RS_DOCKER_BUILD_IMAGE=1 \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
+# SMITHY_RS_DOCKER_BUILD_IMAGE indicates to build scripts that they are being built inside of the Docker build image.
+# This is used primarily by the `build.gradle.kts` files in choosing how to execute build tools. If inside the image,
+# they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
+ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
 RUN npm install -g diff2html-cli@5.1.11
 WORKDIR /home/build
 COPY ci-build/scripts/sanity-test /home/build/sanity-test
