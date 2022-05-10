@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -71,6 +72,18 @@ class UnconstrainedMapGeneratorTest {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, writer)
         }
 
+        val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
+        project.withModule(RustModule.private("constrained")) { writer ->
+            listOf(mapA, mapB).forEach {
+                ConstrainedMapGenerator(
+                    model,
+                    symbolProvider,
+                    constrainedShapeSymbolProvider,
+                    writer,
+                    it
+                ).render()
+            }
+        }
         project.withModule(RustModule.private("unconstrained")) { writer ->
             val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
             val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
@@ -79,6 +92,7 @@ class UnconstrainedMapGeneratorTest {
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
+                    constrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
                     writer,
                     it
@@ -143,7 +157,7 @@ class UnconstrainedMapGeneratorTest {
                     use std::convert::TryFrom;
                     assert_eq!(
                         expected,
-                        std::collections::HashMap::<String, std::collections::HashMap<String, crate::model::StructureC>>::try_from(map_a_unconstrained).unwrap()
+                        crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap().into()
                     );
                 """
             )
@@ -163,7 +177,7 @@ class UnconstrainedMapGeneratorTest {
                         ])
                     );
 
-                    let _map_a: crate::constrained::MaybeConstrained<std::collections::HashMap<String, std::collections::HashMap<String, crate::model::StructureC>>> = map_a_unconstrained.into();
+                    let _map_a: crate::constrained::MaybeConstrained<crate::constrained::map_a_constrained::MapAConstrained> = map_a_unconstrained.into();
                 """
             )
 

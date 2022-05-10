@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -69,6 +70,18 @@ class UnconstrainedListGeneratorTest {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, writer)
         }
 
+        val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
+        project.withModule(RustModule.private("constrained")) { writer ->
+            listOf(listA, listB).forEach {
+                ConstrainedListGenerator(
+                    model,
+                    symbolProvider,
+                    constrainedShapeSymbolProvider,
+                    writer,
+                    it
+                ).render()
+            }
+        }
         project.withModule(RustModule.private("unconstrained")) { writer ->
             val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
             val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
@@ -77,6 +90,7 @@ class UnconstrainedListGeneratorTest {
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
+                    constrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
                     writer,
                     it
@@ -99,7 +113,7 @@ class UnconstrainedListGeneratorTest {
                     use std::convert::TryFrom;
                     assert_eq!(
                         expected_err,
-                        Vec::<Vec<crate::model::StructureC>>::try_from(list_a_unconstrained).unwrap_err()
+                        crate::constrained::list_a_constrained::ListAConstrained::try_from(list_a_unconstrained).unwrap_err()
                     );
                 """
             )
@@ -111,15 +125,17 @@ class UnconstrainedListGeneratorTest {
                     let list_b_unconstrained = list_b_unconstrained::ListBUnconstrained(vec![c_builder]);
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
-                    let expected = vec![vec![crate::model::StructureC {
+                    let expected: Vec<Vec<crate::model::StructureC>> = vec![vec![crate::model::StructureC {
                         string: String::from("david"),
                         int: 69
                     }]];
+                    let actual: Vec<Vec<crate::model::StructureC>> = 
+                        crate::constrained::list_a_constrained::ListAConstrained::try_from(list_a_unconstrained).unwrap().into();
 
                     use std::convert::TryFrom;
                     assert_eq!(
                         expected,
-                        Vec::<Vec<crate::model::StructureC>>::try_from(list_a_unconstrained).unwrap()
+                        actual
                     );
                 """
             )
@@ -131,7 +147,7 @@ class UnconstrainedListGeneratorTest {
                     let list_b_unconstrained = list_b_unconstrained::ListBUnconstrained(vec![c_builder]);
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
-                    let _list_a: crate::constrained::MaybeConstrained<Vec<Vec<crate::model::StructureC>>> = list_a_unconstrained.into();
+                    let _list_a: crate::constrained::MaybeConstrained<crate::constrained::list_a_constrained::ListAConstrained> = list_a_unconstrained.into();
                 """
             )
 
