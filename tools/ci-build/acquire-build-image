@@ -1,7 +1,7 @@
 #!/usr/bin/env -S python3 -u
 #
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import Enum
 from unittest.mock import call, MagicMock

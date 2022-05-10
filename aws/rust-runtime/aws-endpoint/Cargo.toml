@@ -11,7 +11,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-types = { path = "../aws-types" }
 http = "0.2.3"
-regex = { version = "1", default-features = false, features = ["std"] }
+regex = { version = "1.5.5", default-features = false, features = ["std"] }
 tracing = "0.1"
 
 [package.metadata.docs.rs]

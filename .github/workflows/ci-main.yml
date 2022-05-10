@@ -1,5 +1,5 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 
 # This workflow differs from PR CI in that it uploads a Docker build image to public ECR.
 # This should be done only on push to main so that PRs from forks can successfully run CI
