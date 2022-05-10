@@ -504,9 +504,6 @@ mod test {
     }
 
     #[tokio::test]
-    #[should_panic(
-        expected = "offset must be less than or equal to file size but was greater than"
-    )]
     async fn fsbuilder_with_offset_greater_than_file_length_returns_error() {
         let mut file = NamedTempFile::new().unwrap();
         let line_0 = "Line 0\n";
@@ -518,15 +515,18 @@ mod test {
         // Ensure that the file was written to
         file.flush().expect("flushing is OK");
 
-        FsBuilder::new()
-            .path(&file)
-            // We're going to skip all file contents by setting an offset
-            // much larger than the file size
-            .offset(9000)
-            .build()
-            .await
-            // this will panic
-            .unwrap();
+        assert_eq!(
+            FsBuilder::new()
+                .path(&file)
+                // We're going to skip all file contents by setting an offset
+                // much larger than the file size
+                .offset(9000)
+                .build()
+                .await
+                .unwrap_err()
+                .to_string(),
+            "offset must be less than or equal to file size but was greater than"
+        );
     }
 
     #[tokio::test]
