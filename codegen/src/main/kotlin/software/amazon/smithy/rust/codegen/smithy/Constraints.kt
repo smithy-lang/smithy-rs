@@ -33,7 +33,8 @@ fun Shape.isConstrained(symbolProvider: SymbolProvider) = when (this) {
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
     else -> {
-        this.hasConstraintTrait()
+//        this.hasConstraintTrait()
+        false
     }
 }
 
