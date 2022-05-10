@@ -228,35 +228,13 @@ class ServerBuilderGenerator(
                 if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
                     val maybeConstrainedConstrained = "${symbol.wrapMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
                     val constrainedTypeHoldsFinalType = model.expectShape(member.target).isStructureShape
-                    // TODO Refactor this. 3 conditions (isOptional, hasBox, constrainedTypeHoldsFinalType)
-                    if (symbol.isOptional()) {
-                        if (hasBox) {
-                            if (constrainedTypeHoldsFinalType) {
-                                rust("input.map(|v| Box::new($maybeConstrainedConstrained(*v)))")
-                            } else {
-                                rust("input.map(|v| Box::new($maybeConstrainedConstrained((*v).into())))")
-                            }
-                        } else {
-                            if (constrainedTypeHoldsFinalType) {
-                                rust("input.map(|v| $maybeConstrainedConstrained(v))")
-                            } else {
-                                rust("input.map(|v| $maybeConstrainedConstrained(v.into()))")
-                            }
-                        }
-                    } else {
-                        if (hasBox) {
-                            // TODO Add a protocol test testing this branch.
-                            if (constrainedTypeHoldsFinalType) {
-                                rust("Box::new($maybeConstrainedConstrained(*input))")
-                            } else {
-                                rust("Box::new($maybeConstrainedConstrained((*input).into()))")
-                            }
-                        } else {
-                            if (constrainedTypeHoldsFinalType) {
-                                rust("$maybeConstrainedConstrained(input)")
-                            } else {
-                                rust("$maybeConstrainedConstrained(input.into())")
-                            }
+                    // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
+                    var varExpr = if (symbol.isOptional()) "v" else "input"
+                    if (hasBox) varExpr = "*$varExpr"
+                    if (!constrainedTypeHoldsFinalType) varExpr = "($varExpr).into()"
+                    conditionalBlock("input.map(|v| ", ")", conditional = symbol.isOptional()) {
+                        conditionalBlock("Box::new(", ")", conditional = hasBox) {
+                            rust("$maybeConstrainedConstrained($varExpr)")
                         }
                     }
                 } else {
