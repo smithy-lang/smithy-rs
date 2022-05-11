@@ -112,9 +112,9 @@ class UnconstrainedMapGenerator(
 
             rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
                 if (listOf(keyShape, valueShape).any { isValueConstrained(it) }) {
-                    rust(
+                    rustTemplate(
                         """
-                        let res: Result<_, Self::Error> = value.0
+                        let res: Result<std::collections::HashMap<#{ConstrainedKeySymbol}, #{ConstrainedValueSymbol}>, Self::Error> = value.0
                             .into_iter()
                             .map(|(k, v)| {
                                 use std::convert::TryInto;
@@ -124,7 +124,9 @@ class UnconstrainedMapGenerator(
                             })
                             .collect();
                         let hm = res?;
-                        """
+                        """,
+                        "ConstrainedKeySymbol" to symbolProvider.toSymbol(keyShape),
+                        "ConstrainedValueSymbol" to symbolProvider.toSymbol(valueShape),
                     )
                 } else {
                     rust("let hm = value.0;")
@@ -139,15 +141,14 @@ class UnconstrainedMapGenerator(
         }
     }
 
-    // TODO This is the correct implementation when we have constraint traits.
-//    private fun isKeyConstrained(shape: StringShape) = shape.hasConstraintTrait()
-    private fun isKeyConstrained(shape: StringShape) = false
+    private fun isKeyConstrained(shape: StringShape) = shape.isConstrained(symbolProvider)
 
     private fun isValueConstrained(shape: Shape): Boolean = when (shape) {
         is StructureShape -> shape.canReachConstrainedShape(model, symbolProvider)
         is CollectionShape -> shape.canReachConstrainedShape(model, symbolProvider)
         is MapShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Constraint traits on simple shapes.
+        is StringShape -> shape.isConstrained(symbolProvider)
+        // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Other constraint traits on simple shapes.
         else -> false
     }
 }

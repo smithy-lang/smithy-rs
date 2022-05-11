@@ -12,13 +12,16 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.smithy.Models
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.Unconstrained
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.smithy.contextName
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.isConstrained
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -88,7 +91,19 @@ class ConstraintViolationSymbolProvider(
                     .definitionFile(Unconstrained.filename)
                     .build()
             }
-            // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Simple shapes can have constraint traits.
+            is StringShape -> {
+                check(shape.isConstrained(base))
+
+                val namespace = "crate::${Models.namespace}::${RustReservedWords.escapeIfNeeded(shape.contextName(serviceShape).toSnakeCase())}"
+                val rustType = RustType.Opaque(constraintViolationName, namespace)
+                Symbol.builder()
+                    .rustType(rustType)
+                    .name(rustType.name)
+                    .namespace(rustType.namespace, "::")
+                    .definitionFile(Models.filename)
+                    .build()
+            }
+            // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Other simple shapes can have constraint traits.
             else -> base.toSymbol(shape)
         }
 }

@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedListGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PublicConstrainedMapGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.PublicConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
@@ -33,6 +34,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.Constrained
 import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
+import software.amazon.smithy.rust.codegen.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -57,6 +59,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBox
 import software.amazon.smithy.rust.codegen.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.runCommand
 import java.util.logging.Logger
 
@@ -80,8 +83,10 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     private val codegenContext: CodegenContext
     private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
     private val protocolGenerator: ProtocolGenerator
-    private val unconstrainedModule = RustModule.private(Unconstrained.namespace, "Unconstrained types for constrained shapes.")
-    private val constrainedModule = RustModule.private(Constrained.namespace, "Constrained types for constrained shapes.")
+    private val unconstrainedModule =
+        RustModule.private(Unconstrained.namespace, "Unconstrained types for constrained shapes.")
+    private val constrainedModule =
+        RustModule.private(Constrained.namespace, "Constrained types for constrained shapes.")
     private val shapesReachableFromOperationInputs: Set<Shape>
 
     init {
@@ -104,9 +109,22 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         protocolGeneratorFactory = generator
         model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
         val baseProvider = RustCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
+        // TODO No `CodegenDecorator` is altering the symbol provider, so we might as well remove the `symbolProvider`
+        //  method from the `RustCodegenDecorator` interface.
         symbolProvider =
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
-        unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, service)
+        unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(
+            codegenDecorator.symbolProvider(
+                generator.symbolProvider(
+                    model, RustCodegenServerPlugin.baseSymbolProvider(
+                        model,
+                        service,
+                        symbolVisitorConfig,
+                        publicConstrainedShapesEnabled = false
+                    )
+                )
+            ), model, service
+        )
         constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, service)
         constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, service)
 
@@ -211,7 +229,11 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     }
 
     override fun listShape(shape: ListShape) {
-        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(model, symbolProvider)) {
+        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
+                model,
+                symbolProvider
+            )
+        ) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for list $shape")
             rustCrate.withModule(unconstrainedModule) { writer ->
                 UnconstrainedListGenerator(
@@ -253,7 +275,11 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             }
         }
 
-        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(model, symbolProvider)) {
+        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
+                model,
+                symbolProvider
+            )
+        ) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for map $shape")
             rustCrate.withModule(unconstrainedModule) { writer ->
                 UnconstrainedMapGenerator(
@@ -289,10 +315,30 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        logger.info("[rust-server-codegen] Generating an enum $shape")
+        check(!(shape.hasTrait<EnumTrait>() && shape.isConstrained(symbolProvider))) {
+            """
+            String shape has an `enum` trait and another constraint trait. This is valid according to the Smithy spec
+            v1 IDL, but it makes no sense: https://github.com/awslabs/smithy/issues/1121
+            """
+        }
+
         shape.getTrait<EnumTrait>()?.also { enum ->
+            logger.info("[rust-server-codegen] Generating an enum $shape")
             rustCrate.useShapeWriter(shape) { writer ->
                 EnumGenerator(model, symbolProvider, writer, shape, enum).render()
+            }
+        }
+
+        if (shape.isConstrained(symbolProvider)) {
+            logger.info("[rust-server-codegen] Generating a constrained string $shape")
+            rustCrate.withModule(ModelsModule) { writer ->
+                PublicConstrainedStringGenerator(
+                    model,
+                    symbolProvider,
+                    constraintViolationSymbolProvider,
+                    writer,
+                    shape
+                ).render()
             }
         }
     }

@@ -128,6 +128,7 @@ class ConstrainedShapeSymbolProvider(
             }
             else -> {
                 // TODO Other shape types.
+                // TODO We should arguably panic here? Since the rest are either public / don't need constrained type.
                 base.toSymbol(shape)
             }
         }

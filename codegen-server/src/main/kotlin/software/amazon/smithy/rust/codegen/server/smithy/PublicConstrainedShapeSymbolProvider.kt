@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.smithy.Models
@@ -28,6 +29,7 @@ import software.amazon.smithy.rust.codegen.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
+// TODO Docs. This symbol provider is wrapped by the other ones.
 // TODO Unit tests.
 class PublicConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
@@ -54,17 +56,21 @@ class PublicConstrainedShapeSymbolProvider(
                 publicConstrainedSymbolForCollectionOrMapShape(shape)
             }
             is MemberShape -> {
-                // TODO member shapes can have constraint traits.
+                // TODO member shapes can have constraint traits (constraint trait precedence).
                 val target = model.expectShape(shape.target)
                 val targetSymbol = this.toSymbol(target)
                 // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
                 handleOptionality(handleRustBoxing(targetSymbol, shape), shape)
             }
+            is StringShape -> {
+                val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
+                symbolBuilder(shape, rustType).locatedIn(Models).build()
+            }
             else -> base.toSymbol(shape)
         }
     }
 
-    // TODO These are copied from `SymbolVisitor.kt`
+    // TODO The following two methods have been copied from `SymbolVisitor.kt`
     private fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
         if (shape.hasTrait<RustBoxTrait>()) {
             symbol.makeRustBoxed()

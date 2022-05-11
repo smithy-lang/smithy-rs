@@ -107,8 +107,12 @@ structure ConA {
 map ConBMap {
     key: String,
     //value: AnotherMap
-    value: String
+    value: NiceString
 }
+
+@length(min: 1, max: 10)
+string NiceString
+
 //
 // map AnotherMap {
 //     key: String,

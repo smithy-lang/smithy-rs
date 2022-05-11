@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.hasConstraintTrait
+import software.amazon.smithy.rust.codegen.smithy.isConstrained
 
 // TODO Docs
 // TODO Unit tests
@@ -88,13 +88,14 @@ class ConstrainedMapGenerator(
     }
 
     // TODO These are copied from `UnconstrainedMapGenerator.kt`.
-    private fun isKeyConstrained(shape: StringShape) = shape.hasConstraintTrait()
+    private fun isKeyConstrained(shape: StringShape) = shape.isConstrained(symbolProvider)
 
     private fun isValueConstrained(shape: Shape): Boolean = when (shape) {
         is StructureShape -> shape.canReachConstrainedShape(model, symbolProvider)
         is CollectionShape -> shape.canReachConstrainedShape(model, symbolProvider)
         is MapShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Constraint traits on simple shapes.
+        is StringShape -> shape.isConstrained(symbolProvider)
+        // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Other constraint traits on simple shapes.
         else -> false
     }
 }

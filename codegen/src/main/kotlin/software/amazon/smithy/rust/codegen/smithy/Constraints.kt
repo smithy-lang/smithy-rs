@@ -9,6 +9,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
@@ -28,6 +29,9 @@ fun Shape.hasConstraintTrait() =
         this.hasTrait<PatternTrait>()
 
 // TODO Maybe we should rename this to `isDirectlyConstrained`.
+// TODO Perhaps it's best that we specialize and have `StringShape.isConstrained()`, `MapShape.isConstrained()` etc,
+//   and we check only for the supported constraint traits and also only check for the ones compatible according to the
+//   Smithy spec selectors.
 /**
  * A shape is constrained if:
  *
@@ -47,6 +51,7 @@ fun Shape.isConstrained(symbolProvider: SymbolProvider) = when (this) {
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
     is MapShape -> this.hasConstraintTrait()
+    is StringShape -> this.hasTrait<LengthTrait>() // TODO For the moment only `length` on string shapes is supported.
     else -> {
         // this.hasConstraintTrait()
         false

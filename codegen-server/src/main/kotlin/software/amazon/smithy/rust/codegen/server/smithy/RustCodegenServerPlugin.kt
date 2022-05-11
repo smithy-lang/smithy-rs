@@ -56,15 +56,14 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
         fun baseSymbolProvider(
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig
+            symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig,
+            publicConstrainedShapesEnabled: Boolean = true
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // TODO Docs
-                .let { PublicConstrainedShapeSymbolProvider(it, model, serviceShape) }
+                .let { if (publicConstrainedShapesEnabled) PublicConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let {
-                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
-                }
+                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model) }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
