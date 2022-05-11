@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.smithy.hasConstraintTrait
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -227,7 +228,8 @@ class ServerBuilderGenerator(
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
                 if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
                     val maybeConstrainedConstrained = "${symbol.wrapMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
-                    val constrainedTypeHoldsFinalType = model.expectShape(member.target).isStructureShape
+                    val constrainedTypeHoldsFinalType = model.expectShape(member.target).isStructureShape ||
+                            memberHasConstraintTraitOrTargetHasConstraintTrait(member)
                     // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
                     var varExpr = if (symbol.isOptional()) "v" else "input"
                     if (hasBox) varExpr = "*$varExpr"
@@ -397,15 +399,22 @@ class ServerBuilderGenerator(
         )
     }
 
+    private fun memberHasConstraintTraitOrTargetHasConstraintTrait(member: MemberShape) =
+        member.hasConstraintTrait() || (model.expectShape(member.target).hasConstraintTrait())
+
     /**
      * Returns the symbol for a builder's member.
      * All builder members are optional, but only some are `Option<T>`s where `T` needs to be constrained.
      */
     private fun builderMemberSymbol(member: MemberShape): Symbol =
         if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
-            val strippedOption = constrainedShapeSymbolProvider!!.toSymbol(member)
-                // Strip the `Option` in case the member is not `required`.
-                .mapRustType { it.stripOuter<RustType.Option>() }
+            val strippedOption = if (memberHasConstraintTraitOrTargetHasConstraintTrait(member)) {
+                symbolProvider.toSymbol(member)
+            } else {
+                constrainedShapeSymbolProvider!!.toSymbol(member)
+            }
+            // Strip the `Option` in case the member is not `required`.
+            .mapRustType { it.stripOuter<RustType.Option>() }
 
             val hadBox = strippedOption.isRustBoxed()
             strippedOption
@@ -446,6 +455,7 @@ class ServerBuilderGenerator(
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
                 val constrainedTypeHoldsFinalType = model.expectShape(member.target).isStructureShape
+                        || memberHasConstraintTraitOrTargetHasConstraintTrait(member)
 
                 withBlock("$memberName: self.$memberName", ",") {
                     // Write the modifier(s).

@@ -59,6 +59,8 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
             symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+                // TODO Docs
+                .let { PublicConstrainedShapeSymbolProvider(it, model, serviceShape) }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let {
                     EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)

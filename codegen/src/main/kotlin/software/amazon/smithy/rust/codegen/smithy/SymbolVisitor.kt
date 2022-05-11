@@ -84,12 +84,12 @@ data class SymbolLocation(val namespace: String) {
     val filename = "$namespace.rs"
 }
 
-val Models = SymbolLocation("model")
-val Errors = SymbolLocation("error")
-val Operations = SymbolLocation("operation")
+val Models = SymbolLocation(ModelsModule.name)
+val Errors = SymbolLocation(ErrorsModule.name)
+val Operations = SymbolLocation(OperationsModule.name)
 val Serializers = SymbolLocation("serializer")
-val Inputs = SymbolLocation("input")
-val Outputs = SymbolLocation("output")
+val Inputs = SymbolLocation(InputsModule.name)
+val Outputs = SymbolLocation(OutputsModule.name)
 val Unconstrained = SymbolLocation("unconstrained")
 val Constrained = SymbolLocation("constrained")
 
@@ -190,6 +190,18 @@ fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = va
 fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) { "Some($value)" }
 
 /**
+ * Services can rename their contained shapes. See https://awslabs.github.io/smithy/1.0/spec/core/model.html#service
+ * specifically, `rename`
+ */
+fun Shape.contextName(serviceShape: ServiceShape?): String {
+    return if (serviceShape != null) {
+        id.getName(serviceShape)
+    } else {
+        id.name
+    }
+}
+
+/**
  * Base converter from `Shape` to `Symbol`. Shapes are the direct contents of the `Smithy` model. `Symbols` carry information
  * about Rust types, namespaces, dependencies, metadata as well as other information required to render a symbol.
  *
@@ -207,18 +219,6 @@ class SymbolVisitor(
 
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)
-    }
-
-    /**
-     * Services can rename their contained shapes. See https://awslabs.github.io/smithy/1.0/spec/core/model.html#service
-     * specifically, `rename`
-     */
-    private fun Shape.contextName(): String {
-        return if (serviceShape != null) {
-            id.getName(serviceShape)
-        } else {
-            id.name
-        }
     }
 
     /**
@@ -275,7 +275,8 @@ class SymbolVisitor(
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
     override fun stringShape(shape: StringShape): Symbol {
         return if (shape.hasTrait<EnumTrait>()) {
-            symbolBuilder(shape, RustType.Opaque(shape.contextName().toPascalCase())).locatedIn(Models).build()
+            val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
+            symbolBuilder(shape, rustType).locatedIn(Models).build()
         } else {
             simpleShape(shape)
         }
@@ -322,7 +323,7 @@ class SymbolVisitor(
         return symbolBuilder(
             shape,
             RustType.Opaque(
-                shape.contextName()
+                shape.contextName(serviceShape)
                     .replaceFirstChar { it.uppercase() }
             )
         )
@@ -342,7 +343,7 @@ class SymbolVisitor(
         val isError = shape.hasTrait<ErrorTrait>()
         val isInput = shape.hasTrait<SyntheticInputTrait>()
         val isOutput = shape.hasTrait<SyntheticOutputTrait>()
-        val name = shape.contextName().toPascalCase().letIf(isError && config.codegenConfig.renameExceptions) {
+        val name = shape.contextName(serviceShape).toPascalCase().letIf(isError && config.codegenConfig.renameExceptions) {
             it.replace("Exception", "Error")
         }
         val builder = symbolBuilder(shape, RustType.Opaque(name))
@@ -355,7 +356,7 @@ class SymbolVisitor(
     }
 
     override fun unionShape(shape: UnionShape): Symbol {
-        val name = shape.contextName().toPascalCase()
+        val name = shape.contextName(serviceShape).toPascalCase()
         val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(Models)
 
         return builder.build()

@@ -46,6 +46,7 @@ fun Shape.isConstrained(symbolProvider: SymbolProvider) = when (this) {
         //     `required`, so we can't use `member.isOptional` here.
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
+    is MapShape -> this.hasConstraintTrait()
     else -> {
         // this.hasConstraintTrait()
         false

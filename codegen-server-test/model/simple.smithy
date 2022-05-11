@@ -45,15 +45,15 @@ structure ConA {
     conBMap: ConBMap
 }
 
-structure ConB {
-    @required
-    nice: String,
-    @required
-    int: Integer,
-
-    optNice: String,
-    optInt: Integer
-}
+// structure ConB {
+//     @required
+//     nice: String,
+//     @required
+//     int: Integer,
+//
+//     optNice: String,
+//     optInt: Integer
+// }
 
 // structure RecursiveShapesInputOutput {
 //     nested: RecursiveShapesInputOutputNested1
@@ -78,9 +78,9 @@ structure ConB {
 //     foo: ValidList
 // }
 
-list ConBList {
-    member: AnotherList
-}
+// list ConBList {
+//     member: AnotherList
+// }
 
 // list ConBList2 {
 //     member: ConB
@@ -90,9 +90,9 @@ list ConBList {
 //     member: AnotherList
 // }
 //
-list AnotherList {
-    member: ConB
-}
+// list AnotherList {
+//     member: ConB
+// }
 //
 // set ConBSet {
 //     member: AnotherSet
@@ -102,13 +102,16 @@ list AnotherList {
 //     member: String
 // }
 //
+
+@length(min: 1, max: 69)
 map ConBMap {
     key: String,
-    value: AnotherMap
+    //value: AnotherMap
+    value: String
 }
 //
-map AnotherMap {
-    key: String,
-    value: ConBList
-    //value: ConB
-}
+// map AnotherMap {
+//     key: String,
+//     value: ConBList
+//     //value: ConB
+// }
