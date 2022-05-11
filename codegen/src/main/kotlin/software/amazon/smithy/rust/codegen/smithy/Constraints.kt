@@ -27,6 +27,7 @@ fun Shape.hasConstraintTrait() =
         // this.hasTrait<UniqueItemsTrait>() ||
         this.hasTrait<PatternTrait>()
 
+// TODO Maybe we should rename this to `isDirectlyConstrained`.
 /**
  * A shape is constrained if:
  *

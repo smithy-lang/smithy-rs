@@ -226,6 +226,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                 ConstrainedListGenerator(
                     model,
                     symbolProvider,
+                    unconstrainedShapeSymbolProvider,
                     constrainedShapeSymbolProvider,
                     writer,
                     shape
@@ -255,6 +256,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                 ConstrainedMapGenerator(
                     model,
                     symbolProvider,
+                    unconstrainedShapeSymbolProvider,
                     constrainedShapeSymbolProvider,
                     writer,
                     shape

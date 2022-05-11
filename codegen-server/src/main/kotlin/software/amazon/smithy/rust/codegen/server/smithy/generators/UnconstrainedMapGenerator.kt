@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
@@ -72,10 +71,6 @@ class UnconstrainedMapGenerator(
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>);
                 
-                impl #{ConstrainedTrait} for #{ConstrainedSymbol}  {
-                    type Unconstrained = $name;
-                }
-                
                 impl From<$name> for #{MaybeConstrained} {
                     fn from(value: $name) -> Self {
                         Self::Unconstrained(value)
@@ -111,7 +106,6 @@ class UnconstrainedMapGenerator(
                 *constraintViolationCodegenScope,
                 "ConstrainedSymbol" to constrainedSymbol,
                 "MaybeConstrained" to constrainedSymbol.wrapMaybeConstrained(),
-                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             )
         }
     }

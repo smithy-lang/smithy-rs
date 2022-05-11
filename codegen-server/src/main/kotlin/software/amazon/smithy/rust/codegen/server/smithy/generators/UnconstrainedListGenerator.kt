@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
@@ -41,17 +40,12 @@ class UnconstrainedListGenerator(
         val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
-        // TODO Move implementation of ConstrainedTrait to the constrained module.
         // TODO Don't be lazy and don't use `Result<_, >`.
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) Vec<#{InnerUnconstrainedSymbol}>);
-                
-                impl #{ConstrainedTrait} for #{ConstrainedSymbol}  {
-                    type Unconstrained = $name;
-                }
                 
                 impl From<$name> for #{MaybeConstrained} {
                     fn from(value: $name) -> Self {
@@ -83,7 +77,6 @@ class UnconstrainedListGenerator(
                 "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
                 "ConstrainedSymbol" to constrainedSymbol,
                 "MaybeConstrained" to constrainedSymbol.wrapMaybeConstrained(),
-                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             )
         }
     }

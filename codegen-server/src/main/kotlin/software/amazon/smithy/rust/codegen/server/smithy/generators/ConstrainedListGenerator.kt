@@ -12,7 +12,9 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 
 // TODO Docs
@@ -20,6 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 class ConstrainedListGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
+    private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
     val writer: RustWriter,
     val shape: ListShape
@@ -29,6 +32,7 @@ class ConstrainedListGenerator(
 
         val symbol = symbolProvider.toSymbol(shape)
         val constrainedSymbol = constrainedShapeSymbolProvider.toSymbol(shape)
+        val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
         val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
@@ -43,6 +47,10 @@ class ConstrainedListGenerator(
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) Vec<#{InnerConstrainedSymbol}>);
                 
+                impl #{ConstrainedTrait} for $name  {
+                    type Unconstrained = #{UnconstrainedSymbol};
+                }
+                
                 impl From<#{Symbol}> for $name {
                     fn from(v: #{Symbol}) -> Self {
                         Self(v.into_iter().map(|item| item.into()).collect())
@@ -56,6 +64,8 @@ class ConstrainedListGenerator(
                 }
                 """,
                 "InnerConstrainedSymbol" to innerConstrainedSymbol,
+                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+                "UnconstrainedSymbol" to unconstrainedSymbol,
                 "Symbol" to symbol,
             )
         }

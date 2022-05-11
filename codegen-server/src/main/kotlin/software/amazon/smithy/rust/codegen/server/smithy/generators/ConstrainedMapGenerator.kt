@@ -16,7 +16,9 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.hasConstraintTrait
 
@@ -25,6 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.hasConstraintTrait
 class ConstrainedMapGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
+    private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
     val writer: RustWriter,
     val shape: MapShape
@@ -33,6 +36,7 @@ class ConstrainedMapGenerator(
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
         val symbol = symbolProvider.toSymbol(shape)
+        val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val constrainedSymbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
         val name = constrainedSymbol.name
@@ -58,6 +62,10 @@ class ConstrainedMapGenerator(
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>);
                 
+                impl #{ConstrainedTrait} for $name  {
+                    type Unconstrained = #{UnconstrainedSymbol};
+                }
+                
                 impl From<#{Symbol}> for $name {
                     fn from(hm: #{Symbol}) -> Self {
                         Self(hm.into_iter().map(|(k, v)| (k, v.into())).collect())
@@ -72,6 +80,8 @@ class ConstrainedMapGenerator(
                 """,
                 "KeySymbol" to keySymbol,
                 "ValueSymbol" to valueSymbol,
+                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+                "UnconstrainedSymbol" to unconstrainedSymbol,
                 "Symbol" to symbol,
             )
         }
