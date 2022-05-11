@@ -1,12 +1,12 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::lint::LintError;
 use crate::{repo_root, Check, Lint};
 use anyhow::{bail, Context, Result};
-use serde::{de, Deserialize, Deserializer};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -282,12 +282,28 @@ fn no_uncommited_changes(path: &Path) -> Result<()> {
     Ok(())
 }
 
+pub struct ReleaseMetadata {
+    pub title: String,
+    pub tag: String,
+    pub manifest_name: String,
+}
+
+#[derive(Serialize)]
+struct ReleaseManifest {
+    #[serde(rename = "tagName")]
+    tag_name: String,
+    name: String,
+    body: String,
+    prerelease: bool,
+}
+
 pub(crate) fn update_changelogs(
     changelog_next: impl AsRef<Path>,
     smithy_rs_path: impl AsRef<Path>,
     aws_sdk_rust_path: impl AsRef<Path>,
-    smithy_rs_release_header: &str,
-    aws_sdk_rust_release_header: &str,
+    smithy_rs_metadata: &ReleaseMetadata,
+    aws_sdk_rust_metadata: &ReleaseMetadata,
+    release_manifest_output_path: Option<&Path>,
 ) -> Result<()> {
     no_uncommited_changes(changelog_next.as_ref()).context(
         "CHANGELOG.next.toml had unstaged changes. Refusing to perform changelog update.",
@@ -302,19 +318,35 @@ pub(crate) fn update_changelogs(
         smithy_rs,
         aws_sdk_rust,
     } = changelog.into_entries();
-    for (entries, path, release_header) in [
-        (smithy_rs, smithy_rs_path.as_ref(), smithy_rs_release_header),
+    for (entries, path, release_metadata) in [
+        (smithy_rs, smithy_rs_path.as_ref(), smithy_rs_metadata),
         (
             aws_sdk_rust,
             aws_sdk_rust_path.as_ref(),
-            aws_sdk_rust_release_header,
+            aws_sdk_rust_metadata,
         ),
     ] {
         no_uncommited_changes(path)
             .with_context(|| format!("{} had unstaged changes", path.display()))?;
+        let (release_header, release_notes) = render(&entries, &release_metadata.title);
+        if let Some(output_path) = release_manifest_output_path {
+            let release_manifest = ReleaseManifest {
+                tag_name: release_metadata.tag.clone(),
+                name: release_metadata.title.clone(),
+                body: release_notes.clone(),
+                // All releases are pre-releases for now
+                prerelease: true,
+            };
+            std::fs::write(
+                output_path.join(&release_metadata.manifest_name),
+                serde_json::to_string_pretty(&release_manifest)?,
+            )?;
+        }
+
         let mut update = USE_UPDATE_CHANGELOGS.to_string();
         update.push('\n');
-        update.push_str(&render(&entries, release_header));
+        update.push_str(&release_header);
+        update.push_str(&release_notes);
         let current = std::fs::read_to_string(path)?.replace(USE_UPDATE_CHANGELOGS, "");
         update.push_str(&current);
         std::fs::write(path, update)?;
@@ -370,16 +402,18 @@ fn render_sdk_model_entries<'a>(
     }
 }
 
-/// Convert a list of changelog entries into markdown
-fn render(entries: &[ChangelogEntry], release_header: &str) -> String {
-    let mut out = String::new();
-    out.push_str(release_header);
-    out.push('\n');
+/// Convert a list of changelog entries into markdown.
+/// Returns (header, body)
+fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) {
+    let mut header = String::new();
+    header.push_str(release_header);
+    header.push('\n');
     for _ in 0..release_header.len() {
-        out.push('=');
+        header.push('=');
     }
-    out.push('\n');
+    header.push('\n');
 
+    let mut out = String::new();
     render_handauthored(
         entries.iter().filter_map(ChangelogEntry::hand_authored),
         &mut out,
@@ -429,7 +463,7 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> String {
         }
     }
 
-    out
+    (header, out)
 }
 
 pub(crate) struct ChangelogNext;
@@ -475,7 +509,13 @@ fn check_changelog_next(path: impl AsRef<Path>) -> std::result::Result<Changelog
 
 #[cfg(test)]
 mod test {
+    use super::ChangelogEntry;
     use crate::changelog::{render, Changelog, ChangelogEntries};
+
+    fn render_full(entries: &[ChangelogEntry], release_header: &str) -> String {
+        let (header, body) = render(entries, release_header);
+        return format!("{}{}", header, body);
+    }
 
     #[test]
     fn end_to_end_changelog() {
@@ -544,7 +584,7 @@ message = "Some API change"
             smithy_rs,
         } = changelog.into_entries();
 
-        let smithy_rs_rendered = render(&smithy_rs, "v0.3.0 (January 4th, 2022)");
+        let smithy_rs_rendered = render_full(&smithy_rs, "v0.3.0 (January 4th, 2022)");
         let smithy_rs_expected = r#"
 v0.3.0 (January 4th, 2022)
 ==========================
@@ -567,7 +607,7 @@ Thank you for your contributions! ❤
         .trim_start();
         pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
 
-        let aws_sdk_rust_rendered = render(&aws_sdk_rust, "v0.1.0 (January 4th, 2022)");
+        let aws_sdk_rust_rendered = render_full(&aws_sdk_rust, "v0.1.0 (January 4th, 2022)");
         let aws_sdk_expected = r#"
 v0.1.0 (January 4th, 2022)
 ==========================
