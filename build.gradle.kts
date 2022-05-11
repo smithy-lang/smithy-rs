@@ -62,7 +62,7 @@ tasks.register<JavaExec>("ktlintFormat") {
 }
 
 @Suppress("UnstableApiUsage")
-task<JacocoMerge>("jacocoMerge") {
+tasks.register<JacocoMerge>("jacocoMerge") {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     description = "Merge the JaCoCo data files from all subprojects into one"
     afterEvaluate {
