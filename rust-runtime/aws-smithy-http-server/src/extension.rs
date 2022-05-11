@@ -48,8 +48,9 @@
 //!
 //! [extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
 
-use axum_core::extract::RequestParts;
 use std::ops::Deref;
+
+use crate::request::RequestParts;
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
 /// This extension type is set when it has been correctly determined that the request should be
