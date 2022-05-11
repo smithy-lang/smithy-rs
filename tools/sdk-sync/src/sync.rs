@@ -5,7 +5,7 @@
 
 use self::gen::{DefaultSdkGenerator, SdkGenerator};
 use crate::fs::{DefaultFs, Fs};
-use crate::git::{Commit, CommitHash, Git, GitCLI};
+use crate::git::{Commit, Git, GitCLI};
 use crate::versions::{DefaultVersions, Versions, VersionsManifest};
 use anyhow::{bail, Context, Result};
 use smithy_rs_tool_common::macros::here;
@@ -21,49 +21,12 @@ pub const BOT_NAME: &str = "AWS SDK Rust Bot";
 pub const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
 pub const MODEL_STASH_BRANCH_NAME: &str = "__sdk_sync__models_";
 
-#[cfg_attr(test, mockall::automock)]
-pub trait CreateSdkGenerator: Send + std::marker::Sync {
-    fn create_sdk_generator(
-        &self,
-        aws_doc_sdk_examples_revision: &CommitHash,
-        examples_path: &Path,
-        fs: Arc<dyn Fs>,
-        reset_to_commit: Option<CommitHash>,
-        original_smithy_rs_path: &Path,
-    ) -> Result<Box<dyn SdkGenerator>>;
-}
-
-pub struct DefaultCreateSdkGenerator;
-
-impl CreateSdkGenerator for DefaultCreateSdkGenerator {
-    fn create_sdk_generator(
-        &self,
-        aws_doc_sdk_examples_revision: &CommitHash,
-        examples_path: &Path,
-        fs: Arc<dyn Fs>,
-        reset_to_commit: Option<CommitHash>,
-        original_smithy_rs_path: &Path,
-    ) -> Result<Box<dyn SdkGenerator>> {
-        Ok(Box::new(
-            DefaultSdkGenerator::new(
-                aws_doc_sdk_examples_revision,
-                examples_path,
-                fs,
-                reset_to_commit,
-                original_smithy_rs_path,
-            )
-            .context(here!())?,
-        ))
-    }
-}
-
 pub struct Sync {
     aws_doc_sdk_examples: Arc<dyn Git>,
     aws_sdk_rust: Arc<dyn Git>,
     smithy_rs: Arc<dyn Git>,
     fs: Arc<dyn Fs>,
     versions: Arc<dyn Versions>,
-    create_sdk_generator: Arc<dyn CreateSdkGenerator>,
 }
 
 impl Sync {
@@ -78,7 +41,6 @@ impl Sync {
             smithy_rs: Arc::new(GitCLI::new(smithy_rs_path)?),
             fs: Arc::new(DefaultFs::new()) as Arc<dyn Fs>,
             versions: Arc::new(DefaultVersions::new()),
-            create_sdk_generator: Arc::new(DefaultCreateSdkGenerator),
         })
     }
 
@@ -88,7 +50,6 @@ impl Sync {
         smithy_rs: impl Git + 'static,
         fs: impl Fs + 'static,
         versions: impl Versions + 'static,
-        create_sdk_generator: impl CreateSdkGenerator + 'static,
     ) -> Self {
         Self {
             aws_doc_sdk_examples: Arc::new(aws_doc_sdk_examples),
@@ -96,7 +57,6 @@ impl Sync {
             smithy_rs: Arc::new(smithy_rs),
             fs: Arc::new(fs),
             versions: Arc::new(versions),
-            create_sdk_generator: Arc::new(create_sdk_generator),
         }
     }
 
@@ -155,23 +115,31 @@ impl Sync {
     fn sync_model_changes(&self, versions: &VersionsManifest) -> Result<()> {
         info!("Syncing model changes...");
 
-        // Restore the model changes
+        // Restore the model changes. Note: endpoints.json/default config/model changes
+        // may each be in their own commits coming into this, but we want them squashed into
+        // one commit for smithy-rs.
         self.smithy_rs
-            .fast_forward_merge(MODEL_STASH_BRANCH_NAME)
+            .squash_merge(
+                BOT_NAME,
+                BOT_EMAIL,
+                MODEL_STASH_BRANCH_NAME,
+                "Update SDK models",
+            )
+            .context(here!())?;
+        self.smithy_rs
+            .delete_branch(MODEL_STASH_BRANCH_NAME)
             .context(here!())?;
         let model_change_commit = self.smithy_rs.show("HEAD").context(here!())?;
 
         // Generate with the original examples
-        let sdk_gen = self
-            .create_sdk_generator
-            .create_sdk_generator(
-                &versions.aws_doc_sdk_examples_revision,
-                &self.aws_sdk_rust.path().join("examples"),
-                self.fs.clone(),
-                None,
-                self.smithy_rs.path(),
-            )
-            .context(here!("failed to generate the SDK"))?;
+        let sdk_gen = DefaultSdkGenerator::new(
+            &versions.aws_doc_sdk_examples_revision,
+            &self.aws_sdk_rust.path().join("examples"),
+            self.fs.clone(),
+            None,
+            self.smithy_rs.path(),
+        )
+        .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
         self.copy_sdk(generated_sdk.path())
             .context(here!("failed to copy the SDK"))?;
@@ -214,7 +182,6 @@ impl Sync {
         // Generate code in parallel for each individual commit
         let code_gen_paths = {
             let smithy_rs = self.smithy_rs.clone();
-            let create_sdk_generator = self.create_sdk_generator.clone();
             let examples_revision = versions.aws_doc_sdk_examples_revision.clone();
             let examples_path = self.aws_sdk_rust.path().join("examples");
             let fs = self.fs.clone();
@@ -234,15 +201,14 @@ impl Sync {
                         format!("couldn't find commit {} in smithy-rs", commit_hash)
                     })?;
 
-                    let sdk_gen = create_sdk_generator
-                        .create_sdk_generator(
-                            &examples_revision,
-                            &examples_path,
-                            fs.clone(),
-                            Some(commit.hash.clone()),
-                            smithy_rs.path(),
-                        )
-                        .context(here!())?;
+                    let sdk_gen = DefaultSdkGenerator::new(
+                        &examples_revision,
+                        &examples_path,
+                        fs.clone(),
+                        Some(commit.hash.clone()),
+                        smithy_rs.path(),
+                    )
+                    .context(here!())?;
                     let sdk_path = sdk_gen.generate_sdk().context(here!())?;
                     Ok((commit, sdk_path))
                 })
@@ -285,16 +251,14 @@ impl Sync {
         }
         let examples_head = example_revisions.iter().cloned().next().unwrap();
 
-        let sdk_gen = self
-            .create_sdk_generator
-            .create_sdk_generator(
-                &examples_head,
-                &self.aws_doc_sdk_examples.path().join("rust_dev_preview"),
-                self.fs.clone(),
-                None,
-                self.smithy_rs.path(),
-            )
-            .context(here!())?;
+        let sdk_gen = DefaultSdkGenerator::new(
+            &examples_head,
+            &self.aws_doc_sdk_examples.path().join("rust_dev_preview"),
+            self.fs.clone(),
+            None,
+            self.smithy_rs.path(),
+        )
+        .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
         self.copy_sdk(generated_sdk.path())
             .context("failed to copy the SDK")?;
@@ -445,7 +409,7 @@ impl Sync {
 mod tests {
     use super::*;
     use crate::fs::MockFs;
-    use crate::git::MockGit;
+    use crate::git::{CommitHash, MockGit};
     use crate::versions::MockVersions;
 
     // Wish this was in std...
@@ -544,7 +508,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
         assert!(sync
             .commit_sdk_changes(
@@ -596,7 +559,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
         assert!(sync
             .commit_sdk_changes(
@@ -630,7 +592,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
 
         assert!(
@@ -657,7 +618,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
 
         assert!(
@@ -684,7 +644,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
 
         assert!(sync.sdk_has_changes().unwrap(), "it should have changes");
@@ -713,7 +672,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
 
         assert!(sync.sdk_has_changes().unwrap(), "it should have changes");
