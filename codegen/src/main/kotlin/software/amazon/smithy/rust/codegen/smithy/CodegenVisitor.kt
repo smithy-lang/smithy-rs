@@ -187,7 +187,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     override fun stringShape(shape: StringShape) {
         shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
-                EnumGenerator(model, symbolProvider, writer, shape, enum).render()
+                EnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.mode).render()
             }
         }
     }

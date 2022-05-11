@@ -136,7 +136,7 @@ class AwsQuerySerializerGeneratorTest {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice"), renderUnknownVariant = generateUnknownVariant).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
+            EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait(), CodegenMode.Client).render()
         }
 
         project.withModule(RustModule.public("input")) {

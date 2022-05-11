@@ -170,6 +170,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val Debug = stdfmt.member("Debug")
         val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
+        val TryFrom = RuntimeType("TryFrom", dependency = null, namespace = "std::convert")
         val Infallible = RuntimeType("Infallible", dependency = null, namespace = "std::convert")
         val PartialEq = std.member("cmp::PartialEq")
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
@@ -288,6 +289,12 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             "ParseHttpResponse",
             dependency = CargoDependency.SmithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::response"
+        )
+
+        fun jsonDeserialize(runtimeConfig: RuntimeConfig) = RuntimeType(
+            name = "Error",
+            dependency = CargoDependency.smithyJson(runtimeConfig),
+            namespace = "aws_smithy_json::deserialize"
         )
 
         fun ec2QueryErrors(runtimeConfig: RuntimeConfig) =

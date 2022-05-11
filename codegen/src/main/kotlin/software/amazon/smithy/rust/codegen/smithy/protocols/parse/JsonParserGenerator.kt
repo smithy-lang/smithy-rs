@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
@@ -238,14 +239,26 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeStringInner(target: StringShape, escapedStrName: String) {
         withBlock("$escapedStrName.to_unescaped().map(|u|", ")") {
             when (target.hasTrait<EnumTrait>()) {
-                true -> rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
+                true -> {
+                    if (convertsToEnumInServer(target)) {
+                        rust("#T::try_from(u.as_ref())", symbolProvider.toSymbol(target))
+                    } else {
+                        rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
+                    }
+                }
                 else -> rust("u.into_owned()")
             }
         }
     }
 
+    private fun convertsToEnumInServer(shape: StringShape): Boolean {
+        return mode == CodegenMode.Server && shape.hasTrait<EnumTrait>()
+    }
+
     private fun RustWriter.deserializeString(target: StringShape) {
-        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ").transpose()?", *codegenScope) {
+        // additional .transpose()? because Rust does not allow ? up from closures
+        val additionalTranspose = if (convertsToEnumInServer(target)) { ".transpose()?".repeat(2) } else { ".transpose()?" }
+        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ")$additionalTranspose", *codegenScope) {
             deserializeStringInner(target, "s")
         }
     }
@@ -334,6 +347,9 @@ class JsonParserGenerator(
                         }
                         withBlock("let value =", ";") {
                             deserializeMember(shape.value)
+                        }
+                        if (convertsToEnumInServer(keyTarget)) {
+                            rust("let key = key?;")
                         }
                         if (isSparse) {
                             rust("map.insert(key, value);")
