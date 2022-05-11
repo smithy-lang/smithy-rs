@@ -112,7 +112,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
-        "AxumCore" to ServerCargoDependency.AxumCore.asType(),
         "Cow" to ServerRuntimeType.Cow,
         "DateTime" to RuntimeType.DateTime(runtimeConfig),
         "HttpBody" to CargoDependency.HttpBody.asType(),
@@ -155,20 +154,20 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
 
-        // Implement Axum `FromRequest` trait for input types.
+        // Implement `FromRequest` trait for input types.
         rustTemplate(
             """
             ##[derive(Debug)]
             pub(crate) struct $inputName(#{I});
             ##[#{AsyncTrait}::async_trait]
-            impl<B> #{AxumCore}::extract::FromRequest<B> for $inputName
+            impl<B> #{SmithyHttpServer}::request::FromRequest<B> for $inputName
             where
                 B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
                 B::Data: Send,
                 #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
             {
                 type Rejection = #{RuntimeError};
-                async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
+                async fn from_request(req: &mut #{SmithyHttpServer}::request::RequestParts<B>) -> Result<Self, Self::Rejection> {
                     #{parse_request}(req)
                         .await
                         .map($inputName)
@@ -186,7 +185,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             "parse_request" to serverParseRequest(operationShape)
         )
 
-        // Implement Axum `IntoResponse` for output types.
+        // Implement `IntoResponse` for output types.
 
         val outputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
@@ -211,7 +210,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     Self::Error(err) => {
                         match #{serialize_error}(&err) {
                             Ok(mut response) => {
-                                response.extensions_mut().insert(aws_smithy_http_server::extension::ModeledErrorExtension::new(err.name()));
+                                response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(err.name()));
                                 response
                             },
                             Err(e) => {
@@ -232,8 +231,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     Error(#{E})
                 }
                 ##[#{AsyncTrait}::async_trait]
-                impl #{AxumCore}::response::IntoResponse for $outputName {
-                    fn into_response(self) -> #{AxumCore}::response::Response {
+                impl #{SmithyHttpServer}::response::IntoResponse for $outputName {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         $intoResponseImpl
                     }
                 }
@@ -264,8 +263,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 pub(crate) struct $outputName(#{O});
                 ##[#{AsyncTrait}::async_trait]
-                impl #{AxumCore}::response::IntoResponse for $outputName {
-                    fn into_response(self) -> #{AxumCore}::response::Response {
+                impl #{SmithyHttpServer}::response::IntoResponse for $outputName {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         $intoResponseImpl
                     }
                 }
@@ -329,7 +328,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             it.rustBlockTemplate(
                 """
                 pub async fn $fnName<B>(
-                    ##[allow(unused_variables)] request: &mut #{AxumCore}::extract::RequestParts<B>
+                    ##[allow(unused_variables)] request: &mut #{SmithyHttpServer}::request::RequestParts<B>
                 ) -> std::result::Result<
                     #{I},
                     #{RequestRejection}
@@ -369,7 +368,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 pub fn $fnName(
                     ##[allow(unused_variables)] output: #{O}
                 ) -> std::result::Result<
-                    #{AxumCore}::response::Response,
+                    #{SmithyHttpServer}::response::Response,
                     #{ResponseRejection}
                 >
                 """.trimIndent(),
@@ -392,7 +391,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(error: &#{E}) -> std::result::Result<#{AxumCore}::response::Response, #{ResponseRejection}>",
+                "pub fn $fnName(error: &#{E}) -> std::result::Result<#{SmithyHttpServer}::response::Response, #{ResponseRejection}>",
                 *codegenScope,
                 "E" to errorSymbol
             ) {

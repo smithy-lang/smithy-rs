@@ -20,6 +20,10 @@ pub mod protocols;
 #[doc(hidden)]
 pub mod rejection;
 #[doc(hidden)]
+pub mod request;
+#[doc(hidden)]
+pub mod response;
+#[doc(hidden)]
 pub mod runtime_error;
 
 #[doc(inline)]
@@ -29,9 +33,6 @@ pub use self::extension::Extension;
 pub use self::routing::Router;
 #[doc(inline)]
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
-
-/// Alias for a type-erased error type.
-pub(crate) use axum_core::BoxError;
 
 #[cfg(test)]
 mod test_helpers;

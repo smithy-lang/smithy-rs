@@ -5,7 +5,7 @@
 
 // This code was copied and then modified from Tokio's Axum.
 
-/* Copyright (c) 2021 Tower Contributors
+/* Copyright (c) 2022 Tower Contributors
  *
  * Permission is hereby granted, free of charge, to any
  * person obtaining a copy of this software and associated
@@ -32,33 +32,15 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-//! Error definition.
+use crate::body::BoxBody;
 
-use std::{error::Error as StdError, fmt};
+#[doc(hidden)]
+pub type Response<T = BoxBody> = http::Response<T>;
 
-/// Errors that can happen when using this crate.
-#[derive(Debug)]
-pub struct Error {
-    inner: BoxError,
-}
-
-pub(crate) type BoxError = Box<dyn StdError + Send + Sync>;
-
-impl Error {
-    /// Create a new `Error` from a boxable error.
-    pub(crate) fn new(error: impl Into<BoxError>) -> Self {
-        Self { inner: error.into() }
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner.fmt(f)
-    }
-}
-
-impl StdError for Error {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        Some(&*self.inner)
-    }
+/// Trait for generating responses.
+///
+/// Types that implement `IntoResponse` can be returned from handlers.
+pub trait IntoResponse {
+    /// Create a response.
+    fn into_response(self) -> Response;
 }
