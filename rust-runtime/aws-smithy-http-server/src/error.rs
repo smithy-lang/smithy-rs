@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 // This code was copied and then modified from Tokio's Axum.
@@ -34,7 +34,6 @@
 
 //! Error definition.
 
-use crate::BoxError;
 use std::{error::Error as StdError, fmt};
 
 /// Errors that can happen when using this crate.
@@ -42,6 +41,8 @@ use std::{error::Error as StdError, fmt};
 pub struct Error {
     inner: BoxError,
 }
+
+pub(crate) type BoxError = Box<dyn StdError + Send + Sync>;
 
 impl Error {
     /// Create a new `Error` from a boxable error.
