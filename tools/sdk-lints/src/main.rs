@@ -10,6 +10,7 @@ use crate::lint_cargo_toml::{CrateAuthor, CrateLicense, DocsRs};
 use crate::readmes::{ReadmesExist, ReadmesHaveFooters};
 use crate::todos::TodosHaveContext;
 use anyhow::{bail, Context, Result};
+use changelog::ReleaseMetadata;
 use clap::Parser;
 use lazy_static::lazy_static;
 use ordinal::Ordinal;
@@ -68,6 +69,9 @@ enum Args {
         /// Whether or not independent crate versions are being used (defaults to false)
         #[clap(long)]
         independent_versioning: bool,
+        /// Optional path to output a release manifest file to
+        #[clap(long)]
+        release_manifest_output_path: Option<PathBuf>,
     },
 }
 
@@ -166,27 +170,44 @@ fn main() -> Result<()> {
         }
         Args::UpdateChangelog {
             independent_versioning,
+            release_manifest_output_path,
         } => {
+            let now = OffsetDateTime::now_local()?;
             let changelog_next_path = repo_root().join("CHANGELOG.next.toml");
             let changelog_path = repo_root().join("CHANGELOG.md");
             let aws_changelog_path = repo_root().join("aws/SDK_CHANGELOG.md");
             if independent_versioning {
-                let header = date_header()?;
+                let smithy_rs_metadata =
+                    date_based_release_metadata(now, "smithy-rs-release-manifest.json");
+                let sdk_metadata =
+                    date_based_release_metadata(now, "aws-sdk-rust-release-manifest.json");
                 changelog::update_changelogs(
                     changelog_next_path,
                     changelog_path,
                     aws_changelog_path,
-                    &header,
-                    &header,
+                    &smithy_rs_metadata,
+                    &sdk_metadata,
+                    release_manifest_output_path.as_deref(),
                 )?
             } else {
                 let auto = auto_changelog_meta()?;
+                let smithy_rs_metadata = version_based_release_metadata(
+                    now,
+                    &auto.smithy_version,
+                    "smithy-rs-release-manifest.json",
+                );
+                let sdk_metadata = version_based_release_metadata(
+                    now,
+                    &auto.sdk_version,
+                    "aws-sdk-rust-release-manifest.json",
+                );
                 changelog::update_changelogs(
                     changelog_next_path,
                     changelog_path,
                     aws_changelog_path,
-                    &release_header_sync_versioned(&auto.smithy_version)?,
-                    &release_header_sync_versioned(&auto.sdk_version)?,
+                    &smithy_rs_metadata,
+                    &sdk_metadata,
+                    release_manifest_output_path.as_deref(),
                 )?
             }
         }
@@ -199,22 +220,45 @@ struct ChangelogMeta {
     sdk_version: String,
 }
 
-fn date_header() -> Result<String> {
-    let now = OffsetDateTime::now_local()?;
-    Ok(format!(
+fn date_based_release_metadata(
+    now: OffsetDateTime,
+    manifest_name: impl Into<String>,
+) -> ReleaseMetadata {
+    ReleaseMetadata {
+        title: date_title(&now),
+        tag: format!(
+            "release-{year}-{month:02}-{day:02}",
+            year = now.date().year(),
+            month = u8::from(now.date().month()),
+            day = now.date().day()
+        ),
+        manifest_name: manifest_name.into(),
+    }
+}
+
+fn version_based_release_metadata(
+    now: OffsetDateTime,
+    version: &str,
+    manifest_name: impl Into<String>,
+) -> ReleaseMetadata {
+    ReleaseMetadata {
+        title: format!(
+            "v{version} ({date})",
+            version = version,
+            date = date_title(&now)
+        ),
+        tag: format!("v{version}", version = version),
+        manifest_name: manifest_name.into(),
+    }
+}
+
+fn date_title(now: &OffsetDateTime) -> String {
+    format!(
         "{month} {day}, {year}",
         month = now.date().month(),
         day = Ordinal(now.date().day()),
         year = now.date().year()
-    ))
-}
-
-fn release_header_sync_versioned(version: &str) -> Result<String> {
-    Ok(format!(
-        "v{version} ({date})",
-        version = version,
-        date = date_header()?
-    ))
+    )
 }
 
 /// Discover the new version for the changelog from gradle.properties and the date.
@@ -265,4 +309,28 @@ fn all_runtime_crates() -> Result<impl Iterator<Item = PathBuf>> {
 
 fn all_cargo_tomls() -> Result<impl Iterator<Item = PathBuf>> {
     Ok(all_runtime_crates()?.map(|pkg| pkg.join("Cargo.toml")))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{date_based_release_metadata, version_based_release_metadata};
+    use time::OffsetDateTime;
+
+    #[test]
+    fn test_date_based_release_metadata() {
+        let now = OffsetDateTime::from_unix_timestamp(100_000_000).unwrap();
+        let result = date_based_release_metadata(now, "some-manifest.json");
+        assert_eq!("March 3rd, 1973", result.title);
+        assert_eq!("release-1973-03-03", result.tag);
+        assert_eq!("some-manifest.json", result.manifest_name);
+    }
+
+    #[test]
+    fn test_version_based_release_metadata() {
+        let now = OffsetDateTime::from_unix_timestamp(100_000_000).unwrap();
+        let result = version_based_release_metadata(now, "0.11.0", "some-other-manifest.json");
+        assert_eq!("v0.11.0 (March 3rd, 1973)", result.title);
+        assert_eq!("v0.11.0", result.tag);
+        assert_eq!("some-other-manifest.json", result.manifest_name);
+    }
 }
