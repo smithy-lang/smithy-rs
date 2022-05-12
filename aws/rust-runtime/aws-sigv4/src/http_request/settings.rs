@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use http::header::{HeaderName, USER_AGENT};
 use std::time::Duration;
 
 /// HTTP signing parameters
@@ -26,8 +27,8 @@ pub struct SigningSettings {
     /// For presigned requests, how long the presigned request is valid for
     pub expires_in: Option<Duration>,
 
-    /// For signed requests, which already signed the user-agent header
-    pub allow_signing_user_agent_header: bool,
+    /// Headers that should be excluded from the signing process
+    pub excluded_headers: Option<Vec<HeaderName>>,
 }
 
 /// HTTP payload checksum type
@@ -62,12 +63,15 @@ pub enum PercentEncodingMode {
 
 impl Default for SigningSettings {
     fn default() -> Self {
+        // The user agent header should not be signed because it may be altered by proxies
+        const EXCLUDED_HEADERS: [HeaderName; 1] = [USER_AGENT];
+
         Self {
             percent_encoding_mode: PercentEncodingMode::Double,
             payload_checksum_kind: PayloadChecksumKind::NoHeader,
             signature_location: SignatureLocation::Headers,
             expires_in: None,
-            allow_signing_user_agent_header: false,
+            excluded_headers: Some(EXCLUDED_HEADERS.to_vec()),
         }
     }
 }
