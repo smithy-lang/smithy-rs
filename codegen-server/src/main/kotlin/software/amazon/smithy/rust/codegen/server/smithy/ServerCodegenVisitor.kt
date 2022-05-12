@@ -317,8 +317,8 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     override fun stringShape(shape: StringShape) {
         check(!(shape.hasTrait<EnumTrait>() && shape.isConstrained(symbolProvider))) {
             """
-            String shape has an `enum` trait and another constraint trait. This is valid according to the Smithy spec
-            v1 IDL, but it makes no sense: https://github.com/awslabs/smithy/issues/1121
+            String shape $shape has an `enum` trait and another constraint trait. This is valid according to the Smithy 
+            spec v1 IDL, but it makes no sense: https://github.com/awslabs/smithy/issues/1121
             """
         }
 
