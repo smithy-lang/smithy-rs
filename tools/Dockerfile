@@ -49,6 +49,7 @@ ARG rust_stable_version=1.58.1
 ARG rust_nightly_version=nightly-2022-03-29
 ARG cargo_udeps_version=0.1.27
 ARG cargo_hack_version=0.5.12
+ARG cargo_minimal_versions_version=0.1.3
 # If the `checkout_smithy_rs_tools` arg is set to true, then the Dockerfile will acquire the tools
 # source code by checking out awslabs/smithy-rs/main rather than copying them from the local directory.
 ARG checkout_smithy_rs_tools=false
@@ -92,6 +93,7 @@ COPY . tools/
 RUN set -eux; \
     cargo +${rust_nightly_version} install cargo-udeps --version ${cargo_udeps_version}; \
     cargo install cargo-hack --version ${cargo_hack_version}; \
+    cargo install cargo-minimal-versions --version ${cargo_minimal_versions_version}; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
         git clone https://github.com/awslabs/smithy-rs.git; \
         cd smithy-rs; \
@@ -140,7 +142,9 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     CARGO_INCREMENTAL=0 \
     RUSTDOCFLAGS="-D warnings" \
     RUSTFLAGS="-D warnings" \
-    SMITHY_RS_DOCKER_BUILD_IMAGE=1
+    SMITHY_RS_DOCKER_BUILD_IMAGE=1 \
+    LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8
 RUN npm install -g diff2html-cli@5.1.11
 WORKDIR /home/build
 COPY ci-build/scripts/sanity-test /home/build/sanity-test

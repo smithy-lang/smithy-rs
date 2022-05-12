@@ -126,7 +126,7 @@ fun generateSmithyBuild(services: AwsServices): String {
     """
 }
 
-task("generateSmithyBuild") {
+tasks.register("generateSmithyBuild") {
     description = "generate smithy-build.json"
     inputs.property("servicelist", awsServices.services.toString())
     inputs.property("eventStreamAllowList", eventStreamAllowList)
@@ -138,7 +138,7 @@ task("generateSmithyBuild") {
     }
 }
 
-task("generateIndexMd") {
+tasks.register("generateIndexMd") {
     inputs.property("servicelist", awsServices.services.toString())
     val indexMd = outputDir.resolve("index.md")
     outputs.file(indexMd)
@@ -147,7 +147,7 @@ task("generateIndexMd") {
     }
 }
 
-task("relocateServices") {
+tasks.register("relocateServices") {
     description = "relocate AWS services to their final destination"
     doLast {
         awsServices.services.forEach {
@@ -172,7 +172,7 @@ task("relocateServices") {
     outputs.dir(sdkOutputDir)
 }
 
-task("relocateExamples") {
+tasks.register("relocateExamples") {
     description = "relocate the examples folder & rewrite path dependencies"
     doLast {
         if (awsServices.examples.isNotEmpty()) {
@@ -193,7 +193,7 @@ task("relocateExamples") {
     outputs.dir(outputDir)
 }
 
-task<ExecRustBuildTool>("fixExampleManifests") {
+tasks.register<ExecRustBuildTool>("fixExampleManifests") {
     description = "Adds dependency path and corrects version number of examples after relocation"
     enabled = awsServices.examples.isNotEmpty()
 
@@ -272,7 +272,7 @@ fun generateCargoWorkspace(services: AwsServices): String {
     """.trimMargin()
 }
 
-task("generateCargoWorkspace") {
+tasks.register("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
         outputDir.mkdirs()
@@ -346,7 +346,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     )
 }
 
-task("finalizeSdk") {
+tasks.register("finalizeSdk") {
     dependsOn("assemble")
     outputs.upToDateWhen { false }
     finalizedBy(

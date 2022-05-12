@@ -16,9 +16,6 @@ aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream"
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-types = { path = "../aws-types" }
 http = "0.2.2"
-# Trying this out as an experiment. thiserror can be removed and replaced with hand written error
-# implementations and it is not a breaking change.
-thiserror = "1"
 tracing = "0.1"
 
 [dev-dependencies]
