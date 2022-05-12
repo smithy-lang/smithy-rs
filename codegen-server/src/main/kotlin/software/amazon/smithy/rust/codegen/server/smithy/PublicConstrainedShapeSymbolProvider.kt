@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.smithy.Models
@@ -25,6 +26,7 @@ import software.amazon.smithy.rust.codegen.smithy.isConstrained
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
+import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
@@ -46,15 +48,7 @@ class PublicConstrainedShapeSymbolProvider(
     }
 
     override fun toSymbol(shape: Shape): Symbol {
-        if (!shape.isMemberShape && !shape.isConstrained(base)) {
-            return base.toSymbol(shape)
-        }
-
         return when (shape) {
-            is MapShape -> {
-                check(shape.hasTrait<LengthTrait>()) { "Only the `length` constraint trait can be applied to maps" }
-                publicConstrainedSymbolForCollectionOrMapShape(shape)
-            }
             is MemberShape -> {
                 // TODO member shapes can have constraint traits (constraint trait precedence).
                 val target = model.expectShape(shape.target)
@@ -62,7 +56,42 @@ class PublicConstrainedShapeSymbolProvider(
                 // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
                 handleOptionality(handleRustBoxing(targetSymbol, shape), shape)
             }
+            is MapShape -> {
+                if (shape.isConstrained(base)) {
+                    check(shape.hasTrait<LengthTrait>()) { "Only the `length` constraint trait can be applied to maps" }
+                    publicConstrainedSymbolForCollectionOrMapShape(shape)
+                } else {
+                    val keySymbol = this.toSymbol(shape.key)
+                    val valueSymbol = this.toSymbol(shape.value)
+                    symbolBuilder(shape, RustType.HashMap(keySymbol.rustType(), valueSymbol.rustType()))
+                        .addReference(keySymbol)
+                        .addReference(valueSymbol)
+                        .build()
+                }
+            }
+            is CollectionShape -> {
+                // TODO Both arms return the same because we haven't implemented any constraint trait on collection shapes yet.
+                if (shape.isConstrained(base)) {
+                    val inner = this.toSymbol(shape.member)
+                    symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
+                } else {
+                    val inner = this.toSymbol(shape.member)
+                    symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
+                }
+            }
             is StringShape -> {
+                if (!shape.isConstrained(base)) {
+                    return base.toSymbol(shape)
+                }
+
+                if (shape.hasTrait<EnumTrait>()) {
+                    // String shape has a constraint trait in addition to the `enum` trait.
+                    // The `enum` trait takes precedence, so the base symbol provider will generate a Rust `enum`.
+                    // We warn about this case in [ServerCodegenVisitor].
+                    // See https://github.com/awslabs/smithy/issues/1121f for more information.
+                    return base.toSymbol(shape)
+                }
+
                 val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
                 symbolBuilder(shape, rustType).locatedIn(Models).build()
             }

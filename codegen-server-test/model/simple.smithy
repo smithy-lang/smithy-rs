@@ -18,6 +18,7 @@ operation AnOperation {
     // output: RecursiveShapesInputOutput,
     input: AnOperationInput,
     output: AnOperationOutput,
+    /* errors: [MyError] */
 }
 
 structure AnOperationInput {
@@ -42,8 +43,19 @@ structure ConA {
 
     // conBSet: ConBSet,
 
-    conBMap: ConBMap
+    // conBMap: ConBMap
+
+    @length(min:4, max:6)
+    list: LengthList,
 }
+
+@length(min:2, max:8)
+list LengthList {
+    member: LengthString
+}
+
+@length(min:2, max:8)
+string LengthString
 
 // structure ConB {
 //     @required
@@ -103,15 +115,23 @@ structure ConA {
 // }
 //
 
-@length(min: 1, max: 69)
-map ConBMap {
-    key: String,
-    //value: AnotherMap
-    value: NiceString
-}
+// @length(min: 1, max: 69)
+// map ConBMap {
+//     key: String,
+//     //value: AnotherMap
+//     value: NiceString
+// }
 
-@length(min: 1, max: 10)
-string NiceString
+// @length(min: 1, max: 10)
+// string NiceString
+
+// @error("client")
+// @retryable
+// @httpError(429)
+// structure MyError {
+//     @required
+//     message: NiceString
+// }
 
 //
 // map AnotherMap {

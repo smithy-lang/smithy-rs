@@ -17,7 +17,8 @@ class ResponseBindingGenerator(
     codegenContext: CodegenContext,
     operationShape: OperationShape
 ) {
-    private val httpBindingGenerator = HttpBindingGenerator(protocol, codegenContext, operationShape)
+    private val httpBindingGenerator =
+        HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape)
 
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType =
         httpBindingGenerator.generateDeserializeHeaderFn(binding)

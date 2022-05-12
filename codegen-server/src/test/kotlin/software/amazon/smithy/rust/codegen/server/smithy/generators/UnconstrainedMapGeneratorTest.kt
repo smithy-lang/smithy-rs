@@ -72,12 +72,14 @@ class UnconstrainedMapGeneratorTest {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, writer)
         }
 
+        val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
         val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
         project.withModule(RustModule.private("constrained")) { writer ->
             listOf(mapA, mapB).forEach {
                 ConstrainedMapGenerator(
                     model,
                     symbolProvider,
+                    unconstrainedShapeSymbolProvider,
                     constrainedShapeSymbolProvider,
                     writer,
                     it
@@ -85,7 +87,6 @@ class UnconstrainedMapGeneratorTest {
             }
         }
         project.withModule(RustModule.private("unconstrained")) { writer ->
-            val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
             val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
             listOf(mapA, mapB).forEach {
                 UnconstrainedMapGenerator(

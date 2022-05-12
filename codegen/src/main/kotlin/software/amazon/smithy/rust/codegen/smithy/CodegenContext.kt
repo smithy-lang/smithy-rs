@@ -53,6 +53,8 @@ data class CodegenContext(
      * Some settings are dependent on whether server vs. client codegen is being invoked.
      */
     val mode: CodegenMode,
+
+    val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider? = null
 ) {
     constructor(
         model: Model,
@@ -61,7 +63,8 @@ data class CodegenContext(
         protocol: ShapeId,
         settings: RustSettings,
         mode: CodegenMode,
-    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings, mode)
+        unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider? = null
+    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings, mode, unconstrainedShapeSymbolProvider)
 
     /**
      * The name of the cargo crate to generate e.g. `aws-sdk-s3`

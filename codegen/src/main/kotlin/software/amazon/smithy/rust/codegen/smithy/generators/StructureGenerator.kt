@@ -8,8 +8,6 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -64,14 +62,7 @@ fun MemberShape.deserializerBuilderSetterName(model: Model, symbolProvider: Symb
         return this.setterName()
     }
 
-    val canReachConstrainedShape = when (val targetShape = model.expectShape(this.target)) {
-        is CollectionShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
-        is MapShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
-        is StructureShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
-        else -> false
-    }
-
-    return if (canReachConstrainedShape) {
+    return if (this.canReachConstrainedShape(model, symbolProvider)) {
         "set_${this.memberName.toSnakeCase()}"
     } else {
         this.memberName.toSnakeCase()

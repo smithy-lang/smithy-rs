@@ -104,6 +104,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 ) : ProtocolTraitImplGenerator {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
+    private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
@@ -495,7 +496,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
      * case it will generate response headers for the given error shape.
      *
      * It sets three groups of headers in order. Headers from one group take precedence over headers in a later group.
-     *     1. Headers bound by the `httpHeader` and `httpPrefixHeader` traits.
+     *     1. Headers bound by the `httpHeader` and `httpPrefixHeader` traits. = null
      *     2. The protocol-specific `Content-Type` header for the operation.
      *     3. Additional protocol-specific headers for errors, if [errorShape] is non-null.
      */
@@ -574,7 +575,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         inputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
+        val httpBindingGenerator = ServerRequestBindingGenerator(
+            protocol,
+            codegenContext,
+            codegenContext.unconstrainedShapeSymbolProvider!!,
+            operationShape
+        )
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
@@ -975,6 +981,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             ServerRequestBindingGenerator(
                 protocol,
                 codegenContext,
+                codegenContext.unconstrainedShapeSymbolProvider!!,
                 operationShape,
             )
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
@@ -994,6 +1001,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             ServerRequestBindingGenerator(
                 protocol,
                 codegenContext,
+                codegenContext.unconstrainedShapeSymbolProvider!!,
                 operationShape,
             )
         val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
@@ -1021,7 +1029,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     private fun generateParsePercentEncodedStrAsStringFn(binding: HttpBindingDescriptor): RuntimeType {
-        val output = symbolProvider.toSymbol(binding.member)
+        val output = unconstrainedShapeSymbolProvider!!.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
@@ -1035,7 +1043,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     let value = <_>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
-                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
+                    Ok(${unconstrainedShapeSymbolProvider.wrapOptional(binding.member, "value")})
                     """.trimIndent(),
                     *codegenScope,
                 )

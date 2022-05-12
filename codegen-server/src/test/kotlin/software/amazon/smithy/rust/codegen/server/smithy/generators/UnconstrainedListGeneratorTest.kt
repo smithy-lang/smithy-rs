@@ -70,12 +70,14 @@ class UnconstrainedListGeneratorTest {
             model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, writer)
         }
 
+        val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
         val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
         project.withModule(RustModule.private("constrained")) { writer ->
             listOf(listA, listB).forEach {
                 ConstrainedListGenerator(
                     model,
                     symbolProvider,
+                    unconstrainedShapeSymbolProvider,
                     constrainedShapeSymbolProvider,
                     writer,
                     it
@@ -83,7 +85,6 @@ class UnconstrainedListGeneratorTest {
             }
         }
         project.withModule(RustModule.private("unconstrained")) { writer ->
-            val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
             val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
             listOf(listA, listB).forEach {
                 UnconstrainedListGenerator(

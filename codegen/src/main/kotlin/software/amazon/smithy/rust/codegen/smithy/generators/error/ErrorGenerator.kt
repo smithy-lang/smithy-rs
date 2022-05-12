@@ -8,10 +8,14 @@ package software.amazon.smithy.rust.codegen.smithy.generators.error
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RetryableTrait
+import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.asDeref
+import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -21,6 +25,8 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.smithy.mapRustType
+import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -70,13 +76,25 @@ class ErrorGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val messageShape = shape.errorMessageMember()
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
+        // TODO Why do we always generate a `pub fn message() -> Option<&str> { None }` for `@error` structure shapes,
+        //   even when they don’t have a `message` field?
         val (returnType, message) = messageShape?.let {
-            if (symbolProvider.toSymbol(messageShape).isOptional()) {
-                "Option<&str>" to "self.${symbolProvider.toMemberName(it)}.as_deref()"
+            val messageSymbol = symbolProvider.toSymbol(it).mapRustType { t -> t.asDeref() }
+            if (messageSymbol.rustType().stripOuter<RustType.Option>() is RustType.Opaque) {
+                // The string shape has a constraint trait that makes its symbol be a wrapper tuple struct.
+                if (messageSymbol.isOptional()) {
+                    "Option<&${messageSymbol.rustType().stripOuter<RustType.Option>().render()}>" to "self.${symbolProvider.toMemberName(it)}.as_ref()"
+                } else {
+                    "&${messageSymbol.rustType().render()}" to "&self.${symbolProvider.toMemberName(it)}"
+                }
             } else {
-                "&str" to "self.${symbolProvider.toMemberName(it)}.as_ref()"
+                if (messageSymbol.isOptional()) {
+                    messageSymbol.rustType().render() to "self.${symbolProvider.toMemberName(it)}.as_deref()"
+                } else {
+                    messageSymbol.rustType().render() to "self.${symbolProvider.toMemberName(it)}.as_ref()"
+                }
             }
-        } ?: "Option<&str>" to "None"
+        } ?: ("Option<&str>" to "None")
         writer.rustBlock("impl ${symbol.name}") {
             val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)
             if (retryKindWriteable != null) {

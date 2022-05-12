@@ -50,29 +50,44 @@ class UnconstrainedShapeSymbolProvider(
                 base.toSymbol(shape)
             }
             is ListShape -> {
-                check(shape.canReachConstrainedShape(model, base))
-
-                if (shape.isConstrained(base)) {
-//                    TODO("The `length` constraint trait on list shapes is currently not implemented")
+                if (shape.canReachConstrainedShape(model, base)) {
                     unconstrainedSymbolForListOrMapShape(shape)
                 } else {
-                    unconstrainedSymbolForListOrMapShape(shape)
+                    base.toSymbol(shape)
                 }
+//                check(shape.canReachConstrainedShape(model, base))
+//
+//                if (shape.isConstrained(base)) {
+////                    TODO("The `length` constraint trait on list shapes is currently not implemented")
+//                    unconstrainedSymbolForListOrMapShape(shape)
+//                } else {
+//                    unconstrainedSymbolForListOrMapShape(shape)
+//                }
             }
             is MapShape -> {
-                check(shape.canReachConstrainedShape(model, base))
-
-                if (shape.isConstrained(base)) {
-//                    TODO("The `length` constraint trait on map shapes is currently not implemented")
+                if (shape.canReachConstrainedShape(model, base)) {
                     unconstrainedSymbolForListOrMapShape(shape)
                 } else {
-                    unconstrainedSymbolForListOrMapShape(shape)
+                    base.toSymbol(shape)
                 }
+//                check(shape.canReachConstrainedShape(model, base))
+//
+//                if (shape.isConstrained(base)) {
+////                    TODO("The `length` constraint trait on map shapes is currently not implemented")
+//                    unconstrainedSymbolForListOrMapShape(shape)
+//                } else {
+//                    unconstrainedSymbolForListOrMapShape(shape)
+//                }
             }
             is StructureShape -> {
-                check(shape.canReachConstrainedShape(model, base))
-
-                shape.builderSymbol(base)
+                if (shape.canReachConstrainedShape(model, base)) {
+                    shape.builderSymbol(base)
+                } else {
+                    base.toSymbol(shape)
+                }
+//                check(shape.canReachConstrainedShape(model, base))
+//
+//                shape.builderSymbol(base)
             }
             // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Simple shapes can have constraint traits.
             else -> base.toSymbol(shape)

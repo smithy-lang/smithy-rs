@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.model.traits.RangeTrait
@@ -51,7 +52,7 @@ fun Shape.isConstrained(symbolProvider: SymbolProvider) = when (this) {
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
     is MapShape -> this.hasConstraintTrait()
-    is StringShape -> this.hasTrait<LengthTrait>() // TODO For the moment only `length` on string shapes is supported.
+    is StringShape -> !this.hasTrait<EnumTrait>() && this.hasTrait<LengthTrait>() // TODO For the moment only `length` on string shapes is supported.
     else -> {
         // this.hasConstraintTrait()
         false
@@ -79,7 +80,7 @@ fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: Sym
         is CollectionShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
         is MapShape -> targetShape.asMapShape().get().canReachConstrainedShape(model, symbolProvider)
         is StructureShape -> targetShape.asStructureShape().get().canReachConstrainedShape(model, symbolProvider)
-        else -> false
+        else -> targetShape.isConstrained(symbolProvider)
     }
 
 fun MemberShape.requiresNewtype() =

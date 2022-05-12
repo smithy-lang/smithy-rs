@@ -128,7 +128,15 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, service)
         constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, service)
 
-        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, mode = CodegenMode.Server)
+        codegenContext = CodegenContext(
+            model,
+            symbolProvider,
+            service,
+            protocol,
+            settings,
+            mode = CodegenMode.Server,
+            unconstrainedShapeSymbolProvider
+        )
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
@@ -315,13 +323,6 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        check(!(shape.hasTrait<EnumTrait>() && shape.isConstrained(symbolProvider))) {
-            """
-            String shape $shape has an `enum` trait and another constraint trait. This is valid according to the Smithy 
-            spec v1 IDL, but it makes no sense: https://github.com/awslabs/smithy/issues/1121
-            """
-        }
-
         shape.getTrait<EnumTrait>()?.also { enum ->
             logger.info("[rust-server-codegen] Generating an enum $shape")
             rustCrate.useShapeWriter(shape) { writer ->
@@ -329,7 +330,16 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             }
         }
 
-        if (shape.isConstrained(symbolProvider)) {
+        if (shape.hasTrait<EnumTrait>() && shape.isConstrained(symbolProvider)) {
+            logger.warning(
+                """
+                String shape $shape has an `enum` trait and another constraint trait. This is valid according to the Smithy
+                spec v1 IDL, but it's unclear what the semantics are. In any case, the Smithy CLI should enforce the
+                constraints (which it currently does not), not each code generator.
+                See https://github.com/awslabs/smithy/issues/1121f for more information.
+                """.trimIndent()
+            )
+        } else if (shape.isConstrained(symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) { writer ->
                 PublicConstrainedStringGenerator(

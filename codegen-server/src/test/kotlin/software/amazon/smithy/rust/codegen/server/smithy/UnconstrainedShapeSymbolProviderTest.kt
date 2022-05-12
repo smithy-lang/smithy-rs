@@ -5,13 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.rustType
@@ -79,7 +79,7 @@ class UnconstrainedShapeSymbolProviderTest {
     }
 
     @Test
-    fun `it should throw if called with a shape that cannot reach a constrained shape`() {
+    fun `it should delegate to the base symbol provider if called with a shape that cannot reach a constrained shape`() {
         val model =
             """
             $baseModelString
@@ -97,9 +97,9 @@ class UnconstrainedShapeSymbolProviderTest {
         val symbolProvider = UnconstrainedShapeSymbolProvider(serverTestSymbolProvider(model, serviceShape), model, serviceShape)
 
         val listAShape = model.lookup<ListShape>("test#ListA")
+        val structureBShape = model.lookup<StructureShape>("test#StructureB")
 
-        shouldThrow<IllegalStateException> {
-            symbolProvider.toSymbol(listAShape)
-        }
+        symbolProvider.toSymbol(structureBShape).rustType().render() shouldBe "crate::model::StructureB"
+        symbolProvider.toSymbol(listAShape).rustType().render() shouldBe "std::vec::Vec<crate::model::StructureB>"
     }
 }

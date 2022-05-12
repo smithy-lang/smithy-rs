@@ -84,7 +84,7 @@ fun testCodegenContext(
     serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
     ShapeId.from("test#Protocol"),
     settings,
-    mode
+    mode,
 )
 
 private const val SmithyVersion = "1.0"

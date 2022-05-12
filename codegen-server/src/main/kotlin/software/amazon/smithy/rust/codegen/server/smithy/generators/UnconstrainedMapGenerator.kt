@@ -32,7 +32,7 @@ class UnconstrainedMapGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
-    constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
+    private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val writer: RustWriter,
     val shape: MapShape
@@ -111,10 +111,20 @@ class UnconstrainedMapGenerator(
             rust("type Error = $constraintViolationName;")
 
             rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
-                if (listOf(keyShape, valueShape).any { isValueConstrained(it) }) {
+                if (isKeyConstrained(keyShape) || isValueConstrained(valueShape)) {
+                    val resolveToNonPublicConstrainedValueType =
+                        isValueConstrained(valueShape) &&
+                        !valueShape.isConstrained(symbolProvider) &&
+                        !valueShape.isStructureShape
+                    val constrainedValueSymbol = if (resolveToNonPublicConstrainedValueType) {
+                        constrainedShapeSymbolProvider.toSymbol(valueShape)
+                    } else {
+                        symbolProvider.toSymbol(valueShape)
+                    }
+
                     rustTemplate(
                         """
-                        let res: Result<std::collections::HashMap<#{ConstrainedKeySymbol}, #{ConstrainedValueSymbol}>, Self::Error> = value.0
+                        let res: Result<std::collections::HashMap<#{KeySymbol}, #{ConstrainedValueSymbol}>, Self::Error> = value.0
                             .into_iter()
                             .map(|(k, v)| {
                                 use std::convert::TryInto;
@@ -125,9 +135,46 @@ class UnconstrainedMapGenerator(
                             .collect();
                         let hm = res?;
                         """,
-                        "ConstrainedKeySymbol" to symbolProvider.toSymbol(keyShape),
-                        "ConstrainedValueSymbol" to symbolProvider.toSymbol(valueShape),
+                        "KeySymbol" to symbolProvider.toSymbol(keyShape),
+                        "ConstrainedValueSymbol" to constrainedValueSymbol
                     )
+
+                    val constrainedValueTypeIsNotFinalType =
+                        resolveToNonPublicConstrainedValueType && shape.isConstrained(symbolProvider)
+                    if (constrainedValueTypeIsNotFinalType) {
+                        // The map is constrained. Its value shape reaches a constrained shape, but the value shape itself
+                        // is not directly constrained. The value shape must be an aggregate shape. But it is not a
+                        // structure shape. So it must be a collection or map shape. In this case the type for the value
+                        // shape that implements the `Constrained` trait _does not_ coincide with the regular type the user
+                        // is exposed to. The former will be the `pub(crate)` wrapper tuple type created by a
+                        // `Constrained*Generator`, whereas the latter will be an stdlib container type. Both types are
+                        // isomorphic though, and we can convert between them using `From`, so that's what we do here.
+                        //
+                        // As a concrete example of this particular case, consider the model:
+                        //
+                        // ```smithy
+                        // @length(min: 1)
+                        // map Map {
+                        //    key: String,
+                        //    value: List,
+                        // }
+                        //
+                        // list List {
+                        //     member: NiceString
+                        // }
+                        //
+                        // @length(min:1, max:69)
+                        // string NiceString
+                        // ```
+                        rustTemplate(
+                            """
+                            let hm: std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}> = 
+                                hm.into_iter().map(|(k, v)| (k, v.into())).collect();
+                            """,
+                            "KeySymbol" to symbolProvider.toSymbol(keyShape),
+                            "ValueSymbol" to symbolProvider.toSymbol(valueShape)
+                        )
+                    }
                 } else {
                     rust("let hm = value.0;")
                 }
@@ -135,7 +182,7 @@ class UnconstrainedMapGenerator(
                 if (shape.isConstrained(symbolProvider)) {
                     rust("Self::try_from(hm)")
                 } else {
-                    rust("Self(hm)")
+                    rust("Ok(Self(hm))")
                 }
             }
         }

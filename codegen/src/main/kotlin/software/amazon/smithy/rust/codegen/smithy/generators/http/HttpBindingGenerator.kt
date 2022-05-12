@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
@@ -86,10 +87,10 @@ public enum class HttpMessageType {
 class HttpBindingGenerator(
     private val protocol: Protocol,
     codegenContext: CodegenContext,
+    val symbolProvider: RustSymbolProvider,
     private val operationShape: OperationShape
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val symbolProvider = codegenContext.symbolProvider
     private val mode = codegenContext.mode
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape

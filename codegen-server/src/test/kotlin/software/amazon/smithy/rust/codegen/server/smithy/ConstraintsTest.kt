@@ -122,7 +122,7 @@ class ConstraintsTest {
 
     @Test
     fun `it should not detect unsupported constrained traits as constrained`() {
-        listOf(mapA, structAInt, structAString, myString).forEach {
+        listOf(structAInt, structAString, myString).forEach {
             it.isConstrained(symbolProvider) shouldBe false
         }
     }

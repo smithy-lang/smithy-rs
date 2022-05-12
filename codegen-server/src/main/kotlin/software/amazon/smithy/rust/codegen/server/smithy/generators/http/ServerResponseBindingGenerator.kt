@@ -18,7 +18,8 @@ class ServerResponseBindingGenerator(
     codegenContext: CodegenContext,
     operationShape: OperationShape
 ) {
-    private val httpBindingGenerator = HttpBindingGenerator(protocol, codegenContext, operationShape)
+    private val httpBindingGenerator =
+        HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape)
 
     fun generateAddHeadersFn(shape: Shape): RuntimeType? =
         httpBindingGenerator.generateAddHeadersFn(shape, HttpMessageType.RESPONSE)
