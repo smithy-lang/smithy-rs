@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use std::ffi::OsStr;
@@ -13,7 +13,7 @@ use anyhow::Result;
 
 const EXPECTED_CONTENTS: &[&str] = &[
     "Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.",
-    "SPDX-License-Identifier: Apache-2.0.",
+    "SPDX-License-Identifier: Apache-2.0",
 ];
 
 const NEEDS_HEADER: [&str; 5] = ["sh", "py", "rs", "kt", "ts"];
@@ -69,7 +69,7 @@ fn has_copyright_header(contents: &str) -> bool {
     for line in contents.lines().take(10) {
         match expected.peek() {
             Some(next) => {
-                if line.contains(*next) {
+                if line.trim().ends_with(*next) {
                     let _ = expected.next();
                 }
             }
@@ -86,12 +86,12 @@ mod test {
     #[test]
     fn has_license_header() {
         let valid = [
-            "// something else\n# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.\n# SPDX-License-Identifier: Apache-2.0.",
-            "# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.\n# SPDX-License-Identifier: Apache-2.0.",
-            "/*\n* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.\n* SPDX-License-Identifier: Apache-2.0.\n */",
+            "// something else\n# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.\n# SPDX-License-Identifier: Apache-2.0",
+            "# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.\n# SPDX-License-Identifier: Apache-2.0",
+            "/*\n* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.\n* SPDX-License-Identifier: Apache-2.0\n */",
         ];
 
-        let invalid = ["", "no license", "// something else\n# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.\n# SPDX-License-Identifier: Apache-3.0."];
+        let invalid = ["", "no license", "// something else\n# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.\n# SPDX-License-Identifier: Apache-3.0"];
 
         for license in valid {
             assert!(

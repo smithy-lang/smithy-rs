@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators
@@ -18,10 +18,10 @@ import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.lookup
 
-class ServerCombinedErrorGeneratorTest {
+class CombinedErrorGeneratorTest {
     private val baseModel = """
         namespace error
-        
+
         operation Greeting {
             errors: [InvalidGreeting, ComplexError, FooException]
         }
@@ -64,19 +64,19 @@ class ServerCombinedErrorGeneratorTest {
                     assert_eq!(error.code(), Some("InvalidGreeting"));
                     use aws_smithy_types::retry::ProvideErrorKind;
                     assert_eq!(error.retryable_error_kind(), Some(aws_smithy_types::retry::ErrorKind::ClientError));
-           
+
                     // Generate is_xyz methods for errors.
                     assert_eq!(error.is_invalid_greeting(), true);
                     assert_eq!(error.is_complex_error(), false);
-           
+
                     // Unhandled variants properly delegate message.
                     let error = GreetingError::generic(aws_smithy_types::Error::builder().message("hello").build());
                     assert_eq!(error.message(), Some("hello"));
-           
+
                     let error = GreetingError::unhandled("some other error");
                     assert_eq!(error.message(), None);
                     assert_eq!(error.code(), None);
-           
+
                     // Indicate the original name in the display output.
                     let error = FooError::builder().build();
                     assert_eq!(format!("{}", error), "FooError [FooException]")

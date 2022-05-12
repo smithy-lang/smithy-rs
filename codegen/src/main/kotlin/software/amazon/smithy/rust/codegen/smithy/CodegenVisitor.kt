@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy
@@ -72,7 +72,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
-            DefaultPublicModules
+            DefaultPublicModules,
+            codegenContext.settings.codegenConfig
         )
         httpGenerator = protocolGenerator.buildProtocolGenerator(codegenContext)
     }

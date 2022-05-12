@@ -21,7 +21,6 @@ aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 async-trait = "0.1"
-axum-core = "0.1"
 bytes = "1.1"
 futures-util = { version = "0.3", default-features = false }
 http = "0.2"

@@ -10,6 +10,10 @@ authors = ["Zelda Hessler <zhessler@amazon.com>"]
 # Having this here prevents this tool from being included in a higher-level workspace
 [workspace]
 
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
 [dependencies]
 anyhow = "1"
 clap = { version = "3.1.7", features = ["derive"] }

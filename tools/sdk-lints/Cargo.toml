@@ -6,10 +6,20 @@ publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
 [dependencies]
 anyhow = "1"
 cargo_toml = "0.10.1"
 clap = { version = "3.1.7", features = ["derive"]}
 toml = "0.5.8"
 serde = { version = "1", features = ["derive"]}
+serde_json = "1"
 lazy_static = "1.4.0"
+time = { version = "0.3.9", features = ["local-offset"]}
+ordinal = "0.3.2"
+
+[dev-dependencies]
+pretty_assertions = "1.2.1"

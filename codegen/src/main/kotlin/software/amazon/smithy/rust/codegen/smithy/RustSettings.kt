@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy
@@ -26,6 +26,7 @@ private const val MODULE_REPOSITORY = "moduleRepository"
 private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val LICENSE = "license"
 private const val EXAMPLES = "examples"
+private const val CUSTOMIZATION_CONFIG = "customizationConfig"
 const val CODEGEN_SETTINGS = "codegen"
 
 /**
@@ -43,6 +44,8 @@ data class CodegenConfig(
     val includeFluentClient: Boolean = true,
     val addMessageToErrors: Boolean = true,
     val formatTimeoutSeconds: Int = 20,
+    /** Generate comments in the generated code indicating where code was generated from */
+    val debugMode: Boolean = false,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
     val eventStreamAllowList: Set<String> = emptySet(),
 ) {
@@ -54,6 +57,7 @@ data class CodegenConfig(
                     node.get().getBooleanMemberOrDefault("includeFluentClient", true),
                     node.get().getBooleanMemberOrDefault("addMessageToErrors", true),
                     node.get().getNumberMemberOrDefault("formatTimeoutSeconds", 20).toInt(),
+                    node.get().getBooleanMemberOrDefault("debugMode", false),
                     node.get().getArrayMember("eventStreamAllowList")
                         .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
                         .orNull()?.toSet() ?: emptySet()
@@ -78,7 +82,8 @@ class RustSettings(
     val runtimeConfig: RuntimeConfig,
     val codegenConfig: CodegenConfig,
     val license: String?,
-    val examplesUri: String? = null
+    val examplesUri: String? = null,
+    val customizationConfig: ObjectNode? = null
 ) {
 
     /**
@@ -132,7 +137,8 @@ class RustSettings(
                     RUNTIME_CONFIG,
                     CODEGEN_SETTINGS,
                     EXAMPLES,
-                    LICENSE
+                    LICENSE,
+                    CUSTOMIZATION_CONFIG
                 )
             )
 
@@ -151,7 +157,8 @@ class RustSettings(
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
                 codegenConfig,
                 license = config.getStringMember(LICENSE).orNull()?.value,
-                examplesUri = config.getStringMember(EXAMPLES).orNull()?.value
+                examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
+                customizationConfig = config.getObjectMember(CUSTOMIZATION_CONFIG).orNull()
             )
         }
 

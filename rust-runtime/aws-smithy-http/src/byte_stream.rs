@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 //! ByteStream Abstractions
 //!
@@ -95,8 +95,33 @@
 //! }
 //! # }
 //! ```
+//!
+//! If you want more control over how the file is read, such as specifying the size of the buffer used to read the file
+//! or the length of the file, use an [`FsBuilder`](crate::byte_stream::FsBuilder).
+//!
+//! ```no_run
+//! # #[cfg(feature = "rt-tokio")]
+//! # {
+//! use aws_smithy_http::byte_stream::{ByteStream, Length};
+//! use std::path::Path;
+//! struct GetObjectInput {
+//!     body: ByteStream
+//! }
+//!
+//! async fn bytestream_from_file() -> GetObjectInput {
+//!     let bytestream = ByteStream::read_from().path("docs/some-large-file.csv")
+//!         .buffer_size(32_784)
+//!         .length(Length::Exact(123_456))
+//!         .build()
+//!         .await
+//!         .expect("valid path");
+//!     GetObjectInput { body: bytestream }
+//! }
+//! # }
+//! ```
 
 use crate::body::SdkBody;
+use crate::callback::BodyCallback;
 use bytes::Buf;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
@@ -110,6 +135,11 @@ use std::task::{Context, Poll};
 
 #[cfg(feature = "rt-tokio")]
 mod bytestream_util;
+#[cfg(feature = "rt-tokio")]
+pub use bytestream_util::Length;
+
+#[cfg(feature = "rt-tokio")]
+pub use self::bytestream_util::FsBuilder;
 
 /// Stream of binary data
 ///
@@ -239,6 +269,33 @@ impl ByteStream {
         self.0.collect().await.map_err(|err| Error(err))
     }
 
+    /// Returns a [`FsBuilder`](crate::byte_stream::FsBuilder), allowing you to build a `ByteStream` with
+    /// full control over how the file is read (eg. specifying the length of the file or the size of the buffer used to read the file).
+    /// ```no_run
+    /// # #[cfg(feature = "rt-tokio")]
+    /// # {
+    /// use aws_smithy_http::byte_stream::{ByteStream, Length};
+    ///
+    /// async fn bytestream_from_file() -> ByteStream {
+    ///     let bytestream = ByteStream::read_from()
+    ///         .path("docs/some-large-file.csv")
+    ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
+    ///         .buffer_size(32_784)
+    ///         // Specify the length of the file used (skips an additional call to retrieve the size)
+    ///         .length(Length::Exact(123_456))
+    ///         .build()
+    ///         .await
+    ///         .expect("valid path");
+    ///     bytestream
+    /// }
+    /// # }
+    /// ```
+    #[cfg(feature = "rt-tokio")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
+    pub fn read_from() -> FsBuilder {
+        FsBuilder::new()
+    }
+
     /// Create a ByteStream that streams data from the filesystem
     ///
     /// This function creates a retryable ByteStream for a given `path`. The returned ByteStream
@@ -251,6 +308,10 @@ impl ByteStream {
     ///
     /// Furthermore, a partial write MAY seek in the file and resume from the previous location.
     ///
+    /// Note: If you want more control, such as specifying the size of the buffer used to read the file
+    /// or the length of the file, use a [`FsBuilder`](crate::byte_stream::FsBuilder) as returned
+    /// from `ByteStream::read_from`
+    ///
     /// # Examples
     /// ```no_run
     /// use aws_smithy_http::byte_stream::ByteStream;
@@ -262,36 +323,29 @@ impl ByteStream {
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_path(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
-        let path = path.as_ref();
-        let path_buf = path.to_path_buf();
-        let sz = tokio::fs::metadata(path)
-            .await
-            .map_err(|err| Error(err.into()))?
-            .len();
-        let body_loader = move || {
-            SdkBody::from_dyn(http_body::combinators::BoxBody::new(
-                bytestream_util::PathBody::from_path(path_buf.as_path(), sz),
-            ))
-        };
-        Ok(ByteStream::new(SdkBody::retryable(body_loader)))
+        FsBuilder::new().path(path).build().await
     }
 
     /// Create a ByteStream from a file
     ///
     /// NOTE: This will NOT result in a retryable ByteStream. For a ByteStream that can be retried in the case of
     /// upstream failures, use [`ByteStream::from_path`](ByteStream::from_path)
+    #[deprecated(
+        since = "0.40.0",
+        note = "Prefer the more extensible ByteStream::read_from() API"
+    )]
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_file(file: tokio::fs::File) -> Result<Self, Error> {
-        let sz = file
-            .metadata()
-            .await
-            .map_err(|err| Error(err.into()))?
-            .len();
-        let body = SdkBody::from_dyn(http_body::combinators::BoxBody::new(
-            bytestream_util::PathBody::from_file(file, sz),
-        ));
-        Ok(ByteStream::new(body))
+        FsBuilder::new().file(file).build().await
+    }
+
+    /// Set a callback on this `ByteStream`. The callback's methods will be called at various points
+    /// throughout this `ByteStream`'s life cycle. See the [`BodyCallback`](BodyCallback) trait for
+    /// more information.
+    pub fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
+        self.0.with_body_callback(body_callback);
+        self
     }
 }
 
@@ -416,10 +470,11 @@ struct Inner<B> {
 }
 
 impl<B> Inner<B> {
-    pub fn new(body: B) -> Self {
+    fn new(body: B) -> Self {
         Self { body }
     }
-    pub async fn collect(self) -> Result<AggregatedBytes, B::Error>
+
+    async fn collect(self) -> Result<AggregatedBytes, B::Error>
     where
         B: http_body::Body<Data = Bytes>,
     {
@@ -430,6 +485,13 @@ impl<B> Inner<B> {
             output.push(buf?);
         }
         Ok(AggregatedBytes(output))
+    }
+}
+
+impl Inner<SdkBody> {
+    fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
+        self.body.with_callback(body_callback);
+        self
     }
 }
 

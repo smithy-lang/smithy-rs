@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
@@ -10,17 +10,17 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.smithy.protocols.RestXml
 
 /*
- * RestJson1 server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
- * with RestJson1 specific configurations.
+ * RestXml server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
+ * with RestXml specific configurations.
  */
-class ServerRestJsonFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator> {
-    override fun protocol(codegenContext: CodegenContext): Protocol = RestJson(codegenContext)
+class ServerRestXmlFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator> {
+    override fun protocol(codegenContext: CodegenContext): Protocol = RestXml(codegenContext)
 
     override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpBoundProtocolGenerator =
-        ServerHttpBoundProtocolGenerator(codegenContext, RestJson(codegenContext))
+        ServerHttpBoundProtocolGenerator(codegenContext, RestXml(codegenContext))
 
     override fun transformModel(model: Model): Model = model
 

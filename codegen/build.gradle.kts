@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
@@ -120,9 +120,5 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories {
-        maven {
-            url = uri("$buildDir/repository")
-        }
-    }
+    repositories { maven { url = uri("$buildDir/repository") } }
 }

@@ -12,13 +12,60 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.56.1 to 1.58.1 per our \"two versions behind\" policy."
-references = ["smithy-rs#1318"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "Velfi"
+message = "Log a debug event when a retry is going to be peformed"
+references = ["smithy-rs#1352"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
 
 [[smithy-rs]]
-message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.56.1 to 1.58.1 per our \"two versions behind\" policy."
-references = ["smithy-rs#1318"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+message = "Log a debug event when a retry is going to be peformed"
+references = ["smithy-rs#1352"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+The `aws_smithy_http::byte_stream::bytestream_util::FsBuilder` has been updated to allow for easier creation of
+multi-part requests.
+
+- `FsBuilder::offset` is a new method allowing users to specify an offset to start reading a file from.
+- `FsBuilder::file_size` has been reworked into `FsBuilder::length` and is now used to specify the amount of data to read.
+
+With these two methods, it's now simple to create a `ByteStream` that will read a single "chunk" of a file. The example
+below demonstrates how you could divide a single `File` into consecutive chunks to create multiple `ByteStream`s.
+
+```rust
+let example_file_path = Path::new("/example.txt");
+let example_file_size = tokio::fs::metadata(&example_file_path).await.unwrap().len();
+let chunks = 6;
+let chunk_size = file_size / chunks;
+let mut byte_streams = Vec::new();
+
+for i in 0..chunks {
+    let length = if i == chunks - 1 {
+        // If we're on the last chunk, the length to read might be less than a whole chunk.
+        // We substract the size of all previous chunks from the total file size to get the
+        // size of the final chunk.
+        file_size - (i * chunk_size)
+    } else {
+        chunk_size
+    };
+
+    let byte_stream = ByteStream::read_from()
+        .path(&file_path)
+        .offset(i * chunk_size)
+        .length(length)
+        .build()
+        .await?;
+
+    byte_streams.push(byte_stream);
+}
+
+for chunk in byte_streams {
+    // Make requests to a service
+}
+```
+"""
+references = ["aws-sdk-rust#494", "aws-sdk-rust#519"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "Velfi"

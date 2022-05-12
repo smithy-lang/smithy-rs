@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy
@@ -290,7 +290,15 @@ class SymbolVisitor(
     }
 
     override fun operationShape(shape: OperationShape): Symbol {
-        return symbolBuilder(shape, RustType.Opaque(shape.contextName().capitalize())).locatedIn(Operations).build()
+        return symbolBuilder(
+            shape,
+            RustType.Opaque(
+                shape.contextName()
+                    .replaceFirstChar { it.uppercase() }
+            )
+        )
+            .locatedIn(Operations)
+            .build()
     }
 
     override fun resourceShape(shape: ResourceShape?): Symbol {

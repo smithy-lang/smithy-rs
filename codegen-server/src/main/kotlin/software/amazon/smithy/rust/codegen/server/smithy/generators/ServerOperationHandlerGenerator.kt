@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
@@ -38,7 +38,6 @@ class ServerOperationHandlerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
-        "AxumCore" to ServerCargoDependency.AxumCore.asType(),
         "PinProjectLite" to ServerCargoDependency.PinProjectLite.asType(),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
@@ -106,9 +105,9 @@ class ServerOperationHandlerGenerator(
                     """
                     type Sealed = #{ServerOperationHandler}::sealed::Hidden;
                     async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::body::BoxBody> {
-                        let mut req = #{AxumCore}::extract::RequestParts::new(req);
-                        use #{AxumCore}::extract::FromRequest;
-                        use #{AxumCore}::response::IntoResponse;
+                        let mut req = #{SmithyHttpServer}::request::RequestParts::new(req);
+                        use #{SmithyHttpServer}::request::FromRequest;
+                        use #{SmithyHttpServer}::response::IntoResponse;
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
                             Err(runtime_error) => {
