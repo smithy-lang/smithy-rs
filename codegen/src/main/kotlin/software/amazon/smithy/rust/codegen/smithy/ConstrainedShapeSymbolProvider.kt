@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
-import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -21,11 +21,6 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-fun constrainedTypeNameForListOrMapShape(shape: Shape, serviceShape: ServiceShape): String {
-    check(shape.isListShape || shape.isMapShape)
-    return "${shape.id.getName(serviceShape).toPascalCase()}Constrained"
-}
-
 class ConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
@@ -34,9 +29,9 @@ class ConstrainedShapeSymbolProvider(
     private val nullableIndex = NullableIndex.of(model)
 
     private fun constrainedSymbolForCollectionOrMapShape(shape: Shape): Symbol {
-        check(shape is ListShape || shape is MapShape)
+        check(shape is CollectionShape || shape is MapShape)
 
-        val name = constrainedTypeNameForListOrMapShape(shape, serviceShape)
+        val name = constrainedTypeNameForCollectionOrMapShape(shape, serviceShape)
         val namespace = "crate::${Constrained.namespace}::${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}"
         val rustType = RustType.Opaque(name, namespace)
         return Symbol.builder()
@@ -68,32 +63,23 @@ class ConstrainedShapeSymbolProvider(
             symbol.makeRustBoxed()
         } else symbol
 
+    private fun errorMessage(shape: Shape) =
+        "This symbol provider was called with $shape. However, it can only be called with a shape that is (transitively) constrained"
+
     override fun toSymbol(shape: Shape): Symbol =
         when (shape) {
-            is ListShape -> {
-                check(shape.canReachConstrainedShape(model, base))
+            is CollectionShape -> {
+                require(shape.canReachConstrainedShape(model, base)) { errorMessage(shape) }
 
-                if (shape.isConstrained(base)) {
-//                    TODO("The `length` constraint trait on list shapes is currently not implemented")
-                    constrainedSymbolForCollectionOrMapShape(shape)
-                } else {
-                    constrainedSymbolForCollectionOrMapShape(shape)
-                }
+                constrainedSymbolForCollectionOrMapShape(shape)
             }
             is MapShape -> {
-                check(shape.canReachConstrainedShape(model, base))
+                require(shape.canReachConstrainedShape(model, base)) { errorMessage(shape) }
 
-                if (shape.isConstrained(base)) {
-//                    TODO("The `length` constraint trait on map shapes is currently not implemented")
-                    constrainedSymbolForCollectionOrMapShape(shape)
-                } else {
-                    constrainedSymbolForCollectionOrMapShape(shape)
-                }
+                constrainedSymbolForCollectionOrMapShape(shape)
             }
             is MemberShape -> {
-                check(shape.canReachConstrainedShape(model, base)) {
-                    shape.id
-                }
+                require(shape.canReachConstrainedShape(model, base)) { errorMessage(shape) }
                 check(model.expectShape(shape.container).isStructureShape)
 
                 if (shape.requiresNewtype()) {
@@ -132,4 +118,9 @@ class ConstrainedShapeSymbolProvider(
                 base.toSymbol(shape)
             }
         }
+}
+
+fun constrainedTypeNameForCollectionOrMapShape(shape: Shape, serviceShape: ServiceShape): String {
+    check(shape is CollectionShape || shape is MapShape)
+    return "${shape.id.getName(serviceShape).toPascalCase()}Constrained"
 }

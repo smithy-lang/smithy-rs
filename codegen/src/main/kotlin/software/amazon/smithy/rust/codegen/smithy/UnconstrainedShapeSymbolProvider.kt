@@ -7,10 +7,9 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
@@ -18,11 +17,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
-
-fun unconstrainedTypeNameForListOrMapShape(shape: Shape, serviceShape: ServiceShape): String {
-    check(shape.isListShape || shape.isMapShape)
-    return "${shape.id.getName(serviceShape).toPascalCase()}Unconstrained"
-}
 
 /**
  * The [UnconstrainedShapeSymbolProvider] returns, _for a given constrained
@@ -73,10 +67,11 @@ class UnconstrainedShapeSymbolProvider(
     private val model: Model,
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
-    private fun unconstrainedSymbolForListOrMapShape(shape: Shape): Symbol {
-        check(shape is ListShape || shape is MapShape)
 
-        val name = unconstrainedTypeNameForListOrMapShape(shape, serviceShape)
+    private fun unconstrainedSymbolForCollectionOrMapShape(shape: Shape): Symbol {
+        check(shape is CollectionShape || shape is MapShape)
+
+        val name = unconstrainedTypeNameForCollectionOrMapShape(shape, serviceShape)
         val namespace = "crate::${Unconstrained.namespace}::${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}"
         val rustType = RustType.Opaque(name, namespace)
         return Symbol.builder()
@@ -89,20 +84,16 @@ class UnconstrainedShapeSymbolProvider(
 
     override fun toSymbol(shape: Shape): Symbol =
         when (shape) {
-            is SetShape -> {
-//                TODO("Set shapes can only contain some simple shapes, but constraint traits on simple shapes are not implemented")
-                base.toSymbol(shape)
-            }
-            is ListShape -> {
+            is CollectionShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
-                    unconstrainedSymbolForListOrMapShape(shape)
+                    unconstrainedSymbolForCollectionOrMapShape(shape)
                 } else {
                     base.toSymbol(shape)
                 }
             }
             is MapShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
-                    unconstrainedSymbolForListOrMapShape(shape)
+                    unconstrainedSymbolForCollectionOrMapShape(shape)
                 } else {
                     base.toSymbol(shape)
                 }
@@ -114,7 +105,12 @@ class UnconstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
-            // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Simple shapes can have constraint traits.
+            // TODO Arm for `MemberShape`s.
             else -> base.toSymbol(shape)
         }
+}
+
+fun unconstrainedTypeNameForCollectionOrMapShape(shape: Shape, serviceShape: ServiceShape): String {
+    check(shape is CollectionShape || shape is MapShape)
+    return "${shape.id.getName(serviceShape).toPascalCase()}Unconstrained"
 }

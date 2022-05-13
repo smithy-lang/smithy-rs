@@ -14,10 +14,10 @@ service SimpleService {
 
 @http(uri: "/operation", method: "GET")
 operation AnOperation {
-    input: RecursiveShapesInputOutput,
-    output: RecursiveShapesInputOutput,
-    // input: AnOperationInput,
-    // output: AnOperationOutput,
+    // input: RecursiveShapesInputOutput,
+    // output: RecursiveShapesInputOutput,
+    input: AnOperationInput,
+    output: AnOperationOutput,
     // errors: [MyError]
 }
 
@@ -45,13 +45,15 @@ structure ConA {
 
     // conBMap: ConBMap
 
-    normalString: NormalString,
-    lengthString: LengthString,
-    playerAction: PlayerAction,
-    myEnum: MyEnum
+    // normalString: NormalString,
+    // lengthString: LengthString,
+    // playerAction: PlayerAction,
+    // myEnum: MyEnum
 
     // @length(min:4, max:6)
     // list: LengthList,
+
+    set: LengthStringSet
 }
 
 // @length(min:2, max:8)
@@ -95,6 +97,12 @@ structure DirectedAction {
     }
 ])
 string MyEnum
+
+// A set that is not directly constrained, but that has a member that is. There
+// is no such example in any of the other test models!
+set LengthStringSet {
+    member: LengthString
+}
 
 // structure ConB {
 //     @required

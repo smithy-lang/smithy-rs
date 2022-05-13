@@ -11,6 +11,7 @@ import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeVisitor
 import software.amazon.smithy.model.shapes.StringShape
@@ -19,14 +20,14 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedListGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedCollectionShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PublicConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PublicConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
-import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedListGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -244,7 +245,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         ) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for list $shape")
             rustCrate.withModule(unconstrainedModule) { writer ->
-                UnconstrainedListGenerator(
+                UnconstrainedCollectionGenerator(
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
@@ -257,7 +258,40 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
 
             logger.info("[rust-server-codegen] Generating a constrained type for list $shape")
             rustCrate.withModule(constrainedModule) { writer ->
-                ConstrainedListGenerator(
+                ConstrainedCollectionShape(
+                    model,
+                    symbolProvider,
+                    unconstrainedShapeSymbolProvider,
+                    constrainedShapeSymbolProvider,
+                    writer,
+                    shape
+                ).render()
+            }
+        }
+    }
+
+    override fun setShape(shape: SetShape) {
+        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
+                model,
+                symbolProvider
+            )
+        ) {
+            logger.info("[rust-server-codegen] Generating an unconstrained type for set $shape")
+            rustCrate.withModule(unconstrainedModule) { writer ->
+                UnconstrainedCollectionGenerator(
+                    model,
+                    symbolProvider,
+                    unconstrainedShapeSymbolProvider,
+                    constrainedShapeSymbolProvider,
+                    constraintViolationSymbolProvider,
+                    writer,
+                    shape
+                ).render()
+            }
+
+            logger.info("[rust-server-codegen] Generating a constrained type for set $shape")
+            rustCrate.withModule(constrainedModule) { writer ->
+                ConstrainedCollectionShape(
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,

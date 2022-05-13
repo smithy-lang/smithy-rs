@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.lookup
 
-class UnconstrainedListGeneratorTest {
+class UnconstrainedCollectionGeneratorTest {
     @Test
     fun `it should generate unconstrained lists`() {
         val model =
@@ -74,7 +74,7 @@ class UnconstrainedListGeneratorTest {
         val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
         project.withModule(RustModule.private("constrained")) { writer ->
             listOf(listA, listB).forEach {
-                ConstrainedListGenerator(
+                ConstrainedCollectionShape(
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
@@ -87,7 +87,7 @@ class UnconstrainedListGeneratorTest {
         project.withModule(RustModule.private("unconstrained")) { writer ->
             val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
             listOf(listA, listB).forEach {
-                UnconstrainedListGenerator(
+                UnconstrainedCollectionGenerator(
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
@@ -132,10 +132,7 @@ class UnconstrainedListGeneratorTest {
                     let actual: Vec<Vec<crate::model::StructureC>> = 
                         crate::constrained::list_a_constrained::ListAConstrained::try_from(list_a_unconstrained).unwrap().into();
                         
-                    assert_eq!(
-                        expected,
-                        actual
-                    );
+                    assert_eq!(expected, actual);
                 """
             )
 

@@ -7,10 +7,9 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -25,7 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.contextName
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.isConstrained
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.unconstrainedTypeNameForListOrMapShape
+import software.amazon.smithy.rust.codegen.smithy.unconstrainedTypeNameForCollectionOrMapShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 // TODO Unit tests.
@@ -36,11 +35,11 @@ class ConstraintViolationSymbolProvider(
 ) : WrappingSymbolProvider(base) {
     private val constraintViolationName = "ConstraintViolation"
 
-    private fun unconstrainedSymbolForListOrMapShape(shape: Shape): Symbol {
-        check(shape is ListShape || shape is MapShape)
+    private fun constraintViolationSymbolForCollectionOrMapShape(shape: Shape): Symbol {
+        check(shape is CollectionShape || shape is MapShape)
 
         // TODO Move ConstraintViolation type to the constrained namespace.
-        val unconstrainedTypeName = unconstrainedTypeNameForListOrMapShape(shape, serviceShape)
+        val unconstrainedTypeName = unconstrainedTypeNameForCollectionOrMapShape(shape, serviceShape)
         val namespace = "crate::${Unconstrained.namespace}::${RustReservedWords.escapeIfNeeded(unconstrainedTypeName.toSnakeCase())}"
         val rustType = RustType.Opaque(constraintViolationName, namespace)
         return Symbol.builder()
@@ -53,29 +52,15 @@ class ConstraintViolationSymbolProvider(
 
     override fun toSymbol(shape: Shape): Symbol =
         when (shape) {
-            is SetShape -> {
-//                TODO("Set shapes can only contain some simple shapes, but constraint traits on simple shapes are not implemented")
-                base.toSymbol(shape)
-            }
-            is ListShape -> {
+            is CollectionShape -> {
                 check(shape.canReachConstrainedShape(model, base))
 
-                if (shape.isConstrained(base)) {
-//                    TODO("The `length` constraint trait on list shapes is currently not implemented")
-                    unconstrainedSymbolForListOrMapShape(shape)
-                } else {
-                    unconstrainedSymbolForListOrMapShape(shape)
-                }
+                constraintViolationSymbolForCollectionOrMapShape(shape)
             }
             is MapShape -> {
                 check(shape.canReachConstrainedShape(model, base))
 
-                if (shape.isConstrained(base)) {
-//                    TODO("The `length` constraint trait on map shapes is currently not implemented")
-                    unconstrainedSymbolForListOrMapShape(shape)
-                } else {
-                    unconstrainedSymbolForListOrMapShape(shape)
-                }
+                constraintViolationSymbolForCollectionOrMapShape(shape)
             }
             is StructureShape -> {
                 check(shape.canReachConstrainedShape(model, base))

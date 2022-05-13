@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
@@ -21,13 +20,13 @@ import software.amazon.smithy.rust.codegen.smithy.isConstrained
 
 // TODO Docs
 // TODO Unit tests
-class ConstrainedListGenerator(
+class ConstrainedCollectionShape(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
     val writer: RustWriter,
-    val shape: ListShape
+    val shape: CollectionShape
 ) {
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
@@ -59,7 +58,7 @@ class ConstrainedListGenerator(
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
-                pub(crate) struct $name(pub(crate) Vec<#{InnerConstrainedSymbol}>);
+                pub(crate) struct $name(pub(crate) std::vec::Vec<#{InnerConstrainedSymbol}>);
                 
                 impl #{ConstrainedTrait} for $name  {
                     type Unconstrained = #{UnconstrainedSymbol};

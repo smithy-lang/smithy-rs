@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
@@ -19,14 +19,14 @@ import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
 
 // TODO Docs
-class UnconstrainedListGenerator(
+class UnconstrainedCollectionGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val writer: RustWriter,
-    val shape: ListShape
+    val shape: CollectionShape
 ) {
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
@@ -45,7 +45,7 @@ class UnconstrainedListGenerator(
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
-                pub(crate) struct $name(pub(crate) Vec<#{InnerUnconstrainedSymbol}>);
+                pub(crate) struct $name(pub(crate) std::vec::Vec<#{InnerUnconstrainedSymbol}>);
                 
                 impl From<$name> for #{MaybeConstrained} {
                     fn from(value: $name) -> Self {
