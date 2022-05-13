@@ -14,11 +14,11 @@ service SimpleService {
 
 @http(uri: "/operation", method: "GET")
 operation AnOperation {
-    // input: RecursiveShapesInputOutput,
-    // output: RecursiveShapesInputOutput,
-    input: AnOperationInput,
-    output: AnOperationOutput,
-    /* errors: [MyError] */
+    input: RecursiveShapesInputOutput,
+    output: RecursiveShapesInputOutput,
+    // input: AnOperationInput,
+    // output: AnOperationOutput,
+    // errors: [MyError]
 }
 
 structure AnOperationInput {
@@ -106,19 +106,19 @@ string MyEnum
 //     optInt: Integer
 // }
 
-// structure RecursiveShapesInputOutput {
-//     nested: RecursiveShapesInputOutputNested1
-// }
-//
-// structure RecursiveShapesInputOutputNested1 {
-//     @required
-//     recursiveMember: RecursiveShapesInputOutputNested2
-// }
-//
-// structure RecursiveShapesInputOutputNested2 {
-//     @required
-//     recursiveMember: RecursiveShapesInputOutputNested1,
-// }
+structure RecursiveShapesInputOutput {
+    nested: RecursiveShapesInputOutputNested1
+}
+
+structure RecursiveShapesInputOutputNested1 {
+    @required
+    recursiveMember: RecursiveShapesInputOutputNested2
+}
+
+structure RecursiveShapesInputOutputNested2 {
+    @required
+    recursiveMember: RecursiveShapesInputOutputNested1,
+}
 
 // list ValidList {
 //     member: RecursiveShapesInputOutput

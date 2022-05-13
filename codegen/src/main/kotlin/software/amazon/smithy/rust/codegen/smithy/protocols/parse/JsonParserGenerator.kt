@@ -48,6 +48,7 @@ import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.deserializeFunctionName
+import software.amazon.smithy.rust.codegen.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -241,7 +242,8 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.deserializeMember(memberShape: MemberShape) {
-        when (val target = model.expectShape(memberShape.target)) {
+        val target = model.expectShape(memberShape.target)
+        when (target) {
             is StringShape -> deserializeString(target)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
             is NumberShape -> deserializeNumber(target)
@@ -256,8 +258,8 @@ class JsonParserGenerator(
         }
         val symbol = symbolProvider.toSymbol(memberShape)
         if (symbol.isRustBoxed()) {
-            if (mode == CodegenMode.Server) {
-                // Before boxing, convert into `Validated`.
+            if (mode == CodegenMode.Server && memberShape.targetCanReachConstrainedShape(model, symbolProvider)) {
+                // Before boxing, convert into `MaybeConstrained` if the target can reach a constrained shape.
                 rust(".map(|x| x.into())")
             }
             rust(".map(Box::new)")

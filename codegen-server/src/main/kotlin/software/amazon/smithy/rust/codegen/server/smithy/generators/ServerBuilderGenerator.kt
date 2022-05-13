@@ -221,12 +221,22 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         val hasBox = symbol.mapRustType { it.stripOuter<RustType.Option>() }.isRustBoxed()
+        val wrapInMaybeConstrained = takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)
 
         writer.documentShape(member, model)
+        if (hasBox && wrapInMaybeConstrained) {
+            // In the case of recursive shapes, the member might be boxed. If so, and the member is also constrained, the
+            // implementation of this function needs to immediately unbox the value to wrap it in `MaybeConstrained`,
+            // and then re-box. Clippy warns us that we could have just taken in an unboxed value to avoid this round-trip
+            // to the heap. However, that will make the builder take in a value whose type does not exactly match the
+            // shape member's type.
+            // We don't want to introduce API asymmetry just for this particular case, so we disable the lint.
+            Attribute.Custom("allow(clippy::boxed_local)").render(writer)
+        }
         writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
-                if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
+                if (wrapInMaybeConstrained) {
                     val maybeConstrainedConstrained = "${symbol.wrapMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
                     val constrainedTypeHoldsFinalType = model.expectShape(member.target).isStructureShape ||
                             memberHasConstraintTraitOrTargetHasConstraintTrait(member)
