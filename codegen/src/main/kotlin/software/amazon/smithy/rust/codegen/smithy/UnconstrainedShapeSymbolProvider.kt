@@ -105,6 +105,9 @@ class UnconstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
+//            is MemberShape -> {
+//                TODO("Constraint traits on member shape not implemented yet")
+//            }
             // TODO Arm for `MemberShape`s.
             else -> base.toSymbol(shape)
         }

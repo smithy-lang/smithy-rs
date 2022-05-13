@@ -53,9 +53,12 @@ class ConstrainedMapGenerator(
             symbolProvider.toSymbol(valueShape)
         }
 
-        // The converters are only needed when the constrained type is `pub(crate)`, for the server builder function
-        // member function to work.
-        // Note that unless the map holds an aggregate shape as its value shape, the `.into()` calls are useless.
+        // Unless the map holds an aggregate shape as its value shape whose symbol's type is _not_ `pub(crate)`, the
+        // `.into()` calls are useless.
+        // See the comment in [ConstrainedCollectionShape] for a more detailed explanation.
+        val innerNeedsConstraining =
+            !valueShape.isDirectlyConstrained(symbolProvider) && (valueShape is CollectionShape || valueShape.isMapShape)
+
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
                 """
@@ -67,14 +70,22 @@ class ConstrainedMapGenerator(
                 }
                 
                 impl From<#{Symbol}> for $name {
-                    fn from(hm: #{Symbol}) -> Self {
-                        Self(hm.into_iter().map(|(k, v)| (k, v.into())).collect())
+                    fn from(v: #{Symbol}) -> Self {
+                        ${ if (innerNeedsConstraining) {
+                            "Self(v.into_iter().map(|(k, v)| (k, v.into())).collect())"
+                        } else {
+                            "Self(v)"
+                        } }
                     }
                 }
 
                 impl From<$name> for #{Symbol} {
-                    fn from(wrapper: $name) -> Self {
-                        wrapper.0.into_iter().map(|(k, v)| (k, v.into())).collect()
+                    fn from(v: $name) -> Self {
+                        ${ if (innerNeedsConstraining) {
+                            "v.0.into_iter().map(|(k, v)| (k, v.into())).collect()"
+                        } else {
+                            "v.0"
+                        } }
                     }
                 }
                 """,

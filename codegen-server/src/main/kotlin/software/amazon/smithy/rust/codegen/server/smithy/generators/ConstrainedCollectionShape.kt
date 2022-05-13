@@ -51,7 +51,7 @@ class ConstrainedCollectionShape(
         // generated code a little bit simpler.
         //
         // [`useless_conversion`]: https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion.
-        val targetNeedsConstraining =
+        val innerNeedsConstraining =
             !innerShape.isDirectlyConstrained(symbolProvider) && (innerShape is CollectionShape || innerShape.isMapShape)
 
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
@@ -66,7 +66,7 @@ class ConstrainedCollectionShape(
                 
                 impl From<#{Symbol}> for $name {
                     fn from(v: #{Symbol}) -> Self {
-                        ${ if (targetNeedsConstraining) {
+                        ${ if (innerNeedsConstraining) {
                             "Self(v.into_iter().map(|item| item.into()).collect())"
                         } else {
                             "Self(v)"
@@ -76,7 +76,7 @@ class ConstrainedCollectionShape(
 
                 impl From<$name> for #{Symbol} {
                     fn from(v: $name) -> Self {
-                        ${ if (targetNeedsConstraining) {
+                        ${ if (innerNeedsConstraining) {
                             "v.0.into_iter().map(|item| item.into()).collect()"
                         } else {
                             "v.0"

@@ -53,7 +53,15 @@ structure ConA {
     // @length(min:4, max:6)
     // list: LengthList,
 
-    set: LengthStringSet
+    //set: LengthStringSet,
+
+    @httpPrefixHeaders("X-Foo-")
+    headerMap: HeaderMap
+}
+
+map HeaderMap {
+    key: LengthString,
+    value: LengthString
 }
 
 // @length(min:2, max:8)
