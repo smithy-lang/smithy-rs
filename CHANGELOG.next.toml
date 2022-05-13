@@ -69,3 +69,9 @@ for chunk in byte_streams {
 references = ["aws-sdk-rust#494", "aws-sdk-rust#519"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Update generated crates to Rust 2021"
+references = ["smithy-rs#1332"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "82marbag"
