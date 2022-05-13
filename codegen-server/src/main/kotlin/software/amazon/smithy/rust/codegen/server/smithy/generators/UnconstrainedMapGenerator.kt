@@ -128,8 +128,8 @@ class UnconstrainedMapGenerator(
                             .into_iter()
                             .map(|(k, v)| {
                                 use std::convert::TryInto;
-                                ${if (isKeyConstrained(keyShape)) "let k = k.try_into().map_err(|err| Self::Error::Key(err))?;" else ""}
-                                ${if (isValueConstrained(valueShape)) "let v = v.try_into().map_err(|err| Self::Error::Value(err))?;" else ""}
+                                ${if (isKeyConstrained(keyShape)) "let k = k.try_into().map_err(Self::Error::Key)?;" else ""}
+                                ${if (isValueConstrained(valueShape)) "let v = v.try_into().map_err(Self::Error::Value)?;" else ""}
                                 Ok((k, v))
                             })
                             .collect();

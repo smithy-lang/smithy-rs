@@ -45,17 +45,56 @@ structure ConA {
 
     // conBMap: ConBMap
 
-    @length(min:4, max:6)
-    list: LengthList,
+    normalString: NormalString,
+    lengthString: LengthString,
+    playerAction: PlayerAction,
+    myEnum: MyEnum
+
+    // @length(min:4, max:6)
+    // list: LengthList,
 }
 
-@length(min:2, max:8)
-list LengthList {
-    member: LengthString
-}
+// @length(min:2, max:8)
+// list LengthList {
+//     member: LengthString
+// }
 
 @length(min:2, max:8)
 string LengthString
+
+string NormalString
+
+union PlayerAction {
+    /// Quit the game.
+    quit: Unit,
+
+    /// Move in a specific direction.
+    move: DirectedAction,
+
+    /// Jump in a specific direction.
+    jump: DirectedAction
+}
+
+structure DirectedAction {
+    @required
+    direction: Integer
+}
+
+@enum([
+    {
+        value: "t2.nano",
+        name: "T2_NANO",
+    },
+    {
+        value: "t2.micro",
+        name: "T2_MICRO",
+    },
+    {
+        value: "m256.mega",
+        name: "M256_MEGA",
+    }
+])
+string MyEnum
 
 // structure ConB {
 //     @required

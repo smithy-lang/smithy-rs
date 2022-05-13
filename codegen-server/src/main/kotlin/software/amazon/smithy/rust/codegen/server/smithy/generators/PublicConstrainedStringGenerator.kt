@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
-import java.util.*
 
 // TODO Docs
 // TODO Unit tests
@@ -37,16 +36,12 @@ class PublicConstrainedStringGenerator(
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
-        val minCondition = if (lengthTrait.min.isPresent && lengthTrait.min.get().toInt() > 0) {
-            lengthTrait.min.map { "$it <= length" }
-        } else Optional.empty()
-        val maxCondition = lengthTrait.max.map { "length <= $it" }
-        val condition = if (minCondition.isPresent && maxCondition.isPresent) {
-            "${minCondition.get()} && ${maxCondition.get()}"
-        } else if (minCondition.isPresent) {
-            minCondition.get()
+        val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
+            "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
+        } else if (lengthTrait.min.isPresent) {
+            "${lengthTrait.min.get()} <= length"
         } else {
-            maxCondition.get()
+            "length <= ${lengthTrait.max.get()}"
         }
 
         // TODO Docs for everything.

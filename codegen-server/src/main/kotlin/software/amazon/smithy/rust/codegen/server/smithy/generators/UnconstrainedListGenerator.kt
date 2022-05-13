@@ -68,8 +68,8 @@ class UnconstrainedListGenerator(
                                 inner.try_into()
                             })
                             .collect();
-                        res.map(|inner| Self(inner))   
-                           .map_err(|err| ConstraintViolation(err))
+                        res.map(Self)   
+                           .map_err(ConstraintViolation)
                     }
                 }
                 """,

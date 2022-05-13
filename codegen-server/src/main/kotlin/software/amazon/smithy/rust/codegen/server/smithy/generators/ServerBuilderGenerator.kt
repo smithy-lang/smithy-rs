@@ -234,7 +234,7 @@ class ServerBuilderGenerator(
                     var varExpr = if (symbol.isOptional()) "v" else "input"
                     if (hasBox) varExpr = "*$varExpr"
                     if (!constrainedTypeHoldsFinalType) varExpr = "($varExpr).into()"
-                    conditionalBlock("input.map(|v| ", ")", conditional = symbol.isOptional()) {
+                    conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
                         conditionalBlock("Box::new(", ")", conditional = hasBox) {
                             rust("$maybeConstrainedConstrained($varExpr)")
                         }
@@ -494,7 +494,7 @@ class ServerBuilderGenerator(
                                 })
                                 .map(|res| 
                                     res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.into())" }
-                                       .map_err(|err| ConstraintViolation::${constraintViolation.name()}(err))
+                                       .map_err(ConstraintViolation::${constraintViolation.name()})
                                 )
                                 .transpose()?
                                 """,

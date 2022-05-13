@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -16,6 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.smithy.isConstrained
 
 // TODO Docs
 // TODO Unit tests
@@ -38,9 +40,21 @@ class ConstrainedListGenerator(
         val innerShape = model.expectShape(shape.member.target)
         val innerConstrainedSymbol = constrainedShapeSymbolProvider.toSymbol(innerShape)
 
-        // The converters are only needed when the constrained type is `pub(crate)`, for the server builder function
-        // member function to work.
-        // Note that unless the list holds an aggregate shape, the `.into()` calls are useless.
+        // If the target member shape is itself _not_ directly constrained, and is an aggregate non-Structure shape,
+        // then its corresponding constrained type is the `pub(crate)` wrapper tuple type, which needs converting into
+        // the public type the user is exposed to. The two types are isomorphic, and we can convert between them using
+        // `From`. So we track this particular case here in order to iterate over the list's members and convert
+        // each of them.
+        //
+        // Note that we could add the iteration code unconditionally and it would still be correct, but the `into()` calls
+        // would be useless. Clippy flags this as [`useless_conversion`]. We could deactivate the lint, but it's probably
+        // best that we just don't emit a useless iteration, lest the compiler not optimize it away, and to make the
+        // generated code a little bit simpler.
+        //
+        // [`useless_conversion`]: https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion.
+        val targetNeedsConstraining =
+            !innerShape.isConstrained(symbolProvider) && (innerShape is CollectionShape || innerShape.isMapShape)
+
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
                 """
@@ -53,13 +67,21 @@ class ConstrainedListGenerator(
                 
                 impl From<#{Symbol}> for $name {
                     fn from(v: #{Symbol}) -> Self {
-                        Self(v.into_iter().map(|item| item.into()).collect())
+                        ${ if (targetNeedsConstraining) {
+                            "Self(v.into_iter().map(|item| item.into()).collect())"
+                        } else {
+                            "Self(v)"
+                        } }
                     }
                 }
 
                 impl From<$name> for #{Symbol} {
                     fn from(v: $name) -> Self {
-                        v.0.into_iter().map(|item| item.into()).collect()
+                        ${ if (targetNeedsConstraining) {
+                            "v.0.into_iter().map(|item| item.into()).collect()"
+                        } else {
+                            "v.0"
+                        } }
                     }
                 }
                 """,
