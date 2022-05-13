@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.isConstrained
+import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
@@ -42,7 +42,7 @@ class UnconstrainedMapGenerator(
     private val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
     private val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
     private val valueShape = model.expectShape(shape.value.target)
-    private val constrainedSymbol = if (shape.isConstrained(symbolProvider)) {
+    private val constrainedSymbol = if (shape.isDirectlyConstrained(symbolProvider)) {
         symbolProvider.toSymbol(shape)
     } else {
         constrainedShapeSymbolProvider.toSymbol(shape)
@@ -114,7 +114,7 @@ class UnconstrainedMapGenerator(
                 if (isKeyConstrained(keyShape) || isValueConstrained(valueShape)) {
                     val resolveToNonPublicConstrainedValueType =
                         isValueConstrained(valueShape) &&
-                        !valueShape.isConstrained(symbolProvider) &&
+                        !valueShape.isDirectlyConstrained(symbolProvider) &&
                         !valueShape.isStructureShape
                     val constrainedValueSymbol = if (resolveToNonPublicConstrainedValueType) {
                         constrainedShapeSymbolProvider.toSymbol(valueShape)
@@ -139,7 +139,7 @@ class UnconstrainedMapGenerator(
                     )
 
                     val constrainedValueTypeIsNotFinalType =
-                        resolveToNonPublicConstrainedValueType && shape.isConstrained(symbolProvider)
+                        resolveToNonPublicConstrainedValueType && shape.isDirectlyConstrained(symbolProvider)
                     if (constrainedValueTypeIsNotFinalType) {
                         // The map is constrained. Its value shape reaches a constrained shape, but the value shape itself
                         // is not directly constrained. The value shape must be an aggregate shape. But it is not a
@@ -178,7 +178,7 @@ class UnconstrainedMapGenerator(
                     rust("let hm = value.0;")
                 }
 
-                if (shape.isConstrained(symbolProvider)) {
+                if (shape.isDirectlyConstrained(symbolProvider)) {
                     rust("Self::try_from(hm)")
                 } else {
                     rust("Ok(Self(hm))")
@@ -187,13 +187,13 @@ class UnconstrainedMapGenerator(
         }
     }
 
-    private fun isKeyConstrained(shape: StringShape) = shape.isConstrained(symbolProvider)
+    private fun isKeyConstrained(shape: StringShape) = shape.isDirectlyConstrained(symbolProvider)
 
     private fun isValueConstrained(shape: Shape): Boolean = when (shape) {
         is StructureShape -> shape.canReachConstrainedShape(model, symbolProvider)
         is CollectionShape -> shape.canReachConstrainedShape(model, symbolProvider)
         is MapShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        is StringShape -> shape.isConstrained(symbolProvider)
+        is StringShape -> shape.isDirectlyConstrained(symbolProvider)
         // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Other constraint traits on simple shapes.
         else -> false
     }

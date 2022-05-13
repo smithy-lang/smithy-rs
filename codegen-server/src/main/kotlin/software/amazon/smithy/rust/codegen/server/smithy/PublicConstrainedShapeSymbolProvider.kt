@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.contextName
-import software.amazon.smithy.rust.codegen.smithy.isConstrained
+import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.locatedIn
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
@@ -57,7 +57,7 @@ class PublicConstrainedShapeSymbolProvider(
                 handleOptionality(handleRustBoxing(targetSymbol, shape), shape)
             }
             is MapShape -> {
-                if (shape.isConstrained(base)) {
+                if (shape.isDirectlyConstrained(base)) {
                     check(shape.hasTrait<LengthTrait>()) { "Only the `length` constraint trait can be applied to maps" }
                     publicConstrainedSymbolForCollectionOrMapShape(shape)
                 } else {
@@ -71,7 +71,7 @@ class PublicConstrainedShapeSymbolProvider(
             }
             is CollectionShape -> {
                 // TODO Both arms return the same because we haven't implemented any constraint trait on collection shapes yet.
-                if (shape.isConstrained(base)) {
+                if (shape.isDirectlyConstrained(base)) {
                     val inner = this.toSymbol(shape.member)
                     symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
                 } else {
@@ -80,7 +80,7 @@ class PublicConstrainedShapeSymbolProvider(
                 }
             }
             is StringShape -> {
-                if (!shape.isConstrained(base)) {
+                if (!shape.isDirectlyConstrained(base)) {
                     return base.toSymbol(shape)
                 }
 

@@ -30,7 +30,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.smithy.isConstrained
+import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -410,7 +410,7 @@ class ServerBuilderGenerator(
     }
 
     private fun memberHasConstraintTraitOrTargetHasConstraintTrait(member: MemberShape) =
-        member.isConstrained(symbolProvider) || (model.expectShape(member.target).isConstrained(symbolProvider))
+        member.isDirectlyConstrained(symbolProvider) || (model.expectShape(member.target).isDirectlyConstrained(symbolProvider))
 
     /**
      * Returns the symbol for a builder's member.

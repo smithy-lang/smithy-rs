@@ -50,7 +50,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.isConstrained
+import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
@@ -304,7 +304,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     }
 
     override fun mapShape(shape: MapShape) {
-        if (shape.isConstrained(symbolProvider)) {
+        if (shape.isDirectlyConstrained(symbolProvider)) {
             rustCrate.useShapeWriter(shape) { writer ->
                 PublicConstrainedMapGenerator(
                     model,
@@ -335,7 +335,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                 ).render()
             }
 
-            if (!shape.isConstrained(symbolProvider)) {
+            if (!shape.isDirectlyConstrained(symbolProvider)) {
                 logger.info("[rust-server-codegen] Generating a constrained type for map $shape")
                 rustCrate.withModule(constrainedModule) { writer ->
                     ConstrainedMapGenerator(
@@ -364,7 +364,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             }
         }
 
-        if (shape.hasTrait<EnumTrait>() && shape.isConstrained(symbolProvider)) {
+        if (shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(symbolProvider)) {
             logger.warning(
                 """
                 String shape $shape has an `enum` trait and another constraint trait. This is valid according to the Smithy
@@ -373,7 +373,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                 See https://github.com/awslabs/smithy/issues/1121f for more information.
                 """.trimIndent()
             )
-        } else if (shape.isConstrained(symbolProvider)) {
+        } else if (shape.isDirectlyConstrained(symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) { writer ->
                 PublicConstrainedStringGenerator(

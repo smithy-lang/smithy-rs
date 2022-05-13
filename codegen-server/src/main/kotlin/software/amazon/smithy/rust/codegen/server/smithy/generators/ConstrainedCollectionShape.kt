@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.isConstrained
+import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 
 // TODO Docs
 // TODO Unit tests
@@ -52,7 +52,7 @@ class ConstrainedCollectionShape(
         //
         // [`useless_conversion`]: https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion.
         val targetNeedsConstraining =
-            !innerShape.isConstrained(symbolProvider) && (innerShape is CollectionShape || innerShape.isMapShape)
+            !innerShape.isDirectlyConstrained(symbolProvider) && (innerShape is CollectionShape || innerShape.isMapShape)
 
         writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(

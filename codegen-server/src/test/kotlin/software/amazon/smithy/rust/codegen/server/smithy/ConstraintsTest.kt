@@ -14,8 +14,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.hasConstraintTrait
-import software.amazon.smithy.rust.codegen.smithy.isConstrained
+import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.requiresNewtype
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.util.lookup
@@ -23,70 +22,73 @@ import software.amazon.smithy.rust.codegen.util.lookup
 class ConstraintsTest {
     private val model =
         """
-            namespace test
+        namespace test
 
-            service TestService {
-                version: "123",
-                operations: [TestOperation]
-            }
+        service TestService {
+            version: "123",
+            operations: [TestOperation]
+        }
+        
+        operation TestOperation {
+            input: TestInputOutput,
+            output: TestInputOutput,
+        }
+        
+        structure TestInputOutput {
+            map: MapA,
             
-            operation TestOperation {
-                input: TestInputOutput,
-                output: TestInputOutput,
-            }
+            recursive: RecursiveShape
+        }
+        
+        structure RecursiveShape {
+            shape: RecursiveShape,
+            mapB: MapB
+        }
+        
+        @length(min: 1, max: 69)
+        map MapA {
+            key: String,
+            value: MapB
+        }
+        
+        map MapB {
+            key: String,
+            value: StructureA
+        }
+        
+        @uniqueItems
+        list ListA {
+            member: MyString
+        }
+        
+        @pattern("\\w+")
+        string MyString
+        
+        @length(min: 1, max: 69)
+        string LengthString
+        
+        structure StructureA {
+            @range(min: 1, max: 69)
+            int: Integer,
             
-            structure TestInputOutput {
-                map: MapA,
-                
-                recursive: RecursiveShape
-            }
-            
-            structure RecursiveShape {
-                shape: RecursiveShape,
-                mapB: MapB
-            }
-            
-            @length(min: 1, max: 69)
-            map MapA {
-                key: String,
-                value: MapB
-            }
-            
-            map MapB {
-                key: String,
-                value: StructureA
-            }
-            
-            @uniqueItems
-            list ListA {
-                member: MyString
-            }
-            
+            @required
+            string: String
+        }
+        
+        // This shape is not in the service closure.
+        structure StructureB {
             @pattern("\\w+")
-            string MyString
+            patternString: String,
             
-            structure StructureA {
-                @range(min: 1, max: 69)
-                int: Integer,
-                
-                @required
-                string: String
-            }
+            @required
+            requiredString: String,
             
-            // This shape is not in the service closure.
-            structure StructureB {
-                @pattern("\\w+")
-                patternString: String,
-                
-                @required
-                requiredString: String,
-                
-                mapA: MapA,
-                
-                @length(min: 1, max: 5)
-                mapAPrecedence: MapA
-            }
-            """.asSmithyModel()
+            mapA: MapA,
+            
+            @length(min: 1, max: 5)
+            mapAPrecedence: MapA
+        }
+        """.asSmithyModel()
     private val symbolProvider = serverTestSymbolProvider(model)
 
     private val testInputOutput = model.lookup<StructureShape>("test#TestInputOutput")
@@ -95,35 +97,33 @@ class ConstraintsTest {
     private val mapB = model.lookup<MapShape>("test#MapB")
     private val listA = model.lookup<ListShape>("test#ListA")
     private val myString = model.lookup<StringShape>("test#MyString")
+    private val lengthString = model.lookup<StringShape>("test#LengthString")
     private val structA = model.lookup<StructureShape>("test#StructureA")
     private val structAInt = model.lookup<MemberShape>("test#StructureA\$int")
     private val structAString = model.lookup<MemberShape>("test#StructureA\$string")
 
     @Test
-    fun `it should recognize constraint traits`() {
-        listOf(mapA, structAInt, structAString, myString).forEach {
-            it.hasConstraintTrait() shouldBe true
-        }
-
-        listOf(mapB, structA).forEach {
-            it.hasConstraintTrait() shouldBe false
-        }
-    }
-
-    @Test
     fun `it should not recognize uniqueItems as a constraint trait because it's deprecated`() {
-        listA.hasConstraintTrait() shouldBe false
+        listA.isDirectlyConstrained(symbolProvider) shouldBe false
     }
 
     @Test
     fun `it should detect supported constrained traits as constrained`() {
-        structA.isConstrained(symbolProvider) shouldBe true
+        listOf(mapA, structA, lengthString).forEach {
+            // TODO When a test like this one fails, we get:
+            //   ```
+            //   io.kotest.assertions.AssertionFailedError: expected:<true> but was:<false>
+            //      at software.amazon.smithy.rust.codegen.server.smithy.ConstraintsTest.it should detect supported constrained traits as constrained(ConstraintsTest.kt:109)
+            //   ```
+            //   How can I make it so that it prints `it` to determine which particular case failed?
+            it.isDirectlyConstrained(symbolProvider) shouldBe true
+        }
     }
 
     @Test
     fun `it should not detect unsupported constrained traits as constrained`() {
         listOf(structAInt, structAString, myString).forEach {
-            it.isConstrained(symbolProvider) shouldBe false
+            it.isDirectlyConstrained(symbolProvider) shouldBe false
         }
     }
 

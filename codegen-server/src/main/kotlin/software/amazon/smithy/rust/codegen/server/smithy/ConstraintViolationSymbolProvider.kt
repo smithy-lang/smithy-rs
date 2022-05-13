@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.contextName
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.smithy.isConstrained
+import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.unconstrainedTypeNameForCollectionOrMapShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -77,7 +77,7 @@ class ConstraintViolationSymbolProvider(
                     .build()
             }
             is StringShape -> {
-                check(shape.isConstrained(base))
+                check(shape.isDirectlyConstrained(base))
 
                 val namespace = "crate::${Models.namespace}::${RustReservedWords.escapeIfNeeded(shape.contextName(serviceShape).toSnakeCase())}"
                 val rustType = RustType.Opaque(constraintViolationName, namespace)
