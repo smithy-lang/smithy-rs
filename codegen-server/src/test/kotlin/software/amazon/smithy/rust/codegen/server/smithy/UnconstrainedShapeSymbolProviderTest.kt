@@ -18,9 +18,10 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.util.lookup
 
-// TODO I can't move this file to `codegen` subproject because `serverTestSymbolProvider` is only in the `codegen-server`
-//  subproject, but I need `UnconstrainedSymbolProvider` to be in the `codegen` subproject because it's used in the
-//  `JsonParserGenerator`.
+/**
+ * While [UnconstrainedShapeSymbolProvider] _must_ be in the `codegen` subproject, these tests need to be in the
+ * `codegen-server` subproject, because they use [serverTestSymbolProvider].
+ */
 class UnconstrainedShapeSymbolProviderTest {
     private val baseModelString =
         """

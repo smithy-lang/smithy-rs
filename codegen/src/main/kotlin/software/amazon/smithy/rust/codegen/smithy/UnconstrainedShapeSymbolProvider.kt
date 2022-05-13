@@ -24,6 +24,50 @@ fun unconstrainedTypeNameForListOrMapShape(shape: Shape, serviceShape: ServiceSh
     return "${shape.id.getName(serviceShape).toPascalCase()}Unconstrained"
 }
 
+/**
+ * The [UnconstrainedShapeSymbolProvider] returns, _for a given constrained
+ * shape_, a symbol whose Rust type can hold the corresponding unconstrained
+ * values.
+ *
+ * For collection and map shapes, this type is a [RustType.Opaque] wrapper
+ * tuple newtype holding a container over the inner unconstrained type. For
+ * structure shapes, it's their builder type. For simple shapes, it's whatever
+ * the regular base symbol provider returns.
+ *
+ * So, for example, given the following model:
+ *
+ * ```smithy
+ * list ListA {
+ *     member: ListB
+ * }
+ *
+ * list ListB {
+ *     member: Structure
+ * }
+ *
+ * structure Structure {
+ *     @required
+ *     string: String
+ * }
+ * ```
+ *
+ * `ListB` is not _directly_ constrained, but it is constrained, because it
+ * holds `Structure`s, that are constrained. So the corresponding unconstrained
+ * symbol has Rust type `struct
+ * ListBUnconstrained(std::vec::Vec<crate::model::structure::Builder>)`.
+ * Likewise, `ListA` is also constrained. Its unconstrained symbol has Rust
+ * type `struct ListAUnconstrained(std::vec::Vec<ListBUnconstrained>)`.
+ *
+ * For an _unconstrained_ shape and for simple shapes, this symbol provider
+ * delegates to the base symbol provider. It is therefore important that this
+ * symbol provider _not_ wrap [PublicConstrainedShapeSymbolProvider] (from the
+ * `codegen-server` subproject), because that symbol provider will return a
+ * constrained type for shapes that have constraint traits attached.
+ *
+ * While this symbol provider is only used by the server, it needs to be in the
+ * `codegen` subproject because the (common to client and server) parsers use
+ * it.
+ */
 class UnconstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
@@ -55,14 +99,6 @@ class UnconstrainedShapeSymbolProvider(
                 } else {
                     base.toSymbol(shape)
                 }
-//                check(shape.canReachConstrainedShape(model, base))
-//
-//                if (shape.isConstrained(base)) {
-////                    TODO("The `length` constraint trait on list shapes is currently not implemented")
-//                    unconstrainedSymbolForListOrMapShape(shape)
-//                } else {
-//                    unconstrainedSymbolForListOrMapShape(shape)
-//                }
             }
             is MapShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
@@ -70,14 +106,6 @@ class UnconstrainedShapeSymbolProvider(
                 } else {
                     base.toSymbol(shape)
                 }
-//                check(shape.canReachConstrainedShape(model, base))
-//
-//                if (shape.isConstrained(base)) {
-////                    TODO("The `length` constraint trait on map shapes is currently not implemented")
-//                    unconstrainedSymbolForListOrMapShape(shape)
-//                } else {
-//                    unconstrainedSymbolForListOrMapShape(shape)
-//                }
             }
             is StructureShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
@@ -85,9 +113,6 @@ class UnconstrainedShapeSymbolProvider(
                 } else {
                     base.toSymbol(shape)
                 }
-//                check(shape.canReachConstrainedShape(model, base))
-//
-//                shape.builderSymbol(base)
             }
             // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Simple shapes can have constraint traits.
             else -> base.toSymbol(shape)
