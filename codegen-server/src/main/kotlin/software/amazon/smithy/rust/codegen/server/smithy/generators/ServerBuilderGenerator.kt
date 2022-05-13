@@ -479,10 +479,7 @@ class ServerBuilderGenerator(
                                 """
                                 .map(|v| match *v {
                                     #{MaybeConstrained}::Constrained(x) => Ok(Box::new(x)),
-                                    #{MaybeConstrained}::Unconstrained(x) => {
-                                        use std::convert::TryInto;
-                                        Ok(Box::new(x.try_into()?))
-                                    }
+                                    #{MaybeConstrained}::Unconstrained(x) => Ok(Box::new(x.try_into()?)),
                                 })
                                 .map(|res| 
                                     res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.into())" }
@@ -497,10 +494,7 @@ class ServerBuilderGenerator(
                                 """
                                 .map(|v| match v {
                                     #{MaybeConstrained}::Constrained(x) => Ok(x),
-                                    #{MaybeConstrained}::Unconstrained(x) => {
-                                        use std::convert::TryInto;
-                                        x.try_into()
-                                    }
+                                    #{MaybeConstrained}::Unconstrained(x) => x.try_into(),
                                 })
                                 .map(|res| 
                                     res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.into())" }

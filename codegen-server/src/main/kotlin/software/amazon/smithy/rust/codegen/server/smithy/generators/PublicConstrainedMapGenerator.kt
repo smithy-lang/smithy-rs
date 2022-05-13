@@ -49,7 +49,6 @@ class PublicConstrainedMapGenerator(
             
             impl $name {
                 pub fn parse(value: $inner) -> Result<Self, #{ConstraintViolation}> {
-                    use std::convert::TryFrom;
                     Self::try_from(value)
                 }
             }

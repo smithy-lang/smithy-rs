@@ -63,10 +63,7 @@ class UnconstrainedListGenerator(
                         let res: Result<_, #{InnerConstraintViolationSymbol}> = value
                             .0
                             .into_iter()
-                            .map(|inner| {
-                                use std::convert::TryInto;
-                                inner.try_into()
-                            })
+                            .map(|inner| inner.try_into())
                             .collect();
                         res.map(Self)   
                            .map_err(ConstraintViolation)

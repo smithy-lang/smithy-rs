@@ -123,7 +123,6 @@ class UnconstrainedMapGeneratorTest {
 //                            crate::model::structure_c::ConstraintViolation::MissingString,
 //                        ));
 //
-//                    use std::convert::TryFrom;
 //                    assert_eq!(
 //                        expected_err,
 //                        std::collections::HashMap::<String, std::collections::HashMap<String, crate::model::StructureC>>::try_from(map_a_unconstrained).unwrap_err()
@@ -155,7 +154,6 @@ class UnconstrainedMapGeneratorTest {
                         ]))
                     ]);
 
-                    use std::convert::TryFrom;
                     assert_eq!(
                         expected,
                         crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap().into()

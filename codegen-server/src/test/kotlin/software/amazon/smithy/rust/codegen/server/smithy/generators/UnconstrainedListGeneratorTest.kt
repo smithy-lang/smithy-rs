@@ -110,8 +110,7 @@ class UnconstrainedListGeneratorTest {
                         list_a_unconstrained::ConstraintViolation(list_b_unconstrained::ConstraintViolation(
                             crate::model::structure_c::ConstraintViolation::MissingString,
                         ));
-
-                    use std::convert::TryFrom;
+                        
                     assert_eq!(
                         expected_err,
                         crate::constrained::list_a_constrained::ListAConstrained::try_from(list_a_unconstrained).unwrap_err()
@@ -132,8 +131,7 @@ class UnconstrainedListGeneratorTest {
                     }]];
                     let actual: Vec<Vec<crate::model::StructureC>> = 
                         crate::constrained::list_a_constrained::ListAConstrained::try_from(list_a_unconstrained).unwrap().into();
-
-                    use std::convert::TryFrom;
+                        
                     assert_eq!(
                         expected,
                         actual
