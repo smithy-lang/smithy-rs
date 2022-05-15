@@ -560,7 +560,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 let status = output.$memberName
                     .ok_or(#{ResponseRejection}::MissingHttpStatusCode)?;
-                let http_status: u16 = std::convert::TryFrom::<i32>::try_from(status)
+                let http_status: u16 = status.try_into()
                     .map_err(|_| #{ResponseRejection}::InvalidHttpStatusCode)?;
                 """.trimIndent(),
                 *codegenScope,

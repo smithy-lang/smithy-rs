@@ -60,7 +60,7 @@ class CargoTomlGenerator(
                 "version" to settings.moduleVersion,
                 "authors" to settings.moduleAuthors,
                 settings.moduleDescription?.let { "description" to it },
-                "edition" to "2018",
+                "edition" to "2021",
                 "license" to settings.license,
                 "repository" to settings.moduleRepository,
             ).toMap(),
