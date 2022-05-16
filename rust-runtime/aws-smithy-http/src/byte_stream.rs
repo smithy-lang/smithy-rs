@@ -204,6 +204,7 @@ pub use self::bytestream_util::FsBuilder;
 ///     use aws_smithy_http::byte_stream::ByteStream;
 ///     use aws_smithy_http::body::SdkBody;
 ///     use tokio::io::{AsyncBufReadExt, BufReader};
+///     #[cfg(feature = "rt-tokio")]
 ///     async fn example() -> std::io::Result<()> {
 ///        let stream = ByteStream::new(SdkBody::from("hello!\nThis is some data"));
 ///        // Wrap the stream in a BufReader
