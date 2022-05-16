@@ -538,7 +538,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::byte_stream::{ByteStream, Inner};
+    use crate::byte_stream::Inner;
     use bytes::Bytes;
 
     #[tokio::test]
@@ -614,6 +614,7 @@ mod tests {
     #[cfg(feature = "rt-tokio")]
     #[tokio::test]
     async fn bytestream_into_async_read() {
+        use super::ByteStream;
         use tokio::io::AsyncBufReadExt;
 
         let byte_stream = ByteStream::from_static(b"data 1\ndata 2\ndata 3");
