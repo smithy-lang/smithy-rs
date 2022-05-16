@@ -349,6 +349,13 @@ impl ByteStream {
     }
 }
 
+#[cfg(feature = "rt-tokio")]
+impl ByteStream {
+    pub fn into_async_read(self) -> impl tokio::io::AsyncRead {
+        tokio_util::io::StreamReader::new(self)
+    }
+}
+
 impl Default for ByteStream {
     fn default() -> Self {
         Self(Inner {
@@ -400,6 +407,12 @@ impl std::fmt::Display for Error {
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         Some(self.0.as_ref() as _)
+    }
+}
+
+impl From<Error> for std::io::Error {
+    fn from(err: Error) -> Self {
+        std::io::Error::new(std::io::ErrorKind::Other, err)
     }
 }
 
@@ -525,7 +538,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::byte_stream::Inner;
+    use crate::byte_stream::{ByteStream, Inner};
     use bytes::Bytes;
 
     #[tokio::test]
@@ -596,5 +609,21 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[cfg(feature = "rt-tokio")]
+    #[tokio::test]
+    async fn bytestream_into_async_read() {
+        use tokio::io::AsyncBufReadExt;
+
+        let byte_stream = ByteStream::from_static(b"data 1\ndata 2\ndata 3");
+        let async_buf_read = tokio::io::BufReader::new(byte_stream.into_async_read());
+
+        let mut lines = async_buf_read.lines();
+
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 1".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 2".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 3".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), None);
     }
 }
