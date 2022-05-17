@@ -27,5 +27,6 @@
   - [RFC-0011: Publishing Alpha to Crates.io](./rfcs/rfc0011_crates_io_alpha_publishing.md)
   - [RFC-0012: Independent Crate Versioning](./rfcs/rfc0012_independent_crate_versioning.md)
   - [RFC-0013: Body Callback APIs](./rfcs/rfc0013_body_callback_apis.md)
-  - [RFC-0014: Fine-grained timeout configuration](./rfcs/rfc00014_timeout_config.md)
-  - [RFC-0015: How Cargo "features" should be used in the SDK and runtime crates](./rfcs/rfc00015_using_features_responsibly.md)
+  - [RFC-0014: Fine-grained timeout configuration](./rfcs/rfc0014_timeout_config.md)
+  - [RFC-0015: How Cargo "features" should be used in the SDK and runtime crates](./rfcs/rfc0015_using_features_responsibly.md)
+  - [RFC-0016: Replacing Callback APIs for `ByteStream` and `SdkBody` with a body-wrapping API](./rfcs/rfc0016_body_callback_apis_v2.md)
