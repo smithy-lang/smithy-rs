@@ -23,7 +23,29 @@ operation AnOperation {
 
 structure AnOperationInput {
     @required
-    conA: ConA
+    conA: ConA,
+
+    //  Only top-level members of an operation's input structure are considered
+    //  when deserializing HTTP messages.
+
+    @httpHeader("X-Length")
+    lengthString: LengthString,
+
+    @httpHeader("X-Length-Set")
+    lengthStringSet: LengthStringSet,
+
+    @httpHeader("X-Length-List")
+    lengthStringList: LengthStringList,
+
+    @httpHeader("X-String")
+    string: String,
+
+    // @required
+    @httpPrefixHeaders("X-Required-")
+    requiredHeaderMap: HeaderMap,
+
+    //@httpPrefixHeaders("X-Foo-")
+    //headerMap: HeaderMap
 }
 
 structure AnOperationOutput {
@@ -46,7 +68,7 @@ structure ConA {
     // conBMap: ConBMap
 
     // normalString: NormalString,
-    // lengthString: LengthString,
+
     // playerAction: PlayerAction,
     // myEnum: MyEnum
 
@@ -54,14 +76,11 @@ structure ConA {
     // list: LengthList,
 
     //set: LengthStringSet,
-
-    @httpPrefixHeaders("X-Foo-")
-    headerMap: HeaderMap
 }
 
 map HeaderMap {
     key: LengthString,
-    value: LengthString
+    value: LengthString,
 }
 
 // @length(min:2, max:8)
@@ -109,6 +128,10 @@ string MyEnum
 // A set that is not directly constrained, but that has a member that is. There
 // is no such example in any of the other test models!
 set LengthStringSet {
+    member: LengthString
+}
+
+list LengthStringList {
     member: LengthString
 }
 

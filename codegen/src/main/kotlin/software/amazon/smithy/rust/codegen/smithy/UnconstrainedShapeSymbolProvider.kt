@@ -7,14 +7,17 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -67,6 +70,7 @@ class UnconstrainedShapeSymbolProvider(
     private val model: Model,
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
+    private val nullableIndex = NullableIndex.of(model)
 
     private fun unconstrainedSymbolForCollectionOrMapShape(shape: Shape): Symbol {
         check(shape is CollectionShape || shape is MapShape)
@@ -81,6 +85,27 @@ class UnconstrainedShapeSymbolProvider(
             .definitionFile(Unconstrained.filename)
             .build()
     }
+
+    // TODO The following two methods have been copied from `SymbolVisitor.kt`.
+    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
+        if (member.isRequired) {
+            symbol
+        } else if (nullableIndex.isNullable(member)) {
+            symbol.makeOptional()
+        } else {
+            symbol
+        }
+
+    /**
+     * Boxes and returns [symbol], the symbol for the target of the member shape [shape], if [shape] is annotated with
+     * [RustBoxTrait]; otherwise returns [symbol] unchanged.
+     *
+     * See `RecursiveShapeBoxer.kt` for the model transformation pass that annotates model shapes with [RustBoxTrait].
+     */
+    private fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
+        if (shape.hasTrait<RustBoxTrait>()) {
+            symbol.makeRustBoxed()
+        } else symbol
 
     override fun toSymbol(shape: Shape): Symbol =
         when (shape) {
@@ -105,10 +130,20 @@ class UnconstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
-//            is MemberShape -> {
-//                TODO("Constraint traits on member shape not implemented yet")
-//            }
-            // TODO Arm for `MemberShape`s.
+            is MemberShape -> {
+                // The only case where we use this symbol provider on a member shape is when generating deserializers
+                // for HTTP-bound member shapes. See how e.g. [HttpBindingGenerator] generates deserializers for a member
+                // shape with the `httpPrefixHeaders` trait targeting a map shape of string keys and values.
+                if (model.expectShape(shape.container).isStructureShape && shape.targetCanReachConstrainedShape(model, base)) {
+                    val targetShape = model.expectShape(shape.target)
+                    val targetSymbol = this.toSymbol(targetShape)
+                    // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
+                    handleOptionality(handleRustBoxing(targetSymbol, shape), shape)
+                } else {
+                    base.toSymbol(shape)
+                }
+                // TODO Constraint traits on member shapes are not implemented yet.
+            }
             else -> base.toSymbol(shape)
         }
 }
