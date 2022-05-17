@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
@@ -79,7 +79,6 @@ class ServerProtocolTestGenerator(
         "SmithyHttp" to CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
-        "AxumCore" to ServerCargoDependency.AxumCore.asType(),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(codegenContext.runtimeConfig).asType(),
         "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!")
     )
@@ -294,7 +293,7 @@ class ServerProtocolTestGenerator(
         rustTemplate(
             """
             let output = super::$operationImpl;
-            use #{AxumCore}::response::IntoResponse;
+            use #{SmithyHttpServer}::response::IntoResponse;
             let http_response = output.into_response();
             """,
             *codegenScope,
@@ -316,10 +315,10 @@ class ServerProtocolTestGenerator(
         val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustTemplate(
             """
-            use #{AxumCore}::extract::FromRequest;
-            let mut http_request = #{AxumCore}::extract::RequestParts::new(http_request);
+            use #{SmithyHttpServer}::request::FromRequest;
+            let mut http_request = #{SmithyHttpServer}::request::RequestParts::new(http_request);
             let rejection = super::$operationName::from_request(&mut http_request).await.expect_err("request was accepted but we expected it to be rejected");
-            use #{AxumCore}::response::IntoResponse;
+            use #{SmithyHttpServer}::response::IntoResponse;
             let http_response = rejection.into_response();
             """,
             *codegenScope,
@@ -381,8 +380,8 @@ class ServerProtocolTestGenerator(
         val operationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
         rustWriter.rustTemplate(
             """
-            use #{AxumCore}::extract::FromRequest;
-            let mut http_request = #{AxumCore}::extract::RequestParts::new(http_request);
+            use #{SmithyHttpServer}::request::FromRequest;
+            let mut http_request = #{SmithyHttpServer}::request::RequestParts::new(http_request);
             let parsed = super::$operationName::from_request(&mut http_request).await.expect("failed to parse request").0;
             """,
             *codegenScope,

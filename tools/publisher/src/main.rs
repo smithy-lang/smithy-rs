@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::subcommand::fix_manifests::{subcommand_fix_manifests, Mode};
@@ -17,6 +17,7 @@ mod cargo;
 mod fs;
 mod package;
 mod repo;
+mod retry;
 mod sort;
 mod subcommand;
 

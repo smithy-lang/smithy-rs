@@ -1,11 +1,11 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Protocol helpers.
 use crate::rejection::RequestRejection;
-use axum_core::extract::RequestParts;
+use crate::request::RequestParts;
 use paste::paste;
 
 /// Supported protocols.
@@ -85,7 +85,7 @@ mod tests {
 
     /// This macro validates the rejection type since we cannot implement `PartialEq`
     /// for `RequestRejection` as it is based on the crate error type, which uses
-    /// `axum_core::BoxError`.
+    /// `crate::error::BoxError`.
     macro_rules! validate_rejection_type {
         ($result:expr, $rejection:path) => {
             match $result {

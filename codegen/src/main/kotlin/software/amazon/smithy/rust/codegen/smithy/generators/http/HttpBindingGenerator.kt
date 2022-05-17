@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators.http
@@ -478,7 +478,6 @@ class HttpBindingGenerator(
                 rustBlock("if !$safeName.is_empty()") {
                     rustTemplate(
                         """
-                        use std::convert::TryFrom;
                         let header_value = $safeName;
                         let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
                             #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header value: {}", &${
@@ -517,7 +516,6 @@ class HttpBindingGenerator(
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
                     })?;
-                    use std::convert::TryFrom;
                     let header_value = ${headerFmtFun(this, target, memberShape, "v", listHeader)};
                     let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
                         #{build_error}::InvalidField {
