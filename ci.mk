@@ -59,6 +59,14 @@ check-server-codegen-integration-tests:
 check-server-codegen-unit-tests:
 	$(CI_ACTION) $@
 
+.PHONY: check-server-codegen-integration-tests-python
+check-server-codegen-integration-tests-python:
+	$(CI_ACTION) $@
+
+.PHONY: check-server-codegen-unit-tests-python
+check-server-codegen-unit-tests-python:
+	$(CI_ACTION) $@
+
 .PHONY: check-server-e2e-test
 check-server-e2e-test:
 	$(CI_ACTION) $@

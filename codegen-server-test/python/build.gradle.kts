@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-description = "Generates Rust code from Smithy models and runs the protocol tests"
-extra["displayName"] = "Smithy :: Rust :: Codegen :: Server :: Test"
-extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.test"
+description = "Generates Rust/Python code from Smithy models and runs the protocol tests"
+extra["displayName"] = "Smithy :: Rust :: Codegen :: Server :: Python :: Test"
+extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.python.test"
 
 tasks["jar"].enabled = false
 
-plugins { id("software.amazon.smithy").version("0.5.3") }
+plugins { id("software.amazon.smithy") }
 
 val smithyVersion: String by project
 val defaultRustFlags: String by project
@@ -17,7 +17,11 @@ val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val pluginName = "rust-server-codegen"
-val workingDirUnderBuildDir = "smithyprojections/codegen-server-test/"
+val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-python/"
+
+configure<software.amazon.smithy.gradle.SmithyExtension> {
+    outputDirectory = file("$buildDir/$workingDirUnderBuildDir")
+}
 
 buildscript {
     val smithyVersion: String by project
@@ -27,7 +31,7 @@ buildscript {
 }
 
 dependencies {
-    implementation(project(":codegen-server"))
+    implementation(project(":codegen-server:python"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
@@ -45,7 +49,7 @@ val allCodegenTests = listOf(
     CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
 )
 
-tasks.register("generateSmithyBuild") {
+task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
         projectDir.resolve("smithy-build.json")
@@ -59,7 +63,7 @@ tasks.register("generateSmithyBuild") {
     }
 }
 
-tasks.register("generateCargoWorkspace") {
+task("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
         buildDir.resolve("$workingDirUnderBuildDir/Cargo.toml")
