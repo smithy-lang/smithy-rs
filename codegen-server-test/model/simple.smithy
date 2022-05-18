@@ -28,6 +28,7 @@ structure AnOperationInput {
     //  Only top-level members of an operation's input structure are considered
     //  when deserializing HTTP messages.
 
+    // TODO Test with mediaType trait too.
     @httpHeader("X-Length")
     lengthString: LengthString,
 

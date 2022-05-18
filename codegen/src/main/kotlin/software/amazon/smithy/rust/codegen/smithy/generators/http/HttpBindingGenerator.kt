@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
@@ -121,7 +122,7 @@ class HttpBindingGenerator(
         val fnName = "deser_header_${fnName(operationShape, binding)}"
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
             writer.rustBlock(
-                "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
+                "pub(crate) fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 outputT,
                 headerUtil
@@ -314,19 +315,20 @@ class HttpBindingGenerator(
      * Parse a value from a header.
      * This function produces an expression which produces the precise type required by the target shape.
      */
-    private fun RustWriter.deserializeFromHeader(targetType: Shape, memberShape: MemberShape) {
-        val rustType = symbolProvider.toSymbol(targetType).rustType().stripOuter<RustType.Option>()
+    private fun RustWriter.deserializeFromHeader(targetShape: Shape, memberShape: MemberShape) {
+        val rustType = symbolProvider.toSymbol(targetShape).rustType().stripOuter<RustType.Option>()
         // Normally, we go through a flow that looks for `,`s but that's wrong if the output
         // is just a single string (which might include `,`s.).
         // MediaType doesn't include `,` since it's base64, send that through the normal path
-        if (targetType is StringShape && !targetType.hasTrait<MediaTypeTrait>()) {
+        if (targetShape is StringShape && !targetShape.hasTrait<MediaTypeTrait>()) {
             rust("#T::one_or_none(headers)", headerUtil)
             return
         }
-        val (coreType, coreShape) = if (targetType is CollectionShape) {
-            rustType.stripOuter<RustType.Container>() to model.expectShape(targetType.member.target)
+        val (coreType, coreShape) = if (targetShape is CollectionShape) {
+            val coreShape = model.expectShape(targetShape.member.target)
+            symbolProvider.toSymbol(coreShape).rustType() to coreShape
         } else {
-            rustType to targetType
+            rustType to targetShape
         }
         val parsedValue = safeName()
         if (coreType == dateTime) {
@@ -338,18 +340,22 @@ class HttpBindingGenerator(
                 )
             val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
             rust(
-                "let $parsedValue: Vec<${coreType.render(true)}> = #T::many_dates(headers, #T)?;",
+                "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates(headers, #T)?;",
                 headerUtil,
                 timestampFormatType
             )
         } else if (coreShape.isPrimitive()) {
             rust(
-                "let $parsedValue = #T::read_many_primitive::<${coreType.render(fullyQualified = true)}>(headers)?;",
+                "let $parsedValue = #T::read_many_primitive::<${coreType.render()}>(headers)?;",
                 headerUtil
             )
         } else {
+            check(coreShape.isStringShape) {
+                "The `httpHeader` trait can be applied to structure members that target a `boolean`, `number`, `string`, or " +
+                        "`timestamp`; or a `structure` member that targets a list/set of these types. Found $coreShape."
+            }
             rust(
-                "let $parsedValue: Vec<${coreType.render(fullyQualified = true)}> = #T::read_many_from_str(headers)?;",
+                "let $parsedValue: Vec<${coreType.render()}> = #T::read_many_from_str(headers)?;",
                 headerUtil
             )
             if (coreShape.hasTrait<MediaTypeTrait>()) {
@@ -389,17 +395,31 @@ class HttpBindingGenerator(
                     })
                     """
                 )
-            else -> rustTemplate(
-                """
-                if $parsedValue.len() > 1 {
-                    Err(#{header_util}::ParseError::new_with_message(format!("expected one item but found {}", $parsedValue.len())))
+            else -> {
+                val returnUnconstrainedType = mode == CodegenMode.Server &&
+                        targetShape is CollectionShape &&
+                        targetShape.canReachConstrainedShape(model, symbolProvider)
+                if (returnUnconstrainedType) {
+                    rust(
+                        """
+                        Ok(Some(#T($parsedValue)))
+                        """,
+                        symbolProvider.toSymbol(targetShape)
+                    )
                 } else {
-                    let mut $parsedValue = $parsedValue;
-                    Ok($parsedValue.pop())
+                    rustTemplate(
+                        """
+                        if $parsedValue.len() > 1 {
+                            Err(#{header_util}::ParseError::new_with_message(format!("expected one item but found {}", $parsedValue.len())))
+                        } else {
+                            let mut $parsedValue = $parsedValue;
+                            Ok($parsedValue.pop())
+                        }
+                        """,
+                        "header_util" to headerUtil
+                    )
                 }
-                """,
-                "header_util" to headerUtil
-            )
+            }
         }
     }
 
