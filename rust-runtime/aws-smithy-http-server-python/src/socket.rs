@@ -77,13 +77,16 @@ mod tests {
     #[test]
     fn socket_can_bind_on_random_port() {
         let socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
+        #[cfg(not(target_os = "windows"))]
         assert!(socket.inner.is_listener().is_ok());
     }
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn socket_can_be_cloned() {
         let socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
         let cloned_socket = socket.try_clone().unwrap();
+        #[cfg(not(target_os = "windows"))]
         assert!(cloned_socket.inner.is_listener().is_ok());
     }
 }
