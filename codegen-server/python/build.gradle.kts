@@ -11,13 +11,13 @@ plugins {
     `maven-publish`
 }
 
-description = "Generates Rust server-side code from Smithy models"
+description = "Generates Rust/Python server-side code from Smithy models"
 
-extra["displayName"] = "Smithy :: Rust :: Codegen :: Server"
+extra["displayName"] = "Smithy :: Rust :: Codegen :: Server :: Python"
 
-extra["moduleName"] = "software.amazon.smithy.rust.codegen.server"
+extra["moduleName"] = "software.amazon.smithy.rust.codegen.server.python"
 
-group = "software.amazon.smithy.rust.codegen.server.smithy"
+group = "software.amazon.smithy.rust.codegen.server.python.smithy"
 
 version = "0.1.0"
 
@@ -26,6 +26,7 @@ val kotestVersion: String by project
 
 dependencies {
     implementation(project(":codegen"))
+    implementation(project(":codegen-server"))
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
