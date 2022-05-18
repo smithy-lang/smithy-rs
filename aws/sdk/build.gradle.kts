@@ -51,17 +51,18 @@ dependencies {
 val awsServices: AwsServices by lazy { discoverServices(loadServiceMembership()) }
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 
-fun getSdkVersion(): String = properties.get("aws.sdk.version") ?: throw kotlin.Exception("SDK version missing")
-fun getSmithyRsVersion(): String = properties.get("smithy.rs.runtime.crate.version") ?: throw kotlin.Exception("smithy-rs version missing")
-fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw kotlin.Exception("Rust MSRV missing")
+fun getSdkVersion(): String = properties.get("aws.sdk.version") ?: throw Exception("SDK version missing")
+fun getSmithyRsVersion(): String = properties.get("smithy.rs.runtime.crate.version") ?: throw Exception("smithy-rs version missing")
+fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
+fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
 
 fun loadServiceMembership(): Membership {
     val membershipOverride = properties.get("aws.services")?.let { parseMembership(it) }
     println(membershipOverride)
     val fullSdk =
-        parseMembership(properties.get("aws.services.fullsdk") ?: throw kotlin.Exception("full sdk list missing"))
+        parseMembership(properties.get("aws.services.fullsdk") ?: throw Exception("full sdk list missing"))
     val tier1 =
-        parseMembership(properties.get("aws.services.smoketest") ?: throw kotlin.Exception("smoketest list missing"))
+        parseMembership(properties.get("aws.services.smoketest") ?: throw Exception("smoketest list missing"))
     return membershipOverride ?: if ((properties.get("aws.fullsdk") ?: "") == "true") {
         fullSdk
     } else {
@@ -131,11 +132,12 @@ tasks.register("generateSmithyBuild") {
     inputs.property("servicelist", awsServices.services.toString())
     inputs.property("eventStreamAllowList", eventStreamAllowList)
     inputs.dir(projectDir.resolve("aws-models"))
-    outputs.file(projectDir.resolve("smithy-build.json"))
+    outputs.file(buildDir.resolve("smithy-build.json"))
 
     doFirst {
-        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
+        buildDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
     }
+    outputs.upToDateWhen { false }
 }
 
 tasks.register("generateIndexMd") {
@@ -335,15 +337,22 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
 
     toolPath = publisherToolPath
     binaryName = "publisher"
-    arguments = listOf(
+    arguments = mutableListOf(
         "generate-version-manifest",
         "--location",
         outputDir.absolutePath,
         "--smithy-build",
-        outputDir.resolve("../../smithy-build.json").normalize().absolutePath,
+        buildDir.resolve("smithy-build.json").normalize().absolutePath,
         "--examples-revision",
-        properties.get("aws.sdk.examples.revision") ?: "missing"
-    )
+        properties.get("aws.sdk.examples.revision") ?: "missing",
+        "--release-tag",
+        "v" + getSdkVersion()
+    ).apply {
+        val previousReleaseManifestPath = getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
+            add("--previous-release-versions")
+            add(manifestPath)
+        }
+    }
 }
 
 tasks.register("finalizeSdk") {
@@ -362,13 +371,8 @@ tasks.register("finalizeSdk") {
     )
 }
 
-tasks.register<Delete>("deleteSdk") {
-    delete = setOf(outputDir)
-}
-tasks["clean"].dependsOn("deleteSdk")
-
 tasks["smithyBuildJar"].apply {
-    inputs.file(projectDir.resolve("smithy-build.json"))
+    inputs.file(buildDir.resolve("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
     dependsOn("generateSmithyBuild")
     dependsOn("generateCargoWorkspace")
@@ -410,6 +414,10 @@ tasks.register<Exec>("cargoClippy") {
 
 tasks["test"].finalizedBy("cargoClippy", "cargoTest", "cargoDocs")
 
+tasks.register<Delete>("deleteSdk") {
+    delete = setOf(outputDir)
+}
+tasks["clean"].dependsOn("deleteSdk")
 tasks["clean"].doFirst {
-    delete("smithy-build.json")
+    delete(buildDir.resolve("smithy-build.json"))
 }

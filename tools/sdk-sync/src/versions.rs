@@ -5,8 +5,7 @@
 
 use crate::fs::{DefaultFs, Fs};
 use crate::git::CommitHash;
-use anyhow::{Context, Result};
-use serde::Deserialize;
+use anyhow::Result;
 use std::path::Path;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -29,13 +28,9 @@ impl DefaultVersions {
     }
 
     fn load_from(&self, fs: &dyn Fs, path: &Path) -> Result<VersionsManifest> {
-        #[derive(Deserialize)]
-        pub struct Deser {
-            smithy_rs_revision: String,
-            aws_doc_sdk_examples_revision: String,
-        }
         let contents = fs.read_to_string(&path.join("versions.toml"))?;
-        let manifest: Deser = toml::from_str(&contents).context("parse versions.toml")?;
+        let manifest =
+            smithy_rs_tool_common::versions_manifest::VersionsManifest::from_str(&contents)?;
         Ok(VersionsManifest {
             smithy_rs_revision: CommitHash::from(manifest.smithy_rs_revision),
             aws_doc_sdk_examples_revision: CommitHash::from(manifest.aws_doc_sdk_examples_revision),
