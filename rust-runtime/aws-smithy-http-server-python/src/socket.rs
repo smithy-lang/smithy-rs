@@ -62,7 +62,7 @@ impl SharedSocket {
         Ok(SharedSocket { inner: socket })
     }
 
-    /// Clone the shared socket allowing it to be shared between multiple
+    /// Clone the inner socket allowing it to be shared between multiple
     /// Python processes.
     pub fn try_clone(&self) -> PyResult<SharedSocket> {
         let copied = self.inner.try_clone()?;
