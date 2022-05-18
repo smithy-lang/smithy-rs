@@ -113,11 +113,11 @@ structure ConA {
 
     conBSet: ConBSet,
 
-    conBMap: ConBMap,
+    // conBMap: ConBMap,
 
     mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 
-    unionWithConstrainedStructureVariant: UnionWithConstrainedStructureVariant,
+    //unionWithConstrainedStructureVariant: UnionWithConstrainedStructureVariant,
     enumString: EnumString,
 
     listOfLengthString: ListOfLengthString,
