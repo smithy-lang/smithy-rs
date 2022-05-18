@@ -13,6 +13,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -935,47 +936,63 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     when (queryParamsBinding.queryParamsBindingTargetMapValueType()) {
                         QueryParamsTargetMapValueType.STRING -> {
                             rust("query_params.entry(String::from(k)).or_insert_with(|| String::from(v));")
-                        } else -> {
-                            rustTemplate(
+                        }
+                        QueryParamsTargetMapValueType.LIST, QueryParamsTargetMapValueType.SET -> {
+                            rust(
                                 """
                                 let entry = query_params.entry(String::from(k)).or_default();
                                 entry.push(String::from(v));
-                                """.trimIndent()
+                                """
                             )
                         }
                     }
                 }
             }
             if (queryParamsBinding != null) {
-                rust(
-                    "input = input.${queryParamsBinding.member.deserializerBuilderSetterName(
-                        model,
-                        symbolProvider,
-                        codegenContext.mode
-                    )}(${
-                    if (symbolProvider.toSymbol(queryParamsBinding.member).isOptional()) {
-                        "Some(query_params)"
-                    } else {
-                        "query_params"
+                val hasConstrainedTarget =
+                    model.expectShape(queryParamsBinding.member.target, MapShape::class.java).canReachConstrainedShape(model, symbolProvider)
+                val symbolProvider = if (hasConstrainedTarget) unconstrainedShapeSymbolProvider!! else symbolProvider
+                val isOptional = symbolProvider.toSymbol(queryParamsBinding.member).isOptional()
+                withBlock("input = input.${queryParamsBinding.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(", ");") {
+                    conditionalBlock("Some(", ")", conditional = isOptional) {
+                        conditionalBlock(
+                            "#T(",
+                            ")",
+                            conditional = hasConstrainedTarget,
+                            symbolProvider.toSymbol(queryParamsBinding.member).mapRustType { it.stripOuter<RustType.Option>() }) {
+                            write("query_params")
+                        }
                     }
-                    });"
-                )
+                }
+//                rust(
+//                    "input = input.${queryParamsBinding.member.deserializerBuilderSetterName(
+//                        model,
+//                        symbolProvider,
+//                        codegenContext.mode
+//                    )}(${
+//                    if (symbolProvider.toSymbol(queryParamsBinding.member).isOptional()) {
+//                        "Some(query_params)"
+//                    } else {
+//                        "query_params"
+//                    }
+//                    });"
+//                )
             }
-            queryBindingsTargettingCollection.forEach {
+            queryBindingsTargettingCollection.forEach { binding ->
                 // TODO Constraint traits on member shapes are not implemented yet. We would have to check those here too.
                 val hasConstrainedTarget =
-                        model.expectShape(it.member.target, CollectionShape::class.java).canReachConstrainedShape(model, symbolProvider)
+                        model.expectShape(binding.member.target, CollectionShape::class.java).canReachConstrainedShape(model, symbolProvider)
                 val symbolProvider = if (hasConstrainedTarget) unconstrainedShapeSymbolProvider!! else symbolProvider
-                val memberName = symbolProvider.toMemberName(it.member)
-                val isOptional = symbolProvider.toSymbol(it.member).isOptional()
+                val memberName = symbolProvider.toMemberName(binding.member)
+                val isOptional = symbolProvider.toSymbol(binding.member).isOptional()
                 rustBlock("if !$memberName.is_empty()") {
-                    withBlock("input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(", ");") {
+                    withBlock("input = input.${binding.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(", ");") {
                         conditionalBlock("Some(", ")", conditional = isOptional) {
                             conditionalBlock(
                                 "#T(",
                                 ")",
                                 conditional = hasConstrainedTarget,
-                                symbolProvider.toSymbol(it.member).mapRustType { t -> t.stripOuter<RustType.Option>() }) {
+                                symbolProvider.toSymbol(binding.member).mapRustType { it.stripOuter<RustType.Option>() }) {
                                 write(memberName)
                             }
                         }

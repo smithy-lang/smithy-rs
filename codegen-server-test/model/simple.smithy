@@ -8,7 +8,10 @@ use aws.protocols#restJson1
 @title("SimpleService")
 service SimpleService {
     operations: [
-        AnOperation,
+        //AnOperation,
+        QueryParamsTargetingMapOfLengthString,
+        // QueryParamsTargetingMapOfListOfLengthString,
+        // QueryParamsTargetingMapOfSetOfLengthString,
     ],
 }
 
@@ -19,6 +22,39 @@ operation AnOperation {
     input: AnOperationInput,
     output: AnOperationOutput,
     // errors: [MyError]
+}
+
+@http(uri: "/query-params-targeting-map-of-length-string", method: "GET")
+operation QueryParamsTargetingMapOfLengthString {
+    input: QueryParamsTargetingMapOfLengthStringInputOutput,
+    output: QueryParamsTargetingMapOfLengthStringInputOutput,
+}
+
+@http(uri: "/query-params-targeting-map-of-list-of-length-string", method: "GET")
+operation QueryParamsTargetingMapOfListOfLengthString {
+    input: QueryParamsTargetingMapOfListOfLengthStringInputOutput,
+    output: QueryParamsTargetingMapOfListOfLengthStringInputOutput,
+}
+
+@http(uri: "/query-params-targeting-map-of-set-of-length-string", method: "GET")
+operation QueryParamsTargetingMapOfSetOfLengthString {
+    input: QueryParamsTargetingMapOfSetOfLengthStringInputOutput,
+    output: QueryParamsTargetingMapOfSetOfLengthStringInputOutput,
+}
+
+structure QueryParamsTargetingMapOfLengthStringInputOutput {
+    @httpQueryParams
+    mapOfLengthString: MapOfLengthString
+}
+
+structure QueryParamsTargetingMapOfListOfLengthStringInputOutput {
+    @httpQueryParams
+    mapOfListOfLengthString: MapOfListOfLengthString
+}
+
+structure QueryParamsTargetingMapOfSetOfLengthStringInputOutput {
+    @httpQueryParams
+    mapOfSetOfLengthString: MapOfSetOfLengthString
 }
 
 structure AnOperationInput {
@@ -83,9 +119,25 @@ structure ConA {
     //set: LengthStringSet,
 }
 
+// TODO Use MapOfLengthString
 map LengthStringHeaderMap {
     key: LengthString,
     value: LengthString,
+}
+
+map MapOfLengthString {
+    key: LengthString,
+    value: LengthString,
+}
+
+map MapOfListOfLengthString {
+    key: LengthString,
+    value: LengthStringList,
+}
+
+map MapOfSetOfLengthString {
+    key: LengthString,
+    value: LengthStringSet,
 }
 
 // @length(min:2, max:8)
@@ -130,6 +182,7 @@ structure DirectedAction {
 ])
 string MyEnum
 
+// TODO Rename these to ListOfLengthString, SetOfLengthString
 // A set that is not directly constrained, but that has a member that is. There
 // is no such example in any of the other test models!
 set LengthStringSet {
