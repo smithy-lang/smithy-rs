@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
-import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -624,13 +623,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     }
                     """
                 )
-//                withBlock("input = input.${member.deserializerBuilderSetterName(model, symbolProvider)}(", ");") {
-//                    if (symbolProvider.toSymbol(binding.member).isOptional()) {
-//                        "Some(${parsedValue(this)})"
-//                    } else {
-//                        parsedValue(this)
-//                    }
-//                }
             }
         }
         serverRenderUriPathParser(this, operationShape)
@@ -796,13 +788,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     //     * a map of set of string.
     enum class QueryParamsTargetMapValueType {
         STRING, LIST, SET;
-
-        fun asRustType(): RustType =
-            when (this) {
-                STRING -> RustType.String
-                LIST -> RustType.Vec(RustType.String)
-                SET -> RustType.HashSet(RustType.String)
-            }
     }
 
     private fun queryParamsTargetMapValueType(targetMapValue: Shape): QueryParamsTargetMapValueType =
@@ -815,8 +800,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         } else {
             throw ExpectationNotMetException(
                 """
-                @httpQueryParams trait applied to non-supported target
-                $targetMapValue of type ${targetMapValue.type}
+                @httpQueryParams trait applied to non-supported target $targetMapValue of type ${targetMapValue.type}
                 """.trimIndent(),
                 targetMapValue.sourceLocation
             )
@@ -838,9 +822,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
         fun HttpBindingDescriptor.queryParamsBindingTargetMapValueType(): QueryParamsTargetMapValueType {
             check(this.location == HttpLocation.QUERY_PARAMS)
-            val queryParamsTarget = model.expectShape(this.member.target)
-            val mapTarget = queryParamsTarget.asMapShape().get()
-            return queryParamsTargetMapValueType(model.expectShape(mapTarget.value.target))
+            val queryParamsTarget = model.expectShape(this.member.target, MapShape::class.java)
+            return queryParamsTargetMapValueType(model.expectShape(queryParamsTarget.value.target))
         }
 
         with(writer) {
@@ -853,11 +836,15 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             )
 
             if (queryParamsBinding != null) {
-                rustTemplate(
-                    "let mut query_params: #{HashMap}<String, " +
-                        "${queryParamsBinding.queryParamsBindingTargetMapValueType().asRustType().render()}> = #{HashMap}::new();",
-                    "HashMap" to RustType.HashMap.RuntimeType,
-                )
+                val target = model.expectShape(queryParamsBinding.member.target, MapShape::class.java)
+                val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
+                // TODO Here we only check the target shape; constraint traits on member shapes are not implemented yet.
+                val targetSymbol = unconstrainedShapeSymbolProvider!!.toSymbol(target)
+                withBlock("let mut query_params: #T = ", ";", targetSymbol) {
+                    conditionalBlock("#T(", ")", conditional = hasConstrainedTarget, targetSymbol) {
+                        rust("#T::new()", RustType.HashMap.RuntimeType)
+                    }
+                }
             }
             val (queryBindingsTargettingCollection, queryBindingsTargettingSimple) =
                 queryBindings.partition { model.expectShape(it.member.target) is CollectionShape }
@@ -933,50 +920,50 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
 
                 if (queryParamsBinding != null) {
+                    val target = model.expectShape(queryParamsBinding.member.target, MapShape::class.java)
+                    // TODO Here we only check the target shape; constraint traits on member shapes are not implemented yet.
+                    val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
                     when (queryParamsBinding.queryParamsBindingTargetMapValueType()) {
                         QueryParamsTargetMapValueType.STRING -> {
-                            rust("query_params.entry(String::from(k)).or_insert_with(|| String::from(v));")
+                            rust("query_params.${if (hasConstrainedTarget) "0." else ""}entry(String::from(k)).or_insert_with(|| String::from(v));")
                         }
                         QueryParamsTargetMapValueType.LIST, QueryParamsTargetMapValueType.SET -> {
-                            rust(
-                                """
-                                let entry = query_params.entry(String::from(k)).or_default();
-                                entry.push(String::from(v));
-                                """
-                            )
+                            if (hasConstrainedTarget) {
+                                val collectionShape = model.expectShape(target.value.target, CollectionShape::class.java)
+                                val collectionSymbol = unconstrainedShapeSymbolProvider!!.toSymbol(collectionShape)
+                                rust(
+                                    // `or_insert_with` instead of `or_insert` to avoid the allocation when the entry is
+                                    // not empty.
+                                    """
+                                    let entry = query_params.0.entry(String::from(k)).or_insert_with(|| #T(std::vec::Vec::new()));
+                                    entry.0.push(String::from(v));
+                                    """,
+                                    collectionSymbol,
+                                )
+                            } else {
+                                rust(
+                                    """
+                                    let entry = query_params.entry(String::from(k)).or_default();
+                                    entry.push(String::from(v));
+                                    """
+                                )
+                            }
                         }
                     }
                 }
             }
             if (queryParamsBinding != null) {
+                // TODO Constraint traits on member shapes are not implemented yet. We would have to check those here too.
                 val hasConstrainedTarget =
                     model.expectShape(queryParamsBinding.member.target, MapShape::class.java).canReachConstrainedShape(model, symbolProvider)
+                // TODO Why not always use the unconstrainedShapeSymbolProvider? It should work!
                 val symbolProvider = if (hasConstrainedTarget) unconstrainedShapeSymbolProvider!! else symbolProvider
                 val isOptional = symbolProvider.toSymbol(queryParamsBinding.member).isOptional()
                 withBlock("input = input.${queryParamsBinding.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(", ");") {
                     conditionalBlock("Some(", ")", conditional = isOptional) {
-                        conditionalBlock(
-                            "#T(",
-                            ")",
-                            conditional = hasConstrainedTarget,
-                            symbolProvider.toSymbol(queryParamsBinding.member).mapRustType { it.stripOuter<RustType.Option>() }) {
-                            write("query_params")
-                        }
+                        write("query_params")
                     }
                 }
-//                rust(
-//                    "input = input.${queryParamsBinding.member.deserializerBuilderSetterName(
-//                        model,
-//                        symbolProvider,
-//                        codegenContext.mode
-//                    )}(${
-//                    if (symbolProvider.toSymbol(queryParamsBinding.member).isOptional()) {
-//                        "Some(query_params)"
-//                    } else {
-//                        "query_params"
-//                    }
-//                    });"
-//                )
             }
             queryBindingsTargettingCollection.forEach { binding ->
                 // TODO Constraint traits on member shapes are not implemented yet. We would have to check those here too.

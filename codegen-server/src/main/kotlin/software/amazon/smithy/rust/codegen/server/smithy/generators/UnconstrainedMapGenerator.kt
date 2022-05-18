@@ -52,6 +52,7 @@ class UnconstrainedMapGenerator(
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
         val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
+        // TODO The unconstrained shape symbol provider should always work.
         val keySymbol = if (isKeyConstrained(keyShape)) {
             unconstrainedShapeSymbolProvider.toSymbol(keyShape)
         } else {

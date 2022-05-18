@@ -10,8 +10,8 @@ service SimpleService {
     operations: [
         //AnOperation,
         QueryParamsTargetingMapOfLengthString,
-        // QueryParamsTargetingMapOfListOfLengthString,
-        // QueryParamsTargetingMapOfSetOfLengthString,
+        QueryParamsTargetingMapOfListOfLengthString,
+        QueryParamsTargetingMapOfSetOfLengthString,
     ],
 }
 
