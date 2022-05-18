@@ -9,8 +9,6 @@ keywords = ["smithy", "framework", "web", "api", "aws"]
 categories = ["asynchronous", "web-programming", "api-bindings"]
 description = """
 Python server runtime for Smithy Rust Server Framework.
-
-NOTE: THIS IS HIGHLY EXPERIMENTAL AND SHOULD NOT BE USED YET.
 """
 # until this is not stable, it is not publishable.
 publish = false
