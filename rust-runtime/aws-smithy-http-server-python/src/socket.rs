@@ -26,9 +26,10 @@ pub struct SharedSocket {
 
 #[pymethods]
 impl SharedSocket {
-    /// Create a new `SharedSocket` from an address, port and backlog.
+    /// Create a new UNIX `SharedSocket` from an address, port and backlog.
     /// If not specified, the backlog defaults to 1024 connections.
     #[new]
+    #[cfg(not(target_os = "windows"))]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
         let address: SocketAddr = format!("{}:{}", address, port).parse()?;
         let domain = if address.is_ipv6() { Domain::IPV6 } else { Domain::IPV4 };
@@ -39,6 +40,22 @@ impl SharedSocket {
         // addresses. For IPv4 sockets this means that a socket may bind even when
         // there's a socket already listening on this port.
         socket.set_reuse_port(true)?;
+        socket.set_reuse_address(true)?;
+        socket.bind(&address.into())?;
+        socket.listen(backlog.unwrap_or(1024))?;
+        Ok(SharedSocket { inner: socket })
+    }
+
+    /// Create a new Windows `SharedSocket` from an address, port and backlog.
+    /// If not specified, the backlog defaults to 1024 connections.
+    #[new]
+    #[cfg(target_os = "windows")]
+    pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
+        let address: SocketAddr = format!("{}:{}", address, port).parse()?;
+        let domain = if address.is_ipv6() { Domain::IPV6 } else { Domain::IPV4 };
+        tracing::info!("Shared socket listening on {address}, IP version: {domain:?}");
+        let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
+        // `SO_REUSEPORT` is not available on Windows.
         socket.set_reuse_address(true)?;
         socket.bind(&address.into())?;
         socket.listen(backlog.unwrap_or(1024))?;
