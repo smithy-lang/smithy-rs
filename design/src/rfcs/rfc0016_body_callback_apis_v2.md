@@ -58,6 +58,9 @@ const CRC_32_C_HEADER_NAME: &str = "x-amz-checksum-crc32c";
 const SHA_1_HEADER_NAME: &str = "x-amz-checksum-sha1";
 const SHA_256_HEADER_NAME: &str = "x-amz-checksum-sha256";
 
+const WITH_OPTIONAL_WHITESPACE: bool = true;
+const TRAILER_SEPARATOR: &str = if WITH_OPTIONAL_WHITESPACE { ": " } else { ":" };
+
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug, Default)]
@@ -74,20 +77,25 @@ impl Crc32Callback {
 
     fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         let mut header_map = HeaderMap::new();
-        let key = HeaderName::from_static(CRC_32_HEADER_NAME);
-        // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.clone().finalize();
-        let value = HeaderValue::from_str(&base64::encode(u32::to_be_bytes(hash)))
-            .expect("base64 will always produce valid header values from checksums");
-
-        header_map.insert(key, value);
+        header_map.insert(Self::header_name(), self.header_value());
 
         Ok(Some(header_map))
     }
 
     // Size of the checksum in bytes
-    fn size() -> u64 {
+    fn size() -> usize {
         4
+    }
+
+    fn header_name() -> HeaderName {
+        HeaderName::from_static(CRC_32_HEADER_NAME)
+    }
+
+    fn header_value(&self) -> HeaderValue {
+        // We clone the hasher because `Hasher::finalize` consumes `self`
+        let hash = self.hasher.clone().finalize();
+        HeaderValue::from_str(&base64::encode(u32::to_be_bytes(hash)))
+            .expect("base64 will always produce valid header values from checksums")
     }
 }
 
@@ -108,20 +116,25 @@ impl Crc32cCallback {
 
     fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         let mut header_map = HeaderMap::new();
-        let key = HeaderName::from_static(CRC_32_C_HEADER_NAME);
-        // If no data was provided to this callback and no CRC was ever calculated, return zero as the checksum.
-        let hash = self.state.unwrap_or_default();
-        let value = HeaderValue::from_str(&base64::encode(u32::to_be_bytes(hash)))
-            .expect("base64 will always produce valid header values from checksums");
-
-        header_map.insert(key, value);
+        header_map.insert(Self::header_name(), self.header_value());
 
         Ok(Some(header_map))
     }
 
     // Size of the checksum in bytes
-    fn size() -> u64 {
+    fn size() -> usize {
         4
+    }
+
+    fn header_name() -> HeaderName {
+        HeaderName::from_static(CRC_32_C_HEADER_NAME)
+    }
+
+    fn header_value(&self) -> HeaderValue {
+        // If no data was provided to this callback and no CRC was ever calculated, return zero as the checksum.
+        let hash = self.state.unwrap_or_default();
+        HeaderValue::from_str(&base64::encode(u32::to_be_bytes(hash)))
+            .expect("base64 will always produce valid header values from checksums")
     }
 }
 
@@ -139,20 +152,25 @@ impl Sha1Callback {
 
     fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         let mut header_map = HeaderMap::new();
-        let key = HeaderName::from_static(SHA_1_HEADER_NAME);
-        // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.clone().finalize();
-        let value = HeaderValue::from_str(&base64::encode(&hash[..]))
-            .expect("base64 will always produce valid header values from checksums");
-
-        header_map.insert(key, value);
+        header_map.insert(Self::header_name(), self.header_value());
 
         Ok(Some(header_map))
     }
 
     // Size of the checksum in bytes
-    fn size() -> u64 {
+    fn size() -> usize {
         20
+    }
+
+    fn header_name() -> HeaderName {
+        HeaderName::from_static(SHA_1_HEADER_NAME)
+    }
+
+    fn header_value(&self) -> HeaderValue {
+        // We clone the hasher because `Hasher::finalize` consumes `self`
+        let hash = self.hasher.clone().finalize();
+        HeaderValue::from_str(&base64::encode(&hash[..]))
+            .expect("base64 will always produce valid header values from checksums")
     }
 }
 
@@ -170,20 +188,25 @@ impl Sha256Callback {
 
     fn trailers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
         let mut header_map = HeaderMap::new();
-        let key = HeaderName::from_static(SHA_256_HEADER_NAME);
-        // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.clone().finalize();
-        let value = HeaderValue::from_str(&base64::encode(&hash[..]))
-            .expect("base64 will always produce valid header values from checksums");
-
-        header_map.insert(key, value);
+        header_map.insert(Self::header_name(), self.header_value());
 
         Ok(Some(header_map))
     }
 
     // Size of the checksum in bytes
-    fn size() -> u64 {
+    fn size() -> usize {
         32
+    }
+
+    fn header_name() -> HeaderName {
+        HeaderName::from_static(SHA_256_HEADER_NAME)
+    }
+
+    fn header_value(&self) -> HeaderValue {
+        // We clone the hasher because `Hasher::finalize` consumes `self`
+        let hash = self.hasher.clone().finalize();
+        HeaderValue::from_str(&base64::encode(&hash[..]))
+            .expect("base64 will always produce valid header values from checksums")
     }
 }
 
@@ -231,19 +254,24 @@ impl ChecksumCallback {
         }
     }
 
-    // TODO I think I still need to account for the size of the trailer names.
-    //      Should I be doing that here?
     pub fn size_hint(&self) -> SizeHint {
-        let checksum_size_in_bytes = match &self.0 {
-            Inner::Crc32(_) => Crc32Callback::size(),
-            Inner::Crc32c(_) => Crc32cCallback::size(),
-            Inner::Sha1(_) => Sha1Callback::size(),
-            Inner::Sha256(_) => Sha256Callback::size(),
+        let (trailer_name_size_in_bytes, checksum_size_in_bytes) = match &self.0 {
+            // We want to get the size of the actual `HeaderName` except those don't have a `.len()`
+            // method so we'd have to convert back to the original string. That's why we're getting
+            // `.len()` from the original strings here.
+            Inner::Crc32(_) => (CRC_32_HEADER_NAME.len(), Crc32Callback::size()),
+            Inner::Crc32c(_) => (CRC_32_C_HEADER_NAME.len(), Crc32cCallback::size()),
+            Inner::Sha1(_) => (SHA_1_HEADER_NAME.len(), Sha1Callback::size()),
+            Inner::Sha256(_) => (SHA_256_HEADER_NAME.len(), Sha256Callback::size()),
         };
-        let base64_encoded_checksum_size_in_bytes =
-            base64::encoded_length(checksum_size_in_bytes as usize);
+        // The checksums will be base64 encoded so we need to get that length
+        let base64_encoded_checksum_size_in_bytes = base64::encoded_length(checksum_size_in_bytes);
 
-        SizeHint::with_exact(base64_encoded_checksum_size_in_bytes as u64)
+        let total_size = trailer_name_size_in_bytes
+            + TRAILER_SEPARATOR.len()
+            + base64_encoded_checksum_size_in_bytes;
+
+        SizeHint::with_exact(total_size as u64)
     }
 }
 ```
@@ -260,7 +288,6 @@ use http::{HeaderMap, HeaderValue};
 use http_body::{Body, SizeHint};
 use pin_project::pin_project;
 
-use std::error::Error as StdError;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -280,11 +307,10 @@ impl ChecksumBody<SdkBody> {
         }
     }
 
-    // TODO a more intelligent person could prob impl this with generics
     fn poll_inner(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Bytes, Error>>> {
+    ) -> Poll<Option<Result<Bytes, aws_smithy_http::body::Error>>> {
         let this = self.project();
         let inner = this.inner;
         let mut checksum_callback = this.checksum_callback;
@@ -307,11 +333,9 @@ impl ChecksumBody<SdkBody> {
     }
 }
 
-pub type Error = Box<dyn StdError + Send + Sync>;
-
 impl http_body::Body for ChecksumBody<SdkBody> {
     type Data = Bytes;
-    type Error = Error;
+    type Error = aws_smithy_http::body::Error;
 
     fn poll_data(
         self: Pin<&mut Self>,
