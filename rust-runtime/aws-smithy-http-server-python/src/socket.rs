@@ -66,4 +66,11 @@ mod tests {
         let socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
         assert!(socket.inner.is_listener().is_ok());
     }
+
+    #[test]
+    fn socket_can_be_cloned() {
+        let socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
+        let cloned_socket = socket.try_clone().unwrap();
+        assert!(cloned_socket.inner.is_listener().is_ok());
+    }
 }
