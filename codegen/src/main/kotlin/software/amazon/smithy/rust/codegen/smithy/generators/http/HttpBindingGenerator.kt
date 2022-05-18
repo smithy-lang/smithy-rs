@@ -354,7 +354,6 @@ class HttpBindingGenerator(
                 rust("let $parsedValue = $parsedValue?;")
             }
         }
-        // TODO(https://github.com/awslabs/smithy-rs/issues/837): this doesn't support non-optional vectors
         when (rustType) {
             is RustType.Vec ->
                 rust(

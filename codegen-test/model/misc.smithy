@@ -11,23 +11,26 @@ use aws.protocols#restJson1
 @title("MiscService")
 service MiscService {
     operations: [
-        OperationWithInnerRequiredShape,
+        RequiredInnerShapeOperation,
+        RequiredHeaderCollectionOperation,
     ],
 }
 
 /// This operation tests that (de)serializing required values from a nested
 /// shape works correctly.
-@http(uri: "/operation", method: "GET")
-operation OperationWithInnerRequiredShape {
-    input: OperationWithInnerRequiredShapeInput,
-    output: OperationWithInnerRequiredShapeOutput,
+@http(uri: "/required-inner-shape-operation", method: "GET")
+operation RequiredInnerShapeOperation {
+    input: RequiredInnerShapeOperationInputOutput,
+    output: RequiredInnerShapeOperationInputOutput,
 }
 
-structure OperationWithInnerRequiredShapeInput {
-    inner: InnerShape
+@http(uri: "/required-header-collection-operation", method: "GET")
+operation RequiredHeaderCollectionOperation {
+    input: RequiredHeaderCollectionOperationInputOutput,
+    output: RequiredHeaderCollectionOperationInputOutput,
 }
 
-structure OperationWithInnerRequiredShapeOutput {
+structure RequiredInnerShapeOperationInputOutput {
     inner: InnerShape
 }
 
@@ -107,4 +110,22 @@ union AUnion {
     i32: Integer,
     string: String,
     time: Timestamp,
+}
+
+structure RequiredHeaderCollectionOperationInputOutput {
+    @required
+    @httpHeader("X-Required-List")
+    requiredHeaderList: HeaderList,
+
+    @required
+    @httpHeader("X-Required-Set")
+    requiredHeaderSet: HeaderSet,
+}
+
+list HeaderList {
+    member: String
+}
+
+set HeaderSet {
+    member: String
 }
