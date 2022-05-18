@@ -17,9 +17,6 @@ pub mod routing;
 
 #[doc(hidden)]
 pub mod protocols;
-#[cfg(feature = "python")]
-#[doc(hidden)]
-pub mod python;
 #[doc(hidden)]
 pub mod rejection;
 #[doc(hidden)]
