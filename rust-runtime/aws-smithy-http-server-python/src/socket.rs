@@ -34,15 +34,11 @@ impl SharedSocket {
         let domain = if address.is_ipv6() { Domain::IPV6 } else { Domain::IPV4 };
         tracing::info!("Shared socket listening on {address}, IP version: {domain:?}");
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
-        // Set value for the `SO_REUSEPORT` option on this socket.
+        // Set value for the `SO_REUSEPORT` and `SO_REUSEADDR` options on this socket.
         // This indicates that further calls to `bind` may allow reuse of local
         // addresses. For IPv4 sockets this means that a socket may bind even when
         // there's a socket already listening on this port.
         socket.set_reuse_port(true)?;
-        // Set value for the `SO_REUSEADDR` option on this socket.
-        // This indicates that futher calls to `bind` may allow reuse of local
-        // addresses. For IPv4 sockets this means that a socket may bind even when
-        // there's a socket already listening on this port.
         socket.set_reuse_address(true)?;
         socket.bind(&address.into())?;
         socket.listen(backlog.unwrap_or(1024))?;
