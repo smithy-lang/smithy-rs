@@ -26,11 +26,13 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -40,6 +42,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerR
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
@@ -49,6 +52,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperat
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -958,20 +962,25 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 )
             }
             queryBindingsTargettingCollection.forEach {
+                // TODO Constraint traits on member shapes are not implemented yet. We would have to check those here too.
+                val hasConstrainedTarget =
+                        model.expectShape(it.member.target, CollectionShape::class.java).canReachConstrainedShape(model, symbolProvider)
+                val symbolProvider = if (hasConstrainedTarget) unconstrainedShapeSymbolProvider!! else symbolProvider
                 val memberName = symbolProvider.toMemberName(it.member)
-                rustTemplate(
-                    """
-                    if !$memberName.is_empty() {
-                        input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(${
-                    if (symbolProvider.toSymbol(it.member).isOptional()) {
-                        "Some($memberName)"
-                    } else {
-                        memberName
+                val isOptional = symbolProvider.toSymbol(it.member).isOptional()
+                rustBlock("if !$memberName.is_empty()") {
+                    withBlock("input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.mode)}(", ");") {
+                        conditionalBlock("Some(", ")", conditional = isOptional) {
+                            conditionalBlock(
+                                "#T(",
+                                ")",
+                                conditional = hasConstrainedTarget,
+                                symbolProvider.toSymbol(it.member).mapRustType { t -> t.stripOuter<RustType.Option>() }) {
+                                write(memberName)
+                            }
+                        }
                     }
-                    });
-                    }
-                    """.trimIndent()
-                )
+                }
             }
         }
     }

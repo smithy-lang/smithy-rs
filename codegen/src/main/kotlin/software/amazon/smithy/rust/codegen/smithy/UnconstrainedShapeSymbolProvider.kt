@@ -132,8 +132,11 @@ class UnconstrainedShapeSymbolProvider(
             }
             is MemberShape -> {
                 // The only case where we use this symbol provider on a member shape is when generating deserializers
-                // for HTTP-bound member shapes. See how e.g. [HttpBindingGenerator] generates deserializers for a member
-                // shape with the `httpPrefixHeaders` trait targeting a map shape of string keys and values.
+                // for HTTP-bound member shapes. See, for example:
+                // * how [HttpBindingGenerator] generates deserializers for a member shape with the `httpPrefixHeaders`
+                //   trait targeting a map shape of string keys and values; or
+                // * how [ServerHttpBoundProtocolGenerator] deserializes for a member shape with the `httpQuery` trait
+                //   targeting a collection shape that can reach a constrained shape.
                 if (model.expectShape(shape.container).isStructureShape && shape.targetCanReachConstrainedShape(model, base)) {
                     val targetShape = model.expectShape(shape.target)
                     val targetSymbol = this.toSymbol(targetShape)

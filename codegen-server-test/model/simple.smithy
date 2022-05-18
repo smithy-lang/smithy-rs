@@ -29,24 +29,28 @@ structure AnOperationInput {
     //  when deserializing HTTP messages.
 
     // TODO Test with mediaType trait too.
-    @httpHeader("X-Length")
-    lengthString: LengthString,
+    // @httpHeader("X-Length")
+    // lengthStringHeader: LengthString,
 
-    @httpHeader("X-Length-Set")
-    lengthStringSet: LengthStringSet,
+    // @httpHeader("X-Length-Set")
+    // lengthStringSetHeader: LengthStringSet,
 
-    @httpHeader("X-Length-List")
-    lengthStringList: LengthStringList,
+    // @httpHeader("X-Length-List")
+    // lengthStringListHeader: LengthStringList,
 
-    @httpHeader("X-String")
-    string: String,
+    // // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
+    // // @required
+    // @httpPrefixHeaders("X-Prefix-Headers-")
+    // lengthStringHeaderMap: LengthStringHeaderMap,
 
-    // @required
-    @httpPrefixHeaders("X-Required-")
-    requiredHeaderMap: HeaderMap,
+    @httpQuery("lengthString")
+    lengthStringQuery: LengthString,
 
-    //@httpPrefixHeaders("X-Foo-")
-    //headerMap: HeaderMap
+    @httpQuery("lengthStringList")
+    lengthStringListQuery: LengthStringList,
+
+    @httpQuery("lengthStringSet")
+    lengthStringSetQuery: LengthStringSet,
 }
 
 structure AnOperationOutput {
@@ -79,7 +83,7 @@ structure ConA {
     //set: LengthStringSet,
 }
 
-map HeaderMap {
+map LengthStringHeaderMap {
     key: LengthString,
     value: LengthString,
 }
