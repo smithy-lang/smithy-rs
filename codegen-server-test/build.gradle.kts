@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 description = "Generates Rust code from Smithy models and runs the protocol tests"
@@ -45,7 +45,7 @@ val allCodegenTests = listOf(
     CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
 )
 
-task("generateSmithyBuild") {
+tasks.register("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
         projectDir.resolve("smithy-build.json")
@@ -59,7 +59,7 @@ task("generateSmithyBuild") {
     }
 }
 
-task("generateCargoWorkspace") {
+tasks.register("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
         buildDir.resolve("$workingDirUnderBuildDir/Cargo.toml")

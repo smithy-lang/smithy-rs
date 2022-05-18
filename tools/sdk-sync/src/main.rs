@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use anyhow::{Context, Result};
@@ -16,7 +16,7 @@ const CODEGEN_MIN_RAM_REQUIRED_GB: usize = 2;
 
 /// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
 #[derive(Parser, Debug)]
-#[clap(name = "smithy-rs-sync")]
+#[clap(name = "sdk-sync")]
 struct Args {
     /// The path to the smithy-rs repo folder.
     #[clap(long, parse(from_os_str))]

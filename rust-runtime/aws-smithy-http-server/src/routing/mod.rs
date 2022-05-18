@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! HTTP routing that adheres to the [Smithy specification].
@@ -10,10 +10,10 @@
 use self::future::RouterFuture;
 use self::request_spec::RequestSpec;
 use crate::body::{boxed, Body, BoxBody, HttpBody};
+use crate::error::BoxError;
 use crate::protocols::Protocol;
+use crate::response::IntoResponse;
 use crate::runtime_error::{RuntimeError, RuntimeErrorKind};
-use crate::BoxError;
-use axum_core::response::IntoResponse;
 use http::{Request, Response, StatusCode};
 use std::collections::HashMap;
 use std::{
@@ -365,7 +365,10 @@ where
 #[cfg(test)]
 mod rest_tests {
     use super::*;
-    use crate::{body::boxed, routing::request_spec::*};
+    use crate::{
+        body::{boxed, BoxBody},
+        routing::request_spec::*,
+    };
     use futures_util::Future;
     use http::{HeaderMap, Method};
     use std::pin::Pin;

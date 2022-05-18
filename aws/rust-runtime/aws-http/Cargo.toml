@@ -12,7 +12,7 @@ aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../aws-types" }
 http = "0.2.3"
-lazy_static = "1"
+lazy_static = "1.4.0"
 tracing = "0.1"
 percent-encoding = "2.1.0"
 

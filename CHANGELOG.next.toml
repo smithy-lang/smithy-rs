@@ -11,14 +11,20 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
 
-[[aws-sdk-rust]]
-message = "Log a debug event when a retry is going to be peformed"
-references = ["smithy-rs#1352"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
-
 [[smithy-rs]]
-message = "Log a debug event when a retry is going to be peformed"
-references = ["smithy-rs#1352"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
+message = "Add ability to sign a request with all headers, or to change which headers are excluded from signing"
+references = ["smithy-rs#1381"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "alonlud"
+
+ [[aws-sdk-rust]]
+ message = "Add method `ByteStream::into_async_read`. This makes it easy to convert `ByteStream`s into a struct implementing `tokio:io::AsyncRead`. Available on **crate feature** `rt-tokio` only."
+ references = ["smithy-rs#1390"]
+ meta = { "breaking" = false, "tada" = true, "bug" = false }
+ author = "Velfi"
+
+ [[smithy-rs]]
+ message = "Add method `ByteStream::into_async_read`. This makes it easy to convert `ByteStream`s into a struct implementing `tokio:io::AsyncRead`. Available on **crate feature** `rt-tokio` only."
+ references = ["smithy-rs#1390"]
+ meta = { "breaking" = false, "tada" = true, "bug" = false }
+ author = "Velfi"
