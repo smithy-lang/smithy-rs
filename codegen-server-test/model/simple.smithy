@@ -4,125 +4,125 @@ namespace com.amazonaws.simple
 
 use aws.protocols#restJson1
 
+// TODO Move to another file and rename to ConstraintTraitsService.
 @restJson1
-@title("SimpleService")
 service SimpleService {
     operations: [
-        //AnOperation,
-        QueryParamsTargetingMapOfLengthString,
-        QueryParamsTargetingMapOfListOfLengthString,
-        QueryParamsTargetingMapOfSetOfLengthString,
+        ConstrainedShapesOperation,
+        ConstrainedHttpBoundShapesOperation,
+        ConstrainedRecursiveShapesOperation,
+        // `httpQueryParams` is structurually exclusive, so we need one
+        // operation per target shape type combination.
+        QueryParamsTargetingMapOfLengthStringOperation,
+        QueryParamsTargetingMapOfListOfLengthStringOperation,
+        QueryParamsTargetingMapOfSetOfLengthStringOperation,
     ],
 }
 
-@http(uri: "/operation", method: "GET")
-operation AnOperation {
-    // input: RecursiveShapesInputOutput,
-    // output: RecursiveShapesInputOutput,
-    input: AnOperationInput,
-    output: AnOperationOutput,
-    // errors: [MyError]
+@http(uri: "/constrained-shapes-operation", method: "GET")
+operation ConstrainedShapesOperation {
+    input: ConstrainedShapesOperationInputOutput,
+    output: ConstrainedShapesOperationInputOutput,
+    errors: [ErrorWithLengthStringMessage]
 }
 
-@http(uri: "/query-params-targeting-map-of-length-string", method: "GET")
-operation QueryParamsTargetingMapOfLengthString {
-    input: QueryParamsTargetingMapOfLengthStringInputOutput,
-    output: QueryParamsTargetingMapOfLengthStringInputOutput,
+@http(uri: "/constrained-http-bound-shapes-operation", method: "GET")
+operation ConstrainedHttpBoundShapesOperation {
+    input: ConstrainedHttpBoundShapesOperationInputOutput,
+    output: ConstrainedHttpBoundShapesOperationInputOutput,
 }
 
-@http(uri: "/query-params-targeting-map-of-list-of-length-string", method: "GET")
-operation QueryParamsTargetingMapOfListOfLengthString {
-    input: QueryParamsTargetingMapOfListOfLengthStringInputOutput,
-    output: QueryParamsTargetingMapOfListOfLengthStringInputOutput,
+@http(uri: "/constrained-recursive-shapes-operation", method: "GET")
+operation ConstrainedRecursiveShapesOperation {
+    input: ConstrainedRecursiveShapesOperationInputOutput,
+    output: ConstrainedRecursiveShapesOperationInputOutput,
 }
 
-@http(uri: "/query-params-targeting-map-of-set-of-length-string", method: "GET")
-operation QueryParamsTargetingMapOfSetOfLengthString {
-    input: QueryParamsTargetingMapOfSetOfLengthStringInputOutput,
-    output: QueryParamsTargetingMapOfSetOfLengthStringInputOutput,
+@http(uri: "/query-params-targeting-map-of-length-string-operation", method: "GET")
+operation QueryParamsTargetingMapOfLengthStringOperation {
+    input: QueryParamsTargetingMapOfLengthStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfLengthStringOperationInputOutput,
 }
 
-structure QueryParamsTargetingMapOfLengthStringInputOutput {
-    @httpQueryParams
-    mapOfLengthString: MapOfLengthString
+@http(uri: "/query-params-targeting-map-of-list-of-length-string-operation", method: "GET")
+operation QueryParamsTargetingMapOfListOfLengthStringOperation {
+    input: QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput,
 }
 
-structure QueryParamsTargetingMapOfListOfLengthStringInputOutput {
-    @httpQueryParams
-    mapOfListOfLengthString: MapOfListOfLengthString
+@http(uri: "/query-params-targeting-map-of-set-of-length-string-operation", method: "GET")
+operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
+    input: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
 }
 
-structure QueryParamsTargetingMapOfSetOfLengthStringInputOutput {
-    @httpQueryParams
-    mapOfSetOfLengthString: MapOfSetOfLengthString
-}
-
-structure AnOperationInput {
+structure ConstrainedShapesOperationInputOutput {
     @required
     conA: ConA,
+}
 
-    //  Only top-level members of an operation's input structure are considered
-    //  when deserializing HTTP messages.
+structure ConstrainedHttpBoundShapesOperationInputOutput {
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
+    // @required
+    @httpPrefixHeaders("X-Prefix-Headers-")
+    lengthStringHeaderMap: MapOfLengthString,
 
     // TODO Test with mediaType trait too.
-    // @httpHeader("X-Length")
-    // lengthStringHeader: LengthString,
+    @httpHeader("X-Length")
+    lengthStringHeader: LengthString,
 
-    // @httpHeader("X-Length-Set")
-    // lengthStringSetHeader: LengthStringSet,
+    @httpHeader("X-Length-Set")
+    lengthStringSetHeader: SetOfLengthString,
 
-    // @httpHeader("X-Length-List")
-    // lengthStringListHeader: LengthStringList,
-
-    // // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
-    // // @required
-    // @httpPrefixHeaders("X-Prefix-Headers-")
-    // lengthStringHeaderMap: LengthStringHeaderMap,
+    @httpHeader("X-Length-List")
+    lengthStringListHeader: ListOfLengthString,
 
     @httpQuery("lengthString")
     lengthStringQuery: LengthString,
 
     @httpQuery("lengthStringList")
-    lengthStringListQuery: LengthStringList,
+    lengthStringListQuery: ListOfLengthString,
 
     @httpQuery("lengthStringSet")
-    lengthStringSetQuery: LengthStringSet,
+    lengthStringSetQuery: SetOfLengthString,
 }
 
-structure AnOperationOutput {
-    // conA: ConA,
+structure QueryParamsTargetingMapOfLengthStringOperationInputOutput {
+    @httpQueryParams
+    mapOfLengthString: MapOfLengthString
+}
 
-    // conCList: ConCList,
+structure QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput {
+    @httpQueryParams
+    mapOfListOfLengthString: MapOfListOfLengthString
+}
+
+structure QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput {
+    @httpQueryParams
+    mapOfSetOfLengthString: MapOfSetOfLengthString
 }
 
 structure ConA {
-    // @required
-    // conB: ConB,
+    @required
+    conB: ConB,
 
-    // optConB: ConB,
+    optConB: ConB,
 
-    // conBList: ConBList,
-    // conBList2: ConBList2,
+    conBList: ConBList,
+    conBList2: ConBList2,
 
-    // conBSet: ConBSet,
+    conBSet: ConBSet,
 
-    // conBMap: ConBMap
+    conBMap: ConBMap,
 
-    // normalString: NormalString,
+    mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 
-    // playerAction: PlayerAction,
-    // myEnum: MyEnum
+    unionWithConstrainedStructureVariant: UnionWithConstrainedStructureVariant,
+    enumString: EnumString,
 
-    // @length(min:4, max:6)
-    // list: LengthList,
+    listOfLengthString: ListOfLengthString,
 
-    //set: LengthStringSet,
-}
-
-// TODO Use MapOfLengthString
-map LengthStringHeaderMap {
-    key: LengthString,
-    value: LengthString,
+    setOfLengthString: SetOfLengthString,
 }
 
 map MapOfLengthString {
@@ -132,38 +132,29 @@ map MapOfLengthString {
 
 map MapOfListOfLengthString {
     key: LengthString,
-    value: LengthStringList,
+    value: ListOfLengthString,
 }
 
 map MapOfSetOfLengthString {
     key: LengthString,
-    value: LengthStringSet,
+    value: SetOfLengthString,
 }
 
-// @length(min:2, max:8)
-// list LengthList {
-//     member: LengthString
-// }
+@length(min: 2, max: 8)
+list LengthListOfLengthString {
+    member: LengthString
+}
 
-@length(min:2, max:8)
+@length(min: 2, max: 69)
 string LengthString
 
-string NormalString
-
-union PlayerAction {
-    /// Quit the game.
-    quit: Unit,
-
-    /// Move in a specific direction.
-    move: DirectedAction,
-
-    /// Jump in a specific direction.
-    jump: DirectedAction
+union UnionWithConstrainedStructureVariant {
+    constrainedStructureVariant: ConstrainedStructureVariant
 }
 
-structure DirectedAction {
+structure ConstrainedStructureVariant {
     @required
-    direction: Integer
+    int: Integer
 }
 
 @enum([
@@ -180,31 +171,31 @@ structure DirectedAction {
         name: "M256_MEGA",
     }
 ])
-string MyEnum
+string EnumString
 
-// TODO Rename these to ListOfLengthString, SetOfLengthString
-// A set that is not directly constrained, but that has a member that is. There
-// is no such example in any of the other test models!
-set LengthStringSet {
+set SetOfLengthString {
     member: LengthString
 }
 
-list LengthStringList {
+list ListOfLengthString {
     member: LengthString
 }
 
-// structure ConB {
-//     @required
-//     nice: String,
-//     @required
-//     int: Integer,
-//
-//     optNice: String,
-//     optInt: Integer
-// }
+structure ConB {
+    @required
+    nice: String,
+    @required
+    int: Integer,
 
-structure RecursiveShapesInputOutput {
-    nested: RecursiveShapesInputOutputNested1
+    optNice: String,
+    optInt: Integer
+}
+
+structure ConstrainedRecursiveShapesOperationInputOutput {
+    nested: RecursiveShapesInputOutputNested1,
+
+    @required
+    recursiveList: RecursiveList
 }
 
 structure RecursiveShapesInputOutputNested1 {
@@ -217,61 +208,48 @@ structure RecursiveShapesInputOutputNested2 {
     recursiveMember: RecursiveShapesInputOutputNested1,
 }
 
-// list ValidList {
-//     member: RecursiveShapesInputOutput
-// }
-//
-// structure RecursiveShapesInputOutput {
-//     @required
-//     foo: ValidList
-// }
+list RecursiveList {
+    member: RecursiveShapesInputOutputNested1
+}
 
-// list ConBList {
-//     member: AnotherList
-// }
+list ConBList {
+    member: NestedList
+}
 
-// list ConBList2 {
-//     member: ConB
-// }
+list ConBList2 {
+    member: ConB
+}
 
-// list ConCList {
-//     member: AnotherList
-// }
-//
-// list AnotherList {
-//     member: ConB
-// }
-//
-// set ConBSet {
-//     member: AnotherSet
-// }
-//
-// set AnotherSet {
-//     member: String
-// }
-//
+list NestedList {
+    member: ConB
+}
 
-// @length(min: 1, max: 69)
-// map ConBMap {
-//     key: String,
-//     //value: AnotherMap
-//     value: NiceString
-// }
+set ConBSet {
+    member: NestedSet
+}
 
-// @length(min: 1, max: 10)
-// string NiceString
+set NestedSet {
+    member: String
+}
 
-// @error("client")
-// @retryable
-// @httpError(429)
-// structure MyError {
-//     @required
-//     message: NiceString
-// }
+@length(min: 1, max: 69)
+map ConBMap {
+    key: String,
+    value: LengthString
+}
 
-//
-// map AnotherMap {
-//     key: String,
-//     value: ConBList
-//     //value: ConB
-// }
+@error("client")
+structure ErrorWithLengthStringMessage {
+    @required
+    message: LengthString
+}
+
+map MapOfMapOfListOfListOfConB {
+    key: String,
+    value: MapOfListOfListOfConB
+}
+
+map MapOfListOfListOfConB {
+    key: String,
+    value: ConBList
+}
