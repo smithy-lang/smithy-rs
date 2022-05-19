@@ -176,7 +176,7 @@ class HttpBindingGenerator(
                 if (returnUnconstrainedType) {
                     // If the map shape has constrained string keys or values, we need to wrap the deserialized hash map
                     // in the corresponding unconstrained wrapper tuple struct.
-                    rust("let out = out.map(|hm| #T(hm));", outputT.mapRustType { it.stripOuter<RustType.Option>() })
+                    rust("let out = out.map(#T);", outputT.mapRustType { it.stripOuter<RustType.Option>() })
                 }
                 rust("out.map(Some)")
             }
