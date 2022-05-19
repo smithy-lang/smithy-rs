@@ -177,6 +177,17 @@ async fn correct_owner(package: &Package) -> Result<()> {
         Duration::from_secs(5),
         || async {
             let owners = cargo::GetOwners::new(&package.handle.name).spawn().await?;
+            let incorrect_owners = owners.iter().filter(|&owner| owner != CRATE_OWNER);
+            for incorrect_owner in incorrect_owners {
+                cargo::RemoveOwner::new(&package.handle.name, incorrect_owner)
+                    .spawn()
+                    .await
+                    .context("remove incorrect owner")?;
+                info!(
+                    "Removed incorrect owner `{}` from crate `{}`",
+                    incorrect_owner, package.handle
+                );
+            }
             if !owners.iter().any(|owner| owner == CRATE_OWNER) {
                 cargo::AddOwner::new(&package.handle.name, CRATE_OWNER)
                     .spawn()

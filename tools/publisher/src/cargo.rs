@@ -8,11 +8,13 @@
 mod add_owner;
 mod get_owners;
 mod publish;
+mod remove_owner;
 mod yank;
 
 pub use add_owner::AddOwner;
 pub use get_owners::GetOwners;
 pub use publish::Publish;
+pub use remove_owner::RemoveOwner;
 pub use yank::Yank;
 
 use anyhow::{Context, Result};
