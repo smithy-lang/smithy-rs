@@ -11,11 +11,14 @@ service SimpleService {
         ConstrainedShapesOperation,
         ConstrainedHttpBoundShapesOperation,
         ConstrainedRecursiveShapesOperation,
-        // `httpQueryParams` is structurually exclusive, so we need one
-        // operation per target shape type combination.
+        // `httpQueryParams` and `httpPrefixHeaders` are structurually
+        // exclusive, so we need one operation per target shape type
+        // combination.
+        QueryParamsTargetingLengthMapOperation,
         QueryParamsTargetingMapOfLengthStringOperation,
         QueryParamsTargetingMapOfListOfLengthStringOperation,
         QueryParamsTargetingMapOfSetOfLengthStringOperation,
+        HttpPrefixHeadersTargetingLengthMapOperation,
     ],
 }
 
@@ -38,6 +41,12 @@ operation ConstrainedRecursiveShapesOperation {
     output: ConstrainedRecursiveShapesOperationInputOutput,
 }
 
+@http(uri: "/query-params-targeting-length-map", method: "GET")
+operation QueryParamsTargetingLengthMapOperation {
+    input: QueryParamsTargetingLengthMapOperationInputOutput,
+    output: QueryParamsTargetingLengthMapOperationInputOutput,
+}
+
 @http(uri: "/query-params-targeting-map-of-length-string-operation", method: "GET")
 operation QueryParamsTargetingMapOfLengthStringOperation {
     input: QueryParamsTargetingMapOfLengthStringOperationInputOutput,
@@ -54,6 +63,12 @@ operation QueryParamsTargetingMapOfListOfLengthStringOperation {
 operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
     input: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
     output: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
+}
+
+@http(uri: "/http-prefix-headers-targeting-length-map-operation", method: "GET")
+operation HttpPrefixHeadersTargetingLengthMapOperation {
+    input: HttpPrefixHeadersTargetingLengthMapOperationInputOutput,
+    output: HttpPrefixHeadersTargetingLengthMapOperationInputOutput,
 }
 
 structure ConstrainedShapesOperationInputOutput {
@@ -87,6 +102,16 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     lengthStringSetQuery: SetOfLengthString,
 }
 
+structure HttpPrefixHeadersTargetingLengthMapOperationInputOutput {
+    @httpPrefixHeaders("X-Prefix-Headers-")
+    lengthMap: ConBMap,
+}
+
+structure QueryParamsTargetingLengthMapOperationInputOutput {
+    @httpQueryParams
+    lengthMap: ConBMap
+}
+
 structure QueryParamsTargetingMapOfLengthStringOperationInputOutput {
     @httpQueryParams
     mapOfLengthString: MapOfLengthString
@@ -113,7 +138,7 @@ structure ConA {
 
     conBSet: ConBSet,
 
-    // conBMap: ConBMap,
+    conBMap: ConBMap,
 
     mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 

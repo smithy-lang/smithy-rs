@@ -542,9 +542,12 @@ class HttpBindingGenerator(
         }
         ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
             val listHeader = memberType is CollectionShape
+            // `iter()` is needed for when the value implements `Deref` for a `Target` that is an iterator; `Deref` coercion
+            // does not happen in for loops.
+            // This case happens when the value is a constrained type i.e. a wrapper tuple newtype holding a `HashMap`.
             rustTemplate(
                 """
-                for (k, v) in $field {
+                for (k, v) in $field.iter() {
                     use std::str::FromStr;
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
