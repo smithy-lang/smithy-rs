@@ -3,6 +3,8 @@ $version: "1.0"
 namespace aws.protocoltests.misc
 
 use aws.protocols#restJson1
+use smithy.test#httpRequestTests
+use smithy.test#httpResponseTests
 
 /// A service to test miscellaneous aspects of code generation where protocol
 /// selection is not relevant. If you want to test something protocol-specific,
@@ -12,6 +14,8 @@ use aws.protocols#restJson1
 service MiscService {
     operations: [
         OperationWithInnerRequiredShape,
+        ResponseCodeRequired,
+        ResponseCodeDefault,
     ],
 }
 
@@ -108,3 +112,67 @@ union AUnion {
     string: String,
     time: Timestamp,
 }
+
+/// This operation tests that the response code defaults to @http's code
+@http(method: "GET", uri: "/responseCodeDefault", code: 418)
+@httpRequestTests([
+    {
+        id: "ResponseCodeDefaultTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/responseCodeDefault",
+        method: "GET",
+    }
+])
+@httpResponseTests([
+    {
+        id: "ResponseCodeDefaultTest",
+        protocol: "aws.protocols#restJson1",
+        code: 418,
+    }
+])
+operation ResponseCodeDefault {
+    input: ResponseCodeDefaultInput,
+    output: ResponseCodeDefaultOutput,
+}
+
+@input
+structure ResponseCodeDefaultInput {}
+
+@output
+structure ResponseCodeDefaultOutput {}
+
+/// This operation tests that @httpResponseCode is @required
+/// and is used over @http's code
+@http(method: "GET", uri: "/responseCodeRequired", code: 200)
+@httpRequestTests([
+    {
+        id: "ResponseCodeRequiredTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/responseCodeRequired",
+        method: "GET",
+    }
+])
+@httpResponseTests([
+    {
+        id: "ResponseCodeRequiredTest",
+        protocol: "aws.protocols#restJson1",
+        code: 418,
+        params: {"responseCode": 418}
+    }
+])
+operation ResponseCodeRequired {
+    input: ResponseCodeRequiredInput,
+    output: ResponseCodeRequiredOutput,
+}
+
+@input
+structure ResponseCodeRequiredInput {}
+
+@output
+structure ResponseCodeRequiredOutput {
+    @required
+    @httpResponseCode
+    responseCode: HttpResponseCode,
+}
+
+integer HttpResponseCode

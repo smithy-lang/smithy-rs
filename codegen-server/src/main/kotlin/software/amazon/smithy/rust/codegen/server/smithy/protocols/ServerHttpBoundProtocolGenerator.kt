@@ -20,6 +20,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
+import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -468,7 +469,15 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
-        bindings.find { it.location == HttpLocation.RESPONSE_CODE }?.let { serverRenderResponseCodeBinding(it)(this) }
+        bindings.find { it.location == HttpLocation.RESPONSE_CODE }
+            ?.let {
+                serverRenderResponseCodeBinding(it, null)(this)
+            }
+            // no binding but http has a code set?
+            ?: operationShape.getTrait<HttpTrait>()?.code?.let {
+                serverRenderResponseCodeBinding(null, it)(this)
+            }
+        // leave the default code
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
             val memberName = symbolProvider.toMemberName(it)
@@ -552,24 +561,35 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     private fun serverRenderResponseCodeBinding(
-        binding: HttpBindingDescriptor
+        binding: HttpBindingDescriptor?,
+        defaultCode: Int?
     ): Writable {
-        check(binding.location == HttpLocation.RESPONSE_CODE)
+        check(binding?.location == HttpLocation.RESPONSE_CODE || defaultCode != null)
+
         return writable {
-            val memberName = symbolProvider.toMemberName(binding.member)
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1229): This code is problematic for two reasons:
-            // 1. We're not falling back to the `http` trait if no `output.$memberName` is `None`.
-            // 2. It only works when `output.$memberName` is of type `Option<i32>`.
+            binding?.let {
+                val memberName = symbolProvider.toMemberName(binding.member)
+                rust("let status = output.$memberName")
+                if (binding.member.isOptional) {
+                    rustTemplate(
+                        """
+                        .ok_or(#{ResponseRejection}::MissingHttpStatusCode)?
+                        """.trimIndent(),
+                        *codegenScope,
+                    )
+                }
+            } ?: run {
+                rust("let status = $defaultCode")
+            }
             rustTemplate(
                 """
-                let status = output.$memberName
-                    .ok_or(#{ResponseRejection}::MissingHttpStatusCode)?;
+                ;
                 let http_status: u16 = status.try_into()
                     .map_err(|_| #{ResponseRejection}::InvalidHttpStatusCode)?;
+                builder = builder.status(http_status);
                 """.trimIndent(),
                 *codegenScope,
             )
-            rust("builder = builder.status(http_status);")
         }
     }
 
