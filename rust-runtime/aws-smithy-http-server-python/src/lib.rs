@@ -11,7 +11,10 @@
 //!
 //! [PyO3]: https://pyo3.rs/
 
+mod logging;
 mod socket;
 
+#[doc(inline)]
+pub use logging::{setup, LogLevel};
 #[doc(inline)]
 pub use socket::SharedSocket;

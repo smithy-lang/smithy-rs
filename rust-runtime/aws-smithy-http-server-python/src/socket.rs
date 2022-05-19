@@ -10,6 +10,8 @@ use pyo3::prelude::*;
 use socket2::{Domain, Protocol, Socket, Type};
 use std::net::SocketAddr;
 
+/// Socket implementation that can be shared between multiple Python processes.
+///
 /// Python cannot handle true multi-threaded applications due to the [GIL],
 /// often resulting in reduced performance and only one core used by the application.
 /// To work around this, Python web applications usually create a socket with
