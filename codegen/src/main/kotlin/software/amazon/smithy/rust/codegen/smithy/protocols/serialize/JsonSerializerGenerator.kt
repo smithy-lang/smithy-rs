@@ -416,7 +416,10 @@ class JsonSerializerGenerator(
     private fun RustWriter.serializeMap(context: Context<MapShape>) {
         val keyName = safeName("key")
         val valueName = safeName("value")
-        rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
+        // `iter()` is needed for when the value implements `Deref` for a `Target` that is an iterator; `Deref` coercion
+        // does not happen in for loops.
+        // This case happens when the value is a constrained type i.e. a wrapper tuple newtype holding a `HashMap`.
+        rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}.iter()") {
             val keyTarget = model.expectShape(context.shape.key.target)
             val keyExpression = when (keyTarget.hasTrait<EnumTrait>()) {
                 true -> "$keyName.as_str()"

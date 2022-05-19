@@ -42,6 +42,7 @@ class PublicConstrainedMapGenerator(
         }
 
         // TODO Docs for everything.
+        // TODO Use TryFrom from Dan's PR.
         writer.rustTemplate(
             """
             ##[derive(Debug, Clone, PartialEq)]
@@ -55,6 +56,14 @@ class PublicConstrainedMapGenerator(
             
             impl #{ConstrainedTrait} for $name  {
                 type Unconstrained = #{UnconstrainedSymbol};
+            }
+            
+            impl std::ops::Deref for $name {
+                type Target = $inner;
+            
+                fn deref(&self) -> &Self::Target {
+                    &self.0
+                }
             }
             
             impl std::convert::TryFrom<$inner> for $name {

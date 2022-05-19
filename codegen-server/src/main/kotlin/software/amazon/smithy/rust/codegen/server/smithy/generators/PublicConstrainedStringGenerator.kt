@@ -46,6 +46,7 @@ class PublicConstrainedStringGenerator(
 
         // TODO Docs for everything.
         // TODO Display impl.
+        // TODO Use TryFrom from Dan's PR.
         // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
         // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
         // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
@@ -86,7 +87,7 @@ class PublicConstrainedStringGenerator(
             
             impl std::fmt::Display for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                   write!(f, "{}", self.0)
+                   self.0.fmt(f)
                 }
             }
             
