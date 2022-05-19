@@ -29,7 +29,7 @@ operation ConstrainedShapesOperation {
     errors: [ErrorWithLengthStringMessage]
 }
 
-@http(uri: "/constrained-http-bound-shapes-operation", method: "GET")
+@http(uri: "/constrained-http-bound-shapes-operation/{lengthStringLabel}", method: "GET")
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
@@ -77,6 +77,10 @@ structure ConstrainedShapesOperationInputOutput {
 }
 
 structure ConstrainedHttpBoundShapesOperationInputOutput {
+    @required
+    @httpLabel
+    lengthStringLabel: LengthString,
+
     // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
     // @required
     @httpPrefixHeaders("X-Prefix-Headers-")
