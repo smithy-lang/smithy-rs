@@ -133,6 +133,11 @@ structure ConA {
 
     optConB: ConB,
 
+    lengthString: LengthString,
+    minLengthString: MinLengthString,
+    maxLengthString: MaxLengthString,
+    fixedLengthString: FixedLengthString,
+
     conBList: ConBList,
     conBList2: ConBList2,
 
@@ -172,6 +177,15 @@ list LengthListOfLengthString {
 
 @length(min: 2, max: 69)
 string LengthString
+
+@length(min: 2)
+string MinLengthString
+
+@length(min: 69)
+string MaxLengthString
+
+@length(min: 69, max: 69)
+string FixedLengthString
 
 union UnionWithConstrainedStructureVariant {
     constrainedStructureVariant: ConstrainedStructureVariant

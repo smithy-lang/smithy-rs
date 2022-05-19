@@ -163,7 +163,7 @@ class UnconstrainedMapGenerator(
                         //     member: NiceString
                         // }
                         //
-                        // @length(min:1, max:69)
+                        // @length(min: 1, max: 69)
                         // string NiceString
                         // ```
                         rustTemplate(
