@@ -32,7 +32,11 @@ impl SharedSocket {
     #[cfg(not(target_os = "windows"))]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
         let address: SocketAddr = format!("{}:{}", address, port).parse()?;
-        let domain = if address.is_ipv6() { Domain::IPV6 } else { Domain::IPV4 };
+        let domain = if address.is_ipv6() {
+            Domain::IPV6
+        } else {
+            Domain::IPV4
+        };
         tracing::info!("Shared socket listening on {address}, IP version: {domain:?}");
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
         // Set value for the `SO_REUSEPORT` and `SO_REUSEADDR` options on this socket.
@@ -52,7 +56,11 @@ impl SharedSocket {
     #[cfg(target_os = "windows")]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
         let address: SocketAddr = format!("{}:{}", address, port).parse()?;
-        let domain = if address.is_ipv6() { Domain::IPV6 } else { Domain::IPV4 };
+        let domain = if address.is_ipv6() {
+            Domain::IPV6
+        } else {
+            Domain::IPV4
+        };
         tracing::info!("Shared socket listening on {address}, IP version: {domain:?}");
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
         // `SO_REUSEPORT` is not available on Windows.
@@ -76,17 +84,17 @@ mod tests {
 
     #[test]
     fn socket_can_bind_on_random_port() {
-        let socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
+        let _socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
         #[cfg(not(target_os = "windows"))]
-        assert!(socket.inner.is_listener().is_ok());
+        assert!(_socket.inner.is_listener().is_ok());
     }
 
     #[test]
     #[cfg(not(target_os = "windows"))]
     fn socket_can_be_cloned() {
         let socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
-        let cloned_socket = socket.try_clone().unwrap();
+        let _cloned_socket = socket.try_clone().unwrap();
         #[cfg(not(target_os = "windows"))]
-        assert!(cloned_socket.inner.is_listener().is_ok());
+        assert!(_cloned_socket.inner.is_listener().is_ok());
     }
 }
