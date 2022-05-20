@@ -233,10 +233,7 @@ class ServerBuilderGenerator(
             // We don't want to introduce API asymmetry just for this particular case, so we disable the lint.
             Attribute.Custom("allow(clippy::boxed_local)").render(writer)
         }
-        writer.rustBlock("""
-            ##[allow(clippy::type_complexity)]
-            pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self
-            """) {
+        writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
                 if (wrapInMaybeConstrained) {
@@ -277,13 +274,9 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
-        // TODO Ask about enabling type_complexity globally.
         // TODO: `pub(crate)` unless we commit to making builders of builders public.
         // Setter names will never hit a reserved word and therefore never need escaping.
-        writer.rustBlock("""
-            ##[allow(clippy::type_complexity)]
-            pub(crate) fn set_${memberName.toSnakeCase()}(mut self, input: $inputType) -> Self
-            """) {
+        writer.rustBlock("pub(crate) fn set_${memberName.toSnakeCase()}(mut self, input: $inputType) -> Self") {
             rust(
                 """
                 self.$memberName = ${

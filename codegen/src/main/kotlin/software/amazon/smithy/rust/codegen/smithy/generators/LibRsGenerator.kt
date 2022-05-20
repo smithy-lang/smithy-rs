@@ -44,6 +44,8 @@ class LibRsGenerator(
                 rust("##![warn(missing_docs)]")
             }
 
+            rust("##![allow(clippy::type_complexity)]")
+
             val libraryDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value ?: settings.moduleName
             containerDocs(escape(libraryDocs))
             val crateLayout = customizations.map { it.section(LibRsSection.ModuleDocumentation(LibRsSection.CrateOrganization)) }.filter { !it.isEmpty() }
