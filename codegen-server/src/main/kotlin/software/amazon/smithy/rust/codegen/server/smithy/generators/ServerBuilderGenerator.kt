@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
@@ -54,9 +54,9 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 class ServerBuilderGenerator(
     private val codegenContext: CodegenContext,
     private val shape: StructureShape,
-    private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider? = null,
+    private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider? = null,
 ) {
-    private val takeInUnconstrainedTypes = constrainedShapeSymbolProvider != null
+    private val takeInUnconstrainedTypes = pubCrateConstrainedShapeSymbolProvider != null
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val constraintViolationSymbolProvider =
@@ -422,7 +422,7 @@ class ServerBuilderGenerator(
             val strippedOption = if (memberHasConstraintTraitOrTargetHasConstraintTrait(member)) {
                 symbolProvider.toSymbol(member)
             } else {
-                constrainedShapeSymbolProvider!!.toSymbol(member)
+                pubCrateConstrainedShapeSymbolProvider!!.toSymbol(member)
             }
             // Strip the `Option` in case the member is not `required`.
             .mapRustType { it.stripOuter<RustType.Option>() }

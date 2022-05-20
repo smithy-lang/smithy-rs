@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
@@ -32,7 +32,7 @@ class UnconstrainedMapGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
-    private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
+    private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val writer: RustWriter,
     val shape: MapShape
@@ -45,7 +45,7 @@ class UnconstrainedMapGenerator(
     private val constrainedSymbol = if (shape.isDirectlyConstrained(symbolProvider)) {
         symbolProvider.toSymbol(shape)
     } else {
-        constrainedShapeSymbolProvider.toSymbol(shape)
+        pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
     }
 
     fun render() {
@@ -118,7 +118,7 @@ class UnconstrainedMapGenerator(
                         !valueShape.isDirectlyConstrained(symbolProvider) &&
                         !valueShape.isStructureShape
                     val constrainedValueSymbol = if (resolveToNonPublicConstrainedValueType) {
-                        constrainedShapeSymbolProvider.toSymbol(valueShape)
+                        pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
                     } else {
                         symbolProvider.toSymbol(valueShape)
                     }

@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 // TODO Docs. This symbol provider is wrapped by the other ones.
 // TODO Unit tests.
-class PublicConstrainedShapeSymbolProvider(
+class ConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
     private val serviceShape: ServiceShape,

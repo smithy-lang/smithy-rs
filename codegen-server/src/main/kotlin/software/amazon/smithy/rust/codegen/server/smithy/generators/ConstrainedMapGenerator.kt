@@ -6,21 +6,15 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
-import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
+import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
+import software.amazon.smithy.rust.codegen.util.expectTrait
 
 // TODO Docs
 // TODO Unit tests
@@ -28,85 +22,64 @@ class ConstrainedMapGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
-    private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
+    private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val writer: RustWriter,
     val shape: MapShape
 ) {
     fun render() {
-        check(shape.canReachConstrainedShape(model, symbolProvider))
+        val lengthTrait = shape.expectTrait<LengthTrait>()
 
-        val symbol = symbolProvider.toSymbol(shape)
-        val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
-        val constrainedSymbol = constrainedShapeSymbolProvider.toSymbol(shape)
-        val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
-        val name = constrainedSymbol.name
-        val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
-        val valueShape = model.expectShape(shape.value.target)
-        val keySymbol = if (isKeyConstrained(keyShape)) {
-            constrainedShapeSymbolProvider.toSymbol(keyShape)
+        val name = symbolProvider.toSymbol(shape).name
+        val inner = "std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>"
+        val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
+
+        val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
+            "(${lengthTrait.min.get()}..=${lengthTrait.max.get()}).contains(&length)"
+        } else if (lengthTrait.min.isPresent) {
+            "${lengthTrait.min.get()} <= length"
         } else {
-            symbolProvider.toSymbol(keyShape)
-        }
-        val valueSymbol = if (isValueConstrained(valueShape)) {
-            constrainedShapeSymbolProvider.toSymbol(valueShape)
-        } else {
-            symbolProvider.toSymbol(valueShape)
+            "length <= ${lengthTrait.max.get()}"
         }
 
-        // Unless the map holds an aggregate shape as its value shape whose symbol's type is _not_ `pub(crate)`, the
-        // `.into()` calls are useless.
-        // See the comment in [ConstrainedCollectionShape] for a more detailed explanation.
-        val innerNeedsConstraining =
-            !valueShape.isDirectlyConstrained(symbolProvider) && (valueShape is CollectionShape || valueShape.isMapShape)
-
-        writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
-            rustTemplate(
-                """
-                ##[derive(Debug, Clone)]
-                pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>);
-                
-                impl #{ConstrainedTrait} for $name  {
-                    type Unconstrained = #{UnconstrainedSymbol};
+        // TODO Docs for everything.
+        // TODO Use TryFrom from Dan's PR.
+        writer.rustTemplate(
+            """
+            ##[derive(Debug, Clone, PartialEq)]
+            pub struct $name(pub(crate) $inner);
+            
+            impl $name {
+                pub fn parse(value: $inner) -> Result<Self, #{ConstraintViolation}> {
+                    Self::try_from(value)
                 }
                 
-                impl From<#{Symbol}> for $name {
-                    fn from(v: #{Symbol}) -> Self {
-                        ${ if (innerNeedsConstraining) {
-                            "Self(v.into_iter().map(|(k, v)| (k, v.into())).collect())"
-                        } else {
-                            "Self(v)"
-                        } }
+                pub fn inner(&self) -> &$inner {
+                    &self.0
+                }
+            }
+            
+            impl #{ConstrainedTrait} for $name  {
+                type Unconstrained = #{UnconstrainedSymbol};
+            }
+            
+            impl std::convert::TryFrom<$inner> for $name {
+                type Error = #{ConstraintViolation};
+                
+                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                    let length = value.len();
+                    if $condition {
+                        Ok(Self(value))
+                    } else {
+                        Err(#{ConstraintViolation}::Length(length))
                     }
                 }
-
-                impl From<$name> for #{Symbol} {
-                    fn from(v: $name) -> Self {
-                        ${ if (innerNeedsConstraining) {
-                            "v.0.into_iter().map(|(k, v)| (k, v.into())).collect()"
-                        } else {
-                            "v.0"
-                        } }
-                    }
-                }
-                """,
-                "KeySymbol" to keySymbol,
-                "ValueSymbol" to valueSymbol,
-                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
-                "UnconstrainedSymbol" to unconstrainedSymbol,
-                "Symbol" to symbol,
-            )
-        }
-    }
-
-    // TODO These are copied from `UnconstrainedMapGenerator.kt`.
-    private fun isKeyConstrained(shape: StringShape) = shape.isDirectlyConstrained(symbolProvider)
-
-    private fun isValueConstrained(shape: Shape): Boolean = when (shape) {
-        is StructureShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        is CollectionShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        is MapShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        is StringShape -> shape.isDirectlyConstrained(symbolProvider)
-        // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Other constraint traits on simple shapes.
-        else -> false
+            }
+            """,
+            "KeySymbol" to symbolProvider.toSymbol(model.expectShape(shape.key.target)),
+            "ValueSymbol" to symbolProvider.toSymbol(model.expectShape(shape.value.target)),
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "UnconstrainedSymbol" to unconstrainedShapeSymbolProvider.toSymbol(shape),
+            "ConstraintViolation" to constraintViolation
+        )
     }
 }

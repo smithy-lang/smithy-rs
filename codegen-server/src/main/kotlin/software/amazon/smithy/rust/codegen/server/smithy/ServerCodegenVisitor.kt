@@ -20,10 +20,10 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedCollectionShape
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedCollectionShapeGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.PublicConstrainedMapGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.PublicConstrainedStringGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
@@ -33,9 +33,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtoco
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.Constrained
-import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
+import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -76,7 +76,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
 
     private val symbolProvider: RustSymbolProvider
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider
-    private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider
+    private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider
     private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
@@ -126,7 +126,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                 )
             ), model, service
         )
-        constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, service)
+        pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, service)
         constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, service)
 
         codegenContext = CodegenContext(
@@ -224,7 +224,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             val builderGenerator = ServerBuilderGenerator(
                 codegenContext,
                 shape,
-                if (shapesReachableFromOperationInputs.contains(shape)) constrainedShapeSymbolProvider else null
+                if (shapesReachableFromOperationInputs.contains(shape)) pubCrateConstrainedShapeSymbolProvider else null
             )
             builderGenerator.render(writer)
             writer.implBlock(shape, symbolProvider) {
@@ -249,7 +249,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
-                    constrainedShapeSymbolProvider,
+                    pubCrateConstrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
                     writer,
                     shape
@@ -258,11 +258,11 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
 
             logger.info("[rust-server-codegen] Generating a constrained type for list $shape")
             rustCrate.withModule(constrainedModule) { writer ->
-                ConstrainedCollectionShape(
+                ConstrainedCollectionShapeGenerator(
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
-                    constrainedShapeSymbolProvider,
+                    pubCrateConstrainedShapeSymbolProvider,
                     writer,
                     shape
                 ).render()
@@ -282,7 +282,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
-                    constrainedShapeSymbolProvider,
+                    pubCrateConstrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
                     writer,
                     shape
@@ -291,11 +291,11 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
 
             logger.info("[rust-server-codegen] Generating a constrained type for set $shape")
             rustCrate.withModule(constrainedModule) { writer ->
-                ConstrainedCollectionShape(
+                ConstrainedCollectionShapeGenerator(
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
-                    constrainedShapeSymbolProvider,
+                    pubCrateConstrainedShapeSymbolProvider,
                     writer,
                     shape
                 ).render()
@@ -306,7 +306,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     override fun mapShape(shape: MapShape) {
         if (shape.isDirectlyConstrained(symbolProvider)) {
             rustCrate.useShapeWriter(shape) { writer ->
-                PublicConstrainedMapGenerator(
+                ConstrainedMapGenerator(
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
@@ -328,7 +328,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
-                    constrainedShapeSymbolProvider,
+                    pubCrateConstrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
                     writer,
                     shape
@@ -338,11 +338,11 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             if (!shape.isDirectlyConstrained(symbolProvider)) {
                 logger.info("[rust-server-codegen] Generating a constrained type for map $shape")
                 rustCrate.withModule(constrainedModule) { writer ->
-                    ConstrainedMapGenerator(
+                    PubCrateConstrainedMapGenerator(
                         model,
                         symbolProvider,
                         unconstrainedShapeSymbolProvider,
-                        constrainedShapeSymbolProvider,
+                        pubCrateConstrainedShapeSymbolProvider,
                         writer,
                         shape
                     ).render()
@@ -376,7 +376,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         } else if (shape.isDirectlyConstrained(symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) { writer ->
-                PublicConstrainedStringGenerator(
+                ConstrainedStringGenerator(
                     model,
                     symbolProvider,
                     constraintViolationSymbolProvider,

@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
@@ -23,7 +23,7 @@ class UnconstrainedCollectionGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
-    private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
+    private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val writer: RustWriter,
     val shape: CollectionShape
@@ -36,7 +36,7 @@ class UnconstrainedCollectionGenerator(
         val name = symbol.name
         val innerShape = model.expectShape(shape.member.target)
         val innerUnconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
-        val constrainedSymbol = constrainedShapeSymbolProvider.toSymbol(shape)
+        val constrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
         val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 

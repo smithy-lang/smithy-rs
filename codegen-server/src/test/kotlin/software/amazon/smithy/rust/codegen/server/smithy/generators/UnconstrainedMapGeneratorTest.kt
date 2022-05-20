@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -73,14 +73,14 @@ class UnconstrainedMapGeneratorTest {
         }
 
         val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
-        val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
+        val pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
         project.withModule(RustModule.private("constrained")) { writer ->
             listOf(mapA, mapB).forEach {
-                ConstrainedMapGenerator(
+                PubCrateConstrainedMapGenerator(
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
-                    constrainedShapeSymbolProvider,
+                    pubCrateConstrainedShapeSymbolProvider,
                     writer,
                     it
                 ).render()
@@ -93,7 +93,7 @@ class UnconstrainedMapGeneratorTest {
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
-                    constrainedShapeSymbolProvider,
+                    pubCrateConstrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
                     writer,
                     it

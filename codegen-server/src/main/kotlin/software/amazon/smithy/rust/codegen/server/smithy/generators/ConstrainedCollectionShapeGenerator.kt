@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.ConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
@@ -20,11 +20,11 @@ import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 
 // TODO Docs
 // TODO Unit tests
-class ConstrainedCollectionShape(
+class ConstrainedCollectionShapeGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
-    private val constrainedShapeSymbolProvider: ConstrainedShapeSymbolProvider,
+    private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     val writer: RustWriter,
     val shape: CollectionShape
 ) {
@@ -32,12 +32,12 @@ class ConstrainedCollectionShape(
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
         val symbol = symbolProvider.toSymbol(shape)
-        val constrainedSymbol = constrainedShapeSymbolProvider.toSymbol(shape)
+        val constrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
         val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
         val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
-        val innerConstrainedSymbol = constrainedShapeSymbolProvider.toSymbol(innerShape)
+        val innerConstrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(innerShape)
 
         // If the target member shape is itself _not_ directly constrained, and is an aggregate non-Structure shape,
         // then its corresponding constrained type is the `pub(crate)` wrapper tuple type, which needs converting into
