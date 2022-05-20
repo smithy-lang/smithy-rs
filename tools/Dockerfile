@@ -123,6 +123,7 @@ RUN set -eux; \
         openssl-devel \
         pkgconfig \
         python3 \
+        python3-devel \
         shadow-utils; \
     yum clean all; \
     rm -rf /var/cache/yum; \
