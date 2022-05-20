@@ -859,7 +859,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
                         when {
                             memberShape.isStringShape -> {
-                                // `<_>::from()` is necessary to convert the `&str` into:
+                                // `<_>::from()/try_from()` is necessary to convert the `&str` into:
                                 //     * the Rust enum in case the `string` shape has the `enum` trait; or
                                 //     * `String` in case it doesn't.
                                 if (memberShape.hasTrait<EnumTrait>()) {

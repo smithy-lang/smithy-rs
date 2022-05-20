@@ -54,7 +54,7 @@ class ServerEnumGeneratorTest {
     }
 
     @Test
-    fun `it generates named enums without the unknown variant`() {
+    fun `it generates enums without the unknown variant`() {
         val provider = serverTestSymbolProvider(model)
         val writer = RustWriter.forModule("model")
         val shape = model.lookup<StringShape>("test#InstanceType")
@@ -65,15 +65,15 @@ class ServerEnumGeneratorTest {
             // check no unknown
             let instance = InstanceType::T2Micro;
             match instance {
-            InstanceType::T2Micro => (),
-            InstanceType::T2Nano => (),
+                InstanceType::T2Micro => (),
+                InstanceType::T2Nano => (),
             }
             """
         )
     }
 
     @Test
-    fun `it generates named enums without non_exhaustive`() {
+    fun `it generates enums without non_exhaustive`() {
         val provider = serverTestSymbolProvider(model)
         val writer = RustWriter.forModule("model")
         val shape = model.lookup<StringShape>("test#InstanceType")
