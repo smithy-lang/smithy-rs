@@ -17,10 +17,26 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
+import software.amazon.smithy.rust.codegen.smithy.isTransitivelyConstrained
 
-// TODO Docs
 // TODO Unit tests
-class ConstrainedCollectionShapeGenerator(
+/**
+ * A generator for a wrapper tuple newtype over a collection shape's symbol
+ * type.
+ *
+ * This newtype is for a collection shape that is _transitively_ constrained,
+ * but not directly. That is, the collection shape does not have a constraint
+ * trait attached, but the members it holds reach a constrained shape. The
+ * generated newtype is therefore `pub(crate)`, as the class name indicates,
+ * and is not available to end users. After deserialization, upon constraint
+ * traits' enforcement, this type is converted into the regular `Vec` the user
+ * sees via the generated converters.
+ *
+ * TODO(https://github.com/awslabs/smithy-rs/issues/1401) If the collection
+ *  shape is _directly_ constrained, use [ConstrainedCollectionGenerator]
+ *  instead.
+ */
+class PubCrateConstrainedCollectionShapeGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
@@ -37,7 +53,11 @@ class ConstrainedCollectionShapeGenerator(
         val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
         val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
-        val innerConstrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(innerShape)
+        val innerConstrainedSymbol = if (innerShape.isTransitivelyConstrained(model, symbolProvider)) {
+            pubCrateConstrainedShapeSymbolProvider.toSymbol(innerShape)
+        } else {
+            symbolProvider.toSymbol(innerShape)
+        }
 
         // If the target member shape is itself _not_ directly constrained, and is an aggregate non-Structure shape,
         // then its corresponding constrained type is the `pub(crate)` wrapper tuple type, which needs converting into
@@ -59,11 +79,11 @@ class ConstrainedCollectionShapeGenerator(
                 """
                 ##[derive(Debug, Clone)]
                 pub(crate) struct $name(pub(crate) std::vec::Vec<#{InnerConstrainedSymbol}>);
-                
+
                 impl #{ConstrainedTrait} for $name  {
                     type Unconstrained = #{UnconstrainedSymbol};
                 }
-                
+
                 impl From<#{Symbol}> for $name {
                     fn from(v: #{Symbol}) -> Self {
                         ${ if (innerNeedsConstraining) {

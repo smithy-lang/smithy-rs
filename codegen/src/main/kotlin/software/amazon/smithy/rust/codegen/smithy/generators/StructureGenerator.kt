@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.ErrorGenerato
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -62,7 +63,7 @@ fun MemberShape.deserializerBuilderSetterName(model: Model, symbolProvider: Symb
         return this.setterName()
     }
 
-    return if (this.canReachConstrainedShape(model, symbolProvider)) {
+    return if (this.targetCanReachConstrainedShape(model, symbolProvider)) {
         "set_${this.memberName.toSnakeCase()}"
     } else {
         this.memberName.toSnakeCase()

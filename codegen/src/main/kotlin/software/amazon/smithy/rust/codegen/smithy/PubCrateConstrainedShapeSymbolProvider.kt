@@ -14,13 +14,42 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.SimpleShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
+// TODO Unit tests.
+/**
+ * The [PubCrateConstrainedShapeSymbolProvider] returns, for a given
+ * _transitively but not directly_ constrained shape, a symbol whose Rust type
+ * can hold the constrained values.
+ *
+ * For collection and map shapes, this type is a [RustType.Opaque] wrapper
+ * tuple newtype holding a container over the inner constrained type. For
+ * member shapes, it's whatever their target shape resolves to.
+ *
+ * The class name is prefixed with `PubCrate` because the symbols it returns
+ * have associated types that are generated as `pub(crate)`. See the
+ * `PubCrate*Generator` classes to see how these types are generated.
+ *
+ * It is important that this symbol provider _not_ wrap
+ * [ConstrainedShapeSymbolProvider], since otherwise it will eventually
+ * delegate to it and generate a symbol with a `pub` type.
+ *
+ * Note simple shapes cannot be transitively but not directly constrained, so
+ * this symbol provider is only implemented for aggregate shapes. The symbol
+ * provider will intentionally crash in such a case to avoid the caller
+ * incorrectly using it.
+ *
+ * If the shape is _directly_ constrained, use [ConstrainedShapeSymbolProvider]
+ * instead.
+ */
 class PubCrateConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
@@ -64,22 +93,16 @@ class PubCrateConstrainedShapeSymbolProvider(
         } else symbol
 
     private fun errorMessage(shape: Shape) =
-        "This symbol provider was called with $shape. However, it can only be called with a shape that is (transitively) constrained"
+        "This symbol provider was called with $shape. However, it can only be called with a shape that is transitively constrained"
 
-    override fun toSymbol(shape: Shape): Symbol =
-        when (shape) {
-            is CollectionShape -> {
-                require(shape.canReachConstrainedShape(model, base)) { errorMessage(shape) }
+    override fun toSymbol(shape: Shape): Symbol {
+        require(shape.isTransitivelyConstrained(model, base)) { errorMessage(shape) }
 
-                constrainedSymbolForCollectionOrMapShape(shape)
-            }
-            is MapShape -> {
-                require(shape.canReachConstrainedShape(model, base)) { errorMessage(shape) }
-
+        return when (shape) {
+            is CollectionShape, is MapShape -> {
                 constrainedSymbolForCollectionOrMapShape(shape)
             }
             is MemberShape -> {
-                require(shape.canReachConstrainedShape(model, base)) { errorMessage(shape) }
                 check(model.expectShape(shape.container).isStructureShape)
 
                 if (shape.requiresNewtype()) {
@@ -112,12 +135,17 @@ class PubCrateConstrainedShapeSymbolProvider(
                     }
                 }
             }
-            else -> {
-                // TODO Other shape types.
-                // TODO We should arguably panic here? Since the rest are either public / don't need constrained type.
+            is StructureShape, is UnionShape -> {
+                // Structure shapes and union shapes always generate a [RustType.Opaque] constrained type.
                 base.toSymbol(shape)
             }
+            else -> {
+                check(shape is SimpleShape)
+                // The rest of the shape types are simple shapes; they generate a public constrained type.
+                PANIC(errorMessage(shape))
+            }
         }
+    }
 }
 
 fun constrainedTypeNameForCollectionOrMapShape(shape: Shape, serviceShape: ServiceShape): String {

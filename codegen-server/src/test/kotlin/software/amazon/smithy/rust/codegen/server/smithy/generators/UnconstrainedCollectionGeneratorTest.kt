@@ -74,7 +74,7 @@ class UnconstrainedCollectionGeneratorTest {
         val pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
         project.withModule(RustModule.private("constrained")) { writer ->
             listOf(listA, listB).forEach {
-                ConstrainedCollectionShapeGenerator(
+                PubCrateConstrainedCollectionShapeGenerator(
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,

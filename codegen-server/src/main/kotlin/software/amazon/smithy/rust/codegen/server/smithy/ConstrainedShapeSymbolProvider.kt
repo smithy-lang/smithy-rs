@@ -31,8 +31,26 @@ import software.amazon.smithy.rust.codegen.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-// TODO Docs. This symbol provider is wrapped by the other ones.
 // TODO Unit tests.
+/**
+ * The [ConstrainedShapeSymbolProvider] returns, for a given _directly_
+ * constrained shape, a symbol whose Rust type can hold the constrained values.
+ *
+ * For all shapes with supported traits directly attached to them, this type is
+ * a [RustType.Opaque] wrapper tuple newtype holding the inner constrained
+ * type.
+ *
+ * The symbols this symbol provider returns are always public and exposed to
+ * the end user.
+ *
+ * This symbol provider is meant to be used "deep" within the wrapped symbol
+ * providers chain, just above the core base symbol provider, `SymbolVisitor`.
+ *
+ * If the shape is _transitively but not directly_ constrained, use
+ * [PubCrateConstrainedShapeSymbolProvider] instead, which returns symbols
+ * whose associated types are `pub(crate)` and thus not exposed to the end
+ * user.
+ */
 class ConstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,

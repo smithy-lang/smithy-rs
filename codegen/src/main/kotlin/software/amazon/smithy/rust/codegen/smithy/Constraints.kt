@@ -3,11 +3,8 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
-import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -55,31 +52,8 @@ fun Shape.hasPublicConstrainedWrapperTupleType(model: Model): Boolean = when (th
     else -> false
 }
 
-fun StructureShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) =
-    Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
-
-fun CollectionShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) =
-    Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
-
-fun ListShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) =
-    (this as CollectionShape).canReachConstrainedShape(model, symbolProvider)
-fun SetShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) =
-    (this as CollectionShape).canReachConstrainedShape(model, symbolProvider)
-
-fun MapShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) =
-    Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
-
-fun MemberShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
-    this.isDirectlyConstrained(symbolProvider) || this.targetCanReachConstrainedShape(model, symbolProvider)
-
-// TODO Callers should use `MemberShape.canReachConstrainedShape`, and this function should be inlined.
 fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
-    when (val targetShape = model.expectShape(this.target)) {
-        is CollectionShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
-        is MapShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
-        is StructureShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
-        else -> targetShape.isDirectlyConstrained(symbolProvider)
-    }
+    model.expectShape(this.target).canReachConstrainedShape(model, symbolProvider)
 
 fun MemberShape.requiresNewtype() =
     // Note that member shapes whose only constraint trait is `required` do not require a newtype.
@@ -88,3 +62,9 @@ fun MemberShape.requiresNewtype() =
             // `uniqueItems` is deprecated, so we ignore it.
             // this.hasTrait<UniqueItemsTrait>() ||
             this.hasTrait<PatternTrait>()
+
+fun Shape.isTransitivelyConstrained(model: Model, symbolProvider: SymbolProvider) =
+    !this.isDirectlyConstrained(symbolProvider) && this.canReachConstrainedShape(model, symbolProvider)
+
+fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) =
+    Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
