@@ -23,14 +23,14 @@ pub fn setup(py: Python, level: LogLevel) -> PyResult<()> {
                 .with(format)
                 .with(filter)
                 .init();
-            setup_python_logging(py, level.into())?;
+            setup_python_logging(py, level)?;
         }
         Err(_) => {
             tracing_subscriber::registry()
                 .with(format)
                 .with(LevelFilter::from_level(level.into()))
                 .init();
-            setup_python_logging(py, level.into())?;
+            setup_python_logging(py, level)?;
         }
     }
     Ok(())
@@ -47,6 +47,17 @@ pub enum LogLevel {
     Info,
     Warn,
     Error,
+}
+
+impl From<LogLevel> for String {
+    fn from(other: LogLevel) -> String {
+        match other {
+            LogLevel::Error => "ERROR".into(),
+            LogLevel::Warn => "WARN".into(),
+            LogLevel::Info => "INFO".into(),
+            _ => "DEBUG".into(),
+        }
+    }
 }
 
 impl From<String> for LogLevel {
@@ -83,29 +94,31 @@ impl From<LogLevel> for Level {
 ///
 /// Since any call like `logging.warn(...)` sets up logging via `logging.basicConfig`, all log messages are now
 /// delivered to `crate::logging`, which will send them to `tracing::event!`.
-fn setup_python_logging(py: Python, level: Level) -> PyResult<()> {
+fn setup_python_logging(py: Python, level: LogLevel) -> PyResult<()> {
     let logging = py.import("logging")?;
     logging.setattr("python_tracing", wrap_pyfunction!(python_tracing, logging)?)?;
 
-    let level = level.to_string();
+    let level: String = level.into();
     let pycode = format!(
         r#"
 class RustTracing(Handler):
+    """ Python logging to Rust tracing handler. """
     def __init__(self, level=0):
         super().__init__(level=level)
 
     def emit(self, record):
         python_tracing(record)
 
+# Store the old basicConfig in the local namespace.
 oldBasicConfig = basicConfig
 
 def basicConfig(*pargs, **kwargs):
+    """ Reimplement basicConfig to hijack the root logger. """
     if "handlers" not in kwargs:
         kwargs["handlers"] = [RustTracing()]
-    kwargs["level"] = {}
+    kwargs["level"] = {level}
     return oldBasicConfig(*pargs, **kwargs)
 "#,
-        level
     );
 
     py.run(&pycode, Some(logging.dict()), None)?;
@@ -115,6 +128,7 @@ def basicConfig(*pargs, **kwargs):
 }
 
 /// Consumes a Python `logging.LogRecord` and emits a Rust `tracing::Event` instead.
+#[cfg(not(test))]
 #[pyfunction]
 fn python_tracing(record: &PyAny) -> PyResult<()> {
     let level = record.getattr("levelno")?;
@@ -132,4 +146,36 @@ fn python_tracing(record: &PyAny) -> PyResult<()> {
     };
 
     Ok(())
+}
+
+#[cfg(test)]
+#[pyfunction]
+fn python_tracing(record: &PyAny) -> PyResult<()> {
+    let message = record.getattr("getMessage")?.call0()?;
+    pretty_assertions::assert_eq!(message.to_string(), "a message");
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    fn initialize() {
+        INIT.call_once(|| {
+            pyo3::prepare_freethreaded_python();
+        });
+    }
+
+    #[test]
+    fn tracing_handler_is_injected_in_python() {
+        initialize();
+        Python::with_gil(|py| {
+            setup_python_logging(py, LogLevel::Info).unwrap();
+            let logging = py.import("logging").unwrap();
+            logging.call_method1("info", ("a message",)).unwrap();
+        });
+    }
 }
