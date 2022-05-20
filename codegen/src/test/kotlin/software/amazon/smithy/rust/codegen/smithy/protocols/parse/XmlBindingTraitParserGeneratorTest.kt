@@ -89,7 +89,7 @@ internal class XmlBindingTraitParserGeneratorTest {
     """.asSmithyModel()
 
     @Test
-    fun `generates valid parsers in client`() {
+    fun `generates valid parsers`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = XmlBindingTraitParserGenerator(
