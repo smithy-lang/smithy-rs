@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy
+package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.build.SmithyBuildPlugin
@@ -11,6 +11,7 @@ import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.DefaultConfig
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
@@ -22,7 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecor
 import java.util.logging.Level
 import java.util.logging.Logger
 
-/** Rust Codegen Plugin
+/** Rust with Python bindings Codegen Plugin.
  *  This is the entrypoint for code generation, triggered by the smithy-build plugin.
  *  `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  *  enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
@@ -30,7 +31,7 @@ import java.util.logging.Logger
 class RustCodegenServerPlugin : SmithyBuildPlugin {
     private val logger = Logger.getLogger(javaClass.name)
 
-    override fun getName(): String = "rust-server-codegen"
+    override fun getName(): String = "rust-server-codegen-python"
 
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
@@ -43,7 +44,7 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
         val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context)
 
         // ServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
-        logger.info("Loaded plugin to generate pure Rust bindings for the server SSDK")
+        logger.info("Loaded plugin to generate Rust/Python bindings for the server SSDK")
         ServerCodegenVisitor(context, codegenDecorator).execute()
     }
 
@@ -57,14 +58,13 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
         fun baseSymbolProvider(
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig,
-            publicConstrainedShapesEnabled: Boolean = true
+            symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
-                // TODO Docs
-                .let { if (publicConstrainedShapesEnabled) ConstrainedShapeSymbolProvider(it, model, serviceShape) else it }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model) }
+                .let {
+                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
+                }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes

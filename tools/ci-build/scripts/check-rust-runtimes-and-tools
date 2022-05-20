@@ -45,7 +45,6 @@ test_tool "tools/publisher" "${RUST_STABLE_VERSION}"
 test_tool "tools/sdk-lints" "${RUST_STABLE_VERSION}"
 test_tool "tools/sdk-sync" "${RUST_STABLE_VERSION}"
 test_tool "tools/sdk-versioner" "${RUST_STABLE_VERSION}"
-test_tool "tools/smithy-rs-sync" "${RUST_STABLE_VERSION}"
 test_tool "tools/smithy-rs-tool-common" "${RUST_STABLE_VERSION}"
 
 echo -e "${C_YELLOW}Running additional per-crate checks...${C_RESET}"
