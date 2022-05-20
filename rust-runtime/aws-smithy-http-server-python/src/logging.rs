@@ -49,6 +49,8 @@ pub enum LogLevel {
     Error,
 }
 
+/// `From<LogLevel>` is used to convert `LogLevel` to the correct string
+/// needed by Python `logging` module.
 impl From<LogLevel> for String {
     fn from(other: LogLevel) -> String {
         match other {
@@ -60,6 +62,7 @@ impl From<LogLevel> for String {
     }
 }
 
+/// `From<String>` is used to covert `tracing::EnvFilter` into `LogLevel`.
 impl From<String> for LogLevel {
     fn from(other: String) -> LogLevel {
         match other.as_str() {
@@ -72,6 +75,7 @@ impl From<String> for LogLevel {
     }
 }
 
+/// `From<LogLevel>` is used to covert `LogLevel` into `tracing::EnvFilter`.
 impl From<LogLevel> for Level {
     fn from(other: LogLevel) -> Level {
         match other {
