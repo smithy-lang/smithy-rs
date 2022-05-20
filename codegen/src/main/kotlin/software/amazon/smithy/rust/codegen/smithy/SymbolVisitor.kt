@@ -409,10 +409,7 @@ fun Symbol.isOptional(): Boolean = when (this.rustType()) {
 /**
  * Get the referenced symbol for T if [this] is an Option<T>, [this] otherwise
  */
-fun Symbol.extractSymbolFromOption(): Symbol = when (this.isOptional()) {
-    true -> this.references[0].symbol
-    false -> this
-}
+fun Symbol.extractSymbolFromOption(): Symbol = this.mapRustType { it.stripOuter<RustType.Option>() }
 
 fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is RustType.Box
 

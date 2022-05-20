@@ -10,7 +10,6 @@ import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customizations.ClientCustomizations
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
@@ -53,7 +52,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
                 // Generate `ByteStream` instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(NonExhaustive)) }
+                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)
                 .let { StreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot

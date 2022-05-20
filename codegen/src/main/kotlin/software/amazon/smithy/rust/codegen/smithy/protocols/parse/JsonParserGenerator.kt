@@ -251,9 +251,7 @@ class JsonParserGenerator(
         }
     }
 
-    private fun convertsToEnumInServer(shape: StringShape): Boolean {
-        return mode == CodegenMode.Server && shape.hasTrait<EnumTrait>()
-    }
+    private fun convertsToEnumInServer(shape: StringShape) = mode == CodegenMode.Server && shape.hasTrait<EnumTrait>()
 
     private fun RustWriter.deserializeString(target: StringShape) {
         // additional .transpose()? because Rust does not allow ? up from closures

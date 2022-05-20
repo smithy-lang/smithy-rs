@@ -184,7 +184,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         logger.info("[rust-server-codegen] Generating an enum $shape")
         shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
-                ServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.mode, codegenContext.runtimeConfig).render()
+                ServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.runtimeConfig).render()
             }
         }
     }

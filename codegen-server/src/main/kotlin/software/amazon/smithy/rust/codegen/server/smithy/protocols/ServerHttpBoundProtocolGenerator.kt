@@ -998,7 +998,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private fun generateParsePercentEncodedStrAsStringFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
-        val type = output.extractSymbolFromOption()
+        val symbol = output.extractSymbolFromOption()
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{RequestRejection}>",
@@ -1008,23 +1008,25 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 // `<_>::from()` is necessary to convert the `&str` into:
                 //     * the Rust enum in case the `string` shape has the `enum` trait; or
                 //     * `String` in case it doesn't.
-                when (type.rustType()) {
+                when (symbol.rustType()) {
                     RustType.String ->
                         rustTemplate(
                             """
                             let value = <#{T}>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
                             """,
                             *codegenScope,
-                            "T" to type,
+                            "T" to symbol,
                         )
-                    else -> // RustType.Opaque, the Enum
+                    else -> { // RustType.Opaque, the Enum
+                        check(symbol.rustType() is RustType.Opaque)
                         rustTemplate(
                             """
                             let value = <#{T}>::try_from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref())?;
                             """,
                             *codegenScope,
-                            "T" to type,
+                            "T" to symbol,
                         )
+                    }
                 }
                 writer.write(
                     """

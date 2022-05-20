@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumMemberModel
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -109,7 +108,7 @@ class EnumGeneratorTest {
             val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")
             val shape = model.lookup<StringShape>("test#InstanceType")
-            val generator = EnumGenerator(model, provider, writer, shape, shape.expectTrait<EnumTrait>(), CodegenMode.Client)
+            val generator = EnumGenerator(model, provider, writer, shape, shape.expectTrait<EnumTrait>())
             generator.render()
             writer.compileAndTest(
                 """
@@ -126,7 +125,7 @@ class EnumGeneratorTest {
         }
 
         @Test
-        fun `named enums are implement eq and hash`() {
+        fun `named enums implement eq and hash`() {
             val model = """
                 namespace test
                 @enum([
@@ -140,10 +139,10 @@ class EnumGeneratorTest {
                 }])
                 string FooEnum
             """.asSmithyModel()
-            val shape: StringShape = model.lookup("test#FooEnum")
+            val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val writer = RustWriter.forModule("model")
-            val generator = EnumGenerator(model, testSymbolProvider(model), writer, shape, trait, CodegenMode.Client)
+            val generator = EnumGenerator(model, testSymbolProvider(model), writer, shape, trait)
             generator.render()
             writer.compileAndTest(
                 """
@@ -156,7 +155,7 @@ class EnumGeneratorTest {
         }
 
         @Test
-        fun `unnamed enums are implement eq and hash`() {
+        fun `unnamed enums implement eq and hash`() {
             val model = """
                 namespace test
                 @enum([
@@ -168,10 +167,10 @@ class EnumGeneratorTest {
                 }])
                 string FooEnum
             """.asSmithyModel()
-            val shape: StringShape = model.lookup("test#FooEnum")
+            val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val writer = RustWriter.forModule("model")
-            val generator = EnumGenerator(model, testSymbolProvider(model), writer, shape, trait, CodegenMode.Client)
+            val generator = EnumGenerator(model, testSymbolProvider(model), writer, shape, trait)
             generator.render()
             writer.compileAndTest(
                 """
@@ -206,11 +205,11 @@ class EnumGeneratorTest {
                 ])
                 string FooEnum
             """.asSmithyModel()
-            val shape: StringShape = model.lookup("test#FooEnum")
+            val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")
-            val generator = EnumGenerator(model, provider, writer, shape, trait, CodegenMode.Client)
+            val generator = EnumGenerator(model, provider, writer, shape, trait)
             generator.render()
             writer.compileAndTest(
                 """
@@ -236,7 +235,7 @@ class EnumGeneratorTest {
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")
-            EnumGenerator(model, provider, writer, shape, trait, CodegenMode.Client).render()
+            EnumGenerator(model, provider, writer, shape, trait).render()
 
             writer.compileAndTest(
                 """
@@ -263,7 +262,7 @@ class EnumGeneratorTest {
             val shape: StringShape = model.lookup("test#SomeEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
-            val rendered = RustWriter.forModule("model").also { EnumGenerator(model, provider, it, shape, trait, CodegenMode.Client).render() }.toString()
+            val rendered = RustWriter.forModule("model").also { EnumGenerator(model, provider, it, shape, trait).render() }.toString()
 
             rendered shouldContain
                 """
@@ -289,7 +288,7 @@ class EnumGeneratorTest {
             val shape: StringShape = model.lookup("test#SomeEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
-            val rendered = RustWriter.forModule("model").also { EnumGenerator(model, provider, it, shape, trait, CodegenMode.Client).render() }.toString()
+            val rendered = RustWriter.forModule("model").also { EnumGenerator(model, provider, it, shape, trait).render() }.toString()
 
             rendered shouldContain
                 """
@@ -313,7 +312,7 @@ class EnumGeneratorTest {
         val trait = shape.expectTrait<EnumTrait>()
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
-        EnumGenerator(model, provider, writer, shape, trait, CodegenMode.Client).render()
+        EnumGenerator(model, provider, writer, shape, trait).render()
 
         writer.compileAndTest(
             """

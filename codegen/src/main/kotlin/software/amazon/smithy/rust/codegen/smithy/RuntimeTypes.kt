@@ -169,6 +169,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val Clone = std.member("clone::Clone")
         val Debug = stdfmt.member("Debug")
         val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
+        val Display = stdfmt.member("Display")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val TryFrom = RuntimeType("TryFrom", dependency = null, namespace = "std::convert")
         val Infallible = RuntimeType("Infallible", dependency = null, namespace = "std::convert")

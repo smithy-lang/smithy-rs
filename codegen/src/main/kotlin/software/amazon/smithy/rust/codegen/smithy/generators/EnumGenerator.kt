@@ -77,13 +77,13 @@ open class EnumGenerator(
     private val writer: RustWriter,
     private val shape: StringShape,
     private val enumTrait: EnumTrait,
-    private val mode: CodegenMode,
 ) {
     protected val symbol = symbolProvider.toSymbol(shape)
     protected val enumName = symbol.name
     protected val meta = symbol.expectRustMetadata()
     protected val sortedMembers: List<EnumMemberModel> =
         enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }
+    protected open var mode: CodegenMode = CodegenMode.Client
 
     companion object {
         /** Name of the generated unknown enum member name for enums with named members. */
@@ -199,14 +199,14 @@ open class EnumGenerator(
         }
     }
 
-    private fun renderFromStr() {
+    open fun renderFromStr() {
         writer.rust(
             """
             impl std::str::FromStr for $enumName {
                 type Err = std::convert::Infallible;
 
                 fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-                    Ok($enumName::try_from(s).unwrap())
+                    Ok($enumName::from(s))
                 }
             }
             """
