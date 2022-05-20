@@ -19,7 +19,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
@@ -38,10 +37,12 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
+import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
@@ -286,11 +287,15 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     private fun RustWriter.serializeRawMember(member: MemberShape, input: String) {
-        when (val shape = model.expectShape(member.target)) {
-            is StringShape -> if (shape.hasTrait<EnumTrait>()) {
-                rust("$input.as_str()")
-            } else {
-                rust("$input.as_ref()")
+        when (model.expectShape(member.target)) {
+            is StringShape -> {
+                val workingWithPublicConstrainedWrapperTupleType =
+                    mode == CodegenMode.Server && member.hasPublicConstrainedWrapperTupleType(model)
+                if (workingWithPublicConstrainedWrapperTupleType) {
+                    rust("$input.0.as_str()")
+                } else {
+                    rust("$input.as_str()")
+                }
             }
             is BooleanShape, is NumberShape -> {
                 rust(
