@@ -349,7 +349,7 @@ class SymbolVisitor(
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
         }.let {
-            handleOptionality(it, shape, nullableIndex)
+            handleOptionality(it, shape, nullableIndex, config)
         }
     }
 
