@@ -242,26 +242,6 @@ class SymbolVisitor(
         return RuntimeType.Blob(config.runtimeConfig).toSymbol()
     }
 
-    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
-        if (config.handleRequired && member.isRequired) {
-            symbol
-        } else if (nullableIndex.isNullable(member)) {
-            symbol.makeOptional()
-        } else {
-            symbol
-        }
-
-    /**
-     * Boxes and returns [symbol], the symbol for the target of the member shape [shape], if [shape] is annotated with
-     * [RustBoxTrait]; otherwise returns [symbol] unchanged.
-     *
-     * See `RecursiveShapeBoxer.kt` for the model transformation pass that annotates model shapes with [RustBoxTrait].
-     */
-    private fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
-        if (shape.hasTrait<RustBoxTrait>()) {
-            symbol.makeRustBoxed()
-        } else symbol
-
     private fun simpleShape(shape: SimpleShape): Symbol {
         return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).setDefault(Default.RustDefault).build()
     }
@@ -369,7 +349,7 @@ class SymbolVisitor(
         return targetSymbol.letIf(config.handleRustBoxing) {
             handleRustBoxing(it, shape)
         }.let {
-            handleOptionality(it, shape)
+            handleOptionality(it, shape, nullableIndex)
         }
     }
 
@@ -377,6 +357,34 @@ class SymbolVisitor(
         return RuntimeType.DateTime(config.runtimeConfig).toSymbol()
     }
 }
+
+fun handleOptionality(
+    symbol: Symbol,
+    member: MemberShape,
+    nullableIndex: NullableIndex,
+    config: SymbolVisitorConfig? = null
+): Symbol {
+    val handleRequired = config?.handleRequired ?: true
+    return if (handleRequired && member.isRequired) {
+        symbol
+    } else if (nullableIndex.isNullable(member)) {
+        symbol.makeOptional()
+    } else {
+        symbol
+    }
+}
+
+/**
+ * Boxes and returns [symbol], the symbol for the target of the member shape [shape], if [shape] is annotated with
+ * [RustBoxTrait]; otherwise returns [symbol] unchanged.
+ *
+ * See `RecursiveShapeBoxer.kt` for the model transformation pass that annotates model shapes with [RustBoxTrait].
+ */
+fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
+    if (shape.hasTrait<RustBoxTrait>()) {
+        symbol.makeRustBoxed()
+    } else symbol
+
 
 fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
     val builder = Symbol.builder().putProperty(SHAPE_KEY, shape)

@@ -71,27 +71,6 @@ class PubCrateConstrainedShapeSymbolProvider(
             .build()
     }
 
-    // TODO The following two methods have been copied from `SymbolVisitor.kt`.
-    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
-        if (member.isRequired) {
-            symbol
-        } else if (nullableIndex.isNullable(member)) {
-            symbol.makeOptional()
-        } else {
-            symbol
-        }
-
-    /**
-     * Boxes and returns [symbol], the symbol for the target of the member shape [shape], if [shape] is annotated with
-     * [RustBoxTrait]; otherwise returns [symbol] unchanged.
-     *
-     * See `RecursiveShapeBoxer.kt` for the model transformation pass that annotates model shapes with [RustBoxTrait].
-     */
-    private fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
-        if (shape.hasTrait<RustBoxTrait>()) {
-            symbol.makeRustBoxed()
-        } else symbol
-
     private fun errorMessage(shape: Shape) =
         "This symbol provider was called with $shape. However, it can only be called with a shape that is transitively constrained"
 
@@ -117,7 +96,7 @@ class PubCrateConstrainedShapeSymbolProvider(
                     } else {
                         val targetSymbol = this.toSymbol(targetShape)
                         // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                        handleOptionality(handleRustBoxing(targetSymbol, shape), shape)
+                        handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex)
                     }
                 } else {
                     val targetShape = model.expectShape(shape.target)
@@ -131,7 +110,7 @@ class PubCrateConstrainedShapeSymbolProvider(
                     } else {
                         val targetSymbol = this.toSymbol(targetShape)
                         // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                        handleOptionality(handleRustBoxing(targetSymbol, shape), shape)
+                        handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex)
                     }
                 }
             }
@@ -141,7 +120,8 @@ class PubCrateConstrainedShapeSymbolProvider(
             }
             else -> {
                 check(shape is SimpleShape)
-                // The rest of the shape types are simple shapes; they generate a public constrained type.
+                // The rest of the shape types are simple shapes, which are impossible to be transitively but not
+                // directly constrained; directly constrained shapes generate public constrained types.
                 PANIC(errorMessage(shape))
             }
         }

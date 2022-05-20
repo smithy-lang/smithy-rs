@@ -34,13 +34,16 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider) = when (this) {
     is StructureShape -> {
         // TODO(https://github.com/awslabs/smithy-rs/issues/1302): The only reason why the functions in this file have
-        //   to take in a `SymbolProvider` is because non-`required` blob streaming members are interpreted as
-        //   `required`, so we can't use `member.isOptional` here.
+        //  to take in a `SymbolProvider` is because non-`required` blob streaming members are interpreted as
+        //  `required`, so we can't use `member.isOptional` here.
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
     is MapShape -> this.hasTrait<LengthTrait>()
-    // TODO While `enum` traits are constraint traits, we're outright rejecting unknown enum variants as deserialization
-    //   errors instead of parsing them into an unconstrained type that we then constrain after parsing the entire request.
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1401) While `enum` traits are constraint traits, we're outright
+    //  rejecting unknown enum variants as deserialization errors instead of parsing them into an unconstrained type
+    //  that we then constrain after parsing the entire request. If the string shape has both the `enum` trait and
+    //  another constraint trait, we warn about this case in [ServerCodegenVisitor].
+    //  See also https://github.com/awslabs/smithy/issues/1121.
     is StringShape -> !this.hasTrait<EnumTrait>() && this.hasTrait<LengthTrait>()
     else -> false
 }
@@ -67,4 +70,11 @@ fun Shape.isTransitivelyConstrained(model: Model, symbolProvider: SymbolProvider
     !this.isDirectlyConstrained(symbolProvider) && this.canReachConstrainedShape(model, symbolProvider)
 
 fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) =
-    Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
+    if (this is MemberShape) {
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not implemented
+        //  yet. Also, note that a walker over a member shape can, perhaps counterintuitively, reach the _containing_ shape,
+        //  so we can't simply delegate to the `else` branch when we implement them.
+        this.targetCanReachConstrainedShape(model, symbolProvider)
+    } else {
+        Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
+    }

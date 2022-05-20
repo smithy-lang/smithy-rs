@@ -17,7 +17,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -86,27 +85,6 @@ class UnconstrainedShapeSymbolProvider(
             .build()
     }
 
-    // TODO The following two methods have been copied from `SymbolVisitor.kt`.
-    private fun handleOptionality(symbol: Symbol, member: MemberShape): Symbol =
-        if (member.isRequired) {
-            symbol
-        } else if (nullableIndex.isNullable(member)) {
-            symbol.makeOptional()
-        } else {
-            symbol
-        }
-
-    /**
-     * Boxes and returns [symbol], the symbol for the target of the member shape [shape], if [shape] is annotated with
-     * [RustBoxTrait]; otherwise returns [symbol] unchanged.
-     *
-     * See `RecursiveShapeBoxer.kt` for the model transformation pass that annotates model shapes with [RustBoxTrait].
-     */
-    private fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
-        if (shape.hasTrait<RustBoxTrait>()) {
-            symbol.makeRustBoxed()
-        } else symbol
-
     override fun toSymbol(shape: Shape): Symbol =
         when (shape) {
             is CollectionShape -> {
@@ -137,15 +115,20 @@ class UnconstrainedShapeSymbolProvider(
                 //   trait targeting a map shape of string keys and values; or
                 // * how [ServerHttpBoundProtocolGenerator] deserializes for a member shape with the `httpQuery` trait
                 //   targeting a collection shape that can reach a constrained shape.
-                if (model.expectShape(shape.container).isStructureShape && shape.targetCanReachConstrainedShape(model, base)) {
+                if (model.expectShape(shape.container).isStructureShape && shape.targetCanReachConstrainedShape(
+                        model,
+                        base
+                    )
+                ) {
                     val targetShape = model.expectShape(shape.target)
                     val targetSymbol = this.toSymbol(targetShape)
                     // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                    handleOptionality(handleRustBoxing(targetSymbol, shape), shape)
+                    handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex)
                 } else {
                     base.toSymbol(shape)
                 }
-                // TODO Constraint traits on member shapes are not implemented yet.
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
+                //   implemented yet.
             }
             else -> base.toSymbol(shape)
         }
