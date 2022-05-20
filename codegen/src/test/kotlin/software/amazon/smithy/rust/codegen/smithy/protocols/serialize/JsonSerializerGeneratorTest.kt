@@ -10,7 +10,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
@@ -145,7 +144,7 @@ class JsonSerializerGeneratorTest {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
             UnionGenerator(model, symbolProvider, it, model.lookup("test#Choice")).render()
             val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait(), CodegenMode.Client).render()
+            EnumGenerator(model, symbolProvider, it, enum, enum.expectTrait()).render()
         }
 
         project.withModule(RustModule.public("input")) {
