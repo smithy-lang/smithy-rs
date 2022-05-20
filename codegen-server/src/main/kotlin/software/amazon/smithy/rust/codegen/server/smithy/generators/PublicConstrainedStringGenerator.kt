@@ -53,11 +53,15 @@ class PublicConstrainedStringGenerator(
         writer.rustTemplate(
             """
             ##[derive(Debug, Clone, PartialEq, Eq, Hash)]
-            pub struct $name($inner);
+            pub struct $name(pub(crate) $inner);
             
             impl $name {
                 pub fn parse(value: $inner) -> Result<Self, #{ConstraintViolation}> {
                     Self::try_from(value)
+                }
+                
+                pub fn inner(&self) -> &$inner {
+                    &self.0
                 }
             }
             
@@ -68,20 +72,6 @@ class PublicConstrainedStringGenerator(
             impl From<$inner> for #{MaybeConstrained} {
                 fn from(value: $inner) -> Self {
                     Self::Unconstrained(value)
-                }
-            }
-            
-            impl std::ops::Deref for $name {
-                type Target = String;
-            
-                fn deref(&self) -> &Self::Target {
-                    &self.0
-                }
-            }
-            
-            impl AsRef<str> for $name {
-                fn as_ref(&self) -> &str {
-                    self.0.as_str()
                 }
             }
             

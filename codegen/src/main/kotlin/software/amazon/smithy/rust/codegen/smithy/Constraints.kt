@@ -48,6 +48,13 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider) = when (this) {
     else -> false
 }
 
+fun Shape.hasPublicConstrainedWrapperTupleType(model: Model): Boolean = when (this) {
+    is MapShape -> this.hasTrait<LengthTrait>()
+    is StringShape -> !this.hasTrait<EnumTrait>() && this.hasTrait<LengthTrait>()
+    is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model)
+    else -> false
+}
+
 fun StructureShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider) =
     Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
 
@@ -69,8 +76,8 @@ fun MemberShape.canReachConstrainedShape(model: Model, symbolProvider: SymbolPro
 fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
     when (val targetShape = model.expectShape(this.target)) {
         is CollectionShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
-        is MapShape -> targetShape.asMapShape().get().canReachConstrainedShape(model, symbolProvider)
-        is StructureShape -> targetShape.asStructureShape().get().canReachConstrainedShape(model, symbolProvider)
+        is MapShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
+        is StructureShape -> targetShape.canReachConstrainedShape(model, symbolProvider)
         else -> targetShape.isDirectlyConstrained(symbolProvider)
     }
 

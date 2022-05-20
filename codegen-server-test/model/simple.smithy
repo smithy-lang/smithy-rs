@@ -86,9 +86,11 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpPrefixHeaders("X-Prefix-Headers-")
     lengthStringHeaderMap: MapOfLengthString,
 
-    // TODO Test with mediaType trait too.
     @httpHeader("X-Length")
     lengthStringHeader: LengthString,
+
+    // @httpHeader("X-Length-MediaType")
+    // lengthStringHeaderWithMediaType: MediaTypeLengthString,
 
     @httpHeader("X-Length-Set")
     lengthStringSetHeader: SetOfLengthString,
@@ -190,6 +192,10 @@ string MaxLengthString
 
 @length(min: 69, max: 69)
 string FixedLengthString
+
+@mediaType("video/quicktime")
+@length(min: 1, max: 69)
+string MediaTypeLengthString
 
 union UnionWithConstrainedStructureVariant {
     constrainedStructureVariant: ConstrainedStructureVariant

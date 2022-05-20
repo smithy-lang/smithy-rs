@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
+import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
@@ -542,12 +543,11 @@ class HttpBindingGenerator(
         }
         ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
             val listHeader = memberType is CollectionShape
-            // `iter()` is needed for when the value implements `Deref` for a `Target` that is an iterator; `Deref` coercion
-            // does not happen in for loops.
-            // This case happens when the value is a constrained type i.e. a wrapper tuple newtype holding a `HashMap`.
+            val workingWithPublicConstrainedWrapperTupleType =
+                mode == CodegenMode.Server && memberShape.hasPublicConstrainedWrapperTupleType(model)
             rustTemplate(
                 """
-                for (k, v) in $field.iter() {
+                for (k, v) in ${ if (workingWithPublicConstrainedWrapperTupleType) "&$field.0" else field } {
                     use std::str::FromStr;
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
@@ -592,7 +592,14 @@ class HttpBindingGenerator(
                     val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
                     "$func(&$targetName)"
                 } else {
-                    quoteValue("AsRef::<str>::as_ref($targetName)")
+                    // TODO Constraint traits on member traits are not supported yet. Note that here, counterintuitively,
+                    //  in case we're rendering a header for a collection, `member` is still referring to the structure
+                    //  member shape where the `httpHeader` or `httpPrefixHeaders` trait was found, and _not_ to the
+                    //  collection member shape on which we'd have to check for constraint trait precedence. So
+                    //  `member.hasPublicConstrainedWrapperTupleType()` is _not_ what we want.
+                    val workingWithPublicConstrainedWrapperTupleType =
+                        mode == CodegenMode.Server && target.hasPublicConstrainedWrapperTupleType(model)
+                    quoteValue("AsRef::<str>::as_ref(${ if (workingWithPublicConstrainedWrapperTupleType) "&$targetName.0" else targetName })")
                 }
             }
             target.isTimestampShape -> {

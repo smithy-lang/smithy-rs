@@ -46,24 +46,20 @@ class PublicConstrainedMapGenerator(
         writer.rustTemplate(
             """
             ##[derive(Debug, Clone, PartialEq)]
-            pub struct $name($inner);
+            pub struct $name(pub(crate) $inner);
             
             impl $name {
                 pub fn parse(value: $inner) -> Result<Self, #{ConstraintViolation}> {
                     Self::try_from(value)
                 }
+                
+                pub fn inner(&self) -> &$inner {
+                    &self.0
+                }
             }
             
             impl #{ConstrainedTrait} for $name  {
                 type Unconstrained = #{UnconstrainedSymbol};
-            }
-            
-            impl std::ops::Deref for $name {
-                type Target = $inner;
-            
-                fn deref(&self) -> &Self::Target {
-                    &self.0
-                }
             }
             
             impl std::convert::TryFrom<$inner> for $name {

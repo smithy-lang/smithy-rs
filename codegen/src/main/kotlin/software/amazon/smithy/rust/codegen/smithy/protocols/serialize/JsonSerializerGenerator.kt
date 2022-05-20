@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
@@ -39,6 +40,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
+import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -347,7 +349,15 @@ class JsonSerializerGenerator(
 
     private fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
         val writer = context.writerExpression
-        val value = context.valueExpression
+
+        val workingWithPublicConstrainedWrapperTupleType =
+            mode == CodegenMode.Server && context.shape.hasPublicConstrainedWrapperTupleType(model)
+        val value = if (workingWithPublicConstrainedWrapperTupleType) {
+            ValueExpression.Value("${context.valueExpression.name}.0")
+        } else {
+            context.valueExpression
+        }
+
         when (target) {
             is StringShape -> rust("$writer.string(${value.name}.as_str());")
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
@@ -416,14 +426,16 @@ class JsonSerializerGenerator(
     private fun RustWriter.serializeMap(context: Context<MapShape>) {
         val keyName = safeName("key")
         val valueName = safeName("value")
-        // `iter()` is needed for when the value implements `Deref` for a `Target` that is an iterator; `Deref` coercion
-        // does not happen in for loops.
-        // This case happens when the value is a constrained type i.e. a wrapper tuple newtype holding a `HashMap`.
-        rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}.iter()") {
+        rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyTarget = model.expectShape(context.shape.key.target)
-            val keyExpression = when (keyTarget.hasTrait<EnumTrait>()) {
-                true -> "$keyName.as_str()"
-                else -> keyName
+            val workingWithPublicConstrainedWrapperTupleType =
+                mode == CodegenMode.Server && keyTarget.hasPublicConstrainedWrapperTupleType(model)
+            val keyExpression = if (workingWithPublicConstrainedWrapperTupleType) {
+                "$keyName.0.as_str()"
+            } else if (keyTarget.hasTrait<EnumTrait>()) {
+                "$keyName.as_str()"
+            } else {
+                keyName
             }
             serializeMember(MemberContext.mapMember(context, keyExpression, valueName))
         }
