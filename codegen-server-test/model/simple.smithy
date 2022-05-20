@@ -3,302 +3,129 @@ $version: "1.0"
 namespace com.amazonaws.simple
 
 use aws.protocols#restJson1
+use smithy.test#httpRequestTests
+use smithy.test#httpResponseTests
 
-// TODO Move to another file and rename to ConstraintTraitsService.
 @restJson1
+@title("SimpleService")
+@documentation("A simple service example, with a Service resource that can be registered and a readonly healthcheck")
 service SimpleService {
+    version: "2022-01-01",
+    resources: [
+        Service,
+    ],
     operations: [
-        ConstrainedShapesOperation,
-        ConstrainedHttpBoundShapesOperation,
-        ConstrainedRecursiveShapesOperation,
-        // `httpQueryParams` and `httpPrefixHeaders` are structurually
-        // exclusive, so we need one operation per target shape type
-        // combination.
-        QueryParamsTargetingLengthMapOperation,
-        QueryParamsTargetingMapOfLengthStringOperation,
-        QueryParamsTargetingMapOfListOfLengthStringOperation,
-        QueryParamsTargetingMapOfSetOfLengthStringOperation,
-        HttpPrefixHeadersTargetingLengthMapOperation,
+        Healthcheck,
+        StoreServiceBlob,
     ],
 }
 
-@http(uri: "/constrained-shapes-operation", method: "GET")
-operation ConstrainedShapesOperation {
-    input: ConstrainedShapesOperationInputOutput,
-    output: ConstrainedShapesOperationInputOutput,
-    errors: [ErrorWithLengthStringMessage]
-}
+@documentation("Id of the service that will be registered")
+string ServiceId
 
-@http(uri: "/constrained-http-bound-shapes-operation/{lengthStringLabel}", method: "GET")
-operation ConstrainedHttpBoundShapesOperation {
-    input: ConstrainedHttpBoundShapesOperationInputOutput,
-    output: ConstrainedHttpBoundShapesOperationInputOutput,
-}
-
-@http(uri: "/constrained-recursive-shapes-operation", method: "GET")
-operation ConstrainedRecursiveShapesOperation {
-    input: ConstrainedRecursiveShapesOperationInputOutput,
-    output: ConstrainedRecursiveShapesOperationInputOutput,
-}
-
-@http(uri: "/query-params-targeting-length-map", method: "GET")
-operation QueryParamsTargetingLengthMapOperation {
-    input: QueryParamsTargetingLengthMapOperationInputOutput,
-    output: QueryParamsTargetingLengthMapOperationInputOutput,
-}
-
-@http(uri: "/query-params-targeting-map-of-length-string-operation", method: "GET")
-operation QueryParamsTargetingMapOfLengthStringOperation {
-    input: QueryParamsTargetingMapOfLengthStringOperationInputOutput,
-    output: QueryParamsTargetingMapOfLengthStringOperationInputOutput,
-}
-
-@http(uri: "/query-params-targeting-map-of-list-of-length-string-operation", method: "GET")
-operation QueryParamsTargetingMapOfListOfLengthStringOperation {
-    input: QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput,
-    output: QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput,
-}
-
-@http(uri: "/query-params-targeting-map-of-set-of-length-string-operation", method: "GET")
-operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
-    input: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
-    output: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
-}
-
-@http(uri: "/http-prefix-headers-targeting-length-map-operation", method: "GET")
-operation HttpPrefixHeadersTargetingLengthMapOperation {
-    input: HttpPrefixHeadersTargetingLengthMapOperationInputOutput,
-    output: HttpPrefixHeadersTargetingLengthMapOperationInputOutput,
-}
-
-structure ConstrainedShapesOperationInputOutput {
-    @required
-    conA: ConA,
-}
-
-structure ConstrainedHttpBoundShapesOperationInputOutput {
-    @required
-    @httpLabel
-    lengthStringLabel: LengthString,
-
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
-    // @required
-    @httpPrefixHeaders("X-Prefix-Headers-")
-    lengthStringHeaderMap: MapOfLengthString,
-
-    @httpHeader("X-Length")
-    lengthStringHeader: LengthString,
-
-    // @httpHeader("X-Length-MediaType")
-    // lengthStringHeaderWithMediaType: MediaTypeLengthString,
-
-    @httpHeader("X-Length-Set")
-    lengthStringSetHeader: SetOfLengthString,
-
-    @httpHeader("X-Length-List")
-    lengthStringListHeader: ListOfLengthString,
-
-    @httpQuery("lengthString")
-    lengthStringQuery: LengthString,
-
-    @httpQuery("lengthStringList")
-    lengthStringListQuery: ListOfLengthString,
-
-    @httpQuery("lengthStringSet")
-    lengthStringSetQuery: SetOfLengthString,
-}
-
-structure HttpPrefixHeadersTargetingLengthMapOperationInputOutput {
-    @httpPrefixHeaders("X-Prefix-Headers-")
-    lengthMap: ConBMap,
-}
-
-structure QueryParamsTargetingLengthMapOperationInputOutput {
-    @httpQueryParams
-    lengthMap: ConBMap
-}
-
-structure QueryParamsTargetingMapOfLengthStringOperationInputOutput {
-    @httpQueryParams
-    mapOfLengthString: MapOfLengthString
-}
-
-structure QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput {
-    @httpQueryParams
-    mapOfListOfLengthString: MapOfListOfLengthString
-}
-
-structure QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput {
-    @httpQueryParams
-    mapOfSetOfLengthString: MapOfSetOfLengthString
-}
-
-structure ConA {
-    @required
-    conB: ConB,
-
-    optConB: ConB,
-
-    lengthString: LengthString,
-    minLengthString: MinLengthString,
-    maxLengthString: MaxLengthString,
-    fixedLengthString: FixedLengthString,
-
-    conBList: ConBList,
-    conBList2: ConBList2,
-
-    conBSet: ConBSet,
-
-    conBMap: ConBMap,
-
-    mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
-
-    //unionWithConstrainedStructureVariant: UnionWithConstrainedStructureVariant,
-    enumString: EnumString,
-
-    listOfLengthString: ListOfLengthString,
-
-    setOfLengthString: SetOfLengthString,
-}
-
-map MapOfLengthString {
-    key: LengthString,
-    value: LengthString,
-}
-
-map MapOfListOfLengthString {
-    key: LengthString,
-    value: ListOfLengthString,
-}
-
-map MapOfSetOfLengthString {
-    key: LengthString,
-    value: SetOfLengthString,
-}
-
-@length(min: 2, max: 8)
-list LengthListOfLengthString {
-    member: LengthString
-}
-
-@length(min: 2, max: 69)
-string LengthString
-
-@length(min: 2)
-string MinLengthString
-
-@length(min: 69)
-string MaxLengthString
-
-@length(min: 69, max: 69)
-string FixedLengthString
-
-@mediaType("video/quicktime")
-@length(min: 1, max: 69)
-string MediaTypeLengthString
-
-union UnionWithConstrainedStructureVariant {
-    constrainedStructureVariant: ConstrainedStructureVariant
-}
-
-structure ConstrainedStructureVariant {
-    @required
-    int: Integer
-}
-
-@enum([
-    {
-        value: "t2.nano",
-        name: "T2_NANO",
-    },
-    {
-        value: "t2.micro",
-        name: "T2_MICRO",
-    },
-    {
-        value: "m256.mega",
-        name: "M256_MEGA",
-    }
-])
-string EnumString
-
-set SetOfLengthString {
-    member: LengthString
-}
-
-list ListOfLengthString {
-    member: LengthString
-}
-
-structure ConB {
-    @required
-    nice: String,
-    @required
-    int: Integer,
-
-    optNice: String,
-    optInt: Integer
-}
-
-structure ConstrainedRecursiveShapesOperationInputOutput {
-    nested: RecursiveShapesInputOutputNested1,
-
-    @required
-    recursiveList: RecursiveList
-}
-
-structure RecursiveShapesInputOutputNested1 {
-    @required
-    recursiveMember: RecursiveShapesInputOutputNested2
-}
-
-structure RecursiveShapesInputOutputNested2 {
-    @required
-    recursiveMember: RecursiveShapesInputOutputNested1,
-}
-
-list RecursiveList {
-    member: RecursiveShapesInputOutputNested1
-}
-
-list ConBList {
-    member: NestedList
-}
-
-list ConBList2 {
-    member: ConB
-}
-
-list NestedList {
-    member: ConB
-}
-
-set ConBSet {
-    member: NestedSet
-}
-
-set NestedSet {
-    member: String
-}
-
-@length(min: 1, max: 69)
-map ConBMap {
-    key: String,
-    value: LengthString
-}
+@documentation("Name of the service that will be registered")
+string ServiceName
 
 @error("client")
-structure ErrorWithLengthStringMessage {
+@documentation(
+    """
+    Returned when a new resource cannot be created because one already exists.
+    """
+)
+structure ResourceAlreadyExists {
     @required
-    message: LengthString
+    message: String
 }
 
-map MapOfMapOfListOfListOfConB {
-    key: String,
-    value: MapOfListOfListOfConB
+@documentation("A resource that can register services")
+resource Service {
+    identifiers: { id: ServiceId },
+    put: RegisterService,
 }
 
-map MapOfListOfListOfConB {
-    key: String,
-    value: ConBList
+@idempotent
+@http(method: "PUT", uri: "/service/{id}")
+@documentation("Service register operation")
+@httpRequestTests([
+    {
+        id: "RegisterServiceRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/service/1",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        params: { id: "1", name: "TestService" },
+        body: "{\"name\":\"TestService\"}",
+        method: "PUT",
+    }
+])
+@httpResponseTests([
+    {
+        id: "RegisterServiceResponseTest",
+        protocol: "aws.protocols#restJson1",
+        params: { id: "1", name: "TestService" },
+        body: "{\"id\":\"1\",\"name\":\"TestService\"}",
+        code: 200,
+    }
+])
+operation RegisterService {
+    input: RegisterServiceInputRequest,
+    output: RegisterServiceOutputResponse,
+    errors: [ResourceAlreadyExists]
+}
+
+@documentation("Service register input structure")
+structure RegisterServiceInputRequest {
+    @required
+    @httpLabel
+    id: ServiceId,
+    name: ServiceName,
+}
+
+@documentation("Service register output structure")
+structure RegisterServiceOutputResponse {
+    @required
+    id: ServiceId,
+    name: ServiceName,
+}
+
+@readonly
+@http(uri: "/healthcheck", method: "GET")
+@documentation("Read-only healthcheck operation")
+operation Healthcheck {
+    input: HealthcheckInputRequest,
+    output: HealthcheckOutputResponse
+}
+
+@documentation("Service healthcheck output structure")
+structure HealthcheckInputRequest {
+
+}
+
+@documentation("Service healthcheck input structure")
+structure HealthcheckOutputResponse {
+
+}
+
+@readonly
+@http(method: "GET", uri: "/service/{id}/blob")
+@documentation("Stores a blob for a service id")
+operation StoreServiceBlob {
+    input: StoreServiceBlobInput,
+    output: StoreServiceBlobOutput
+}
+
+@documentation("Store a blob for a service id input structure")
+structure StoreServiceBlobInput {
+    @required
+    @httpLabel
+    id: ServiceId,
+    @required
+    @httpPayload
+    content: Blob,
+}
+
+@documentation("Store a blob for a service id output structure")
+structure StoreServiceBlobOutput {
+
 }
