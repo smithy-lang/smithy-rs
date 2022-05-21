@@ -1,0 +1,85 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package software.amazon.smithy.rust.codegen.server.python.smithy.generators
+
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.rustlang.render
+import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.rustType
+
+open class PythonServerStructureGenerator(
+    model: Model,
+    private val symbolProvider: RustSymbolProvider,
+    private val writer: RustWriter,
+    private val shape: StructureShape
+) : StructureGenerator(model, symbolProvider, writer, shape) {
+    private val codegenScope = arrayOf(
+        "PyO3" to PythonServerCargoDependency.PyO3.asType(),
+    )
+
+    override fun renderStructure() {
+        val symbol = symbolProvider.toSymbol(shape)
+        val containerMeta = symbol.expectRustMetadata()
+        writer.rustTemplate("##[#{PyO3}::pyclass]", *codegenScope)
+        writer.documentShape(shape, model)
+        val withoutDebug = containerMeta.derives.copy(derives = containerMeta.derives.derives - RuntimeType.Debug)
+        containerMeta.copy(derives = withoutDebug).render(writer)
+
+        writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
+            forEachMember(members) { member, memberName, memberSymbol ->
+                renderMemberDoc(member, memberSymbol)
+                writer.rustTemplate("##[#{PyO3}(get, set)]", *codegenScope)
+                memberSymbol.expectRustMetadata().render(this)
+                write("$memberName: #T,", symbolProvider.toSymbol(member))
+            }
+        }
+
+        renderStructureImpl()
+        renderDebugImpl()
+        renderPyO3Methods()
+    }
+
+    private fun renderPyO3Methods() {
+        if (accessorMembers.isEmpty()) {
+            return
+        }
+        writer.rustTemplate(
+            """/// Python methods implementation for `$name`
+        ##[#{PyO3}::pymethods]""",
+            *codegenScope
+        )
+        writer.rustBlock("impl $name") {
+            write(
+                """##[new]
+                /// Create a new `$name` that can be instantiated by Python.
+            pub fn new("""
+            )
+            // Render field accessor methods
+            forEachMember(accessorMembers) { _, memberName, memberSymbol ->
+                val memberType = memberSymbol.rustType()
+                write("$memberName: ${memberType.render()},")
+            }
+            rustBlock(") -> Self") {
+                rustBlock("Self") {
+                    forEachMember(accessorMembers) { _, memberName, _ ->
+                        write("$memberName,")
+                    }
+                }
+            }
+        }
+    }
+}

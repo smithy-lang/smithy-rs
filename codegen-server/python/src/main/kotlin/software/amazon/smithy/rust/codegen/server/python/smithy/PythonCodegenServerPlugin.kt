@@ -11,7 +11,6 @@ import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.DefaultConfig
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
@@ -28,7 +27,7 @@ import java.util.logging.Logger
  *  `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
  *  enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
  */
-class RustCodegenServerPlugin : SmithyBuildPlugin {
+class PythonCodegenServerPlugin : SmithyBuildPlugin {
     private val logger = Logger.getLogger(javaClass.name)
 
     override fun getName(): String = "rust-server-codegen-python"
@@ -44,8 +43,8 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
         val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context)
 
         // ServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
-        logger.info("Loaded plugin to generate Rust/Python bindings for the server SSDK")
-        ServerCodegenVisitor(context, codegenDecorator).execute()
+        logger.warning("Loaded plugin to generate Rust/Python bindings for the server SSDK for projection ${context.projectionName}")
+        PythonServerCodegenVisitor(context, codegenDecorator).execute()
     }
 
     companion object {

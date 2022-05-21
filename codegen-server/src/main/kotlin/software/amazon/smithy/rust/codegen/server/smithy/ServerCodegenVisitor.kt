@@ -49,19 +49,19 @@ import java.util.logging.Logger
  * Entrypoint for server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
  */
-class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
+open class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
     ShapeVisitor.Default<Unit>() {
 
-    private val logger = Logger.getLogger(javaClass.name)
     private val settings = ServerRustSettings.from(context.model, context.settings)
-
-    private val symbolProvider: RustSymbolProvider
-    private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
-    private val model: Model
-    private val codegenContext: CodegenContext
-    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
-    private val protocolGenerator: ProtocolGenerator
+
+    protected val logger = Logger.getLogger(javaClass.name)
+    protected val rustCrate: RustCrate
+    protected val symbolProvider: RustSymbolProvider
+    protected val model: Model
+    protected val codegenContext: CodegenContext
+    protected val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
+    protected val protocolGenerator: ProtocolGenerator
 
     init {
         val symbolVisitorConfig =

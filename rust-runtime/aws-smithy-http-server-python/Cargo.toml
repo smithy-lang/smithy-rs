@@ -14,6 +14,7 @@ Python server runtime for Smithy Rust Server Framework.
 publish = false
 
 [dependencies]
+aws-smithy-types = { path = "../aws-smithy-types" }
 pyo3 = { version = "0.16" }
 pyo3-asyncio = { version = "0.16", features = ["attributes", "tokio-runtime"] }
 socket2 = { version = "0.4", features = ["all"] }

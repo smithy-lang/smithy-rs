@@ -13,6 +13,7 @@
 
 mod logging;
 mod socket;
+mod types;
 
 #[doc(inline)]
 pub use logging::{setup, LogLevel};

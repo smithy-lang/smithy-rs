@@ -50,20 +50,20 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
     }
 }
 
-class StructureGenerator(
+open class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape
 ) {
     private val errorTrait = shape.getTrait<ErrorTrait>()
-    private val members: List<MemberShape> = shape.allMembers.values.toList()
-    private val accessorMembers: List<MemberShape> = when (errorTrait) {
+    protected val members: List<MemberShape> = shape.allMembers.values.toList()
+    protected val accessorMembers: List<MemberShape> = when (errorTrait) {
         null -> members
         // Let the ErrorGenerator render the error message accessor if this is an error struct
         else -> members.filter { "message" != symbolProvider.toMemberName(it) }
     }
-    private val name = symbolProvider.toSymbol(shape).name
+    protected val name = symbolProvider.toSymbol(shape).name
 
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
@@ -90,7 +90,7 @@ class StructureGenerator(
      * Search for lifetimes used by the members of the struct and generate a declaration.
      * e.g. `<'a, 'b>`
      */
-    private fun lifetimeDeclaration(): String {
+    protected fun lifetimeDeclaration(): String {
         val lifetimes = members
             .map { symbolProvider.toSymbol(it).rustType() }
             .mapNotNull {
@@ -107,7 +107,7 @@ class StructureGenerator(
     /** Render a custom debug implementation
      * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
      */
-    private fun renderDebugImpl() {
+    protected fun renderDebugImpl() {
         writer.rustBlock("impl ${lifetimeDeclaration()} #T for $name ${lifetimeDeclaration()}", RuntimeType.Debug) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
@@ -125,7 +125,7 @@ class StructureGenerator(
         }
     }
 
-    private fun renderStructureImpl() {
+    protected fun renderStructureImpl() {
         if (accessorMembers.isEmpty()) {
             return
         }
@@ -153,7 +153,7 @@ class StructureGenerator(
         }
     }
 
-    private fun renderStructure() {
+    open fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
@@ -172,7 +172,7 @@ class StructureGenerator(
         renderDebugImpl()
     }
 
-    private fun RustWriter.forEachMember(
+    protected fun RustWriter.forEachMember(
         toIterate: List<MemberShape>,
         block: RustWriter.(MemberShape, String, Symbol) -> Unit
     ) {
@@ -183,7 +183,7 @@ class StructureGenerator(
         }
     }
 
-    private fun RustWriter.renderMemberDoc(member: MemberShape, memberSymbol: Symbol) {
+    protected fun RustWriter.renderMemberDoc(member: MemberShape, memberSymbol: Symbol) {
         documentShape(
             member,
             model,
