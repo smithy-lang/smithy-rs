@@ -4,6 +4,7 @@
  */
 
 package software.amazon.smithy.rust.codegen.server.python.smithy
+
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -16,6 +17,8 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 object PythonServerCargoDependency {
     val PyO3: CargoDependency = CargoDependency("pyo3", CratesIo("0.16"), features = setOf("extension-module"))
     val PyO3Asyncio: CargoDependency = CargoDependency("pyo3-asyncio", CratesIo("0.16"), features = setOf("attributes", "tokio-runtime"))
+    val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.0"), features = setOf("full"))
+    val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
 
     fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
     fun SmithyHttpServerPython(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server-python")

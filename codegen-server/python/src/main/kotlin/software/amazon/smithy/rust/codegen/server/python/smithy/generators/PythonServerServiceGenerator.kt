@@ -49,13 +49,17 @@ class PythonServerServiceGenerator(
 
             if (operation.errors.isNotEmpty()) {
                 rustCrate.withModule(RustModule.Error) { writer ->
-                    PythonServerCombinedErrorGenerator(context.model, context.symbolProvider, operation, context.runtimeConfig)
+                    PythonServerCombinedErrorGenerator(context.model, context, operation)
                         .render(writer)
                 }
             }
         }
         rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) { writer ->
             ServerOperationHandlerGenerator(context, operations)
+                .render(writer)
+        }
+        rustCrate.withModule(RustModule.public("python_operation_handler", "Python operation handlers implementation.")) { writer ->
+            PythonServerOperationHandlerGenerator(context, operations)
                 .render(writer)
         }
         rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->

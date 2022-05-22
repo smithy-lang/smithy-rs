@@ -22,5 +22,5 @@ object PythonServerRuntimeType {
         RuntimeType("Blob", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python::types")
 
     fun PyError(runtimeConfig: RuntimeConfig) =
-        RuntimeType("PyError", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python")
+        RuntimeType("Error", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python")
 }

@@ -14,6 +14,7 @@
 mod error;
 mod logging;
 mod socket;
+mod state;
 pub mod types;
 
 #[doc(inline)]
@@ -22,6 +23,8 @@ pub use error::Error;
 pub use logging::{setup, LogLevel};
 #[doc(inline)]
 pub use socket::SharedSocket;
+#[doc(inline)]
+pub use state::State;
 
 #[cfg(test)]
 mod tests {
