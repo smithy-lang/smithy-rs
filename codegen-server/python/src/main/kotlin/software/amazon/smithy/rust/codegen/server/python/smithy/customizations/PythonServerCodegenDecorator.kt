@@ -11,9 +11,8 @@ import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecor
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 
-val DECORATORS = listOf(AddInternalServerErrorToAllOpsDecorator(), CdylibDecorator())
-
-class CdylibDecorator : RustCodegenDecorator {
+// Configure the [lib] section to Cargo.toml.
+class CdylibManifestDecorator : RustCodegenDecorator {
     override val name: String = "CdylibDecorator"
     override val order: Byte = 0
 
@@ -23,6 +22,20 @@ class CdylibDecorator : RustCodegenDecorator {
         mapOf("lib" to mapOf("name" to codegenContext.settings.moduleName, "crate-type" to listOf("cdylib")))
 }
 
+val DECORATORS = listOf(
+    // Add the InternalServerError error to all operations.
+    // This is done because the Python interpreter can raise exceptions during execution
+    // and we cannot guarantee infallible execution of operations.
+    AddInternalServerErrorToAllOpsDecorator(),
+    // Add the [lib] section to Cargo.toml to configure the generation of the shared library:
+    //
+    // [lib]
+    // name = "$CRATE_NAME"
+    // crate-type = ["cdylib"]
+    CdylibManifestDecorator()
+)
+
+// Combined codegen decorator for Python services.
 class PythonServerCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {
     override val name: String = "PythonServerCodegenDecorator"
     override val order: Byte = -1
