@@ -13,9 +13,22 @@
 
 mod logging;
 mod socket;
-mod types;
+pub mod types;
 
 #[doc(inline)]
 pub use logging::{setup, LogLevel};
 #[doc(inline)]
 pub use socket::SharedSocket;
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    pub(crate) fn initialize() {
+        INIT.call_once(|| {
+            pyo3::prepare_freethreaded_python();
+        });
+    }
+}

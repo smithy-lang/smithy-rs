@@ -163,19 +163,10 @@ fn python_tracing(record: &PyAny) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Once;
-
-    static INIT: Once = Once::new();
-
-    fn initialize() {
-        INIT.call_once(|| {
-            pyo3::prepare_freethreaded_python();
-        });
-    }
 
     #[test]
     fn tracing_handler_is_injected_in_python() {
-        initialize();
+        crate::tests::initialize();
         Python::with_gil(|py| {
             setup_python_logging(py, LogLevel::Info).unwrap();
             let logging = py.import("logging").unwrap();
