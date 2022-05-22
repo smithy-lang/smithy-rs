@@ -52,16 +52,17 @@ import java.util.logging.Logger
 open class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
     ShapeVisitor.Default<Unit>() {
 
-    private val settings = ServerRustSettings.from(context.model, context.settings)
     private val fileManifest = context.fileManifest
 
     protected val logger = Logger.getLogger(javaClass.name)
-    protected val rustCrate: RustCrate
-    protected val symbolProvider: RustSymbolProvider
-    protected val model: Model
-    protected val codegenContext: CodegenContext
-    protected val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
-    protected val protocolGenerator: ProtocolGenerator
+    protected val settings = ServerRustSettings.from(context.model, context.settings)
+
+    var model: Model
+    var protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
+    var protocolGenerator: ProtocolGenerator
+    var codegenContext: CodegenContext
+    var symbolProvider: RustSymbolProvider
+    var rustCrate: RustCrate
 
     init {
         val symbolVisitorConfig =
@@ -96,7 +97,7 @@ open class ServerCodegenVisitor(context: PluginContext, private val codegenDecor
      * Base model transformation applied to all services.
      * See below for details.
      */
-    private fun baselineTransform(model: Model) =
+    protected fun baselineTransform(model: Model) =
         model
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }

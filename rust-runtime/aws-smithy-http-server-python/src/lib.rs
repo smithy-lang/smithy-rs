@@ -11,10 +11,13 @@
 //!
 //! [PyO3]: https://pyo3.rs/
 
+mod error;
 mod logging;
 mod socket;
 pub mod types;
 
+#[doc(inline)]
+pub use error::Error;
 #[doc(inline)]
 pub use logging::{setup, LogLevel};
 #[doc(inline)]

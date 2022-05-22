@@ -286,7 +286,7 @@ class HttpBindingGenerator(
                 }
                 is BlobShape -> rust(
                     "Ok(#T::new(body))",
-                    RuntimeType.Blob(runtimeConfig)
+                    symbolProvider.toSymbol(targetShape)
                 )
                 // `httpPayload` can be applied to set/map/list shapes.
                 // However, none of the AWS protocols support it.

@@ -16,8 +16,8 @@ pub struct Blob(aws_smithy_types::Blob);
 impl Blob {
     ///
     #[new]
-    pub fn new(input: Vec<u8>) -> Self {
-        Self(aws_smithy_types::Blob::new(input))
+    pub fn new(input: &[u8]) -> Self {
+        Self(aws_smithy_types::Blob::new::<Vec<u8>>(input.into()))
     }
 
     ///
@@ -28,7 +28,7 @@ impl Blob {
 
     ///
     #[setter(data)]
-    pub fn set_data(&mut self, data: Vec<u8>) {
+    pub fn set_data(&mut self, data: &[u8]) {
         *self = Self::new(data);
     }
 }
