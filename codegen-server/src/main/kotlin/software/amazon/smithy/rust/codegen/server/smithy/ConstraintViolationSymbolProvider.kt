@@ -24,10 +24,10 @@ import software.amazon.smithy.rust.codegen.smithy.contextName
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.unconstrainedTypeNameForCollectionOrMapShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 // TODO Unit tests.
+// TODO Docs.
 class ConstraintViolationSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
@@ -38,21 +38,26 @@ class ConstraintViolationSymbolProvider(
     private fun constraintViolationSymbolForCollectionOrMapShape(shape: Shape): Symbol {
         check(shape is CollectionShape || shape is MapShape)
 
-        // TODO Move ConstraintViolation type to the constrained namespace.
-        val unconstrainedTypeName = unconstrainedTypeNameForCollectionOrMapShape(shape, serviceShape)
-        val namespace = "crate::${Unconstrained.namespace}::${RustReservedWords.escapeIfNeeded(unconstrainedTypeName.toSnakeCase())}"
-        val rustType = RustType.Opaque(constraintViolationName, namespace)
+        val symbol = base.toSymbol(shape)
+        val constraintViolationNamespace =
+            "${symbol.namespace.let { it.ifEmpty { "crate::${Models.namespace}" } }}::${
+                RustReservedWords.escapeIfNeeded(
+                    shape.contextName(serviceShape).toSnakeCase()
+                )
+            }"
+        val rustType = RustType.Opaque(constraintViolationName, constraintViolationNamespace)
         return Symbol.builder()
             .rustType(rustType)
             .name(rustType.name)
             .namespace(rustType.namespace, "::")
-            .definitionFile(Unconstrained.filename)
+            .definitionFile(symbol.definitionFile)
             .build()
     }
 
     override fun toSymbol(shape: Shape): Symbol =
         when (shape) {
             is CollectionShape -> {
+                // TODO Move these checks out.
                 check(shape.canReachConstrainedShape(model, base))
 
                 constraintViolationSymbolForCollectionOrMapShape(shape)

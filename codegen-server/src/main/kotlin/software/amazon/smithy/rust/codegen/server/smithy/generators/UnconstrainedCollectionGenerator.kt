@@ -25,7 +25,8 @@ class UnconstrainedCollectionGenerator(
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
-    val writer: RustWriter,
+    private val unconstrainedModuleWriter: RustWriter,
+    private val modelsModuleWriter: RustWriter,
     val shape: CollectionShape
 ) {
     fun render() {
@@ -37,11 +38,12 @@ class UnconstrainedCollectionGenerator(
         val innerShape = model.expectShape(shape.member.target)
         val innerUnconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
         val constrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
-        val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
+        val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
+        val constraintViolationName = constraintViolationSymbol.name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
         // TODO Don't be lazy and don't use `Result<_, >`.
-        writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
+        unconstrainedModuleWriter.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
                 """
                 ##[derive(Debug, Clone)]
@@ -53,11 +55,8 @@ class UnconstrainedCollectionGenerator(
                     }
                 }
                 
-                ##[derive(Debug, PartialEq)]
-                pub struct $constraintViolationName(pub(crate) #{InnerConstraintViolationSymbol});
-                
                 impl std::convert::TryFrom<$name> for #{ConstrainedSymbol} {
-                    type Error = $constraintViolationName;
+                    type Error = #{ConstraintViolationSymbol};
                 
                     fn try_from(value: $name) -> Result<Self, Self::Error> {
                         let res: Result<_, #{InnerConstraintViolationSymbol}> = value
@@ -66,14 +65,27 @@ class UnconstrainedCollectionGenerator(
                             .map(|inner| inner.try_into())
                             .collect();
                         res.map(Self)   
-                           .map_err(ConstraintViolation)
+                           .map_err(#{ConstraintViolationSymbol})
                     }
                 }
                 """,
                 "InnerUnconstrainedSymbol" to innerUnconstrainedSymbol,
                 "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
                 "ConstrainedSymbol" to constrainedSymbol,
+                "ConstraintViolationSymbol" to constraintViolationSymbol,
                 "MaybeConstrained" to constrainedSymbol.wrapMaybeConstrained(),
+            )
+        }
+
+        modelsModuleWriter.withModule(
+            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last()
+        ) {
+            rustTemplate(
+                """
+                ##[derive(Debug, PartialEq)]
+                pub struct $constraintViolationName(pub(crate) #{InnerConstraintViolationSymbol});
+                """,
+                "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
             )
         }
     }

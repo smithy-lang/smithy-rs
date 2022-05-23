@@ -34,12 +34,14 @@ class UnconstrainedMapGenerator(
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
-    val writer: RustWriter,
+    private val unconstrainedModuleWriter: RustWriter,
+    private val modelsModuleWriter: RustWriter,
     val shape: MapShape
 ) {
     private val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
     private val name = symbol.name
-    private val constraintViolationName = constraintViolationSymbolProvider.toSymbol(shape).name
+    private val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
+    private val constraintViolationName = constraintViolationSymbol.name
     private val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
     private val valueShape = model.expectShape(shape.value.target)
     private val constrainedSymbol = if (shape.isDirectlyConstrained(symbolProvider)) {
@@ -63,6 +65,34 @@ class UnconstrainedMapGenerator(
         } else {
             symbolProvider.toSymbol(valueShape)
         }
+
+        unconstrainedModuleWriter.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
+            rustTemplate(
+                """
+                ##[derive(Debug, Clone)]
+                pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>);
+                
+                impl From<$name> for #{MaybeConstrained} {
+                    fn from(value: $name) -> Self {
+                        Self::Unconstrained(value)
+                    }
+                }
+                
+                """,
+                "KeySymbol" to keySymbol,
+                "ValueSymbol" to valueSymbol,
+                "MaybeConstrained" to constrainedSymbol.wrapMaybeConstrained(),
+            )
+
+            renderTryFromUnconstrainedForConstrained(this)
+        }
+
+        renderConstraintViolation()
+    }
+
+    // TODO Docs for ConstraintViolation.
+    // TODO KeyConstraintViolation and ValueConstraintViolation need to be `#[doc(hidden)]`.
+    private fun renderConstraintViolation() {
         val constraintViolationCodegenScope = listOfNotNull(
             if (isKeyConstrained(keyShape)) {
                 "KeyConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(keyShape)
@@ -76,47 +106,33 @@ class UnconstrainedMapGenerator(
             },
         ).toTypedArray()
 
-        // TODO Docs for ConstraintViolation.
-        // TODO KeyConstraintViolation and ValueConstraintViolation need to be `#[doc(hidden)]`.
-        writer.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
+        modelsModuleWriter.withModule(
+            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last()
+        ) {
             rustTemplate(
                 """
-                ##[derive(Debug, Clone)]
-                pub(crate) struct $name(pub(crate) std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>);
-                
-                impl From<$name> for #{MaybeConstrained} {
-                    fn from(value: $name) -> Self {
-                        Self::Unconstrained(value)
-                    }
-                }
-                
                 ##[derive(Debug, PartialEq)]
                 pub enum $constraintViolationName {
-                    ${ if (shape.hasTrait<LengthTrait>()) "Length(usize)," else "" }
-                    ${ if (isKeyConstrained(keyShape)) "Key(#{KeyConstraintViolationSymbol})," else "" }
-                    ${ if (isValueConstrained(valueShape)) "Value(#{ValueConstraintViolationSymbol})," else "" }
+                    ${if (shape.hasTrait<LengthTrait>()) "Length(usize)," else ""}
+                    ${if (isKeyConstrained(keyShape)) "Key(#{KeyConstraintViolationSymbol})," else ""}
+                    ${if (isValueConstrained(valueShape)) "Value(#{ValueConstraintViolationSymbol})," else ""}
                 }
                 """,
-                "KeySymbol" to keySymbol,
-                "ValueSymbol" to valueSymbol,
                 *constraintViolationCodegenScope,
-                "MaybeConstrained" to constrainedSymbol.wrapMaybeConstrained(),
             )
-
-            renderTryFromUnconstrainedForConstrained(this)
         }
     }
 
     private fun renderTryFromUnconstrainedForConstrained(writer: RustWriter) {
         writer.rustBlock("impl std::convert::TryFrom<$name> for #{T}", constrainedSymbol) {
-            rust("type Error = $constraintViolationName;")
+            rust("type Error = #T;", constraintViolationSymbol)
 
             rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
                 if (isKeyConstrained(keyShape) || isValueConstrained(valueShape)) {
                     val resolveToNonPublicConstrainedValueType =
                         isValueConstrained(valueShape) &&
-                        !valueShape.isDirectlyConstrained(symbolProvider) &&
-                        !valueShape.isStructureShape
+                                !valueShape.isDirectlyConstrained(symbolProvider) &&
+                                !valueShape.isStructureShape
                     val constrainedValueSymbol = if (resolveToNonPublicConstrainedValueType) {
                         pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
                     } else {

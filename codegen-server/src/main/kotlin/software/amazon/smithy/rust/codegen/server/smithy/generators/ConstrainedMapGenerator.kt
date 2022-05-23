@@ -31,6 +31,7 @@ class ConstrainedMapGenerator(
 
         val name = symbolProvider.toSymbol(shape).name
         val inner = "std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>"
+        // TODO This won't work if the map is only used in operation output, because we don't render the constraint violation symbol.
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
         val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
