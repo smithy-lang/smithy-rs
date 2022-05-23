@@ -18,6 +18,10 @@ plugins {
     id("software.amazon.smithy").version("0.6.0")
 }
 
+configure<software.amazon.smithy.gradle.SmithyExtension> {
+    smithyBuildConfigs = files(buildDir.resolve("smithy-build.json"))
+}
+
 val smithyVersion: String by project
 val defaultRustFlags: String by project
 val defaultRustDocFlags: String by project
