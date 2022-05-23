@@ -185,6 +185,11 @@ pub enum RequestRejection {
     // error, but it would be a lot of effort for comparatively low benefit.
     /// Used when consuming the input struct builder.
     Build(crate::Error),
+
+    /// Used by the server when the enum variant sent by a client is not known.
+    /// Unlike the rejections above, the inner type is code generated,
+    /// with each enum having its own generated error type.
+    EnumVariantNotFound(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl std::error::Error for RequestRejection {}
