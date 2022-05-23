@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
@@ -19,8 +20,12 @@ import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-// TODO Docs
 // TODO Unit tests
+/**
+ * [ConstrainedStringGenerator] generates a wrapper tuple newtype holding a constrained `String`.
+ * This type can be built from unconstrained values, yielding a `ConstraintViolation` when the input does not satisfy
+ * the constraints.
+ */
 class ConstrainedStringGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
@@ -44,24 +49,33 @@ class ConstrainedStringGenerator(
             "length <= ${lengthTrait.max.get()}"
         }
 
-        // TODO Docs for everything.
-        // TODO Display impl.
+        // TODO Docs for `ConstraintViolation`.
+        // TODO Display impl does not honor `sensitive` trait.
+        // TODO Use Display from Dan's PR.
         // TODO Use TryFrom from Dan's PR.
         // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
         // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
         // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
+        writer.documentShape(shape, model, note = rustDocsNote(name))
         writer.rustTemplate(
             """
             ##[derive(Debug, Clone, PartialEq, Eq, Hash)]
             pub struct $name(pub(crate) $inner);
             
             impl $name {
+                /// ${rustDocsParseMethod(name, inner)}
                 pub fn parse(value: $inner) -> Result<Self, #{ConstraintViolation}> {
                     Self::try_from(value)
                 }
                 
+                /// ${rustDocsInnerMethod(inner)}
                 pub fn inner(&self) -> &$inner {
                     &self.0
+                }
+                
+                /// ${rustDocsIntoInnerMethod(inner)}
+                pub fn into_inner(self) -> $inner {
+                    self.0
                 }
             }
             

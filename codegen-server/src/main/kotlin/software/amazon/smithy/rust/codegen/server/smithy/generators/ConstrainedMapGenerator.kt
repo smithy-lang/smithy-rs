@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -16,8 +17,16 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
-// TODO Docs
 // TODO Unit tests
+/**
+ * [ConstrainedMapGenerator] generates a wrapper tuple newtype holding a constrained `std::collections::HashMap`.
+ * This type can be built from unconstrained values, yielding a `ConstraintViolation` when the input does not satisfy
+ * the constraints.
+ *
+ * The [`length` trait] is the only constraint trait applicable to map shapes.
+ *
+ * [`length` trait]: https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
+ */
 class ConstrainedMapGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
@@ -27,6 +36,7 @@ class ConstrainedMapGenerator(
     val shape: MapShape
 ) {
     fun render() {
+        // The `length` trait is the only constraint trait applicable to map shapes.
         val lengthTrait = shape.expectTrait<LengthTrait>()
 
         val name = symbolProvider.toSymbol(shape).name
@@ -42,20 +52,27 @@ class ConstrainedMapGenerator(
             "length <= ${lengthTrait.max.get()}"
         }
 
-        // TODO Docs for everything.
         // TODO Use TryFrom from Dan's PR.
+        writer.documentShape(shape, model, note = rustDocsNote(name))
         writer.rustTemplate(
             """
             ##[derive(Debug, Clone, PartialEq)]
             pub struct $name(pub(crate) $inner);
             
             impl $name {
+                /// ${rustDocsParseMethod(name, inner)}
                 pub fn parse(value: $inner) -> Result<Self, #{ConstraintViolation}> {
                     Self::try_from(value)
                 }
                 
+                /// ${rustDocsInnerMethod(inner)}
                 pub fn inner(&self) -> &$inner {
                     &self.0
+                }
+                
+                /// ${rustDocsIntoInnerMethod(inner)}
+                pub fn into_inner(self) -> $inner {
+                    self.0
                 }
             }
             
