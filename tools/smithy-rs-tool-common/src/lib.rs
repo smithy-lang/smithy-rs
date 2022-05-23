@@ -9,3 +9,4 @@ pub mod git;
 pub mod macros;
 pub mod package;
 pub mod shell;
+pub mod versions_manifest;

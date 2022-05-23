@@ -12,11 +12,13 @@ use crate::retry::{run_with_retry, BoxError, ErrorClass};
 use crate::CRATE_OWNER;
 use crate::{cargo, SDK_REPO_NAME};
 use anyhow::{bail, Context, Result};
+use clap::Parser;
 use crates_io_api::{AsyncClient, Error};
 use dialoguer::Confirm;
 use lazy_static::lazy_static;
 use smithy_rs_tool_common::shell::ShellOperation;
-use std::path::Path;
+use smithy_rs_tool_common::versions_manifest::VersionsManifest;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
@@ -30,7 +32,14 @@ lazy_static! {
     .expect("valid client");
 }
 
-pub async fn subcommand_publish(location: &Path) -> Result<()> {
+#[derive(Parser, Debug)]
+pub struct PublishArgs {
+    /// Path containing the crates to publish. Crates will be discovered recursively
+    #[clap(long)]
+    location: PathBuf,
+}
+
+pub async fn subcommand_publish(PublishArgs { location }: &PublishArgs) -> Result<()> {
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
@@ -41,7 +50,7 @@ pub async fn subcommand_publish(location: &Path) -> Result<()> {
     info!("Finished crate discovery.");
 
     // Sanity check the repository tag if publishing from `aws-sdk-rust`
-    confirm_correct_tag(&batches, &location).await?;
+    confirm_correct_tag(&location).await?;
 
     // Don't proceed unless the user confirms the plan
     confirm_plan(&batches, stats)?;
@@ -103,23 +112,23 @@ async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn confirm_correct_tag(batches: &[Vec<Package>], location: &Path) -> Result<()> {
-    let aws_config_version = batches
-        .iter()
-        .flat_map(|batch| batch.iter().find(|p| p.handle.name == "aws-config"))
-        .map(|package| &package.handle.version)
-        .next();
-    if let Some(aws_config_version) = aws_config_version {
-        let expected_tag = format!("v{}", aws_config_version);
-        let repository = Repository::new(SDK_REPO_NAME, location)?;
-        let current_tag = repository.current_tag().await?;
-        if expected_tag != current_tag {
-            bail!(
-                "Current tag `{}` in the local `aws-sdk-rust` repository didn't match expected release tag `{}`",
-                current_tag,
-                expected_tag
-            );
-        }
+async fn confirm_correct_tag(location: &Path) -> Result<()> {
+    let repository = Repository::new(SDK_REPO_NAME, location)?;
+    let versions_manifest = VersionsManifest::from_file(location.join("versions.toml"))?;
+    if versions_manifest.release.is_none() {
+        // The release metadata is required for yanking in the event of a bad release, so don't
+        // allow publish if it's missing.
+        bail!("Generated `versions.toml` doesn't have release metadata. Refusing to publish!");
+    }
+    let expected_tag = versions_manifest.release.unwrap().tag;
+    let current_tag = repository.current_tag().await?;
+    if expected_tag != current_tag {
+        bail!(
+            "Current tag `{}` in the local `aws-sdk-rust` repository didn't match expected \
+             release tag `{}` from the `versions.toml` file",
+            current_tag,
+            expected_tag
+        );
     }
     Ok(())
 }

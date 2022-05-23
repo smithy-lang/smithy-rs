@@ -10,6 +10,7 @@
 import sys
 import subprocess
 import shlex
+import os.path
 
 
 def get_cmd_output(command):
@@ -17,13 +18,37 @@ def get_cmd_output(command):
     return result.stdout.decode("utf-8").strip()
 
 
-def get_examples_revision():
+def get_property(name):
+    prefix = f"-P{name}="
     for arg in sys.argv:
-        prefix = "-Paws.sdk.examples.revision="
         if arg.startswith(prefix):
             return arg[len(prefix):]
     return None
 
+
+def get_examples_revision():
+    return get_property("aws.sdk.examples.revision")
+
+
+def get_previous_release_versions():
+    return get_property("aws.sdk.previous.release.versions.manifest")
+
+
+if get_property("aws.fullsdk") != "true":
+    sys.exit(1)
+
+# Verify the versions manifest path was set correctly
+previous_release_versions = get_previous_release_versions()
+if previous_release_versions is None or not os.path.exists(previous_release_versions):
+    print("Previous release versions file didn't exist")
+    sys.exit(1)
+else:
+    # Verify its the right file by looking for our special comment
+    with open(previous_release_versions, 'r') as file:
+        contents = file.read()
+        if "# special test comment: this came from the previous release" not in contents:
+            print("Wrong previous release versions.toml given to aws:sdk:assemble")
+            sys.exit(1)
 
 examples_revision = get_examples_revision()
 smithy_rs_revision = get_cmd_output("git rev-parse HEAD")
