@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationHandlerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationRegistryGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -55,11 +54,11 @@ class PythonServerServiceGenerator(
             }
         }
         rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) { writer ->
-            ServerOperationHandlerGenerator(context, operations)
+            PythonServerOperationHandlerGenerator(context, operations)
                 .render(writer)
         }
-        rustCrate.withModule(RustModule.public("python_operation_handler", "Python operation handlers implementation.")) { writer ->
-            PythonServerOperationHandlerGenerator(context, operations)
+        rustCrate.withModule(RustModule.public("python_app", "Python server implementation.")) { writer ->
+            PythonServerGenerator(context, operations)
                 .render(writer)
         }
         rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->

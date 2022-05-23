@@ -80,6 +80,12 @@ impl SharedSocket {
     }
 }
 
+impl SharedSocket {
+    pub fn get_socket(&self) -> Result<Socket, std::io::Error> {
+        self.inner.try_clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -7,7 +7,6 @@
 //!
 //! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 
-use self::future::RouterFuture;
 use self::request_spec::RequestSpec;
 use crate::body::{boxed, Body, BoxBody, HttpBody};
 use crate::error::BoxError;
@@ -33,7 +32,7 @@ pub mod request_spec;
 
 mod route;
 
-pub use self::{into_make_service::IntoMakeService, route::Route};
+pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::Route};
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
 /// based on the request's URI and HTTP method or on some specific header setting the target operation.

@@ -29,14 +29,10 @@ pub type PyHandlers = HashMap<String, Arc<PyHandler>>;
 #[derive(Debug, Clone)]
 pub struct State {
     pub context: Arc<PyObject>,
-    pub handlers: PyHandlers,
 }
 
 impl State {
-    fn new(context: PyObject, handlers: PyHandlers) -> Self {
-        Self {
-            context: Arc::new(context),
-            handlers,
-        }
+    pub(crate) fn new(context: Arc<PyObject>) -> Self {
+        Self { context }
     }
 }

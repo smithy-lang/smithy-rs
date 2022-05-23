@@ -13,6 +13,7 @@
 
 mod error;
 mod logging;
+mod server;
 mod socket;
 mod state;
 pub mod types;
@@ -22,9 +23,11 @@ pub use error::Error;
 #[doc(inline)]
 pub use logging::{setup, LogLevel};
 #[doc(inline)]
+pub use server::PyServer;
+#[doc(inline)]
 pub use socket::SharedSocket;
 #[doc(inline)]
-pub use state::State;
+pub use state::{PyHandler, PyHandlers, State};
 
 #[cfg(test)]
 mod tests {
