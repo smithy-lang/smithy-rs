@@ -1,4 +1,66 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+v0.42.0 (May 13th, 2022)
+========================
+**Breaking Changes:**
+- ⚠🎉 ([aws-sdk-rust#494](https://github.com/awslabs/aws-sdk-rust/issues/494), [aws-sdk-rust#519](https://github.com/awslabs/aws-sdk-rust/issues/519)) The `aws_smithy_http::byte_stream::bytestream_util::FsBuilder` has been updated to allow for easier creation of
+    multi-part requests.
+
+    - `FsBuilder::offset` is a new method allowing users to specify an offset to start reading a file from.
+    - `FsBuilder::file_size` has been reworked into `FsBuilder::length` and is now used to specify the amount of data to read.
+
+    With these two methods, it's now simple to create a `ByteStream` that will read a single "chunk" of a file. The example
+    below demonstrates how you could divide a single `File` into consecutive chunks to create multiple `ByteStream`s.
+
+    ```rust
+    let example_file_path = Path::new("/example.txt");
+    let example_file_size = tokio::fs::metadata(&example_file_path).await.unwrap().len();
+    let chunks = 6;
+    let chunk_size = file_size / chunks;
+    let mut byte_streams = Vec::new();
+
+    for i in 0..chunks {
+        let length = if i == chunks - 1 {
+            // If we're on the last chunk, the length to read might be less than a whole chunk.
+            // We substract the size of all previous chunks from the total file size to get the
+            // size of the final chunk.
+            file_size - (i * chunk_size)
+        } else {
+            chunk_size
+        };
+
+        let byte_stream = ByteStream::read_from()
+            .path(&file_path)
+            .offset(i * chunk_size)
+            .length(length)
+            .build()
+            .await?;
+
+        byte_streams.push(byte_stream);
+    }
+
+    for chunk in byte_streams {
+        // Make requests to a service
+    }
+    ```
+
+**New this release:**
+- ([smithy-rs#1352](https://github.com/awslabs/smithy-rs/issues/1352)) Log a debug event when a retry is going to be peformed
+- ([smithy-rs#1332](https://github.com/awslabs/smithy-rs/issues/1332), @82marbag) Update generated crates to Rust 2021
+
+**Contributors**
+Thank you for your contributions! ❤
+- @82marbag ([smithy-rs#1332](https://github.com/awslabs/smithy-rs/issues/1332))
+
+0.41.0 (April 28th, 2022)
+=========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#1318](https://github.com/awslabs/smithy-rs/issues/1318)) Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.56.1 to 1.58.1 per our "two versions behind" policy.
+
+**New this release:**
+- ([smithy-rs#1307](https://github.com/awslabs/smithy-rs/issues/1307)) Add new trait for HTTP body callbacks. This is the first step to enabling us to implement optional checksum verification of requests and responses.
+- ([smithy-rs#1330](https://github.com/awslabs/smithy-rs/issues/1330)) Upgrade to Smithy 1.21.0
+
+
 0.40.2 (April 14th, 2022)
 =========================
 

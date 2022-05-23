@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::fs::Fs;
@@ -8,9 +8,10 @@ use crate::package::{
     discover_and_validate_package_batches, Package, PackageBatch, PackageHandle, PackageStats,
 };
 use crate::repo::{resolve_publish_location, Repository};
+use crate::retry::{run_with_retry, BoxError, ErrorClass};
 use crate::CRATE_OWNER;
 use crate::{cargo, SDK_REPO_NAME};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use crates_io_api::{AsyncClient, Error};
 use dialoguer::Confirm;
 use lazy_static::lazy_static;
@@ -59,10 +60,8 @@ pub async fn subcommand_publish(location: &Path) -> Result<()> {
             tasks.push(tokio::spawn(async move {
                 // Only publish if it hasn't been published yet.
                 if !is_published(&package.handle).await? {
-                    info!("Publishing `{}`...", package.handle);
-                    cargo::Publish::new(package.handle.clone(), &package.crate_path)
-                        .spawn()
-                        .await?;
+                    publish(&package.handle, &package.crate_path).await?;
+
                     // Sometimes it takes a little bit of time for the new package version
                     // to become available after publish. If we proceed too quickly, then
                     // the next package publish can fail if it depends on this package.
@@ -83,6 +82,24 @@ pub async fn subcommand_publish(location: &Path) -> Result<()> {
         tokio::time::sleep(Duration::from_secs(30)).await;
     }
 
+    Ok(())
+}
+
+async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
+    info!("Publishing `{}`...", handle);
+    run_with_retry(
+        &format!("Publishing `{}`", handle),
+        3,
+        Duration::from_secs(5),
+        || async {
+            cargo::Publish::new(handle.clone(), &crate_path)
+                .spawn()
+                .await?;
+            Result::<_, BoxError>::Ok(())
+        },
+        |_err| ErrorClass::Retry,
+    )
+    .await?;
     Ok(())
 }
 
@@ -108,16 +125,29 @@ async fn confirm_correct_tag(batches: &[Vec<Package>], location: &Path) -> Resul
 }
 
 async fn is_published(handle: &PackageHandle) -> Result<bool> {
-    let expected_version = handle.version.to_string();
-    let crate_info = match CRATES_IO_CLIENT.get_crate(&handle.name).await {
-        Ok(info) => info,
-        Err(Error::NotFound(_)) => return Ok(false),
-        Err(other) => return Err(other.into()),
-    };
-    Ok(crate_info
-        .versions
-        .iter()
-        .any(|crate_version| crate_version.num == expected_version))
+    run_with_retry(
+        &format!("Checking if `{}` is already published", handle.name),
+        3,
+        Duration::from_secs(5),
+        || async {
+            let expected_version = (&handle.version).to_string();
+            let crate_info = match CRATES_IO_CLIENT.get_crate(&handle.name).await {
+                Ok(info) => info,
+                Err(Error::NotFound(_)) => return Ok(false),
+                Err(other) => return Err(other),
+            };
+            Ok(crate_info
+                .versions
+                .iter()
+                .any(|crate_version| crate_version.num == expected_version))
+        },
+        |err| match err {
+            Error::Http(_) => ErrorClass::Retry,
+            _ => ErrorClass::NoRetry,
+        },
+    )
+    .await
+    .context("is_published")
 }
 
 /// Waits for the given package to show up on crates.io
@@ -141,14 +171,35 @@ async fn wait_for_eventual_consistency(package: &Package) -> Result<()> {
 
 /// Corrects the crate ownership.
 async fn correct_owner(package: &Package) -> Result<()> {
-    let owners = cargo::GetOwners::new(&package.handle.name).spawn().await?;
-    if !owners.iter().any(|owner| owner == CRATE_OWNER) {
-        cargo::AddOwner::new(&package.handle.name, CRATE_OWNER)
-            .spawn()
-            .await?;
-        info!("Corrected crate ownership of `{}`", package.handle);
-    }
-    Ok(())
+    run_with_retry(
+        &format!("Correcting ownership of `{}`", package.handle.name),
+        3,
+        Duration::from_secs(5),
+        || async {
+            let owners = cargo::GetOwners::new(&package.handle.name).spawn().await?;
+            let incorrect_owners = owners.iter().filter(|&owner| owner != CRATE_OWNER);
+            for incorrect_owner in incorrect_owners {
+                cargo::RemoveOwner::new(&package.handle.name, incorrect_owner)
+                    .spawn()
+                    .await
+                    .context("remove incorrect owner")?;
+                info!(
+                    "Removed incorrect owner `{}` from crate `{}`",
+                    incorrect_owner, package.handle
+                );
+            }
+            if !owners.iter().any(|owner| owner == CRATE_OWNER) {
+                cargo::AddOwner::new(&package.handle.name, CRATE_OWNER)
+                    .spawn()
+                    .await?;
+                info!("Corrected crate ownership of `{}`", package.handle);
+            }
+            Result::<_, BoxError>::Ok(())
+        },
+        |_err| ErrorClass::Retry,
+    )
+    .await
+    .context("correct_owner")
 }
 
 fn confirm_plan(batches: &[PackageBatch], stats: PackageStats) -> Result<()> {

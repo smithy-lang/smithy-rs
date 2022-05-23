@@ -1,13 +1,13 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 allprojects {
     apply plugin: "jacoco"
 
     jacoco {
-        toolVersion = "0.8.5"
+        toolVersion = "0.8.8"
         reportsDir = file("${buildDir}/jacoco-reports")
     }
 }

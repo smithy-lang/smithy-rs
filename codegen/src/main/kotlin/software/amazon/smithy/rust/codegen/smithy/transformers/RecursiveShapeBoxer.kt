@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.transformers
@@ -51,13 +51,11 @@ object RecursiveShapeBoxer {
         // (External to this function) Go back to 1.
         val index = TopologicalIndex.of(model)
         val recursiveShapes = index.recursiveShapes
-        val loops = recursiveShapes.map {
-            // Get all the shapes in the closure (represented as Paths
-            shapeId ->
+        val loops = recursiveShapes.map { shapeId ->
+            // Get all the shapes in the closure (represented as `Path`s).
             index.getRecursiveClosure(shapeId)
-        }.flatMap {
-            // flatten the connections into shapes
-            loops ->
+        }.flatMap { loops ->
+            // Flatten the connections into shapes.
             loops.map { it.shapes }
         }
         val loopToFix = loops.firstOrNull { !containsIndirection(it) }

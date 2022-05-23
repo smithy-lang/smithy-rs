@@ -11,7 +11,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-rt-tokio = ["tokio/rt", "tokio/fs", "tokio-util/io"]
+rt-tokio = ["tokio/rt", "tokio/fs", "tokio/io-util", "tokio-util/io"]
 event-stream = ["aws-smithy-eventstream"]
 
 [dependencies]
@@ -32,7 +32,7 @@ hyper = "0.14"
 # ByteStream internals
 futures-core = "0.3.14"
 tokio = { version = "1.6", optional = true }
-tokio-util = { version = "0.6", optional = true }
+tokio-util = { version = "0.7", optional = true }
 
 [dev-dependencies]
 async-stream = "0.3"

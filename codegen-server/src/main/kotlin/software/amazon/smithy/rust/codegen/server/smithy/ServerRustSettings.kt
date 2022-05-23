@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy
@@ -29,6 +29,7 @@ data class ServerCodegenConfig(
     val includeFluentClient: Boolean = false,
     val addMessageToErrors: Boolean = false,
     val formatTimeoutSeconds: Int = 20,
+    val debugMode: Boolean = false,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
     val eventStreamAllowList: Set<String> = emptySet(),
 ) {
@@ -42,6 +43,7 @@ data class ServerCodegenConfig(
                     false,
                     false,
                     20,
+                    debugMode = false,
                     emptySet()
                 )
             }

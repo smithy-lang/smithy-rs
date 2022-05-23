@@ -1,6 +1,6 @@
 #
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 #
 
 # This is a makefile executed by the `./ci` script that
@@ -57,6 +57,14 @@ check-server-codegen-integration-tests:
 
 .PHONY: check-server-codegen-unit-tests
 check-server-codegen-unit-tests:
+	$(CI_ACTION) $@
+
+.PHONY: check-server-codegen-integration-tests-python
+check-server-codegen-integration-tests-python:
+	$(CI_ACTION) $@
+
+.PHONY: check-server-codegen-unit-tests-python
+check-server-codegen-unit-tests-python:
 	$(CI_ACTION) $@
 
 .PHONY: check-server-e2e-test
