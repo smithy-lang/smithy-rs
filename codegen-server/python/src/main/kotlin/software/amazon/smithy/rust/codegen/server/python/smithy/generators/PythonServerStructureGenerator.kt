@@ -37,7 +37,7 @@ open class PythonServerStructureGenerator(
 ) : StructureGenerator(model, symbolProvider, writer, shape) {
     private val codegenScope =
         arrayOf(
-            "PyO3" to PythonServerCargoDependency.PyO3.asType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(codegenContext.runtimeConfig).asType()
         )
 
@@ -45,9 +45,9 @@ open class PythonServerStructureGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         if (shape.hasTrait<ErrorTrait>()) {
-            writer.rustTemplate("##[#{PyO3}::pyclass(extends = pyo3::exceptions::PyException)]", *codegenScope)
+            writer.rustTemplate("##[#{pyo3}::pyclass(extends = pyo3::exceptions::PyException)]", *codegenScope)
         } else {
-            writer.rustTemplate("##[#{PyO3}::pyclass]", *codegenScope)
+            writer.rustTemplate("##[#{pyo3}::pyclass]", *codegenScope)
         }
         writer.documentShape(shape, model)
         val withoutDebug = containerMeta.derives.copy(
@@ -58,7 +58,7 @@ open class PythonServerStructureGenerator(
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             forEachMember(members) { member, memberName, memberSymbol ->
                 renderMemberDoc(member, memberSymbol)
-                writer.rustTemplate("##[#{PyO3}(get, set)]", *codegenScope)
+                writer.rustTemplate("##[#{pyo3}(get, set)]", *codegenScope)
                 memberSymbol.expectRustMetadata().render(this)
                 write("$memberName: #T,", symbolProvider.toSymbol(member))
             }
@@ -71,17 +71,16 @@ open class PythonServerStructureGenerator(
 
     private fun renderPyO3Methods() {
         if (shape.hasTrait<ErrorTrait>() || !accessorMembers.isEmpty()) {
-
             writer.rustTemplate(
                 """/// Python methods implementation for `$name`
-                ##[#{PyO3}::pymethods]""",
+                ##[#{pyo3}::pymethods]""",
                 *codegenScope
             )
             writer.rustBlock("impl $name") {
                 write(
                     """##[new]
                     /// Create a new `$name` that can be instantiated by Python.
-                       pub fn new("""
+                    pub fn new("""
                 )
                 // Render field accessor methods
                 forEachMember(accessorMembers) { _, memberName, memberSymbol ->
@@ -99,6 +98,18 @@ open class PythonServerStructureGenerator(
                         }
                     }
                 }
+                rustTemplate(
+                    """
+                    fn __repr__(&self) -> String  {
+                        format!("{self:?}")
+                    }
+                    fn __str__(&self) -> String {
+                        format!("{self:?}")
+                    }
+
+                    """,
+                    *codegenScope
+                )
             }
         }
     }

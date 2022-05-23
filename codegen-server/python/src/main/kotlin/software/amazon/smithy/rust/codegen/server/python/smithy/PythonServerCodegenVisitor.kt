@@ -8,7 +8,10 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
@@ -22,6 +25,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.util.getTrait
 
 /**
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
@@ -66,6 +70,16 @@ class PythonServerCodegenVisitor(context: PluginContext, private val codegenDeco
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
+    /**
+     * Structure Shape Visitor
+     *
+     * For each structure shape, generate:
+     * - A Rust structure for the shape ([StructureGenerator]).
+     * - `pyo3::PyClass` trait implementation.
+     * - A builder for the shape.
+     *
+     * This function _does not_ generate any serializers.
+     */
     override fun structureShape(shape: StructureShape) {
         logger.info("[python-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
@@ -77,6 +91,20 @@ class PythonServerCodegenVisitor(context: PluginContext, private val codegenDeco
             builderGenerator.render(writer)
             writer.implBlock(shape, symbolProvider) {
                 builderGenerator.renderConvenienceMethod(this)
+            }
+        }
+    }
+
+    /**
+     * Enum Shape Visitor
+     *
+     * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
+     */
+    override fun stringShape(shape: StringShape) {
+        logger.info("[rust-server-codegen] Generating an enum $shape")
+        shape.getTrait<EnumTrait>()?.also { enum ->
+            rustCrate.useShapeWriter(shape) { writer ->
+                PythonServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.runtimeConfig).render()
             }
         }
     }

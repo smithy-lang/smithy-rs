@@ -56,7 +56,7 @@ class EnumMemberModel(private val definition: EnumDefinition, private val symbol
     }
 }
 
-private fun RustWriter.docWithNote(doc: String?, note: String?) {
+fun RustWriter.docWithNote(doc: String?, note: String?) {
     if (doc.isNullOrBlank() && note.isNullOrBlank()) {
         // If the model doesn't have any documentation for the shape, then suppress the missing docs lint
         // since the lack of documentation is a modeling issue rather than a codegen issue.
@@ -141,7 +141,7 @@ open class EnumGenerator(
         }
     }
 
-    private fun renderEnum() {
+    open fun renderEnum() {
         val renamedWarning =
             sortedMembers.mapNotNull { it.name() }.filter { it.renamedFrom != null }.joinToString("\n") {
                 val previousName = it.renamedFrom!!

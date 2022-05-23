@@ -177,7 +177,7 @@ open class ServerCodegenVisitor(context: PluginContext, private val codegenDecor
     }
 
     /**
-     * String Shape Visitor
+     * Enum Shape Visitor
      *
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */

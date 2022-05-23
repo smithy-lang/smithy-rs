@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.util.dq
 
-class ServerEnumGenerator(
+open class ServerEnumGenerator(
     model: Model,
     symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
@@ -37,6 +37,10 @@ class ServerEnumGenerator(
             pub struct $errorStruct(String);
             """
         )
+        renderEnumImpl()
+    }
+
+    protected fun renderEnumImpl() {
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.TryFrom) {
             write("type Error = $errorStruct;")
             writer.rustBlock("fn try_from(s: &str) -> Result<Self, <$enumName as #T<&str>>::Error>", RuntimeType.TryFrom) {
