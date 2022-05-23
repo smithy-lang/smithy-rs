@@ -53,7 +53,7 @@ struct Metadata {
 
 const RUST_SDK_TEAM: &str = "AWS Rust SDK Team <aws-sdk-rust@amazon.com>";
 const SERVER_TEAM: &str = "Smithy Rust Server <smithy-rs-server@amazon.com>";
-const SERVER_CRATES: &[&str] = &["aws-smithy-http-server"];
+const SERVER_CRATES: &[&str] = &["aws-smithy-http-server", "aws-smithy-http-server-python"];
 
 /// Check crate licensing
 ///
