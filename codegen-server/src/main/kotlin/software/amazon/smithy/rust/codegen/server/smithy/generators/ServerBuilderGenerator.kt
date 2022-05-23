@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
@@ -238,12 +239,10 @@ class ServerBuilderGenerator(
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
                 if (wrapInMaybeConstrained) {
                     val maybeConstrainedConstrained = "${symbol.wrapMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
-                    val constrainedTypeHoldsFinalType = model.expectShape(member.target).isStructureShape ||
-                            memberHasConstraintTraitOrTargetHasConstraintTrait(member)
                     // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
                     var varExpr = if (symbol.isOptional()) "v" else "input"
                     if (hasBox) varExpr = "*$varExpr"
-                    if (!constrainedTypeHoldsFinalType) varExpr = "($varExpr).into()"
+                    if (!constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
                     conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
                         conditionalBlock("Box::new(", ")", conditional = hasBox) {
                             rust("$maybeConstrainedConstrained($varExpr)")
@@ -257,6 +256,21 @@ class ServerBuilderGenerator(
             rust("self")
         }
     }
+
+    /**
+     * Returns whether the constrained builder member type (the type on which the `Constrained` trait is implemented)
+     * is the final type the user sees when receiving the built struct. This is true when the corresponding constrained
+     * type is public and not `pub(crate)`, which happens when the target is a structure or is directly constrained.
+     *
+     * An example where this returns false is when the member shape targets a list whose members are lists of structures
+     * having at least one `required` member. In this case the member shape is transitively but not directly constrained,
+     * so the generated constrained type is `pub(crate)` and needs converting into the final type the user will be
+     * exposed to.
+     *
+     * See [PubCrateConstrainedShapeSymbolProvider] too.
+     */
+    fun constrainedTypeHoldsFinalType(member: MemberShape) =
+        model.expectShape(member.target).isStructureShape || member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)
 
     /**
      * Render a `set_foo` method.
@@ -410,16 +424,13 @@ class ServerBuilderGenerator(
         )
     }
 
-    private fun memberHasConstraintTraitOrTargetHasConstraintTrait(member: MemberShape) =
-        member.isDirectlyConstrained(symbolProvider) || (model.expectShape(member.target).isDirectlyConstrained(symbolProvider))
-
     /**
      * Returns the symbol for a builder's member.
      * All builder members are optional, but only some are `Option<T>`s where `T` needs to be constrained.
      */
     private fun builderMemberSymbol(member: MemberShape): Symbol =
         if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
-            val strippedOption = if (memberHasConstraintTraitOrTargetHasConstraintTrait(member)) {
+            val strippedOption = if (member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)) {
                 symbolProvider.toSymbol(member)
             } else {
                 pubCrateConstrainedShapeSymbolProvider!!.toSymbol(member)
@@ -465,8 +476,6 @@ class ServerBuilderGenerator(
         writer.rustBlock("#T", structureSymbol) {
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
-                val constrainedTypeHoldsFinalType = model.expectShape(member.target).isStructureShape
-                        || memberHasConstraintTraitOrTargetHasConstraintTrait(member)
 
                 withBlock("$memberName: self.$memberName", ",") {
                     // Write the modifier(s).
@@ -483,7 +492,7 @@ class ServerBuilderGenerator(
                                     #{MaybeConstrained}::Unconstrained(x) => Ok(Box::new(x.try_into()?)),
                                 })
                                 .map(|res| 
-                                    res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.into())" }
+                                    res${ if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())" }
                                        .map_err(|err| ConstraintViolation::${constraintViolation.name()}(Box::new(err)))
                                 )
                                 .transpose()?
@@ -498,7 +507,7 @@ class ServerBuilderGenerator(
                                     #{MaybeConstrained}::Unconstrained(x) => x.try_into(),
                                 })
                                 .map(|res| 
-                                    res${ if (constrainedTypeHoldsFinalType) "" else ".map(|v| v.into())" }
+                                    res${ if (constrainedTypeHoldsFinalType(member)) "" else ".map(|v| v.into())" }
                                        .map_err(ConstraintViolation::${constraintViolation.name()})
                                 )
                                 .transpose()?

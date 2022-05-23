@@ -16,11 +16,9 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.util.PANIC
-import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -47,6 +45,10 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  * provider will intentionally crash in such a case to avoid the caller
  * incorrectly using it.
  *
+ * Note also that for the purposes of this symbol provider, a member shape is
+ * transitively but not directly constrained only in the case where it itself
+ * is not directly constrained and its target also is not directly constrained.
+ *
  * If the shape is _directly_ constrained, use [ConstrainedShapeSymbolProvider]
  * instead.
  */
@@ -72,7 +74,7 @@ class PubCrateConstrainedShapeSymbolProvider(
     }
 
     private fun errorMessage(shape: Shape) =
-        "This symbol provider was called with $shape. However, it can only be called with a shape that is transitively constrained"
+        "This symbol provider was called with $shape. However, it can only be called with a shape that is transitively constrained."
 
     override fun toSymbol(shape: Shape): Symbol {
         require(shape.isTransitivelyConstrained(model, base)) { errorMessage(shape) }
@@ -82,36 +84,19 @@ class PubCrateConstrainedShapeSymbolProvider(
                 constrainedSymbolForCollectionOrMapShape(shape)
             }
             is MemberShape -> {
-                check(model.expectShape(shape.container).isStructureShape)
+                require(model.expectShape(shape.container).isStructureShape) {
+                    "This arm is only exercised by `ServerBuilderGenerator`"
+                }
+                require(!shape.hasConstraintTraitOrTargetHasConstraintTrait(model, base)) { errorMessage(shape) }
 
-                if (shape.requiresNewtype()) {
-                    //TODO()
+                val targetShape = model.expectShape(shape.target)
 
-                    // TODO What follows is wrong; here we should refer to an opaque type for the member shape.
-                    //     But for now we add this to not make the validation model crash.
-
-                    val targetShape = model.expectShape(shape.target)
-                    if (targetShape is SimpleShape) {
-                        base.toSymbol(shape)
-                    } else {
-                        val targetSymbol = this.toSymbol(targetShape)
-                        // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                        handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex)
-                    }
+                if (targetShape is SimpleShape) {
+                    base.toSymbol(shape)
                 } else {
-                    val targetShape = model.expectShape(shape.target)
-
-                    if (targetShape is SimpleShape) {
-                        check(shape.hasTrait<RequiredTrait>()) {
-                            "Targeting a simple shape that can reach a constrained shape and does not need a newtype; the member shape must be `required`"
-                        }
-
-                        base.toSymbol(shape)
-                    } else {
-                        val targetSymbol = this.toSymbol(targetShape)
-                        // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
-                        handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex)
-                    }
+                    val targetSymbol = this.toSymbol(targetShape)
+                    // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
+                    handleOptionality(handleRustBoxing(targetSymbol, shape), shape, nullableIndex)
                 }
             }
             is StructureShape, is UnionShape -> {

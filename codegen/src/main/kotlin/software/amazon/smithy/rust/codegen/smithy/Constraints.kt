@@ -66,6 +66,9 @@ fun MemberShape.requiresNewtype() =
             // this.hasTrait<UniqueItemsTrait>() ||
             this.hasTrait<PatternTrait>()
 
+fun MemberShape.hasConstraintTraitOrTargetHasConstraintTrait(model: Model, symbolProvider: SymbolProvider) =
+    this.isDirectlyConstrained(symbolProvider) || (model.expectShape(this.target).isDirectlyConstrained(symbolProvider))
+
 fun Shape.isTransitivelyConstrained(model: Model, symbolProvider: SymbolProvider) =
     !this.isDirectlyConstrained(symbolProvider) && this.canReachConstrainedShape(model, symbolProvider)
 
