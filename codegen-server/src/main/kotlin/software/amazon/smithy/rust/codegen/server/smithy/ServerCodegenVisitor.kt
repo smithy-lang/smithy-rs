@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -237,14 +238,16 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         }
     }
 
-    // TODO Have a single method for collections.
-    override fun listShape(shape: ListShape) {
+    override fun listShape(shape: ListShape) = collectionShape(shape)
+    override fun setShape(shape: SetShape) = collectionShape(shape)
+
+    private fun collectionShape(shape: CollectionShape) {
         if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
                 model,
                 symbolProvider
             )
         ) {
-            logger.info("[rust-server-codegen] Generating an unconstrained type for list $shape")
+            logger.info("[rust-server-codegen] Generating an unconstrained type for collection shape $shape")
             rustCrate.withModule(unconstrainedModule) { unconstrainedModuleWriter ->
                 rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
                     UnconstrainedCollectionGenerator(
@@ -260,43 +263,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                 }
             }
 
-            logger.info("[rust-server-codegen] Generating a constrained type for list $shape")
-            rustCrate.withModule(constrainedModule) { writer ->
-                PubCrateConstrainedCollectionShapeGenerator(
-                    model,
-                    symbolProvider,
-                    unconstrainedShapeSymbolProvider,
-                    pubCrateConstrainedShapeSymbolProvider,
-                    writer,
-                    shape
-                ).render()
-            }
-        }
-    }
-
-    override fun setShape(shape: SetShape) {
-        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
-                model,
-                symbolProvider
-            )
-        ) {
-            logger.info("[rust-server-codegen] Generating an unconstrained type for set $shape")
-            rustCrate.withModule(unconstrainedModule) { unconstrainedModuleWriter ->
-                rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
-                    UnconstrainedCollectionGenerator(
-                        model,
-                        symbolProvider,
-                        unconstrainedShapeSymbolProvider,
-                        pubCrateConstrainedShapeSymbolProvider,
-                        constraintViolationSymbolProvider,
-                        unconstrainedModuleWriter,
-                        modelsModuleWriter,
-                        shape
-                    ).render()
-                }
-            }
-
-            logger.info("[rust-server-codegen] Generating a constrained type for set $shape")
+            logger.info("[rust-server-codegen] Generating a constrained type for collection shape $shape")
             rustCrate.withModule(constrainedModule) { writer ->
                 PubCrateConstrainedCollectionShapeGenerator(
                     model,
