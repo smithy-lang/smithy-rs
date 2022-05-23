@@ -7,6 +7,7 @@ use crate::fs::{DefaultFs, Fs};
 use crate::git::CommitHash;
 use anyhow::Result;
 use std::path::Path;
+use std::str::FromStr;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct VersionsManifest {

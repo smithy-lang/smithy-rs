@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::str::FromStr;
 
 /// Root struct representing a `versions.toml` manifest
 #[derive(Debug, Deserialize, Serialize)]
@@ -34,10 +35,6 @@ pub struct VersionsManifest {
 }
 
 impl VersionsManifest {
-    pub fn from_str(value: &str) -> Result<VersionsManifest> {
-        Ok(toml::from_str(value)?)
-    }
-
     pub fn from_file(path: impl AsRef<Path>) -> Result<VersionsManifest> {
         Self::from_str(
             &fs::read_to_string(path.as_ref())
@@ -52,6 +49,14 @@ impl VersionsManifest {
         fs::write(path.as_ref(), serialized)
             .with_context(|| format!("failed to write to {:?}", path.as_ref()))?;
         Ok(())
+    }
+}
+
+impl FromStr for VersionsManifest {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(toml::from_str(value)?)
     }
 }
 
