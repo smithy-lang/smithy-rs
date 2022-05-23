@@ -41,7 +41,7 @@ pub struct State {
 
 impl State {
     /// Create a new [State] structure.
-    pub(crate) fn new(context: Arc<PyObject>) -> Self {
+    pub fn new(context: Arc<PyObject>) -> Self {
         Self { context }
     }
 }
