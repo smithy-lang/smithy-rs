@@ -128,7 +128,8 @@ data class CargoDependency(
     private val location: DependencyLocation,
     val scope: DependencyScope = DependencyScope.Compile,
     val optional: Boolean = false,
-    val features: Set<String> = emptySet()
+    val features: Set<String> = emptySet(),
+    val crateName: String = name.replace("-", "_")
 ) : RustDependency(name) {
     val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
 
@@ -143,7 +144,7 @@ data class CargoDependency(
         is Local -> "local"
     }
 
-    fun rustName(name: String): RuntimeType = RuntimeType(name, this, this.name.replace("-", "_"))
+    fun rustName(name: String): RuntimeType = RuntimeType(name, this, this.crateName)
 
     fun toMap(): Map<String, Any> {
         val attribs = mutableMapOf<String, Any>()
@@ -199,7 +200,7 @@ data class CargoDependency(
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4"))
-        val Md5: CargoDependency = CargoDependency("md5", CratesIo("0.7"))
+        val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10"), crateName = "md5")
         val PercentEncoding: CargoDependency = CargoDependency("percent-encoding", CratesIo("2"))
         val PrettyAssertions: CargoDependency = CargoDependency("pretty_assertions", CratesIo("1"), scope = DependencyScope.Dev)
         val Regex: CargoDependency = CargoDependency("regex", CratesIo("1"))
