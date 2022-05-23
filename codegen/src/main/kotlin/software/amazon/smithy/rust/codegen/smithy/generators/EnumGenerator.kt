@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -27,7 +28,7 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 
 /** Model that wraps [EnumDefinition] to calculate and cache values required to generate the Rust enum source. */
-internal class EnumMemberModel(private val definition: EnumDefinition, private val symbolProvider: RustSymbolProvider) {
+class EnumMemberModel(private val definition: EnumDefinition, private val symbolProvider: RustSymbolProvider) {
     // Because enum variants always start with an upper case letter, they will never
     // conflict with reserved words (which are always lower case), therefore, we never need
     // to fall back to raw identifiers
@@ -70,18 +71,19 @@ private fun RustWriter.docWithNote(doc: String?, note: String?) {
     }
 }
 
-class EnumGenerator(
+open class EnumGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StringShape,
-    private val enumTrait: EnumTrait
+    private val enumTrait: EnumTrait,
 ) {
-    private val symbol = symbolProvider.toSymbol(shape)
-    private val enumName = symbol.name
-    private val meta = symbol.expectRustMetadata()
-    private val sortedMembers: List<EnumMemberModel> =
+    protected val symbol = symbolProvider.toSymbol(shape)
+    protected val enumName = symbol.name
+    protected val meta = symbol.expectRustMetadata()
+    protected val sortedMembers: List<EnumMemberModel> =
         enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }
+    protected open var mode: CodegenMode = CodegenMode.Client
 
     companion object {
         /** Name of the generated unknown enum member name for enums with named members. */
@@ -97,6 +99,8 @@ class EnumGenerator(
             renderEnum()
             writer.insertTrailingNewline()
             // impl From<str> for Blah { ... }
+            renderFromForStr()
+            // impl FromStr for Blah { ... }
             renderFromStr()
             writer.insertTrailingNewline()
             // impl Blah { pub fn as_str(&self) -> &str
@@ -151,8 +155,10 @@ class EnumGenerator(
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
-            docs("$UnknownVariant contains new variants that have been added since this code was generated.")
-            write("$UnknownVariant(String)")
+            if (mode == CodegenMode.Client) {
+                docs("$UnknownVariant contains new variants that have been added since this code was generated.")
+                write("$UnknownVariant(String)")
+            }
         }
     }
 
@@ -164,7 +170,9 @@ class EnumGenerator(
                     sortedMembers.forEach { member ->
                         write("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
                     }
-                    write("$enumName::$UnknownVariant(s) => s.as_ref()")
+                    if (mode == CodegenMode.Client) {
+                        write("$enumName::$UnknownVariant(s) => s.as_ref()")
+                    }
                 }
             }
 
@@ -178,7 +186,7 @@ class EnumGenerator(
         }
     }
 
-    private fun renderFromStr() {
+    protected open fun renderFromForStr() {
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.From) {
             writer.rustBlock("fn from(s: &str) -> Self") {
                 writer.rustBlock("match s") {
@@ -189,7 +197,9 @@ class EnumGenerator(
                 }
             }
         }
+    }
 
+    open fun renderFromStr() {
         writer.rust(
             """
             impl std::str::FromStr for $enumName {

@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
@@ -276,10 +277,17 @@ class HttpBindingGenerator(
                         }
                     }
                     if (targetShape.hasTrait<EnumTrait>()) {
-                        rust(
-                            "Ok(#T::from(body_str))",
-                            symbolProvider.toSymbol(targetShape)
-                        )
+                        if (mode == CodegenMode.Server) {
+                            rust(
+                                "Ok(#T::try_from(body_str)?)",
+                                symbolProvider.toSymbol(targetShape)
+                            )
+                        } else {
+                            rust(
+                                "Ok(#T::from(body_str))",
+                                symbolProvider.toSymbol(targetShape)
+                            )
+                        }
                     } else {
                         rust("Ok(body_str.to_string())")
                     }
