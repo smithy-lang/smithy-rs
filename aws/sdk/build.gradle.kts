@@ -348,13 +348,13 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
         "--smithy-build",
         buildDir.resolve("smithy-build.json").normalize().absolutePath,
         "--examples-revision",
-        properties.get("aws.sdk.examples.revision") ?: "missing",
-        "--release-tag",
-        "v" + getSdkVersion()
+        properties.get("aws.sdk.examples.revision") ?: "missing"
     ).apply {
         val previousReleaseManifestPath = getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
             add("--previous-release-versions")
             add(manifestPath)
+            add("--release-tag")
+            add("v" + getSdkVersion())
         }
     }
 }
