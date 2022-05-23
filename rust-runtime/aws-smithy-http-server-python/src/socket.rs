@@ -81,6 +81,7 @@ impl SharedSocket {
 }
 
 impl SharedSocket {
+    /// Get a cloned inner socket.
     pub fn get_socket(&self) -> Result<Socket, std::io::Error> {
         self.inner.try_clone()
     }

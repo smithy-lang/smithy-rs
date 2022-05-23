@@ -88,7 +88,7 @@ impl From<LogLevel> for Level {
     }
 }
 
-/// Modifies the Python `logging` module to deliver its log messages using `tracing::Subscriber` events.
+/// Modifies the Python `logging` module to deliver its log messages using [tracing::Subscriber] events.
 ///
 /// To achieve this goal, the following changes are made to the module:
 /// - A new builtin function `logging.python_tracing` transcodes `logging.LogRecord`s to `tracing::Event`s. This function
@@ -97,7 +97,7 @@ impl From<LogLevel> for Level {
 /// - `logging.basicConfig` is changed to use `logging.HostHandler` by default.
 ///
 /// Since any call like `logging.warn(...)` sets up logging via `logging.basicConfig`, all log messages are now
-/// delivered to `crate::logging`, which will send them to `tracing::event!`.
+/// delivered to `crate::logging`, which will send them to [tracing::event].
 fn setup_python_logging(py: Python, level: LogLevel) -> PyResult<()> {
     let logging = py.import("logging")?;
     logging.setattr("python_tracing", wrap_pyfunction!(python_tracing, logging)?)?;
@@ -131,7 +131,7 @@ def basicConfig(*pargs, **kwargs):
     Ok(())
 }
 
-/// Consumes a Python `logging.LogRecord` and emits a Rust `tracing::Event` instead.
+/// Consumes a Python `logging.LogRecord` and emits a Rust [tracing::Event] instead.
 #[cfg(not(test))]
 #[pyfunction]
 fn python_tracing(record: &PyAny) -> PyResult<()> {

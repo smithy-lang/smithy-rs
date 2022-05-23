@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSu
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 
 /**
- * ServerServiceGenerator
+ * PythonServerServiceGenerator
  *
  * Service generator is the main codegeneration entry point for Smithy services. Individual structures and unions are
  * generated in codegen visitor, but this class handles all protocol-specific code generation (i.e. operations).
@@ -57,8 +57,8 @@ class PythonServerServiceGenerator(
             PythonServerOperationHandlerGenerator(context, operations)
                 .render(writer)
         }
-        rustCrate.withModule(RustModule.public("python_app", "Python server implementation.")) { writer ->
-            PythonServerGenerator(context, operations)
+        rustCrate.withModule(RustModule.public("python_app", "Python server and application implementation.")) { writer ->
+            PythonApplicationGenerator(context, operations)
                 .render(writer)
         }
         rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->

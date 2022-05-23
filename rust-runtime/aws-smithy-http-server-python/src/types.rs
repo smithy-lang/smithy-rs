@@ -7,26 +7,26 @@
 
 use pyo3::prelude::*;
 
-///
+/// Python Wrapper for [aws_smithy_types::Blob].
 #[pyclass]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Blob(aws_smithy_types::Blob);
 
 #[pymethods]
 impl Blob {
-    ///
+    /// Create a new Python instance of `Blob`.
     #[new]
     pub fn new(input: &[u8]) -> Self {
         Self(aws_smithy_types::Blob::new::<Vec<u8>>(input.into()))
     }
 
-    ///
+    /// Python getter for the `Blob` byte array.
     #[getter(data)]
     pub fn get_data(&self) -> &[u8] {
         self.0.as_ref()
     }
 
-    ///
+    /// Python setter for the `Blob` byte array.
     #[setter(data)]
     pub fn set_data(&mut self, data: &[u8]) {
         *self = Self::new(data);

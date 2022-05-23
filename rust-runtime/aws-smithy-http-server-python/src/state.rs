@@ -3,11 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! State object definition.
+//! [State] and Python handlers..
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use pyo3::prelude::*;
 
+/// The Python business logic implementation needs to carry some information
+/// to be executed properly like the size of its arguments and if it is
+/// a coroutine.
 #[derive(Debug, Clone)]
 pub struct PyHandler {
     pub func: PyObject,
@@ -23,8 +26,13 @@ impl Deref for PyHandler {
     }
 }
 
+/// Mapping holding the Python business logic handlers.
 pub type PyHandlers = HashMap<String, Arc<PyHandler>>;
 
+/// Python application [State] structure holding the Python context.
+///
+/// The possibility of passing the State or not is decided in Python if the method
+/// `context()` is called on the `App` to register a context object.
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct State {
@@ -32,6 +40,7 @@ pub struct State {
 }
 
 impl State {
+    /// Create a new [State] structure.
     pub(crate) fn new(context: Arc<PyObject>) -> Self {
         Self { context }
     }

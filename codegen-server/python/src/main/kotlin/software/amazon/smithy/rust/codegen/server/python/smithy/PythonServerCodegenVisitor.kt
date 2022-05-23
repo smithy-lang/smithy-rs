@@ -24,8 +24,11 @@ import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 
 /**
- * Entrypoint for server-side code generation. This class will walk the in-memory model and
+ * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
+ *
+ * This class inherits from [ServerCodegenVisitor] since it uses most of the functionlities of the super class
+ * and have to override the symbol provider with [PythonServerSymbolProvider].
  */
 class PythonServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
     ServerCodegenVisitor(context, codegenDecorator) {
@@ -50,18 +53,24 @@ class PythonServerCodegenVisitor(context: PluginContext, private val codegenDeco
         protocolGeneratorFactory = generator
         model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
         val baseProvider = PythonCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
+        // Override symbolProvider.
         symbolProvider =
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
+        // Override `codegenContext` which carries the symbolProvider.
         codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, mode = CodegenMode.Server)
 
+        // Override `rustCrate` which carries the symbolProvider.
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
+        // Override `protocolGenerator` which carries the symbolProvider.
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
     override fun structureShape(shape: StructureShape) {
         logger.info("[python-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
+            // Use Python specific structure generator that adds the #[pyclass] attribute
+            // and #[pymethods] implementation.
             PythonServerStructureGenerator(model, codegenContext, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
             val builderGenerator =
                 BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
@@ -76,10 +85,10 @@ class PythonServerCodegenVisitor(context: PluginContext, private val codegenDeco
      * Generate service-specific code for the model:
      * - Serializers
      * - Deserializers
-     * - Fluent client
      * - Trait implementations
      * - Protocol tests
      * - Operation structures
+     * - Python operation handlers
      */
     override fun serviceShape(shape: ServiceShape) {
         logger.info("[python-server-codegen] Generating a service $shape")

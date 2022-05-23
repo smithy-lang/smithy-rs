@@ -25,7 +25,7 @@ paste = "1.0"
 pyo3 = { version = "0.16" }
 pyo3-asyncio = { version = "0.16", features = ["attributes", "tokio-runtime"] }
 socket2 = { version = "0.4", features = ["all"] }
-thiserror = "1.0"
+thiserror = "1.0.31"
 tokio = { version = "1", features = ["full"] }
 tower = "0.4"
 tower-http = { version = "0.3", features = ["map-response-body", "trace"] }

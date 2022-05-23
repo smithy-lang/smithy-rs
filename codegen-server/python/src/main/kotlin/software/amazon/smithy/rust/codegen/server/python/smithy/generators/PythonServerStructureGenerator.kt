@@ -23,6 +23,11 @@ import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
+/**
+ * To share structures defined in Rust with Python, `pyo3` provides the `PyClass` trait.
+ * This class generates input / output / error structures definitions and implements the
+ * `PyClass` trait.
+ */
 open class PythonServerStructureGenerator(
     model: Model,
     private val codegenContext: CodegenContext,

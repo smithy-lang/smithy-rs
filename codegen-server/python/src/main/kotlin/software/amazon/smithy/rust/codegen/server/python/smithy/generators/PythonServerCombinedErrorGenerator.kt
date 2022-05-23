@@ -18,9 +18,8 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 
 /**
- * Generates a unified error enum for [operation]. [ErrorGenerator] handles generating the
- * individual variants, but we must still combine those variants into an enum covering all possible
- * errors for a given operation.
+ * Generates a unified error enum for [operation]. It depends on [ServerCombinedErrorGenerator]
+ * to generate the errors from the model and adds the Rust implementation `From<pyo3::PyErr>`.
  */
 class PythonServerCombinedErrorGenerator(
     private val model: Model,

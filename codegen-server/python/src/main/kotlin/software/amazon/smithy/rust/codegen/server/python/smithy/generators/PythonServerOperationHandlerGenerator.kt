@@ -17,7 +17,18 @@ import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
- * ServerOperationHandlerGenerator
+ * The Rust code responsible to run the Python business logic on the Python interpreter
+ * is implemented in this class, which inherits from [ServerOperationHandlerGenerator].
+ *
+ * We codegenerate all operations handlers (steps usually left to the developer in a pure
+ * Rust application), which are built into a `Router` by [PythonApplicationGenerator].
+ *
+ * To call a Python function from Rust, anything dealing with Python runs inside an async
+ * block that allows to catch stacktraces. The handler function is extracted from `PyHandler`
+ * and called with the necessary arguments inside a blocking Tokio task.
+ * At the end the block is awaited and errors are collected and reported.
+ *
+ * To call a Python coroutine, the same happens, but scheduled in a `tokio::Future`.
  */
 class PythonServerOperationHandlerGenerator(
     codegenContext: CodegenContext,
@@ -45,19 +56,19 @@ class PythonServerOperationHandlerGenerator(
     private fun renderPythonOperationHandlerImpl(writer: RustWriter) {
         operations.map { operation ->
             val operationName = symbolProvider.toSymbol(operation).name
-            val inputName = "crate::input::${operationName}Input"
-            val outputName = "crate::output::${operationName}Output"
-            val errorName = "crate::error::${operationName}Error"
+            val input = "crate::input::${operationName}Input"
+            val output = "crate::output::${operationName}Output"
+            val error = "crate::error::${operationName}Error"
             val name = operationName.toSnakeCase()
 
             writer.rustBlockTemplate(
                 """
                 /// Python handler for operation `$operationName`.
                 pub async fn $name(
-                    input: $inputName,
+                    input: $input,
                     state: #{SmithyServer}::Extension<#{SmithyPython}::State>,
                     handler: std::sync::Arc<#{SmithyPython}::PyHandler>,
-                ) -> Result<$outputName, $errorName>
+                ) -> Result<$output, $error>
                 """.trimIndent(),
                 *codegenScope
             ) {
@@ -67,48 +78,63 @@ class PythonServerOperationHandlerGenerator(
                     let result = async {
                         let handler = handler.clone();
                         if handler.is_coroutine {
-                            #{tracing}::debug!("Executing Python coroutine `$name()`");
-                            let result = #{pyo3}::Python::with_gil(|py| {
-                                let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
-                                let coro = if handler.args == 1 {
-                                    pyhandler.call1((input,))?
-                                } else {
-                                    pyhandler.call1((input, &*state.0.context))?
-                                };
-                                #{pyo3asyncio}::tokio::into_future(coro)
-                            })?;
-                            result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$outputName>(py)))?
+                            ${renderPyCoroutine(name, output)}
                         } else {
-                            #{tracing}::debug!("Executing Python handlertion `$name()`");
-                            #{tokio}::task::spawn_blocking(move || {
-                                #{pyo3}::Python::with_gil(|py| {
-                                    let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
-                                    let output = if handler.args == 1 {
-                                        pyhandler.call1((input,))?
-                                    } else {
-                                        pyhandler.call1((input, &*state.0.context))?
-                                    };
-                                    output.extract::<$outputName>()
-                                })
-                            })
-                            .await.map_err(|e| #{pyo3}::exceptions::PyRuntimeError::new_err(e.to_string()))?
+                            ${renderPyFunction(name, output)}
                         }
                     };
-                    // Catch and record and Python traceback.
-                    result.await.map_err(|e| {
-                        #{pyo3}::Python::with_gil(|py| {
-                            let traceback = match e.traceback(py) {
-                                Some(t) => t.format().unwrap_or_else(|e| e.to_string()),
-                                None => "Unknown traceback".to_string()
-                            };
-                            #{tracing}::error!("{}\n{}", e, traceback);
-                        });
-                        e.into()
-                    })
+                    ${renderPyError()}
                     """.trimIndent(),
                     *codegenScope
                 )
             }
         }
     }
+
+    private fun renderPyFunction(name: String, output: String): String =
+        """
+        #{tracing}::debug!("Executing Python handlertion `$name()`");
+        #{tokio}::task::spawn_blocking(move || {
+            #{pyo3}::Python::with_gil(|py| {
+                let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
+                let output = if handler.args == 1 {
+                    pyhandler.call1((input,))?
+                } else {
+                    pyhandler.call1((input, &*state.0.context))?
+                };
+                output.extract::<$output>()
+            })
+        })
+        .await.map_err(|e| #{pyo3}::exceptions::PyRuntimeError::new_err(e.to_string()))?
+        """
+
+    private fun renderPyCoroutine(name: String, output: String): String =
+        """
+        #{tracing}::debug!("Executing Python coroutine `$name()`");
+        let result = #{pyo3}::Python::with_gil(|py| {
+            let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
+            let coro = if handler.args == 1 {
+                pyhandler.call1((input,))?
+            } else {
+                pyhandler.call1((input, &*state.0.context))?
+            };
+            #{pyo3asyncio}::tokio::into_future(coro)
+        })?;
+        result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))?
+        """
+
+    private fun renderPyError(): String =
+        """
+        // Catch and record and Python traceback.
+        result.await.map_err(|e| {
+            #{pyo3}::Python::with_gil(|py| {
+                let traceback = match e.traceback(py) {
+                    Some(t) => t.format().unwrap_or_else(|e| e.to_string()),
+                    None => "Unknown traceback".to_string()
+                };
+                #{tracing}::error!("{}\n{}", e, traceback);
+            });
+            e.into()
+        })
+        """
 }
