@@ -22,12 +22,43 @@ import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.contextName
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 // TODO Unit tests.
-// TODO Docs.
+/**
+ * The [ConstraintViolationSymbolProvider] returns, for a given constrained
+ * shape, a symbol whose Rust type can hold information about constraint
+ * violations that may occur when building the shape from unconstrained values.
+ *
+ * So, for example, given the model:
+ *
+ * ```smithy
+ * @pattern("\\w+")
+ * @length(min: 1, max: 69)
+ * string NiceString
+ *
+ * structure Structure {
+ *     @required
+ *     niceString: NiceString
+ * }
+ * ```
+ *
+ * A `NiceString` built from an arbitrary Rust `String` may give rise to at
+ * most two constraint trait violations: one for `pattern`, one for `length`.
+ * Similarly, the shape `Structure` can fail to be built when a value for
+ * `niceString` is not provided.
+ *
+ * Said type is always called `ConstraintViolation`, and resides in a bespoke
+ * module inside the same module as the _public_ constrained type the user is
+ * exposed to. When the user is _not_ exposed to the constrained type, the
+ * constraint violation type's module is a child of the `model` module.
+ *
+ * It is the responsibility of the caller to ensure that the shape is
+ * constrained (either directly or transitively) before using this symbol
+ * provider. This symbol provider intentionally crashes if the shape is not
+ * constrained.
+ */
 class ConstraintViolationSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
@@ -54,22 +85,14 @@ class ConstraintViolationSymbolProvider(
             .build()
     }
 
-    override fun toSymbol(shape: Shape): Symbol =
-        when (shape) {
-            is CollectionShape -> {
-                // TODO Move these checks out.
-                check(shape.canReachConstrainedShape(model, base))
+    override fun toSymbol(shape: Shape): Symbol {
+        check(shape.canReachConstrainedShape(model, base))
 
-                constraintViolationSymbolForCollectionOrMapShape(shape)
-            }
-            is MapShape -> {
-                check(shape.canReachConstrainedShape(model, base))
-
+        return when (shape) {
+            is MapShape, is CollectionShape -> {
                 constraintViolationSymbolForCollectionOrMapShape(shape)
             }
             is StructureShape -> {
-                check(shape.canReachConstrainedShape(model, base))
-
                 val builderSymbol = shape.builderSymbol(base)
 
                 val namespace = builderSymbol.namespace
@@ -82,9 +105,11 @@ class ConstraintViolationSymbolProvider(
                     .build()
             }
             is StringShape -> {
-                check(shape.isDirectlyConstrained(base))
-
-                val namespace = "crate::${Models.namespace}::${RustReservedWords.escapeIfNeeded(shape.contextName(serviceShape).toSnakeCase())}"
+                val namespace = "crate::${Models.namespace}::${
+                    RustReservedWords.escapeIfNeeded(
+                        shape.contextName(serviceShape).toSnakeCase()
+                    )
+                }"
                 val rustType = RustType.Opaque(constraintViolationName, namespace)
                 Symbol.builder()
                     .rustType(rustType)
@@ -93,7 +118,7 @@ class ConstraintViolationSymbolProvider(
                     .definitionFile(Models.filename)
                     .build()
             }
-            // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Other simple shapes can have constraint traits.
-            else -> base.toSymbol(shape)
+            else -> TODO("Constraint traits on other shapes not implemented yet")
         }
+    }
 }
