@@ -105,11 +105,9 @@ class StructureGenerator(
                     .map { symbolProvider.toSymbol(it) }.any {
                         // If any members are not optional && we can't use a default, we need to
                         // generate a fallible builder.
-                        // TODO Won't canUseDefault suffice?
                         !it.isOptional() && !it.canUseDefault()
                     }
 
-        // TODO Not quite right. @box not taken into account. Also shape builders / constrained shapes
         /**
          * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGenerator], requires a
          * fallible builder to be constructed.

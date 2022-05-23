@@ -592,11 +592,12 @@ class HttpBindingGenerator(
                     val func = writer.format(RuntimeType.Base64Encode(runtimeConfig))
                     "$func(&$targetName)"
                 } else {
-                    // TODO Constraint traits on member traits are not supported yet. Note that here, counterintuitively,
-                    //  in case we're rendering a header for a collection, `member` is still referring to the structure
-                    //  member shape where the `httpHeader` or `httpPrefixHeaders` trait was found, and _not_ to the
-                    //  collection member shape on which we'd have to check for constraint trait precedence. So
-                    //  `member.hasPublicConstrainedWrapperTupleType()` is _not_ what we want.
+                    // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member traits are not
+                    //  supported yet. Note that here, counterintuitively, in case we're rendering a header for a
+                    //  collection, `member` is still referring to the structure member shape where the `httpHeader` or
+                    //  `httpPrefixHeaders` trait was found, and _not_ to the collection member shape on which we'd have
+                    //  to check for constraint trait precedence. So `member.hasPublicConstrainedWrapperTupleType()` is
+                    //  _not_ what we want.
                     val workingWithPublicConstrainedWrapperTupleType =
                         mode == CodegenMode.Server && target.hasPublicConstrainedWrapperTupleType(model)
                     quoteValue("AsRef::<str>::as_ref(${ if (workingWithPublicConstrainedWrapperTupleType) "&$targetName.0" else targetName })")

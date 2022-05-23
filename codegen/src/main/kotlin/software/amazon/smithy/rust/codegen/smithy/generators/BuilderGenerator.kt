@@ -244,7 +244,6 @@ class BuilderGenerator(
      * ```
      */
     private fun coreBuilder(writer: RustWriter) {
-        // TODO Refactor like server
         writer.rustBlock("#T", structureSymbol) {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)

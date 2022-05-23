@@ -484,7 +484,6 @@ class ServerBuilderGenerator(
                             .mapRustType { it.stripOuter<RustType.Option>() }
                             .isRustBoxed()
                         if (hasBox) {
-                            // TODO(https://github.com/awslabs/smithy-rs/issues/1332) `TryInto` is in Rust 2021's prelude.
                             rustTemplate(
                                 """
                                 .map(|v| match *v {
