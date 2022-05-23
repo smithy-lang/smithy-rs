@@ -97,7 +97,7 @@ impl From<LogLevel> for Level {
 /// - `logging.basicConfig` is changed to use `logging.HostHandler` by default.
 ///
 /// Since any call like `logging.warn(...)` sets up logging via `logging.basicConfig`, all log messages are now
-/// delivered to `crate::logging`, which will send them to [tracing::event].
+/// delivered to `crate::logging`, which will send them to `tracing::event!`.
 fn setup_python_logging(py: Python, level: LogLevel) -> PyResult<()> {
     let logging = py.import("logging")?;
     logging.setattr("python_tracing", wrap_pyfunction!(python_tracing, logging)?)?;
