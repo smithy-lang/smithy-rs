@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -86,21 +87,24 @@ class UnconstrainedMapGeneratorTest {
                 ).render()
             }
         }
-        project.withModule(RustModule.private("unconstrained")) { writer ->
-            val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
-            listOf(mapA, mapB).forEach {
-                UnconstrainedMapGenerator(
-                    model,
-                    symbolProvider,
-                    unconstrainedShapeSymbolProvider,
-                    pubCrateConstrainedShapeSymbolProvider,
-                    constraintViolationSymbolProvider,
-                    writer,
-                    it
-                ).render()
-            }
+        project.withModule(RustModule.private("unconstrained")) { unconstrainedModuleWriter ->
+            project.withModule(ModelsModule) { modelsModuleWriter ->
+                val constraintViolationSymbolProvider =
+                    ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
+                listOf(mapA, mapB).forEach {
+                    UnconstrainedMapGenerator(
+                        model,
+                        symbolProvider,
+                        unconstrainedShapeSymbolProvider,
+                        pubCrateConstrainedShapeSymbolProvider,
+                        constraintViolationSymbolProvider,
+                        unconstrainedModuleWriter,
+                        modelsModuleWriter,
+                        it
+                    ).render()
+                }
 
-            // TODO This test is flaky because it depends on the order in which the `HashMap` is visited.
+                // TODO This test is flaky because it depends on the order in which the `HashMap` is visited.
 //            writer.unitTest(
 //                name = "map_a_unconstrained_fail_to_constrain_with_first_error",
 //                test = """
@@ -130,9 +134,9 @@ class UnconstrainedMapGeneratorTest {
 //                """
 //            )
 
-            writer.unitTest(
-                name = "map_a_unconstrained_succeed_to_constrain",
-                test = """
+                unconstrainedModuleWriter.unitTest(
+                    name = "map_a_unconstrained_succeed_to_constrain",
+                    test = """
                     let c_builder = crate::model::StructureC::builder().int(69).string(String::from("david"));
                     let map_b_unconstrained = map_b_unconstrained::MapBUnconstrained(
                         std::collections::HashMap::from([
@@ -159,11 +163,11 @@ class UnconstrainedMapGeneratorTest {
                         crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap().into()
                     );
                 """
-            )
+                )
 
-            writer.unitTest(
-                name = "map_a_unconstrained_converts_into_constrained",
-                test = """
+                unconstrainedModuleWriter.unitTest(
+                    name = "map_a_unconstrained_converts_into_constrained",
+                    test = """
                     let c_builder = crate::model::StructureC::builder();
                     let map_b_unconstrained = map_b_unconstrained::MapBUnconstrained(
                         std::collections::HashMap::from([
@@ -178,9 +182,10 @@ class UnconstrainedMapGeneratorTest {
 
                     let _map_a: crate::constrained::MaybeConstrained<crate::constrained::map_a_constrained::MapAConstrained> = map_a_unconstrained.into();
                 """
-            )
+                )
 
-            project.compileAndTest()
+                project.compileAndTest()
+            }
         }
     }
 }

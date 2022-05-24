@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -84,30 +85,32 @@ class UnconstrainedCollectionGeneratorTest {
                 ).render()
             }
         }
-        project.withModule(RustModule.private("unconstrained")) { writer ->
-            val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
-            listOf(listA, listB).forEach {
-                UnconstrainedCollectionGenerator(
-                    model,
-                    symbolProvider,
-                    unconstrainedShapeSymbolProvider,
-                    pubCrateConstrainedShapeSymbolProvider,
-                    constraintViolationSymbolProvider,
-                    writer,
-                    it
-                ).render()
-            }
+        project.withModule(RustModule.private("unconstrained")) { unconstrainedModuleWriter ->
+            project.withModule(ModelsModule) { modelsModuleWriter ->
+                val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, serviceShape)
+                listOf(listA, listB).forEach {
+                    UnconstrainedCollectionGenerator(
+                        model,
+                        symbolProvider,
+                        unconstrainedShapeSymbolProvider,
+                        pubCrateConstrainedShapeSymbolProvider,
+                        constraintViolationSymbolProvider,
+                        unconstrainedModuleWriter,
+                        modelsModuleWriter,
+                        it
+                    ).render()
+                }
 
-            writer.unitTest(
-                name = "list_a_unconstrained_fail_to_constrain_with_first_error",
-                test = """
+                unconstrainedModuleWriter.unitTest(
+                    name = "list_a_unconstrained_fail_to_constrain_with_first_error",
+                    test = """
                     let c_builder1 = crate::model::StructureC::builder().int(69);
                     let c_builder2 = crate::model::StructureC::builder().string(String::from("david"));
                     let list_b_unconstrained = list_b_unconstrained::ListBUnconstrained(vec![c_builder1, c_builder2]);
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
                     let expected_err =
-                        list_a_unconstrained::ConstraintViolation(list_b_unconstrained::ConstraintViolation(
+                        crate::model::list_a::ConstraintViolation(crate::model::list_b::ConstraintViolation(
                             crate::model::structure_c::ConstraintViolation::MissingString,
                         ));
                         
@@ -116,11 +119,11 @@ class UnconstrainedCollectionGeneratorTest {
                         crate::constrained::list_a_constrained::ListAConstrained::try_from(list_a_unconstrained).unwrap_err()
                     );
                 """
-            )
+                )
 
-            writer.unitTest(
-                name = "list_a_unconstrained_succeed_to_constrain",
-                test = """
+                unconstrainedModuleWriter.unitTest(
+                    name = "list_a_unconstrained_succeed_to_constrain",
+                    test = """
                     let c_builder = crate::model::StructureC::builder().int(69).string(String::from("david"));
                     let list_b_unconstrained = list_b_unconstrained::ListBUnconstrained(vec![c_builder]);
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
@@ -134,20 +137,20 @@ class UnconstrainedCollectionGeneratorTest {
                         
                     assert_eq!(expected, actual);
                 """
-            )
+                )
 
-            writer.unitTest(
-                name = "list_a_unconstrained_converts_into_constrained",
-                test = """
+                unconstrainedModuleWriter.unitTest(
+                    name = "list_a_unconstrained_converts_into_constrained",
+                    test = """
                     let c_builder = crate::model::StructureC::builder();
                     let list_b_unconstrained = list_b_unconstrained::ListBUnconstrained(vec![c_builder]);
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
                     let _list_a: crate::constrained::MaybeConstrained<crate::constrained::list_a_constrained::ListAConstrained> = list_a_unconstrained.into();
                 """
-            )
-
-            project.compileAndTest()
+                )
+                project.compileAndTest()
+            }
         }
     }
 }
