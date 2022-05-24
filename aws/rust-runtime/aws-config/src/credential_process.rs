@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Credentials Provider for external process
@@ -71,7 +71,7 @@ impl CredentialProcessProvider {
             ))
         })?;
 
-        match parse_credential_process_json_credentials(&output) {
+        match parse_credential_process_json_credentials(output) {
             Ok(RefreshableCredentials {
                 access_key_id,
                 secret_access_key,

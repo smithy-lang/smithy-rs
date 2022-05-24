@@ -382,8 +382,8 @@ fn static_creds_from_profile(profile: &Profile) -> Result<Credentials, ProfileFi
 /// [profile B]
 /// credential_process = /opt/bin/awscreds-custom --username helen
 /// ```
-fn credential_process_from_profile<'a>(
-    profile: &'a Profile,
+fn credential_process_from_profile(
+    profile: &Profile,
 ) -> Option<Result<BaseProvider, ProfileFileError>> {
     profile
         .get(credential_process::CREDENTIAL_PROCESS)
