@@ -11,13 +11,31 @@ use aws_smithy_types::date_time::Format;
 use aws_smithy_types::DateTime;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
 use aws_types::{credentials, Credentials};
+use std::borrow::Cow;
+use std::fmt;
 use std::process::Command;
 use std::time::SystemTime;
 
 /// Credentials Provider
-#[derive(Debug)]
 pub struct CredentialProcessProvider {
     command: String,
+}
+
+/// Returns the given `command` string with arguments redacted if there were any
+pub(crate) fn debug_fmt_command_string(command: &str) -> Cow<'_, str> {
+    match command.find(char::is_whitespace) {
+        Some(index) => Cow::Owned(format!("{} ** arguments redacted **", &command[0..index])),
+        None => Cow::Borrowed(command),
+    }
+}
+
+impl fmt::Debug for CredentialProcessProvider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Security: The arguments for command must be redacted since they can be sensitive
+        f.debug_struct("CredentialProcessProvider")
+            .field("command", &debug_fmt_command_string(&self.command))
+            .finish()
+    }
 }
 
 impl ProvideCredentials for CredentialProcessProvider {
@@ -55,12 +73,17 @@ impl CredentialProcessProvider {
             ))
         })?;
 
-        tracing::debug!(command = ?command, status = ?output.status, "executed command");
+        // Security: command arguments can be logged at trace level, but must be redacted at debug level
+        // since they can contain sensitive information.
+        tracing::trace!(command = ?command, status = ?output.status, "executed command (unredacted)");
+        tracing::debug!(command = ?debug_fmt_command_string(&self.command), status = ?output.status, "executed command");
 
         if !output.status.success() {
+            let reason =
+                std::str::from_utf8(&output.stderr).unwrap_or("could not decode stderr as UTF-8");
             return Err(CredentialsError::provider_error(format!(
-                "Error retrieving credentials from external process: exited with code: {}",
-                output.status
+                "Error retrieving credentials: external process exited with code {}. Stderr: {}",
+                output.status, reason
             )));
         }
 
@@ -116,7 +139,7 @@ pub(crate) fn parse_credential_process_json_credentials(
              "Expiration": "2022-05-02T18:36:00+00:00"
             */
             (key, Token::ValueNumber { value, .. }) if key.eq_ignore_ascii_case("Version") => {
-                version = Some(value.to_u8())
+                version = Some(value.to_i32())
             }
             (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("AccessKeyId") => {
                 access_key_id = Some(value.to_unescaped()?)
@@ -158,7 +181,7 @@ pub(crate) fn parse_credential_process_json_credentials(
             )
             .map_err(|_| {
                 InvalidJsonCredentials::Other(
-                    "credential expiration time cannot be represented by a SystemTime".into(),
+                    "credential expiration time cannot be represented by a DateTime".into(),
                 )
             })?;
             Ok(RefreshableCredentials {

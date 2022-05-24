@@ -12,9 +12,11 @@
 //! 1-credential-per row (as opposed to a direct profile file representation which can combine
 //! multiple actions into the same profile).
 
+use crate::credential_process::debug_fmt_command_string;
 use crate::profile::credentials::ProfileFileError;
 use crate::profile::{Profile, ProfileSet};
 use aws_types::Credentials;
+use std::fmt;
 
 /// Chain of Profile Providers
 ///
@@ -43,7 +45,7 @@ impl<'a> ProfileChain<'a> {
 ///
 /// Base providers do not require input credentials to provide their own credentials,
 /// e.g. IMDS, ECS, Environment variables
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[non_exhaustive]
 pub enum BaseProvider<'a> {
     /// A profile that specifies a named credential source
@@ -89,6 +91,43 @@ pub enum BaseProvider<'a> {
     /// credential_process = /opt/bin/awscreds-custom --username helen
     /// ```
     CredentialProcess(&'a str),
+}
+
+impl<'a> fmt::Debug for BaseProvider<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NamedSource(source) => f.debug_tuple("NamedSource").field(source).finish(),
+            Self::AccessKey(access_key) => f.debug_tuple("AccessKey").field(access_key).finish(),
+            Self::WebIdentityTokenRole {
+                role_arn,
+                web_identity_token_file,
+                session_name,
+            } => f
+                .debug_struct("WebIdentityTokenRole")
+                .field("role_arn", role_arn)
+                .field("web_identity_token_file", web_identity_token_file)
+                .field("session_name", session_name)
+                .finish(),
+            Self::Sso {
+                sso_account_id,
+                sso_region,
+                sso_role_name,
+                sso_start_url,
+            } => f
+                .debug_struct("Sso")
+                .field("sso_account_id", sso_account_id)
+                .field("sso_region", sso_region)
+                .field("sso_role_name", sso_role_name)
+                .field("sso_start_url", sso_start_url)
+                .finish(),
+            Self::CredentialProcess(command) => {
+                // Security: The arguments for `BaseProvider::CredentialProcess` must be redacted since they can be sensitive
+                f.debug_tuple("CredentialProcess")
+                    .field(&debug_fmt_command_string(command))
+                    .finish()
+            }
+        }
+    }
 }
 
 /// A profile that specifies a role to assume
@@ -519,5 +558,24 @@ mod tests {
             sso_role_name: String,
             sso_start_url: String,
         },
+    }
+
+    #[test]
+    fn base_provider_process_credentials_args_redaction() {
+        assert_eq!(
+            "CredentialProcess(\"program\")",
+            format!("{:?}", BaseProvider::CredentialProcess("program"))
+        );
+        assert_eq!(
+            "CredentialProcess(\"program ** arguments redacted **\")",
+            format!("{:?}", BaseProvider::CredentialProcess("program arg1 arg2"))
+        );
+        assert_eq!(
+            "CredentialProcess(\"program ** arguments redacted **\")",
+            format!(
+                "{:?}",
+                BaseProvider::CredentialProcess("program\targ1 arg2")
+            )
+        );
     }
 }

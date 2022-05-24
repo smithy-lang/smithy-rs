@@ -10,7 +10,7 @@ use aws_smithy_types::DateTime;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
+use std::fmt::{self, Display, Formatter};
 use std::time::SystemTime;
 
 #[derive(Debug)]
@@ -63,12 +63,23 @@ impl Display for InvalidJsonCredentials {
 
 impl Error for InvalidJsonCredentials {}
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub(crate) struct RefreshableCredentials<'a> {
     pub(crate) access_key_id: Cow<'a, str>,
     pub(crate) secret_access_key: Cow<'a, str>,
     pub(crate) session_token: Cow<'a, str>,
     pub(crate) expiration: SystemTime,
+}
+
+impl<'a> fmt::Debug for RefreshableCredentials<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RefreshableCredentials")
+            .field("access_key_id", &self.access_key_id)
+            .field("secret_access_key", &"** redacted **")
+            .field("session_token", &"** redacted **")
+            .field("expiration", &self.expiration)
+            .finish()
+    }
 }
 
 #[non_exhaustive]
@@ -118,7 +129,6 @@ pub(crate) fn parse_json_credentials(
     let mut expiration = None;
     let mut message = None;
     json_parse_loop(credentials_response.as_bytes(), |key, value| {
-        dbg!("calling loop with", &key, &value);
         match (key, value) {
             /*
              "Code": "Success",
@@ -131,7 +141,6 @@ pub(crate) fn parse_json_credentials(
             */
             (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("Code") => {
                 code = Some(value.to_unescaped()?);
-                dbg!("set code to", &code);
             }
             (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("AccessKeyId") => {
                 access_key_id = Some(value.to_unescaped()?);
