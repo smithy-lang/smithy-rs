@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.generators
@@ -125,7 +125,7 @@ class EnumGeneratorTest {
         }
 
         @Test
-        fun `named enums are implement eq and hash`() {
+        fun `named enums implement eq and hash`() {
             val model = """
                 namespace test
                 @enum([
@@ -139,7 +139,7 @@ class EnumGeneratorTest {
                 }])
                 string FooEnum
             """.asSmithyModel()
-            val shape: StringShape = model.lookup("test#FooEnum")
+            val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val writer = RustWriter.forModule("model")
             val generator = EnumGenerator(model, testSymbolProvider(model), writer, shape, trait)
@@ -155,7 +155,7 @@ class EnumGeneratorTest {
         }
 
         @Test
-        fun `unnamed enums are implement eq and hash`() {
+        fun `unnamed enums implement eq and hash`() {
             val model = """
                 namespace test
                 @enum([
@@ -167,7 +167,7 @@ class EnumGeneratorTest {
                 }])
                 string FooEnum
             """.asSmithyModel()
-            val shape: StringShape = model.lookup("test#FooEnum")
+            val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val writer = RustWriter.forModule("model")
             val generator = EnumGenerator(model, testSymbolProvider(model), writer, shape, trait)
@@ -183,7 +183,7 @@ class EnumGeneratorTest {
         }
 
         @Test
-        fun `it generates unamed enums`() {
+        fun `it generates unnamed enums`() {
             val model = """
                 namespace test
                 @enum([
@@ -205,7 +205,7 @@ class EnumGeneratorTest {
                 ])
                 string FooEnum
             """.asSmithyModel()
-            val shape: StringShape = model.lookup("test#FooEnum")
+            val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")

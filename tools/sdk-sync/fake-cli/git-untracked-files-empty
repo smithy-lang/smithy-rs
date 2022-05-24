@@ -2,7 +2,7 @@
 import os
 import sys
 
-expected = ["/tmp", ["ls-files", "--exclude-standard", "--others"]]
+expected = [os.path.realpath("/tmp"), ["ls-files", "--exclude-standard", "--others"]]
 actual = [os.getcwd(), sys.argv[1:]]
 if expected != actual:
     print(f"ERROR\nExpect: {expected}\nActual: {actual}")

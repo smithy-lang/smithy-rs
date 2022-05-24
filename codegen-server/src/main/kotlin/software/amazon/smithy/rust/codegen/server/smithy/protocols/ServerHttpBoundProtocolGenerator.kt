@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -40,6 +41,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerR
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.extractSymbolFromOption
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -53,6 +55,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPay
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.toOptional
 import software.amazon.smithy.rust.codegen.smithy.wrapOptional
 import software.amazon.smithy.rust.codegen.util.dq
@@ -60,6 +63,7 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -112,7 +116,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
-        "AxumCore" to ServerCargoDependency.AxumCore.asType(),
         "Cow" to ServerRuntimeType.Cow,
         "DateTime" to RuntimeType.DateTime(runtimeConfig),
         "HttpBody" to CargoDependency.HttpBody.asType(),
@@ -155,20 +158,20 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
 
-        // Implement Axum `FromRequest` trait for input types.
+        // Implement `FromRequest` trait for input types.
         rustTemplate(
             """
             ##[derive(Debug)]
             pub(crate) struct $inputName(#{I});
             ##[#{AsyncTrait}::async_trait]
-            impl<B> #{AxumCore}::extract::FromRequest<B> for $inputName
+            impl<B> #{SmithyHttpServer}::request::FromRequest<B> for $inputName
             where
                 B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
                 B::Data: Send,
                 #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
             {
                 type Rejection = #{RuntimeError};
-                async fn from_request(req: &mut #{AxumCore}::extract::RequestParts<B>) -> Result<Self, Self::Rejection> {
+                async fn from_request(req: &mut #{SmithyHttpServer}::request::RequestParts<B>) -> Result<Self, Self::Rejection> {
                     #{parse_request}(req)
                         .await
                         .map($inputName)
@@ -186,7 +189,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             "parse_request" to serverParseRequest(operationShape)
         )
 
-        // Implement Axum `IntoResponse` for output types.
+        // Implement `IntoResponse` for output types.
 
         val outputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
@@ -211,7 +214,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     Self::Error(err) => {
                         match #{serialize_error}(&err) {
                             Ok(mut response) => {
-                                response.extensions_mut().insert(aws_smithy_http_server::extension::ModeledErrorExtension::new(err.name()));
+                                response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(err.name()));
                                 response
                             },
                             Err(e) => {
@@ -232,8 +235,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     Error(#{E})
                 }
                 ##[#{AsyncTrait}::async_trait]
-                impl #{AxumCore}::response::IntoResponse for $outputName {
-                    fn into_response(self) -> #{AxumCore}::response::Response {
+                impl #{SmithyHttpServer}::response::IntoResponse for $outputName {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         $intoResponseImpl
                     }
                 }
@@ -264,8 +267,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 pub(crate) struct $outputName(#{O});
                 ##[#{AsyncTrait}::async_trait]
-                impl #{AxumCore}::response::IntoResponse for $outputName {
-                    fn into_response(self) -> #{AxumCore}::response::Response {
+                impl #{SmithyHttpServer}::response::IntoResponse for $outputName {
+                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         $intoResponseImpl
                     }
                 }
@@ -329,7 +332,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             it.rustBlockTemplate(
                 """
                 pub async fn $fnName<B>(
-                    ##[allow(unused_variables)] request: &mut #{AxumCore}::extract::RequestParts<B>
+                    ##[allow(unused_variables)] request: &mut #{SmithyHttpServer}::request::RequestParts<B>
                 ) -> std::result::Result<
                     #{I},
                     #{RequestRejection}
@@ -369,7 +372,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 pub fn $fnName(
                     ##[allow(unused_variables)] output: #{O}
                 ) -> std::result::Result<
-                    #{AxumCore}::response::Response,
+                    #{SmithyHttpServer}::response::Response,
                     #{ResponseRejection}
                 >
                 """.trimIndent(),
@@ -392,7 +395,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
-                "pub fn $fnName(error: &#{E}) -> std::result::Result<#{AxumCore}::response::Response, #{ResponseRejection}>",
+                "pub fn $fnName(error: &#{E}) -> std::result::Result<#{SmithyHttpServer}::response::Response, #{ResponseRejection}>",
                 *codegenScope,
                 "E" to errorSymbol
             ) {
@@ -561,7 +564,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 let status = output.$memberName
                     .ok_or(#{ResponseRejection}::MissingHttpStatusCode)?;
-                let http_status: u16 = std::convert::TryFrom::<i32>::try_from(status)
+                let http_status: u16 = status.try_into()
                     .map_err(|_| #{ResponseRejection}::InvalidHttpStatusCode)?;
                 """.trimIndent(),
                 *codegenScope,
@@ -856,15 +859,25 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
                         when {
                             memberShape.isStringShape -> {
-                                // `<_>::from()` is necessary to convert the `&str` into:
+                                // `<_>::from()/try_from()` is necessary to convert the `&str` into:
                                 //     * the Rust enum in case the `string` shape has the `enum` trait; or
                                 //     * `String` in case it doesn't.
-                                rustTemplate(
-                                    """
-                                    let v = <_>::from(#{PercentEncoding}::percent_decode_str(&v).decode_utf8()?.as_ref());
-                                    """.trimIndent(),
-                                    *codegenScope
-                                )
+                                if (memberShape.hasTrait<EnumTrait>()) {
+                                    rustTemplate(
+                                        """
+                                        let v = <#{memberShape}>::try_from(#{PercentEncoding}::percent_decode_str(&v).decode_utf8()?.as_ref())?;
+                                        """,
+                                        *codegenScope,
+                                        "memberShape" to symbolProvider.toSymbol(memberShape),
+                                    )
+                                } else {
+                                    rustTemplate(
+                                        """
+                                        let v = <_>::from(#{PercentEncoding}::percent_decode_str(&v).decode_utf8()?.as_ref());
+                                        """.trimIndent(),
+                                        *codegenScope
+                                    )
+                                }
                             }
                             memberShape.isTimestampShape -> {
                                 val index = HttpBindingIndex.of(model)
@@ -985,6 +998,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private fun generateParsePercentEncodedStrAsStringFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
+        val symbol = output.extractSymbolFromOption()
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{RequestRejection}>",
@@ -994,12 +1008,30 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 // `<_>::from()` is necessary to convert the `&str` into:
                 //     * the Rust enum in case the `string` shape has the `enum` trait; or
                 //     * `String` in case it doesn't.
-                rustTemplate(
+                when (symbol.rustType()) {
+                    RustType.String ->
+                        rustTemplate(
+                            """
+                            let value = <#{T}>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
+                            """,
+                            *codegenScope,
+                            "T" to symbol,
+                        )
+                    else -> { // RustType.Opaque, the Enum
+                        check(symbol.rustType() is RustType.Opaque)
+                        rustTemplate(
+                            """
+                            let value = <#{T}>::try_from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref())?;
+                            """,
+                            *codegenScope,
+                            "T" to symbol,
+                        )
+                    }
+                }
+                writer.write(
                     """
-                    let value = <_>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
                     Ok(${symbolProvider.wrapOptional(binding.member, "value")})
-                    """.trimIndent(),
-                    *codegenScope,
+                    """
                 )
             }
         }

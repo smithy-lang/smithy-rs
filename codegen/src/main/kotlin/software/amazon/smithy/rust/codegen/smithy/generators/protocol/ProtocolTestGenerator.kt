@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators.protocol
@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -75,7 +76,7 @@ class ProtocolTestGenerator(
     private val operationIndex = OperationIndex.of(codegenContext.model)
 
     private val instantiator = with(codegenContext) {
-        Instantiator(symbolProvider, model, runtimeConfig)
+        Instantiator(symbolProvider, model, runtimeConfig, CodegenMode.Client)
     }
 
     private val codegenScope = arrayOf(

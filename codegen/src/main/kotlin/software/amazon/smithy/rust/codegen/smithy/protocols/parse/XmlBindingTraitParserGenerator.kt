@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.parse
@@ -141,7 +141,6 @@ class XmlBindingTraitParserGenerator(
                 val shapeName = XmlName(xmlIndex.payloadShapeName(member))
                 rustTemplate(
                     """
-                    use std::convert::TryFrom;
                     let mut doc = #{Document}::try_from(inp)?;
                     ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
@@ -190,7 +189,6 @@ class XmlBindingTraitParserGenerator(
             ) {
                 rustTemplate(
                     """
-                    use std::convert::TryFrom;
                     let mut doc = #{Document}::try_from(inp)?;
 
                     ##[allow(unused_mut)]
@@ -226,7 +224,6 @@ class XmlBindingTraitParserGenerator(
                 if (members.isNotEmpty()) {
                     rustTemplate(
                         """
-                        use std::convert::TryFrom;
                         let mut document = #{Document}::try_from(inp)?;
                         ##[allow(unused_mut)]
                         let mut error_decoder = #{xml_errors}::error_scope(&mut document)?;
@@ -258,7 +255,6 @@ class XmlBindingTraitParserGenerator(
             ) {
                 rustTemplate(
                     """
-                    use std::convert::TryFrom;
                     let mut doc = #{Document}::try_from(inp)?;
 
                     ##[allow(unused_mut)]

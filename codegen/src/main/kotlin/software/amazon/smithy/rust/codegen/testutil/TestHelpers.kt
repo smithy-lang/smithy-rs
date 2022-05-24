@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.testutil
@@ -80,7 +80,9 @@ fun testCodegenContext(
     model,
     testSymbolProvider(model),
     TestRuntimeConfig,
-    serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
+    serviceShape
+        ?: model.serviceShapes.firstOrNull()
+        ?: ServiceShape.builder().version("test").id("test#Service").build(),
     ShapeId.from("test#Protocol"),
     settings, mode
 )

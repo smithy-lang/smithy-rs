@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators.http
@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
@@ -276,10 +277,17 @@ class HttpBindingGenerator(
                         }
                     }
                     if (targetShape.hasTrait<EnumTrait>()) {
-                        rust(
-                            "Ok(#T::from(body_str))",
-                            symbolProvider.toSymbol(targetShape)
-                        )
+                        if (mode == CodegenMode.Server) {
+                            rust(
+                                "Ok(#T::try_from(body_str)?)",
+                                symbolProvider.toSymbol(targetShape)
+                            )
+                        } else {
+                            rust(
+                                "Ok(#T::from(body_str))",
+                                symbolProvider.toSymbol(targetShape)
+                            )
+                        }
                     } else {
                         rust("Ok(body_str.to_string())")
                     }
@@ -478,7 +486,6 @@ class HttpBindingGenerator(
                 rustBlock("if !$safeName.is_empty()") {
                     rustTemplate(
                         """
-                        use std::convert::TryFrom;
                         let header_value = $safeName;
                         let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
                             #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header value: {}", &${
@@ -517,7 +524,6 @@ class HttpBindingGenerator(
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
                     })?;
-                    use std::convert::TryFrom;
                     let header_value = ${headerFmtFun(this, target, memberShape, "v", listHeader)};
                     let header_value = http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
                         #{build_error}::InvalidField {
