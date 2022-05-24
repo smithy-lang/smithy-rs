@@ -51,6 +51,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperat
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
@@ -471,13 +472,13 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         serverRenderResponseHeaders(operationShape)
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }
             ?.let {
-                serverRenderResponseCodeBinding(it, null)(this)
+                serverRenderResponseCodeBinding(it)(this)
             }
-            // no binding but http has a code set?
+            // no binding, use http's
             ?: operationShape.getTrait<HttpTrait>()?.code?.let {
-                serverRenderResponseCodeBinding(null, it)(this)
+                serverRenderHttpResponseCode(it)(this)
             }
-        // leave the default code
+        // Fallback to the default code of `http::response::Builder`, 200.
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
             val memberName = symbolProvider.toMemberName(it)
@@ -560,26 +561,37 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
     }
 
-    private fun serverRenderResponseCodeBinding(
-        binding: HttpBindingDescriptor?,
-        defaultCode: Int?
+    private fun serverRenderHttpResponseCode(
+        defaultCode: Int
     ): Writable {
-        check(binding?.location == HttpLocation.RESPONSE_CODE || defaultCode != null)
+        return writable {
+            rustTemplate(
+                """
+                let status = $defaultCode;
+                let http_status: u16 = status.try_into()
+                    .map_err(|_| #{ResponseRejection}::InvalidHttpStatusCode)?;
+                builder = builder.status(http_status);
+                """.trimIndent(),
+                *codegenScope,
+            )
+        }
+    }
+
+    private fun serverRenderResponseCodeBinding(
+        binding: HttpBindingDescriptor
+    ): Writable {
+        check(binding.location == HttpLocation.RESPONSE_CODE)
 
         return writable {
-            binding?.let {
-                val memberName = symbolProvider.toMemberName(binding.member)
-                rust("let status = output.$memberName")
-                if (binding.member.isOptional) {
-                    rustTemplate(
-                        """
-                        .ok_or(#{ResponseRejection}::MissingHttpStatusCode)?
-                        """.trimIndent(),
-                        *codegenScope,
-                    )
-                }
-            } ?: run {
-                rust("let status = $defaultCode")
+            val memberName = symbolProvider.toMemberName(binding.member)
+            rust("let status = output.$memberName")
+            if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                rustTemplate(
+                    """
+                    .ok_or(#{ResponseRejection}::MissingHttpStatusCode)?
+                    """.trimIndent(),
+                    *codegenScope,
+                )
             }
             rustTemplate(
                 """

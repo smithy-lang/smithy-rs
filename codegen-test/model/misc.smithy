@@ -15,6 +15,7 @@ service MiscService {
     operations: [
         OperationWithInnerRequiredShape,
         ResponseCodeRequired,
+        ResponseCodeHttpFallback,
         ResponseCodeDefault,
     ],
 }
@@ -113,23 +114,15 @@ union AUnion {
     time: Timestamp,
 }
 
-/// This operation tests that the response code defaults to @http's code
-@http(method: "GET", uri: "/responseCodeDefault", code: 418)
-@httpRequestTests([
-    {
-        id: "ResponseCodeDefaultTest",
-        protocol: "aws.protocols#restJson1",
-        uri: "/responseCodeDefault",
-        method: "GET",
-    }
-])
+/// This operation tests that the response code defaults to 200 when no other code is set
 @httpResponseTests([
     {
         id: "ResponseCodeDefaultTest",
         protocol: "aws.protocols#restJson1",
-        code: 418,
+        code: 200,
     }
 ])
+@http(method: "GET", uri: "/responseCodeDefault")
 operation ResponseCodeDefault {
     input: ResponseCodeDefaultInput,
     output: ResponseCodeDefaultOutput,
@@ -141,17 +134,28 @@ structure ResponseCodeDefaultInput {}
 @output
 structure ResponseCodeDefaultOutput {}
 
-/// This operation tests that @httpResponseCode is @required
-/// and is used over @http's code
-@http(method: "GET", uri: "/responseCodeRequired", code: 200)
-@httpRequestTests([
+/// This operation tests that the response code defaults to @http's code
+@httpResponseTests([
     {
-        id: "ResponseCodeRequiredTest",
+        id: "ResponseCodeHttpFallbackTest",
         protocol: "aws.protocols#restJson1",
-        uri: "/responseCodeRequired",
-        method: "GET",
+        code: 418,
     }
 ])
+@http(method: "GET", uri: "/responseCodeHttpFallback", code: 418)
+operation ResponseCodeHttpFallback {
+    input: ResponseCodeHttpFallbackInput,
+    output: ResponseCodeHttpFallbackOutput,
+}
+
+@input
+structure ResponseCodeHttpFallbackInput {}
+
+@output
+structure ResponseCodeHttpFallbackOutput {}
+
+/// This operation tests that @httpResponseCode is @required
+/// and is used over @http's code
 @httpResponseTests([
     {
         id: "ResponseCodeRequiredTest",
@@ -160,6 +164,7 @@ structure ResponseCodeDefaultOutput {}
         params: {"responseCode": 418}
     }
 ])
+@http(method: "GET", uri: "/responseCodeRequired", code: 418)
 operation ResponseCodeRequired {
     input: ResponseCodeRequiredInput,
     output: ResponseCodeRequiredOutput,
@@ -172,7 +177,5 @@ structure ResponseCodeRequiredInput {}
 structure ResponseCodeRequiredOutput {
     @required
     @httpResponseCode
-    responseCode: HttpResponseCode,
+    responseCode: Integer,
 }
-
-integer HttpResponseCode
