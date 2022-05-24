@@ -28,3 +28,21 @@ author = "alonlud"
  references = ["smithy-rs#1390"]
  meta = { "breaking" = false, "tada" = true, "bug" = false }
  author = "Velfi"
+
+[[smithy-rs]]
+message = "Add ability to specify a different rust crate name than the one derived from the package name"
+references = ["smithy-rs#1404"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "petrosagg"
+
+[[smithy-rs]]
+message = "Switch to [RustCrypto](https://github.com/RustCrypto)'s implementation of MD5."
+references = ["smithy-rs#1404"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "petrosagg"
+
+[[aws-sdk-rust]]
+message = "Switch to [RustCrypto](https://github.com/RustCrypto)'s implementation of MD5."
+references = ["smithy-rs#1404"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "petrosagg"

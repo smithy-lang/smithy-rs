@@ -42,7 +42,7 @@ class HttpChecksumRequiredGenerator(
                             .body()
                             .bytes()
                             .expect("checksum can only be computed for non-streaming operations");
-                        let checksum = #{md5}::compute(data);
+                        let checksum = <#{md5}::Md5 as #{md5}::Digest>::digest(data);
                         req.headers_mut().insert(
                             #{http}::header::HeaderName::from_static("content-md5"),
                             #{base64_encode}(&checksum[..]).parse().expect("checksum is valid header value")
