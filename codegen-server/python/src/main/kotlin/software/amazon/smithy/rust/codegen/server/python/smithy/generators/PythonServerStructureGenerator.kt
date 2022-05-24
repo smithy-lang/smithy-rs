@@ -104,7 +104,7 @@ open class PythonServerStructureGenerator(
                         format!("{self:?}")
                     }
                     fn __str__(&self) -> String {
-                        self.0.to_string()
+                        format!("{self:?}")
                     }
 
                     """,
