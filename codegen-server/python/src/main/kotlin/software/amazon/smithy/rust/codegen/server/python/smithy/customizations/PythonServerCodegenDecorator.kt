@@ -44,8 +44,8 @@ class PubUsePythonTypes(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
     override fun section(section: LibRsSection): Writable {
         return when (section) {
             is LibRsSection.Body -> writable {
-                docs("Re-exported types from supporting crates.")
-                rustBlock("pub mod types") {
+                docs("Re-exported Python types from supporting crates.")
+                rustBlock("pub mod python_types") {
                     rust("pub use #T;", PythonServerRuntimeType.Blob(runtimeConfig).toSymbol())
                 }
             }
