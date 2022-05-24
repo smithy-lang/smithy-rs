@@ -92,7 +92,7 @@ class PythonServerEnumGenerator(
                     self.as_str().to_owned()
                 }
                 fn __str__(&self) -> String {
-                    self.as_str().to_owned()
+                    self.0.to_string()
                 }
                 """,
                 *codegenScope
