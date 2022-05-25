@@ -890,7 +890,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                                 rustTemplate(
                                     """
-                                    let v = #{PercentEncoding}::percent_decode_str(&v).decode_utf8()?;
                                     let v = #{DateTime}::from_str(&v, #{format})?;
                                     """.trimIndent(),
                                     *codegenScope,
