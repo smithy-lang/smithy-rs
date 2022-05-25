@@ -134,6 +134,7 @@ def basicConfig(*pargs, **kwargs):
 /// Consumes a Python `logging.LogRecord` and emits a Rust [tracing::Event] instead.
 #[cfg(not(test))]
 #[pyfunction]
+#[pyo3(text_signature = "(record)")]
 fn python_tracing(record: &PyAny) -> PyResult<()> {
     let level = record.getattr("levelno")?;
     let message = record.getattr("getMessage")?.call0()?;
@@ -154,6 +155,7 @@ fn python_tracing(record: &PyAny) -> PyResult<()> {
 
 #[cfg(test)]
 #[pyfunction]
+#[pyo3(text_signature = "(record)")]
 fn python_tracing(record: &PyAny) -> PyResult<()> {
     let message = record.getattr("getMessage")?.call0()?;
     pretty_assertions::assert_eq!(message.to_string(), "a message");

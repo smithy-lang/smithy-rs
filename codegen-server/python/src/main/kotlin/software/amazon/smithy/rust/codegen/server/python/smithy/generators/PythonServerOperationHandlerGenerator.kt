@@ -66,7 +66,7 @@ class PythonServerOperationHandlerGenerator(
                 /// Python handler for operation `$operationName`.
                 pub async fn $name(
                     input: $input,
-                    state: #{SmithyServer}::Extension<#{SmithyPython}::State>,
+                    state: #{SmithyServer}::Extension<#{SmithyPython}::PyState>,
                     handler: std::sync::Arc<#{SmithyPython}::PyHandler>,
                 ) -> Result<$output, $error>
                 """.trimIndent(),

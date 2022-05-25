@@ -35,11 +35,11 @@ pub type PyHandlers = HashMap<String, Arc<PyHandler>>;
 /// `context()` is called on the `App` to register a context object.
 #[pyclass]
 #[derive(Debug, Clone)]
-pub struct State {
+pub struct PyState {
     pub context: Arc<PyObject>,
 }
 
-impl State {
+impl PyState {
     /// Create a new [State] structure.
     pub fn new(context: Arc<PyObject>) -> Self {
         Self { context }

@@ -57,7 +57,7 @@ class PythonServerServiceGenerator(
             PythonServerOperationHandlerGenerator(context, operations)
                 .render(writer)
         }
-        rustCrate.withModule(RustModule.public("python_app", "Python server and application implementation.")) { writer ->
+        rustCrate.withModule(RustModule.public("python_server_application", "Python server and application implementation.")) { writer ->
             PythonApplicationGenerator(context, operations)
                 .render(writer)
         }
