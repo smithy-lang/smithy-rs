@@ -126,7 +126,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "Nom" to ServerCargoDependency.Nom.asType(),
         "PercentEncoding" to CargoDependency.PercentEncoding.asType(),
         "Regex" to CargoDependency.Regex.asType(),
-        "SerdeUrlEncoded" to ServerCargoDependency.SerdeUrlEncoded.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
