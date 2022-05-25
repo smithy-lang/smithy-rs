@@ -865,7 +865,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 if (memberShape.hasTrait<EnumTrait>()) {
                                     rustTemplate(
                                         """
-                                        let v = <#{memberShape}>::try_from(#{PercentEncoding}::percent_decode_str(&v).decode_utf8()?.as_ref())?;
+                                        let v = <#{memberShape}>::try_from(v.as_ref())?;
                                         """,
                                         *codegenScope,
                                         "memberShape" to symbolProvider.toSymbol(memberShape),
@@ -873,7 +873,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 } else {
                                     rustTemplate(
                                         """
-                                        let v = <_>::from(#{PercentEncoding}::percent_decode_str(&v).decode_utf8()?.as_ref());
+                                        let v = <_>::from(v.as_ref());
                                         """.trimIndent(),
                                         *codegenScope
                                     )
