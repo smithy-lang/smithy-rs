@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! [State] and Python handlers..
+//! [PyState] and Python handlers..
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use pyo3::prelude::*;
