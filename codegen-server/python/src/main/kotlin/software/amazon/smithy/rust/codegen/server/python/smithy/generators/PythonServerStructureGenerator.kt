@@ -51,7 +51,7 @@ open class PythonServerStructureGenerator(
         }
         writer.documentShape(shape, model)
         val withoutDebug = containerMeta.derives.copy(
-            derives = containerMeta.derives.derives - RuntimeType.Debug
+            derives = containerMeta.derives.derives - RuntimeType.Debug + RuntimeType.Clone
         )
         containerMeta.copy(derives = withoutDebug).render(writer)
 
@@ -83,19 +83,13 @@ open class PythonServerStructureGenerator(
                     pub fn new("""
                 )
                 // Render field accessor methods
-                forEachMember(accessorMembers) { _, memberName, memberSymbol ->
+                forEachMember(members) { _, memberName, memberSymbol ->
                     val memberType = memberSymbol.rustType()
                     write("$memberName: ${memberType.render()},")
                 }
-                if (shape.hasTrait<ErrorTrait>()) {
-                    write("message: String,")
-                }
                 rustBlock(") -> Self") {
                     rustBlock("Self") {
-                        forEachMember(accessorMembers) { _, memberName, _ -> write("$memberName,") }
-                        if (shape.hasTrait<ErrorTrait>()) {
-                            write("message,")
-                        }
+                        forEachMember(members) { _, memberName, _ -> write("$memberName,") }
                     }
                 }
                 rustTemplate(
