@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
  */
 object ServerCargoDependency {
     val AsyncTrait: CargoDependency = CargoDependency("async-trait", CratesIo("0.1"))
+    val FormUrlEncoded: CargoDependency = CargoDependency("form_urlencoded", CratesIo("1"))
     val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3"))
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))

@@ -118,6 +118,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
         "Cow" to ServerRuntimeType.Cow,
         "DateTime" to RuntimeType.DateTime(runtimeConfig),
+        "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.asType(),
         "HttpBody" to CargoDependency.HttpBody.asType(),
         "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
         "Hyper" to CargoDependency.Hyper.asType(),
@@ -815,7 +816,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             rustTemplate(
                 """
                 let query_string = request.uri().query().unwrap_or("");
-                let pairs = #{SerdeUrlEncoded}::from_str::<Vec<(#{Cow}<'_, str>, #{Cow}<'_, str>)>>(query_string)?;
+                let pairs = #{FormUrlEncoded}::parse(query_string.as_bytes());
                 """.trimIndent(),
                 *codegenScope
             )
