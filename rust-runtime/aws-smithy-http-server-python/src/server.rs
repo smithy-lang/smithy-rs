@@ -44,7 +44,7 @@ impl PyApp {
     /// Start a signle worker with its own Tokio and Python async runtime and provided shared socket.
     ///
     /// Python asyncronous loop need to be started and handled during the lifetime of the process.
-    /// First of all we install [uvloop] as the main Python event loop. Thanks to [libuv], uvloop
+    /// First of all we install [uvloop] as the main Python event loop. Thanks to libuv, uvloop
     /// performs ~20% better than Python standard event loop in most benchmarks, while being 100%
     /// compatible.
     /// We retrieve the Python context object, if setup by the user calling [PyApp::context] method,
@@ -73,7 +73,7 @@ impl PyApp {
         tracing::debug!("Setting up uvloop for current process");
         let event_loop = asyncio.call_method0("new_event_loop")?;
         asyncio.call_method1("set_event_loop", (event_loop,))?;
-        // Create `State` object from the Python context object.
+        // Create the `PyState` object from the Python context object.
         let context = self.context.clone().unwrap_or_else(|| Arc::new(py.None()));
         let state = PyState::new(context);
         // Build the router.

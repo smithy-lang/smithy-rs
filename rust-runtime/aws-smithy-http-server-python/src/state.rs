@@ -29,7 +29,7 @@ impl Deref for PyHandler {
 /// Mapping holding the Python business logic handlers.
 pub type PyHandlers = HashMap<String, Arc<PyHandler>>;
 
-/// Python application [State] structure holding the Python context.
+/// [PyState] structure holding the Python context.
 ///
 /// The possibility of passing the State or not is decided in Python if the method
 /// `context()` is called on the `App` to register a context object.
@@ -40,7 +40,7 @@ pub struct PyState {
 }
 
 impl PyState {
-    /// Create a new [State] structure.
+    /// Create a new [PyState] structure.
     pub fn new(context: Arc<PyObject>) -> Self {
         Self { context }
     }
