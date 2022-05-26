@@ -104,35 +104,38 @@ class UnconstrainedMapGeneratorTest {
                     ).render()
                 }
 
-                // TODO This test is flaky because it depends on the order in which the `HashMap` is visited.
-//            writer.unitTest(
-//                name = "map_a_unconstrained_fail_to_constrain_with_first_error",
-//                test = """
-//                    let c_builder1 = crate::model::StructureC::builder().int(69);
-//                    let c_builder2 = crate::model::StructureC::builder().string(String::from("david"));
-//                    let map_b_unconstrained = map_b_unconstrained::MapBUnconstrained(
-//                        std::collections::HashMap::from([
-//                            (String::from("KeyB1"), c_builder1),
-//                            (String::from("KeyB2"), c_builder2),
-//                        ])
-//                    );
-//                    let map_a_unconstrained = map_a_unconstrained::MapAUnconstrained(
-//                        std::collections::HashMap::from([
-//                            (String::from("KeyA"), map_b_unconstrained),
-//                        ])
-//                    );
-//
-//                    let expected_err =
-//                        map_a_unconstrained::ConstraintViolation::Value(map_b_unconstrained::ConstraintViolation::Value(
-//                            crate::model::structure_c::ConstraintViolation::MissingString,
-//                        ));
-//
-//                    assert_eq!(
-//                        expected_err,
-//                        std::collections::HashMap::<String, std::collections::HashMap<String, crate::model::StructureC>>::try_from(map_a_unconstrained).unwrap_err()
-//                    );
-//                """
-//            )
+                unconstrainedModuleWriter.unitTest(
+                    name = "map_a_unconstrained_fail_to_constrain_with_some_error",
+                    test = """
+                        let c_builder1 = crate::model::StructureC::builder().int(69);
+                        let c_builder2 = crate::model::StructureC::builder().string(String::from("david"));
+                        let map_b_unconstrained = map_b_unconstrained::MapBUnconstrained(
+                            std::collections::HashMap::from([
+                                (String::from("KeyB1"), c_builder1),
+                                (String::from("KeyB2"), c_builder2),
+                            ])
+                        );
+                        let map_a_unconstrained = map_a_unconstrained::MapAUnconstrained(
+                            std::collections::HashMap::from([
+                                (String::from("KeyA"), map_b_unconstrained),
+                            ])
+                        );
+
+                        // Any of these two errors could be returned; it depends on the order in which the maps are visited.
+                        let missing_string_expected_err =
+                            crate::model::map_a::ConstraintViolation::Value(crate::model::map_b::ConstraintViolation::Value(
+                                crate::model::structure_c::ConstraintViolation::MissingString,
+                            ));
+                        let missing_int_expected_err =
+                            crate::model::map_a::ConstraintViolation::Value(crate::model::map_b::ConstraintViolation::Value(
+                                crate::model::structure_c::ConstraintViolation::MissingInt,
+                            ));
+                            
+                        let actual_err = crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap_err();
+
+                        assert!(actual_err == missing_string_expected_err || actual_err == missing_int_expected_err);
+                    """
+                )
 
                 unconstrainedModuleWriter.unitTest(
                     name = "map_a_unconstrained_succeed_to_constrain",
