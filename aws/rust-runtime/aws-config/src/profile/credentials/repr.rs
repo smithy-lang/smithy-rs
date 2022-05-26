@@ -12,11 +12,10 @@
 //! 1-credential-per row (as opposed to a direct profile file representation which can combine
 //! multiple actions into the same profile).
 
-use crate::credential_process::debug_fmt_command_string;
+use crate::credential_process::CommandWithSensitiveArgs;
 use crate::profile::credentials::ProfileFileError;
 use crate::profile::{Profile, ProfileSet};
 use aws_types::Credentials;
-use std::fmt;
 
 /// Chain of Profile Providers
 ///
@@ -26,17 +25,17 @@ use std::fmt;
 /// ProfileChain is a direct representation of the Profile. It can contain named providers
 /// that don't actually have implementations.
 #[derive(Debug)]
-pub struct ProfileChain<'a> {
-    pub(crate) base: BaseProvider<'a>,
-    pub(crate) chain: Vec<RoleArn<'a>>,
+pub(super) struct ProfileChain<'a> {
+    pub(super) base: BaseProvider<'a>,
+    pub(super) chain: Vec<RoleArn<'a>>,
 }
 
 impl<'a> ProfileChain<'a> {
-    pub fn base(&self) -> &BaseProvider<'a> {
+    pub(super) fn base(&self) -> &BaseProvider<'a> {
         &self.base
     }
 
-    pub fn chain(&self) -> &[RoleArn<'a>] {
+    pub(super) fn chain(&self) -> &[RoleArn<'a>] {
         self.chain.as_slice()
     }
 }
@@ -45,9 +44,9 @@ impl<'a> ProfileChain<'a> {
 ///
 /// Base providers do not require input credentials to provide their own credentials,
 /// e.g. IMDS, ECS, Environment variables
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
-pub enum BaseProvider<'a> {
+pub(super) enum BaseProvider<'a> {
     /// A profile that specifies a named credential source
     /// Eg: `credential_source = Ec2InstanceMetadata`
     ///
@@ -90,44 +89,7 @@ pub enum BaseProvider<'a> {
     /// [profile assume-role]
     /// credential_process = /opt/bin/awscreds-custom --username helen
     /// ```
-    CredentialProcess(&'a str),
-}
-
-impl<'a> fmt::Debug for BaseProvider<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NamedSource(source) => f.debug_tuple("NamedSource").field(source).finish(),
-            Self::AccessKey(access_key) => f.debug_tuple("AccessKey").field(access_key).finish(),
-            Self::WebIdentityTokenRole {
-                role_arn,
-                web_identity_token_file,
-                session_name,
-            } => f
-                .debug_struct("WebIdentityTokenRole")
-                .field("role_arn", role_arn)
-                .field("web_identity_token_file", web_identity_token_file)
-                .field("session_name", session_name)
-                .finish(),
-            Self::Sso {
-                sso_account_id,
-                sso_region,
-                sso_role_name,
-                sso_start_url,
-            } => f
-                .debug_struct("Sso")
-                .field("sso_account_id", sso_account_id)
-                .field("sso_region", sso_region)
-                .field("sso_role_name", sso_role_name)
-                .field("sso_start_url", sso_start_url)
-                .finish(),
-            Self::CredentialProcess(command) => {
-                // Security: The arguments for `BaseProvider::CredentialProcess` must be redacted since they can be sensitive
-                f.debug_tuple("CredentialProcess")
-                    .field(&debug_fmt_command_string(command))
-                    .finish()
-            }
-        }
-    }
+    CredentialProcess(CommandWithSensitiveArgs<&'a str>),
 }
 
 /// A profile that specifies a role to assume
@@ -135,18 +97,18 @@ impl<'a> fmt::Debug for BaseProvider<'a> {
 /// A RoleArn can only be created from either a profile with `source_profile`
 /// or one with `credential_source`.
 #[derive(Debug)]
-pub struct RoleArn<'a> {
+pub(super) struct RoleArn<'a> {
     /// Role to assume
-    pub role_arn: &'a str,
+    pub(super) role_arn: &'a str,
     /// external_id parameter to pass to the assume role provider
-    pub external_id: Option<&'a str>,
+    pub(super) external_id: Option<&'a str>,
 
     /// session name parameter to pass to the assume role provider
-    pub session_name: Option<&'a str>,
+    pub(super) session_name: Option<&'a str>,
 }
 
 /// Resolve a ProfileChain from a ProfileSet or return an error
-pub fn resolve_chain<'a>(
+pub(super) fn resolve_chain<'a>(
     profile_set: &'a ProfileSet,
     profile_override: Option<&str>,
 ) -> Result<ProfileChain<'a>, ProfileFileError> {
@@ -426,11 +388,16 @@ fn credential_process_from_profile(
 ) -> Option<Result<BaseProvider, ProfileFileError>> {
     profile
         .get(credential_process::CREDENTIAL_PROCESS)
-        .map(|credential_process| Ok(BaseProvider::CredentialProcess(credential_process)))
+        .map(|credential_process| {
+            Ok(BaseProvider::CredentialProcess(
+                CommandWithSensitiveArgs::new(credential_process),
+            ))
+        })
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::credential_process::CommandWithSensitiveArgs;
     use crate::profile::credentials::repr::{resolve_chain, BaseProvider, ProfileChain};
     use crate::profile::ProfileSet;
     use serde::Deserialize;
@@ -493,9 +460,9 @@ mod tests {
                 secret_access_key: creds.secret_access_key().into(),
                 session_token: creds.session_token().map(|tok| tok.to_string()),
             }),
-            BaseProvider::CredentialProcess(credential_process) => {
-                output.push(Provider::CredentialProcess(credential_process.into()))
-            }
+            BaseProvider::CredentialProcess(credential_process) => output.push(
+                Provider::CredentialProcess(credential_process.unredacted().into()),
+            ),
             BaseProvider::WebIdentityTokenRole {
                 role_arn,
                 web_identity_token_file,
@@ -564,17 +531,25 @@ mod tests {
     fn base_provider_process_credentials_args_redaction() {
         assert_eq!(
             "CredentialProcess(\"program\")",
-            format!("{:?}", BaseProvider::CredentialProcess("program"))
-        );
-        assert_eq!(
-            "CredentialProcess(\"program ** arguments redacted **\")",
-            format!("{:?}", BaseProvider::CredentialProcess("program arg1 arg2"))
+            format!(
+                "{:?}",
+                BaseProvider::CredentialProcess(CommandWithSensitiveArgs::new("program"))
+            )
         );
         assert_eq!(
             "CredentialProcess(\"program ** arguments redacted **\")",
             format!(
                 "{:?}",
-                BaseProvider::CredentialProcess("program\targ1 arg2")
+                BaseProvider::CredentialProcess(CommandWithSensitiveArgs::new("program arg1 arg2"))
+            )
+        );
+        assert_eq!(
+            "CredentialProcess(\"program ** arguments redacted **\")",
+            format!(
+                "{:?}",
+                BaseProvider::CredentialProcess(CommandWithSensitiveArgs::new(
+                    "program\targ1 arg2"
+                ))
             )
         );
     }

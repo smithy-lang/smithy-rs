@@ -11,31 +11,61 @@ use aws_smithy_types::date_time::Format;
 use aws_smithy_types::DateTime;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
 use aws_types::{credentials, Credentials};
-use std::borrow::Cow;
 use std::fmt;
 use std::process::Command;
 use std::time::SystemTime;
 
-/// Credentials Provider
-pub struct CredentialProcessProvider {
-    command: String,
-}
+pub(crate) struct CommandWithSensitiveArgs<T>(T);
 
-/// Returns the given `command` string with arguments redacted if there were any
-pub(crate) fn debug_fmt_command_string(command: &str) -> Cow<'_, str> {
-    match command.find(char::is_whitespace) {
-        Some(index) => Cow::Owned(format!("{} ** arguments redacted **", &command[0..index])),
-        None => Cow::Borrowed(command),
+impl<T> CommandWithSensitiveArgs<T>
+where
+    T: AsRef<str>,
+{
+    pub(crate) fn new(value: T) -> Self {
+        Self(value)
+    }
+
+    pub(crate) fn unredacted(&self) -> &str {
+        self.0.as_ref()
     }
 }
 
-impl fmt::Debug for CredentialProcessProvider {
+impl<T> fmt::Display for CommandWithSensitiveArgs<T>
+where
+    T: AsRef<str>,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Security: The arguments for command must be redacted since they can be sensitive
-        f.debug_struct("CredentialProcessProvider")
-            .field("command", &debug_fmt_command_string(&self.command))
-            .finish()
+        let command = self.0.as_ref();
+        match command.find(char::is_whitespace) {
+            Some(index) => write!(f, "{} ** arguments redacted **", &command[0..index]),
+            None => write!(f, "{}", command),
+        }
     }
+}
+
+impl<T> fmt::Debug for CommandWithSensitiveArgs<T>
+where
+    T: AsRef<str>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", format!("{}", self))
+    }
+}
+
+impl<T> Clone for CommandWithSensitiveArgs<T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+/// Credentials Provider
+#[derive(Debug)]
+pub struct CredentialProcessProvider {
+    command: CommandWithSensitiveArgs<String>,
 }
 
 impl ProvideCredentials for CredentialProcessProvider {
@@ -50,19 +80,22 @@ impl ProvideCredentials for CredentialProcessProvider {
 impl CredentialProcessProvider {
     /// Create new [`CredentialProcessProvider`]
     pub fn new(command: String) -> Self {
-        Self { command }
+        Self {
+            command: CommandWithSensitiveArgs::new(command),
+        }
     }
 
     async fn credentials(&self) -> credentials::Result {
+        // Security: command arguments must be redacted at debug level
         tracing::debug!(command = %self.command, "loading credentials from external process");
 
         let mut command = if cfg!(windows) {
             let mut command = Command::new("cmd.exe");
-            command.args(&["/C", &self.command]);
+            command.args(&["/C", self.command.unredacted()]);
             command
         } else {
             let mut command = Command::new("sh");
-            command.args(&["-c", &self.command]);
+            command.args(&["-c", self.command.unredacted()]);
             command
         };
 
@@ -73,10 +106,8 @@ impl CredentialProcessProvider {
             ))
         })?;
 
-        // Security: command arguments can be logged at trace level, but must be redacted at debug level
-        // since they can contain sensitive information.
+        // Security: command arguments can be logged at trace level
         tracing::trace!(command = ?command, status = ?output.status, "executed command (unredacted)");
-        tracing::debug!(command = ?debug_fmt_command_string(&self.command), status = ?output.status, "executed command");
 
         if !output.status.success() {
             let reason =
@@ -162,41 +193,40 @@ pub(crate) fn parse_credential_process_json_credentials(
     })?;
 
     match version {
-        Some(1) => {
-            let access_key_id =
-                access_key_id.ok_or(InvalidJsonCredentials::MissingField("AccessKeyId"))?;
-            let secret_access_key =
-                secret_access_key.ok_or(InvalidJsonCredentials::MissingField("SecretAccessKey"))?;
-            let session_token =
-                session_token.ok_or(InvalidJsonCredentials::MissingField("Token"))?;
-            let expiration =
-                expiration.ok_or(InvalidJsonCredentials::MissingField("Expiration"))?;
-            let expiration = SystemTime::try_from(
-                DateTime::from_str(expiration.as_ref(), Format::DateTime).map_err(|err| {
-                    InvalidJsonCredentials::InvalidField {
-                        field: "Expiration",
-                        err: err.into(),
-                    }
-                })?,
-            )
-            .map_err(|_| {
-                InvalidJsonCredentials::Other(
-                    "credential expiration time cannot be represented by a DateTime".into(),
-                )
-            })?;
-            Ok(RefreshableCredentials {
-                access_key_id,
-                secret_access_key,
-                session_token,
-                expiration,
+        Some(1) => { /* continue */ }
+        None => return Err(InvalidJsonCredentials::MissingField("Version")),
+        Some(version) => {
+            return Err(InvalidJsonCredentials::InvalidField {
+                field: "version",
+                err: format!("unknown version number: {}", version).into(),
             })
         }
-        None => Err(InvalidJsonCredentials::MissingField("Version")),
-        Some(version) => Err(InvalidJsonCredentials::InvalidField {
-            field: "version",
-            err: format!("unknown version number: {}", version).into(),
-        }),
     }
+
+    let access_key_id = access_key_id.ok_or(InvalidJsonCredentials::MissingField("AccessKeyId"))?;
+    let secret_access_key =
+        secret_access_key.ok_or(InvalidJsonCredentials::MissingField("SecretAccessKey"))?;
+    let session_token = session_token.ok_or(InvalidJsonCredentials::MissingField("Token"))?;
+    let expiration = expiration.ok_or(InvalidJsonCredentials::MissingField("Expiration"))?;
+    let expiration = SystemTime::try_from(
+        DateTime::from_str(expiration.as_ref(), Format::DateTime).map_err(|err| {
+            InvalidJsonCredentials::InvalidField {
+                field: "Expiration",
+                err: err.into(),
+            }
+        })?,
+    )
+    .map_err(|_| {
+        InvalidJsonCredentials::Other(
+            "credential expiration time cannot be represented by a DateTime".into(),
+        )
+    })?;
+    Ok(RefreshableCredentials {
+        access_key_id,
+        secret_access_key,
+        session_token,
+        expiration,
+    })
 }
 
 #[cfg(test)]

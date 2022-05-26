@@ -102,7 +102,7 @@ impl ProviderChain {
             }
             BaseProvider::AccessKey(key) => Arc::new(key.clone()),
             BaseProvider::CredentialProcess(credential_process) => Arc::new(
-                CredentialProcessProvider::new(credential_process.to_string()),
+                CredentialProcessProvider::new(credential_process.unredacted().into()),
             ),
             BaseProvider::WebIdentityTokenRole {
                 role_arn,

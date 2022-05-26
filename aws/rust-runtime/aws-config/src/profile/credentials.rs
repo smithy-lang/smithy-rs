@@ -502,4 +502,6 @@ mod test {
     make_test!(invalid_config);
     make_test!(region_override);
     make_test!(credential_process);
+    make_test!(credential_process_failure);
+    make_test!(credential_process_invalid);
 }
