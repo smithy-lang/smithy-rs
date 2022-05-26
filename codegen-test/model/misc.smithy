@@ -117,7 +117,7 @@ union AUnion {
 /// This operation tests that the response code defaults to 200 when no other code is set
 @httpResponseTests([
     {
-        id: "ResponseCodeDefaultTest",
+        id: "ResponseCodeDefault",
         protocol: "aws.protocols#restJson1",
         code: 200,
     }
@@ -137,7 +137,7 @@ structure ResponseCodeDefaultOutput {}
 /// This operation tests that the response code defaults to @http's code
 @httpResponseTests([
     {
-        id: "ResponseCodeHttpFallbackTest",
+        id: "ResponseCodeHttpFallback",
         protocol: "aws.protocols#restJson1",
         code: 418,
     }
@@ -158,13 +158,13 @@ structure ResponseCodeHttpFallbackOutput {}
 /// and is used over @http's code
 @httpResponseTests([
     {
-        id: "ResponseCodeRequiredTest",
+        id: "ResponseCodeRequired",
         protocol: "aws.protocols#restJson1",
-        code: 418,
-        params: {"responseCode": 418}
+        code: 201,
+        params: {"responseCode": 201}
     }
 ])
-@http(method: "GET", uri: "/responseCodeRequired", code: 418)
+@http(method: "GET", uri: "/responseCodeRequired", code: 201)
 operation ResponseCodeRequired {
     input: ResponseCodeRequiredInput,
     output: ResponseCodeRequiredOutput,
