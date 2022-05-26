@@ -62,7 +62,39 @@ where
     }
 }
 
-/// Credentials Provider
+/// External process credentials provider
+///
+/// This credentials provider runs a configured external process and parses
+/// its output to retrieve credentials.
+///
+/// The external process must exit with status 0 and output the following
+/// JSON format to `stdout` to provide credentials:
+///
+/// ```json
+/// {
+///     "Version:" 1,
+///     "AccessKeyId": "access key id",
+///     "SecretAccessKey": "secret access key",
+///     "SessionToken": "session token",
+///     "Expiration": "time that the expiration will expire"
+/// }
+/// ```
+///
+/// The `Version` must be set to 1. `AccessKeyId` and `SecretAccessKey` are always required.
+/// `SessionToken` must be set if a session token is associated with the `AccessKeyId`.
+/// The `Expiration` is optional, and must be given in the RFC 3339 date time format (e.g.,
+/// `2022-05-26T12:34:56.789Z`).
+///
+/// If the external process exits with a non-zero status, then the contents of `stderr`
+/// will be output as part of the credentials provider error message.
+///
+/// This credentials provider is included in the profile credentials provider, and can be
+/// configured using the `credential_process` attribute. For example:
+///
+/// ```plain
+/// [profile example]
+/// credential_process = /path/to/my/process --some --arguments
+/// ```
 #[derive(Debug)]
 pub struct CredentialProcessProvider {
     command: CommandWithSensitiveArgs<String>,
@@ -78,7 +110,7 @@ impl ProvideCredentials for CredentialProcessProvider {
 }
 
 impl CredentialProcessProvider {
-    /// Create new [`CredentialProcessProvider`]
+    /// Create new [`CredentialProcessProvider`] with the `command` needed to execute the external process.
     pub fn new(command: String) -> Self {
         Self {
             command: CommandWithSensitiveArgs::new(command),
