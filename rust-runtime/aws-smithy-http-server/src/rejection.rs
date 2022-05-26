@@ -194,6 +194,18 @@ pub enum RequestRejection {
 
 impl std::error::Error for RequestRejection {}
 
+// Consider a conversion between `T` and `U` followed by a bubbling up of the conversion error
+// through `Result<_, RequestRejection>`. This [`From`] implementation accomodates the special case
+// where `T` and `U` are equal, in such cases `T`/`U` a enjoy `TryFrom<T>` with
+// `Err = Infallible`.
+impl From<std::convert::Infallible> for RequestRejection {
+    fn from(_err: std::convert::Infallible) -> Self {
+        // We opt for this `match` here rather than [`unreachable`] to assure the reader that this
+        // code path is dead.
+        match _err {}
+    }
+}
+
 // These converters are solely to make code-generation simpler. They convert from a specific error
 // type (from a runtime/third-party crate or the standard library) into a variant of the
 // [`crate::rejection::RequestRejection`] enum holding the type-erased boxed [`crate::Error`]
