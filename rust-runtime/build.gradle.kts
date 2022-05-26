@@ -6,7 +6,6 @@
 description = "Rust Runtime"
 plugins {
     kotlin("jvm")
-    maven
     `maven-publish`
 }
 
