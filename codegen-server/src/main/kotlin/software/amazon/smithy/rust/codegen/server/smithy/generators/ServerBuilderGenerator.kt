@@ -31,7 +31,6 @@ import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.hasConstraintTraitOrTargetHasConstraintTrait
-import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -395,11 +394,9 @@ class ServerBuilderGenerator(
         }
 
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1332) `TryFrom` is in Rust 2021's prelude.
-        // TODO Use Dan's TryFrom.
         writer.rustTemplate(
             """
-            impl std::convert::TryFrom<Builder> for #{Structure} {
+            impl #{TryFrom}<Builder> for #{Structure} {
                 type Error = ConstraintViolation;
                 
                 fn try_from(builder: Builder) -> Result<Self, Self::Error> {
@@ -408,6 +405,7 @@ class ServerBuilderGenerator(
             }
             """,
             "Structure" to structureSymbol,
+            "TryFrom" to RuntimeType.TryFrom,
         )
     }
 

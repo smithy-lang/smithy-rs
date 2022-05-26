@@ -52,7 +52,6 @@ class ConstrainedMapGenerator(
             "length <= ${lengthTrait.max.get()}"
         }
 
-        // TODO Use TryFrom from Dan's PR.
         writer.documentShape(shape, model, note = rustDocsNote(name))
         writer.rustTemplate(
             """
@@ -80,7 +79,7 @@ class ConstrainedMapGenerator(
                 type Unconstrained = #{UnconstrainedSymbol};
             }
             
-            impl std::convert::TryFrom<$inner> for $name {
+            impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
                 
                 fn try_from(value: $inner) -> Result<Self, Self::Error> {
@@ -97,6 +96,7 @@ class ConstrainedMapGenerator(
             "ValueSymbol" to symbolProvider.toSymbol(model.expectShape(shape.value.target)),
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "UnconstrainedSymbol" to unconstrainedShapeSymbolProvider.toSymbol(shape),
+            "TryFrom" to RuntimeType.TryFrom,
             "ConstraintViolation" to constraintViolation
         )
     }

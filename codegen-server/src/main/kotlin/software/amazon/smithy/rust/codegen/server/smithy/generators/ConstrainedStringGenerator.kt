@@ -51,8 +51,6 @@ class ConstrainedStringGenerator(
 
         // TODO Docs for `ConstraintViolation`.
         // TODO Display impl does not honor `sensitive` trait.
-        // TODO Use Display from Dan's PR.
-        // TODO Use TryFrom from Dan's PR.
         // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
         // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
         // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
@@ -89,7 +87,7 @@ class ConstrainedStringGenerator(
                 }
             }
             
-            impl std::fmt::Display for $name {
+            impl #{Display} for $name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                    self.0.fmt(f)
                 }
@@ -102,7 +100,7 @@ class ConstrainedStringGenerator(
                 }
             }
             
-            impl std::convert::TryFrom<$inner> for $name {
+            impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
                 
                 fn try_from(value: $inner) -> Result<Self, Self::Error> {
@@ -118,6 +116,8 @@ class ConstrainedStringGenerator(
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "ConstraintViolation" to constraintViolation,
             "MaybeConstrained" to symbol.wrapMaybeConstrained(),
+            "Display" to RuntimeType.Display,
+            "TryFrom" to RuntimeType.TryFrom,
         )
     }
 }
