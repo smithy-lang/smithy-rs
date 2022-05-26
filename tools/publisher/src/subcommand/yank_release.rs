@@ -20,18 +20,19 @@ const MAX_CONCURRENCY: usize = 5;
 
 #[derive(Parser, Debug)]
 pub struct YankReleaseArgs {
-    /// The aws-sdk-rust release tag to yank
+    /// The aws-sdk-rust release tag to yank. The CLI will download the `versions.toml` file
+    /// from GitHub at this tagged version to determine which crates to yank.
     #[clap(long, required_unless_present = "versions-toml")]
-    release_tag: Option<String>,
+    github_release_tag: Option<String>,
     /// Path to a `versions.toml` file with a `[release]` section to yank.
-    /// The `--release-tag` option is preferred to this, but this is provided as a fail safe.
-    #[clap(long, required_unless_present = "release-tag")]
+    /// The `--github-release-tag` option is preferred to this, but this is provided as a fail safe.
+    #[clap(long, required_unless_present = "github-release-tag")]
     versions_toml: Option<PathBuf>,
 }
 
 pub async fn subcommand_yank_release(
     YankReleaseArgs {
-        release_tag,
+        github_release_tag,
         versions_toml,
     }: &YankReleaseArgs,
 ) -> Result<()> {
@@ -39,10 +40,10 @@ pub async fn subcommand_yank_release(
     cargo::confirm_installed_on_path()?;
 
     // Retrieve information about the release to yank
-    let release = match (release_tag, versions_toml) {
+    let release = match (github_release_tag, versions_toml) {
         (Some(release_tag), None) => acquire_release_from_tag(release_tag).await,
         (None, Some(versions_toml)) => acquire_release_from_file(versions_toml),
-        _ => bail!("Only one of `--release-tag` or `--versions-toml` should be provided"),
+        _ => bail!("Only one of `--github-release-tag` or `--versions-toml` should be provided"),
     }
     .context("failed to retrieve information about the release to yank")?;
 
@@ -63,7 +64,9 @@ pub async fn subcommand_yank_release(
             info!("Yanking `{}-{}`...", crate_name, crate_version);
             let result = cargo::Yank::new(&crate_name, &crate_version).spawn().await;
             drop(permit);
-            info!("Successfully yanked `{}-{}`", crate_name, crate_version);
+            if result.is_ok() {
+                info!("Successfully yanked `{}-{}`", crate_name, crate_version);
+            }
             result
         }));
     }

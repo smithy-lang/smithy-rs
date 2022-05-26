@@ -36,7 +36,7 @@ enum Args {
     /// Publishes crates to crates.io
     Publish(PublishArgs),
     /// Yanks an entire SDK release. For individual packages, use `cargo yank` instead.
-    /// Only one of the `--release-tag` or `--versions-toml` options are required.
+    /// Only one of the `--github-release-tag` or `--versions-toml` options are required.
     YankRelease(YankReleaseArgs),
     /// Hydrates the SDK README template file
     HydrateReadme(HydrateReadmeArgs),
