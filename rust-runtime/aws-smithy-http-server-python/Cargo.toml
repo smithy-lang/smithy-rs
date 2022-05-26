@@ -22,8 +22,8 @@ http = "0.2"
 hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp", "stream"] }
 num_cpus = "1.13"
 paste = "1.0"
-pyo3 = { version = "0.16" }
-pyo3-asyncio = { version = "0.16", features = ["attributes", "tokio-runtime"] }
+pyo3 = { version = "0.16.5" }
+pyo3-asyncio = { version = "0.16.0", features = ["attributes", "tokio-runtime"] }
 socket2 = { version = "0.4", features = ["all"] }
 thiserror = "1.0.31"
 tokio = { version = "1", features = ["full"] }
