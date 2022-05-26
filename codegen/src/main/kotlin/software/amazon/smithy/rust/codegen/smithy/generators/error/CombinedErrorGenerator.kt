@@ -95,7 +95,7 @@ class CombinedErrorGenerator(
                 RuntimeType.StdError
             )
         }
-        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.stdfmt.member("Display")) {
+        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 delegateToVariants {
                     writable { rust("_inner.fmt(f)") }

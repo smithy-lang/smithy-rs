@@ -35,7 +35,7 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
-        // Discover [RustCodegenDecorators] on the classpath. [RustCodegenDectorator] return different types of
+        // Discover [RustCodegenDecorators] on the classpath. [RustCodegenDecorator] return different types of
         // customization. A customization is a function of:
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)

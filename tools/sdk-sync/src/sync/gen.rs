@@ -43,6 +43,7 @@ pub trait SdkGenerator {
 /// SDK generator that creates a temporary directory and clones the given `smithy-rs` into it
 /// so that generation can safely be done in parallel for other commits.
 pub struct DefaultSdkGenerator {
+    previous_versions_manifest: PathBuf,
     aws_doc_sdk_examples_revision: CommitHash,
     examples_path: PathBuf,
     fs: Arc<dyn Fs>,
@@ -53,6 +54,7 @@ pub struct DefaultSdkGenerator {
 impl DefaultSdkGenerator {
     #[instrument(skip(fs))]
     pub fn new(
+        previous_versions_manifest: &Path,
         aws_doc_sdk_examples_revision: &CommitHash,
         examples_path: &Path,
         fs: Arc<dyn Fs>,
@@ -73,6 +75,7 @@ impl DefaultSdkGenerator {
         }
 
         Ok(Self {
+            previous_versions_manifest: previous_versions_manifest.into(),
             aws_doc_sdk_examples_revision: aws_doc_sdk_examples_revision.clone(),
             examples_path: examples_path.into(),
             fs,
@@ -110,6 +113,12 @@ impl DefaultSdkGenerator {
         info!("Generating the SDK...");
         let mut command = Command::new("./gradlew");
         command.arg("-Paws.fullsdk=true");
+        command.arg(format!(
+            "-Paws.sdk.previous.release.versions.manifest={}",
+            self.previous_versions_manifest
+                .to_str()
+                .expect("not expecting strange file names")
+        ));
         command.arg(format!(
             "-Paws.sdk.examples.revision={}",
             &self.aws_doc_sdk_examples_revision

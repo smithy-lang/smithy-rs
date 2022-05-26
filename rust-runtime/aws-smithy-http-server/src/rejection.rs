@@ -182,9 +182,14 @@ pub enum RequestRejection {
     BoolParse(crate::Error),
 
     /// Used when consuming the input struct builder, and a constraint violation occurs.
-    // This is the only error that doesn't take in `crate::Error`, since it is constructed directly
-    // in the code-generated SDK instead of in this crate.
+    // Unlike the rejections above, this does not take in `crate::Error`, since it is constructed
+    // directly in the code-generated SDK instead of in this crate.
     Build(Box<dyn std::error::Error + Send + Sync>),
+
+    /// Used by the server when the enum variant sent by a client is not known.
+    // Unlike the rejections above, the inner type is code generated,
+    // with each enum having its own generated error type.
+    EnumVariantNotFound(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl std::error::Error for RequestRejection {}

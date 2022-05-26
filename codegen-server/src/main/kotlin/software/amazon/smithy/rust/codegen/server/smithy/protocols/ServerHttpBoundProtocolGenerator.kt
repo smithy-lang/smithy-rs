@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -43,6 +44,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerR
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.smithy.extractSymbolFromOption
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
@@ -58,12 +60,14 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPay
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.wrapOptional
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -878,15 +882,25 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
                         when {
                             memberShape.isStringShape -> {
-                                // `<_>::from()` is necessary to convert the `&str` into:
+                                // `<_>::from()/try_from()` is necessary to convert the `&str` into:
                                 //     * the Rust enum in case the `string` shape has the `enum` trait; or
                                 //     * `String` in case it doesn't.
-                                rustTemplate(
-                                    """
-                                    let v = <_>::from(#{PercentEncoding}::percent_decode_str(&v).decode_utf8()?.as_ref());
-                                    """.trimIndent(),
-                                    *codegenScope
-                                )
+                                if (memberShape.hasTrait<EnumTrait>()) {
+                                    rustTemplate(
+                                        """
+                                        let v = <#{memberShape}>::try_from(#{PercentEncoding}::percent_decode_str(&v).decode_utf8()?.as_ref())?;
+                                        """,
+                                        *codegenScope,
+                                        "memberShape" to symbolProvider.toSymbol(memberShape),
+                                    )
+                                } else {
+                                    rustTemplate(
+                                        """
+                                        let v = <_>::from(#{PercentEncoding}::percent_decode_str(&v).decode_utf8()?.as_ref());
+                                        """.trimIndent(),
+                                        *codegenScope
+                                    )
+                                }
                             }
                             memberShape.isTimestampShape -> {
                                 val index = HttpBindingIndex.of(model)
@@ -1044,6 +1058,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private fun generateParsePercentEncodedStrAsStringFn(binding: HttpBindingDescriptor): RuntimeType {
         val output = unconstrainedShapeSymbolProvider!!.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
+        val symbol = output.extractSymbolFromOption()
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{RequestRejection}>",
@@ -1053,13 +1068,27 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 // `<_>::from()` is necessary to convert the `&str` into:
                 //     * the Rust enum in case the `string` shape has the `enum` trait; or
                 //     * `String` in case it doesn't.
-                rustTemplate(
-                    """
-                    let value = <_>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
-                    Ok(${unconstrainedShapeSymbolProvider.wrapOptional(binding.member, "value")})
-                    """.trimIndent(),
-                    *codegenScope,
-                )
+                when (symbol.rustType()) {
+                    RustType.String ->
+                        rustTemplate(
+                            """
+                            let value = <#{T}>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
+                            """,
+                            *codegenScope,
+                            "T" to symbol,
+                        )
+                    else -> { // RustType.Opaque, the Enum
+                        check(symbol.rustType() is RustType.Opaque)
+                        rustTemplate(
+                            """
+                            let value = <#{T}>::try_from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref())?;
+                            """,
+                            *codegenScope,
+                            "T" to symbol,
+                        )
+                    }
+                }
+                writer.rust("Ok(${symbolProvider.wrapOptional(binding.member, "value")})")
             }
         }
     }

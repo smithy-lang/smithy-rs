@@ -291,10 +291,17 @@ class HttpBindingGenerator(
                         }
                     }
                     if (targetShape.hasTrait<EnumTrait>()) {
-                        rust(
-                            "Ok(#T::from(body_str))",
-                            symbolProvider.toSymbol(targetShape)
-                        )
+                        if (mode == CodegenMode.Server) {
+                            rust(
+                                "Ok(#T::try_from(body_str)?)",
+                                symbolProvider.toSymbol(targetShape)
+                            )
+                        } else {
+                            rust(
+                                "Ok(#T::from(body_str))",
+                                symbolProvider.toSymbol(targetShape)
+                            )
+                        }
                     } else {
                         rust("Ok(body_str.to_string())")
                     }
