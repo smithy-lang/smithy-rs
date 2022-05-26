@@ -93,7 +93,7 @@ class PythonServerOperationHandlerGenerator(
 
     private fun renderPyFunction(name: String, output: String): String =
         """
-        #{tracing}::debug!("Executing Python handlertion `$name()`");
+        #{tracing}::debug!("Executing Python handler function `$name()`");
         #{tokio}::task::spawn_blocking(move || {
             #{pyo3}::Python::with_gil(|py| {
                 let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
@@ -110,7 +110,7 @@ class PythonServerOperationHandlerGenerator(
 
     private fun renderPyCoroutine(name: String, output: String): String =
         """
-        #{tracing}::debug!("Executing Python coroutine `$name()`");
+        #{tracing}::debug!("Executing Python handler coroutine `$name()`");
         let result = #{pyo3}::Python::with_gil(|py| {
             let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
             let coro = if handler.args == 1 {
@@ -125,7 +125,7 @@ class PythonServerOperationHandlerGenerator(
 
     private fun renderPyError(): String =
         """
-        // Catch and record and Python traceback.
+        // Catch and record a Python traceback.
         result.await.map_err(|e| {
             #{pyo3}::Python::with_gil(|py| {
                 let traceback = match e.traceback(py) {
