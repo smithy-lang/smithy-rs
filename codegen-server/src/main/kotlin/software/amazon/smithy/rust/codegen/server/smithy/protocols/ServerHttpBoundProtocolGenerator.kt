@@ -55,7 +55,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPay
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.toOptional
 import software.amazon.smithy.rust.codegen.smithy.wrapOptional
 import software.amazon.smithy.rust.codegen.util.dq
@@ -743,7 +742,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 .forEachIndexed { index, segment ->
                     val binding = pathBindings.find { it.memberName == segment.content }
                     if (binding != null && segment.isLabel) {
-                        val deserializer = generateParsePercentEncodedStrFn(binding)
+                        val deserializer = generateParseFn(binding, true)
                         rustTemplate(
                             """
                             input = input.${binding.member.setterName()}(
@@ -838,7 +837,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
             rustBlock("for (k, v) in pairs") {
                 queryBindingsTargettingSimple.forEach {
-                    val deserializer = generateParsePercentEncodedStrFn(it)
+                    val deserializer = generateParseFn(it, false)
                     val memberName = symbolProvider.toMemberName(it.member)
                     rustTemplate(
                         """
@@ -980,21 +979,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         )
     }
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1231): If this function was called to parse a query string
-    // key value pair, we don't need to percent-decode it _again_.
-    private fun generateParsePercentEncodedStrFn(binding: HttpBindingDescriptor): RuntimeType {
-        // HTTP bindings we support that contain percent-encoded data.
-        check(binding.location == HttpLocation.LABEL || binding.location == HttpLocation.QUERY)
-
-        val target = model.expectShape(binding.member.target)
-        return when {
-            target.isStringShape -> generateParsePercentEncodedStrAsStringFn(binding)
-            target.isTimestampShape -> generateParsePercentEncodedStrAsTimestampFn(binding)
-            else -> generateParseStrAsPrimitiveFn(binding)
-        }
-    }
-
-    private fun generateParsePercentEncodedStrAsStringFn(binding: HttpBindingDescriptor): RuntimeType {
+    private fun generateParseFn(binding: HttpBindingDescriptor, percentDecoding: Boolean): RuntimeType {
         val output = symbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
         val symbol = output.extractSymbolFromOption()
@@ -1004,85 +989,69 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
                 "O" to output,
             ) {
-                // `<_>::from()` is necessary to convert the `&str` into:
-                //     * the Rust enum in case the `string` shape has the `enum` trait; or
-                //     * `String` in case it doesn't.
-                when (symbol.rustType()) {
-                    RustType.String ->
-                        rustTemplate(
-                            """
-                            let value = <#{T}>::from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref());
-                            """,
-                            *codegenScope,
-                            "T" to symbol,
-                        )
-                    else -> { // RustType.Opaque, the Enum
-                        check(symbol.rustType() is RustType.Opaque)
-                        rustTemplate(
-                            """
-                            let value = <#{T}>::try_from(#{PercentEncoding}::percent_decode_str(value).decode_utf8()?.as_ref())?;
-                            """,
-                            *codegenScope,
-                            "T" to symbol,
-                        )
+                val target = model.expectShape(binding.member.target)
+
+                when {
+                    target.isStringShape -> {
+                        if (percentDecoding) {
+                            rustTemplate(
+                                """
+                                let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
+                                let value = #{T}::try_from(value.as_ref())?;
+                                """,
+                                *codegenScope,
+                                "T" to symbol,
+                            )
+                        } else {
+                            rustTemplate(
+                                """
+                                let value = #{T}::try_from(value)?;
+                                """,
+                                "T" to symbol,
+                            )
+                        }
                     }
+                    target.isTimestampShape -> {
+                        val index = HttpBindingIndex.of(model)
+                        val timestampFormat =
+                            index.determineTimestampFormat(
+                                binding.member,
+                                binding.location,
+                                protocol.defaultTimestampFormat,
+                            )
+                        val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
+
+                        if (percentDecoding) {
+                            rustTemplate(
+                                """
+                                let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
+                                let value = #{DateTime}::from_str(value.as_ref(), #{format})?;
+                                """,
+                                *codegenScope,
+                                "format" to timestampFormatType,
+                            )
+                        } else {
+                            rustTemplate(
+                                """
+                                let value = #{DateTime}::from_str(value, #{format})?;
+                                """,
+                                *codegenScope,
+                                "format" to timestampFormatType,
+                            )
+                        }
+                    }
+                    else -> rustTemplate(
+                        """
+                        let value = std::str::FromStr::from_str(value)?;
+                        """,
+                        *codegenScope,
+                    )
                 }
+
                 writer.write(
                     """
                     Ok(${symbolProvider.wrapOptional(binding.member, "value")})
                     """
-                )
-            }
-        }
-    }
-
-    private fun generateParsePercentEncodedStrAsTimestampFn(binding: HttpBindingDescriptor): RuntimeType {
-        val output = symbolProvider.toSymbol(binding.member)
-        val fnName = generateParseStrFnName(binding)
-        val index = HttpBindingIndex.of(model)
-        val timestampFormat =
-            index.determineTimestampFormat(
-                binding.member,
-                binding.location,
-                protocol.defaultTimestampFormat,
-            )
-        val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-        return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
-            writer.rustBlockTemplate(
-                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{RequestRejection}>",
-                *codegenScope,
-                "O" to output,
-            ) {
-                rustTemplate(
-                    """
-                    let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
-                    let value = #{DateTime}::from_str(&value, #{format})?;
-                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
-                    """.trimIndent(),
-                    *codegenScope,
-                    "format" to timestampFormatType,
-                )
-            }
-        }
-    }
-
-    // Function to parse a string as the data type generated for boolean, byte, short, integer, long, float, or double shapes.
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1232): This function can be replaced by https://docs.rs/aws-smithy-types/latest/aws_smithy_types/primitive/trait.Parse.html
-    private fun generateParseStrAsPrimitiveFn(binding: HttpBindingDescriptor): RuntimeType {
-        val output = symbolProvider.toSymbol(binding.member)
-        val fnName = generateParseStrFnName(binding)
-        return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
-            writer.rustBlockTemplate(
-                "pub fn $fnName(value: &str) -> std::result::Result<#{O}, #{RequestRejection}>",
-                *codegenScope,
-                "O" to output,
-            ) {
-                rustTemplate(
-                    """
-                    let value = std::str::FromStr::from_str(value)?;
-                    Ok(${symbolProvider.wrapOptional(binding.member, "value")})
-                    """.trimIndent(),
-                    *codegenScope,
                 )
             }
         }
