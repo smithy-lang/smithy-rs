@@ -1,4 +1,8 @@
-import java.lang.IllegalArgumentException
+import org.gradle.api.Project
+import org.gradle.api.tasks.Exec
+import org.gradle.kotlin.dsl.extra
+import org.gradle.kotlin.dsl.register
+import java.io.File
 
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
@@ -76,6 +80,7 @@ fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTest>): Li
 }
 
 val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS)
+
 /**
  * Filter the Cargo commands to be run on the generated Rust crates using the given [properties].
  * The list of Cargo commands that is run by default is defined in [AllCargoCommands].
@@ -101,4 +106,136 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
         "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${AllCargoCommands.map { it.toString }}`)"
     }
     return ret
+}
+
+fun registerGenerateSmithyBuildTask(
+    rootProject: Project,
+    project: Project,
+    pluginName: String,
+    allCodegenTests: List<CodegenTest>
+) {
+    val properties = PropertyRetriever(rootProject, project)
+    project.tasks.register("generateSmithyBuild") {
+        description = "generate smithy-build.json"
+        outputs.file(project.projectDir.resolve("smithy-build.json"))
+
+        doFirst {
+            project.projectDir.resolve("smithy-build.json")
+                .writeText(
+                    generateSmithyBuild(
+                        rootProject.projectDir.absolutePath,
+                        pluginName,
+                        codegenTests(properties, allCodegenTests)
+                    )
+                )
+
+            // If this is a rebuild, cache all the hashes of the generated Rust files. These are later used by the
+            // `modifyMtime` task.
+            project.extra["previousBuildHashes"] = project.buildDir.walk()
+                .filter { it.name.endsWith(".rs") || it.name == "Cargo.toml" || it.name == "Cargo.lock" }
+                .map {
+                    HashUtils.getCheckSumFromFile(it) to it.lastModified()
+                }
+                .toMap()
+        }
+    }
+}
+
+fun registerGenerateCargoWorkspaceTask(
+    rootProject: Project,
+    project: Project,
+    pluginName: String,
+    allCodegenTests: List<CodegenTest>,
+    workingDirUnderBuildDir: String
+) {
+    val properties = PropertyRetriever(rootProject, project)
+    project.tasks.register("generateCargoWorkspace") {
+        description = "generate Cargo.toml workspace file"
+        doFirst {
+            project.buildDir.resolve("$workingDirUnderBuildDir/Cargo.toml")
+                .writeText(generateCargoWorkspace(pluginName, codegenTests(properties, allCodegenTests)))
+        }
+    }
+}
+
+fun registerGenerateCargoConfigTomlTask(
+    project: Project,
+    outputDir: File
+) {
+    project.tasks.register("generateCargoConfigToml") {
+        description = "generate `.cargo/config.toml`"
+        doFirst {
+            outputDir.resolve(".cargo").mkdir()
+            outputDir.resolve(".cargo/config.toml")
+                .writeText(
+                    """
+                    [build]
+                    rustflags = ["--deny", "warnings"]
+                    """.trimIndent()
+                )
+        }
+    }
+}
+
+fun registerModifyMtimeTask(
+    project: Project
+) {
+    // Cargo uses `mtime` (among other factors) to determine whether a compilation unit needs a rebuild. While developing,
+    // it is likely that only a small number of the generated crate files are modified across rebuilds. This task compares
+    // the hashes of the newly generated files with the (previously cached) old ones, and restores their `mtime`s if the
+    // hashes coincide.
+    // Debugging tip: it is useful to run with `CARGO_LOG=cargo::core::compiler::fingerprint=trace` to learn why Cargo
+    // determines a compilation unit needs a rebuild.
+    // For more information see https://github.com/awslabs/smithy-rs/issues/1412.
+    project.tasks.register("modifyMtime") {
+        description = "modify Rust files' `mtime` if the contents did not change"
+        dependsOn("generateSmithyBuild")
+
+        doFirst {
+            val previousBuildHashes: Map<String, Long> = project.extra["previousBuildHashes"] as Map<String, Long>
+
+            project.buildDir.walk()
+                .filter { it.name.endsWith(".rs") || it.name == "Cargo.toml" }
+                .map {
+                    HashUtils.getCheckSumFromFile(it) to it
+                }
+                .forEach { (currentHash, currentFile) ->
+                    previousBuildHashes[currentHash]?.also { oldMtime ->
+                        println("Setting `mtime` of $currentFile back to `$oldMtime` because its hash `$currentHash` remained unchanged after a rebuild.")
+                        currentFile.setLastModified(oldMtime)
+                    }
+                }
+        }
+    }
+}
+
+fun registerCargoCommandsTasks(
+    project: Project,
+    outputDir: File,
+    defaultRustDocFlags: String
+) {
+    project.tasks.register<Exec>(Cargo.CHECK.toString) {
+        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        workingDir(outputDir)
+        commandLine("cargo", "check", "--lib", "--tests", "--benches")
+    }
+
+    project.tasks.register<Exec>(Cargo.TEST.toString) {
+        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        workingDir(outputDir)
+        commandLine("cargo", "test")
+    }
+
+    project.tasks.register<Exec>(Cargo.DOCS.toString) {
+        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        workingDir(outputDir)
+        environment("RUSTDOCFLAGS", defaultRustDocFlags)
+        commandLine("cargo", "doc", "--no-deps", "--document-private-items")
+    }
+
+    project.tasks.register<Exec>(Cargo.CLIPPY.toString) {
+        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        workingDir(outputDir)
+        commandLine("cargo", "clippy")
+    }
 }
