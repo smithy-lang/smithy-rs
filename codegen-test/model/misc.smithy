@@ -164,7 +164,7 @@ structure ResponseCodeHttpFallbackOutput {}
         params: {"responseCode": 201}
     }
 ])
-@http(method: "GET", uri: "/responseCodeRequired", code: 201)
+@http(method: "GET", uri: "/responseCodeRequired", code: 200)
 operation ResponseCodeRequired {
     input: ResponseCodeRequiredInput,
     output: ResponseCodeRequiredOutput,
