@@ -37,9 +37,18 @@ pub struct PublishArgs {
     /// Path containing the crates to publish. Crates will be discovered recursively
     #[clap(long)]
     location: PathBuf,
+
+    /// Don't prompt for confirmation before publishing
+    #[clap(short('y'))]
+    skip_confirmation: bool,
 }
 
-pub async fn subcommand_publish(PublishArgs { location }: &PublishArgs) -> Result<()> {
+pub async fn subcommand_publish(
+    PublishArgs {
+        location,
+        skip_confirmation,
+    }: &PublishArgs,
+) -> Result<()> {
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
@@ -53,7 +62,7 @@ pub async fn subcommand_publish(PublishArgs { location }: &PublishArgs) -> Resul
     confirm_correct_tag(&location).await?;
 
     // Don't proceed unless the user confirms the plan
-    confirm_plan(&batches, stats)?;
+    confirm_plan(&batches, stats, *skip_confirmation)?;
 
     // Use a semaphore to only allow a few concurrent publishes
     let max_concurrency = num_cpus::get_physical();
@@ -114,7 +123,7 @@ async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
 
 async fn confirm_correct_tag(location: &Path) -> Result<()> {
     let repository = Repository::new(SDK_REPO_NAME, location)?;
-    let versions_manifest = VersionsManifest::from_file(location.join("versions.toml"))?;
+    let versions_manifest = VersionsManifest::from_file(location.join("../versions.toml"))?;
     if versions_manifest.release.is_none() {
         // The release metadata is required for yanking in the event of a bad release, so don't
         // allow publish if it's missing.
@@ -211,7 +220,11 @@ async fn correct_owner(package: &Package) -> Result<()> {
     .context("correct_owner")
 }
 
-fn confirm_plan(batches: &[PackageBatch], stats: PackageStats) -> Result<()> {
+fn confirm_plan(
+    batches: &[PackageBatch],
+    stats: PackageStats,
+    skip_confirmation: bool,
+) -> Result<()> {
     let mut full_plan = Vec::new();
     for batch in batches {
         for package in batch {
@@ -235,13 +248,14 @@ fn confirm_plan(batches: &[PackageBatch], stats: PackageStats) -> Result<()> {
         stats.aws_sdk_crates
     );
 
-    if Confirm::new()
-        .with_prompt("Continuing will publish to crates.io. Do you wish to continue?")
-        .interact()?
+    if skip_confirmation
+        || Confirm::new()
+            .with_prompt("Continuing will publish to crates.io. Do you wish to continue?")
+            .interact()?
     {
         Ok(())
     } else {
-        Err(anyhow::Error::msg("aborted"))
+        bail!("aborted")
     }
 }
 
