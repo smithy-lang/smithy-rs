@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.rustlang.render
@@ -35,11 +36,12 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
+import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
@@ -91,7 +93,7 @@ class HttpBindingGenerator(
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
-    private val mode = codegenContext.mode
+    private val target = codegenContext.target
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
@@ -131,8 +133,8 @@ class HttpBindingGenerator(
 
     fun generateDeserializePrefixHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpBinding.Location.PREFIX_HEADERS)
-        val outputT = symbolProvider.toSymbol(binding.member)
-        check(outputT.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputT.rustType() }
+        val outputSymbol = symbolProvider.toSymbol(binding.member)
+        check(outputSymbol.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputSymbol.rustType() }
         val target = model.expectShape(binding.member.target)
         check(target is MapShape)
         val fnName = "deser_prefix_header_${fnName(operationShape, binding)}"
@@ -146,11 +148,12 @@ class HttpBindingGenerator(
                 deserializeFromHeader(model.expectShape(target.value.target), binding.member)
             }
         }
+        val returnTypeSymbol = outputSymbol.mapRustType { it.asOptional() }
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
             writer.rustBlock(
                 "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
-                outputT,
+                returnTypeSymbol,
                 headerUtil
             ) {
                 rust(
@@ -215,15 +218,15 @@ class HttpBindingGenerator(
         }
     }
 
-    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, target: UnionShape) {
+    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, targetShape: UnionShape) {
         val unmarshallerConstructorFn = EventStreamUnmarshallerGenerator(
             protocol,
             model,
             runtimeConfig,
             symbolProvider,
             operationShape,
-            target,
-            mode
+            targetShape,
+            target
         ).render()
         rustTemplate(
             """
@@ -277,7 +280,7 @@ class HttpBindingGenerator(
                         }
                     }
                     if (targetShape.hasTrait<EnumTrait>()) {
-                        if (mode == CodegenMode.Server) {
+                        if (target == CodegenTarget.SERVER) {
                             rust(
                                 "Ok(#T::try_from(body_str)?)",
                                 symbolProvider.toSymbol(targetShape)
