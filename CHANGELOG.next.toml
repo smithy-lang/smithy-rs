@@ -12,6 +12,18 @@
 # author = "rcoh"
 
 [[smithy-rs]]
+message = "Add `From` implementation to convert from an SdkConfig to Builder"
+references = []
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jackos"
+
+[[aws-sdk-rust]]
+message = "Add `From` implementation to convert from an SdkConfig to Builder"
+references = []
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jackos"
+
+[[smithy-rs]]
 message = "Add ability to sign a request with all headers, or to change which headers are excluded from signing"
 references = ["smithy-rs#1381"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
