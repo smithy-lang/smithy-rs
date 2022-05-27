@@ -69,6 +69,7 @@ impl AssumeRoleProvider {
 /// A builder for [`AssumeRoleProvider`].
 ///
 /// Construct one through [`AssumeRoleProvider::builder`].
+#[derive(Debug)]
 pub struct AssumeRoleProviderBuilder {
     role_arn: String,
     external_id: Option<String>,

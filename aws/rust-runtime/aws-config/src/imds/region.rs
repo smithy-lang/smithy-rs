@@ -74,7 +74,7 @@ impl ProvideRegion for ImdsRegionProvider {
 }
 
 /// Builder for [`ImdsRegionProvider`]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     provider_config: Option<ProviderConfig>,
     imds_client_override: Option<imds::Client>,

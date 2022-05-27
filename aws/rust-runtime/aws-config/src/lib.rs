@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![warn(missing_docs, rustdoc::missing_crate_level_docs, unreachable_pub)]
+#![warn(
+    missing_docs,
+    rustdoc::missing_crate_level_docs,
+    missing_debug_implementations,
+    unreachable_pub
+)]
 
 //! `aws-config` provides implementations of region, credential resolution.
 //!

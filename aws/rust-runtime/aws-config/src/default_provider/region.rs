@@ -37,7 +37,7 @@ impl DefaultRegionChain {
 }
 
 /// Builder for [DefaultRegionChain]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     env_provider: EnvironmentVariableRegionProvider,
     profile_file: profile::region::Builder,

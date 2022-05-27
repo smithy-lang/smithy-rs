@@ -170,7 +170,7 @@ impl WebIdentityTokenCredentialsProvider {
 }
 
 /// Builder for [`WebIdentityTokenCredentialsProvider`](WebIdentityTokenCredentialsProvider)
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     source: Option<Source>,
     config: Option<ProviderConfig>,

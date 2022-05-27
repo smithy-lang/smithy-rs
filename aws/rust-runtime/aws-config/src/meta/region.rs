@@ -104,6 +104,7 @@ pub mod future {
     ///
     /// - When wrapping an already loaded region, use [`ready`](ProvideRegion::ready).
     /// - When wrapping an asynchronously loaded region, use [`new`](ProvideRegion::new).
+    #[derive(Debug)]
     pub struct ProvideRegion<'a>(NowOrLater<Option<Region>, BoxFuture<'a>>);
     impl<'a> ProvideRegion<'a> {
         /// A future that wraps the given future
