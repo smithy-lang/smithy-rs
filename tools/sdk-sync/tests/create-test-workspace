@@ -89,8 +89,14 @@ echo "Some handwritten file" > some_handwritten
     echo "some_handwritten"; \
 ) > .handwritten
 ( \
+    echo '# special test comment: this came from the previous release'; \
     echo 'smithy_rs_revision = "'"${SMITHY_RS_HEAD}"'"'; \
     echo 'aws_doc_sdk_examples_revision = "'"${EXAMPLES_HEAD}"'"'; \
+    echo '[crates.aws-sdk-s3]'; \
+    echo 'category = "AwsSdk"'; \
+    echo 'version = "0.1.0"'; \
+    echo 'source_hash = "doesntmatterhere"'; \
+    echo 'model_hash = "doesntmatterhere"'; \
 ) > versions.toml
 git add .
 git -c user.name="Test Dev" -c user.email="testdev@example.com" commit -m "Initial commit"
