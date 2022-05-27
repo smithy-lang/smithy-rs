@@ -56,7 +56,6 @@ val awsServices: AwsServices by lazy { discoverServices(loadServiceMembership())
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 
 fun getSdkVersion(): String = properties.get("aws.sdk.version") ?: throw Exception("SDK version missing")
-fun getSmithyRsVersion(): String = properties.get("smithy.rs.runtime.crate.version") ?: throw Exception("smithy-rs version missing")
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
 fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
 
@@ -206,14 +205,14 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
     toolPath = sdkVersionerToolPath
     binaryName = "sdk-versioner"
     arguments = listOf(
-        outputDir.resolve("examples").absolutePath,
+        "use-path-and-version-dependencies",
         "--sdk-path", "../../sdk",
-        "--sdk-version", getSdkVersion(),
-        "--smithy-version", getSmithyRsVersion()
+        "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
+        outputDir.resolve("examples").absolutePath
     )
 
     outputs.dir(outputDir)
-    dependsOn("relocateExamples")
+    dependsOn("relocateExamples", "generateVersionManifest")
 }
 
 /**
@@ -307,7 +306,6 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
     dependsOn("relocateRuntime")
     dependsOn("relocateAwsRuntime")
     dependsOn("relocateExamples")
-    dependsOn("fixExampleManifests")
 }
 
 tasks.register<ExecRustBuildTool>("hydrateReadme") {
@@ -369,9 +367,10 @@ tasks.register("finalizeSdk") {
         "relocateExamples",
         "generateIndexMd",
         "fixManifests",
+        "generateVersionManifest",
+        "fixExampleManifests",
         "hydrateReadme",
-        "relocateChangelog",
-        "generateVersionManifest"
+        "relocateChangelog"
     )
 }
 
