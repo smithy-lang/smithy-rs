@@ -12,10 +12,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.util.dq
 
@@ -27,7 +27,7 @@ class ServerEnumGenerator(
     enumTrait: EnumTrait,
     private val runtimeConfig: RuntimeConfig,
 ) : EnumGenerator(model, symbolProvider, writer, shape, enumTrait) {
-    override var mode: CodegenMode = CodegenMode.Server
+    override var target: CodegenTarget = CodegenTarget.SERVER
     private val errorStruct = "${enumName}UnknownVariantError"
 
     override fun renderFromForStr() {
