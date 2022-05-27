@@ -193,33 +193,33 @@ pub(super) fn resolve_chain<'a>(
 }
 
 mod role {
-    pub const ROLE_ARN: &str = "role_arn";
-    pub const EXTERNAL_ID: &str = "external_id";
-    pub const SESSION_NAME: &str = "role_session_name";
+    pub(super) const ROLE_ARN: &str = "role_arn";
+    pub(super) const EXTERNAL_ID: &str = "external_id";
+    pub(super) const SESSION_NAME: &str = "role_session_name";
 
-    pub const CREDENTIAL_SOURCE: &str = "credential_source";
-    pub const SOURCE_PROFILE: &str = "source_profile";
+    pub(super) const CREDENTIAL_SOURCE: &str = "credential_source";
+    pub(super) const SOURCE_PROFILE: &str = "source_profile";
 }
 
 mod sso {
-    pub const ACCOUNT_ID: &str = "sso_account_id";
-    pub const REGION: &str = "sso_region";
-    pub const ROLE_NAME: &str = "sso_role_name";
-    pub const START_URL: &str = "sso_start_url";
+    pub(super) const ACCOUNT_ID: &str = "sso_account_id";
+    pub(super) const REGION: &str = "sso_region";
+    pub(super) const ROLE_NAME: &str = "sso_role_name";
+    pub(super) const START_URL: &str = "sso_start_url";
 }
 
 mod web_identity_token {
-    pub const TOKEN_FILE: &str = "web_identity_token_file";
+    pub(super) const TOKEN_FILE: &str = "web_identity_token_file";
 }
 
 mod static_credentials {
-    pub const AWS_ACCESS_KEY_ID: &str = "aws_access_key_id";
-    pub const AWS_SECRET_ACCESS_KEY: &str = "aws_secret_access_key";
-    pub const AWS_SESSION_TOKEN: &str = "aws_session_token";
+    pub(super) const AWS_ACCESS_KEY_ID: &str = "aws_access_key_id";
+    pub(super) const AWS_SECRET_ACCESS_KEY: &str = "aws_secret_access_key";
+    pub(super) const AWS_SESSION_TOKEN: &str = "aws_session_token";
 }
 
 mod credential_process {
-    pub const CREDENTIAL_PROCESS: &str = "credential_process";
+    pub(super) const CREDENTIAL_PROCESS: &str = "credential_process";
 }
 const PROVIDER_NAME: &str = "ProfileFile";
 

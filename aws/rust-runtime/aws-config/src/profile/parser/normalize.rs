@@ -68,7 +68,7 @@ impl ProfileName<'_> {
 /// - Profile names are validated (see `validate_profile_name`)
 /// - A profile named `profile default` takes priority over a profile named `default`.
 /// - Profiles with identical names are merged
-pub fn merge_in(base: &mut ProfileSet, raw_profile_set: RawProfileSet, kind: FileKind) {
+pub(super) fn merge_in(base: &mut ProfileSet, raw_profile_set: RawProfileSet, kind: FileKind) {
     // parse / validate profile names
     let validated_profiles = raw_profile_set
         .into_iter()
