@@ -19,7 +19,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -64,7 +63,6 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
-import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -860,25 +858,15 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
                         when {
                             memberShape.isStringShape -> {
-                                // `<_>::from()/try_from()` is necessary to convert the `&str` into:
-                                //     * the Rust enum in case the `string` shape has the `enum` trait; or
-                                //     * `String` in case it doesn't.
-                                if (memberShape.hasTrait<EnumTrait>()) {
-                                    rustTemplate(
-                                        """
-                                        let v = <#{memberShape}>::try_from(v.as_ref())?;
-                                        """,
-                                        *codegenScope,
-                                        "memberShape" to symbolProvider.toSymbol(memberShape),
-                                    )
-                                } else {
-                                    rustTemplate(
-                                        """
-                                        let v = <_>::from(v.as_ref());
-                                        """.trimIndent(),
-                                        *codegenScope
-                                    )
-                                }
+                                // NOTE: This path is traversed with or without @enum applied. The `try_from` is used
+                                // as a common conversion.
+                                rustTemplate(
+                                    """
+                                    let v = <#{memberShape}>::try_from(v.as_ref())?;
+                                    """,
+                                    *codegenScope,
+                                    "memberShape" to symbolProvider.toSymbol(memberShape),
+                                )
                             }
                             memberShape.isTimestampShape -> {
                                 val index = HttpBindingIndex.of(model)
