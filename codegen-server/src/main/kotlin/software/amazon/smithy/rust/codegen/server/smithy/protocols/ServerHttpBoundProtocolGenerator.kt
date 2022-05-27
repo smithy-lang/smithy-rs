@@ -12,7 +12,9 @@ import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
+import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -1040,12 +1042,15 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             )
                         }
                     }
-                    else -> rustTemplate(
-                        """
-                        let value = std::str::FromStr::from_str(value)?;
-                        """,
-                        *codegenScope,
-                    )
+                    else -> {
+                        check(target is NumberShape || target is BooleanShape)
+                        rustTemplate(
+                            """
+                            let value = std::str::FromStr::from_str(value)?;
+                            """,
+                            *codegenScope,
+                        )
+                    }
                 }
 
                 writer.write(
