@@ -411,3 +411,18 @@ impl SdkConfig {
         Builder::default()
     }
 }
+
+impl From<SdkConfig> for Builder {
+    fn from(config: SdkConfig) -> Self {
+        Builder {
+            app_name: config.app_name,
+            credentials_provider: config.credentials_provider,
+            endpoint_resolver: config.endpoint_resolver,
+            http_connector: config.http_connector,
+            region: config.region,
+            retry_config: config.retry_config,
+            timeout_config: config.timeout_config,
+            sleep_impl: config.sleep_impl,
+        }
+    }
+}
