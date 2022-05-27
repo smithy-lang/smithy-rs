@@ -7,4 +7,4 @@ pub mod fix_manifests;
 pub mod generate_version_manifest;
 pub mod hydrate_readme;
 pub mod publish;
-pub mod yank_category;
+pub mod yank_release;
