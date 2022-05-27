@@ -270,8 +270,8 @@ class JsonParserGenerator(
         withBlock("$escapedStrName.to_unescaped().map(|u|", ")") {
             when (target.hasTrait<EnumTrait>()) {
                 true -> {
-                    if (convertsToEnumInServer(target)) {
-                        rust("#T::try_from(u.as_ref())", symbolProvider.toSymbol(target))
+                    if (parseUnconstrainedEnum(target)) {
+                        rust("u.into_owned()")
                     } else {
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
                     }
@@ -281,12 +281,10 @@ class JsonParserGenerator(
         }
     }
 
-    private fun convertsToEnumInServer(shape: StringShape) = mode == CodegenMode.Server && shape.hasTrait<EnumTrait>()
+    private fun parseUnconstrainedEnum(shape: StringShape) = mode == CodegenMode.Server && shape.hasTrait<EnumTrait>()
 
     private fun RustWriter.deserializeString(target: StringShape) {
-        // additional .transpose()? because Rust does not allow ? up from closures
-        val additionalTranspose = if (convertsToEnumInServer(target)) { ".transpose()?".repeat(2) } else { ".transpose()?" }
-        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ")$additionalTranspose", *codegenScope) {
+        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ").transpose()?", *codegenScope) {
             deserializeStringInner(target, "s")
         }
     }
@@ -392,7 +390,7 @@ class JsonParserGenerator(
                         withBlock("let value =", ";") {
                             deserializeMember(shape.value)
                         }
-                        if (convertsToEnumInServer(keyTarget)) {
+                        if (parseUnconstrainedEnum(keyTarget)) {
                             rust("let key = key?;")
                         }
                         if (isSparse) {

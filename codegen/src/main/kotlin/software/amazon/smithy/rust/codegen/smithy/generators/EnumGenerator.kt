@@ -75,7 +75,7 @@ open class EnumGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
-    private val shape: StringShape,
+    protected val shape: StringShape,
     private val enumTrait: EnumTrait,
 ) {
     protected val symbol = symbolProvider.toSymbol(shape)

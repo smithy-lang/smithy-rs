@@ -11,84 +11,73 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
+import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.CodegenMode
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.util.dq
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class ServerEnumGenerator(
     model: Model,
     symbolProvider: RustSymbolProvider,
+    constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     private val writer: RustWriter,
     shape: StringShape,
     enumTrait: EnumTrait,
-    private val runtimeConfig: RuntimeConfig,
 ) : EnumGenerator(model, symbolProvider, writer, shape, enumTrait) {
     override var mode: CodegenMode = CodegenMode.Server
-    private val errorStruct = "${enumName}UnknownVariantError"
+    private val unknownVariantSymbol = constraintViolationSymbolProvider.toSymbol(shape)
 
     override fun renderFromForStr() {
+        // TODO Docs for ConstraintViolation
+        // TODO Display for ConstraintViolation
         writer.rust(
             """
-            ##[derive(Debug, PartialEq, Eq, Hash)]
-            pub struct $errorStruct(String);
+            pub mod ${enumName.toSnakeCase()} {
+                ##[derive(Debug, PartialEq)]
+                pub struct ConstraintViolation(pub(crate) String);
+            }
             """
         )
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.TryFrom) {
-            write("type Error = $errorStruct;")
-            writer.rustBlock("fn try_from(s: &str) -> Result<Self, <$enumName as #T<&str>>::Error>", RuntimeType.TryFrom) {
-                writer.rustBlock("match s") {
+            rust("type Error = #T;", unknownVariantSymbol)
+            rustBlock("fn try_from(s: &str) -> Result<Self, Self::Error>") {
+                rustBlock("match s") {
                     sortedMembers.forEach { member ->
-                        write("${member.value.dq()} => Ok($enumName::${member.derivedName()}),")
+                        rust("${member.value.dq()} => Ok($enumName::${member.derivedName()}),")
                     }
-                    write("_ => Err($errorStruct(s.to_owned()))")
+                    rust("_ => Err(#T(s.to_owned()))", unknownVariantSymbol)
                 }
             }
         }
         writer.rustTemplate(
             """
-            impl #{From}<$errorStruct> for #{RequestRejection} {
-                fn from(e: $errorStruct) -> Self {
-                    Self::EnumVariantNotFound(Box::new(e))
-                }
-            }
-
-            impl #{From}<$errorStruct> for #{JsonDeserialize} {
-                fn from(e: $errorStruct) -> Self {
-                    Self::custom(format!("unknown variant {}", e))
-                }
-            }
-
-            impl #{StdError} for $errorStruct { }
-
-            impl #{Display} for $errorStruct {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    self.0.fmt(f)
+            impl #{TryFrom}<String> for $enumName {
+                type Error = #{UnknownVariantSymbol};
+                fn try_from(s: String) -> Result<Self, Self::Error> {
+                    s.try_into()
                 }
             }
             """,
-            "Display" to RuntimeType.Display,
-            "From" to RuntimeType.From,
-            "StdError" to RuntimeType.StdError,
-            "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
-            "JsonDeserialize" to RuntimeType.jsonDeserialize(runtimeConfig),
+            "TryFrom" to RuntimeType.TryFrom,
+            "UnknownVariantSymbol" to unknownVariantSymbol
         )
     }
 
     override fun renderFromStr() {
-        writer.rust(
+        writer.rustTemplate(
             """
             impl std::str::FromStr for $enumName {
-                type Err = $errorStruct;
+                type Err = #{UnknownVariantSymbol};
 
                 fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-                    $enumName::try_from(s)
+                    Self::try_from(s)
                 }
             }
-            """
+            """,
+            "UnknownVariantSymbol" to unknownVariantSymbol
         )
     }
 }

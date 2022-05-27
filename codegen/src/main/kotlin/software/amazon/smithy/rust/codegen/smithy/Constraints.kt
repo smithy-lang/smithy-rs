@@ -39,12 +39,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider) = when (this) {
         this.members().map { symbolProvider.toSymbol(it) }.any { !it.isOptional() }
     }
     is MapShape -> this.hasTrait<LengthTrait>()
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401) While `enum` traits are constraint traits, we're outright
-    //  rejecting unknown enum variants as deserialization errors instead of parsing them into an unconstrained type
-    //  that we then constrain after parsing the entire request. If the string shape has both the `enum` trait and
-    //  another constraint trait, we warn about this case in [ServerCodegenVisitor].
-    //  See also https://github.com/awslabs/smithy/issues/1121.
-    is StringShape -> !this.hasTrait<EnumTrait>() && this.hasTrait<LengthTrait>()
+    is StringShape -> this.hasTrait<EnumTrait>() || this.hasTrait<LengthTrait>()
     else -> false
 }
 

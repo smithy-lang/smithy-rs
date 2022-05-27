@@ -50,7 +50,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 //     - Unlike in `BuilderGenerator.kt`, we don't add helper methods to add items to vectors and hash maps.
 //     - This builder is not `PartialEq`.
 //     - Always implements either From<Builder> for Structure or TryFrom<Builder> for Structure.
-//     - `constrainedShapeSymbolProvider` only needed if we want the builder to take in unconstrained types.
+//     - `pubCrateConstrainedShapeSymbolProvider` only needed if we want the builder to take in unconstrained types.
 class ServerBuilderGenerator(
     private val codegenContext: CodegenContext,
     private val shape: StructureShape,
@@ -84,6 +84,7 @@ class ServerBuilderGenerator(
             }
 
             renderImplDisplayConstraintViolation(writer)
+            // TODO Use RuntimeType.StdError
             writer.rust("impl std::error::Error for ConstraintViolation { }")
 
             // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
@@ -124,6 +125,7 @@ class ServerBuilderGenerator(
     }
 
     // TODO This impl does not take into account sensitive trait.
+    // TODO Use RuntimeType.Display
     private fun renderImplDisplayConstraintViolation(writer: RustWriter) {
         writer.rustBlock("impl std::fmt::Display for ConstraintViolation") {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
@@ -142,6 +144,7 @@ class ServerBuilderGenerator(
     }
 
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
+        // TODO Use RuntimeType.From
         writer.rustTemplate(
             """
             impl From<ConstraintViolation> for #{RequestRejection} {
@@ -155,6 +158,7 @@ class ServerBuilderGenerator(
     }
 
     private fun renderImplFromBuilderForMaybeConstrained(writer: RustWriter) {
+        // TODO Use RuntimeType.From
         writer.rust(
             """
             impl From<Builder> for #{T} {
@@ -410,6 +414,7 @@ class ServerBuilderGenerator(
     }
 
     private fun renderFromBuilderImpl(writer: RustWriter) {
+        // TODO Use RuntimeType.From
         writer.rustTemplate(
             """
             impl From<Builder> for #{Structure} {
@@ -434,6 +439,7 @@ class ServerBuilderGenerator(
                 pubCrateConstrainedShapeSymbolProvider!!.toSymbol(member)
             }
             // Strip the `Option` in case the member is not `required`.
+            // TODO Grep for these and replace them with `extractSymbolFromOption`.
             .mapRustType { it.stripOuter<RustType.Option>() }
 
             val hadBox = strippedOption.isRustBoxed()
