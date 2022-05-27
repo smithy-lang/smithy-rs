@@ -979,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "publisher"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -992,6 +992,7 @@ dependencies = [
  "lazy_static",
  "num_cpus",
  "regex",
+ "reqwest",
  "semver",
  "serde",
  "serde_json",
