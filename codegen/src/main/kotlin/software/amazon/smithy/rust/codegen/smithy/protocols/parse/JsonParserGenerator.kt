@@ -34,9 +34,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -62,7 +62,7 @@ class JsonParserGenerator(
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
+    private val target = codegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
     private val codegenScope = arrayOf(
@@ -251,7 +251,7 @@ class JsonParserGenerator(
         }
     }
 
-    private fun convertsToEnumInServer(shape: StringShape) = mode == CodegenMode.Server && shape.hasTrait<EnumTrait>()
+    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
 
     private fun RustWriter.deserializeString(target: StringShape) {
         // additional .transpose()? because Rust does not allow ? up from closures
@@ -436,7 +436,7 @@ class JsonParserGenerator(
                                         }
                                     }
                                 }
-                                when (mode.renderUnknownVariant()) {
+                                when (target.renderUnknownVariant()) {
                                     // in client mode, resolve an unknown union variant to the unknown variant
                                     true -> rustTemplate(
                                         """

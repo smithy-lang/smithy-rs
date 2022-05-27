@@ -36,8 +36,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
@@ -93,7 +93,7 @@ class HttpBindingGenerator(
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
-    private val mode = codegenContext.mode
+    private val target = codegenContext.target
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
@@ -218,15 +218,15 @@ class HttpBindingGenerator(
         }
     }
 
-    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, target: UnionShape) {
+    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, targetShape: UnionShape) {
         val unmarshallerConstructorFn = EventStreamUnmarshallerGenerator(
             protocol,
             model,
             runtimeConfig,
             symbolProvider,
             operationShape,
-            target,
-            mode
+            targetShape,
+            target
         ).render()
         rustTemplate(
             """
@@ -280,7 +280,7 @@ class HttpBindingGenerator(
                         }
                     }
                     if (targetShape.hasTrait<EnumTrait>()) {
-                        if (mode == CodegenMode.Server) {
+                        if (target == CodegenTarget.SERVER) {
                             rust(
                                 "Ok(#T::try_from(body_str)?)",
                                 symbolProvider.toSymbol(targetShape)

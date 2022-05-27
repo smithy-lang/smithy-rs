@@ -39,7 +39,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -60,7 +59,7 @@ class Instantiator(
     private val symbolProvider: RustSymbolProvider,
     private val model: Model,
     private val runtimeConfig: RuntimeConfig,
-    private val mode: CodegenMode,
+    private val target: CodegenTarget,
 ) {
     data class Ctx(
         // The Rust HTTP library lower cases headers but Smithy protocol tests
@@ -254,7 +253,7 @@ class Instantiator(
             writer.rust("$data.to_string()")
         } else {
             val enumSymbol = symbolProvider.toSymbol(shape)
-            if (mode == CodegenMode.Server) {
+            if (target == CodegenTarget.SERVER) {
                 writer.rust("""#T::try_from($data).expect("This is used in tests ONLY")""", enumSymbol)
             } else {
                 writer.rust("#T::from($data)", enumSymbol)

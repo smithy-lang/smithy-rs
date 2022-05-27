@@ -112,7 +112,7 @@ class XmlBindingTraitParserGenerator(
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)
     private val xmlIndex = XmlNameIndex.of(model)
-    private val mode = codegenContext.mode
+    private val target = codegenContext.target
     private val xmlDeserModule = RustModule.private("xml_deser")
 
     /**
@@ -430,7 +430,7 @@ class XmlBindingTraitParserGenerator(
                             rust("base = Some(#T::$variantName(tmp));", symbol)
                         }
                     }
-                    when (mode.renderUnknownVariant()) {
+                    when (target.renderUnknownVariant()) {
                         true -> rust("_unknown => base = Some(#T::${UnionGenerator.UnknownVariantName}),", symbol)
                         false -> rustTemplate("""variant => return Err(#{XmlError}::custom(format!("unexpected union variant: {:?}", variant)))""", *codegenScope)
                     }
