@@ -995,6 +995,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
                 when {
                     target.isStringShape -> {
+                        // NOTE: This path is traversed with or without @enum applied. The `try_from` is used as a
+                        // common conversion.
                         if (percentDecoding) {
                             rustTemplate(
                                 """
