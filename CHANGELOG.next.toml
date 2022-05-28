@@ -52,3 +52,9 @@ message = "Add support for `credential_process` in AWS configs for fetching cred
 references = ["smithy-rs#1356"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jszwedko"
+
+[[aws-sdk-rust]]
+message = "Add `Debug` implementation to several types in `aws-config`"
+references = ["smithy-rs#1421"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
