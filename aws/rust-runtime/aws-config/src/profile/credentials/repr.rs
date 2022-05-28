@@ -223,7 +223,7 @@ mod credential_process {
 }
 const PROVIDER_NAME: &str = "ProfileFile";
 
-fn base_provider(profile: &Profile) -> Result<BaseProvider, ProfileFileError> {
+fn base_provider(profile: &Profile) -> Result<BaseProvider<'_>, ProfileFileError> {
     // the profile must define either a `CredentialsSource` or a concrete set of access keys
     match profile.get(role::CREDENTIAL_SOURCE) {
         Some(source) => Ok(BaseProvider::NamedSource(source)),
@@ -239,7 +239,7 @@ enum NextProfile<'a> {
     Named(&'a str),
 }
 
-fn chain_provider(profile: &Profile) -> Result<NextProfile, ProfileFileError> {
+fn chain_provider(profile: &Profile) -> Result<NextProfile<'_>, ProfileFileError> {
     let (source_profile, credential_source) = (
         profile.get(role::SOURCE_PROFILE),
         profile.get(role::CREDENTIAL_SOURCE),
@@ -266,7 +266,7 @@ fn chain_provider(profile: &Profile) -> Result<NextProfile, ProfileFileError> {
     }
 }
 
-fn role_arn_from_profile(profile: &Profile) -> Option<RoleArn> {
+fn role_arn_from_profile(profile: &Profile) -> Option<RoleArn<'_>> {
     // Web Identity Tokens are root providers, not chained roles
     if profile.get(web_identity_token::TOKEN_FILE).is_some() {
         return None;
@@ -281,7 +281,7 @@ fn role_arn_from_profile(profile: &Profile) -> Option<RoleArn> {
     })
 }
 
-fn sso_from_profile(profile: &Profile) -> Option<Result<BaseProvider, ProfileFileError>> {
+fn sso_from_profile(profile: &Profile) -> Option<Result<BaseProvider<'_>, ProfileFileError>> {
     /*
     Sample:
     [profile sample-profile]
@@ -318,7 +318,7 @@ fn sso_from_profile(profile: &Profile) -> Option<Result<BaseProvider, ProfileFil
 
 fn web_identity_token_from_profile(
     profile: &Profile,
-) -> Option<Result<BaseProvider, ProfileFileError>> {
+) -> Option<Result<BaseProvider<'_>, ProfileFileError>> {
     let session_name = profile.get(role::SESSION_NAME);
     match (
         profile.get(role::ROLE_ARN),
@@ -385,7 +385,7 @@ fn static_creds_from_profile(profile: &Profile) -> Result<Credentials, ProfileFi
 /// ```
 fn credential_process_from_profile(
     profile: &Profile,
-) -> Option<Result<BaseProvider, ProfileFileError>> {
+) -> Option<Result<BaseProvider<'_>, ProfileFileError>> {
     profile
         .get(credential_process::CREDENTIAL_PROCESS)
         .map(|credential_process| {
@@ -451,7 +451,7 @@ mod tests {
         selected_profile: String,
     }
 
-    fn to_test_output(profile_chain: ProfileChain) -> Vec<Provider> {
+    fn to_test_output(profile_chain: ProfileChain<'_>) -> Vec<Provider> {
         let mut output = vec![];
         match profile_chain.base {
             BaseProvider::NamedSource(name) => output.push(Provider::NamedSource(name.into())),

@@ -104,7 +104,7 @@ enum State<'a> {
 }
 
 /// Parse `file` into a `RawProfileSet`
-pub(super) fn parse_profile_file(file: &File) -> Result<RawProfileSet, ProfileParseError> {
+pub(super) fn parse_profile_file(file: &File) -> Result<RawProfileSet<'_>, ProfileParseError> {
     let mut parser = Parser {
         data: HashMap::new(),
         state: State::Starting,

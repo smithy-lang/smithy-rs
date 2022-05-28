@@ -65,7 +65,7 @@ impl ImdsRegionProvider {
 }
 
 impl ProvideRegion for ImdsRegionProvider {
-    fn region(&self) -> future::ProvideRegion {
+    fn region(&self) -> future::ProvideRegion<'_> {
         future::ProvideRegion::new(
             self.region()
                 .instrument(tracing::debug_span!("imds_load_region")),

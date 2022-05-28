@@ -76,13 +76,13 @@ impl RegionProviderChain {
 }
 
 impl ProvideRegion for Option<Region> {
-    fn region(&self) -> future::ProvideRegion {
+    fn region(&self) -> future::ProvideRegion<'_> {
         future::ProvideRegion::ready(self.clone())
     }
 }
 
 impl ProvideRegion for RegionProviderChain {
-    fn region(&self) -> future::ProvideRegion {
+    fn region(&self) -> future::ProvideRegion<'_> {
         future::ProvideRegion::new(RegionProviderChain::region(self))
     }
 }
@@ -133,29 +133,29 @@ pub mod future {
 /// a standard provider chain.
 pub trait ProvideRegion: Send + Sync + Debug {
     /// Load a region from this provider
-    fn region(&self) -> future::ProvideRegion;
+    fn region(&self) -> future::ProvideRegion<'_>;
 }
 
 impl ProvideRegion for Region {
-    fn region(&self) -> future::ProvideRegion {
+    fn region(&self) -> future::ProvideRegion<'_> {
         future::ProvideRegion::ready(Some(self.clone()))
     }
 }
 
 impl<'a> ProvideRegion for &'a Region {
-    fn region(&self) -> future::ProvideRegion {
+    fn region(&self) -> future::ProvideRegion<'_> {
         future::ProvideRegion::ready(Some((*self).clone()))
     }
 }
 
 impl ProvideRegion for Box<dyn ProvideRegion> {
-    fn region(&self) -> future::ProvideRegion {
+    fn region(&self) -> future::ProvideRegion<'_> {
         self.as_ref().region()
     }
 }
 
 impl ProvideRegion for &'static str {
-    fn region(&self) -> future::ProvideRegion {
+    fn region(&self) -> future::ProvideRegion<'_> {
         future::ProvideRegion::ready(Some(Region::new(Cow::Borrowed(*self))))
     }
 }

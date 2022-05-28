@@ -249,7 +249,7 @@ impl Inner {
 }
 
 impl ProvideCredentials for Inner {
-    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'_>
     where
         Self: 'a,
     {

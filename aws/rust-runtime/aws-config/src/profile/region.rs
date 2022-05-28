@@ -149,7 +149,7 @@ fn resolve_profile_chain_for_region(
 }
 
 impl ProvideRegion for ProfileFileRegionProvider {
-    fn region(&self) -> future::ProvideRegion {
+    fn region(&self) -> future::ProvideRegion<'_> {
         future::ProvideRegion::new(self.region())
     }
 }

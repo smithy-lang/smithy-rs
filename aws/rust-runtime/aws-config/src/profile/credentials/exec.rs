@@ -89,7 +89,7 @@ impl ProviderChain {
 impl ProviderChain {
     pub(super) fn from_repr(
         provider_config: &ProviderConfig,
-        repr: repr::ProfileChain,
+        repr: repr::ProfileChain<'_>,
         factory: &named::NamedProviderFactory,
     ) -> Result<Self, ProfileFileError> {
         let base = match repr.base() {
@@ -165,11 +165,11 @@ pub(super) mod named {
         providers: HashMap<Cow<'static, str>, Arc<dyn ProvideCredentials>>,
     }
 
-    fn lower_cow(mut inp: Cow<str>) -> Cow<str> {
-        if !inp.chars().all(|c| c.is_ascii_lowercase()) {
-            inp.to_mut().make_ascii_lowercase();
+    fn lower_cow(mut input: Cow<'_, str>) -> Cow<'_, str> {
+        if !input.chars().all(|c| c.is_ascii_lowercase()) {
+            input.to_mut().make_ascii_lowercase();
         }
-        inp
+        input
     }
 
     impl NamedProviderFactory {

@@ -73,7 +73,7 @@ impl Builder {
 }
 
 impl ProvideRegion for DefaultRegionChain {
-    fn region(&self) -> crate::meta::region::future::ProvideRegion {
+    fn region(&self) -> crate::meta::region::future::ProvideRegion<'_> {
         ProvideRegion::region(&self.0)
     }
 }
