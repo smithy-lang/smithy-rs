@@ -16,10 +16,10 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
  */
 object ServerCargoDependency {
     val AsyncTrait: CargoDependency = CargoDependency("async-trait", CratesIo("0.1"))
+    val FormUrlEncoded: CargoDependency = CargoDependency("form_urlencoded", CratesIo("1"))
     val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3"))
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
-    val SerdeUrlEncoded: CargoDependency = CargoDependency("serde_urlencoded", CratesIo("0.7"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
 
     fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
