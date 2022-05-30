@@ -50,7 +50,7 @@ val allCodegenTests = listOf(
 
 registerGenerateSmithyBuildTask(rootProject, project, pluginName, allCodegenTests)
 registerGenerateCargoWorkspaceTask(rootProject, project, pluginName, allCodegenTests, workingDirUnderBuildDir)
-registerGenerateCargoConfigTomlTask(project, buildDir.resolve("$workingDirUnderBuildDir/.cargo"))
+registerGenerateCargoConfigTomlTask(project, buildDir.resolve(workingDirUnderBuildDir))
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
