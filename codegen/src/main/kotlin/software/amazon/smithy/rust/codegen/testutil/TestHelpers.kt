@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin
@@ -75,7 +74,7 @@ fun testCodegenContext(
     model: Model,
     serviceShape: ServiceShape? = null,
     settings: RustSettings = testRustSettings(),
-    mode: CodegenMode = CodegenMode.Client
+    mode: CodegenTarget = CodegenTarget.CLIENT
 ): CodegenContext = CodegenContext(
     model,
     testSymbolProvider(model),

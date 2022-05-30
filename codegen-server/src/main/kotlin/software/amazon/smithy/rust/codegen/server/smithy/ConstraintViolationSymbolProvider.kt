@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.smithy.Models
@@ -104,6 +105,10 @@ class ConstraintViolationSymbolProvider(
                     .definitionFile(Unconstrained.filename)
                     .build()
             }
+            is UnionShape -> {
+                // TODO
+                base.toSymbol(shape)
+            }
             is StringShape -> {
                 val namespace = "crate::${Models.namespace}::${
                     RustReservedWords.escapeIfNeeded(
@@ -118,7 +123,7 @@ class ConstraintViolationSymbolProvider(
                     .definitionFile(Models.filename)
                     .build()
             }
-            else -> TODO("Constraint traits on other shapes not implemented yet")
+            else -> TODO("Constraint traits on other shapes not implemented yet: $shape")
         }
     }
 }

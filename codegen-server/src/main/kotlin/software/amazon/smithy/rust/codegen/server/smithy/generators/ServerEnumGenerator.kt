@@ -12,9 +12,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -27,8 +27,9 @@ class ServerEnumGenerator(
     shape: StringShape,
     enumTrait: EnumTrait,
 ) : EnumGenerator(model, symbolProvider, writer, shape, enumTrait) {
-    override var mode: CodegenMode = CodegenMode.Server
+    override var target: CodegenTarget = CodegenTarget.SERVER
     private val unknownVariantSymbol = constraintViolationSymbolProvider.toSymbol(shape)
+    private val errorStruct = "${enumName}UnknownVariantError"
 
     override fun renderFromForStr() {
         // TODO Docs for ConstraintViolation

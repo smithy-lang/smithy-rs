@@ -34,7 +34,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.Unconstraine
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.Constrained
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
@@ -137,7 +136,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             service,
             protocol,
             settings,
-            mode = CodegenMode.Server,
+            target = CodegenTarget.SERVER,
             unconstrainedShapeSymbolProvider
         )
 

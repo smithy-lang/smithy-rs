@@ -34,11 +34,11 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
@@ -69,7 +69,7 @@ class JsonParserGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, codegenContext.serviceShape)
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
+    private val codegenTarget = codegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
     private val codegenScope = arrayOf(
@@ -213,13 +213,14 @@ class JsonParserGenerator(
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
                     rustBlock("${jsonName(member).dq()} =>") {
-                        if (mode == CodegenMode.Client) {
-                            withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(", ");") {
+                        // TODO Use when
+                        if (codegenTarget == CodegenTarget.CLIENT) {
+                            withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)}(", ");") {
                                 deserializeMember(member)
                             }
                         } else {
                             if (symbolProvider.toSymbol(member).isOptional()) {
-                                withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(", ");") {
+                                withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)}(", ");") {
                                     deserializeMember(member)
                                 }
                             } else {
@@ -228,7 +229,7 @@ class JsonParserGenerator(
                                 rust(
                                     """
                                     {
-                                        builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, mode)}(v);
+                                        builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)}(v);
                                     }
                                     """
                                 )
@@ -241,10 +242,10 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeMember(memberShape: MemberShape) {
+    private fun RustWriter.deserializeMember(memberShape: MemberShape, unionMemberREMOVE_ME: Boolean = false) {
         val target = model.expectShape(memberShape.target)
         when (target) {
-            is StringShape -> deserializeString(target)
+            is StringShape -> deserializeString(target, unionMemberREMOVE_ME)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
             is NumberShape -> deserializeNumber(target)
             is BlobShape -> rustTemplate("#{expect_blob_or_null}(tokens.next())?", *codegenScope)
@@ -258,7 +259,7 @@ class JsonParserGenerator(
         }
         val symbol = symbolProvider.toSymbol(memberShape)
         if (symbol.isRustBoxed()) {
-            if (mode == CodegenMode.Server && memberShape.targetCanReachConstrainedShape(model, symbolProvider)) {
+            if (codegenTarget == CodegenTarget.SERVER && memberShape.targetCanReachConstrainedShape(model, symbolProvider)) {
                 // Before boxing, convert into `MaybeConstrained` if the target can reach a constrained shape.
                 rust(".map(|x| x.into())")
             }
@@ -266,11 +267,23 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeStringInner(target: StringShape, escapedStrName: String) {
+    private fun RustWriter.deserializeStringInner(target: StringShape, escapedStrName: String, unionMemberREMOVE_ME: Boolean = false) {
         withBlock("$escapedStrName.to_unescaped().map(|u|", ")") {
             when (target.hasTrait<EnumTrait>()) {
                 true -> {
-                    if (parseUnconstrainedEnum(target)) {
+                    if (codegenTarget == CodegenTarget.SERVER && unionMemberREMOVE_ME) {
+                        // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Union shapes with constrained variants
+                        //  are not yet implemented.
+                        rust(
+                            """
+                            {
+                                use std::str::FromStr;
+                                #T::from_str(u.as_ref()).expect("Remove me")
+                            }
+                            """,
+                            symbolProvider.toSymbol(target)
+                        )
+                    } else if (parseUnconstrainedEnum(target)) {
                         rust("u.into_owned()")
                     } else {
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
@@ -281,11 +294,11 @@ class JsonParserGenerator(
         }
     }
 
-    private fun parseUnconstrainedEnum(shape: StringShape) = mode == CodegenMode.Server && shape.hasTrait<EnumTrait>()
+    private fun parseUnconstrainedEnum(shape: StringShape) = codegenTarget == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
 
-    private fun RustWriter.deserializeString(target: StringShape) {
+    private fun RustWriter.deserializeString(target: StringShape, unionMemberREMOVE_ME: Boolean = false) {
         withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ").transpose()?", *codegenScope) {
-            deserializeStringInner(target, "s")
+            deserializeStringInner(target, "s", unionMemberREMOVE_ME)
         }
     }
 
@@ -307,7 +320,7 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val returnUnconstrainedType = mode == CodegenMode.Server && shape.canReachConstrainedShape(model, symbolProvider)
+        val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)
         val returnType = if (returnUnconstrainedType) {
             unconstrainedShapeSymbolProvider.toSymbol(shape)
         } else {
@@ -363,7 +376,7 @@ class JsonParserGenerator(
         val keyTarget = model.expectShape(shape.key.target) as StringShape
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val returnUnconstrainedType = mode == CodegenMode.Server && shape.canReachConstrainedShape(model, symbolProvider)
+        val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)
         val returnType = if (returnUnconstrainedType) {
             unconstrainedShapeSymbolProvider.toSymbol(shape)
         } else {
@@ -390,9 +403,6 @@ class JsonParserGenerator(
                         withBlock("let value =", ";") {
                             deserializeMember(shape.value)
                         }
-                        if (parseUnconstrainedEnum(keyTarget)) {
-                            rust("let key = key?;")
-                        }
                         if (isSparse) {
                             rust("map.insert(key, value);")
                         } else {
@@ -415,7 +425,7 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
-        val returnBuilder = mode == CodegenMode.Server && shape.canReachConstrainedShape(model, symbolProvider)
+        val returnBuilder = codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)
         val returnType = if (returnBuilder) {
             unconstrainedShapeSymbolProvider.toSymbol(shape)
         } else {
@@ -493,13 +503,13 @@ class JsonParserGenerator(
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {
                                         withBlock("Some(#T::$variantName(", "))", symbol) {
-                                            deserializeMember(member)
+                                            deserializeMember(member, unionMemberREMOVE_ME = true)
                                             unwrapOrDefaultOrError(member)
                                         }
                                     }
                                 }
-                                when (mode.renderUnknownVariant()) {
-                                    // in client mode, resolve an unknown union variant to the unknown variant
+                                when (codegenTarget.renderUnknownVariant()) {
+                                    // In client mode, resolve an unknown union variant to the unknown variant.
                                     true -> rustTemplate(
                                         """
                                         _ => {
@@ -509,7 +519,8 @@ class JsonParserGenerator(
                                         """,
                                         "Union" to symbol, *codegenScope
                                     )
-                                    // in server mode, use strict parsing
+                                    // In server mode, use strict parsing.
+                                    // Consultation: https://github.com/awslabs/smithy/issues/1222
                                     false -> rustTemplate(
                                         """variant => return Err(#{Error}::custom(format!("unexpected union variant: {}", variant)))""",
                                         *codegenScope

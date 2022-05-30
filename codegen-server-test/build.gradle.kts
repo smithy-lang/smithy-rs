@@ -34,16 +34,16 @@ dependencies {
 }
 
 val allCodegenTests = listOf(
-    CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("com.amazonaws.simple#ConstraintsService", "constraints"),
-    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
-    CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation"),
-    CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
-    CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
-    CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
-    CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
-    CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
-    CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
+//    CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
+//    CodegenTest("com.amazonaws.simple#ConstraintsService", "constraints"),
+//    CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
+    CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation")
+//    CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
+//    CodegenTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
+//    CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
+//    CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+//    CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
+//    CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
 )
 
 tasks.register("generateSmithyBuild") {

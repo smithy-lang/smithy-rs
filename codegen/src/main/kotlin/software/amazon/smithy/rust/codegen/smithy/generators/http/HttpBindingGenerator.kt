@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.rustlang.render
@@ -35,10 +36,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.redactIfNecessary
 import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
@@ -96,7 +97,7 @@ class HttpBindingGenerator(
     private val operationShape: OperationShape
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
+    private val codegenTarget = codegenContext.target
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
@@ -136,10 +137,10 @@ class HttpBindingGenerator(
 
     fun generateDeserializePrefixHeaderFn(binding: HttpBindingDescriptor): RuntimeType {
         check(binding.location == HttpBinding.Location.PREFIX_HEADERS)
-        val returnUnconstrainedType = mode == CodegenMode.Server && binding.member.targetCanReachConstrainedShape(model, symbolProvider)
-        val outputT = symbolProvider.toSymbol(binding.member)
+        val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER && binding.member.targetCanReachConstrainedShape(model, symbolProvider)
+        val outputSymbol = symbolProvider.toSymbol(binding.member)
         if (!returnUnconstrainedType) {
-            check(outputT.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputT.rustType() }
+            check(outputSymbol.rustType().stripOuter<RustType.Option>() is RustType.HashMap) { outputSymbol.rustType() }
         }
         val target = model.expectShape(binding.member.target)
         check(target is MapShape)
@@ -154,11 +155,12 @@ class HttpBindingGenerator(
                 deserializeFromHeader(model.expectShape(target.value.target), binding.member)
             }
         }
+        val returnTypeSymbol = outputSymbol.mapRustType { it.asOptional() }
         return RuntimeType.forInlineFun(fnName, httpSerdeModule) { writer ->
             writer.rustBlock(
                 "pub(crate) fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
-                outputT,
+                returnTypeSymbol,
                 headerUtil
             ) {
                 rust(
@@ -177,7 +179,7 @@ class HttpBindingGenerator(
                 if (returnUnconstrainedType) {
                     // If the map shape has constrained string keys or values, we need to wrap the deserialized hash map
                     // in the corresponding unconstrained wrapper tuple struct.
-                    rust("let out = out.map(#T);", outputT.mapRustType { it.stripOuter<RustType.Option>() })
+                    rust("let out = out.map(#T);", outputSymbol.mapRustType { it.stripOuter<RustType.Option>() })
                 }
                 rust("out.map(Some)")
             }
@@ -229,15 +231,15 @@ class HttpBindingGenerator(
         }
     }
 
-    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, target: UnionShape) {
+    private fun RustWriter.bindEventStreamOutput(operationShape: OperationShape, targetShape: UnionShape) {
         val unmarshallerConstructorFn = EventStreamUnmarshallerGenerator(
             protocol,
             model,
             runtimeConfig,
             symbolProvider,
             operationShape,
-            target,
-            mode
+            targetShape,
+            codegenTarget
         ).render()
         rustTemplate(
             """
@@ -291,7 +293,7 @@ class HttpBindingGenerator(
                         }
                     }
                     if (targetShape.hasTrait<EnumTrait>()) {
-                        if (mode == CodegenMode.Server) {
+                        if (codegenTarget == CodegenTarget.SERVER) {
                             rust(
                                 "Ok(#T::try_from(body_str)?)",
                                 symbolProvider.toSymbol(targetShape)
@@ -404,7 +406,7 @@ class HttpBindingGenerator(
                     """
                 )
             else -> {
-                val returnUnconstrainedType = mode == CodegenMode.Server &&
+                val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER &&
                         targetShape is CollectionShape &&
                         targetShape.canReachConstrainedShape(model, symbolProvider)
                 if (returnUnconstrainedType) {
@@ -551,7 +553,7 @@ class HttpBindingGenerator(
         ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
             val listHeader = memberType is CollectionShape
             val workingWithPublicConstrainedWrapperTupleType =
-                mode == CodegenMode.Server && memberShape.hasPublicConstrainedWrapperTupleType(model)
+                codegenTarget == CodegenTarget.SERVER && memberShape.hasPublicConstrainedWrapperTupleType(model)
             rustTemplate(
                 """
                 for (k, v) in ${ if (workingWithPublicConstrainedWrapperTupleType) "&$field.0" else field } {
@@ -606,7 +608,7 @@ class HttpBindingGenerator(
                     //  to check for constraint trait precedence. So `member.hasPublicConstrainedWrapperTupleType()` is
                     //  _not_ what we want.
                     val workingWithPublicConstrainedWrapperTupleType =
-                        mode == CodegenMode.Server && target.hasPublicConstrainedWrapperTupleType(model)
+                        codegenTarget == CodegenTarget.SERVER && target.hasPublicConstrainedWrapperTupleType(model)
                     quoteValue("AsRef::<str>::as_ref(${ if (workingWithPublicConstrainedWrapperTupleType) "&$targetName.0" else targetName })")
                 }
             }

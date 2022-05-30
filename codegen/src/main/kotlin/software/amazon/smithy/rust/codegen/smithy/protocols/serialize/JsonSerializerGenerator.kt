@@ -32,11 +32,11 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
@@ -149,7 +149,7 @@ class JsonSerializerGenerator(
 
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
-    private val mode = codegenContext.mode
+    private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
@@ -351,7 +351,7 @@ class JsonSerializerGenerator(
         val writer = context.writerExpression
 
         val workingWithPublicConstrainedWrapperTupleType =
-            mode == CodegenMode.Server && context.shape.hasPublicConstrainedWrapperTupleType(model)
+            codegenTarget == CodegenTarget.SERVER && context.shape.hasPublicConstrainedWrapperTupleType(model)
         val value = if (workingWithPublicConstrainedWrapperTupleType) {
             ValueExpression.Value("${context.valueExpression.name}.0")
         } else {
@@ -429,7 +429,7 @@ class JsonSerializerGenerator(
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyTarget = model.expectShape(context.shape.key.target)
             val workingWithPublicConstrainedWrapperTupleType =
-                mode == CodegenMode.Server && keyTarget.hasPublicConstrainedWrapperTupleType(model)
+                codegenTarget == CodegenTarget.SERVER && keyTarget.hasPublicConstrainedWrapperTupleType(model)
             val keyExpression = if (workingWithPublicConstrainedWrapperTupleType) {
                 "$keyName.0.as_str()"
             } else if (keyTarget.hasTrait<EnumTrait>()) {
@@ -457,7 +457,7 @@ class JsonSerializerGenerator(
                             serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
                         }
                     }
-                    if (mode.renderUnknownVariant()) {
+                    if (codegenTarget.renderUnknownVariant()) {
                         rustTemplate(
                             "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                             "Union" to unionSymbol,

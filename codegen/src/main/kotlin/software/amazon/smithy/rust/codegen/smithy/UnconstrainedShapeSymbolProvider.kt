@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
@@ -129,6 +130,13 @@ class UnconstrainedShapeSymbolProvider(
                 }
                 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
                 //   implemented yet.
+            }
+            is StringShape -> {
+                if (shape.canReachConstrainedShape(model, base)) {
+                    symbolBuilder(shape, SimpleShapes.getValue(shape::class)).setDefault(Default.RustDefault).build()
+                } else {
+                    base.toSymbol(shape)
+                }
             }
             else -> base.toSymbol(shape)
         }

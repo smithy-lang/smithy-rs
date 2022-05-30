@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -83,7 +82,7 @@ open class EnumGenerator(
     protected val meta = symbol.expectRustMetadata()
     protected val sortedMembers: List<EnumMemberModel> =
         enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }
-    protected open var mode: CodegenMode = CodegenMode.Client
+    protected open var target: CodegenTarget = CodegenTarget.CLIENT
 
     companion object {
         /** Name of the generated unknown enum member name for enums with named members. */
@@ -155,7 +154,7 @@ open class EnumGenerator(
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
-            if (mode == CodegenMode.Client) {
+            if (target == CodegenTarget.CLIENT) {
                 docs("$UnknownVariant contains new variants that have been added since this code was generated.")
                 write("$UnknownVariant(String)")
             }
@@ -170,7 +169,7 @@ open class EnumGenerator(
                     sortedMembers.forEach { member ->
                         write("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
                     }
-                    if (mode == CodegenMode.Client) {
+                    if (target == CodegenTarget.CLIENT) {
                         write("$enumName::$UnknownVariant(s) => s.as_ref()")
                     }
                 }

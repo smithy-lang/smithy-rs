@@ -39,7 +39,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -60,7 +59,7 @@ class Instantiator(
     private val symbolProvider: RustSymbolProvider,
     private val model: Model,
     private val runtimeConfig: RuntimeConfig,
-    private val mode: CodegenMode,
+    private val codegenTarget: CodegenTarget,
 ) {
     data class Ctx(
         // The Rust HTTP library lower cases headers but Smithy protocol tests
@@ -163,9 +162,9 @@ class Instantiator(
                 //  the client is superfluous except in the case where the shape is a `@streaming` blob, because
                 //  [StreamingTraitSymbolProvider] always generates a non `Option`al target type: in all other cases the
                 //  client generates `Option`al types.
-                conditional = when (mode) {
-                    CodegenMode.Client -> ctx.builder || symbol.isOptional()
-                    CodegenMode.Server -> symbol.isOptional()
+                conditional = when (codegenTarget) {
+                    CodegenTarget.CLIENT -> ctx.builder || symbol.isOptional()
+                    CodegenTarget.SERVER -> symbol.isOptional()
                 }
             ) {
                 writer.conditionalBlock(
@@ -261,7 +260,7 @@ class Instantiator(
             writer.rust("$data.to_string()")
         } else {
             val enumSymbol = symbolProvider.toSymbol(shape)
-            if (mode == CodegenMode.Server) {
+            if (codegenTarget == CodegenTarget.SERVER) {
                 writer.rust("""#T::try_from($data).expect("This is used in tests ONLY")""", enumSymbol)
             } else {
                 writer.rust("#T::from($data)", enumSymbol)
@@ -278,18 +277,18 @@ class Instantiator(
         writer.write("#T::builder()", symbolProvider.toSymbol(shape))
         data.members.forEach { (key, value) ->
             val memberShape = shape.expectMember(key.value)
-            val setterName = when (mode) {
-                CodegenMode.Client -> memberShape.setterName()
-                CodegenMode.Server -> symbolProvider.toMemberName(memberShape)
+            val setterName = when (codegenTarget) {
+                CodegenTarget.CLIENT -> memberShape.setterName()
+                CodegenTarget.SERVER -> symbolProvider.toMemberName(memberShape)
             }
             writer.withBlock(".$setterName(", ")") {
                 renderMember(this, memberShape, value, ctx)
             }
         }
         writer.write(".build()")
-        val hasFallibleBuilder = when (mode) {
-            CodegenMode.Client -> StructureGenerator.hasFallibleBuilder(shape, symbolProvider)
-            CodegenMode.Server -> StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes = false)
+        val hasFallibleBuilder = when (codegenTarget) {
+            CodegenTarget.CLIENT -> StructureGenerator.hasFallibleBuilder(shape, symbolProvider)
+            CodegenTarget.SERVER -> StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes = false)
         }
         if (hasFallibleBuilder) {
             writer.write(".unwrap()")

@@ -8,6 +8,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
@@ -73,6 +74,11 @@ fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider)
         //  yet. Also, note that a walker over a member shape can, perhaps counterintuitively, reach the _containing_ shape,
         //  so we can't simply delegate to the `else` branch when we implement them.
         this.targetCanReachConstrainedShape(model, symbolProvider)
+    } else if (this is UnionShape) {
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Union shapes with constrained variants are not yet
+        //  implemented, so we have to be careful and calculate whether there's at least one directly constrained shape
+        //  that is _not_ reachable via a union.
+        false
     } else {
         Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
     }

@@ -37,8 +37,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
@@ -65,7 +65,7 @@ class XmlBindingTraitSerializerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
     private val smithyXml = CargoDependency.smithyXml(runtimeConfig).asType()
-    private val mode = codegenContext.mode
+    private val codegenTarget = codegenContext.target
     private val codegenScope =
         arrayOf(
             "XmlWriter" to smithyXml.member("encode::XmlWriter"),
@@ -290,7 +290,7 @@ class XmlBindingTraitSerializerGenerator(
         when (model.expectShape(member.target)) {
             is StringShape -> {
                 val workingWithPublicConstrainedWrapperTupleType =
-                    mode == CodegenMode.Server && member.hasPublicConstrainedWrapperTupleType(model)
+                    codegenTarget == CodegenTarget.SERVER && member.hasPublicConstrainedWrapperTupleType(model)
                 if (workingWithPublicConstrainedWrapperTupleType) {
                     rust("$input.0.as_str()")
                 } else {
@@ -403,7 +403,7 @@ class XmlBindingTraitSerializerGenerator(
                         }
                     }
 
-                    if (mode.renderUnknownVariant()) {
+                    if (codegenTarget.renderUnknownVariant()) {
                         rustTemplate(
                             "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                             "Union" to unionSymbol,

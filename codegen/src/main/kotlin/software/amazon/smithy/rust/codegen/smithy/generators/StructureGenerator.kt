@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
@@ -58,8 +57,8 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
  * The name of the builder's setter the deserializer should use.
  * Setter names will never hit a reserved word and therefore never need escaping.
  */
-fun MemberShape.deserializerBuilderSetterName(model: Model, symbolProvider: SymbolProvider, mode: CodegenMode): String {
-    if (mode == CodegenMode.Client) {
+fun MemberShape.deserializerBuilderSetterName(model: Model, symbolProvider: SymbolProvider, codegenTarget: CodegenTarget): String {
+    if (codegenTarget == CodegenTarget.CLIENT) {
         return this.setterName()
     }
 
