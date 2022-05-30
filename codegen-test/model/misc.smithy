@@ -140,6 +140,9 @@ structure ResponseCodeDefaultOutput {}
         id: "ResponseCodeHttpFallback",
         protocol: "aws.protocols#restJson1",
         code: 418,
+        headers: {
+            "Content-Length": "2"
+        }
     }
 ])
 @http(method: "GET", uri: "/responseCodeHttpFallback", code: 418)
@@ -161,7 +164,10 @@ structure ResponseCodeHttpFallbackOutput {}
         id: "ResponseCodeRequired",
         protocol: "aws.protocols#restJson1",
         code: 201,
-        params: {"responseCode": 201}
+        params: {"responseCode": 201},
+        headers: {
+            "Content-Length": "2"
+        }
     }
 ])
 @http(method: "GET", uri: "/responseCodeRequired", code: 200)

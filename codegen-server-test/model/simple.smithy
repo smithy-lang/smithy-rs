@@ -66,6 +66,9 @@ resource Service {
         params: { id: "1", name: "TestService" },
         body: "{\"id\":\"1\",\"name\":\"TestService\"}",
         code: 200,
+        headers: {
+            "Content-Length": "31"
+        }
     }
 ])
 operation RegisterService {
