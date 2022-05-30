@@ -17,12 +17,9 @@ service ConstraintsService {
         // combination.
         QueryParamsTargetingLengthMapOperation,
         QueryParamsTargetingMapOfLengthStringOperation,
-        //QueryParamsTargetingMapOfEnumStringOperation,
         QueryParamsTargetingMapOfListOfLengthStringOperation,
         QueryParamsTargetingMapOfSetOfLengthStringOperation,
-        //QueryParamsTargetingMapOfListOfEnumStringOperation,
         HttpPrefixHeadersTargetingLengthMapOperation,
-        HttpPrefixHeadersTargetingMapOfEnumStringOperation,
     ],
 }
 
@@ -33,7 +30,7 @@ operation ConstrainedShapesOperation {
     errors: [ErrorWithLengthStringMessage]
 }
 
-@http(uri: "/constrained-http-bound-shapes-operation/{lengthStringLabel}/{enumStringLabel}", method: "GET")
+@http(uri: "/constrained-http-bound-shapes-operation/{lengthStringLabel}", method: "GET")
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
@@ -57,12 +54,6 @@ operation QueryParamsTargetingMapOfLengthStringOperation {
     output: QueryParamsTargetingMapOfLengthStringOperationInputOutput,
 }
 
-@http(uri: "/query-params-targeting-map-of-enum-string-operation", method: "GET")
-operation QueryParamsTargetingMapOfEnumStringOperation {
-    input: QueryParamsTargetingMapOfEnumStringOperationInputOutput,
-    output: QueryParamsTargetingMapOfEnumStringOperationInputOutput,
-}
-
 @http(uri: "/query-params-targeting-map-of-list-of-length-string-operation", method: "GET")
 operation QueryParamsTargetingMapOfListOfLengthStringOperation {
     input: QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput,
@@ -75,22 +66,10 @@ operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
     output: QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput,
 }
 
-@http(uri: "/query-params-targeting-map-of-list-of-enum-string-operation", method: "GET")
-operation QueryParamsTargetingMapOfListOfEnumStringOperation {
-    input: QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput,
-    output: QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput,
-}
-
 @http(uri: "/http-prefix-headers-targeting-length-map-operation", method: "GET")
 operation HttpPrefixHeadersTargetingLengthMapOperation {
     input: HttpPrefixHeadersTargetingLengthMapOperationInputOutput,
     output: HttpPrefixHeadersTargetingLengthMapOperationInputOutput,
-}
-
-@http(uri: "/http-prefix-headers-targeting-map-of-enum-string-operation", method: "GET")
-operation HttpPrefixHeadersTargetingMapOfEnumStringOperation {
-    input: HttpPrefixHeadersTargetingMapOfEnumStringOperationInputOutput,
-    output: HttpPrefixHeadersTargetingMapOfEnumStringOperationInputOutput,
 }
 
 structure ConstrainedShapesOperationInputOutput {
@@ -102,10 +81,6 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @required
     @httpLabel
     lengthStringLabel: LengthString,
-
-    @required
-    @httpLabel
-    enumStringLabel: EnumString,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
     // @required
@@ -124,33 +99,19 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpHeader("X-Length-List")
     lengthStringListHeader: ListOfLengthString,
 
-    @httpHeader("X-Enum-List")
-    enumStringListHeader: ListOfEnumString,
-
     @httpQuery("lengthString")
     lengthStringQuery: LengthString,
-
-    @httpQuery("enumString")
-    enumStringQuery: EnumString,
 
     @httpQuery("lengthStringList")
     lengthStringListQuery: ListOfLengthString,
 
     @httpQuery("lengthStringSet")
     lengthStringSetQuery: SetOfLengthString,
-
-    @httpQuery("enumStringList")
-    enumStringListQuery: ListOfEnumString,
 }
 
 structure HttpPrefixHeadersTargetingLengthMapOperationInputOutput {
-    @httpPrefixHeaders("X-Prefix-Headers-LengthMap-")
+    @httpPrefixHeaders("X-Prefix-Headers-")
     lengthMap: ConBMap,
-}
-
-structure HttpPrefixHeadersTargetingMapOfEnumStringOperationInputOutput {
-    @httpPrefixHeaders("X-Prefix-Headers-MapOfEnumString-")
-    mapOfEnumString: MapOfEnumString,
 }
 
 structure QueryParamsTargetingLengthMapOperationInputOutput {
@@ -163,11 +124,6 @@ structure QueryParamsTargetingMapOfLengthStringOperationInputOutput {
     mapOfLengthString: MapOfLengthString
 }
 
-structure QueryParamsTargetingMapOfEnumStringOperationInputOutput {
-    @httpQueryParams
-    mapOfEnumString: MapOfEnumString
-}
-
 structure QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput {
     @httpQueryParams
     mapOfListOfLengthString: MapOfListOfLengthString
@@ -176,11 +132,6 @@ structure QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput {
 structure QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput {
     @httpQueryParams
     mapOfSetOfLengthString: MapOfSetOfLengthString
-}
-
-structure QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput {
-    @httpQueryParams
-    mapOfListOfEnumString: MapOfListOfEnumString
 }
 
 structure ConA {
@@ -216,19 +167,9 @@ map MapOfLengthString {
     value: LengthString,
 }
 
-map MapOfEnumString {
-    key: EnumString,
-    value: EnumString,
-}
-
 map MapOfListOfLengthString {
     key: LengthString,
     value: ListOfLengthString,
-}
-
-map MapOfListOfEnumString {
-    key: EnumString,
-    value: ListOfEnumString,
 }
 
 map MapOfSetOfLengthString {
@@ -288,10 +229,6 @@ set SetOfLengthString {
 
 list ListOfLengthString {
     member: LengthString
-}
-
-list ListOfEnumString {
-    member: EnumString
 }
 
 structure ConB {
