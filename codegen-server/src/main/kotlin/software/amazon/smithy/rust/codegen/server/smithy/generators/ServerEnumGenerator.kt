@@ -29,7 +29,6 @@ class ServerEnumGenerator(
 ) : EnumGenerator(model, symbolProvider, writer, shape, enumTrait) {
     override var target: CodegenTarget = CodegenTarget.SERVER
     private val unknownVariantSymbol = constraintViolationSymbolProvider.toSymbol(shape)
-    private val errorStruct = "${enumName}UnknownVariantError"
 
     override fun renderFromForStr() {
         // TODO Docs for ConstraintViolation

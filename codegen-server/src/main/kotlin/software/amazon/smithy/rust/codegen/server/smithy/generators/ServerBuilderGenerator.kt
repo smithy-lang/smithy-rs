@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -79,6 +80,7 @@ class ServerBuilderGenerator(
             // TODO(): `#[non_exhaustive] unless we commit to making builders of builders public.
             writer.docs("Holds one variant for each of the ways the builder can fail.")
             Attribute.NonExhaustive.render(writer)
+            // TODO This should use `name` from the constraint violation symbol.
             writer.rustBlock("pub enum ConstraintViolation") {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
@@ -263,7 +265,8 @@ class ServerBuilderGenerator(
     /**
      * Returns whether the constrained builder member type (the type on which the `Constrained` trait is implemented)
      * is the final type the user sees when receiving the built struct. This is true when the corresponding constrained
-     * type is public and not `pub(crate)`, which happens when the target is a structure or is directly constrained.
+     * type is public and not `pub(crate)`, which happens when the target is a structure shape, a union shape, or is
+     * directly constrained.
      *
      * An example where this returns false is when the member shape targets a list whose members are lists of structures
      * having at least one `required` member. In this case the member shape is transitively but not directly constrained,
@@ -272,8 +275,12 @@ class ServerBuilderGenerator(
      *
      * See [PubCrateConstrainedShapeSymbolProvider] too.
      */
-    fun constrainedTypeHoldsFinalType(member: MemberShape) =
-        model.expectShape(member.target).isStructureShape || member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)
+    fun constrainedTypeHoldsFinalType(member: MemberShape): Boolean {
+        val targetShape = model.expectShape(member.target)
+        return targetShape is StructureShape ||
+                targetShape is UnionShape ||
+                member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)
+    }
 
     /**
      * Render a `set_foo` method.

@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServic
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.Constrained
@@ -385,9 +386,31 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
      * This function _does not_ generate any serializers.
      */
     override fun unionShape(shape: UnionShape) {
-        logger.info("[rust-server-codegen] Generating an union $shape")
+        logger.info("[rust-server-codegen] Generating an union shape $shape")
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, symbolProvider, it, shape, renderUnknownVariant = false).render()
+        }
+
+        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
+                model,
+                symbolProvider
+            )
+        ) {
+            logger.info("[rust-server-codegen] Generating an unconstrained type for union shape $shape")
+            rustCrate.withModule(unconstrainedModule) { unconstrainedModuleWriter ->
+                rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
+                    UnconstrainedUnionGenerator(
+                        model,
+                        symbolProvider,
+                        unconstrainedShapeSymbolProvider,
+                        pubCrateConstrainedShapeSymbolProvider,
+                        constraintViolationSymbolProvider,
+                        unconstrainedModuleWriter,
+                        modelsModuleWriter,
+                        shape
+                    ).render()
+                }
+            }
         }
     }
 

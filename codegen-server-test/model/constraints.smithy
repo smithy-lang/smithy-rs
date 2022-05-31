@@ -154,7 +154,7 @@ structure ConA {
 
     mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 
-    //unionWithConstrainedStructureVariant: UnionWithConstrainedStructureVariant,
+    constrainedUnion: ConstrainedUnion,
     enumString: EnumString,
 
     listOfLengthString: ListOfLengthString,
@@ -198,13 +198,15 @@ string FixedLengthString
 @length(min: 1, max: 69)
 string MediaTypeLengthString
 
-union UnionWithConstrainedStructureVariant {
-    constrainedStructureVariant: ConstrainedStructureVariant
-}
+/// A union with constrained members.
+union ConstrainedUnion {
+    enumString: EnumString,
+    lengthString: LengthString,
 
-structure ConstrainedStructureVariant {
-    @required
-    int: Integer
+    constrainedStructure: ConB,
+    conBList: ConBList,
+    conBSet: ConBSet,
+    conBMap: ConBMap,
 }
 
 @enum([

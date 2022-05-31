@@ -67,8 +67,8 @@ class ConstraintViolationSymbolProvider(
 ) : WrappingSymbolProvider(base) {
     private val constraintViolationName = "ConstraintViolation"
 
-    private fun constraintViolationSymbolForCollectionOrMapShape(shape: Shape): Symbol {
-        check(shape is CollectionShape || shape is MapShape)
+    private fun constraintViolationSymbolForCollectionOrMapOrUnionShape(shape: Shape): Symbol {
+        check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
 
         val symbol = base.toSymbol(shape)
         val constraintViolationNamespace =
@@ -90,8 +90,8 @@ class ConstraintViolationSymbolProvider(
         check(shape.canReachConstrainedShape(model, base))
 
         return when (shape) {
-            is MapShape, is CollectionShape -> {
-                constraintViolationSymbolForCollectionOrMapShape(shape)
+            is MapShape, is CollectionShape, is UnionShape -> {
+                constraintViolationSymbolForCollectionOrMapOrUnionShape(shape)
             }
             is StructureShape -> {
                 val builderSymbol = shape.builderSymbol(base)
@@ -104,10 +104,6 @@ class ConstraintViolationSymbolProvider(
                     .namespace(rustType.namespace, "::")
                     .definitionFile(Unconstrained.filename)
                     .build()
-            }
-            is UnionShape -> {
-                // TODO
-                base.toSymbol(shape)
             }
             is StringShape -> {
                 val namespace = "crate::${Models.namespace}::${

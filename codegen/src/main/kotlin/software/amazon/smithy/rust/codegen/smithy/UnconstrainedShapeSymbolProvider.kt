@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -28,8 +29,9 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  *
  * For collection and map shapes, this type is a [RustType.Opaque] wrapper
  * tuple newtype holding a container over the inner unconstrained type. For
- * structure shapes, it's their builder type. For simple shapes, it's whatever
- * the regular base symbol provider returns.
+ * structure shapes, it's their builder type. For union shapes, it's an enum
+ * whose variants are the corresponding unconstrained variants. For simple
+ * shapes, it's whatever the regular base symbol provider returns.
  *
  * So, for example, given the following model:
  *
@@ -72,10 +74,10 @@ class UnconstrainedShapeSymbolProvider(
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
 
-    private fun unconstrainedSymbolForCollectionOrMapShape(shape: Shape): Symbol {
-        check(shape is CollectionShape || shape is MapShape)
+    private fun unconstrainedSymbolForCollectionOrMapOrUnionShape(shape: Shape): Symbol {
+        check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
 
-        val name = unconstrainedTypeNameForCollectionOrMapShape(shape, serviceShape)
+        val name = unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape, serviceShape)
         val namespace = "crate::${Unconstrained.namespace}::${RustReservedWords.escapeIfNeeded(name.toSnakeCase())}"
         val rustType = RustType.Opaque(name, namespace)
         return Symbol.builder()
@@ -90,14 +92,14 @@ class UnconstrainedShapeSymbolProvider(
         when (shape) {
             is CollectionShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
-                    unconstrainedSymbolForCollectionOrMapShape(shape)
+                    unconstrainedSymbolForCollectionOrMapOrUnionShape(shape)
                 } else {
                     base.toSymbol(shape)
                 }
             }
             is MapShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
-                    unconstrainedSymbolForCollectionOrMapShape(shape)
+                    unconstrainedSymbolForCollectionOrMapOrUnionShape(shape)
                 } else {
                     base.toSymbol(shape)
                 }
@@ -109,18 +111,24 @@ class UnconstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
             }
+            is UnionShape -> {
+                if (shape.canReachConstrainedShape(model, base)) {
+                    unconstrainedSymbolForCollectionOrMapOrUnionShape(shape)
+                } else {
+                    base.toSymbol(shape)
+                }
+            }
             is MemberShape -> {
-                // The only case where we use this symbol provider on a member shape is when generating deserializers
-                // for HTTP-bound member shapes. See, for example:
-                // * how [HttpBindingGenerator] generates deserializers for a member shape with the `httpPrefixHeaders`
-                //   trait targeting a map shape of string keys and values; or
-                // * how [ServerHttpBoundProtocolGenerator] deserializes for a member shape with the `httpQuery` trait
-                //   targeting a collection shape that can reach a constrained shape.
-                if (model.expectShape(shape.container).isStructureShape && shape.targetCanReachConstrainedShape(
-                        model,
-                        base
-                    )
-                ) {
+                // There are only two cases where we use this symbol provider on a member shape.
+                //
+                // 1. When generating deserializers for HTTP-bound member shapes. See, for example:
+                //     * how [HttpBindingGenerator] generates deserializers for a member shape with the `httpPrefixHeaders`
+                //       trait targeting a map shape of string keys and values; or
+                //     * how [ServerHttpBoundProtocolGenerator] deserializes for a member shape with the `httpQuery`
+                //       trait targeting a collection shape that can reach a constrained shape.
+                //
+                // 2. When generating members for unconstrained unions. See [UnconstrainedUnionGenerator].
+                if (shape.targetCanReachConstrainedShape(model, base)) {
                     val targetShape = model.expectShape(shape.target)
                     val targetSymbol = this.toSymbol(targetShape)
                     // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
@@ -142,7 +150,11 @@ class UnconstrainedShapeSymbolProvider(
         }
 }
 
-fun unconstrainedTypeNameForCollectionOrMapShape(shape: Shape, serviceShape: ServiceShape): String {
-    check(shape is CollectionShape || shape is MapShape)
+/**
+ * Unconstrained type names are always suffixed with `Unconstrained` for clarity, even though we could dispense with it
+ * given that they all live inside the `unconstrained` module, so they don't collide with the constrained types.
+ */
+fun unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape: Shape, serviceShape: ServiceShape): String {
+    check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
     return "${shape.id.getName(serviceShape).toPascalCase()}Unconstrained"
 }
