@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use std::{
     borrow::Borrow,
     collections::{hash_map::RandomState, HashMap},
@@ -6,6 +11,8 @@ use std::{
 
 const SIZE: usize = 20;
 
+/// A map implementation with fast iteration which switches backing storage from [`Vec`] to
+/// [`HashMap`] when the number of entries exceeds 20.
 #[derive(Debug, Clone)]
 pub struct TinyMap<K, V, S = RandomState> {
     inner: TinyMapInner<K, V, S>,
@@ -37,6 +44,10 @@ where
     }
 }
 
+/// An owning iterator over the entries of a `TinyMap`.
+///
+/// This struct is created by the [`into_iter`](IntoIterator::into_iter) method on [`TinyMap`] (
+/// provided by the [`IntoIterator`] trait). See its documentation for more.
 pub struct IntoIter<K, V> {
     inner: EitherIterator<std::vec::IntoIter<(K, V)>, std::collections::hash_map::IntoIter<K, V>>,
 }
@@ -94,6 +105,10 @@ where
     K: Eq + Hash,
     S: BuildHasher,
 {
+    /// Returns a reference to the value corresponding to the key.
+    ///
+    /// The key may be borrowed form of map's key type, but [`Hash`] and [`Eq`] on the borrowed
+    /// form _must_ match those for the key type.
     pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
