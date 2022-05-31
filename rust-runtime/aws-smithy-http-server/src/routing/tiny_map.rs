@@ -9,17 +9,15 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
-const SIZE: usize = 20;
-
 /// A map implementation with fast iteration which switches backing storage from [`Vec`] to
-/// [`HashMap`] when the number of entries exceeds 20.
+/// [`HashMap`] when the number of entries exceeds `CUTOFF` (which defaults to 20).
 #[derive(Debug, Clone)]
-pub struct TinyMap<K, V, S = RandomState> {
-    inner: TinyMapInner<K, V, S>,
+pub struct TinyMap<K, V, S = RandomState, const CUTOFF: usize = 20> {
+    inner: TinyMapInner<K, V, S, CUTOFF>,
 }
 
 #[derive(Debug, Clone)]
-enum TinyMapInner<K, V, S> {
+enum TinyMapInner<K, V, S, const CUTOFF: usize> {
     Vec(Vec<(K, V)>),
     HashMap(HashMap<K, V, S>),
 }
@@ -60,7 +58,7 @@ impl<K, V> Iterator for IntoIter<K, V> {
     }
 }
 
-impl<K, V, S> IntoIterator for TinyMap<K, V, S> {
+impl<K, V, S, const CUTOFF: usize> IntoIterator for TinyMap<K, V, S, CUTOFF> {
     type Item = (K, V);
 
     type IntoIter = IntoIter<K, V>;
@@ -74,19 +72,19 @@ impl<K, V, S> IntoIterator for TinyMap<K, V, S> {
     }
 }
 
-impl<K, V, S> FromIterator<(K, V)> for TinyMap<K, V, S>
+impl<K, V, S, const CUTOFF: usize> FromIterator<(K, V)> for TinyMap<K, V, S, CUTOFF>
 where
     K: Hash + Eq,
     S: BuildHasher + Default,
 {
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
-        let mut vec = Vec::with_capacity(SIZE);
+        let mut vec = Vec::with_capacity(CUTOFF);
         let mut iter = iter.into_iter().enumerate();
 
         // Populate the Vec
         while let Some((index, pair)) = iter.next() {
-            // If overflow SIZE then return a HashMap instead
-            if index == SIZE {
+            // If overflow CUTOFF then return a HashMap instead
+            if index == CUTOFF {
                 let inner = TinyMapInner::HashMap(vec.into_iter().chain(iter.map(|(_, pair)| pair)).collect());
                 return TinyMap { inner };
             }
@@ -100,7 +98,7 @@ where
     }
 }
 
-impl<K, V, S> TinyMap<K, V, S>
+impl<K, V, S, const CUTOFF: usize> TinyMap<K, V, S, CUTOFF>
 where
     K: Eq + Hash,
     S: BuildHasher,
