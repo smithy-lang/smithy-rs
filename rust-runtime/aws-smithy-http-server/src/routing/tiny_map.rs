@@ -121,3 +121,79 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CUTOFF: usize = 5;
+
+    const SMALL_VALUES: [(&'static str, usize); 3] = [("a", 0), ("b", 1), ("c", 2)];
+    const MEDIUM_VALUES: [(&'static str, usize); 5] = [("a", 0), ("b", 1), ("c", 2), ("d", 3), ("e", 4)];
+    const LARGE_VALUES: [(&'static str, usize); 10] = [
+        ("a", 0),
+        ("b", 1),
+        ("c", 2),
+        ("d", 3),
+        ("e", 4),
+        ("f", 5),
+        ("g", 6),
+        ("h", 7),
+        ("i", 8),
+        ("k", 9),
+    ];
+
+    #[test]
+    fn collect_small() {
+        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = SMALL_VALUES.into_iter().collect();
+        assert!(matches!(tiny_map.inner, TinyMapInner::Vec(_)))
+    }
+
+    #[test]
+    fn collect_medium() {
+        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = MEDIUM_VALUES.into_iter().collect();
+        assert!(matches!(tiny_map.inner, TinyMapInner::Vec(_)))
+    }
+
+    #[test]
+    fn collect_large() {
+        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = LARGE_VALUES.into_iter().collect();
+        assert!(matches!(tiny_map.inner, TinyMapInner::HashMap(_)))
+    }
+
+    #[test]
+    fn get_small_success() {
+        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = SMALL_VALUES.into_iter().collect();
+        assert_eq!(tiny_map.get("a"), Some(&0))
+    }
+
+    #[test]
+    fn get_medium_success() {
+        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = MEDIUM_VALUES.into_iter().collect();
+        assert_eq!(tiny_map.get("d"), Some(&3))
+    }
+
+    #[test]
+    fn get_large_success() {
+        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = LARGE_VALUES.into_iter().collect();
+        assert_eq!(tiny_map.get("h"), Some(&7))
+    }
+
+    #[test]
+    fn get_small_fail() {
+        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = SMALL_VALUES.into_iter().collect();
+        assert_eq!(tiny_map.get("x"), None)
+    }
+
+    #[test]
+    fn get_medium_fail() {
+        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = MEDIUM_VALUES.into_iter().collect();
+        assert_eq!(tiny_map.get("y"), None)
+    }
+
+    #[test]
+    fn get_large_fail() {
+        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = LARGE_VALUES.into_iter().collect();
+        assert_eq!(tiny_map.get("z"), None)
+    }
+}
