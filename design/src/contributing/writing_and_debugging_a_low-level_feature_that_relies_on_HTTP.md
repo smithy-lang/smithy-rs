@@ -3,7 +3,7 @@
 ## Background
 
 This article came about as a result of all the difficulties I encountered while developing the request checksums feature
-laid out in the internal-only Flexible Checksums spec (the feature is also highlighted in [this public blog post][S3 Flexible Checksums]).
+laid out in the internal-only Flexible Checksums spec _(the feature is also highlighted in [this public blog post][S3 Flexible Checksums].)_
 I spent much more time developing the feature than I had anticipated. In this article, I'll talk about:
 
 - How the SDK sends requests with a body
