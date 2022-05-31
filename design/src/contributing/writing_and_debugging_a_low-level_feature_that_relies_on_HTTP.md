@@ -3,8 +3,8 @@
 ## Background
 
 This article came about as a result of all the difficulties I encountered while developing the request checksums feature
-laid out in the internal-only Flexible Checksums spec (sometimes referred to as S3 Brawn.) I spent much more time developing the feature
-than I had anticipated. In this article, I'll talk about:
+laid out in the internal-only Flexible Checksums spec (the feature is also highlighted in [this public blog post][S3 Flexible Checksums]).
+I spent much more time developing the feature than I had anticipated. In this article, I'll talk about:
 
 - How the SDK sends requests with a body
 - How the SDK sends requests with a streaming body
@@ -337,6 +337,7 @@ been read.
   ```
   ##
 
+[S3 Flexible Checksums]: https://aws.amazon.com/blogs/aws/new-additional-checksum-algorithms-for-amazon-s3/
 [hyper::error::User::BodyWriteAborted]: https://github.com/hyperium/hyper/blob/740654e55d2bb2f50709f20fb4054a5504d8c2fb/src/error.rs#L98
 [HTTP-based operations]: ../transport/operation.md
 [an example from the QLDB SDK of creating a body]: https://github.com/awslabs/aws-sdk-rust/blob/1bdfba7f53e77a478f60a1a387e4d9d31fd918fc/sdk/qldbsession/src/input.rs#L197
