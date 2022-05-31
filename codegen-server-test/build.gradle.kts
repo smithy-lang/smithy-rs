@@ -35,6 +35,7 @@ dependencies {
 
 val allCodegenTests = listOf(
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
+    CodegenTest("aws.protocoltests.restjson#RestJsonExtras", "rest_json_extras"),
     CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
     CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation"),
     CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),

@@ -660,7 +660,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonHttpWithEmptyStructurePayload", TestType.Request),
             FailingTest(RestJson, "RestJsonHttpResponseCodeDefaultsToModeledCode", TestType.Response),
 
-            FailingTest(RestJson, "RestJsonWithPayloadExpectsImpliedAccept", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case1", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyMalformedBlobInvalidBase64_case2", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyByteMalformedValueRejected_case2", TestType.MalformedRequest),
