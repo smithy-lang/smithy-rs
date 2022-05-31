@@ -72,8 +72,8 @@ pub struct Router<B = Body> {
 enum Routes<B = Body> {
     RestXml(Vec<(Route<B>, RequestSpec)>),
     RestJson1(Vec<(Route<B>, RequestSpec)>),
-    AwsJson10(TinyMap<String, Route<B>>),
-    AwsJson11(TinyMap<String, Route<B>>),
+    AwsJson10(TinyMap<20, String, Route<B>>),
+    AwsJson11(TinyMap<20, String, Route<B>>),
 }
 
 impl<B> Clone for Router<B> {

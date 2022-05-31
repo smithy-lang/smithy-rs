@@ -13,11 +13,11 @@ use std::{
 /// A map implementation with fast iteration which switches backing storage from [`Vec`] to
 /// [`HashMap`] when the number of entries exceeds `CUTOFF` (which defaults to 20).
 #[derive(Clone)]
-pub struct TinyMap<K, V, S = RandomState, const CUTOFF: usize = 20> {
-    inner: TinyMapInner<K, V, S, CUTOFF>,
+pub struct TinyMap<const CUTOFF: usize, K, V, S = RandomState> {
+    inner: TinyMapInner<CUTOFF, K, V, S>,
 }
 
-impl<K, V, S, const CUTOFF: usize> fmt::Debug for TinyMap<K, V, S, CUTOFF>
+impl<const CUTOFF: usize, K, V, S> fmt::Debug for TinyMap<CUTOFF, K, V, S>
 where
     K: fmt::Debug,
     V: fmt::Debug,
@@ -28,12 +28,12 @@ where
 }
 
 #[derive(Clone)]
-enum TinyMapInner<K, V, S, const CUTOFF: usize> {
+enum TinyMapInner<const CUTOFF: usize, K, V, S> {
     Vec(Vec<(K, V)>),
     HashMap(HashMap<K, V, S>),
 }
 
-impl<K, V, S, const CUTOFF: usize> fmt::Debug for TinyMapInner<K, V, S, CUTOFF>
+impl<const CUTOFF: usize, K, V, S> fmt::Debug for TinyMapInner<CUTOFF, K, V, S>
 where
     K: fmt::Debug,
     V: fmt::Debug,
@@ -82,7 +82,7 @@ impl<K, V> Iterator for IntoIter<K, V> {
     }
 }
 
-impl<K, V, S, const CUTOFF: usize> IntoIterator for TinyMap<K, V, S, CUTOFF> {
+impl<const CUTOFF: usize, K, V, S> IntoIterator for TinyMap<CUTOFF, K, V, S> {
     type Item = (K, V);
 
     type IntoIter = IntoIter<K, V>;
@@ -96,7 +96,7 @@ impl<K, V, S, const CUTOFF: usize> IntoIterator for TinyMap<K, V, S, CUTOFF> {
     }
 }
 
-impl<K, V, S, const CUTOFF: usize> FromIterator<(K, V)> for TinyMap<K, V, S, CUTOFF>
+impl<const CUTOFF: usize, K, V, S> FromIterator<(K, V)> for TinyMap<CUTOFF, K, V, S>
 where
     K: Hash + Eq,
     S: BuildHasher + Default,
@@ -122,7 +122,7 @@ where
     }
 }
 
-impl<K, V, S, const CUTOFF: usize> TinyMap<K, V, S, CUTOFF>
+impl<const CUTOFF: usize, K, V, S> TinyMap<CUTOFF, K, V, S>
 where
     K: Eq + Hash,
     S: BuildHasher,
@@ -169,55 +169,55 @@ mod tests {
 
     #[test]
     fn collect_small() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = SMALL_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<CUTOFF, _, _> = SMALL_VALUES.into_iter().collect();
         assert!(matches!(tiny_map.inner, TinyMapInner::Vec(_)))
     }
 
     #[test]
     fn collect_medium() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = MEDIUM_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<CUTOFF, _, _> = MEDIUM_VALUES.into_iter().collect();
         assert!(matches!(tiny_map.inner, TinyMapInner::Vec(_)))
     }
 
     #[test]
     fn collect_large() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = LARGE_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<CUTOFF, _, _> = LARGE_VALUES.into_iter().collect();
         assert!(matches!(tiny_map.inner, TinyMapInner::HashMap(_)))
     }
 
     #[test]
     fn get_small_success() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = SMALL_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<CUTOFF, _, _> = SMALL_VALUES.into_iter().collect();
         assert_eq!(tiny_map.get("a"), Some(&0))
     }
 
     #[test]
     fn get_medium_success() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = MEDIUM_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<CUTOFF, _, _> = MEDIUM_VALUES.into_iter().collect();
         assert_eq!(tiny_map.get("d"), Some(&3))
     }
 
     #[test]
     fn get_large_success() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = LARGE_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<CUTOFF, _, _> = LARGE_VALUES.into_iter().collect();
         assert_eq!(tiny_map.get("h"), Some(&7))
     }
 
     #[test]
     fn get_small_fail() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = SMALL_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<CUTOFF, _, _> = SMALL_VALUES.into_iter().collect();
         assert_eq!(tiny_map.get("x"), None)
     }
 
     #[test]
     fn get_medium_fail() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = MEDIUM_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<CUTOFF, _, _> = MEDIUM_VALUES.into_iter().collect();
         assert_eq!(tiny_map.get("y"), None)
     }
 
     #[test]
     fn get_large_fail() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = LARGE_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<CUTOFF, _, _> = LARGE_VALUES.into_iter().collect();
         assert_eq!(tiny_map.get("z"), None)
     }
 }
