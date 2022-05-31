@@ -162,19 +162,19 @@ mod tests {
 
     #[test]
     fn collect_small() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = SMALL_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<_, _, CUTOFF> = SMALL_VALUES.into_iter().collect();
         assert!(matches!(tiny_map.inner, TinyMapInner::Vec(_)))
     }
 
     #[test]
     fn collect_medium() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = MEDIUM_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<_, _, CUTOFF> = MEDIUM_VALUES.into_iter().collect();
         assert!(matches!(tiny_map.inner, TinyMapInner::Vec(_)))
     }
 
     #[test]
     fn collect_large() {
-        let tiny_map: TinyMap<_, _, RandomState, CUTOFF> = LARGE_VALUES.into_iter().collect();
+        let tiny_map: TinyMap<_, _, CUTOFF> = LARGE_VALUES.into_iter().collect();
         assert!(matches!(tiny_map.inner, TinyMapInner::HashMap(_)))
     }
 
