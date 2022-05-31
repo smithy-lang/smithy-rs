@@ -1,13 +1,13 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import org.gradle.api.Project
 import org.gradle.api.tasks.Exec
 import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.register
 import java.io.File
-
-/*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0
- */
 
 /**
  * This file contains common functionality shared across the buildscripts for the `codegen-test` and `codegen-server-test`
@@ -132,7 +132,7 @@ fun registerGenerateSmithyBuildTask(
             // If this is a rebuild, cache all the hashes of the generated Rust files. These are later used by the
             // `modifyMtime` task.
             project.extra["previousBuildHashes"] = project.buildDir.walk()
-                .filter { it.name.endsWith(".rs") || it.name == "Cargo.toml" || it.name == "Cargo.lock" }
+                .filter { it.isFile }
                 .map {
                     HashUtils.getCheckSumFromFile(it) to it.lastModified()
                 }
@@ -195,7 +195,7 @@ fun registerModifyMtimeTask(
             val previousBuildHashes: Map<String, Long> = project.extra["previousBuildHashes"] as Map<String, Long>
 
             project.buildDir.walk()
-                .filter { it.name.endsWith(".rs") || it.name == "Cargo.toml" }
+                .filter { it.isFile }
                 .map {
                     HashUtils.getCheckSumFromFile(it) to it
                 }
