@@ -9,13 +9,13 @@
 
 use self::future::RouterFuture;
 use self::request_spec::RequestSpec;
+use self::tiny_map::TinyMap;
 use crate::body::{boxed, Body, BoxBody, HttpBody};
 use crate::error::BoxError;
 use crate::protocols::Protocol;
 use crate::response::IntoResponse;
 use crate::runtime_error::{RuntimeError, RuntimeErrorKind};
 use http::{Request, Response, StatusCode};
-use std::collections::HashMap;
 use std::{
     convert::Infallible,
     task::{Context, Poll},
@@ -32,6 +32,7 @@ mod into_make_service;
 pub mod request_spec;
 
 mod route;
+mod tiny_map;
 
 pub use self::{into_make_service::IntoMakeService, route::Route};
 
@@ -71,8 +72,8 @@ pub struct Router<B = Body> {
 enum Routes<B = Body> {
     RestXml(Vec<(Route<B>, RequestSpec)>),
     RestJson1(Vec<(Route<B>, RequestSpec)>),
-    AwsJson10(HashMap<String, Route<B>>),
-    AwsJson11(HashMap<String, Route<B>>),
+    AwsJson10(TinyMap<String, Route<B>>),
+    AwsJson11(TinyMap<String, Route<B>>),
 }
 
 impl<B> Clone for Router<B> {
