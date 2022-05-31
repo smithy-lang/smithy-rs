@@ -77,8 +77,8 @@ const ROUTE_CUTOFF: usize = 20;
 enum Routes<B = Body> {
     RestXml(Vec<(Route<B>, RequestSpec)>),
     RestJson1(Vec<(Route<B>, RequestSpec)>),
-    AwsJson10(TinyMap<ROUTE_CUTOFF, String, Route<B>>),
-    AwsJson11(TinyMap<ROUTE_CUTOFF, String, Route<B>>),
+    AwsJson10(TinyMap<String, Route<B>, ROUTE_CUTOFF>),
+    AwsJson11(TinyMap<String, Route<B>, ROUTE_CUTOFF>),
 }
 
 impl<B> Clone for Router<B> {
