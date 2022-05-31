@@ -6,20 +6,44 @@
 use std::{
     borrow::Borrow,
     collections::{hash_map::RandomState, HashMap},
+    fmt,
     hash::{BuildHasher, Hash},
 };
 
 /// A map implementation with fast iteration which switches backing storage from [`Vec`] to
 /// [`HashMap`] when the number of entries exceeds `CUTOFF` (which defaults to 20).
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TinyMap<K, V, S = RandomState, const CUTOFF: usize = 20> {
     inner: TinyMapInner<K, V, S, CUTOFF>,
 }
 
-#[derive(Debug, Clone)]
+impl<K, V, S, const CUTOFF: usize> fmt::Debug for TinyMap<K, V, S, CUTOFF>
+where
+    K: fmt::Debug,
+    V: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TinyMap").field("inner", &self.inner).finish()
+    }
+}
+
+#[derive(Clone)]
 enum TinyMapInner<K, V, S, const CUTOFF: usize> {
     Vec(Vec<(K, V)>),
     HashMap(HashMap<K, V, S>),
+}
+
+impl<K, V, S, const CUTOFF: usize> fmt::Debug for TinyMapInner<K, V, S, CUTOFF>
+where
+    K: fmt::Debug,
+    V: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Vec(arg0) => f.debug_tuple("Vec").field(arg0).finish(),
+            Self::HashMap(arg0) => f.debug_tuple("HashMap").field(arg0).finish(),
+        }
+    }
 }
 
 enum EitherIterator<Left, Right> {
