@@ -1,4 +1,4 @@
-[# Writing and debugging a low-level feature that relies on HTTP
+# Writing and debugging a low-level feature that relies on HTTP
 
 ## Background
 
