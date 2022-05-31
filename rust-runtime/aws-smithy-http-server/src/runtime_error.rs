@@ -36,7 +36,7 @@ pub enum RuntimeErrorKind {
     /// [`crate::extension::Extension`] from the request.
     InternalFailure(crate::Error),
     // UnsupportedMediaType,
-    // NotAcceptable,
+    NotAcceptable,
 }
 
 /// String representation of the runtime error type.
@@ -48,6 +48,7 @@ impl RuntimeErrorKind {
             RuntimeErrorKind::Serialization(_) => "SerializationException",
             RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
             RuntimeErrorKind::UnknownOperation => "UnknownOperation",
+            RuntimeErrorKind::NotAcceptable => "NotAcceptableException",
         }
     }
 }
@@ -64,6 +65,7 @@ impl IntoResponse for RuntimeError {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
             RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
             RuntimeErrorKind::UnknownOperation => http::StatusCode::NOT_FOUND,
+            RuntimeErrorKind::NotAcceptable => http::StatusCode::NOT_ACCEPTABLE,
         };
 
         let body = crate::body::to_boxed(match self.protocol {
