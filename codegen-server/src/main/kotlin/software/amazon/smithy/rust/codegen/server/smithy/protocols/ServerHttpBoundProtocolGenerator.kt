@@ -174,15 +174,15 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             .filter { it.hasTrait<HttpPayloadTrait>() }
             .map { model.expectShape(it.target) }
             .map {
-                if (it.hasTrait<MediaTypeTrait>()) {
-                    it.getTrait<MediaTypeTrait>()!!.value
-                } else {
-                    if (it.isBlobShape) {
-                        "" // accept
-                    } else {
-                        expectedContentType(it)
+                it.getTrait<MediaTypeTrait>()
+                    ?.value
+                    ?: run {
+                        if (it.isBlobShape) {
+                            "" // accept
+                        } else {
+                            expectedContentType(it)
+                        }
                     }
-                }
             }
         val impliedContentTypes =
             if (mediaTypes.isEmpty()) { "application/json".dq() } else {
