@@ -61,6 +61,11 @@ pub struct Router<B = Body> {
     routes: Routes<B>,
 }
 
+// This constant determines when the `TinyMap` implementation switches from being a `Vec` to a
+// `HashMap`. This is chosen to be 20 as a result of the discussion around
+// https://gist.github.com/daboross/976978d8200caf86e02acb6805961195
+const ROUTE_CUTOFF: usize = 20;
+
 /// Protocol-aware routes types.
 ///
 /// RestJson1 and RestXml routes are stored in a `Vec` because there can be multiple matches on the
@@ -72,8 +77,8 @@ pub struct Router<B = Body> {
 enum Routes<B = Body> {
     RestXml(Vec<(Route<B>, RequestSpec)>),
     RestJson1(Vec<(Route<B>, RequestSpec)>),
-    AwsJson10(TinyMap<20, String, Route<B>>),
-    AwsJson11(TinyMap<20, String, Route<B>>),
+    AwsJson10(TinyMap<ROUTE_CUTOFF, String, Route<B>>),
+    AwsJson11(TinyMap<ROUTE_CUTOFF, String, Route<B>>),
 }
 
 impl<B> Clone for Router<B> {

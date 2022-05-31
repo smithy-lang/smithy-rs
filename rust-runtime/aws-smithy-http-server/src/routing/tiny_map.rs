@@ -11,7 +11,7 @@ use std::{
 };
 
 /// A map implementation with fast iteration which switches backing storage from [`Vec`] to
-/// [`HashMap`] when the number of entries exceeds `CUTOFF` (which defaults to 20).
+/// [`HashMap`] when the number of entries exceeds `CUTOFF`.
 #[derive(Clone)]
 pub struct TinyMap<const CUTOFF: usize, K, V, S = RandomState> {
     inner: TinyMapInner<CUTOFF, K, V, S>,
