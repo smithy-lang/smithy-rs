@@ -41,12 +41,12 @@ where
     }
 }
 
-enum EitherIterator<Left, Right> {
+enum OrIterator<Left, Right> {
     Left(Left),
     Right(Right),
 }
 
-impl<Left, Right> Iterator for EitherIterator<Left, Right>
+impl<Left, Right> Iterator for OrIterator<Left, Right>
 where
     Left: Iterator,
     Right: Iterator<Item = Left::Item>,
@@ -66,7 +66,7 @@ where
 /// This struct is created by the [`into_iter`](IntoIterator::into_iter) method on [`TinyMap`] (
 /// provided by the [`IntoIterator`] trait). See its documentation for more.
 pub struct IntoIter<K, V> {
-    inner: EitherIterator<std::vec::IntoIter<(K, V)>, std::collections::hash_map::IntoIter<K, V>>,
+    inner: OrIterator<std::vec::IntoIter<(K, V)>, std::collections::hash_map::IntoIter<K, V>>,
 }
 
 impl<K, V> Iterator for IntoIter<K, V> {
@@ -84,8 +84,8 @@ impl<K, V, const CUTOFF: usize> IntoIterator for TinyMap<K, V, CUTOFF> {
 
     fn into_iter(self) -> Self::IntoIter {
         let inner = match self.inner {
-            TinyMapInner::Vec(vec) => EitherIterator::Left(vec.into_iter()),
-            TinyMapInner::HashMap(hash_map) => EitherIterator::Right(hash_map.into_iter()),
+            TinyMapInner::Vec(vec) => OrIterator::Left(vec.into_iter()),
+            TinyMapInner::HashMap(hash_map) => OrIterator::Right(hash_map.into_iter()),
         };
         IntoIter { inner }
     }
