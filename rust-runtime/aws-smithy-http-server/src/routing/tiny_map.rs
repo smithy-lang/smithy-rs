@@ -7,38 +7,15 @@ use std::{borrow::Borrow, collections::HashMap, fmt, hash::Hash};
 
 /// A map implementation with fast iteration which switches backing storage from [`Vec`] to
 /// [`HashMap`] when the number of entries exceeds `CUTOFF`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TinyMap<K, V, const CUTOFF: usize> {
     inner: TinyMapInner<K, V, CUTOFF>,
 }
 
-impl<K, V, const CUTOFF: usize> fmt::Debug for TinyMap<K, V, CUTOFF>
-where
-    K: fmt::Debug,
-    V: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TinyMap").field("inner", &self.inner).finish()
-    }
-}
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum TinyMapInner<K, V, const CUTOFF: usize> {
     Vec(Vec<(K, V)>),
     HashMap(HashMap<K, V>),
-}
-
-impl<K, V, const CUTOFF: usize> fmt::Debug for TinyMapInner<K, V, CUTOFF>
-where
-    K: fmt::Debug,
-    V: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Vec(arg0) => f.debug_tuple("Vec").field(arg0).finish(),
-            Self::HashMap(arg0) => f.debug_tuple("HashMap").field(arg0).finish(),
-        }
-    }
 }
 
 enum OrIterator<Left, Right> {
