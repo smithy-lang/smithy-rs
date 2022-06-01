@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::{borrow::Borrow, collections::HashMap, fmt, hash::Hash};
+use std::{borrow::Borrow, collections::HashMap, hash::Hash};
 
 /// A map implementation with fast iteration which switches backing storage from [`Vec`] to
 /// [`HashMap`] when the number of entries exceeds `CUTOFF`.
