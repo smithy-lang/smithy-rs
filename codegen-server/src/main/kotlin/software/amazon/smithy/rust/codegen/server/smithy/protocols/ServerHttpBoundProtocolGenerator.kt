@@ -567,7 +567,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     /**
-     * Add the `Content-Length` header.
+     * Adds the `Content-Length` header.
      *
      * Unlike the headers added in `serverRenderResponseHeaders` the `Content-Length` depends on
      * the payload post-serialization.
