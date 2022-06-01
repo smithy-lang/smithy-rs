@@ -349,7 +349,7 @@ where
                         // Find the `x-amz-target` header.
                         if let Some(target) = req.headers().get("x-amz-target") {
                             if let Ok(target) = target.to_str() {
-                                // Lookup in the `HashMap` for a route for the target.
+                                // Lookup in the `TinyMap` for a route for the target.
                                 let route = routes.get(target);
                                 if let Some(route) = route {
                                     return RouterFuture::from_oneshot(route.clone().oneshot(req));
