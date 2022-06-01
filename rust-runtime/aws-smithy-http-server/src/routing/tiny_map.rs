@@ -99,9 +99,9 @@ where
         let mut vec = Vec::with_capacity(CUTOFF);
         let mut iter = iter.into_iter().enumerate();
 
-        // Populate the Vec
+        // Populate the `Vec`
         while let Some((index, pair)) = iter.next() {
-            // If overflow CUTOFF then return a HashMap instead
+            // If overflow `CUTOFF` then return a `HashMap` instead
             if index == CUTOFF {
                 let inner = TinyMapInner::HashMap(vec.into_iter().chain(iter.map(|(_, pair)| pair)).collect());
                 return TinyMap { inner };
