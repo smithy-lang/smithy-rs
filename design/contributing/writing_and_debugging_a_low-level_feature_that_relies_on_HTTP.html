@@ -1,0 +1,515 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Writing and debugging a low-level feature that relies on HTTP - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">6.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">6.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">6.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">6.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">6.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">6.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">6.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">6.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">6.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">6.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">6.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">6.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">6.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">6.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc00014_timeout_config.html"><strong aria-hidden="true">6.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc00015_using_features_responsibly.html"><strong aria-hidden="true">6.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html" class="active"><strong aria-hidden="true">7.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="writing-and-debugging-a-low-level-feature-that-relies-on-http"><a class="header" href="#writing-and-debugging-a-low-level-feature-that-relies-on-http">Writing and debugging a low-level feature that relies on HTTP</a></h1>
+<h2 id="background"><a class="header" href="#background">Background</a></h2>
+<p>This article came about as a result of all the difficulties I encountered while developing the request checksums feature
+laid out in the internal-only Flexible Checksums spec <em>(the feature is also highlighted in <a href="https://aws.amazon.com/blogs/aws/new-additional-checksum-algorithms-for-amazon-s3/">this public blog post</a>.)</em>
+I spent much more time developing the feature than I had anticipated. In this article, I'll talk about:</p>
+<ul>
+<li>How the SDK sends requests with a body</li>
+<li>How the SDK sends requests with a streaming body</li>
+<li>The various issues I encountered and how I addressed them</li>
+<li>Key takeaways for contributors developing similar low-level features</li>
+</ul>
+<h2 id="how-the-sdk-sends-requests-with-a-body"><a class="header" href="#how-the-sdk-sends-requests-with-a-body">How the SDK sends requests with a body</a></h2>
+<p>All interactions between the SDK and a service are modeled as <a href="../transport/operation.html">&quot;operations&quot;</a>. Operations contain:</p>
+<ul>
+<li>A base HTTP request (with a potentially streaming body)</li>
+<li>A typed property bag of configuration options</li>
+<li>A fully generic response handler</li>
+</ul>
+<p>Users create operations piecemeal with a fluent builder. The options set in the builder are then used to create the
+inner HTTP request, becoming headers or triggering specific request-building functionality (In this case, calculating a
+checksum and attaching it either as a header or a trailer.)</p>
+<p>Here's <a href="https://github.com/awslabs/aws-sdk-rust/blob/1bdfba7f53e77a478f60a1a387e4d9d31fd918fc/sdk/qldbsession/src/input.rs#L197">an example from the QLDB SDK of creating a body</a> from inputs and inserting it into the request to be sent:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let body = aws_smithy_http::body::SdkBody::from(
+    crate::operation_ser::serialize_operation_crate_operation_send_command(&amp;self)?,
+);
+
+if let Some(content_length) = body.content_length() {
+    request = aws_smithy_http::header::set_request_header_if_absent(
+        request,
+        http::header::CONTENT_LENGTH,
+        content_length,
+    );
+}
+let request = request.body(body).expect(&quot;should be valid request&quot;);
+<span class="boring">}
+</span></code></pre></pre>
+<p>Most all request body creation in the SDKs looks like that. Note how it automatically sets the <code>Content-Length</code> header
+whenever the size of the body is known; It'll be relevant later. The body is read into memory and can be inspected
+before the request is sent. This allows for things like calculating a checksum and then inserting it into the request
+as a header.</p>
+<h2 id="how-the-sdk-sends-requests-with-a-streaming-body"><a class="header" href="#how-the-sdk-sends-requests-with-a-streaming-body">How the SDK sends requests with a streaming body</a></h2>
+<p>Often, sending a request with a streaming body looks much the same. However, it's not possible to read a streaming
+body until you've sent the request. Any metadata that needs to be calculated by inspecting the body must be sent as
+trailers. Additionally, some metadata, like <code>Content-Length</code>, can't be sent as a trailer at all.
+<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Trailer#directives">MDN maintains a helpful list</a> of metadata that can only be sent as a header.</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// When trailers are set, we must send an AWS-specific header that lists them named `x-amz-trailer`.
+// For example, when sending a SHA256 checksum as a trailer,
+// we have to send an `x-amz-trailer` header telling the service to watch out for it:
+request
+    .headers_mut()
+    .insert(
+        http::header::HeaderName::from_static(&quot;x-amz-trailer&quot;),
+        http::header::HeaderValue::from_static(&quot;x-amz-checksum-sha256&quot;),
+    );
+<span class="boring">}
+</span></code></pre></pre>
+<h2 id="the-issues-i-encountered-while-implementing-checksums-for-streaming-request-bodies"><a class="header" href="#the-issues-i-encountered-while-implementing-checksums-for-streaming-request-bodies">The issues I encountered while implementing checksums for streaming request bodies</a></h2>
+<h3 id="content-encoding-aws-chunked"><a class="header" href="#content-encoding-aws-chunked"><code>Content-Encoding: aws-chunked</code></a></h3>
+<p>When sending a request body with trailers, we must use an AWS-specific content encoding called <code>aws-chunked</code>. To encode
+a request body for <code>aws-chunked</code> requires us to know the length of each chunk we're going to send before we send it. We
+have to prefix each chunk with its size in bytes, represented by one or more <a href="https://en.wikipedia.org/wiki/Hexadecimal">hexadecimal</a> digits. To close the body, we
+send a final chunk with a zero. For example, the body &quot;Hello world&quot; would look like this when encoded:</p>
+<pre><code>B\r\n
+Hello world\r\n
+0\r\n
+</code></pre>
+<p>When sending a request body encoded in this way, we need to set two length headers:</p>
+<ul>
+<li><code>Content-Length</code> is the length of the entire request body, including the chunk size prefix and zero terminator. In the
+example above, this would be 19.</li>
+<li><code>x-amz-decoded-content-length</code> is the length of the decoded request body. In the example above, this would be 11.</li>
+</ul>
+<p><em><strong>NOTE:</strong> <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Encoding"><code>Content-Encoding</code></a> is distinct from <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Transfer-Encoding"><code>Transfer-Encoding</code></a>. It's possible to
+construct a request with both <code>Content-Encoding: chunked</code> AND <code>Transfer-Encoding: chunked</code>, although we don't ever need
+to do that for SDK requests.</em></p>
+<h3 id="s3-requires-a-content-length-unless-you-also-set-transfer-encoding-chunked"><a class="header" href="#s3-requires-a-content-length-unless-you-also-set-transfer-encoding-chunked">S3 requires a <code>Content-Length</code> unless you also set <code>Transfer-Encoding: chunked</code></a></h3>
+<p>S3 does not require you to send a <code>Content-Length</code> header if you set the <code>Transfer-Encoding: chunked</code> header. That's
+very helpful because it's not always possible to know the total length of a stream of bytes if that's what you're
+constructing your request body from. However, when sending trailers, this part of the spec can be misleading.</p>
+<ol>
+<li>When sending a streaming request, we must send metadata like checksums as trailers</li>
+<li>To send a request body with trailers, we must set the <code>Content-Encoding: aws-chunked</code> header</li>
+<li>When using <code>aws-chunked</code> encoding for a request body, we must set the <code>x-amz-decoded-content-length</code> header with the
+pre-encoding length of the request body.</li>
+</ol>
+<p>This means that we can't actually avoid having to know and specify the length of the request body when sending a request
+to S3. This turns out to not be much of a problem for common use of the SDKs because most streaming request bodies are
+constructed from files. In these cases we can ask the operating system for the file size before sending the request. So
+long as that size doesn't change during sending of the request, all is well. In any other case, the request will fail.</p>
+<h3 id="adding-trailers-to-a-request-changes-the-size-of-that-request"><a class="header" href="#adding-trailers-to-a-request-changes-the-size-of-that-request">Adding trailers to a request changes the size of that request</a></h3>
+<p>Headers don't count towards the size of a request body, but trailers do. That means we need to take trailers (which
+aren't sent until after the body) into account when setting the <code>Content-Length</code> header (which are sent before the
+body.) This means that without setting <code>Transfer-Encoding: chunked</code>, the SDKs only support trailers of known length.
+In the case of checksums, we're lucky because they're always going to be the same size. We must also take into account
+the fact that checksum values are base64 encoded before being set (this lengthens them.)</p>
+<h3 id="hyper-supports-http-request-trailers-but-isnt-compatible-with-content-encoding-aws-chunked"><a class="header" href="#hyper-supports-http-request-trailers-but-isnt-compatible-with-content-encoding-aws-chunked"><code>hyper</code> supports HTTP request trailers but isn't compatible with <code>Content-Encoding: aws-chunked</code></a></h3>
+<p>This was a big source of confusion for me, and I only figured out what was happening with the help of <a href="https://github.com/seanmonstar">@seanmonstar</a>.
+When using <code>aws-chunked</code> encoding, the trailers have to be appended to the body as part of <code>poll_data</code> instead of
+relying on the <code>poll_trailers</code> method. The working <code>http_body::Body</code> implementation of an <code>aws-chunked</code> encoded body
+looked like this:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl Body for AwsChunkedBody&lt;Inner&gt; {
+    type Data = Bytes;
+    type Error = aws_smithy_http::body::Error;
+
+    fn poll_data(
+        self: Pin&lt;&amp;mut Self&gt;,
+        cx: &amp;mut Context&lt;'_&gt;,
+    ) -&gt; Poll&lt;Option&lt;Result&lt;Self::Data, Self::Error&gt;&gt;&gt; {
+        let this = self.project();
+        if *this.already_wrote_trailers {
+            return Poll::Ready(None);
+        }
+
+        if *this.already_wrote_chunk_terminator {
+            return match this.inner.poll_trailers(cx) {
+                Poll::Ready(Ok(trailers)) =&gt; {
+                    *this.already_wrote_trailers = true;
+                    let total_length_of_trailers_in_bytes = this.options.trailer_lens.iter().sum();
+
+                    Poll::Ready(Some(Ok(trailers_as_aws_chunked_bytes(
+                        total_length_of_trailers_in_bytes,
+                        trailers,
+                    ))))
+                }
+                Poll::Pending =&gt; Poll::Pending,
+                Poll::Ready(err) =&gt; Poll::Ready(Some(err)),
+            };
+        };
+
+        match this.inner.poll_data(cx) {
+            Poll::Ready(Some(Ok(mut data))) =&gt; {
+                let bytes = if *this.already_wrote_chunk_size_prefix {
+                    data.copy_to_bytes(data.len())
+                } else {
+                    // A chunk must be prefixed by chunk size in hexadecimal
+                    *this.already_wrote_chunk_size_prefix = true;
+                    let total_chunk_size = this
+                        .options
+                        .chunk_length
+                        .or(this.options.stream_length)
+                        .unwrap_or_default();
+                    prefix_with_total_chunk_size(data, total_chunk_size)
+                };
+
+                Poll::Ready(Some(Ok(bytes)))
+            }
+            Poll::Ready(None) =&gt; {
+                *this.already_wrote_chunk_terminator = true;
+                Poll::Ready(Some(Ok(Bytes::from(&quot;\r\n0\r\n&quot;))))
+            }
+            Poll::Ready(Some(Err(e))) =&gt; Poll::Ready(Some(Err(e))),
+            Poll::Pending =&gt; Poll::Pending,
+        }
+    }
+
+    fn poll_trailers(
+        self: Pin&lt;&amp;mut Self&gt;,
+        _cx: &amp;mut Context&lt;'_&gt;,
+    ) -&gt; Poll&lt;Result&lt;Option&lt;HeaderMap&lt;HeaderValue&gt;&gt;, Self::Error&gt;&gt; {
+        // When using aws-chunked content encoding, trailers have to be appended to the body
+        Poll::Ready(Ok(None))
+    }
+
+    fn is_end_stream(&amp;self) -&gt; bool {
+        self.already_wrote_trailers
+    }
+
+    fn size_hint(&amp;self) -&gt; SizeHint {
+        SizeHint::with_exact(
+            self.encoded_length()
+                .expect(&quot;Requests made with aws-chunked encoding must have known size&quot;)
+                as u64,
+        )
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="the-stream-is-closing-early-and-i-dont-know-why"><a class="header" href="#the-stream-is-closing-early-and-i-dont-know-why">&quot;The stream is closing early, and I don't know why&quot;</a></h3>
+<p>In my early implementation of <code>http_body::Body</code> for an <code>aws-chunked</code> encoded body, the body wasn't being completely read
+out. The problem turned out to be that I was delegating to the <code>is_end_stream</code> trait method of the inner body. Because
+the innermost body had no knowledge of the trailers I needed to send, it was reporting that the stream had ended.
+The fix was to instead rely on the outermost body's knowledge of its own state in order to determine if all data had
+been read.</p>
+<h2 id="what-helped-me-to-understand-the-problems-and-their-solutions"><a class="header" href="#what-helped-me-to-understand-the-problems-and-their-solutions">What helped me to understand the problems and their solutions</a></h2>
+<ul>
+<li>
+<p><strong>Reaching out to others that had specific knowledge of a problem:</strong> Talking to a developer that had tackled this
+feature for another SDK was a big help. Special thanks is due to <a href="https://github.com/jasdel">@jasdel</a> and the Go v2 SDK team.
+<a href="https://github.com/aws/aws-sdk-go-v2/blob/c214cb61990441aa165e216a3f7e845c50d21939/service/internal/checksum/aws_chunked_encoding.go#L90">Their implementation</a> of an <code>aws-chunked</code> encoded body was the basis for
+my own implementation.</p>
+</li>
+<li>
+<p><strong>Avoiding codegen</strong>: The process of updating codegen code and then running codegen for each new change you make is
+slow compared to running codegen once at the beginning of development and then just manually editing the generated SDK
+as necessary. I still needed to run <code>./gradlew :aws:sdk:relocateAwsRuntime :aws:sdk:relocateRuntime</code> whenever I made
+changes to a runtime crate but that was quick because it's just copying the files. Keep as much code out of codegen as
+possible. It's much easier to modify/debug Rust than it is to write a working codegen module that does the same thing.
+Whenever possible, write the codegen modules later, once the design has settled.</p>
+</li>
+<li>
+<p><strong>Using the <code>Display</code> impl for errors:</strong> The <code>Display</code> impl for an error can ofter contain helpful info that might not
+be visible when printing with the <code>Debug</code> impl. Case in point was an error I was getting because of the
+<code>is_end_stream</code> issue. When <code>Debug</code> printed, the error looked like this:</p>
+<pre><code>DispatchFailure(ConnectorError { err: hyper::Error(User(Body), hyper::Error(BodyWriteAborted)), kind: User })
+</code></pre>
+<p>That wasn't too helpful for me on its own. I looked into the <code>hyper</code> source code and found that the <code>Display</code> impl
+contained a helpful message, so I matched into the error and printed the <code>hyper::Error</code> with the <code>Display</code> impl:</p>
+<pre><code>user body write aborted: early end, expected 2 more bytes'
+</code></pre>
+<p>This helped me understand that I wasn't encoding things correctly and was missing a CRLF.</p>
+</li>
+<li>
+<p><strong>Echo Server</strong>: I first used netcat and then later a small echo server written in Rust to see the raw HTTP request
+being sent out by the SDK as I was working on it. The Rust SDK supports setting endpoints for request. This is often
+used to send requests to something like <a href="https://localstack.cloud/">LocalStack</a>, but I used it to send request to <code>localhost</code> instead:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[tokio::test]
+async fn test_checksum_on_streaming_request_against_s3() {
+    let sdk_config = aws_config::from_env()
+        .endpoint_resolver(Endpoint::immutable(&quot;http://localhost:8080&quot;.parse().expect(&quot;valid URI&quot;)))
+        .load().await;
+    let s3_client = aws_sdk_s3::Client::new(&amp;sdk_config);
+
+    let input_text = b&quot;Hello world&quot;;
+    let _res = s3_client
+        .put_object()
+        .bucket(&quot;some-real-bucket&quot;)
+        .key(&quot;test.txt&quot;)
+        .body(aws_sdk_s3::types::ByteStream::from_static(input_text))
+        .checksum_algorithm(ChecksumAlgorithm::Sha256)
+        .send()
+        .await
+        .unwrap();
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The echo server was based off of an <a href="https://github.com/tokio-rs/axum">axum</a> example and looked like this:</p>
+<pre><pre class="playground"><code class="language-rust">use axum::{
+  body::{Body, Bytes},
+  http::{request::Parts, Request, StatusCode},
+  middleware::{self, Next},
+  response::IntoResponse,
+  routing::put,
+  Router,
+};
+use std::net::SocketAddr;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+#[tokio::main]
+async fn main() {
+  tracing_subscriber::registry().with(tracing_subscriber::EnvFilter::new(
+    std::env::var(&quot;RUST_LOG&quot;).unwrap_or_else(|_| &quot;trace&quot;.into()),
+  ))
+  .with(tracing_subscriber::fmt::layer())
+  .init();
+
+  let app = Router::new()
+      .route(&quot;/&quot;, put(|| async move { &quot;200 OK&quot; }))
+      .layer(middleware::from_fn(print_request_response));
+
+  let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+  tracing::debug!(&quot;listening on {}&quot;, addr);
+  axum::Server::bind(&amp;addr)
+      .serve(app.into_make_service())
+      .await
+      .unwrap();
+}
+
+async fn print_request_response(
+  req: Request&lt;Body&gt;,
+  next: Next&lt;Body&gt;,
+) -&gt; Result&lt;impl IntoResponse, (StatusCode, String)&gt; {
+    let (parts, body) = req.into_parts();
+
+    print_parts(&amp;parts).await;
+    let bytes = buffer_and_print(&quot;request&quot;, body).await?;
+    let req = Request::from_parts(parts, Body::from(bytes));
+
+    let res = next.run(req).await;
+
+    Ok(res)
+}
+
+async fn print_parts(parts: &amp;Parts) {
+    tracing::debug!(&quot;{:#?}&quot;, parts);
+}
+
+async fn buffer_and_print&lt;B&gt;(direction: &amp;str, body: B) -&gt; Result&lt;Bytes, (StatusCode, String)&gt;
+where
+  B: axum::body::HttpBody&lt;Data = Bytes&gt;,
+  B::Error: std::fmt::Display,
+{
+    let bytes = match hyper::body::to_bytes(body).await {
+        Ok(bytes) =&gt; bytes,
+        Err(err) =&gt; {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!(&quot;failed to read {} body: {}&quot;, direction, err),
+            ));
+        }
+    };
+
+    if let Ok(body) = std::str::from_utf8(&amp;bytes) {
+        tracing::debug!(&quot;{} body = {:?}&quot;, direction, body);
+    }
+
+    Ok(bytes)
+}
+</code></pre></pre>
+<h2 id=""><a class="header" href="#"></a></h2>
+</li>
+</ul>
+<p>](writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../contributing/overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../contributing/overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        <script type="text/javascript" src="../static/mermaid.min.js"></script>
+        <script type="text/javascript" src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>
