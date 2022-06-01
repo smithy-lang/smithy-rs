@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.targetCanReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
+import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
@@ -74,7 +74,7 @@ class UnconstrainedUnionGenerator(
 
             rustTemplate(
                 """
-                impl std::convert::TryFrom<$name> for #{ConstrainedSymbol} {
+                impl #{TryFrom}<$name> for #{ConstrainedSymbol} {
                     type Error = #{ConstraintViolationSymbol};
                 
                     fn try_from(value: $name) -> Result<Self, Self::Error> {
@@ -82,6 +82,7 @@ class UnconstrainedUnionGenerator(
                     }
                 }
                 """,
+                "TryFrom" to RuntimeType.TryFrom,
                 "ConstrainedSymbol" to constrainedSymbol,
                 "ConstraintViolationSymbol" to constraintViolationSymbol,
                 "body" to generateTryFromUnconstrainedUnionImpl(),
@@ -101,7 +102,7 @@ class UnconstrainedUnionGenerator(
             }
             """,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
-            "MaybeConstrained" to constrainedSymbol.wrapMaybeConstrained(),
+            "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
             "ConstrainedSymbol" to constrainedSymbol,
             "UnconstrainedSymbol" to symbol
         )
@@ -125,7 +126,6 @@ class UnconstrainedUnionGenerator(
             .filter { it.targetCanReachConstrainedShape(model, symbolProvider) }
             .map { ConstraintViolation(it) }
 
-    // TODO I expect we can deduplicate a bit of code; this was copied from [ServerBuilderGenerator.renderConstraintViolation].
     private fun renderConstraintViolation(writer: RustWriter, constraintViolation: ConstraintViolation) {
         val targetShape = model.expectShape(constraintViolation.forMember.target)
 

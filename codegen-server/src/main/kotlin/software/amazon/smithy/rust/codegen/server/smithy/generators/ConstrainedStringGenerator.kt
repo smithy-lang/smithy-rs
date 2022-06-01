@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
+import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -49,7 +49,6 @@ class ConstrainedStringGenerator(
             "length <= ${lengthTrait.max.get()}"
         }
 
-        // TODO Docs for `ConstraintViolation`.
         // TODO Display impl does not honor `sensitive` trait.
         // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
         // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
@@ -115,7 +114,7 @@ class ConstrainedStringGenerator(
             """,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "ConstraintViolation" to constraintViolation,
-            "MaybeConstrained" to symbol.wrapMaybeConstrained(),
+            "MaybeConstrained" to symbol.makeMaybeConstrained(),
             "Display" to RuntimeType.Display,
             "TryFrom" to RuntimeType.TryFrom,
         )

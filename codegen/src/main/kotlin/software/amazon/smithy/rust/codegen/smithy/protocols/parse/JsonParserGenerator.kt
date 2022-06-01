@@ -58,7 +58,7 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
 // TODO: Separate commit: Make all functions pub(crate). If the functions have in their type signature a pub(crate) type,
-//     and the function is declared `pub`, Rust will complain, even if the json_deser module is not `pub`.
+//  and the function is declared `pub`, Rust will complain, even if the json_deser module is not `pub`.
 
 class JsonParserGenerator(
     codegenContext: CodegenContext,
@@ -214,26 +214,38 @@ class JsonParserGenerator(
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
                     rustBlock("${jsonName(member).dq()} =>") {
-                        // TODO Use when
-                        if (codegenTarget == CodegenTarget.CLIENT) {
-                            withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)}(", ");") {
-                                deserializeMember(member)
-                            }
-                        } else {
-                            if (symbolProvider.toSymbol(member).isOptional()) {
-                                withBlock("builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)}(", ");") {
+                        when (codegenTarget) {
+                            CodegenTarget.CLIENT -> {
+                                withBlock(
+                                    "builder = builder.${
+                                        member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)
+                                    }(", ");"
+                                ) {
                                     deserializeMember(member)
                                 }
-                            } else {
-                                rust("if let Some(v) = ")
-                                deserializeMember(member)
-                                rust(
-                                    """
-                                    {
-                                        builder = builder.${member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)}(v);
+                            }
+                            CodegenTarget.SERVER -> {
+                                if (symbolProvider.toSymbol(member).isOptional()) {
+                                    withBlock(
+                                        "builder = builder.${
+                                            member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)
+                                        }(", ");"
+                                    ) {
+                                        deserializeMember(member)
                                     }
-                                    """
-                                )
+                                } else {
+                                    rust("if let Some(v) = ")
+                                    deserializeMember(member)
+                                    rust(
+                                        """
+                                        {
+                                            builder = builder.${
+                                                member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)
+                                            }(v);
+                                        }
+                                        """
+                                    )
+                                }
                             }
                         }
                     }
@@ -271,7 +283,7 @@ class JsonParserGenerator(
         withBlock("$escapedStrName.to_unescaped().map(|u|", ")") {
             when (target.hasTrait<EnumTrait>()) {
                 true -> {
-                    if (parseUnconstrainedEnum(target)) {
+                    if (parseUnconstrainedShape(target)) {
                         rust("u.into_owned()")
                     } else {
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
@@ -281,8 +293,6 @@ class JsonParserGenerator(
             }
         }
     }
-
-    private fun parseUnconstrainedEnum(shape: StringShape) = codegenTarget == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
 
     private fun RustWriter.deserializeString(target: StringShape) {
         withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ").transpose()?", *codegenScope) {
@@ -308,7 +318,7 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)
+        val returnUnconstrainedType = parseUnconstrainedShape(shape)
         val returnType = if (returnUnconstrainedType) {
             unconstrainedShapeSymbolProvider.toSymbol(shape)
         } else {
@@ -364,7 +374,7 @@ class JsonParserGenerator(
         val keyTarget = model.expectShape(shape.key.target) as StringShape
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val returnUnconstrainedType = codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)
+        val returnUnconstrainedType = parseUnconstrainedShape(shape)
         val returnType = if (returnUnconstrainedType) {
             unconstrainedShapeSymbolProvider.toSymbol(shape)
         } else {
@@ -437,27 +447,12 @@ class JsonParserGenerator(
                         rust("Ok(Some(builder))")
                     } else {
                         rust("Ok(Some(builder.build()))")
-//                        withBlock("Ok(Some(builder.build()", "))") {
-//                            if (StructureGenerator.fallibleBuilder(shape, symbolProvider)) {
-//                                rustTemplate(
-//                                    """
-//                                    .map_err(|err| #{Error}::new(
-//                                        #{ErrorReason}::Custom(format!("{}", err).into()), None)
-//                                    )?
-//                                    """,
-//                                    *codegenScope
-//                                )
-//                            }
-//                        }
                     }
                 }
             }
         }
         rust("#T(tokens)?", nestedParser)
     }
-
-    // TODO Grep for `returnUnconstrainedType` and `parseUnconstrainedEnum`. They should _all_ use this method.
-    private fun parseUnconstrainedShape(shape: Shape) = codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)
 
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
@@ -591,4 +586,13 @@ class JsonParserGenerator(
             }
         }
     }
+
+    /**
+     * Whether we should parse a value for a shape into its associated unconstrained type. For example, when the shape
+     * is a `StructureShape`, we should construct and return a builder instead of building into the final `struct` the
+     * user gets. This is only relevant for the server, that parses the incoming request and only after enforces
+     * constraint traits.
+     */
+    private fun parseUnconstrainedShape(shape: Shape) =
+        codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)
 }

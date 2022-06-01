@@ -111,6 +111,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 ) : ProtocolTraitImplGenerator {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
+    // TODO Use `!!` here and not everywhere else. Or figure out a way so that clients and servers can have different `CodegenContext` types.
     private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -871,7 +872,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             if (queryParamsBinding != null) {
                 val target = model.expectShape(queryParamsBinding.member.target, MapShape::class.java)
                 val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
-                // TODO Here we only check the target shape; constraint traits on member shapes are not implemented yet.
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Here we only check the target shape;
+                //  constraint traits on member shapes are not implemented yet.
                 val targetSymbol = unconstrainedShapeSymbolProvider!!.toSymbol(target)
                 withBlock("let mut query_params: #T = ", ";", targetSymbol) {
                     conditionalBlock("#T(", ")", conditional = hasConstrainedTarget, targetSymbol) {
@@ -945,7 +947,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
                 if (queryParamsBinding != null) {
                     val target = model.expectShape(queryParamsBinding.member.target, MapShape::class.java)
-                    // TODO Here we only check the target shape; constraint traits on member shapes are not implemented yet.
+                    // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Here we only check the target shape;
+                    //  constraint traits on member shapes are not implemented yet.
                     val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
                     when (queryParamsBinding.queryParamsBindingTargetMapValueType()) {
                         QueryParamsTargetMapValueType.STRING -> {
@@ -977,12 +980,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
             if (queryParamsBinding != null) {
-                // TODO Constraint traits on member shapes are not implemented yet. We would have to check those here too.
-                val hasConstrainedTarget =
-                    model.expectShape(queryParamsBinding.member.target, MapShape::class.java).canReachConstrainedShape(model, symbolProvider)
-                // TODO Why not always use the unconstrainedShapeSymbolProvider? It should work!
-                val symbolProvider = if (hasConstrainedTarget) unconstrainedShapeSymbolProvider!! else symbolProvider
-                val isOptional = symbolProvider.toSymbol(queryParamsBinding.member).isOptional()
+                val isOptional = unconstrainedShapeSymbolProvider!!.toSymbol(queryParamsBinding.member).isOptional()
                 withBlock("input = input.${queryParamsBinding.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.target)}(", ");") {
                     conditionalBlock("Some(", ")", conditional = isOptional) {
                         write("query_params")
@@ -990,21 +988,28 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
             queryBindingsTargettingCollection.forEach { binding ->
-                // TODO Constraint traits on member shapes are not implemented yet. We would have to check those here too.
-                // TODO UnconstrainedShapeSymbolProvider should always work.
+                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
+                //  implemented yet.
                 val hasConstrainedTarget =
                         model.expectShape(binding.member.target, CollectionShape::class.java).canReachConstrainedShape(model, symbolProvider)
-                val symbolProvider = if (hasConstrainedTarget) unconstrainedShapeSymbolProvider!! else symbolProvider
-                val memberName = symbolProvider.toMemberName(binding.member)
-                val isOptional = symbolProvider.toSymbol(binding.member).isOptional()
+                val memberName = unconstrainedShapeSymbolProvider!!.toMemberName(binding.member)
+                val isOptional = unconstrainedShapeSymbolProvider.toSymbol(binding.member).isOptional()
                 rustBlock("if !$memberName.is_empty()") {
-                    withBlock("input = input.${binding.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.target)}(", ");") {
+                    withBlock(
+                        "input = input.${
+                            binding.member.deserializerBuilderSetterName(
+                                model,
+                                unconstrainedShapeSymbolProvider,
+                                codegenContext.target
+                            )
+                        }(", ");"
+                    ) {
                         conditionalBlock("Some(", ")", conditional = isOptional) {
                             conditionalBlock(
                                 "#T(",
                                 ")",
                                 conditional = hasConstrainedTarget,
-                                symbolProvider.toSymbol(binding.member).mapRustType { it.stripOuter<RustType.Option>() }) {
+                                unconstrainedShapeSymbolProvider.toSymbol(binding.member).mapRustType { it.stripOuter<RustType.Option>() }) {
                                 write(memberName)
                             }
                         }

@@ -112,7 +112,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         protocolGeneratorFactory = generator
         model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
         val baseProvider = RustCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
-        // TODO No `CodegenDecorator` is altering the symbol provider, so we might as well remove the `symbolProvider`
+        // TODO Separate commit: No `CodegenDecorator` is altering the symbol provider, so we might as well remove the `symbolProvider`
         //  method from the `RustCodegenDecorator` interface.
         symbolProvider =
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
@@ -123,7 +123,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                         model,
                         service,
                         symbolVisitorConfig,
-                        publicConstrainedShapesEnabled = false
+                        publicConstrainedTypesEnabled = false
                     )
                 )
             ), model, service

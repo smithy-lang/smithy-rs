@@ -75,8 +75,8 @@ class ErrorGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val messageShape = shape.errorMessageMember()
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
-        // TODO Why do we always generate a `pub fn message() -> Option<&str> { None }` for `@error` structure shapes,
-        //   even when they don’t have a `message` field?
+        // TODO Separate commit: Why do we always generate a `pub fn message() -> Option<&str> { None }` for `@error` structure shapes,
+        //  even when they don’t have a `message` field?
         val (returnType, message) = messageShape?.let {
             val messageSymbol = symbolProvider.toSymbol(it).mapRustType { t -> t.asDeref() }
             if (messageSymbol.rustType().stripOuter<RustType.Option>() is RustType.Opaque) {

@@ -53,13 +53,12 @@ class ServerEnumGeneratorTest {
             shape,
             shape.expectTrait()
         ).render()
-        // TODO Last line needs to be replaced with the `ConstraintViolation`.
         writer.compileAndTest(
             """
             use std::str::FromStr;
             assert_eq!(InstanceType::try_from("t2.nano").unwrap(), InstanceType::T2Nano);
             assert_eq!(InstanceType::from_str("t2.nano").unwrap(), InstanceType::T2Nano);
-            //assert_eq!(InstanceType::try_from("unknown").unwrap_err(), InstanceTypeUnknownVariantError("unknown".to_string()));
+            assert_eq!(InstanceType::try_from("unknown").unwrap_err(), crate::model::instance_type::ConstraintViolation(String::from("unknown")));
             """
         )
     }

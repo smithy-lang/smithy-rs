@@ -13,10 +13,11 @@ import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
+import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 
 // TODO Docs
 class UnconstrainedCollectionGenerator(
@@ -42,7 +43,6 @@ class UnconstrainedCollectionGenerator(
         val constraintViolationName = constraintViolationSymbol.name
         val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
 
-        // TODO Don't be lazy and don't use `Result<_, >`.
         unconstrainedModuleWriter.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
                 """
@@ -55,7 +55,7 @@ class UnconstrainedCollectionGenerator(
                     }
                 }
                 
-                impl std::convert::TryFrom<$name> for #{ConstrainedSymbol} {
+                impl #{TryFrom}<$name> for #{ConstrainedSymbol} {
                     type Error = #{ConstraintViolationSymbol};
                 
                     fn try_from(value: $name) -> Result<Self, Self::Error> {
@@ -73,7 +73,8 @@ class UnconstrainedCollectionGenerator(
                 "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
                 "ConstrainedSymbol" to constrainedSymbol,
                 "ConstraintViolationSymbol" to constraintViolationSymbol,
-                "MaybeConstrained" to constrainedSymbol.wrapMaybeConstrained(),
+                "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
+                "TryFrom" to RuntimeType.TryFrom,
             )
         }
 

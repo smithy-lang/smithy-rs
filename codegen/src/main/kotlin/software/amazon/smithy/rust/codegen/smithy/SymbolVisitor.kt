@@ -127,23 +127,29 @@ fun Symbol.makeRustBoxed(): Symbol =
             .build()
     }
 
-// TODO This can be written in terms of `mapRustType`.
-// TODO isMaybeConstrained. Make it like the others.
-fun Symbol.wrapMaybeConstrained(): Symbol {
-    val rustType = RustType.MaybeConstrained(this.rustType())
-    return Symbol.builder()
-        .rustType(rustType)
-        .addReference(this)
-        .name(rustType.name)
-        .build()
-}
+/**
+ * Make the Rust type of a symbol wrapped in `MaybeConstrained`. (hold `MaybeConstrained<T>`).
+ *
+ * This is idempotent and will have no change if the type is already `MaybeConstrained<T>`.
+ */
+fun Symbol.makeMaybeConstrained(): Symbol =
+    if (this.rustType() is RustType.MaybeConstrained) {
+        this
+    } else {
+        val rustType = RustType.MaybeConstrained(this.rustType())
+        Symbol.builder()
+            .rustType(rustType)
+            .addReference(this)
+            .name(rustType.name)
+            .build()
+    }
 
 /** Map the RustType of a symbol with [f] */
 fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
     val newType = f(this.rustType())
     return Symbol.builder()
         .rustType(newType)
-        // TODO This is a bug. Grep for all `addReference(this)`, maybe they are too.
+        // TODO Separate commit: This is a bug if `f` swaps the type instead of wrapping it.
         .addReference(this)
         .name(newType.name)
         .build()
@@ -439,11 +445,6 @@ fun Symbol.isOptional(): Boolean = when (this.rustType()) {
     is RustType.Option -> true
     else -> false
 }
-
-/**
- * Get the referenced symbol for T if [this] is an Option<T>, [this] otherwise
- */
-fun Symbol.extractSymbolFromOption(): Symbol = this.mapRustType { it.stripOuter<RustType.Option>() }
 
 fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is RustType.Box
 

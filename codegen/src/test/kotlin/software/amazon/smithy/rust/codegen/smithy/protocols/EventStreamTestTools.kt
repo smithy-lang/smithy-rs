@@ -304,7 +304,7 @@ object EventStreamTestModels {
             """.trimIndent(),
         ) { Ec2QueryProtocol(it) },
     )
-    // TODO This is wrong: server tests should be run from the server subproject, and use `serverTestSymbolProvider()`
+    // TODO Separate commit: This is wrong: server tests should be run from the server subproject, and use `serverTestSymbolProvider()`
     // .flatMap { listOf(it, it.copy(target = CodegenTarget.SERVER)) }
 
     class UnmarshallTestCasesProvider : ArgumentsProvider {

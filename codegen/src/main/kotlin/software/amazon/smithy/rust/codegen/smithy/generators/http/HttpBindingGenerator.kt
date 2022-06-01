@@ -552,12 +552,9 @@ class HttpBindingGenerator(
         }
         ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
             val listHeader = memberType is CollectionShape
-            // TODO This should be a method.
-            val workingWithPublicConstrainedWrapperTupleType =
-                codegenTarget == CodegenTarget.SERVER && memberShape.hasPublicConstrainedWrapperTupleType(model)
             rustTemplate(
                 """
-                for (k, v) in ${ if (workingWithPublicConstrainedWrapperTupleType) "&$field.0" else field } {
+                for (k, v) in ${ if (workingWithPublicConstrainedWrapperTupleType(memberShape)) "&$field.0" else field } {
                     use std::str::FromStr;
                     let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{build_error}::InvalidField { field: "$memberName", details: format!("`{}` cannot be used as a header name: {}", k, err)}
@@ -608,9 +605,7 @@ class HttpBindingGenerator(
                     //  `httpPrefixHeaders` trait was found, and _not_ to the collection member shape on which we'd have
                     //  to check for constraint trait precedence. So `member.hasPublicConstrainedWrapperTupleType()` is
                     //  _not_ what we want.
-                    val workingWithPublicConstrainedWrapperTupleType =
-                        codegenTarget == CodegenTarget.SERVER && target.hasPublicConstrainedWrapperTupleType(model)
-                    quoteValue("AsRef::<str>::as_ref(${ if (workingWithPublicConstrainedWrapperTupleType) "&$targetName.0" else targetName })")
+                    quoteValue("AsRef::<str>::as_ref(${if (workingWithPublicConstrainedWrapperTupleType(target)) "&$targetName.0" else targetName})")
                 }
             }
             target.isTimestampShape -> {
@@ -628,4 +623,7 @@ class HttpBindingGenerator(
             else -> throw CodegenException("unexpected shape: $target")
         }
     }
+
+    private fun workingWithPublicConstrainedWrapperTupleType(shape: Shape) =
+        codegenTarget == CodegenTarget.SERVER && shape.hasPublicConstrainedWrapperTupleType(model)
 }

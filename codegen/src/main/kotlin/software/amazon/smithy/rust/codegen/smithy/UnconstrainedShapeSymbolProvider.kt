@@ -137,7 +137,7 @@ class UnconstrainedShapeSymbolProvider(
                     base.toSymbol(shape)
                 }
                 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
-                //   implemented yet.
+                //  implemented yet.
             }
             is StringShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {

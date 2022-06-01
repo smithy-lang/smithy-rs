@@ -6,11 +6,9 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -24,7 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
+import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
 // TODO Docs
@@ -54,17 +52,8 @@ class UnconstrainedMapGenerator(
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
         val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
-        // TODO The unconstrained shape symbol provider should always work.
-        val keySymbol = if (isKeyConstrained(keyShape)) {
-            unconstrainedShapeSymbolProvider.toSymbol(keyShape)
-        } else {
-            symbolProvider.toSymbol(keyShape)
-        }
-        val valueSymbol = if (isValueConstrained(valueShape)) {
-            unconstrainedShapeSymbolProvider.toSymbol(valueShape)
-        } else {
-            symbolProvider.toSymbol(valueShape)
-        }
+        val keySymbol = unconstrainedShapeSymbolProvider.toSymbol(keyShape)
+        val valueSymbol = unconstrainedShapeSymbolProvider.toSymbol(valueShape)
 
         unconstrainedModuleWriter.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustTemplate(
@@ -81,7 +70,7 @@ class UnconstrainedMapGenerator(
                 """,
                 "KeySymbol" to keySymbol,
                 "ValueSymbol" to valueSymbol,
-                "MaybeConstrained" to constrainedSymbol.wrapMaybeConstrained(),
+                "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
             )
 
             renderTryFromUnconstrainedForConstrained(this)
@@ -90,8 +79,6 @@ class UnconstrainedMapGenerator(
         renderConstraintViolation()
     }
 
-    // TODO Docs for ConstraintViolation.
-    // TODO KeyConstraintViolation and ValueConstraintViolation need to be `#[doc(hidden)]`.
     private fun renderConstraintViolation() {
         val constraintViolationCodegenScope = listOfNotNull(
             if (isKeyConstrained(keyShape)) {
@@ -114,8 +101,8 @@ class UnconstrainedMapGenerator(
                 ##[derive(Debug, PartialEq)]
                 pub enum $constraintViolationName {
                     ${if (shape.hasTrait<LengthTrait>()) "Length(usize)," else ""}
-                    ${if (isKeyConstrained(keyShape)) "Key(#{KeyConstraintViolationSymbol})," else ""}
-                    ${if (isValueConstrained(valueShape)) "Value(#{ValueConstraintViolationSymbol})," else ""}
+                    ${if (isKeyConstrained(keyShape)) "##[doc(hidden)] Key(#{KeyConstraintViolationSymbol})," else ""}
+                    ${if (isValueConstrained(valueShape)) "##[doc(hidden)] Value(#{ValueConstraintViolationSymbol})," else ""}
                 }
                 """,
                 *constraintViolationCodegenScope,
@@ -206,12 +193,5 @@ class UnconstrainedMapGenerator(
 
     private fun isKeyConstrained(shape: StringShape) = shape.isDirectlyConstrained(symbolProvider)
 
-    private fun isValueConstrained(shape: Shape): Boolean = when (shape) {
-        is StructureShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        is CollectionShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        is MapShape -> shape.canReachConstrainedShape(model, symbolProvider)
-        is StringShape -> shape.isDirectlyConstrained(symbolProvider)
-        // TODO(https://github.com/awslabs/smithy-rs/pull/1199) Other constraint traits on simple shapes.
-        else -> false
-    }
+    private fun isValueConstrained(shape: Shape): Boolean = shape.canReachConstrainedShape(model, symbolProvider)
 }

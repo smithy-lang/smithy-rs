@@ -31,8 +31,6 @@ class ServerEnumGenerator(
     private val unknownVariantSymbol = constraintViolationSymbolProvider.toSymbol(shape)
 
     override fun renderFromForStr() {
-        // TODO Docs for ConstraintViolation
-        // TODO Display for ConstraintViolation
         writer.rust(
             """
             pub mod ${enumName.toSnakeCase()} {

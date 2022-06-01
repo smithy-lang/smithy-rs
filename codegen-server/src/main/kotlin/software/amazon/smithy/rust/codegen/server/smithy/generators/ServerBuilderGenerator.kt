@@ -41,7 +41,7 @@ import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
+import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -53,7 +53,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 //     - Always implements either From<Builder> for Structure or TryFrom<Builder> for Structure.
 //     - `pubCrateConstrainedShapeSymbolProvider` only needed if we want the builder to take in unconstrained types.
 class ServerBuilderGenerator(
-    private val codegenContext: CodegenContext,
+    codegenContext: CodegenContext,
     private val shape: StructureShape,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider? = null,
 ) {
@@ -67,6 +67,14 @@ class ServerBuilderGenerator(
     private val moduleName = shape.builderSymbol(symbolProvider).namespace.split("::").last()
     private val isBuilderFallible = StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
 
+    private val codegenScope = arrayOf(
+        "RequestRejection" to ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig),
+        "Structure" to structureSymbol,
+        "From" to RuntimeType.From,
+        "TryFrom" to RuntimeType.TryFrom,
+        "MaybeConstrained" to RuntimeType.MaybeConstrained()
+    )
+
     fun render(writer: RustWriter) {
         writer.docs("See #D.", structureSymbol)
         writer.withModule(moduleName) {
@@ -77,17 +85,15 @@ class ServerBuilderGenerator(
     private fun renderBuilder(writer: RustWriter) {
         if (isBuilderFallible) {
             Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.PartialEq)).render(writer)
-            // TODO(): `#[non_exhaustive] unless we commit to making builders of builders public.
             writer.docs("Holds one variant for each of the ways the builder can fail.")
             Attribute.NonExhaustive.render(writer)
-            // TODO This should use `name` from the constraint violation symbol.
-            writer.rustBlock("pub enum ConstraintViolation") {
+            val constraintViolationSymbolName = constraintViolationSymbolProvider.toSymbol(shape).name
+            writer.rustBlock("pub enum $constraintViolationSymbolName") {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 
             renderImplDisplayConstraintViolation(writer)
-            // TODO Use RuntimeType.StdError
-            writer.rust("impl std::error::Error for ConstraintViolation { }")
+            writer.rust("impl #T for ConstraintViolation { }", RuntimeType.StdError)
 
             // Only generate converter from `ConstraintViolation` into `RequestRejection` if the structure shape is
             // an operation input shape.
@@ -127,9 +133,8 @@ class ServerBuilderGenerator(
     }
 
     // TODO This impl does not take into account sensitive trait.
-    // TODO Use RuntimeType.Display
     private fun renderImplDisplayConstraintViolation(writer: RustWriter) {
-        writer.rustBlock("impl std::fmt::Display for ConstraintViolation") {
+        writer.rustBlock("impl #T for ConstraintViolation", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 rustBlock("match self") {
                     constraintViolations().forEach {
@@ -146,30 +151,29 @@ class ServerBuilderGenerator(
     }
 
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
-        // TODO Use RuntimeType.From
         writer.rustTemplate(
             """
-            impl From<ConstraintViolation> for #{RequestRejection} {
+            impl #{From}<ConstraintViolation> for #{RequestRejection} {
                 fn from(value: ConstraintViolation) -> Self {
                     Self::Build(value.into())
                 }
             }
             """,
-            "RequestRejection" to ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig)
+            *codegenScope
         )
     }
 
     private fun renderImplFromBuilderForMaybeConstrained(writer: RustWriter) {
-        // TODO Use RuntimeType.From
-        writer.rust(
+        writer.rustTemplate(
             """
-            impl From<Builder> for #{T} {
+            impl #{From}<Builder> for #{StructureMaybeConstrained} {
                 fn from(builder: Builder) -> Self {
                     Self::Unconstrained(builder)
                 }
             }
             """,
-            structureSymbol.wrapMaybeConstrained()
+            *codegenScope,
+            "StructureMaybeConstrained" to structureSymbol.makeMaybeConstrained()
         )
     }
 
@@ -206,7 +210,6 @@ class ServerBuilderGenerator(
         }
     }
 
-    // TODO(EventStream): [DX] Consider updating builders to take EventInputStream as Into<EventInputStream>
     private fun renderBuilderMember(writer: RustWriter, member: MemberShape) {
         val memberSymbol = builderMemberSymbol(member)
         val memberName = symbolProvider.toMemberName(member)
@@ -243,7 +246,7 @@ class ServerBuilderGenerator(
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
                 if (wrapInMaybeConstrained) {
-                    val maybeConstrainedConstrained = "${symbol.wrapMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
+                    val maybeConstrainedConstrained = "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
                     // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
                     var varExpr = if (symbol.isOptional()) "v" else "input"
                     if (hasBox) varExpr = "*$varExpr"
@@ -298,7 +301,6 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
-        // TODO: `pub(crate)` unless we commit to making builders of builders public.
         // Setter names will never hit a reserved word and therefore never need escaping.
         writer.rustBlock("pub(crate) fn set_${memberName.toSnakeCase()}(mut self, input: $inputType) -> Self") {
             rust(
@@ -341,7 +343,7 @@ class ServerBuilderGenerator(
     private fun renderConstraintViolation(writer: RustWriter, constraintViolation: ConstraintViolation) =
         when (constraintViolation.kind) {
             ConstraintViolationKind.MISSING_MEMBER -> {
-                writer.docs("${constraintViolationMessage(constraintViolation).capitalize()}.")
+                writer.docs("${constraintViolationMessage(constraintViolation).replaceFirstChar { it.uppercase() }}.")
                 writer.rust("${constraintViolation.name()},")
             }
             ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> {
@@ -357,7 +359,6 @@ class ServerBuilderGenerator(
                 // Note we cannot express the inner constraint violation as `<T as TryFrom<T>>::Error`, because `T` might
                 // be `pub(crate)` and that would leak `T` in a public interface.
                 writer.docs("${constraintViolationMessage(constraintViolation)}.")
-                // TODO: `#[doc(hidden)]` unless we commit to making builders of builders public.
                 Attribute.DocHidden.render(writer)
                 writer.rust("${constraintViolation.name()}(#T),", constraintViolationSymbol)
             }
@@ -397,7 +398,7 @@ class ServerBuilderGenerator(
      */
     private fun builderMissingFieldForMember(member: MemberShape) =
         // TODO(https://github.com/awslabs/smithy-rs/issues/1302): We go through the symbol provider because
-        //     non-`required` blob streaming members are interpreted as `required`, so we can't use `member.isOptional`.
+        //  non-`required` blob streaming members are interpreted as `required`, so we can't use `member.isOptional`.
         if (symbolProvider.toSymbol(member).isOptional()) {
             null
         } else {
@@ -415,22 +416,20 @@ class ServerBuilderGenerator(
                 }
             }
             """,
-            "Structure" to structureSymbol,
-            "TryFrom" to RuntimeType.TryFrom,
+            *codegenScope
         )
     }
 
     private fun renderFromBuilderImpl(writer: RustWriter) {
-        // TODO Use RuntimeType.From
         writer.rustTemplate(
             """
-            impl From<Builder> for #{Structure} {
+            impl #{From}<Builder> for #{Structure} {
                 fn from(builder: Builder) -> Self {
                     builder.build()
                 }
             }
             """,
-            "Structure" to structureSymbol,
+            *codegenScope
         )
     }
 
@@ -446,7 +445,6 @@ class ServerBuilderGenerator(
                 pubCrateConstrainedShapeSymbolProvider!!.toSymbol(member)
             }
             // Strip the `Option` in case the member is not `required`.
-            // TODO Grep for these and replace them with `extractSymbolFromOption`.
             .mapRustType { it.stripOuter<RustType.Option>() }
 
             val hadBox = strippedOption.isRustBoxed()
@@ -455,7 +453,7 @@ class ServerBuilderGenerator(
                 .mapRustType { it.stripOuter<RustType.Box>() }
                 // Wrap it in the Cow-like `constrained::MaybeConstrained` type, since we know the target member shape can
                 // reach a constrained shape.
-                .wrapMaybeConstrained()
+                .makeMaybeConstrained()
                 // Box it in case the member can reach itself recursively.
                 .letIf(hadBox) { it.makeRustBoxed() }
                 // Ensure we always end up with an `Option`.
@@ -507,7 +505,7 @@ class ServerBuilderGenerator(
                                 )
                                 .transpose()?
                                 """,
-                                "MaybeConstrained" to RuntimeType.MaybeConstrained()
+                                *codegenScope
                             )
                         } else {
                             rustTemplate(
@@ -522,7 +520,7 @@ class ServerBuilderGenerator(
                                 )
                                 .transpose()?
                                 """,
-                                "MaybeConstrained" to RuntimeType.MaybeConstrained()
+                                *codegenScope
                             )
                         }
                     }

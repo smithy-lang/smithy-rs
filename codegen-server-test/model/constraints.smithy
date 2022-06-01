@@ -23,7 +23,7 @@ service ConstraintsService {
         QueryParamsTargetingMapOfListOfEnumStringOperation,
         HttpPrefixHeadersTargetingLengthMapOperation,
         // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
-        //HttpPrefixHeadersTargetingMapOfEnumStringOperation,
+        // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
     ],
 }
 
@@ -126,11 +126,11 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     lengthStringListHeader: ListOfLengthString,
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
-    //@httpHeader("X-Enum")
+    // @httpHeader("X-Enum")
     //enumStringHeader: EnumString,
 
-    //@httpHeader("X-Enum-List")
-    //enumStringListHeader: ListOfEnumString,
+    // @httpHeader("X-Enum-List")
+    // enumStringListHeader: ListOfEnumString,
 
     @httpQuery("lengthString")
     lengthStringQuery: LengthString,

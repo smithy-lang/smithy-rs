@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.wrapMaybeConstrained
+import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
 // TODO Unit tests
@@ -45,7 +45,7 @@ class ConstrainedTraitForEnumGenerator(
             }
             """,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
-            "MaybeConstrained" to symbol.wrapMaybeConstrained(),
+            "MaybeConstrained" to symbol.makeMaybeConstrained(),
         )
     }
 }
