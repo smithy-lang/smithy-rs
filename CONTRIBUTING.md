@@ -57,3 +57,8 @@ If you discover a potential security issue in this project we ask that you notif
 ## Licensing
 
 See the [LICENSE](LICENSE) file for our project's licensing. We will ask you to confirm the licensing of your contribution.
+
+## More helpful information for contributors
+
+Part of our [design docs](./design/src/overview.md) are dedicated to helpful information for contributors.
+[Take a look](./design/src/contributing/overview.md).
