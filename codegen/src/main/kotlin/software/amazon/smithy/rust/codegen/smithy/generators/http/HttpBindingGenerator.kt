@@ -552,6 +552,7 @@ class HttpBindingGenerator(
         }
         ifSet(memberType, memberSymbol, "&input.$memberName") { field ->
             val listHeader = memberType is CollectionShape
+            // TODO This should be a method.
             val workingWithPublicConstrainedWrapperTupleType =
                 codegenTarget == CodegenTarget.SERVER && memberShape.hasPublicConstrainedWrapperTupleType(model)
             rustTemplate(
