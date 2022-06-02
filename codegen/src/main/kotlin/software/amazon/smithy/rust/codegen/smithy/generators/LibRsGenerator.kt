@@ -44,6 +44,7 @@ class LibRsGenerator(
                 rust("##![warn(missing_docs)]")
             }
 
+            // TODO: Separate commit
             rust("##![allow(clippy::type_complexity)]")
 
             val libraryDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value ?: settings.moduleName
