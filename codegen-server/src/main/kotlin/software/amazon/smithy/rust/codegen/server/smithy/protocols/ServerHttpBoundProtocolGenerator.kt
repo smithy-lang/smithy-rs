@@ -12,7 +12,6 @@ import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
-import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.NumberShape
@@ -22,9 +21,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
-import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
-import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -61,7 +58,6 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBoundProtocolPay
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.smithy.shape
 import software.amazon.smithy.rust.codegen.smithy.toOptional
 import software.amazon.smithy.rust.codegen.smithy.wrapOptional
 import software.amazon.smithy.rust.codegen.util.dq
@@ -69,7 +65,6 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
-import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.isStreaming
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -147,12 +142,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         operationWriter.renderTraits(inputSymbol, outputSymbol, operationShape)
     }
 
-    private fun expectedContentType(payloadTarget: Shape): String = when (payloadTarget) {
-        is BlobShape -> "application/octet-stream"
-        is StringShape -> "text/plain"
-        else -> ""
-    }
-
     /*
      * Generation of `FromRequest` and `IntoResponse`.
      * For non-streaming request bodies, that is, models without streaming traits
@@ -169,39 +158,17 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
-        val mediaTypes = listOf(inputSymbol, outputSymbol)
-            .flatMap { it.shape().members() }
-            .filter { it.hasTrait<HttpPayloadTrait>() }
-            .map { model.expectShape(it.target) }
-            .map {
-                it.getTrait<MediaTypeTrait>()
-                    ?.value
-                    ?: run {
-                        if (it.isBlobShape) {
-                            "" // accept
-                        } else {
-                            expectedContentType(it)
-                        }
-                    }
-            }
-        val impliedContentTypes =
-            if (mediaTypes.isEmpty()) { "application/json".dq() } else {
-                mediaTypes
-                    .filter { it.isNotEmpty() }
-                    .distinct()
-                    .joinToString { it.dq() }
-            }
-        val verifyContentType = if (impliedContentTypes.isEmpty()) { "" } else {
+
+        val impliedResponseContentType = httpBindingResolver.responseContentType(operationShape)
+        val verifyResponseContentType = if (impliedResponseContentType == null) { "" } else {
             """
             if let Some(headers) = req.headers() {
-                if let Some(accept) = headers.get("accept") {
-                    for implied_content_type in &[$impliedContentTypes] {
-                        if accept != implied_content_type {
-                            return Err(Self::Rejection {
-                                protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                                kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
-                            })
-                        }
+                if let Some(accept) = headers.get(#{http}::header::ACCEPT) {
+                    if accept != ${impliedResponseContentType.dq()} {
+                        return Err(Self::Rejection {
+                            protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
+                            kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
+                        })
                     }
                 }
             }
@@ -222,7 +189,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             {
                 type Rejection = #{RuntimeError};
                 async fn from_request(req: &mut #{SmithyHttpServer}::request::RequestParts<B>) -> Result<Self, Self::Rejection> {
-                    $verifyContentType
+                    $verifyResponseContentType
                     #{parse_request}(req)
                         .await
                         .map($inputName)
