@@ -913,7 +913,13 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
                         when {
                             memberShape.isStringShape -> {
-                                rust("let v = v.into_owned();")
+                                if (queryParamsBinding != null) {
+                                    // If there's an `@httpQueryParams` binding, it will want to consume the parsed data
+                                    // too further down, so we need to clone it.
+                                    rust("let v = v.clone().into_owned();")
+                                } else {
+                                    rust("let v = v.into_owned();")
+                                }
                             }
                             memberShape.isTimestampShape -> {
                                 val index = HttpBindingIndex.of(model)

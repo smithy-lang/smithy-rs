@@ -412,7 +412,11 @@ class HttpBindingGenerator(
                 if (returnUnconstrainedType) {
                     rust(
                         """
-                        Ok(Some(#T($parsedValue)))
+                        Ok(if !$parsedValue.is_empty() {
+                            Some(#T($parsedValue))
+                        } else {
+                            None
+                        })
                         """,
                         symbolProvider.toSymbol(targetShape)
                     )

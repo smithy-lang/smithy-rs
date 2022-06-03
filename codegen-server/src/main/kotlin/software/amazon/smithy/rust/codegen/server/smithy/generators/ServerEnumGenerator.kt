@@ -41,7 +41,7 @@ class ServerEnumGenerator(
         )
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.TryFrom) {
             rust("type Error = #T;", unknownVariantSymbol)
-            rustBlock("fn try_from(s: &str) -> Result<Self, Self::Error>") {
+            rustBlock("fn try_from(s: &str) -> Result<Self, <Self as #T<&str>>::Error>", RuntimeType.TryFrom) {
                 rustBlock("match s") {
                     sortedMembers.forEach { member ->
                         rust("${member.value.dq()} => Ok($enumName::${member.derivedName()}),")
@@ -54,8 +54,8 @@ class ServerEnumGenerator(
             """
             impl #{TryFrom}<String> for $enumName {
                 type Error = #{UnknownVariantSymbol};
-                fn try_from(s: String) -> Result<Self, Self::Error> {
-                    s.try_into()
+                fn try_from(s: String) -> std::result::Result<Self, <Self as #{TryFrom}<String>>::Error> {
+                    s.as_str().try_into()
                 }
             }
             """,
@@ -70,7 +70,7 @@ class ServerEnumGenerator(
             impl std::str::FromStr for $enumName {
                 type Err = #{UnknownVariantSymbol};
 
-                fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+                fn from_str(s: &str) -> std::result::Result<Self, <Self as std::str::FromStr>::Err> {
                     Self::try_from(s)
                 }
             }

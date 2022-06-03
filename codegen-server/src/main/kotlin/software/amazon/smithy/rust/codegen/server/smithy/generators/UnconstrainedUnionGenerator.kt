@@ -27,9 +27,9 @@ import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvid
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.targetCanReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
@@ -60,6 +60,7 @@ class UnconstrainedUnionGenerator(
         unconstrainedModuleWriter.withModule(module, RustMetadata(visibility = Visibility.PUBCRATE)) {
             rustBlock(
                 """
+                ##[allow(clippy::enum_variant_names)]
                 ##[derive(Debug, Clone)]
                 pub(crate) enum $name
                 """
@@ -148,25 +149,30 @@ class UnconstrainedUnionGenerator(
                 sortedMembers.forEach { member ->
                     val memberName = unconstrainedShapeSymbolProvider.toMemberName(member)
                     withBlockTemplate(
-                        "#{UnconstrainedUnion}::$memberName(unconstrained) => Self::$memberName(",
-                        "),",
+                        "#{UnconstrainedUnion}::$memberName(unconstrained) => Self::$memberName({",
+                        "}),",
                         "UnconstrainedUnion" to symbol,
                     ) {
                         if (member.targetCanReachConstrainedShape(model, symbolProvider)) {
                             val targetShape = model.expectShape(member.target)
                             val resolveToNonPublicConstrainedType =
                                 !targetShape.isDirectlyConstrained(symbolProvider) &&
-                                !targetShape.isStructureShape
+                                !targetShape.isStructureShape &&
+                                !targetShape.isUnionShape
+
+                            val hasBox = member.hasTrait<RustBoxTrait>()
+                            if (hasBox) {
+                                rust("let unconstrained = *unconstrained;")
+                            }
 
                             if (resolveToNonPublicConstrainedType) {
                                 rustTemplate(
                                     """
-                                    {
-                                        let constrained: #{PubCrateConstrainedShapeSymbol} = unconstrained
-                                            .try_into()
-                                            .map_err(Self::Error::${ConstraintViolation(member).name()})?;
-                                        constrained.into()
-                                    }
+                                    let constrained: #{PubCrateConstrainedShapeSymbol} = unconstrained
+                                        .try_into()
+                                        ${ if (hasBox) ".map(Box::new).map_err(Box::new)" else "" }
+                                        .map_err(Self::Error::${ConstraintViolation(member).name()})?;
+                                    constrained.into()
                                     """,
                                     "PubCrateConstrainedShapeSymbol" to pubCrateConstrainedShapeSymbolProvider.toSymbol(targetShape)
                                 )
@@ -175,6 +181,7 @@ class UnconstrainedUnionGenerator(
                                     """
                                     unconstrained
                                         .try_into()
+                                        ${ if (hasBox) ".map(Box::new).map_err(Box::new)" else "" }
                                         .map_err(Self::Error::${ConstraintViolation(member).name()})?
                                     """
                                 )

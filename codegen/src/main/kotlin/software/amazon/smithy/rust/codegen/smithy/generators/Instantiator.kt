@@ -45,6 +45,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -288,7 +289,11 @@ class Instantiator(
         writer.write(".build()")
         val hasFallibleBuilder = when (codegenTarget) {
             CodegenTarget.CLIENT -> StructureGenerator.hasFallibleBuilder(shape, symbolProvider)
-            CodegenTarget.SERVER -> StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes = false)
+            CodegenTarget.SERVER -> {
+                // Only operation input builders take in unconstrained types.
+                val takesInUnconstrainedTypes = shape.hasTrait<SyntheticInputTrait>()
+                StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takesInUnconstrainedTypes)
+            }
         }
         if (hasFallibleBuilder) {
             writer.write(".unwrap()")

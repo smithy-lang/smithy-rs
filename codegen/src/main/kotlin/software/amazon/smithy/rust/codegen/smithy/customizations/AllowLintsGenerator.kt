@@ -31,6 +31,9 @@ val ClippyAllowLints = listOf(
 
     // Forcing use of `vec![]` can make codegen harder in some cases
     "vec_init_then_push",
+
+    // TODO: Separate commit
+    "type_complexity"
 )
 
 val AllowDocsLints = listOf(

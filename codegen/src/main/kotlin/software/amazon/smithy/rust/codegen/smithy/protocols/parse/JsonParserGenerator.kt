@@ -271,7 +271,9 @@ class JsonParserGenerator(
         }
         val symbol = symbolProvider.toSymbol(memberShape)
         if (symbol.isRustBoxed()) {
-            if (codegenTarget == CodegenTarget.SERVER && memberShape.targetCanReachConstrainedShape(model, symbolProvider)) {
+            if (codegenTarget == CodegenTarget.SERVER &&
+                model.expectShape(memberShape.container).isStructureShape &&
+                memberShape.targetCanReachConstrainedShape(model, symbolProvider)) {
                 // Before boxing, convert into `MaybeConstrained` if the target can reach a constrained shape.
                 rust(".map(|x| x.into())")
             }
