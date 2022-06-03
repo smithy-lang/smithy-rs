@@ -13,26 +13,22 @@ use smithy.test#httpResponseTests
 @title("MiscService")
 service MiscService {
     operations: [
-        OperationWithInnerRequiredShape,
-        ResponseCodeRequired,
-        ResponseCodeHttpFallback,
-        ResponseCodeDefault,
+        InnerRequiredShapeOperation,
+        ResponseCodeRequiredOperation,
+        ResponseCodeHttpFallbackOperation,
+        ResponseCodeDefaultOperation,
     ],
 }
 
 /// This operation tests that (de)serializing required values from a nested
 /// shape works correctly.
-@http(uri: "/operation", method: "GET")
-operation OperationWithInnerRequiredShape {
-    input: OperationWithInnerRequiredShapeInput,
-    output: OperationWithInnerRequiredShapeOutput,
+@http(uri: "/innerRequiredShapeOperation", method: "GET")
+operation InnerRequiredShapeOperation {
+    input: InnerRequiredShapeOperationInputOutput,
+    output: InnerRequiredShapeOperationInputOutput,
 }
 
-structure OperationWithInnerRequiredShapeInput {
-    inner: InnerShape
-}
-
-structure OperationWithInnerRequiredShapeOutput {
+structure InnerRequiredShapeOperationInputOutput {
     inner: InnerShape
 }
 
@@ -114,64 +110,52 @@ union AUnion {
     time: Timestamp,
 }
 
-/// This operation tests that the response code defaults to 200 when no other code is set
+/// This operation tests that the response code defaults to 200 when no other
+/// code is set.
 @httpResponseTests([
     {
-        id: "ResponseCodeDefault",
+        id: "ResponseCodeDefaultOperation",
         protocol: "aws.protocols#restJson1",
         code: 200,
     }
 ])
-@http(method: "GET", uri: "/responseCodeDefault")
-operation ResponseCodeDefault {
-    input: ResponseCodeDefaultInput,
-    output: ResponseCodeDefaultOutput,
+@http(method: "GET", uri: "/responseCodeDefaultOperation")
+operation ResponseCodeDefaultOperation {
+    input: EmptyStructure,
+    output: EmptyStructure,
 }
 
-@input
-structure ResponseCodeDefaultInput {}
-
-@output
-structure ResponseCodeDefaultOutput {}
-
-/// This operation tests that the response code defaults to @http's code
+/// This operation tests that the response code defaults to `@http`'s code.
 @httpResponseTests([
     {
-        id: "ResponseCodeHttpFallback",
+        id: "ResponseCodeHttpFallbackOperation",
         protocol: "aws.protocols#restJson1",
         code: 418,
     }
 ])
-@http(method: "GET", uri: "/responseCodeHttpFallback", code: 418)
-operation ResponseCodeHttpFallback {
-    input: ResponseCodeHttpFallbackInput,
-    output: ResponseCodeHttpFallbackOutput,
+@http(method: "GET", uri: "/responseCodeHttpFallbackOperation", code: 418)
+operation ResponseCodeHttpFallbackOperation {
+    input: EmptyStructure,
+    output: EmptyStructure,
 }
 
-@input
-structure ResponseCodeHttpFallbackInput {}
+structure EmptyStructure {}
 
-@output
-structure ResponseCodeHttpFallbackOutput {}
-
-/// This operation tests that @httpResponseCode is @required
-/// and is used over @http's code
+/// This operation tests that `@httpResponseCode` is `@required`
+/// and is used over `@http's` code.
 @httpResponseTests([
     {
-        id: "ResponseCodeRequired",
+        id: "ResponseCodeRequiredOperation",
         protocol: "aws.protocols#restJson1",
         code: 201,
         params: {"responseCode": 201}
     }
 ])
-@http(method: "GET", uri: "/responseCodeRequired", code: 200)
-operation ResponseCodeRequired {
-    input: ResponseCodeRequiredInput,
+@http(method: "GET", uri: "/responseCodeRequiredOperation", code: 200)
+operation ResponseCodeRequiredOperation {
+    input: EmptyStructure,
     output: ResponseCodeRequiredOutput,
 }
-
-@input
-structure ResponseCodeRequiredInput {}
 
 @output
 structure ResponseCodeRequiredOutput {
