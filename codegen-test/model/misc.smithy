@@ -13,11 +13,41 @@ use smithy.test#httpResponseTests
 @title("MiscService")
 service MiscService {
     operations: [
+        TypeComplexityOperation,
         InnerRequiredShapeOperation,
         ResponseCodeRequiredOperation,
         ResponseCodeHttpFallbackOperation,
         ResponseCodeDefaultOperation,
     ],
+}
+
+/// An operation whose shapes generate complex Rust types.
+/// See https://rust-lang.github.io/rust-clippy/master/index.html#type_complexity.
+@http(uri: "/typeComplexityOperation", method: "GET")
+operation TypeComplexityOperation {
+    input: TypeComplexityOperationInputOutput,
+    output: TypeComplexityOperationInputOutput,
+}
+
+structure TypeComplexityOperationInputOutput {
+    list: ListA
+}
+
+list ListA {
+    member: ListB
+}
+
+list ListB {
+    member: ListC
+}
+
+list ListC {
+    member: MapA
+}
+
+map MapA {
+    key: String,
+    value: EmptyStructure
 }
 
 /// This operation tests that (de)serializing required values from a nested
