@@ -109,11 +109,15 @@ fun Symbol.makeOptional(): Symbol {
     }
 }
 
-/** Map the RustType of a symbol with [f] */
+/**
+ * Map the [RustType] of a symbol with [f].
+ *
+ * WARNING: This function does not set any `SymbolReference`s on the returned symbol. You will have to add those
+ * yourself if your logic relies on them.
+ **/
 fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
     val newType = f(this.rustType())
     return Symbol.builder().rustType(newType)
-        .addReference(this)
         .name(newType.name)
         .build()
 }
