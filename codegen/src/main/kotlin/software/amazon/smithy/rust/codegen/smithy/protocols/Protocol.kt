@@ -22,7 +22,6 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
@@ -81,8 +80,6 @@ typealias ProtocolMap = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>
 interface ProtocolGeneratorFactory<out T : ProtocolGenerator> {
     fun protocol(codegenContext: CodegenContext): Protocol
     fun buildProtocolGenerator(codegenContext: CodegenContext): T
-    fun transformModel(model: Model): Model
-    fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
     fun support(): ProtocolSupport
 }
 

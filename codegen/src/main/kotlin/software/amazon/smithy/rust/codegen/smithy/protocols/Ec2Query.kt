@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.HttpTrait
@@ -28,8 +27,6 @@ class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
 
     override fun buildProtocolGenerator(codegenContext: CodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
-
-    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

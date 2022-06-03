@@ -12,14 +12,13 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
-import java.util.ServiceLoader
+import java.util.*
 import java.util.logging.Logger
 
 /**
@@ -68,8 +67,6 @@ interface RustCodegenDecorator {
     fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap = currentProtocols
 
     fun transformModel(service: ServiceShape, model: Model): Model = model
-
-    fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider = baseProvider
 }
 
 /**
@@ -120,12 +117,6 @@ open class CombinedCodegenDecorator(decorators: List<RustCodegenDecorator>) : Ru
     override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
         return orderedDecorators.foldRight(currentProtocols) { decorator, protocolMap ->
             decorator.protocols(serviceId, protocolMap)
-        }
-    }
-
-    override fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider {
-        return orderedDecorators.foldRight(baseProvider) { decorator, provider ->
-            decorator.symbolProvider(provider)
         }
     }
 

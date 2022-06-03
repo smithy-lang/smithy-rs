@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
@@ -21,8 +20,6 @@ class ServerRestXmlFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGen
 
     override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpBoundProtocolGenerator =
         ServerHttpBoundProtocolGenerator(codegenContext, RestXml(codegenContext))
-
-    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

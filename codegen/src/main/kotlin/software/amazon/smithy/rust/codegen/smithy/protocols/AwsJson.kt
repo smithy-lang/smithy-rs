@@ -46,8 +46,6 @@ class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFac
         return HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
     }
 
-    override fun transformModel(model: Model): Model = model
-
     override fun support(): ProtocolSupport = ProtocolSupport(
         /* Client support */
         requestSerialization = true,

@@ -32,8 +32,6 @@ class AwsQueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun buildProtocolGenerator(codegenContext: CodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
 
-    override fun transformModel(model: Model): Model = model
-
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
             /* Client support */

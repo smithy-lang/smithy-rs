@@ -34,7 +34,7 @@ class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
-        addErrorShapeToModelOps(service, model, { shape -> shape.errors.isEmpty() })
+        addErrorShapeToModelOps(service, model) { shape -> shape.errors.isEmpty() }
 }
 
 /**
@@ -60,11 +60,11 @@ class AddInternalServerErrorToAllOpsDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
-        addErrorShapeToModelOps(service, model, { _ -> true })
+        addErrorShapeToModelOps(service, model) { true }
 }
 
 fun addErrorShapeToModelOps(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {
-    val errorShape = internalServerError(service.id.getNamespace())
+    val errorShape = internalServerError(service.id.namespace)
     val modelShapes = model.toBuilder().addShapes(listOf(errorShape)).build()
     return ModelTransformer.create().mapShapes(modelShapes) { shape ->
         if (shape is OperationShape && opSelector(shape)) {

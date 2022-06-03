@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.Writable
@@ -35,8 +34,6 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGenera
 
     override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpBoundProtocolGenerator =
         ServerHttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
-
-    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

@@ -30,8 +30,6 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun buildProtocolGenerator(codegenContext: CodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, RestJson(codegenContext))
 
-    override fun transformModel(model: Model): Model = model
-
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
             /* Client support */
