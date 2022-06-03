@@ -133,7 +133,7 @@ fun Project.registerGenerateSmithyBuildTask(
             project.extra["previousBuildHashes"] = project.buildDir.walk()
                 .filter { it.isFile }
                 .map {
-                    HashUtils.getCheckSumFromFile(it) to it.lastModified()
+                    getChecksumForFile(it) to it.lastModified()
                 }
                 .toMap()
         }
@@ -192,7 +192,7 @@ fun Project.registerModifyMtimeTask() {
             project.buildDir.walk()
                 .filter { it.isFile }
                 .map {
-                    HashUtils.getCheckSumFromFile(it) to it
+                    getChecksumForFile(it) to it
                 }
                 .forEach { (currentHash, currentFile) ->
                     previousBuildHashes[currentHash]?.also { oldMtime ->
