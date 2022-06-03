@@ -48,15 +48,15 @@ val allCodegenTests = listOf(
     CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
 )
 
-registerGenerateSmithyBuildTask(rootProject, project, pluginName, allCodegenTests)
-registerGenerateCargoWorkspaceTask(rootProject, project, pluginName, allCodegenTests, workingDirUnderBuildDir)
-registerGenerateCargoConfigTomlTask(project, buildDir.resolve(workingDirUnderBuildDir))
+project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
+project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
+project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
-registerModifyMtimeTask(project)
-registerCargoCommandsTasks(project, buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
+project.registerModifyMtimeTask()
+project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

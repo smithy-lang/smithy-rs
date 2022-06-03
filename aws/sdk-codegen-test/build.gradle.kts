@@ -28,14 +28,14 @@ val allCodegenTests = listOf(
     CodegenTest("com.amazonaws.apigateway#BackplaneControlService", "apigateway")
 )
 
-registerGenerateSmithyBuildTask(rootProject, project, pluginName, allCodegenTests)
-registerGenerateCargoWorkspaceTask(rootProject, project, pluginName, allCodegenTests, workingDirUnderBuildDir)
+project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
+project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
-registerModifyMtimeTask(project)
-registerCargoCommandsTasks(project, buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
+project.registerModifyMtimeTask()
+project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

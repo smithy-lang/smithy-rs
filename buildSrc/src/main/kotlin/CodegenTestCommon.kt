@@ -16,7 +16,7 @@ import java.io.File
 
 data class CodegenTest(val service: String, val module: String, val extraConfig: String? = null)
 
-fun generateSmithyBuild(projectDir: String, pluginName: String, tests: List<CodegenTest>): String {
+private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: List<CodegenTest>): String {
     val projections = tests.joinToString(",\n") {
         """
         "${it.module}": {
@@ -53,7 +53,7 @@ enum class Cargo(val toString: String) {
     CLIPPY("cargoClippy");
 }
 
-fun generateCargoWorkspace(pluginName: String, tests: List<CodegenTest>) =
+private fun generateCargoWorkspace(pluginName: String, tests: List<CodegenTest>) =
     """
     [workspace]
     members = [
@@ -64,7 +64,7 @@ fun generateCargoWorkspace(pluginName: String, tests: List<CodegenTest>) =
 /**
  * Filter the service integration tests for which to generate Rust crates in [allTests] using the given [properties].
  */
-fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTest>): List<CodegenTest> {
+private fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTest>): List<CodegenTest> {
     val modulesOverride = properties.get("modules")?.split(",")?.map { it.trim() }
 
     val ret = if (modulesOverride != null) {
@@ -108,14 +108,13 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
     return ret
 }
 
-fun registerGenerateSmithyBuildTask(
+fun Project.registerGenerateSmithyBuildTask(
     rootProject: Project,
-    project: Project,
     pluginName: String,
     allCodegenTests: List<CodegenTest>
 ) {
-    val properties = PropertyRetriever(rootProject, project)
-    project.tasks.register("generateSmithyBuild") {
+    val properties = PropertyRetriever(rootProject, this)
+    this.tasks.register("generateSmithyBuild") {
         description = "generate smithy-build.json"
         outputs.file(project.projectDir.resolve("smithy-build.json"))
 
@@ -141,14 +140,13 @@ fun registerGenerateSmithyBuildTask(
     }
 }
 
-fun registerGenerateCargoWorkspaceTask(
+fun Project.registerGenerateCargoWorkspaceTask(
     rootProject: Project,
-    project: Project,
     pluginName: String,
     allCodegenTests: List<CodegenTest>,
     workingDirUnderBuildDir: String
 ) {
-    val properties = PropertyRetriever(rootProject, project)
+    val properties = PropertyRetriever(rootProject, this)
     project.tasks.register("generateCargoWorkspace") {
         description = "generate Cargo.toml workspace file"
         doFirst {
@@ -158,11 +156,10 @@ fun registerGenerateCargoWorkspaceTask(
     }
 }
 
-fun registerGenerateCargoConfigTomlTask(
-    project: Project,
+fun Project.registerGenerateCargoConfigTomlTask(
     outputDir: File
 ) {
-    project.tasks.register("generateCargoConfigToml") {
+    this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
         doFirst {
             outputDir.resolve(".cargo").mkdir()
@@ -177,9 +174,7 @@ fun registerGenerateCargoConfigTomlTask(
     }
 }
 
-fun registerModifyMtimeTask(
-    project: Project
-) {
+fun Project.registerModifyMtimeTask() {
     // Cargo uses `mtime` (among other factors) to determine whether a compilation unit needs a rebuild. While developing,
     // it is likely that only a small number of the generated crate files are modified across rebuilds. This task compares
     // the hashes of the newly generated files with the (previously cached) old ones, and restores their `mtime`s if the
@@ -187,12 +182,12 @@ fun registerModifyMtimeTask(
     // Debugging tip: it is useful to run with `CARGO_LOG=cargo::core::compiler::fingerprint=trace` to learn why Cargo
     // determines a compilation unit needs a rebuild.
     // For more information see https://github.com/awslabs/smithy-rs/issues/1412.
-    project.tasks.register("modifyMtime") {
+    this.tasks.register("modifyMtime") {
         description = "modify Rust files' `mtime` if the contents did not change"
         dependsOn("generateSmithyBuild")
 
         doFirst {
-            val previousBuildHashes: Map<String, Long> = project.extra["previousBuildHashes"] as Map<String, Long>
+            @Suppress("UNCHECKED_CAST") val previousBuildHashes: Map<String, Long> = project.extra["previousBuildHashes"] as Map<String, Long>
 
             project.buildDir.walk()
                 .filter { it.isFile }
@@ -209,31 +204,30 @@ fun registerModifyMtimeTask(
     }
 }
 
-fun registerCargoCommandsTasks(
-    project: Project,
+fun Project.registerCargoCommandsTasks(
     outputDir: File,
     defaultRustDocFlags: String
 ) {
-    project.tasks.register<Exec>(Cargo.CHECK.toString) {
+    this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
         workingDir(outputDir)
         commandLine("cargo", "check", "--lib", "--tests", "--benches")
     }
 
-    project.tasks.register<Exec>(Cargo.TEST.toString) {
+    this.tasks.register<Exec>(Cargo.TEST.toString) {
         dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
         workingDir(outputDir)
         commandLine("cargo", "test")
     }
 
-    project.tasks.register<Exec>(Cargo.DOCS.toString) {
+    this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
         workingDir(outputDir)
         environment("RUSTDOCFLAGS", defaultRustDocFlags)
         commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     }
 
-    project.tasks.register<Exec>(Cargo.CLIPPY.toString) {
+    this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
         dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
         workingDir(outputDir)
         commandLine("cargo", "clippy")

@@ -386,8 +386,8 @@ tasks["assemble"].apply {
     finalizedBy("finalizeSdk")
 }
 
-registerCargoCommandsTasks(project, outputDir, defaultRustDocFlags)
-registerGenerateCargoConfigTomlTask(project, outputDir)
+project.registerCargoCommandsTasks(outputDir, defaultRustDocFlags)
+project.registerGenerateCargoConfigTomlTask(outputDir)
 
 tasks["test"].finalizedBy(Cargo.CLIPPY, Cargo.TEST, Cargo.DOCS)
 
