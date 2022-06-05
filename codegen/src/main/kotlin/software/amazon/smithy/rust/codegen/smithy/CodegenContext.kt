@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy
@@ -8,14 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-
-/**
- * Code generation mode: In some situations, codegen has different behavior for client vs. server (eg. required fields)
- */
-sealed class CodegenMode {
-    object Server : CodegenMode()
-    object Client : CodegenMode()
-}
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 
 /**
  * Configuration needed to generate the client for a given Service<->Protocol pair
@@ -52,7 +45,7 @@ data class CodegenContext(
      *
      * Some settings are dependent on whether server vs. client codegen is being invoked.
      */
-    val mode: CodegenMode,
+    val target: CodegenTarget,
 ) {
     constructor(
         model: Model,
@@ -60,8 +53,8 @@ data class CodegenContext(
         serviceShape: ServiceShape,
         protocol: ShapeId,
         settings: RustSettings,
-        mode: CodegenMode,
-    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings, mode)
+        target: CodegenTarget,
+    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings, target)
 
     /**
      * The name of the cargo crate to generate e.g. `aws-sdk-s3`

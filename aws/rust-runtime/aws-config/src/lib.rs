@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #![warn(missing_docs)]
 
@@ -122,6 +122,8 @@ mod http_credential_provider;
 pub mod sso;
 
 pub mod connector;
+
+pub mod credential_process;
 
 pub(crate) mod parsing;
 

@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
@@ -30,10 +30,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.unknownVariantError
@@ -45,7 +45,7 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 class EventStreamMarshallerGenerator(
     private val model: Model,
-    private val mode: CodegenMode,
+    private val target: CodegenTarget,
     runtimeConfig: RuntimeConfig,
     private val symbolProvider: RustSymbolProvider,
     private val unionShape: UnionShape,
@@ -107,7 +107,7 @@ class EventStreamMarshallerGenerator(
                             renderMarshallEvent(member, target)
                         }
                     }
-                    if (mode.renderUnknownVariant()) {
+                    if (target.renderUnknownVariant()) {
                         rustTemplate(
                             """
                             Self::Input::${UnionGenerator.UnknownVariantName} => return Err(

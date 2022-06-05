@@ -2203,6 +2203,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>Specifies the destination, format and type of the logs. </p>"
                     }
+                },
+                "TransitEncryptionEnabled": {
+                    "target": "com.amazonaws.elasticache#BooleanOptional",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A flag that enables in-transit encryption when set to true.\n            \n            You cannot modify the value of <code>TransitEncryptionEnabled</code> after the cluster is created. To enable in-transit encryption on a cluster you must set <code>TransitEncryptionEnabled</code> to true when you create a cluster. </p>\n      \n        <p>\n            <b>Required:</b>\n            Only available when creating a cache cluster in an Amazon VPC using Memcached version <code>1.6.12</code> or later.</p>"
+                    }
                 }
             },
             "traits": {
@@ -3344,6 +3350,9 @@
             "input": {
                 "target": "com.amazonaws.elasticache#DeleteCacheParameterGroupMessage"
             },
+            "output": {
+                "target": "smithy.api#Unit"
+            },
             "errors": [
                 {
                     "target": "com.amazonaws.elasticache#CacheParameterGroupNotFoundFault"
@@ -3382,6 +3391,9 @@
             "input": {
                 "target": "com.amazonaws.elasticache#DeleteCacheSecurityGroupMessage"
             },
+            "output": {
+                "target": "smithy.api#Unit"
+            },
             "errors": [
                 {
                     "target": "com.amazonaws.elasticache#CacheSecurityGroupNotFoundFault"
@@ -3419,6 +3431,9 @@
             "type": "operation",
             "input": {
                 "target": "com.amazonaws.elasticache#DeleteCacheSubnetGroupMessage"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
             },
             "errors": [
                 {

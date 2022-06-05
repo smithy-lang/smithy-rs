@@ -1,6 +1,6 @@
 #
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 #
 
 # The base image adds a non-root `build` user and creates a home directory for it,

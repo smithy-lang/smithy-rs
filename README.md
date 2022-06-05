@@ -1,4 +1,4 @@
-Smithy Rust ![status](https://github.com/awslabs/smithy-rs/workflows/CI/badge.svg)
+Smithy Rust [![CI on Branch `main`](https://github.com/awslabs/smithy-rs/actions/workflows/ci-main.yml/badge.svg)](https://github.com/awslabs/smithy-rs/actions/workflows/ci-main.yml)
 ==================================================================================
 
 Smithy code generators for Rust that generate clients, servers, and the entire AWS SDK.

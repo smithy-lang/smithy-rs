@@ -11,26 +11,44 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
 
+[[smithy-rs]]
+message = "Add ability to sign a request with all headers, or to change which headers are excluded from signing"
+references = ["smithy-rs#1381"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "alonlud"
+
+ [[aws-sdk-rust]]
+ message = "Add method `ByteStream::into_async_read`. This makes it easy to convert `ByteStream`s into a struct implementing `tokio:io::AsyncRead`. Available on **crate feature** `rt-tokio` only."
+ references = ["smithy-rs#1390"]
+ meta = { "breaking" = false, "tada" = true, "bug" = false }
+ author = "Velfi"
+
+ [[smithy-rs]]
+ message = "Add method `ByteStream::into_async_read`. This makes it easy to convert `ByteStream`s into a struct implementing `tokio:io::AsyncRead`. Available on **crate feature** `rt-tokio` only."
+ references = ["smithy-rs#1390"]
+ meta = { "breaking" = false, "tada" = true, "bug" = false }
+ author = "Velfi"
+
+[[smithy-rs]]
+message = "Add ability to specify a different rust crate name than the one derived from the package name"
+references = ["smithy-rs#1404"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "petrosagg"
+
+[[smithy-rs]]
+message = "Switch to [RustCrypto](https://github.com/RustCrypto)'s implementation of MD5."
+references = ["smithy-rs#1404"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "petrosagg"
+
 [[aws-sdk-rust]]
-message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.56.1 to 1.58.1 per our \"two versions behind\" policy."
-references = ["smithy-rs#1318"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "Velfi"
-
-[[smithy-rs]]
-message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.56.1 to 1.58.1 per our \"two versions behind\" policy."
-references = ["smithy-rs#1318"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "Velfi"
-
-[[smithy-rs]]
-message = "Add new trait for HTTP body callbacks. This is the first step to enabling us to implement optional checksum verification of requests and responses."
-references = ["smithy-rs#1307"]
+message = "Switch to [RustCrypto](https://github.com/RustCrypto)'s implementation of MD5."
+references = ["smithy-rs#1404"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "Velfi"
+author = "petrosagg"
 
-[[smithy-rs]]
-message = "Upgrade to Smithy 1.21.0"
-references = ["smithy-rs#1330"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
+[[aws-sdk-rust]]
+message = "Add support for `credential_process` in AWS configs for fetching credentials from an external process."
+references = ["smithy-rs#1356"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jszwedko"

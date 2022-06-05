@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+import os
+import sys
+
+expected = [os.path.realpath("/tmp"), ["rev-list", "end_exclusive..start_inclusive", "--", "some-path"]]
+actual = [os.getcwd(), sys.argv[1:]]
+if expected != actual:
+    print(f"ERROR\nExpect: {expected}\nActual: {actual}")
+    sys.exit(1)
+
+print("third-commit")
+print("second-commit")
+print("initial-commit")

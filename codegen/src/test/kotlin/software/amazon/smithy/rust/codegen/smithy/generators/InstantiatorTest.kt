@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators
@@ -81,7 +81,7 @@ class InstantiatorTest {
     @Test
     fun `generate unions`() {
         val union = model.lookup<UnionShape>("com.test#MyUnion")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         val data = Node.parse(
             """{
             "stringVariant": "ok!"
@@ -100,7 +100,7 @@ class InstantiatorTest {
     @Test
     fun `generate struct builders`() {
         val structure = model.lookup<StructureShape>("com.test#MyStruct")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         val data = Node.parse("""{ "bar": 10, "foo": "hello" }""")
         val writer = RustWriter.forModule("model")
         structure.renderWithModelBuilder(model, symbolProvider, writer)
@@ -117,7 +117,7 @@ class InstantiatorTest {
     @Test
     fun `generate builders for boxed structs`() {
         val structure = model.lookup<StructureShape>("com.test#WithBox")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         val data = Node.parse(
             """ {
             "member": {
@@ -157,7 +157,7 @@ class InstantiatorTest {
             """
         )
         val writer = RustWriter.forModule("lib")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#MyList"), data)
@@ -178,7 +178,7 @@ class InstantiatorTest {
             """
         )
         val writer = RustWriter.forModule("lib")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#MySparseList"), data)
@@ -199,7 +199,7 @@ class InstantiatorTest {
             """
         )
         val writer = RustWriter.forModule("model")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         val inner: StructureShape = model.lookup("com.test#Inner")
         inner.renderWithModelBuilder(model, symbolProvider, writer)
         writer.test {
@@ -223,7 +223,7 @@ class InstantiatorTest {
         // "Parameter values that contain binary data MUST be defined using values
         // that can be represented in plain text (for example, use "foo" and not "Zm9vCg==")."
         val writer = RustWriter.forModule("lib")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         writer.test {
             withBlock("let blob = ", ";") {
                 sut.render(

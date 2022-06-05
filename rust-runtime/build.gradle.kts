@@ -1,11 +1,12 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 description = "Rust Runtime"
 plugins {
     kotlin("jvm")
+    `maven-publish`
 }
 
 group = "software.amazon.rustruntime"
@@ -39,7 +40,7 @@ tasks.register<Copy>("copyRuntimeCrates") {
     into(runtimeOutputDir)
 }
 
-task("fixRuntimeCrateVersions") {
+tasks.register("fixRuntimeCrateVersions") {
     dependsOn("copyRuntimeCrates")
     doLast {
         CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { moduleName ->
@@ -56,4 +57,13 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
     binaryName = "publisher"
     arguments = listOf("fix-manifests", "--location", runtimeOutputDir.absolutePath)
     dependsOn("fixRuntimeCrateVersions")
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("default") {
+            from(components["java"])
+        }
+    }
+    repositories { maven { url = uri("$buildDir/repository") } }
 }

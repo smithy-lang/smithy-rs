@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 #
 
 # Generates a Cargo.toml with the given AWS SDK version for this canary
@@ -16,7 +16,7 @@ import zipfile
 
 BASE_MANIFEST = """
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 #
 # IMPORTANT: Don't edit this file directly! Run `build-bundle` to modify this file instead.
 [package]

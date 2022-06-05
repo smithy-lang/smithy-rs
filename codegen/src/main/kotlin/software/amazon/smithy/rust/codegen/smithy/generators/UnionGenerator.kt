@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators
@@ -15,14 +15,13 @@ import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-fun CodegenMode.renderUnknownVariant() = when (this) {
-    is CodegenMode.Server -> false
-    is CodegenMode.Client -> true
+fun CodegenTarget.renderUnknownVariant() = when (this) {
+    CodegenTarget.SERVER -> false
+    CodegenTarget.CLIENT -> true
 }
 
 /**
