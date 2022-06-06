@@ -180,6 +180,8 @@ impl Sync {
     /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
     #[instrument(skip(self, versions))]
     fn sync_smithy_rs(&self, versions: &VersionsManifest) -> Result<()> {
+        use rayon::prelude::*;
+
         info!(
             "Checking for smithy-rs commits in range HEAD..{}",
             versions.smithy_rs_revision
@@ -206,7 +208,7 @@ impl Sync {
             let fs = self.fs.clone();
 
             commits
-                .iter()
+                .par_iter()
                 .enumerate()
                 .map(move |(commit_num, commit_hash)| {
                     let span = info_span!(
