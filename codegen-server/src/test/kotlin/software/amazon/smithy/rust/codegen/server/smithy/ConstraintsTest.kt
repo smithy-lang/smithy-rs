@@ -109,7 +109,7 @@ class ConstraintsTest {
 
     @Test
     fun `it should detect supported constrained traits as constrained`() {
-        listOf(mapA, structA, lengthString).forEach {
+        listOf(mapA, structA, lengthString, myString).forEach {
             // TODO When a test like this one fails, we get:
             //   ```
             //   io.kotest.assertions.AssertionFailedError: expected:<true> but was:<false>

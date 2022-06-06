@@ -111,8 +111,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 ) : ProtocolTraitImplGenerator {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
-    // TODO Use `!!` here and not everywhere else. Or figure out a way so that clients and servers can have different `CodegenContext` types.
-    private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
+    private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider!!
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
@@ -616,7 +615,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val httpBindingGenerator = ServerRequestBindingGenerator(
             protocol,
             codegenContext,
-            codegenContext.unconstrainedShapeSymbolProvider!!,
+            unconstrainedShapeSymbolProvider,
             operationShape
         )
         val structuredDataParser = protocol.structuredDataParser(operationShape)
@@ -874,7 +873,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
                 // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Here we only check the target shape;
                 //  constraint traits on member shapes are not implemented yet.
-                val targetSymbol = unconstrainedShapeSymbolProvider!!.toSymbol(target)
+                val targetSymbol = unconstrainedShapeSymbolProvider.toSymbol(target)
                 withBlock("let mut query_params: #T = ", ";", targetSymbol) {
                     conditionalBlock("#T(", ")", conditional = hasConstrainedTarget, targetSymbol) {
                         rust("#T::new()", RustType.HashMap.RuntimeType)
@@ -963,7 +962,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         QueryParamsTargetMapValueType.LIST, QueryParamsTargetMapValueType.SET -> {
                             if (hasConstrainedTarget) {
                                 val collectionShape = model.expectShape(target.value.target, CollectionShape::class.java)
-                                val collectionSymbol = unconstrainedShapeSymbolProvider!!.toSymbol(collectionShape)
+                                val collectionSymbol = unconstrainedShapeSymbolProvider.toSymbol(collectionShape)
                                 rust(
                                     // `or_insert_with` instead of `or_insert` to avoid the allocation when the entry is
                                     // not empty.
@@ -986,7 +985,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
             if (queryParamsBinding != null) {
-                val isOptional = unconstrainedShapeSymbolProvider!!.toSymbol(queryParamsBinding.member).isOptional()
+                val isOptional = unconstrainedShapeSymbolProvider.toSymbol(queryParamsBinding.member).isOptional()
                 withBlock("input = input.${queryParamsBinding.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.target)}(", ");") {
                     conditionalBlock("Some(", ")", conditional = isOptional) {
                         write("query_params")
@@ -998,7 +997,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 //  implemented yet.
                 val hasConstrainedTarget =
                         model.expectShape(binding.member.target, CollectionShape::class.java).canReachConstrainedShape(model, symbolProvider)
-                val memberName = unconstrainedShapeSymbolProvider!!.toMemberName(binding.member)
+                val memberName = unconstrainedShapeSymbolProvider.toMemberName(binding.member)
                 val isOptional = unconstrainedShapeSymbolProvider.toSymbol(binding.member).isOptional()
                 rustBlock("if !$memberName.is_empty()") {
                     withBlock(
@@ -1064,7 +1063,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     private fun generateParseStrFn(binding: HttpBindingDescriptor, percentDecoding: Boolean): RuntimeType {
-        val output = unconstrainedShapeSymbolProvider!!.toSymbol(binding.member)
+        val output = unconstrainedShapeSymbolProvider.toSymbol(binding.member)
         val fnName = generateParseStrFnName(binding)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) { writer ->
             writer.rustBlockTemplate(
