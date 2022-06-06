@@ -28,9 +28,14 @@ struct Args {
     #[clap(long, parse(from_os_str))]
     aws_doc_sdk_examples: PathBuf,
 
-    /// Override the number of threads to use for code gen.
+    /// Number of threads that `sdk-sync` will use. Defaults to the physical number of CPUs,
+    /// or the available RAM divided by the RAM required for codegen. Whichever is smaller.
     #[clap(long)]
-    num_threads: Option<usize>,
+    sync_threads: Option<usize>,
+    /// The Java parallelism (corresponding to the `java.util.concurrent.ForkJoinPool.common.parallelism`
+    /// system property) to use for Smithy codegen. Defaults to 1.
+    #[clap(long)]
+    smithy_parallelism: Option<usize>,
 }
 
 /// This tool syncs codegen changes from smithy-rs, examples changes from aws-doc-sdk-examples,
@@ -60,18 +65,18 @@ fn main() -> Result<()> {
     info!("Available RAM (GB): {available_ram_gb}");
     info!("Num physical CPUs: {num_cpus}");
 
-    let num_threads = if let Some(num_threads) = args.num_threads {
-        num_threads
+    let smithy_parallelism = args.smithy_parallelism.unwrap_or(1);
+    let sync_threads = if let Some(sync_threads) = args.sync_threads {
+        sync_threads
     } else {
-        let num_threads = (available_ram_gb / CODEGEN_MIN_RAM_REQUIRED_GB)
+        (available_ram_gb / CODEGEN_MIN_RAM_REQUIRED_GB)
             .max(1) // Must use at least 1 thread
-            .min(num_cpus); // Don't exceed the number of physical CPUs
-        num_threads
+            .min(num_cpus) // Don't exceed the number of physical CPUs
     };
-    info!("Thread pool size: {num_threads}");
+    info!("Sync thread pool size: {sync_threads}");
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(num_threads)
+        .num_threads(sync_threads)
         .build_global()
         .unwrap();
 
@@ -79,6 +84,7 @@ fn main() -> Result<()> {
         &args.aws_doc_sdk_examples.canonicalize().context(here!())?,
         &args.aws_sdk_rust.canonicalize().context(here!())?,
         &args.smithy_rs.canonicalize().context(here!())?,
+        smithy_parallelism,
     )?;
 
     sync.sync().map_err(|e| e.context("The sync failed"))
