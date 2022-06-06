@@ -62,9 +62,9 @@ pub struct Router<B = Body> {
 }
 
 // This constant determines when the `TinyMap` implementation switches from being a `Vec` to a
-// `HashMap`. This is chosen to be 20 as a result of the discussion around
-// https://gist.github.com/daboross/976978d8200caf86e02acb6805961195
-const ROUTE_CUTOFF: usize = 20;
+// `HashMap`. This is chosen to be 15 as a result of the discussion around
+// https://github.com/awslabs/smithy-rs/pull/1429#issuecomment-1147516546
+const ROUTE_CUTOFF: usize = 15;
 
 /// Protocol-aware routes types.
 ///
