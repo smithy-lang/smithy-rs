@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import io.kotest.inspectors.forAll
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ListShape
@@ -109,20 +110,14 @@ class ConstraintsTest {
 
     @Test
     fun `it should detect supported constrained traits as constrained`() {
-        listOf(mapA, structA, lengthString, myString).forEach {
-            // TODO When a test like this one fails, we get:
-            //   ```
-            //   io.kotest.assertions.AssertionFailedError: expected:<true> but was:<false>
-            //      at software.amazon.smithy.rust.codegen.server.smithy.ConstraintsTest.it should detect supported constrained traits as constrained(ConstraintsTest.kt:109)
-            //   ```
-            //   How can I make it so that it prints `it` to determine which particular case failed?
+        listOf(mapA, structA, lengthString).forAll {
             it.isDirectlyConstrained(symbolProvider) shouldBe true
         }
     }
 
     @Test
     fun `it should not detect unsupported constrained traits as constrained`() {
-        listOf(structAInt, structAString, myString).forEach {
+        listOf(structAInt, structAString, myString).forAll {
             it.isDirectlyConstrained(symbolProvider) shouldBe false
         }
     }

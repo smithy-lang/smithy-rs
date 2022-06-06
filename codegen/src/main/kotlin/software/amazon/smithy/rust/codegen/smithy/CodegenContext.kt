@@ -25,22 +25,6 @@ data class CodegenContext(
     val symbolProvider: RustSymbolProvider,
 
     /**
-     * This is nullable as only the server needs it.
-     *
-     * TODO: I think the time has come for us to have separate classes:
-     *     - A `ClientCodegenContext` holding `RustSettings`.
-     *     - A `ServerCodegenContext` holding `ServerRustSettings`, `UnconstrainedShapeSymbolProvider`.
-     *     - A `CoreCodegenContext` held by the two classes above for the common properties.
-     *  This "split" would also happen in:
-     *     - `RustSettings`: `ClientRustSettings`, `ServerRustSettings`, `CoreRustSettings`.
-     *     - `CodegenConfig`: `ClientCodegenConfig`, `ServerCodegenConfig`, `CoreCodegenConfig`.
-     *  This would mean generators will only be able to rely on the `Core*` classes:
-     *      - if they just need to know who they're generating for, `CodegenTarget` should be passed in separately.
-     *      - if they additionally need other things that pertain only to the client or only to the server, they
-     *        should be passed in separately in a bigger enum-like class encapsulating it.
-     */
-    val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider? = null,
-    /**
      * Configuration of the runtime package:
      * - Where are the runtime crates (smithy-*) located on the file system? Or are they versioned?
      * - What are they called?
@@ -64,6 +48,23 @@ data class CodegenContext(
      * Some settings are dependent on whether server vs. client codegen is being invoked.
      */
     val target: CodegenTarget,
+
+    /**
+     * This is nullable as only the server needs it.
+     *
+     * TODO: I think the time has come for us to have separate classes:
+     *     - A `ClientCodegenContext` holding `RustSettings`.
+     *     - A `ServerCodegenContext` holding `ServerRustSettings`, `UnconstrainedShapeSymbolProvider`.
+     *     - A `CoreCodegenContext` held by the two classes above for the common properties.
+     *  This "split" would also happen in:
+     *     - `RustSettings`: `ClientRustSettings`, `ServerRustSettings`, `CoreRustSettings`.
+     *     - `CodegenConfig`: `ClientCodegenConfig`, `ServerCodegenConfig`, `CoreCodegenConfig`.
+     *  This would mean generators will only be able to rely on the `Core*` classes:
+     *      - if they just need to know who they're generating for, `CodegenTarget` should be passed in separately.
+     *      - if they additionally need other things that pertain only to the client or only to the server, they
+     *        should be passed in separately in a bigger enum-like class encapsulating it.
+     */
+    val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider? = null,
 ) {
     constructor(
         model: Model,
@@ -73,7 +74,7 @@ data class CodegenContext(
         settings: RustSettings,
         target: CodegenTarget,
         unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider? = null
-    ) : this(model, symbolProvider, unconstrainedShapeSymbolProvider, settings.runtimeConfig, serviceShape, protocol, settings, target)
+    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings, target, unconstrainedShapeSymbolProvider)
 
     /**
      * The name of the cargo crate to generate e.g. `aws-sdk-s3`
