@@ -29,3 +29,6 @@
   - [RFC-0013: Body Callback APIs](./rfcs/rfc0013_body_callback_apis.md)
   - [RFC-0014: Fine-grained timeout configuration](./rfcs/rfc00014_timeout_config.md)
   - [RFC-0015: How Cargo "features" should be used in the SDK and runtime crates](./rfcs/rfc00015_using_features_responsibly.md)
+
+- [Contributing](./contributing/overview.md)
+  - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)
