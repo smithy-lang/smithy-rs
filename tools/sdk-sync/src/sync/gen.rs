@@ -112,6 +112,11 @@ impl DefaultSdkGenerator {
     fn aws_sdk_assemble(&self) -> Result<()> {
         info!("Generating the SDK...");
         let mut command = Command::new("./gradlew");
+        command.arg("--no-daemon"); // Don't let Gradle continue running after the build
+        command.arg("--info"); // Increase logging verbosity for failure debugging
+
+        // Disable Smithy's codegen parallelism in favor of sdk-sync parallelism
+        command.arg("-Djava.util.concurrent.ForkJoinPool.common.parallelism=1");
         command.arg("-Paws.fullsdk=true");
         command.arg(format!(
             "-Paws.sdk.previous.release.versions.manifest={}",

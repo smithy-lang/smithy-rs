@@ -27,6 +27,10 @@ struct Args {
     /// Path to the aws-doc-sdk-examples repository.
     #[clap(long, parse(from_os_str))]
     aws_doc_sdk_examples: PathBuf,
+
+    /// Override the number of threads to use for code gen.
+    #[clap(long)]
+    num_threads: Option<usize>,
 }
 
 /// This tool syncs codegen changes from smithy-rs, examples changes from aws-doc-sdk-examples,
@@ -53,14 +57,21 @@ fn main() -> Result<()> {
     let sys = System::new_all();
     let available_ram_gb = (sys.available_memory() / 1024 / 1024) as usize;
     let num_cpus = num_cpus::get_physical();
-    let threads = (available_ram_gb / CODEGEN_MIN_RAM_REQUIRED_GB)
-        .max(1) // Must use at least 1 thread
-        .min(num_cpus); // Don't exceed the number of physical CPUs
     info!("Available RAM (GB): {available_ram_gb}");
     info!("Num physical CPUs: {num_cpus}");
-    info!("Thread pool size: {threads}");
+
+    let num_threads = if let Some(num_threads) = args.num_threads {
+        num_threads
+    } else {
+        let num_threads = (available_ram_gb / CODEGEN_MIN_RAM_REQUIRED_GB)
+            .max(1) // Must use at least 1 thread
+            .min(num_cpus); // Don't exceed the number of physical CPUs
+        num_threads
+    };
+    info!("Thread pool size: {num_threads}");
+
     rayon::ThreadPoolBuilder::new()
-        .num_threads(threads)
+        .num_threads(num_threads)
         .build_global()
         .unwrap();
 
