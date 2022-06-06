@@ -32,7 +32,7 @@ val ClippyAllowLints = listOf(
     // Forcing use of `vec![]` can make codegen harder in some cases
     "vec_init_then_push",
 
-    // TODO: Separate commit
+    // TODO(https://github.com/awslabs/smithy-rs/pull/1440): Separate commit.
     "type_complexity"
 )
 

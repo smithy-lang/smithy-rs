@@ -304,7 +304,9 @@ object EventStreamTestModels {
             """.trimIndent(),
         ) { Ec2QueryProtocol(it) },
     )
-    // TODO Separate commit: This is wrong: server tests should be run from the server subproject, and use `serverTestSymbolProvider()`
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1442) Server tests
+    //  should be run from the server subproject using the
+    //  `serverTestSymbolProvider()`.
     // .flatMap { listOf(it, it.copy(target = CodegenTarget.SERVER)) }
 
     class UnmarshallTestCasesProvider : ArgumentsProvider {

@@ -149,7 +149,8 @@ fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
     val newType = f(this.rustType())
     return Symbol.builder()
         .rustType(newType)
-        // TODO Separate commit: This is a bug if `f` swaps the type instead of wrapping it.
+        // TODO(https://github.com/awslabs/smithy-rs/pull/1438) Separate
+        //  commit: This is a bug if `f` swaps the type instead of wrapping it.
         .addReference(this)
         .name(newType.name)
         .build()
