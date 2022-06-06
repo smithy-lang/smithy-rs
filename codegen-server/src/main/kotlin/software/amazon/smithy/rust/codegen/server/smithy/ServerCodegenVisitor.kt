@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedTraitForEnumGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedCollectionShapeGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
@@ -266,7 +266,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
 
             logger.info("[rust-server-codegen] Generating a constrained type for collection shape $shape")
             rustCrate.withModule(constrainedModule) { writer ->
-                PubCrateConstrainedCollectionShapeGenerator(
+                PubCrateConstrainedCollectionGenerator(
                     model,
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,

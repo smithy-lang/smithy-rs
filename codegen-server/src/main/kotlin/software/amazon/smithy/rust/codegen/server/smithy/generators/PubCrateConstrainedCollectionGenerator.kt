@@ -36,7 +36,7 @@ import software.amazon.smithy.rust.codegen.smithy.isTransitivelyConstrained
  *  shape is _directly_ constrained, use [ConstrainedCollectionGenerator]
  *  instead.
  */
-class PubCrateConstrainedCollectionShapeGenerator(
+class PubCrateConstrainedCollectionGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
