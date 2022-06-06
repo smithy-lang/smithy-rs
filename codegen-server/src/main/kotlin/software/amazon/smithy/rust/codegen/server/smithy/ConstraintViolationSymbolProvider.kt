@@ -26,7 +26,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-// TODO Unit tests.
 /**
  * The [ConstraintViolationSymbolProvider] returns, for a given constrained
  * shape, a symbol whose Rust type can hold information about constraint

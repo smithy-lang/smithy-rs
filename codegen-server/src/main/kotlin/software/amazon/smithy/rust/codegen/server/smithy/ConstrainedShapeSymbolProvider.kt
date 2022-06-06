@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-// TODO Unit tests.
 /**
  * The [ConstrainedShapeSymbolProvider] returns, for a given _directly_
  * constrained shape, a symbol whose Rust type can hold the constrained values.
@@ -56,8 +55,8 @@ class ConstrainedShapeSymbolProvider(
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
 
-    private fun publicConstrainedSymbolForCollectionOrMapShape(shape: Shape): Symbol {
-        check(shape is CollectionShape || shape is MapShape)
+    private fun publicConstrainedSymbolForMapShape(shape: Shape): Symbol {
+        check(shape is MapShape)
 
         val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
         return symbolBuilder(shape, rustType).locatedIn(Models).build()
@@ -76,7 +75,7 @@ class ConstrainedShapeSymbolProvider(
             is MapShape -> {
                 if (shape.isDirectlyConstrained(base)) {
                     check(shape.hasTrait<LengthTrait>()) { "Only the `length` constraint trait can be applied to maps" }
-                    publicConstrainedSymbolForCollectionOrMapShape(shape)
+                    publicConstrainedSymbolForMapShape(shape)
                 } else {
                     val keySymbol = this.toSymbol(shape.key)
                     val valueSymbol = this.toSymbol(shape.value)

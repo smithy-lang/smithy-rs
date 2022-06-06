@@ -54,11 +54,16 @@ fun serverTestCodegenContext(
     codegenTarget
 )
 
-fun serverTestSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
+fun serverTestSymbolProvider(
+    model: Model,
+    serviceShape: ServiceShape? = null,
+    publicConstrainedTypesEnabled: Boolean = true
+): RustSymbolProvider =
     RustCodegenServerPlugin.baseSymbolProvider(
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
-        ServerTestSymbolVisitorConfig
+        ServerTestSymbolVisitorConfig,
+        publicConstrainedTypesEnabled = publicConstrainedTypesEnabled
     )
 
 /**

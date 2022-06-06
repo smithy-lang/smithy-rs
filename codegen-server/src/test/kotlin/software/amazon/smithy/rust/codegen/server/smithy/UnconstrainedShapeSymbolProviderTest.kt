@@ -31,12 +31,12 @@ class UnconstrainedShapeSymbolProviderTest {
             version: "123",
             operations: [TestOperation]
         }
-        
+
         operation TestOperation {
             input: TestInputOutput,
             output: TestInputOutput,
         }
-        
+
         structure TestInputOutput {
             list: ListA
         }
@@ -47,15 +47,15 @@ class UnconstrainedShapeSymbolProviderTest {
         val model =
             """
             $baseModelString
-            
+
             list ListA {
                 member: ListB
             }
-            
+
             list ListB {
                 member: StructureC
             }
-            
+
             structure StructureC {
                 @required
                 string: String
@@ -84,11 +84,11 @@ class UnconstrainedShapeSymbolProviderTest {
         val model =
             """
             $baseModelString
-            
+
             list ListA {
                 member: StructureB
             }
-            
+
             structure StructureB {
                 string: String
             }

@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-// TODO Unit tests.
 /**
  * The [PubCrateConstrainedShapeSymbolProvider] returns, for a given
  * _transitively but not directly_ constrained shape, a symbol whose Rust type
