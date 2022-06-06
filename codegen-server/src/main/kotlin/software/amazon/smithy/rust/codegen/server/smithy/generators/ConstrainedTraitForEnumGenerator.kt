@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
-// TODO Unit tests
 /**
  * [ConstrainedTraitForEnumGenerator] TODO Docs
  */

@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.isTransitivelyConstrained
 
-// TODO Unit tests
 /**
  * A generator for a wrapper tuple newtype over a map shape's symbol type.
  *
