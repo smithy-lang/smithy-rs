@@ -29,7 +29,7 @@ pub use crate::set::*;
 /// Binary Blob Type
 ///
 /// Blobs represent protocol-agnostic binary content.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct Blob {
     inner: Vec<u8>,
 }
