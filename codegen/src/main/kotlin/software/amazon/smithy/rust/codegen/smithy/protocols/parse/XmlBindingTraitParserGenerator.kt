@@ -510,14 +510,13 @@ class XmlBindingTraitParserGenerator(
                 rustTemplate("let mut out = #{Container}::new();", "Container" to container)
                 parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
                     case(member) {
-                        if (target.isSetShape) {
-                            withBlock("out.insert(", ");") {
-                                parseMember(member, ctx)
-                            }
+                        val method = if (target.isSetShape) {
+                            "insert"
                         } else {
-                            withBlock("out.push(", ");") {
-                                parseMember(member, ctx)
-                            }
+                            "push"
+                        }
+                        withBlock("out.$method(", ");") {
+                            parseMember(member, ctx)
                         }
                     }
                 }
