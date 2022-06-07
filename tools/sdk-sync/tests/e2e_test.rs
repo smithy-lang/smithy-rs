@@ -92,6 +92,7 @@ fn test_without_model_changes() {
         &tmp_dir.as_ref().join("aws-doc-sdk-examples"),
         &tmp_dir.as_ref().join("aws-sdk-rust"),
         &tmp_dir.as_ref().join("smithy-rs"),
+        1,
     )
     .expect("create sync success");
     sync.sync().expect("sync success");
@@ -210,6 +211,7 @@ fn test_with_model_changes() {
         &tmp_dir.as_ref().join("aws-doc-sdk-examples"),
         &tmp_dir.as_ref().join("aws-sdk-rust"),
         &tmp_dir.as_ref().join("smithy-rs"),
+        1,
     )
     .expect("create sync success");
     sync.sync().expect("sync success");
