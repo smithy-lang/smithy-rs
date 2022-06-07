@@ -241,8 +241,7 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
                 "aws_smithy_http::event_stream"
             )
 
-        fun jsonErrors(runtimeConfig: RuntimeConfig) =
-            forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
+        fun jsonErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
 
         val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
 
