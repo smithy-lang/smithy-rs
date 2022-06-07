@@ -172,7 +172,6 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val Display = stdfmt.member("Display")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
         val TryFrom = RuntimeType("TryFrom", dependency = null, namespace = "std::convert")
-        val Infallible = RuntimeType("Infallible", dependency = null, namespace = "std::convert")
         val PartialEq = std.member("cmp::PartialEq")
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
         val String = RuntimeType("String", dependency = null, namespace = "std::string")
@@ -234,8 +233,6 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
 
         val HttpRequestBuilder = Http("request::Builder")
         val HttpResponseBuilder = Http("response::Builder")
-
-        val Hyper = CargoDependency.Hyper.asType()
 
         fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType(
