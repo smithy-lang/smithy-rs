@@ -259,12 +259,7 @@ class SymbolVisitor(
 
     override fun setShape(shape: SetShape): Symbol {
         val inner = this.toSymbol(shape.member)
-        val builder = if (model.expectShape(shape.member.target).isStringShape) {
-            symbolBuilder(shape, RustType.HashSet(inner.rustType()))
-        } else {
-            // only strings get put into actual sets because floats are unhashable
-            symbolBuilder(shape, RustType.Vec(inner.rustType()))
-        }
+        val builder = symbolBuilder(shape, RustType.HashSet(inner.rustType()))
         return builder.addReference(inner).build()
     }
 

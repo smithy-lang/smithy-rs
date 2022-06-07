@@ -292,15 +292,31 @@ class JsonParserGenerator(
                 *codegenScope,
             ) {
                 startArrayOrNull {
-                    rust("let mut items = Vec::new();")
+                    // The conditionals here are a result of the different API of `Vec` and `Set`.
+                    //
+                    // If we're able to construct an `Iterator` rather than `parseLoop` we can use
+                    // `Iterator::collect()` in both cases. Lifetimes seem to obstruct this however.
+                    //
+                    // `Extend::extend_one` being stabilized might also provide a more even surface.
+                    var container = if (shape.isSetShape) {
+                        RustType.HashSet.RuntimeType
+                    } else {
+                        RuntimeType("Vec", dependency = null, namespace = "std::vec")
+                    }
+                    rustTemplate("let mut items = #{Container}::new();", "Container" to container)
                     rustBlock("loop") {
                         rustBlock("match tokens.peek()") {
                             rustBlockTemplate("Some(Ok(#{Token}::EndArray { .. })) =>", *codegenScope) {
                                 rust("tokens.next().transpose().unwrap(); break;")
                             }
                             rustBlock("_ => ") {
+                                var method = if (shape.isSetShape) {
+                                    "insert"
+                                } else {
+                                    "push"
+                                }
                                 if (isSparse) {
-                                    withBlock("items.push(", ");") {
+                                    withBlock("items.$method(", ");") {
                                         deserializeMember(shape.member)
                                     }
                                 } else {
@@ -308,7 +324,7 @@ class JsonParserGenerator(
                                         deserializeMember(shape.member)
                                     }
                                     rustBlock("if let Some(value) = value") {
-                                        rust("items.push(value);")
+                                        rust("items.$method(value);")
                                     }
                                 }
                             }

@@ -79,13 +79,12 @@ sealed class RustType {
         override val namespace = Namespace
 
         companion object {
-            // This is Vec intentionally. Note the following passage from the Smithy spec:
+            // Note the following passage from the Smithy spec:
             //    Sets MUST be insertion ordered. Not all programming languages that support sets
             //    support ordered sets, requiring them may be overly burdensome for users, or conflict with language
             //    idioms. Such languages SHOULD store the values of sets in a list and rely on validation to ensure uniqueness.
-            // It's possible that we could provide our own wrapper type in the future.
-            const val Type = "Vec"
-            const val Namespace = "std::vec"
+            const val Type = "Set"
+            const val Namespace = "aws_smithy_types"
             val RuntimeType = RuntimeType(name = Type, namespace = Namespace, dependency = null)
         }
     }

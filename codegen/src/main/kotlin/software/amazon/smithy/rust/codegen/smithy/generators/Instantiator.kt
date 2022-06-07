@@ -181,8 +181,18 @@ class Instantiator(
         }
     }
 
-    private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode, ctx: Ctx) {
-        renderList(writer, shape, data, ctx)
+    /**
+     * ```rust
+     * aws_smithy_types::Set::from([..., ..., ...])
+     * ```
+     */
+    private fun renderSet(writer: RustWriter, shape: CollectionShape, data: ArrayNode, ctx: Ctx) {
+        writer.withBlock("aws_smithy_types::Set::from([", "])") {
+            data.elements.forEach { v ->
+                renderMember(this, shape.member, v, ctx)
+                write(",")
+            }
+        }
     }
 
     /**

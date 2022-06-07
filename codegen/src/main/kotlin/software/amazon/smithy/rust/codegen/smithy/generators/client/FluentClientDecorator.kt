@@ -542,6 +542,7 @@ class FluentClientGenerator(
                         val outerType = memberSymbol.rustType()
                         when (val coreType = outerType.stripOuter<RustType.Option>()) {
                             is RustType.Vec -> with(core) { renderVecHelper(member, memberName, coreType) }
+                            is RustType.HashSet -> with(core) { renderSetHelper(member, memberName, coreType) }
                             is RustType.HashMap -> with(core) { renderMapHelper(member, memberName, coreType) }
                             else -> with(core) { renderInputHelper(member, memberName, coreType) }
                         }

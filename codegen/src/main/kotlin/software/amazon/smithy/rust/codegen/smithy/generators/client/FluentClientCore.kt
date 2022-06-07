@@ -19,11 +19,21 @@ import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 class FluentClientCore(private val model: Model) {
     /** Generate and write Rust code for a builder method that sets a Vec<T> */
     fun RustWriter.renderVecHelper(member: MemberShape, memberName: String, coreType: RustType.Vec) {
+        renderElemHelper(member, memberName, coreType.member)
+    }
+
+    /** Generate and write Rust code for a builder method that sets a Set<T> */
+    fun RustWriter.renderSetHelper(member: MemberShape, memberName: String, coreType: RustType.HashSet) {
+        renderElemHelper(member, memberName, coreType.member)
+    }
+
+    /** Generate and write Rust code for a builder method that sets a Vec<T> or Set<T> */
+    private fun RustWriter.renderElemHelper(member: MemberShape, memberName: String, coreType: RustType) {
         docs("Appends an item to `${member.memberName}`.")
         rust("///")
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
-        val input = coreType.member.asArgument("input")
+        val input = coreType.asArgument("input")
 
         documentShape(member, model)
         rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {

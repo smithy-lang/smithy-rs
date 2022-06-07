@@ -181,6 +181,7 @@ class BuilderGenerator(
                 // appends
                 when (coreType) {
                     is RustType.Vec -> renderVecHelper(member, memberName, coreType)
+                    is RustType.HashSet -> renderSetHelper(member, memberName, coreType)
                     is RustType.HashMap -> renderMapHelper(member, memberName, coreType)
                     else -> renderBuilderMemberFn(this, coreType, member, memberName)
                 }
@@ -205,6 +206,26 @@ class BuilderGenerator(
                 let mut v = self.$memberName.unwrap_or_default();
                 v.push(${input.value});
                 self.$memberName = Some(v);
+                self
+                """
+            )
+        }
+    }
+
+    private fun RustWriter.renderSetHelper(member: MemberShape, memberName: String, coreType: RustType.HashSet) {
+        docs("Appends an item to `$memberName`.")
+        rust("///")
+        docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
+        rust("///")
+        documentShape(member, model, autoSuppressMissingDocs = false)
+        val input = coreType.member.asArgument("input")
+
+        rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
+            rust(
+                """
+                let mut set = self.$memberName.unwrap_or_default();
+                set.insert(${input.value});
+                self.$memberName = Some(set);
                 self
                 """
             )

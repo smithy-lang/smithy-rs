@@ -16,6 +16,7 @@ import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -864,7 +865,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rust("let mut seen_${symbolProvider.toMemberName(it.member)} = false;")
             }
             queryBindingsTargettingCollection.forEach {
-                rust("let mut ${symbolProvider.toMemberName(it.member)} = Vec::new();")
+                val collection = if (model.expectShape(it.member.target) is SetShape) {
+                    RustType.HashSet.RuntimeType
+                } else {
+                    RuntimeType("Vec", dependency = null, namespace = "std::vec")
+                }
+                rustTemplate("let mut ${symbolProvider.toMemberName(it.member)} = #{Collection}::new();", "Collection" to collection)
             }
 
             rustBlock("for (k, v) in pairs") {
@@ -926,7 +932,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 )
                             }
                         }
-                        rust("${symbolProvider.toMemberName(it.member)}.push(v);")
+                        val method = if (model.expectShape(it.member.target) is SetShape) {
+                            "insert"
+                        } else {
+                            "push"
+                        }
+                        rust("${symbolProvider.toMemberName(it.member)}.$method(v);")
                     }
                 }
 
