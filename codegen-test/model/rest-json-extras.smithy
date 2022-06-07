@@ -81,7 +81,8 @@ service RestJsonExtras {
         code: 500,
         body: "",
         headers: { "X-Amzn-Errortype": "ExtraError" },
-        params: {}
+        params: {},
+        appliesTo: "client",
     }
 ])
 @error("server")
@@ -96,7 +97,8 @@ structure ExtraError {}
         body: "rawstring",
         params: { payload: "rawstring" },
         method: "POST",
-        protocol: "aws.protocols#restJson1"
+        protocol: "aws.protocols#restJson1",
+        appliesTo: "client",
     }
 ])
 operation StringPayload {
@@ -116,7 +118,8 @@ structure StringPayloadInput {
     uri: "/primitive-document",
     method: "POST",
     body: "{}",
-    params: {}
+    params: {},
+    appliesTo: "client",
 }])
 @http(uri: "/primitive-document", method: "POST")
 operation PrimitiveIntOp {
@@ -134,14 +137,16 @@ structure PrimitiveIntDocument {
         protocol: "aws.protocols#restJson1",
         code: 200,
         headers: { "x-field": "123" },
-        params: { field: 123 }
+        params: { field: 123 },
+        appliesTo: "client",
     },
     {
         id: "DeserPrimitiveHeaderMissing",
         protocol: "aws.protocols#restJson1",
         code: 200,
         headers: { },
-        params: { field: 0 }
+        params: { field: 0 },
+        appliesTo: "client",
     }
 ])
 @http(uri: "/primitive", method: "POST")
@@ -164,7 +169,8 @@ structure PrimitiveIntHeaderInput {
         uri: "/foo/enumvalue",
         params: { enum: "enumvalue" },
         method: "GET",
-        protocol: "aws.protocols#restJson1"
+        protocol: "aws.protocols#restJson1",
+        appliesTo: "client",
     }
 ])
 operation EnumQuery {
@@ -204,7 +210,8 @@ structure MapWithEnumKeyInputOutput {
         method: "POST",
         protocol: "aws.protocols#restJson1",
         body: "{\"map\":{\"enumvalue\":\"something\"}}",
-        params: { map: { "enumvalue": "something" } }
+        params: { map: { "enumvalue": "something" } },
+        appliesTo: "client",
     },
 ])
 @httpResponseTests([
@@ -214,6 +221,7 @@ structure MapWithEnumKeyInputOutput {
         code: 200,
         body: "{\"map\":{\"enumvalue\":\"something\"}}",
         params: { map: { "enumvalue": "something" } },
+        appliesTo: "client",
     },
 ])
 operation MapWithEnumKeyOp {
@@ -243,6 +251,7 @@ structure EscapedStringValuesInputOutput {
         protocol: "aws.protocols#restJson1",
         body: "{\"enum\":\"has\\\"quotes\",\"also\\\"has\\\"quotes\":\"test\"}",
         params: { enum: "has\"quotes", someString: "test" },
+        appliesTo: "client",
     }
 ])
 @httpResponseTests([
@@ -252,6 +261,7 @@ structure EscapedStringValuesInputOutput {
         code: 200,
         body: "{\"enum\":\"has\\\"quotes\",\"also\\\"has\\\"quotes\":\"test\"}",
         params: { enum: "has\"quotes", someString: "test" },
+        appliesTo: "client",
     }
 ])
 operation EscapedStringValues {
@@ -286,6 +296,7 @@ structure NullInNonSparseOutput {
         code: 200,
         body: "{\"list\":[null,\"one\",null,\"two\",null],\"map\":{\"zero\":null,\"one\":\"1\"}}",
         params: { list: ["one", "two"], map: { "one": "1" } },
+        appliesTo: "client",
     }
 ])
 operation NullInNonSparse {
@@ -305,7 +316,8 @@ operation CaseInsensitiveErrorOperation {
         code: 500,
         body: "{\"Message\": \"hello\"}",
         headers: { "X-Amzn-Errortype": "CaseInsensitiveError" },
-        params: { message: "hello" }
+        params: { message: "hello" },
+        appliesTo: "client",
     }
 ])
 @error("server")
@@ -325,7 +337,8 @@ structure EmptyStructWithContentOnWireOpOutput {
         protocol: "aws.protocols#restJson1",
         code: 200,
         body: "{\"empty\": {\"value\":\"not actually empty\"}}",
-        params: { empty: {} }
+        params: { empty: {} },
+        appliesTo: "client",
     }
 ])
 operation EmptyStructWithContentOnWireOp {
@@ -353,7 +366,8 @@ apply FixedMalformedAcceptWithGenericString @httpMalformedRequestTests([
                 "x-amzn-errortype": "NotAcceptableException"
             }
         },
-        tags: [ "accept" ]
+        tags: [ "accept" ],
+        appliesTo: "server",
     }
 ])
 
@@ -382,6 +396,7 @@ structure FixedMalformedAcceptWithGenericStringInput {
         params: { id: "1", name: "TestService" },
         body: "{\"name\":\"TestService\"}",
         method: "PUT",
+        appliesTo: "server",
     }
 ])
 @httpResponseTests([
@@ -394,6 +409,7 @@ structure FixedMalformedAcceptWithGenericStringInput {
         },
         body: "{\"id\":\"1\"}",
         code: 200,
+        appliesTo: "server",
     }
 ])
 operation FixedRegisterService {
