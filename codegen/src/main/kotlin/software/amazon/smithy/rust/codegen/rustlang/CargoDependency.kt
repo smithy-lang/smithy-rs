@@ -55,7 +55,7 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
 class InlineDependency(
     name: String,
     val module: RustModule,
-    val extraDependencies: List<RustDependency> = listOf(),
+    private val extraDependencies: List<RustDependency> = listOf(),
     val renderer: (RustWriter) -> Unit
 ) : RustDependency(name) {
     override fun version(): String {
