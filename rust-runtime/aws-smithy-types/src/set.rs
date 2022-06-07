@@ -167,6 +167,7 @@ impl<T> Set<T> {
     /// v.insert(1);
     /// assert_eq!(v.len(), 1);
     /// ```
+    #[inline]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
@@ -183,6 +184,7 @@ impl<T> Set<T> {
     /// v.insert(1);
     /// assert!(!v.is_empty());
     /// ```
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -244,6 +246,7 @@ impl<A> IntoIterator for Set<A> {
 
     type IntoIter = IntoIter<A>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         IntoIter {
             inner: self.inner.into_iter(),
@@ -256,6 +259,7 @@ impl<'a, A> IntoIterator for &'a Set<A> {
 
     type IntoIter = Iter<'a, A>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
@@ -265,6 +269,7 @@ impl<A> FromIterator<A> for Set<A>
 where
     A: Eq + Hash,
 {
+    #[inline]
     fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
         Self {
             inner: IndexSet::from_iter(iter),
