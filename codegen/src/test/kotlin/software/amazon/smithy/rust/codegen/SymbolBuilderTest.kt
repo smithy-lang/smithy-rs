@@ -182,8 +182,8 @@ class SymbolBuilderTest {
 
         val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
-        setSymbol.rustType().render(false) shouldBe "Vec<Record>"
-        setSymbol.referenceClosure().map { it.name } shouldBe listOf("Vec", "Record")
+        setSymbol.rustType().render(false) shouldBe "Set<Record>"
+        setSymbol.referenceClosure().map { it.name } shouldBe listOf("Set", "Record")
     }
 
     @Test
