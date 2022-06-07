@@ -77,7 +77,7 @@ class BuilderGenerator(
     }
 
     private fun renderBuildFn(implBlockWriter: RustWriter) {
-        val fallibleBuilder = StructureGenerator.hasFallibleBuilder(shape, symbolProvider)
+        val fallibleBuilder = StructureGenerator.fallibleBuilder(shape, symbolProvider)
         val outputSymbol = symbolProvider.toSymbol(shape)
         val returnType = when (fallibleBuilder) {
             true -> "Result<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
