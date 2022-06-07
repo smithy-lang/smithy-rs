@@ -19,10 +19,12 @@ pub mod base64;
 pub mod date_time;
 pub mod primitive;
 pub mod retry;
+mod set;
 pub mod timeout;
 pub mod tristate;
 
 pub use crate::date_time::DateTime;
+pub use crate::set::*;
 
 /// Binary Blob Type
 ///

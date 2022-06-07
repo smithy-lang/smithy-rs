@@ -8,6 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
+indexmap = "1.8.2"
 itoa = "1.0.0"
 num-integer = "0.1.44"
 ryu = "1.0.5"
