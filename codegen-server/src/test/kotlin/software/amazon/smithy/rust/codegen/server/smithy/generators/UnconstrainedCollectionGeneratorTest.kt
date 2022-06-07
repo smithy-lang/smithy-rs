@@ -118,7 +118,7 @@ class UnconstrainedCollectionGeneratorTest {
                         expected_err,
                         crate::constrained::list_a_constrained::ListAConstrained::try_from(list_a_unconstrained).unwrap_err()
                     );
-                """
+                    """
                 )
 
                 unconstrainedModuleWriter.unitTest(
@@ -136,7 +136,7 @@ class UnconstrainedCollectionGeneratorTest {
                         crate::constrained::list_a_constrained::ListAConstrained::try_from(list_a_unconstrained).unwrap().into();
                         
                     assert_eq!(expected, actual);
-                """
+                    """
                 )
 
                 unconstrainedModuleWriter.unitTest(
@@ -147,7 +147,7 @@ class UnconstrainedCollectionGeneratorTest {
                     let list_a_unconstrained = list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
 
                     let _list_a: crate::constrained::MaybeConstrained<crate::constrained::list_a_constrained::ListAConstrained> = list_a_unconstrained.into();
-                """
+                    """
                 )
                 project.compileAndTest()
             }

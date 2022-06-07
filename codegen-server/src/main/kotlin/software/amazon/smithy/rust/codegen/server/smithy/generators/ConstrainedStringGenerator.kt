@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-// TODO Unit tests
 /**
  * [ConstrainedStringGenerator] generates a wrapper tuple newtype holding a constrained `String`.
  * This type can be built from unconstrained values, yielding a `ConstraintViolation` when the input does not satisfy

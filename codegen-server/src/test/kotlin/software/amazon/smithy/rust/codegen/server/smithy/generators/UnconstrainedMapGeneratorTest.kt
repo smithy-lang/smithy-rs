@@ -134,7 +134,7 @@ class UnconstrainedMapGeneratorTest {
                         let actual_err = crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap_err();
 
                         assert!(actual_err == missing_string_expected_err || actual_err == missing_int_expected_err);
-                    """
+                        """
                 )
 
                 unconstrainedModuleWriter.unitTest(
@@ -165,7 +165,7 @@ class UnconstrainedMapGeneratorTest {
                         expected,
                         crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap().into()
                     );
-                """
+                    """
                 )
 
                 unconstrainedModuleWriter.unitTest(
@@ -184,7 +184,7 @@ class UnconstrainedMapGeneratorTest {
                     );
 
                     let _map_a: crate::constrained::MaybeConstrained<crate::constrained::map_a_constrained::MapAConstrained> = map_a_unconstrained.into();
-                """
+                    """
                 )
 
                 project.compileAndTest()
