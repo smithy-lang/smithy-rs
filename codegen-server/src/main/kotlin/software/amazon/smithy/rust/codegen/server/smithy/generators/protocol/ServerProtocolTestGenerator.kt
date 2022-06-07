@@ -689,7 +689,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case6", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case8", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyLongMalformedValueRejected_case10", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonMalformedSetDuplicateItems", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonMalformedSetNullItem", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case2", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyShortMalformedValueRejected_case6", TestType.MalformedRequest),
@@ -708,7 +707,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsUTCOffsets", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case13", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonMalformedSetDuplicateBlobs", TestType.MalformedRequest),
 
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),

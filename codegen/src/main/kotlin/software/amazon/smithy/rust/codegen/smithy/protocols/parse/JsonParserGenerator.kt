@@ -310,21 +310,37 @@ class JsonParserGenerator(
                                 rust("tokens.next().transpose().unwrap(); break;")
                             }
                             rustBlock("_ => ") {
-                                var method = if (shape.isSetShape) {
-                                    "insert"
-                                } else {
-                                    "push"
-                                }
-                                if (isSparse) {
-                                    withBlock("items.$method(", ");") {
-                                        deserializeMember(shape.member)
+                                if (shape.isSetShape) {
+                                    if (isSparse) {
+                                        withBlock("let replaced = !items.insert(", ");") {
+                                            deserializeMember(shape.member)
+                                        }
+                                    } else {
+                                        withBlock("let value =", ";") {
+                                            deserializeMember(shape.member)
+                                        }
+                                        rust("let replaced = value.map(|value| !items.insert(value)).unwrap_or(false);")
                                     }
+                                    rustTemplate(
+                                        """
+                                        if replaced {
+                                            return Err(#{JsonDeserialize}::custom("duplicate elements found while deserializing to a set"))
+                                        }
+                                        """,
+                                        "JsonDeserialize" to RuntimeType.jsonDeserialize(runtimeConfig)
+                                    )
                                 } else {
-                                    withBlock("let value =", ";") {
-                                        deserializeMember(shape.member)
-                                    }
-                                    rustBlock("if let Some(value) = value") {
-                                        rust("items.$method(value);")
+                                    if (isSparse) {
+                                        withBlock("items.push(", ");") {
+                                            deserializeMember(shape.member)
+                                        }
+                                    } else {
+                                        withBlock("let value =", ";") {
+                                            deserializeMember(shape.member)
+                                        }
+                                        rustBlock("if let Some(value) = value") {
+                                            rust("items.push(value);")
+                                        }
                                     }
                                 }
                             }
