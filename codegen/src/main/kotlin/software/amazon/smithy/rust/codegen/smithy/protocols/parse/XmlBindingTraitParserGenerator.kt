@@ -503,7 +503,7 @@ class XmlBindingTraitParserGenerator(
                 //
                 // `Extend::extend_one` being stabilized might also provide a more even surface.
                 var container = if (target.isSetShape) {
-                    RustType.HashSet.RuntimeType
+                    RuntimeType.Set(runtimeConfig)
                 } else {
                     RuntimeType("Vec", dependency = null, namespace = "std::vec")
                 }

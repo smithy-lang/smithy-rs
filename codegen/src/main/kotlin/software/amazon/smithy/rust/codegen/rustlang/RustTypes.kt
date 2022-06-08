@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.rustlang
 
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.dq
 
@@ -41,6 +42,7 @@ sealed class RustType {
     abstract val name: kotlin.String
 
     open val namespace: kotlin.String? = null
+    // open val runtimeConfig: RuntimeConfig? = null
 
     object Bool : RustType() {
         override val name: kotlin.String = "bool"
@@ -77,7 +79,6 @@ sealed class RustType {
     data class HashSet(override val member: RustType) : RustType(), Container {
         override val name = Type
         override val namespace = Namespace
-
         companion object {
             // Note the following passage from the Smithy spec:
             //    Sets MUST be insertion ordered. Not all programming languages that support sets
@@ -85,7 +86,10 @@ sealed class RustType {
             //    idioms. Such languages SHOULD store the values of sets in a list and rely on validation to ensure uniqueness.
             const val Type = "Set"
             const val Namespace = "aws_smithy_types"
-            val RuntimeType = RuntimeType(name = Type, namespace = Namespace, dependency = null)
+
+            fun RuntimeType(runtimeConfig: RuntimeConfig): RuntimeType {
+                return RuntimeType(name = Type, namespace = Namespace, dependency = CargoDependency.SmithyTypes(runtimeConfig))
+            }
         }
     }
 

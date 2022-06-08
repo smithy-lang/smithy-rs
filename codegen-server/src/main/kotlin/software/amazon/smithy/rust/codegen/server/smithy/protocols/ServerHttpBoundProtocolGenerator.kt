@@ -866,7 +866,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             }
             queryBindingsTargettingCollection.forEach {
                 val collection = if (model.expectShape(it.member.target) is SetShape) {
-                    RustType.HashSet.RuntimeType
+                    RuntimeType.Set(runtimeConfig)
                 } else {
                     RuntimeType("Vec", dependency = null, namespace = "std::vec")
                 }

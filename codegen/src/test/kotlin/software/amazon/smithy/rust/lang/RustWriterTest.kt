@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
@@ -69,15 +70,17 @@ class RustWriterTest {
                 write("member: #T,", setSymbol)
                 write("otherMember: #T,", stringSymbol)
             }
-            it.addDependency(CargoDependency.SmithyTypes(TestRuntimeConfig))
-            it.unitTest(
-                "manually_created_struct",
-                """
-                let test = Test { member: aws_smithy_types::Set::default(), otherMember: "hello".to_string() };
-                assert_eq!(test.otherMember, "hello");
-                assert_eq!(test.member.is_empty(), true);
-                """
-            )
+            it.rustBlock("fn inner()") {
+                rustTemplate(
+                    """
+                    let test = Test { member: #{Set}::default(), otherMember: "hello".to_string() };
+                    assert_eq!(test.otherMember, "hello");
+                    assert_eq!(test.member.is_empty(), true);
+                    """,
+                    "Set" to RuntimeType.Set(TestRuntimeConfig)
+                )
+            }
+            it.unitTest("manually_created_struct", "inner()")
             val output = it.toString()
             output shouldContain RustType.HashSet.Type
             output shouldContain "struct Test"
