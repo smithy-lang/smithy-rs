@@ -69,13 +69,6 @@ class ErrorGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val messageShape = shape.errorMessageMember()
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
-        val (returnType, message) = messageShape?.let {
-            if (symbolProvider.toSymbol(messageShape).isOptional()) {
-                "Option<&str>" to "self.${symbolProvider.toMemberName(it)}.as_deref()"
-            } else {
-                "&str" to "self.${symbolProvider.toMemberName(it)}.as_ref()"
-            }
-        } ?: "Option<&str>" to "None"
         writer.rustBlock("impl ${symbol.name}") {
             val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)
             if (retryKindWriteable != null) {
@@ -84,12 +77,20 @@ class ErrorGenerator(
                     retryKindWriteable(this)
                 }
             }
-            rust(
-                """
-                /// Returns the error message.
-                pub fn message(&self) -> $returnType { $message }
-                """
-            )
+            if (messageShape != null) {
+                val (returnType, message) = if (symbolProvider.toSymbol(messageShape).isOptional()) {
+                    "Option<&str>" to "self.${symbolProvider.toMemberName(messageShape)}.as_deref()"
+                } else {
+                    "&str" to "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
+                }
+
+                rust(
+                    """
+                    /// Returns the error message.
+                    pub fn message(&self) -> $returnType { $message }
+                    """
+                )
+            }
 
             /*
              * If we're generating for a server, the `name` method is added to enable
