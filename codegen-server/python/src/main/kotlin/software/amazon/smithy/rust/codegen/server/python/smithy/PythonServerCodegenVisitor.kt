@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.util.getTrait
  * This class inherits from [ServerCodegenVisitor] since it uses most of the functionlities of the super class
  * and have to override the symbol provider with [PythonServerSymbolProvider].
  */
-class PythonServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
+class PythonServerCodegenVisitor(context: PluginContext, codegenDecorator: RustCodegenDecorator) :
     ServerCodegenVisitor(context, codegenDecorator) {
 
     init {
