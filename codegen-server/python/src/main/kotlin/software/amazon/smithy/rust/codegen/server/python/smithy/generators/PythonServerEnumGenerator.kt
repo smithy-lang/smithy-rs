@@ -9,11 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -32,10 +28,6 @@ class PythonServerEnumGenerator(
     runtimeConfig: RuntimeConfig,
 ) : ServerEnumGenerator(model, symbolProvider, writer, shape, enumTrait, runtimeConfig) {
 
-    private val codegenScope = arrayOf(
-        "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-    )
-
     override fun render() {
         writer.renderPyClass()
         super.render()
@@ -49,18 +41,17 @@ class PythonServerEnumGenerator(
 
     private fun renderPyO3Methods() {
         writer.renderPyMethods()
-        writer.rustBlock("impl $enumName") {
-            writer.rustTemplate(
-                """
+        writer.rust(
+            """
+            impl $enumName {
                 fn __repr__(&self) -> String  {
                     self.as_str().to_owned()
                 }
                 fn __str__(&self) -> String {
                     self.as_str().to_owned()
                 }
-                """,
-                *codegenScope
-            )
-        }
+            }
+            """
+        )
     }
 }
