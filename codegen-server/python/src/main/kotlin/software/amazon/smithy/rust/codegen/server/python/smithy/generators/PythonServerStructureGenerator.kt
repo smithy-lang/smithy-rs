@@ -30,7 +30,7 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
  */
 open class PythonServerStructureGenerator(
     model: Model,
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape
@@ -38,14 +38,13 @@ open class PythonServerStructureGenerator(
     private val codegenScope =
         arrayOf(
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(codegenContext.runtimeConfig).asType()
         )
 
     override fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         if (shape.hasTrait<ErrorTrait>()) {
-            writer.rustTemplate("##[#{pyo3}::pyclass(extends = pyo3::exceptions::PyException)]", *codegenScope)
+            writer.rustTemplate("##[#{pyo3}::pyclass(extends = #{pyo3}::exceptions::PyException)]", *codegenScope)
         } else {
             writer.rustTemplate("##[#{pyo3}::pyclass]", *codegenScope)
         }
@@ -63,7 +62,6 @@ open class PythonServerStructureGenerator(
                 write("$memberName: #T,", symbolProvider.toSymbol(member))
             }
         }
-
         renderStructureImpl()
         renderDebugImpl()
         renderPyO3Methods()
@@ -71,11 +69,7 @@ open class PythonServerStructureGenerator(
 
     private fun renderPyO3Methods() {
         if (shape.hasTrait<ErrorTrait>() || !accessorMembers.isEmpty()) {
-            writer.rustTemplate(
-                """/// Python methods implementation for `$name`
-                ##[#{pyo3}::pymethods]""",
-                *codegenScope
-            )
+            writer.renderPyMethods()
             writer.rustBlock("impl $name") {
                 write(
                     """##[new]

@@ -95,7 +95,7 @@ class PythonServerCodegenVisitor(context: PluginContext, codegenDecorator: RustC
     }
 
     /**
-     * Enum Shape Visitor
+     * String Shape Visitor
      *
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */

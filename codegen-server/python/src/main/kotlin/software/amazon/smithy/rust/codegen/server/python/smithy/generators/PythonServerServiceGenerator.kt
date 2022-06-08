@@ -5,10 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
-import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationRegistryGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
@@ -27,43 +27,25 @@ class PythonServerServiceGenerator(
     private val protocolSupport: ProtocolSupport,
     private val httpBindingResolver: HttpBindingResolver,
     private val context: CodegenContext,
-) {
-    private val index = TopDownIndex.of(context.model)
+) : ServerServiceGenerator(rustCrate, protocolGenerator, protocolSupport, httpBindingResolver, context) {
 
     /**
      * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
      */
-    fun render() {
-        val operations = index.getContainedOperations(context.serviceShape).sortedBy { it.id }
-        for (operation in operations) {
-            rustCrate.useShapeWriter(operation) { operationWriter ->
-                protocolGenerator.serverRenderOperation(
-                    operationWriter,
-                    operation,
-                )
-                ServerProtocolTestGenerator(context, protocolSupport, operation, operationWriter)
-                    .render()
-            }
-
-            if (operation.errors.isNotEmpty()) {
-                rustCrate.withModule(RustModule.Error) { writer ->
-                    PythonServerCombinedErrorGenerator(context.model, context, operation)
-                        .render(writer)
-                }
-            }
-        }
-        rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) { writer ->
-            PythonServerOperationHandlerGenerator(context, operations)
-                .render(writer)
-        }
+    override fun render() {
+        super.render()
         rustCrate.withModule(RustModule.public("python_server_application", "Python server and application implementation.")) { writer ->
             PythonApplicationGenerator(context, operations)
                 .render(writer)
         }
-        rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->
-            ServerOperationRegistryGenerator(context, httpBindingResolver, operations)
-                .render(writer)
-        }
+    }
+
+    override fun renderCombineErrors(writer: RustWriter, operation: OperationShape) {
+        PythonServerCombinedErrorGenerator(context.model, context, operation).render(writer)
+    }
+
+    override fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {
+        PythonServerOperationHandlerGenerator(context, operations).render(writer)
     }
 }
