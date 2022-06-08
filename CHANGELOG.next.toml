@@ -52,3 +52,9 @@ message = "Add support for `credential_process` in AWS configs for fetching cred
 references = ["smithy-rs#1356"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jszwedko"
+
+[[smithy-rs]]
+message = "Use a newtyped IndexSet to back the \"set\" shape"
+references = ["smithy-rs#1446"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "hlbarber"
