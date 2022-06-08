@@ -60,6 +60,9 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
             symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+                // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
+                // `aws_smithy_http_server_python::types`.
+                .let { PythonServerSymbolProvider(it) }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let {
                     EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
@@ -73,8 +76,5 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
                 .let { RustReservedWordSymbolProvider(it, model) }
-                // Rename a set of symbols that do not implement `PyClass` and have been wrapped inside
-                // `aws_smithy_http_server_python::types`.
-                .let { PythonServerSymbolProvider(it, model) }
     }
 }

@@ -17,9 +17,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.docWithNote
 import software.amazon.smithy.rust.codegen.util.getTrait
 
@@ -34,9 +34,9 @@ class PythonServerEnumGenerator(
     private val writer: RustWriter,
     private val shape: StringShape,
     enumTrait: EnumTrait,
-  runtimeConfig: RuntimeConfig,
+    runtimeConfig: RuntimeConfig,
 ) : ServerEnumGenerator(model, symbolProvider, writer, shape, enumTrait, runtimeConfig) {
-    override var mode: CodegenMode = CodegenMode.Server
+    override var target: CodegenTarget = CodegenTarget.SERVER
 
     private val errorStruct = "${enumName}UnknownVariantError"
     private val codegenScope = arrayOf(
@@ -71,7 +71,7 @@ class PythonServerEnumGenerator(
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
             sortedMembers.forEach { member -> member.render(writer) }
-            if (mode == CodegenMode.Client) {
+            if (target == CodegenTarget.SERVER) {
                 docs("$UnknownVariant contains new variants that have been added since this code was generated.")
                 write("$UnknownVariant(String)")
             }

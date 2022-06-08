@@ -23,18 +23,18 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
  *
  * To enable this decorator write its class name to a resource file like this:
  * ```
- * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToInfallibleOpsDecorator"
+ * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToInfallibleOperationsDecorator"
  * F="software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator"
  * D="codegen-server/src/main/resources/META-INF/services"
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator {
-    override val name: String = "AddInternalServerErrorToInfallibleOps"
+class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorator {
+    override val name: String = "AddInternalServerErrorToInfallibleOperations"
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
-        addErrorShapeToModelOps(service, model, { shape -> shape.errors.isEmpty() })
+        addErrorShapeToModelOperations(service, model, { shape -> shape.errors.isEmpty() })
 }
 
 /**
@@ -49,21 +49,21 @@ class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator {
  *
  * To enable this decorator write its class name to a resource file like this:
  * ```
- * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOpsDecorator"
+ * C="software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator"
  * F="software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator"
  * D="codegen-server/src/main/resources/META-INF/services"
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToAllOpsDecorator : RustCodegenDecorator {
-    override val name: String = "AddInternalServerErrorToAllOps"
+class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator {
+    override val name: String = "AddInternalServerErrorToAllOperations"
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
-        addErrorShapeToModelOps(service, model, { _ -> true })
+        addErrorShapeToModelOperations(service, model, { _ -> true })
 }
 
-fun addErrorShapeToModelOps(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {
+fun addErrorShapeToModelOperations(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {
     val errorShape = internalServerError(service.id.getNamespace())
     val modelShapes = model.toBuilder().addShapes(listOf(errorShape)).build()
     return ModelTransformer.create().mapShapes(modelShapes) { shape ->

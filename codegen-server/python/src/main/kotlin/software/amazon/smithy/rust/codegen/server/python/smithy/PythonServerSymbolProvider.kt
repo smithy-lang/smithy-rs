@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustType
@@ -25,7 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
  * This symbol provider ensures types not implementing `pyo3::PyClass` are swapped with their wrappers from
  * `aws_smithy_http_server_python::types`.
  */
-class PythonServerSymbolProvider(private val base: RustSymbolProvider, private val model: Model) :
+class PythonServerSymbolProvider(private val base: RustSymbolProvider) :
     WrappingSymbolProvider(base) {
 
     private val runtimeConfig = config().runtimeConfig
@@ -38,7 +37,7 @@ class PythonServerSymbolProvider(private val base: RustSymbolProvider, private v
     override fun toSymbol(shape: Shape): Symbol {
         return when (base.toSymbol(shape).rustType()) {
             RuntimeType.Blob(runtimeConfig).toSymbol().rustType() -> {
-                buildSymbol("Blob", "aws_smithy_http_server_python::types")
+                buildSymbol("Blob")
             }
             else -> {
                 base.toSymbol(shape)
@@ -51,10 +50,10 @@ class PythonServerSymbolProvider(private val base: RustSymbolProvider, private v
      * Creating just a symbol like `PythonServerRuntimeType.Blob(runtimeConfig).toSymbol()`
      * is not enough as it lack the metadata.
      */
-    private fun buildSymbol(name: String, namespace: String, public: Boolean = false): Symbol =
+    private fun buildSymbol(name: String, public: Boolean = false): Symbol =
         Symbol.builder()
             .name(name)
-            .namespace(namespace, "::")
+            .namespace("aws_smithy_http_server_python::types", "::")
             .meta(RustMetadata(public = public))
-            .rustType(RustType.Opaque(name ?: "", namespace = namespace)).build()
+            .rustType(RustType.Opaque(name, namespace = "aws_smithy_http_server_python::types")).build()
 }

@@ -62,7 +62,7 @@ class PythonServerOperationHandlerGenerator(
             writer.rustBlockTemplate(
                 """
                 /// Python handler for operation `$operationName`.
-                pub async fn $name(
+                pub async fn $fnName(
                     input: $input,
                     state: #{SmithyServer}::Extension<#{SmithyPython}::PyState>,
                     handler: std::sync::Arc<#{SmithyPython}::PyHandler>,
@@ -76,9 +76,9 @@ class PythonServerOperationHandlerGenerator(
                     let result = async {
                         let handler = handler.clone();
                         if handler.is_coroutine {
-                            ${renderPyCoroutine(name, output)}
+                            ${renderPyCoroutine(fnName, output)}
                         } else {
-                            ${renderPyFunction(name, output)}
+                            ${renderPyFunction(fnName, output)}
                         }
                     };
                     ${renderPyError()}
