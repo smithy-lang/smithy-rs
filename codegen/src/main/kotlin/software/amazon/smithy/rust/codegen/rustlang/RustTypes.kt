@@ -42,7 +42,6 @@ sealed class RustType {
     abstract val name: kotlin.String
 
     open val namespace: kotlin.String? = null
-    // open val runtimeConfig: RuntimeConfig? = null
 
     object Bool : RustType() {
         override val name: kotlin.String = "bool"
