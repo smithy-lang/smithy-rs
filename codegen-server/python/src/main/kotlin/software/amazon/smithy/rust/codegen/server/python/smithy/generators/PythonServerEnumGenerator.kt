@@ -7,11 +7,9 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -19,9 +17,6 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCarg
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.smithy.generators.docWithNote
-import software.amazon.smithy.rust.codegen.util.getTrait
 
 /**
  * To share enums defined in Rust with Python, `pyo3` provides the `PyClass` trait.
@@ -36,55 +31,24 @@ class PythonServerEnumGenerator(
     enumTrait: EnumTrait,
     runtimeConfig: RuntimeConfig,
 ) : ServerEnumGenerator(model, symbolProvider, writer, shape, enumTrait, runtimeConfig) {
-    override var target: CodegenTarget = CodegenTarget.SERVER
 
-    private val errorStruct = "${enumName}UnknownVariantError"
     private val codegenScope = arrayOf(
         "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-        "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType()
     )
 
+    override fun render() {
+        writer.renderPyClass()
+        super.render()
+        renderPyO3Methods()
+    }
+
     override fun renderFromForStr() {
-        writer.rustTemplate(
-            """
-            ##[#{pyo3}::pyclass]
-            ##[derive(Debug, PartialEq, Eq, Hash)]
-            pub struct $errorStruct(String);
-            """,
-            *codegenScope
-        )
-        renderEnumImpl()
+        writer.renderPyClass()
+        super.renderFromForStr()
     }
 
-    override fun renderEnum() {
-        val renamedWarning =
-            sortedMembers.mapNotNull { it.name() }.filter { it.renamedFrom != null }.joinToString("\n") {
-                val previousName = it.renamedFrom!!
-                "`$enumName::$previousName` has been renamed to `::${it.name}`."
-            }
-        writer.docWithNote(
-            shape.getTrait<DocumentationTrait>()?.value,
-            renamedWarning.ifBlank { null }
-        )
-
-        writer.rustTemplate("##[#{pyo3}::pyclass]", *codegenScope)
-        meta.render(writer)
-        writer.rustBlock("enum $enumName") {
-            sortedMembers.forEach { member -> member.render(writer) }
-            if (target == CodegenTarget.SERVER) {
-                docs("$UnknownVariant contains new variants that have been added since this code was generated.")
-                write("$UnknownVariant(String)")
-            }
-        }
-        renderPyO3Methods(writer)
-    }
-
-    private fun renderPyO3Methods(writer: RustWriter) {
-        writer.rustTemplate(
-            """/// Python methods implementation for `$enumName`
-            ##[#{pyo3}::pymethods]""",
-            *codegenScope
-        )
+    private fun renderPyO3Methods() {
+        writer.renderPyMethods()
         writer.rustBlock("impl $enumName") {
             writer.rustTemplate(
                 """

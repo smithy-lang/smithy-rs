@@ -92,7 +92,7 @@ open class EnumGenerator(
         const val Values = "values"
     }
 
-    fun render() {
+    open fun render() {
         if (enumTrait.hasNames()) {
             // pub enum Blah { V1, V2, .. }
             renderEnum()
@@ -140,7 +140,7 @@ open class EnumGenerator(
         }
     }
 
-    open fun renderEnum() {
+    private fun renderEnum() {
         val renamedWarning =
             sortedMembers.mapNotNull { it.name() }.filter { it.renamedFrom != null }.joinToString("\n") {
                 val previousName = it.renamedFrom!!

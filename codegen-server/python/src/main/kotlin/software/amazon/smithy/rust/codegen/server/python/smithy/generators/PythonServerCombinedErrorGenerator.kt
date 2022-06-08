@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
  * to generate the errors from the model and adds the Rust implementation `From<pyo3::PyErr>`.
  */
 class PythonServerCombinedErrorGenerator(
-    private val model: Model,
+    model: Model,
     private val codegenContext: CodegenContext,
     private val operation: OperationShape
 ) : ServerCombinedErrorGenerator(model, codegenContext.symbolProvider, operation) {
