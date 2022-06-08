@@ -48,6 +48,7 @@ pub struct DefaultSdkGenerator {
     examples_path: PathBuf,
     fs: Arc<dyn Fs>,
     smithy_rs: Box<dyn Git>,
+    smithy_parallelism: usize,
     temp_dir: Arc<tempfile::TempDir>,
 }
 
@@ -60,6 +61,7 @@ impl DefaultSdkGenerator {
         fs: Arc<dyn Fs>,
         reset_to_commit: Option<CommitHash>,
         original_smithy_rs_path: &Path,
+        smithy_parallelism: usize,
     ) -> Result<Self> {
         let temp_dir = tempfile::tempdir().context(here!("create temp dir"))?;
         GitCLI::new(original_smithy_rs_path)
@@ -80,6 +82,7 @@ impl DefaultSdkGenerator {
             examples_path: examples_path.into(),
             fs,
             smithy_rs: Box::new(smithy_rs) as Box<dyn Git>,
+            smithy_parallelism,
             temp_dir: Arc::new(temp_dir),
         })
     }
@@ -112,6 +115,14 @@ impl DefaultSdkGenerator {
     fn aws_sdk_assemble(&self) -> Result<()> {
         info!("Generating the SDK...");
         let mut command = Command::new("./gradlew");
+        command.arg("--no-daemon"); // Don't let Gradle continue running after the build
+        command.arg("--info"); // Increase logging verbosity for failure debugging
+
+        // Disable Smithy's codegen parallelism in favor of sdk-sync parallelism
+        command.arg(format!(
+            "-Djava.util.concurrent.ForkJoinPool.common.parallelism={}",
+            self.smithy_parallelism
+        ));
         command.arg("-Paws.fullsdk=true");
         command.arg(format!(
             "-Paws.sdk.previous.release.versions.manifest={}",
