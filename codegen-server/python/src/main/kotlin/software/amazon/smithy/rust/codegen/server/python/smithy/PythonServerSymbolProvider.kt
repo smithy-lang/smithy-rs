@@ -20,9 +20,9 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
  * Input / output / error structures can refer to complex types like the ones implemented inside
  * `aws_smithy_types` (a good example is `aws_smithy_types::Blob`).
  * `aws_smithy_http_server_python::types` wraps those types that do not implement directly the
- * `pyo3::PyClass` trait and cannot be share safely to Python, providing an idiomatic Python / Rust API.
+ * `pyo3::PyClass` trait and cannot be shared safely with Python, providing an idiomatic Python / Rust API.
  *
- * This symbol provider ensures types not implemeting `pyo3::PyClass` are swapped with their wrappers from
+ * This symbol provider ensures types not implementing `pyo3::PyClass` are swapped with their wrappers from
  * `aws_smithy_http_server_python::types`.
  */
 class PythonServerSymbolProvider(private val base: RustSymbolProvider, private val model: Model) :
@@ -33,7 +33,7 @@ class PythonServerSymbolProvider(private val base: RustSymbolProvider, private v
     /**
      * Convert a shape to a Symbol.
      *
-     * Swap the symbol if the shape's symbol does not implement `pyo3::PyClass`.
+     * Swap the shape's symbol if its associated type does not implement `pyo3::PyClass`.
      */
     override fun toSymbol(shape: Shape): Symbol {
         return when (base.toSymbol(shape).rustType()) {

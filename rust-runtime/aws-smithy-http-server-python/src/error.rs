@@ -13,10 +13,10 @@ pub enum Error {
     /// Custom error.
     #[error("{0}")]
     Custom(String),
-    /// Implement `From<pyo3::PyErr>`
+    /// Implement `From<pyo3::PyErr>`.
     #[error("PyO3 error: {0}")]
     PyO3(#[from] pyo3::PyErr),
-    /// Implement `From<tokio::task::JoinError`
+    /// Implement `From<tokio::task::JoinError`.
     #[error("Tokio task join error: {0}")]
     TaskJoin(#[from] tokio::task::JoinError),
 }

@@ -34,8 +34,6 @@ class PythonServerOperationHandlerGenerator(
     codegenContext: CodegenContext,
     private val operations: List<OperationShape>,
 ) : ServerOperationHandlerGenerator(codegenContext, operations) {
-    private val serverCrate = "aws_smithy_http_server"
-    private val serverPythonCrate = "aws_smithy_http_server_python"
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
@@ -54,12 +52,12 @@ class PythonServerOperationHandlerGenerator(
     }
 
     private fun renderPythonOperationHandlerImpl(writer: RustWriter) {
-        operations.map { operation ->
+        for (operation in operations) {
             val operationName = symbolProvider.toSymbol(operation).name
             val input = "crate::input::${operationName}Input"
             val output = "crate::output::${operationName}Output"
             val error = "crate::error::${operationName}Error"
-            val name = operationName.toSnakeCase()
+            val fnName = operationName.toSnakeCase()
 
             writer.rustBlockTemplate(
                 """
@@ -68,7 +66,7 @@ class PythonServerOperationHandlerGenerator(
                     input: $input,
                     state: #{SmithyServer}::Extension<#{SmithyPython}::PyState>,
                     handler: std::sync::Arc<#{SmithyPython}::PyHandler>,
-                ) -> Result<$output, $error>
+                ) -> std::result::Result<$output, $error>
                 """.trimIndent(),
                 *codegenScope
             ) {
@@ -113,7 +111,7 @@ class PythonServerOperationHandlerGenerator(
         #{tracing}::debug!("Executing Python handler coroutine `$name()`");
         let result = #{pyo3}::Python::with_gil(|py| {
             let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
-            let coro = if handler.args == 1 {
+            let coroutine = if handler.args == 1 {
                 pyhandler.call1((input,))?
             } else {
                 pyhandler.call1((input, &*state.0.context))?

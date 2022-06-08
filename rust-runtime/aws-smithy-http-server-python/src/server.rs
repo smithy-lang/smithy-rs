@@ -41,9 +41,9 @@ impl PyApp {
         })
     }
 
-    /// Start a signle worker with its own Tokio and Python async runtime and provided shared socket.
+    /// Start a single worker with its own Tokio and Python async runtime and provided shared socket.
     ///
-    /// Python asyncronous loop need to be started and handled during the lifetime of the process.
+    /// Python asynchronous loop needs to be started and handled during the lifetime of the process.
     /// First of all we install [uvloop] as the main Python event loop. Thanks to libuv, uvloop
     /// performs ~20% better than Python standard event loop in most benchmarks, while being 100%
     /// compatible.
@@ -104,7 +104,7 @@ impl PyApp {
             let server = hyper::Server::from_tcp(
                 raw_socket
                     .try_into()
-                    .expect("Unable to convert socket2::Socket into std::net::TcpListener"),
+                    .expect("Unable to convert `socket2::Socket` into `std::net::TcpListener`"),
             )
             .expect("Unable to create hyper server from shared socket")
             .serve(app.into_make_service());

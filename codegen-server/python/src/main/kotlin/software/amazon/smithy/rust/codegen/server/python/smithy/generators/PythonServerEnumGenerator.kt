@@ -34,7 +34,7 @@ class PythonServerEnumGenerator(
     private val writer: RustWriter,
     private val shape: StringShape,
     enumTrait: EnumTrait,
-    private val runtimeConfig: RuntimeConfig,
+  runtimeConfig: RuntimeConfig,
 ) : ServerEnumGenerator(model, symbolProvider, writer, shape, enumTrait, runtimeConfig) {
     override var mode: CodegenMode = CodegenMode.Server
 

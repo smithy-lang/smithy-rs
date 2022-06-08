@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 
 /**
- * Configure the [lib] section to Cargo.toml.
+ * Configure the [lib] section of `Cargo.toml`.
  *
  * [lib]
  * name = "$CRATE_NAME"
@@ -73,7 +73,6 @@ val DECORATORS = listOf(
     /**
      * Add the [InternalServerError] error to all operations.
      * This is done because the Python interpreter can raise exceptions during execution
-     * and we cannot guarantee infallible execution of operations.
      */
     AddInternalServerErrorToAllOpsDecorator(),
     // Add the [lib] section to Cargo.toml to configure the generation of the shared library:

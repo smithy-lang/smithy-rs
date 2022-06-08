@@ -35,7 +35,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  *        return OperationOutput(description)
  *
  *     app.run()
- zz*
+ *
  * The application holds a mapping between operation names (lowercase, snakecase),
  * the context as defined in Python and some task local with the Python event loop
  * for the current process.
@@ -63,12 +63,12 @@ class PythonApplicationGenerator(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
             "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "pyo3asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
             "tokio" to PythonServerCargoDependency.Tokio.asType(),
             "tracing" to PythonServerCargoDependency.Tracing.asType(),
             "tower" to PythonServerCargoDependency.Tower.asType(),
-            "towerhttp" to PythonServerCargoDependency.TowerHttp.asType(),
-            "numcpus" to PythonServerCargoDependency.NumCpus.asType(),
+            "tower_http" to PythonServerCargoDependency.TowerHttp.asType(),
+            "num_cpus" to PythonServerCargoDependency.NumCpus.asType(),
             "hyper" to PythonServerCargoDependency.Hyper.asType()
         )
 

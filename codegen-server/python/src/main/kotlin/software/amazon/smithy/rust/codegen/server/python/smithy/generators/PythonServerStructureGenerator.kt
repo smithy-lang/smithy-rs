@@ -30,7 +30,7 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
  */
 open class PythonServerStructureGenerator(
     model: Model,
-    private val codegenContext: CodegenContext,
+    codegenContext: CodegenContext,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape
@@ -82,7 +82,7 @@ open class PythonServerStructureGenerator(
                     /// Create a new `$name` that can be instantiated by Python.
                     pub fn new("""
                 )
-                // Render field accessor methods
+                // Render field accessor methods.
                 forEachMember(members) { _, memberName, memberSymbol ->
                     val memberType = memberSymbol.rustType()
                     write("$memberName: ${memberType.render()},")
@@ -100,7 +100,6 @@ open class PythonServerStructureGenerator(
                     fn __str__(&self) -> String {
                         format!("{self:?}")
                     }
-
                     """,
                     *codegenScope
                 )
