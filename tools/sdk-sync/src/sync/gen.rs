@@ -127,9 +127,7 @@ impl DefaultSdkGenerator {
         Ok(())
     }
 
-    /// Runs `aws:sdk:assemble` target with property `aws.fullsdk=true` set
-    #[instrument(skip(self))]
-    fn aws_sdk_assemble(&self) -> Result<()> {
+    fn do_aws_sdk_assemble(&self) -> Result<()> {
         info!("Generating the SDK...");
 
         let mut command = Command::new("./gradlew");
@@ -181,6 +179,26 @@ impl DefaultSdkGenerator {
         let output = command.output()?;
         handle_failure("aws_sdk_assemble", &output)?;
         Ok(())
+    }
+
+    /// Runs `aws:sdk:assemble` target with property `aws.fullsdk=true` set
+    #[instrument(skip(self))]
+    fn aws_sdk_assemble(&self) -> Result<()> {
+        let result = self.do_aws_sdk_assemble();
+        if result.is_err() {
+            // On failure, do a dump of running processes to give more insight into if there is a process leak going on
+            match Command::new("ps").arg("-ef").output() {
+                Ok(output) => info!(
+                    "Running processes shortly after failure:\n---\n{}---\n",
+                    String::from_utf8_lossy(&output.stdout)
+                ),
+                Err(err) => info!(
+                    "Failed to get running processes shortly after failure: {}",
+                    err
+                ),
+            }
+        }
+        result
     }
 }
 
