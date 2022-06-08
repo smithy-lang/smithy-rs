@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -26,7 +25,6 @@ class PythonServerCombinedErrorGenerator(
     private val codegenContext: CodegenContext,
     private val operation: OperationShape
 ) : ServerCombinedErrorGenerator(model, codegenContext.symbolProvider, operation) {
-    private val operationIndex = OperationIndex.of(model)
 
     override fun render(writer: RustWriter) {
         super.render(writer)

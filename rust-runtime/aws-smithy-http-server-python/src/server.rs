@@ -92,7 +92,7 @@ impl PyApp {
                 .enable_all()
                 .thread_name(format!("smithy-rs[{}]", worker_number))
                 .build()
-                .unwrap();
+                .expect("Unable to start a new tokio runtime for this process");
             // Register operations into a Router, add middleware and start the `hyper` server,
             // all inside a [tokio] blocking function.
             tracing::debug!("Add middlewares to Rust Python router");

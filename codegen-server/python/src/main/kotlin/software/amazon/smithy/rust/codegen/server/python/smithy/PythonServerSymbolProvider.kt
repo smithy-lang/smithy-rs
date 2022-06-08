@@ -7,12 +7,9 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.meta
 import software.amazon.smithy.rust.codegen.smithy.rustType
 
 /**
@@ -37,23 +34,11 @@ class PythonServerSymbolProvider(private val base: RustSymbolProvider) :
     override fun toSymbol(shape: Shape): Symbol {
         return when (base.toSymbol(shape).rustType()) {
             RuntimeType.Blob(runtimeConfig).toSymbol().rustType() -> {
-                buildSymbol("Blob")
+                PythonServerRuntimeType.Blob(runtimeConfig).toSymbol()
             }
             else -> {
                 base.toSymbol(shape)
             }
         }
     }
-
-    /**
-     * Create a new symbol based on its name, namespace and metadata.
-     * Creating just a symbol like `PythonServerRuntimeType.Blob(runtimeConfig).toSymbol()`
-     * is not enough as it lack the metadata.
-     */
-    private fun buildSymbol(name: String, public: Boolean = false): Symbol =
-        Symbol.builder()
-            .name(name)
-            .namespace("aws_smithy_http_server_python::types", "::")
-            .meta(RustMetadata(public = public))
-            .rustType(RustType.Opaque(name, namespace = "aws_smithy_http_server_python::types")).build()
 }
