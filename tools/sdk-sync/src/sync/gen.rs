@@ -13,6 +13,23 @@ use std::process::Command;
 use std::sync::Arc;
 use tracing::{info, instrument};
 
+#[derive(Clone, Debug)]
+pub struct CodeGenSettings {
+    pub smithy_parallelism: usize,
+    pub max_gradle_heap_megabytes: usize,
+    pub max_gradle_metaspace_megabytes: usize,
+}
+
+impl Default for CodeGenSettings {
+    fn default() -> Self {
+        Self {
+            smithy_parallelism: 1,
+            max_gradle_heap_megabytes: 512,
+            max_gradle_metaspace_megabytes: 512,
+        }
+    }
+}
+
 pub struct GeneratedSdk {
     path: PathBuf,
     // Keep a reference to the temp directory so that it doesn't get cleaned up
@@ -48,7 +65,7 @@ pub struct DefaultSdkGenerator {
     examples_path: PathBuf,
     fs: Arc<dyn Fs>,
     smithy_rs: Box<dyn Git>,
-    smithy_parallelism: usize,
+    settings: CodeGenSettings,
     temp_dir: Arc<tempfile::TempDir>,
 }
 
@@ -61,7 +78,7 @@ impl DefaultSdkGenerator {
         fs: Arc<dyn Fs>,
         reset_to_commit: Option<CommitHash>,
         original_smithy_rs_path: &Path,
-        smithy_parallelism: usize,
+        settings: &CodeGenSettings,
     ) -> Result<Self> {
         let temp_dir = tempfile::tempdir().context(here!("create temp dir"))?;
         GitCLI::new(original_smithy_rs_path)
@@ -82,7 +99,7 @@ impl DefaultSdkGenerator {
             examples_path: examples_path.into(),
             fs,
             smithy_rs: Box::new(smithy_rs) as Box<dyn Git>,
-            smithy_parallelism,
+            settings: settings.clone(),
             temp_dir: Arc::new(temp_dir),
         })
     }
@@ -127,13 +144,16 @@ impl DefaultSdkGenerator {
             "-Dorg.gradle.jvmargs={}",
             [
                 // Retain default Gradle JVM args
-                "-Xmx512m",
-                "-XX:MaxMetaspaceSize=256m",
+                format!("-Xmx{}m", self.settings.max_gradle_heap_megabytes),
+                format!(
+                    "-XX:MaxMetaspaceSize={}m",
+                    self.settings.max_gradle_metaspace_megabytes
+                ),
                 // Disable incremental compilation and caching since we're compiling exactly once per commit
-                "-Dkotlin.incremental=false",
-                "-Dkotlin.caching.enabled=false",
+                "-Dkotlin.incremental=false".to_string(),
+                "-Dkotlin.caching.enabled=false".to_string(),
                 // Run the compiler in the gradle daemon process to avoid more forking thrash
-                "-Dkotlin.compiler.execution.strategy=in-process"
+                "-Dkotlin.compiler.execution.strategy=in-process".to_string()
             ]
             .join(" ")
         ));
@@ -141,7 +161,7 @@ impl DefaultSdkGenerator {
         // Disable Smithy's codegen parallelism in favor of sdk-sync parallelism
         command.arg(format!(
             "-Djava.util.concurrent.ForkJoinPool.common.parallelism={}",
-            self.smithy_parallelism
+            self.settings.smithy_parallelism
         ));
 
         command.arg("-Paws.fullsdk=true");

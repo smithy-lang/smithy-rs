@@ -6,6 +6,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use sdk_sync::init_tracing;
+use sdk_sync::sync::gen::CodeGenSettings;
 use sdk_sync::sync::Sync;
 use smithy_rs_tool_common::macros::here;
 use std::path::PathBuf;
@@ -36,6 +37,29 @@ struct Args {
     /// system property) to use for Smithy codegen. Defaults to 1.
     #[clap(long)]
     smithy_parallelism: Option<usize>,
+    /// The maximum Java heap space (in megabytes) that the Gradle daemon is allowed to use during code generation.
+    #[clap(long)]
+    max_gradle_heap_megabytes: Option<usize>,
+    /// The maximum Java metaspace (in megabytes) that the Gradle daemon is allowed to use during code generation.
+    #[clap(long)]
+    max_gradle_metaspace_megabytes: Option<usize>,
+}
+
+impl Args {
+    fn codegen_settings(&self) -> CodeGenSettings {
+        let defaults = CodeGenSettings::default();
+        CodeGenSettings {
+            smithy_parallelism: self
+                .smithy_parallelism
+                .unwrap_or(defaults.smithy_parallelism),
+            max_gradle_heap_megabytes: self
+                .max_gradle_heap_megabytes
+                .unwrap_or(defaults.max_gradle_heap_megabytes),
+            max_gradle_metaspace_megabytes: self
+                .max_gradle_metaspace_megabytes
+                .unwrap_or(defaults.max_gradle_metaspace_megabytes),
+        }
+    }
 }
 
 /// This tool syncs codegen changes from smithy-rs, examples changes from aws-doc-sdk-examples,
@@ -65,7 +89,6 @@ fn main() -> Result<()> {
     info!("Available RAM (GB): {available_ram_gb}");
     info!("Num physical CPUs: {num_cpus}");
 
-    let smithy_parallelism = args.smithy_parallelism.unwrap_or(1);
     let sync_threads = if let Some(sync_threads) = args.sync_threads {
         sync_threads
     } else {
@@ -84,7 +107,7 @@ fn main() -> Result<()> {
         &args.aws_doc_sdk_examples.canonicalize().context(here!())?,
         &args.aws_sdk_rust.canonicalize().context(here!())?,
         &args.smithy_rs.canonicalize().context(here!())?,
-        smithy_parallelism,
+        args.codegen_settings(),
     )?;
 
     sync.sync().map_err(|e| e.context("The sync failed"))
