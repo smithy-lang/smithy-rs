@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.traits.LengthTrait
@@ -14,7 +15,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
 // TODO Unit tests
@@ -25,15 +25,18 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
  *
  * The [`length` trait] is the only constraint trait applicable to map shapes.
  *
+ * If [unconstrainedSymbol] is provided, the `MaybeConstrained` trait is implemented for the constrained type, using the
+ * [unconstrainedSymbol]'s associated type as the associated type for the trait.
+ *
  * [`length` trait]: https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
  */
 class ConstrainedMapGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
-    private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val writer: RustWriter,
-    val shape: MapShape
+    val shape: MapShape,
+    private val unconstrainedSymbol: Symbol? = null,
 ) {
     fun render() {
         // The `length` trait is the only constraint trait applicable to map shapes.
@@ -41,7 +44,6 @@ class ConstrainedMapGenerator(
 
         val name = symbolProvider.toSymbol(shape).name
         val inner = "std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>"
-        // TODO This won't work if the map is only used in operation output, because we don't render the constraint violation symbol.
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
         val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
@@ -75,10 +77,6 @@ class ConstrainedMapGenerator(
                 }
             }
             
-            impl #{ConstrainedTrait} for $name  {
-                type Unconstrained = #{UnconstrainedSymbol};
-            }
-            
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
                 
@@ -94,10 +92,20 @@ class ConstrainedMapGenerator(
             """,
             "KeySymbol" to symbolProvider.toSymbol(model.expectShape(shape.key.target)),
             "ValueSymbol" to symbolProvider.toSymbol(model.expectShape(shape.value.target)),
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
-            "UnconstrainedSymbol" to unconstrainedShapeSymbolProvider.toSymbol(shape),
             "TryFrom" to RuntimeType.TryFrom,
             "ConstraintViolation" to constraintViolation
         )
+
+        if (unconstrainedSymbol != null) {
+            writer.rustTemplate(
+                """
+                impl #{ConstrainedTrait} for $name  {
+                    type Unconstrained = #{UnconstrainedSymbol};
+                }
+                """,
+                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+                "UnconstrainedSymbol" to unconstrainedSymbol,
+            )
+        }
     }
 }

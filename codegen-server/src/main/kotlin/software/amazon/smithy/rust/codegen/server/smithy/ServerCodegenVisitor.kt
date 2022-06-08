@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedStringGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedTraitForEnumGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.MapConstraintViolationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
@@ -279,38 +280,23 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     }
 
     override fun mapShape(shape: MapShape) {
-        if (shape.isDirectlyConstrained(symbolProvider)) {
-            rustCrate.useShapeWriter(shape) { writer ->
-                ConstrainedMapGenerator(
-                    model,
-                    symbolProvider,
-                    unconstrainedShapeSymbolProvider,
-                    constraintViolationSymbolProvider,
-                    writer,
-                    shape
-                ).render()
-            }
-        }
-
-        if (shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
+        val renderUnconstrainedMap =
+            shapesReachableFromOperationInputs.contains(shape) && shape.canReachConstrainedShape(
                 model,
                 symbolProvider
             )
-        ) {
+        if (renderUnconstrainedMap) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for map $shape")
             rustCrate.withModule(unconstrainedModule) { unconstrainedModuleWriter ->
-                rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
-                    UnconstrainedMapGenerator(
-                        model,
-                        symbolProvider,
-                        unconstrainedShapeSymbolProvider,
-                        pubCrateConstrainedShapeSymbolProvider,
-                        constraintViolationSymbolProvider,
-                        unconstrainedModuleWriter,
-                        modelsModuleWriter,
-                        shape
-                    ).render()
-                }
+                UnconstrainedMapGenerator(
+                    model,
+                    symbolProvider,
+                    unconstrainedShapeSymbolProvider,
+                    pubCrateConstrainedShapeSymbolProvider,
+                    constraintViolationSymbolProvider,
+                    unconstrainedModuleWriter,
+                    shape
+                ).render()
             }
 
             if (!shape.isDirectlyConstrained(symbolProvider)) {
@@ -325,6 +311,32 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
                         shape
                     ).render()
                 }
+            }
+        }
+
+        val isDirectlyConstrained = shape.isDirectlyConstrained(symbolProvider)
+        if (isDirectlyConstrained) {
+            rustCrate.useShapeWriter(shape) { writer ->
+                ConstrainedMapGenerator(
+                    model,
+                    symbolProvider,
+                    constraintViolationSymbolProvider,
+                    writer,
+                    shape,
+                    if (renderUnconstrainedMap) unconstrainedShapeSymbolProvider.toSymbol(shape) else null
+                ).render()
+            }
+        }
+
+        if (isDirectlyConstrained || renderUnconstrainedMap) {
+            rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
+                MapConstraintViolationGenerator(
+                    model,
+                    symbolProvider,
+                    constraintViolationSymbolProvider,
+                    modelsModuleWriter,
+                    shape
+                ).render()
             }
         }
     }

@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 /**
- * Functions shared amongst the constrained shape generators, to keep the DRY and consistent.
+ * Functions shared amongst the constrained shape generators, to keep them DRY and consistent.
  */
 
 fun rustDocsNote(typeName: String) =

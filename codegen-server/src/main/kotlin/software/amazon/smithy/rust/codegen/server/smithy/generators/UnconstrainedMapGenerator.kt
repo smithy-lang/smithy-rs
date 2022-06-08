@@ -7,9 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MapShape
-import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
@@ -23,7 +21,6 @@ import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvid
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
-import software.amazon.smithy.rust.codegen.util.hasTrait
 
 // TODO Docs
 class UnconstrainedMapGenerator(
@@ -31,15 +28,13 @@ class UnconstrainedMapGenerator(
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
-    private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+    constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     private val unconstrainedModuleWriter: RustWriter,
-    private val modelsModuleWriter: RustWriter,
     val shape: MapShape
 ) {
     private val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
     private val name = symbol.name
     private val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
-    private val constraintViolationName = constraintViolationSymbol.name
     private val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
     private val valueShape = model.expectShape(shape.value.target)
     private val constrainedSymbol = if (shape.isDirectlyConstrained(symbolProvider)) {
@@ -75,39 +70,6 @@ class UnconstrainedMapGenerator(
 
             renderTryFromUnconstrainedForConstrained(this)
         }
-
-        renderConstraintViolation()
-    }
-
-    private fun renderConstraintViolation() {
-        val constraintViolationCodegenScope = listOfNotNull(
-            if (isKeyConstrained(keyShape)) {
-                "KeyConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(keyShape)
-            } else {
-                null
-            },
-            if (isValueConstrained(valueShape)) {
-                "ValueConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(valueShape)
-            } else {
-                null
-            },
-        ).toTypedArray()
-
-        modelsModuleWriter.withModule(
-            constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last()
-        ) {
-            rustTemplate(
-                """
-                ##[derive(Debug, PartialEq)]
-                pub enum $constraintViolationName {
-                    ${if (shape.hasTrait<LengthTrait>()) "Length(usize)," else ""}
-                    ${if (isKeyConstrained(keyShape)) "##[doc(hidden)] Key(#{KeyConstraintViolationSymbol})," else ""}
-                    ${if (isValueConstrained(valueShape)) "##[doc(hidden)] Value(#{ValueConstraintViolationSymbol})," else ""}
-                }
-                """,
-                *constraintViolationCodegenScope,
-            )
-        }
     }
 
     private fun renderTryFromUnconstrainedForConstrained(writer: RustWriter) {
@@ -115,9 +77,9 @@ class UnconstrainedMapGenerator(
             rust("type Error = #T;", constraintViolationSymbol)
 
             rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
-                if (isKeyConstrained(keyShape) || isValueConstrained(valueShape)) {
+                if (isKeyConstrained(keyShape, symbolProvider) || isValueConstrained(valueShape, model, symbolProvider)) {
                     val resolveToNonPublicConstrainedValueType =
-                        isValueConstrained(valueShape) &&
+                        isValueConstrained(valueShape, model, symbolProvider) &&
                                 !valueShape.isDirectlyConstrained(symbolProvider) &&
                                 !valueShape.isStructureShape
                     val constrainedValueSymbol = if (resolveToNonPublicConstrainedValueType) {
@@ -131,8 +93,8 @@ class UnconstrainedMapGenerator(
                         let res: Result<std::collections::HashMap<#{KeySymbol}, #{ConstrainedValueSymbol}>, Self::Error> = value.0
                             .into_iter()
                             .map(|(k, v)| {
-                                ${if (isKeyConstrained(keyShape)) "let k = k.try_into().map_err(Self::Error::Key)?;" else ""}
-                                ${if (isValueConstrained(valueShape)) "let v = v.try_into().map_err(Self::Error::Value)?;" else ""}
+                                ${if (isKeyConstrained(keyShape, symbolProvider)) "let k = k.try_into().map_err(Self::Error::Key)?;" else ""}
+                                ${if (isValueConstrained(valueShape, model, symbolProvider)) "let v = v.try_into().map_err(Self::Error::Value)?;" else ""}
                                 Ok((k, v))
                             })
                             .collect();
@@ -190,8 +152,4 @@ class UnconstrainedMapGenerator(
             }
         }
     }
-
-    private fun isKeyConstrained(shape: StringShape) = shape.isDirectlyConstrained(symbolProvider)
-
-    private fun isValueConstrained(shape: Shape): Boolean = shape.canReachConstrainedShape(model, symbolProvider)
 }

@@ -99,6 +99,13 @@ class UnconstrainedMapGeneratorTest {
                         pubCrateConstrainedShapeSymbolProvider,
                         constraintViolationSymbolProvider,
                         unconstrainedModuleWriter,
+                        it
+                    ).render()
+
+                    MapConstraintViolationGenerator(
+                        model,
+                        symbolProvider,
+                        constraintViolationSymbolProvider,
                         modelsModuleWriter,
                         it
                     ).render()
