@@ -116,7 +116,7 @@ class PythonServerOperationHandlerGenerator(
             } else {
                 pyhandler.call1((input, &*state.0.context))?
             };
-            #{pyo3asyncio}::tokio::into_future(coro)
+            #{pyo3asyncio}::tokio::into_future(coroutine)
         })?;
         result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))?
         """
