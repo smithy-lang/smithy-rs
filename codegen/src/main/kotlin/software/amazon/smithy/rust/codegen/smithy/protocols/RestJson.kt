@@ -9,7 +9,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
@@ -73,14 +72,11 @@ class RestJsonHttpBindingResolver(
         val members = operationShape
             .outputShape(model)
             .members()
-        // temporary fix for https://github.com/awslabs/smithy/blob/df456a514f72f4e35f0fb07c7e26006ff03b2071/smithy-model/src/main/java/software/amazon/smithy/model/knowledge/HttpBindingIndex.java#L352
-        // https://github.com/awslabs/smithy/issues/1259
-        for (m in members) {
-            if (m.hasTrait<DocumentationTrait>()) {
-                break
-            }
-            if (m.hasTrait<HttpPayloadTrait>()) {
-                val target = model.expectShape(m.target)
+        // TODO(https://github.com/awslabs/smithy/issues/1259)
+        //  Temporary fix for https://github.com/awslabs/smithy/blob/df456a514f72f4e35f0fb07c7e26006ff03b2071/smithy-model/src/main/java/software/amazon/smithy/model/knowledge/HttpBindingIndex.java#L352
+        for (member in members) {
+            if (member.hasTrait<HttpPayloadTrait>()) {
+                val target = model.expectShape(member.target)
                 if (!target.hasTrait<StreamingTrait>() && !target.hasTrait<MediaTypeTrait>() && target.isBlobShape) {
                     return null
                 }

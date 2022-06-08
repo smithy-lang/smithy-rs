@@ -47,7 +47,7 @@ impl RuntimeErrorKind {
         match self {
             RuntimeErrorKind::Serialization(_) => "SerializationException",
             RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
-            RuntimeErrorKind::UnknownOperation => "UnknownOperation",
+            RuntimeErrorKind::UnknownOperation => "UnknownOperationException",
             RuntimeErrorKind::NotAcceptable => "NotAcceptableException",
         }
     }

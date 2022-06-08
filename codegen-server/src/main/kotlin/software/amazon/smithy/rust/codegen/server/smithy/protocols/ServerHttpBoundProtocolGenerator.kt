@@ -164,7 +164,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             """
             if let Some(headers) = req.headers() {
                 if let Some(accept) = headers.get(#{http}::header::ACCEPT) {
-                    if accept != ${impliedResponseContentType.dq()} {
+                    if accept != "$impliedResponseContentType" {
                         return Err(Self::Rejection {
                             protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
                             kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
