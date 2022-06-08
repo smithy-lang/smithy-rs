@@ -69,3 +69,9 @@ for chunk in byte_streams {
 references = ["aws-sdk-rust#494", "aws-sdk-rust#519"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Add comments for docker settings needed when using this sdk"
+references = ["aws-sdk-rust#540"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jmklix"
