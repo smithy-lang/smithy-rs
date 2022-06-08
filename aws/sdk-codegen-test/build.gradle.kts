@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Test"
@@ -59,7 +59,7 @@ fun generateSmithyBuild(tests: List<CodegenTest>): String {
 task("generateSmithyBuild") {
     description = "generate smithy-build.json"
     doFirst {
-        projectDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodegenTests))
+        buildDir.resolve("smithy-build.json").writeText(generateSmithyBuild(CodegenTests))
     }
 }
 

@@ -1,30 +1,36 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
+use self::gen::{DefaultSdkGenerator, SdkGenerator};
 use crate::fs::{DefaultFs, Fs};
-use crate::git::{Commit, CommitHash, Git, GitCLI};
-use crate::gradle::{Gradle, GradleCLI};
+use crate::git::{Commit, Git, GitCLI};
 use crate::versions::{DefaultVersions, Versions, VersionsManifest};
 use anyhow::{bail, Context, Result};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info};
+use std::sync::Arc;
+use tracing::{debug, info, info_span};
 use tracing_attributes::instrument;
+
+pub mod gen;
 
 pub const BOT_NAME: &str = "AWS SDK Rust Bot";
 pub const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
 pub const MODEL_STASH_BRANCH_NAME: &str = "__sdk_sync__models_";
 
 pub struct Sync {
-    aws_doc_sdk_examples: Box<dyn Git>,
-    aws_sdk_rust: Box<dyn Git>,
-    smithy_rs: Box<dyn Git>,
-    smithy_rs_gradle: Box<dyn Gradle>,
-    fs: Box<dyn Fs>,
-    versions: Box<dyn Versions>,
+    aws_doc_sdk_examples: Arc<dyn Git>,
+    aws_sdk_rust: Arc<dyn Git>,
+    smithy_rs: Arc<dyn Git>,
+    fs: Arc<dyn Fs>,
+    versions: Arc<dyn Versions>,
+    previous_versions_manifest: Arc<PathBuf>,
+    smithy_parallelism: usize,
+    // Keep a reference to the temp directory so that it doesn't get cleaned up until the sync is complete
+    _temp_dir: Arc<tempfile::TempDir>,
 }
 
 impl Sync {
@@ -32,32 +38,48 @@ impl Sync {
         aws_doc_sdk_examples_path: &Path,
         aws_sdk_rust_path: &Path,
         smithy_rs_path: &Path,
+        smithy_parallelism: usize,
     ) -> Result<Self> {
+        let _temp_dir = Arc::new(tempfile::tempdir().context(here!("create temp dir"))?);
+        let aws_sdk_rust = Arc::new(GitCLI::new(aws_sdk_rust_path)?);
+        let fs = Arc::new(DefaultFs::new()) as Arc<dyn Fs>;
+        let previous_versions_manifest =
+            Arc::new(_temp_dir.path().join("previous-release-versions.toml"));
+        fs.copy(
+            &aws_sdk_rust.path().join("versions.toml"),
+            &previous_versions_manifest,
+        )
+        .context("failed to copy versions.toml to temp dir")?;
+
         Ok(Self {
-            aws_doc_sdk_examples: Box::new(GitCLI::new(aws_doc_sdk_examples_path)?),
-            aws_sdk_rust: Box::new(GitCLI::new(aws_sdk_rust_path)?),
-            smithy_rs: Box::new(GitCLI::new(smithy_rs_path)?),
-            smithy_rs_gradle: Box::new(GradleCLI::new(smithy_rs_path)) as Box<dyn Gradle>,
-            fs: Box::new(DefaultFs::new()) as Box<dyn Fs>,
-            versions: Box::new(DefaultVersions::new()) as Box<dyn Versions>,
+            aws_doc_sdk_examples: Arc::new(GitCLI::new(aws_doc_sdk_examples_path)?),
+            aws_sdk_rust,
+            smithy_rs: Arc::new(GitCLI::new(smithy_rs_path)?),
+            fs,
+            versions: Arc::new(DefaultVersions::new()),
+            previous_versions_manifest,
+            smithy_parallelism,
+            _temp_dir,
         })
     }
 
+    #[cfg(test)]
     pub fn new_with(
         aws_doc_sdk_examples: impl Git + 'static,
         aws_sdk_rust: impl Git + 'static,
         smithy_rs: impl Git + 'static,
-        smithy_rs_gradle: impl Gradle + 'static,
         fs: impl Fs + 'static,
         versions: impl Versions + 'static,
     ) -> Self {
         Self {
-            aws_doc_sdk_examples: Box::new(aws_doc_sdk_examples),
-            aws_sdk_rust: Box::new(aws_sdk_rust),
-            smithy_rs: Box::new(smithy_rs),
-            smithy_rs_gradle: Box::new(smithy_rs_gradle),
-            fs: Box::new(fs),
-            versions: Box::new(versions),
+            aws_doc_sdk_examples: Arc::new(aws_doc_sdk_examples),
+            aws_sdk_rust: Arc::new(aws_sdk_rust),
+            smithy_rs: Arc::new(smithy_rs),
+            fs: Arc::new(fs),
+            versions: Arc::new(versions),
+            previous_versions_manifest: Arc::new(PathBuf::from("doesnt-matter-for-tests")),
+            smithy_parallelism: 1,
+            _temp_dir: Arc::new(tempfile::tempdir().unwrap()),
         }
     }
 
@@ -116,16 +138,36 @@ impl Sync {
     fn sync_model_changes(&self, versions: &VersionsManifest) -> Result<()> {
         info!("Syncing model changes...");
 
-        // Restore the model changes
+        // Restore the model changes. Note: endpoints.json/default config/model changes
+        // may each be in their own commits coming into this, but we want them squashed into
+        // one commit for smithy-rs.
         self.smithy_rs
-            .fast_forward_merge(MODEL_STASH_BRANCH_NAME)
+            .squash_merge(
+                BOT_NAME,
+                BOT_EMAIL,
+                MODEL_STASH_BRANCH_NAME,
+                "Update SDK models",
+            )
+            .context(here!())?;
+        self.smithy_rs
+            .delete_branch(MODEL_STASH_BRANCH_NAME)
             .context(here!())?;
         let model_change_commit = self.smithy_rs.show("HEAD").context(here!())?;
 
         // Generate with the original examples
-        self.copy_original_examples().context(here!())?;
-        self.build_and_copy_sdk(&versions.aws_doc_sdk_examples_revision)
-            .context(here!("failed to generate the SDK"))?;
+        let sdk_gen = DefaultSdkGenerator::new(
+            &self.previous_versions_manifest,
+            &versions.aws_doc_sdk_examples_revision,
+            &self.aws_sdk_rust.path().join("examples"),
+            self.fs.clone(),
+            None,
+            self.smithy_rs.path(),
+            self.smithy_parallelism,
+        )
+        .context(here!())?;
+        let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
+        self.copy_sdk(generated_sdk.path())
+            .context(here!("failed to copy the SDK"))?;
 
         // Commit changes if there are any
         if self.sdk_has_changes().context(here!())? {
@@ -143,6 +185,8 @@ impl Sync {
     /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
     #[instrument(skip(self, versions))]
     fn sync_smithy_rs(&self, versions: &VersionsManifest) -> Result<()> {
+        use rayon::prelude::*;
+
         info!(
             "Checking for smithy-rs commits in range HEAD..{}",
             versions.smithy_rs_revision
@@ -160,24 +204,49 @@ impl Sync {
 
         info!("Syncing {} commit(s)...", commits.len());
 
-        // Run through all the new commits, syncing them one by one
-        for (i, rev) in commits.iter().enumerate() {
-            info!("[{}] Syncing {}...", i + 1, rev);
-            let commit = self
-                .smithy_rs
-                .show(rev.as_ref())
-                .with_context(|| format!("couldn't find commit {} in smithy-rs", rev))?;
+        // Generate code in parallel for each individual commit
+        let code_gen_paths = {
+            let previous_versions_manifest = self.previous_versions_manifest.clone();
+            let smithy_rs = self.smithy_rs.clone();
+            let examples_revision = versions.aws_doc_sdk_examples_revision.clone();
+            let examples_path = self.aws_sdk_rust.path().join("examples");
+            let fs = self.fs.clone();
+            let smithy_parallelism = self.smithy_parallelism;
 
-            // It's OK to `git reset --hard` in this case since the model changes were
-            // stashed, and we will ultimately reset to the latest smithy-rs commit
-            // by the end of this loop.
-            self.smithy_rs
-                .hard_reset(commit.hash.as_ref())
-                .with_context(|| format!("failed to reset to {} in smithy-rs", rev,))?;
+            commits
+                .par_iter()
+                .enumerate()
+                .map(move |(commit_num, commit_hash)| {
+                    let span = info_span!(
+                        "codegen",
+                        commit_num = commit_num,
+                        commit_hash = commit_hash.as_ref()
+                    );
+                    let _enter = span.enter();
 
-            self.copy_original_examples().context(here!())?;
-            self.build_and_copy_sdk(&versions.aws_doc_sdk_examples_revision)
-                .context("failed to generate the SDK")?;
+                    let commit = smithy_rs.show(commit_hash.as_ref()).with_context(|| {
+                        format!("couldn't find commit {} in smithy-rs", commit_hash)
+                    })?;
+
+                    let sdk_gen = DefaultSdkGenerator::new(
+                        &previous_versions_manifest,
+                        &examples_revision,
+                        &examples_path,
+                        fs.clone(),
+                        Some(commit.hash.clone()),
+                        smithy_rs.path(),
+                        smithy_parallelism,
+                    )
+                    .context(here!())?;
+                    let sdk_path = sdk_gen.generate_sdk().context(here!())?;
+                    Ok((commit, sdk_path))
+                })
+                .collect::<Result<Vec<_>>>()?
+        };
+
+        for (commit, generated_sdk) in code_gen_paths {
+            self.copy_sdk(generated_sdk.path())
+                .context("failed to copy the SDK")?;
             self.commit_sdk_changes("[smithy-rs]", &commit)
                 .context("couldn't commit SDK changes to aws-sdk-rust")?;
         }
@@ -211,28 +280,19 @@ impl Sync {
         }
         let examples_head = example_revisions.iter().cloned().next().unwrap();
 
-        let from = self.aws_doc_sdk_examples.path().join("rust_dev_preview");
-
-        info!("Cleaning examples...");
-        self.fs
-            .remove_dir_all_idempotent(&self.smithy_rs.path().join("aws/sdk/examples"))
-            .context(here!())?;
-
-        info!(
-            "Copying examples from {:?} to 'smithy-rs/aws/sdk/examples'...",
-            from
-        );
-        self.fs
-            .recursive_copy(&from, &self.smithy_rs.path().join("aws/sdk/examples"))
-            .context(here!())?;
-        self.fs
-            .remove_dir_all_idempotent(&self.smithy_rs.path().join("aws/sdk/examples/.cargo"))
-            .context(here!())?;
-        self.fs
-            .remove_file(&self.smithy_rs.path().join("aws/sdk/examples/Cargo.toml"))
-            .context(here!())?;
-
-        self.build_and_copy_sdk(&examples_head).context(here!())?;
+        let sdk_gen = DefaultSdkGenerator::new(
+            &self.previous_versions_manifest,
+            &examples_head,
+            &self.aws_doc_sdk_examples.path().join("rust_dev_preview"),
+            self.fs.clone(),
+            None,
+            self.smithy_rs.path(),
+            self.smithy_parallelism,
+        )
+        .context(here!())?;
+        let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
+        self.copy_sdk(generated_sdk.path())
+            .context("failed to copy the SDK")?;
         self.aws_sdk_rust
             .stage(&PathBuf::from("."))
             .context(here!())?;
@@ -270,24 +330,15 @@ impl Sync {
 
     /// Generate an SDK and copy it into `aws-sdk-rust`.
     #[instrument(skip(self))]
-    fn build_and_copy_sdk(&self, aws_doc_sdk_examples_revision: &CommitHash) -> Result<()> {
-        info!("Generating the SDK...");
-
-        // The output of running these commands isn't logged anywhere unless they fail
-        self.smithy_rs_gradle
-            .aws_sdk_assemble(aws_doc_sdk_examples_revision)
-            .context(here!())?;
-
-        let build_artifact_path = self.smithy_rs.path().join("aws/sdk/build/aws-sdk");
-        info!("Successfully generated the SDK");
-
+    fn copy_sdk(&self, generated_sdk_path: &Path) -> Result<()> {
         self.clean_out_existing_sdk()
             .context("couldn't clean out existing SDK from aws-sdk-rust")?;
 
         // Check that we aren't generating any files that we've marked as "handwritten"
         let handwritten_files_in_generated_sdk_folder = self
             .fs
-            .find_handwritten_files_and_folders(self.aws_sdk_rust.path(), &build_artifact_path)?;
+            .find_handwritten_files_and_folders(self.aws_sdk_rust.path(), generated_sdk_path)
+            .context(here!())?;
         if !handwritten_files_in_generated_sdk_folder.is_empty() {
             bail!(
                 "found one or more 'handwritten' files/folders in generated code: {:#?}\nhint: if this file is newly generated, remove it from .handwritten",
@@ -295,26 +346,33 @@ impl Sync {
             );
         }
 
-        self.copy_sdk(&build_artifact_path, self.aws_sdk_rust.path())?;
+        self.copy_sdk_files(generated_sdk_path, self.aws_sdk_rust.path())?;
         Ok(())
     }
 
-    /// Copies current examples in aws-sdk-rust back into smithy-rs.
+    /// Recursively copy all files and folders from the smithy-rs build artifacts folder
+    /// to the aws-sdk-rust repo folder. Paths passed in must be absolute.
     #[instrument(skip(self))]
-    fn copy_original_examples(&self) -> Result<()> {
-        info!("Cleaning examples...");
+    fn copy_sdk_files(&self, from_path: &Path, to_path: &Path) -> Result<()> {
+        info!("Copying generated SDK...");
+
+        assert!(
+            from_path.is_absolute(),
+            "expected absolute from_path but got: {:?}",
+            from_path
+        );
+        assert!(
+            to_path.is_absolute(),
+            "expected absolute to_path but got: {:?}",
+            to_path
+        );
+
+        // The '.' copies the folder contents rather than the folder
         self.fs
-            .remove_dir_all_idempotent(&self.smithy_rs.path().join("aws/sdk/examples"))
+            .recursive_copy(&from_path.join("."), to_path)
             .context(here!())?;
 
-        let from = self.aws_sdk_rust.path().join("examples");
-        info!(
-            "Copying examples from {:?} to 'smithy-rs/aws/sdk/examples'...",
-            from
-        );
-        self.fs
-            .recursive_copy(&from, &self.smithy_rs.path().join("aws/sdk/examples"))
-            .context(here!())?;
+        info!("Successfully copied generated SDK");
         Ok(())
     }
 
@@ -376,40 +434,13 @@ impl Sync {
             .context(here!())?;
         Ok(())
     }
-
-    /// Recursively copy all files and folders from the smithy-rs build artifacts folder
-    /// to the aws-sdk-rust repo folder. Paths passed in must be absolute.
-    #[instrument(skip(self))]
-    fn copy_sdk(&self, from_path: &Path, to_path: &Path) -> Result<()> {
-        info!("Copying generated SDK...");
-
-        assert!(
-            from_path.is_absolute(),
-            "expected absolute from_path but got: {:?}",
-            from_path
-        );
-        assert!(
-            to_path.is_absolute(),
-            "expected absolute to_path but got: {:?}",
-            to_path
-        );
-
-        // The '.' copies the folder contents rather than the folder
-        self.fs
-            .recursive_copy(&from_path.join("."), to_path)
-            .context(here!())?;
-
-        info!("Successfully copied generated SDK");
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::fs::MockFs;
-    use crate::git::MockGit;
-    use crate::gradle::MockGradle;
+    use crate::git::{CommitHash, MockGit};
     use crate::versions::MockVersions;
 
     // Wish this was in std...
@@ -506,7 +537,6 @@ mod tests {
             MockGit::new(),
             aws_sdk_rust,
             MockGit::new(),
-            MockGradle::new(),
             MockFs::new(),
             MockVersions::new(),
         );
@@ -558,7 +588,6 @@ mod tests {
             MockGit::new(),
             aws_sdk_rust,
             MockGit::new(),
-            MockGradle::new(),
             MockFs::new(),
             MockVersions::new(),
         );
@@ -592,7 +621,6 @@ mod tests {
             MockGit::new(),
             aws_sdk_rust,
             MockGit::new(),
-            MockGradle::new(),
             MockFs::new(),
             MockVersions::new(),
         );
@@ -619,7 +647,6 @@ mod tests {
             MockGit::new(),
             aws_sdk_rust,
             MockGit::new(),
-            MockGradle::new(),
             MockFs::new(),
             MockVersions::new(),
         );
@@ -646,7 +673,6 @@ mod tests {
             MockGit::new(),
             aws_sdk_rust,
             MockGit::new(),
-            MockGradle::new(),
             MockFs::new(),
             MockVersions::new(),
         );
@@ -675,7 +701,6 @@ mod tests {
             MockGit::new(),
             aws_sdk_rust,
             MockGit::new(),
-            MockGradle::new(),
             MockFs::new(),
             MockVersions::new(),
         );

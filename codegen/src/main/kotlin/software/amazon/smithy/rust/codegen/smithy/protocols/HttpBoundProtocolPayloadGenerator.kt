@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
@@ -51,7 +51,7 @@ class HttpBoundProtocolPayloadGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
+    private val target = codegenContext.target
     private val httpBindingResolver = protocol.httpBindingResolver
 
     private val operationSerModule = RustModule.private("operation_ser")
@@ -163,7 +163,7 @@ class HttpBoundProtocolPayloadGenerator(
 
         val marshallerConstructorFn = EventStreamMarshallerGenerator(
             model,
-            mode,
+            target,
             runtimeConfig,
             symbolProvider,
             unionShape,
@@ -211,10 +211,10 @@ class HttpBoundProtocolPayloadGenerator(
                 if (symbolProvider.toSymbol(member).isOptional()) {
                     withBlockTemplate(
                         """
-                            let payload = match payload$asRef {
-                                Some(t) => t,
-                                None => return Ok(
-                            """,
+                        let payload = match payload$asRef {
+                            Some(t) => t,
+                            None => return Ok(
+                        """,
                         ")};",
                         *codegenScope
                     ) {

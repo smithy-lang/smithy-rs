@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use anyhow::{Context, Result};
@@ -9,10 +9,14 @@ use sdk_sync::init_tracing;
 use sdk_sync::sync::Sync;
 use smithy_rs_tool_common::macros::here;
 use std::path::PathBuf;
+use sysinfo::{System, SystemExt};
+use tracing::info;
+
+const CODEGEN_MIN_RAM_REQUIRED_GB: usize = 2;
 
 /// A CLI tool to replay commits from smithy-rs, generate code, and commit that code to aws-rust-sdk.
 #[derive(Parser, Debug)]
-#[clap(name = "smithy-rs-sync")]
+#[clap(name = "sdk-sync")]
 struct Args {
     /// The path to the smithy-rs repo folder.
     #[clap(long, parse(from_os_str))]
@@ -23,6 +27,15 @@ struct Args {
     /// Path to the aws-doc-sdk-examples repository.
     #[clap(long, parse(from_os_str))]
     aws_doc_sdk_examples: PathBuf,
+
+    /// Number of threads that `sdk-sync` will use. Defaults to the physical number of CPUs,
+    /// or the available RAM divided by the RAM required for codegen. Whichever is smaller.
+    #[clap(long)]
+    sync_threads: Option<usize>,
+    /// The Java parallelism (corresponding to the `java.util.concurrent.ForkJoinPool.common.parallelism`
+    /// system property) to use for Smithy codegen. Defaults to 1.
+    #[clap(long)]
+    smithy_parallelism: Option<usize>,
 }
 
 /// This tool syncs codegen changes from smithy-rs, examples changes from aws-doc-sdk-examples,
@@ -46,10 +59,32 @@ fn main() -> Result<()> {
     init_tracing();
     let args = Args::parse();
 
+    let sys = System::new_all();
+    let available_ram_gb = (sys.available_memory() / 1024 / 1024) as usize;
+    let num_cpus = num_cpus::get_physical();
+    info!("Available RAM (GB): {available_ram_gb}");
+    info!("Num physical CPUs: {num_cpus}");
+
+    let smithy_parallelism = args.smithy_parallelism.unwrap_or(1);
+    let sync_threads = if let Some(sync_threads) = args.sync_threads {
+        sync_threads
+    } else {
+        (available_ram_gb / CODEGEN_MIN_RAM_REQUIRED_GB)
+            .max(1) // Must use at least 1 thread
+            .min(num_cpus) // Don't exceed the number of physical CPUs
+    };
+    info!("Sync thread pool size: {sync_threads}");
+
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(sync_threads)
+        .build_global()
+        .unwrap();
+
     let sync = Sync::new(
         &args.aws_doc_sdk_examples.canonicalize().context(here!())?,
         &args.aws_sdk_rust.canonicalize().context(here!())?,
         &args.smithy_rs.canonicalize().context(here!())?,
+        smithy_parallelism,
     )?;
 
     sync.sync().map_err(|e| e.context("The sync failed"))

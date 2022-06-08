@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Subcommand for fixing manifest dependency version numbers.
@@ -13,6 +13,7 @@ use crate::fs::Fs;
 use crate::package::{discover_package_manifests, parse_version};
 use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
+use clap::Parser;
 use semver::Version;
 use smithy_rs_tool_common::ci::running_in_ci;
 use std::collections::BTreeMap;
@@ -29,7 +30,23 @@ pub enum Mode {
     Execute,
 }
 
-pub async fn subcommand_fix_manifests(mode: Mode, location: &Path) -> Result<()> {
+#[derive(Parser, Debug)]
+pub struct FixManifestsArgs {
+    /// Path containing the manifests to fix. Manifests will be discovered recursively
+    #[clap(long)]
+    location: PathBuf,
+    /// Checks manifests rather than fixing them
+    #[clap(long)]
+    check: bool,
+}
+
+pub async fn subcommand_fix_manifests(
+    FixManifestsArgs { location, check }: &FixManifestsArgs,
+) -> Result<()> {
+    let mode = match check {
+        true => Mode::Check,
+        false => Mode::Execute,
+    };
     let manifest_paths = discover_package_manifests(location.into()).await?;
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;

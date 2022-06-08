@@ -1,5 +1,5 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 
 # This is the shared CI workflow that is run by both `ci-pr.yml` and `ci-main.yml` depending
 # on if a pull request is being checked, or if the `main` branch is being checked after merge.
@@ -9,7 +9,7 @@ on:
   workflow_call:
 
 env:
-  rust_version: 1.56.1
+  rust_version: 1.58.1
   rust_toolchain_components: clippy,rustfmt
 
 jobs:
@@ -58,6 +58,8 @@ jobs:
         - action: check-sdk-codegen-unit-tests
         - action: check-server-codegen-integration-tests
         - action: check-server-codegen-unit-tests
+        - action: check-server-codegen-integration-tests-python
+        - action: check-server-codegen-unit-tests-python
         - action: check-server-e2e-test
         - action: check-style-and-lints
     steps:

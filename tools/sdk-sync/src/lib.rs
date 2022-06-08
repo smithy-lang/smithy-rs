@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -9,7 +9,6 @@ use tracing_subscriber::EnvFilter;
 
 pub mod fs;
 pub mod git;
-pub mod gradle;
 pub mod sync;
 pub mod versions;
 

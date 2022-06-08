@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators.error
@@ -59,7 +59,7 @@ class TopLevelErrorGenerator(codegenContext: CodegenContext, private val operati
     }
 
     private fun RustWriter.renderImplDisplay() {
-        rustBlock("impl std::fmt::Display for Error") {
+        rustBlock("impl #T for Error", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 rustBlock("match self") {
                     allErrors.forEach {

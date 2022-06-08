@@ -22,7 +22,7 @@ The SDK is code generated from [Smithy models](https://awslabs.github.io/smithy/
 
 ## Getting Started with the SDK
 
-> Examples are availble for many services and operations, check out the [examples folder](https://github.com/awslabs/aws-sdk-rust/tree/main/examples).
+> Examples are availble for many services and operations, check out the [examples folder](./examples).
 
 > For a step-by-step guide including several advanced use cases, check out the [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html).
 
@@ -74,7 +74,7 @@ While we're working on the SDK, detailed usage instructions will be added to the
 * [GitHub discussions](https://github.com/awslabs/aws-sdk-rust/discussions) - For ideas, RFCs & general questions
 * [GitHub issues](https://github.com/awslabs/aws-sdk-rust/issues/new/choose) – For bug reports & feature requests
 * [Generated Docs (latest version)](https://awslabs.github.io/aws-sdk-rust/)
-* [Usage examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples)
+* [Usage examples](./examples)
 
 ## Feedback and Contributing
 
@@ -96,7 +96,7 @@ The SDK currently requires a minimum of Rust {{msrv}}, and is not guaranteed to 
 
 - Design docs - Design documentation for the SDK lives in the [design folder of smithy-rs](https://github.com/awslabs/smithy-rs/tree/main/design).
 - Runtime / Handwritten code: The Rust Runtime code that underpins the SDK can be accessed [here](https://github.com/awslabs/smithy-rs/tree/main/rust-runtime) and [here](https://github.com/awslabs/smithy-rs/tree/main/aws/rust-runtime). This code is copied into this repo as part of code generation.
-- [Code Examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples)
+- [Code Examples](./examples)
 - [API reference documentation (rustdoc)](https://awslabs.github.io/aws-sdk-rust/)
 
 ## Security

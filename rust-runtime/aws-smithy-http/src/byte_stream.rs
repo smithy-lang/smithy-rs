@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 //! ByteStream Abstractions
 //!
@@ -102,7 +102,7 @@
 //! ```no_run
 //! # #[cfg(feature = "rt-tokio")]
 //! # {
-//! use aws_smithy_http::byte_stream::ByteStream;
+//! use aws_smithy_http::byte_stream::{ByteStream, Length};
 //! use std::path::Path;
 //! struct GetObjectInput {
 //!     body: ByteStream
@@ -111,7 +111,7 @@
 //! async fn bytestream_from_file() -> GetObjectInput {
 //!     let bytestream = ByteStream::read_from().path("docs/some-large-file.csv")
 //!         .buffer_size(32_784)
-//!         .file_size(123_456)
+//!         .length(Length::Exact(123_456))
 //!         .build()
 //!         .await
 //!         .expect("valid path");
@@ -135,6 +135,8 @@ use std::task::{Context, Poll};
 
 #[cfg(feature = "rt-tokio")]
 mod bytestream_util;
+#[cfg(feature = "rt-tokio")]
+pub use bytestream_util::Length;
 
 #[cfg(feature = "rt-tokio")]
 pub use self::bytestream_util::FsBuilder;
@@ -147,8 +149,9 @@ pub use self::bytestream_util::FsBuilder;
 ///
 /// `ByteStream` provides two primary mechanisms for accessing the data:
 /// 1. With `.collect()`:
-/// [`.collect()`](crate::byte_stream::ByteStream::collect) reads the complete ByteStream into memory and stores it in `AggregatedBytes`,
-/// a non-contiguous ByteBuffer.
+///
+///     [`.collect()`](crate::byte_stream::ByteStream::collect) reads the complete ByteStream into memory and stores it in `AggregatedBytes`,
+///     a non-contiguous ByteBuffer.
 ///     ```no_run
 ///     use aws_smithy_http::byte_stream::{ByteStream, AggregatedBytes};
 ///     use aws_smithy_http::body::SdkBody;
@@ -163,7 +166,7 @@ pub use self::bytestream_util::FsBuilder;
 ///     ```
 /// 2. Via [`impl Stream`](futures_core::Stream):
 ///
-///     _Note: An import of `StreamExt` is required to use `try_next()`._
+///     _Note: An import of `StreamExt` is required to use `.try_next()`._
 ///
 ///     For use-cases where holding the entire ByteStream in memory is unnecessary, use the
 ///     `Stream` implementation:
@@ -187,6 +190,29 @@ pub use self::bytestream_util::FsBuilder;
 ///            digest.write(&bytes);
 ///        }
 ///        println!("digest: {}", digest.finish());
+///        Ok(())
+///     }
+///     ```
+///
+/// 3. Via [`.into_async_read()`](crate::byte_stream::ByteStream::into_async_read):
+///
+///     _Note: The `rt-tokio` feature must be active to use `.into_async_read()`._
+///
+///     It's possible to convert a `ByteStream` into a struct that implements [`tokio::io::AsyncRead`](tokio::io::AsyncRead).
+///     Then, you can use pre-existing tools like [`tokio::io::BufReader`](tokio::io::BufReader):
+///     ```no_run
+///     use aws_smithy_http::byte_stream::ByteStream;
+///     use aws_smithy_http::body::SdkBody;
+///     use tokio::io::{AsyncBufReadExt, BufReader};
+///     #[cfg(feature = "rt-tokio")]
+///     async fn example() -> std::io::Result<()> {
+///        let stream = ByteStream::new(SdkBody::from("hello!\nThis is some data"));
+///        // Wrap the stream in a BufReader
+///        let buf_reader = BufReader::new(stream.into_async_read());
+///        let mut lines = buf_reader.lines();
+///        assert_eq!(lines.next_line().await?, Some("hello!".to_owned()));
+///        assert_eq!(lines.next_line().await?, Some("This is some data".to_owned()));
+///        assert_eq!(lines.next_line().await?, None);
 ///        Ok(())
 ///     }
 ///     ```
@@ -272,7 +298,7 @@ impl ByteStream {
     /// ```no_run
     /// # #[cfg(feature = "rt-tokio")]
     /// # {
-    /// use aws_smithy_http::byte_stream::ByteStream;
+    /// use aws_smithy_http::byte_stream::{ByteStream, Length};
     ///
     /// async fn bytestream_from_file() -> ByteStream {
     ///     let bytestream = ByteStream::read_from()
@@ -280,7 +306,7 @@ impl ByteStream {
     ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
     ///         .buffer_size(32_784)
     ///         // Specify the length of the file used (skips an additional call to retrieve the size)
-    ///         .file_size(123_456)
+    ///         .length(Length::Exact(123_456))
     ///         .build()
     ///         .await
     ///         .expect("valid path");
@@ -345,6 +371,27 @@ impl ByteStream {
         self.0.with_body_callback(body_callback);
         self
     }
+
+    #[cfg(feature = "rt-tokio")]
+    /// Convert this `ByteStream` into a struct that implements [`AsyncRead`](tokio::io::AsyncRead).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use tokio::io::{BufReader, AsyncBufReadExt};
+    /// use aws_smithy_http::byte_stream::ByteStream;
+    ///
+    /// # async fn dox(my_bytestream: ByteStream) -> std::io::Result<()> {
+    /// let mut lines =  BufReader::new(my_bytestream.into_async_read()).lines();
+    /// while let Some(line) = lines.next_line().await? {
+    ///   // Do something line by line
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn into_async_read(self) -> impl tokio::io::AsyncRead {
+        tokio_util::io::StreamReader::new(self)
+    }
 }
 
 impl Default for ByteStream {
@@ -398,6 +445,12 @@ impl std::fmt::Display for Error {
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         Some(self.0.as_ref() as _)
+    }
+}
+
+impl From<Error> for std::io::Error {
+    fn from(err: Error) -> Self {
+        std::io::Error::new(std::io::ErrorKind::Other, err)
     }
 }
 
@@ -598,44 +651,18 @@ mod tests {
 
     #[cfg(feature = "rt-tokio")]
     #[tokio::test]
-    async fn path_based_bytestreams_with_builder() -> Result<(), Box<dyn std::error::Error>> {
+    async fn bytestream_into_async_read() {
         use super::ByteStream;
-        use bytes::Buf;
-        use http_body::Body;
-        use std::io::Write;
-        use tempfile::NamedTempFile;
-        let mut file = NamedTempFile::new()?;
+        use tokio::io::AsyncBufReadExt;
 
-        for i in 0..10000 {
-            writeln!(file, "Brian was here. Briefly. {}", i)?;
-        }
-        let body = ByteStream::read_from()
-            .path(&file)
-            .buffer_size(16384)
-            // This isn't the right file length - one shouldn't do this in real code
-            .file_size(200)
-            .build()
-            .await?
-            .into_inner();
+        let byte_stream = ByteStream::from_static(b"data 1\ndata 2\ndata 3");
+        let async_buf_read = tokio::io::BufReader::new(byte_stream.into_async_read());
 
-        // assert that the file length specified size is used as size hint
-        assert_eq!(body.size_hint().exact(), Some(200));
+        let mut lines = async_buf_read.lines();
 
-        let mut body1 = body.try_clone().expect("retryable bodies are cloneable");
-        // read a little bit from one of the clones
-        let some_data = body1
-            .data()
-            .await
-            .expect("should have some data")
-            .expect("read should not fail");
-        // The size of one read should be equal to that of the buffer size
-        assert_eq!(some_data.len(), 16384);
-
-        assert_eq!(
-            ByteStream::new(body1).collect().await?.remaining(),
-            298890 - some_data.len()
-        );
-
-        Ok(())
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 1".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 2".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 3".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), None);
     }
 }
