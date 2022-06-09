@@ -120,85 +120,10 @@ jobs:
       run: |
         aws s3 cp target/doc "s3://${S3_BUCKET_NAME}/docs/${{ github.event.pull_request.head.sha }}" --recursive
 
-  generate-server-benchmark:
-    name: Generate server benchmark
-    runs-on: ubuntu-latest
-    outputs:
-      bot-message: ${{ steps.run-benchmark.outputs.bot-message }}
-    steps:
-    - name: Checkout PR
-      uses: actions/checkout@v3
-      with:
-        path: pull-request
-    - name: Checkout origin/main
-      uses: actions/checkout@v3
-      with:
-        repository: awslabs/smithy-rs
-        path: origin-main
-        ref: main
-    - name: Checkout wrk
-      uses: actions/checkout@v3
-      with:
-        repository: wg/wrk
-        path: wrk-build
-        ref: 4.2.0
-    - uses: actions/cache@v2
-      name: Gradle Cache
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-        # Pinned to the commit hash of v1.3.0
-    - name: Rust Cache
-      uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
-      with:
-        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
-        target-dir: ./target
-    - name: Set up JDK
-      uses: actions/setup-java@v1
-      with:
-        java-version: ${{ env.java_version }}
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
-        components: ${{ env.rust_toolchain_components }}
-        default: true
-    - name: Install benchmarks dependencies
-      run: sudo apt-get update && sudo apt-get install -y ${{ env.apt_dependencies }}
-      # Ubuntu 20.04 doesn't have wrk packaged, hence we need to build it 🤦
-      # This will go away as soon as GitHub supports Ubuntu 21.10.
-    - name: Install wrk
-      run: cd wrk-build && make -j8 wrk && sudo cp wrk /usr/local/bin
-    - name: Run benchmark
-      id: run-benchmark
-      run: |
-        mkdir -p ~/.wrk-api-bench
-        # run the benchmark on origin/main
-        pushd origin-main/rust-runtime/aws-smithy-http-server/examples
-        make && RUN_BENCHMARKS=1 cargo test --release
-        popd
-
-        # run the benchmark on current ref
-        pushd pull-request/rust-runtime/aws-smithy-http-server/examples
-        make && RUN_BENCHMARKS=1 cargo test --release
-        popd
-        # Uncomment this for debugging purposes. It will print out the
-        # content of all the benchmarks found in the cache + the last one
-        # produced by the current run.
-        # for x in ~/.wrk-api-bench/*; do echo "Benchmark $x content:"; jq . "$x"; echo; done
-
-        # Ensure the output is available for the PR bot.
-        echo "::set-output name=bot-message::$(cat /tmp/smithy_rs_benchmark_deviation.txt)"
-
   post-bot-comment:
     needs:
     - generate-diff
     - generate-doc-preview
-    - generate-server-benchmark
     runs-on: ubuntu-latest
     name: Post bot comment
     permissions:
@@ -226,6 +151,5 @@ jobs:
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: '${{ steps.bot-messages.outputs.codegen-diff }}\n\n' +
-              '${{ needs.generate-doc-preview.outputs.bot-message }}\n\n' +
-              '${{ needs.generate-server-benchmark.outputs.bot-message }}\n\n'
+              '${{ needs.generate-doc-preview.outputs.bot-message }}\n\n'
           })
