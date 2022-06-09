@@ -932,12 +932,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 )
                             }
                         }
-                        val method = if (model.expectShape(it.member.target) is SetShape) {
-                            "insert"
-                        } else {
-                            "push"
-                        }
-                        rust("${symbolProvider.toMemberName(it.member)}.$method(v);")
+                        rust("${symbolProvider.toMemberName(it.member)}.push(v);")
                     }
                 }
 
