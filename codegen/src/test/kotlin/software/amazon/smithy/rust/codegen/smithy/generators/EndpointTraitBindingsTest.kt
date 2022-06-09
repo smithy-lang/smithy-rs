@@ -78,40 +78,45 @@ internal class EndpointTraitBindingsTest {
                     endpointBindingGenerator.render(this, "self")
                 }
             }
-            it.unitTest(
-                "valid_prefix",
-                """
-                let inp = GetStatusInput { foo: Some("test_value".to_string()) };
-                let prefix = inp.endpoint_prefix().unwrap();
-                assert_eq!(prefix.as_str(), "test_valuea.data.");
-                """
-            )
-            it.unitTest(
-                "invalid_prefix",
-                """
-                // not a valid URI component
-                let inp = GetStatusInput { foo: Some("test value".to_string()) };
-                inp.endpoint_prefix().expect_err("invalid uri component");
-                """
-            )
+            it.unitTest("valid_prefix") {
+                write(
+                    """
+                    let inp = GetStatusInput { foo: Some("test_value".to_string()) };
+                    let prefix = inp.endpoint_prefix().unwrap();
+                    assert_eq!(prefix.as_str(), "test_valuea.data.");
+                    """
+                )
+            }
 
-            it.unitTest(
-                "unset_prefix",
-                """
-                // unset is invalid
-                let inp = GetStatusInput { foo: None };
-                inp.endpoint_prefix().expect_err("invalid uri component");
-                """
-            )
+            it.unitTest("invalid_prefix") {
+                write(
+                    """
+                    // not a valid URI component
+                    let inp = GetStatusInput { foo: Some("test value".to_string()) };
+                    inp.endpoint_prefix().expect_err("invalid uri component");
+                    """
+                )
+            }
 
-            it.unitTest(
-                "empty_prefix",
-                """
-                // empty is invalid
-                let inp = GetStatusInput { foo: Some("".to_string()) };
-                inp.endpoint_prefix().expect_err("empty label is invalid");
-                """
-            )
+            it.unitTest("unset_prefix") {
+                write(
+                    """
+                    // unset is invalid
+                    let inp = GetStatusInput { foo: None };
+                    inp.endpoint_prefix().expect_err("invalid uri component");
+                    """
+                )
+            }
+
+            it.unitTest("empty_prefix") {
+                write(
+                    """
+                    // empty is invalid
+                    let inp = GetStatusInput { foo: Some("".to_string()) };
+                    inp.endpoint_prefix().expect_err("empty label is invalid");
+                    """
+                )
+            }
         }
 
         project.compileAndTest()

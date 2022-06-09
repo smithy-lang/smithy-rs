@@ -55,9 +55,9 @@ class ServerCombinedErrorGeneratorTest {
             val generator = ServerCombinedErrorGenerator(model, symbolProvider, model.lookup("error#Greeting"))
             generator.render(writer)
 
-            writer.unitTest(
-                name = "generates_combined_error_enums",
-                test = """
+            writer.unitTest("generates_combined_error_enums") {
+                rust(
+                    """
                     let variant = InvalidGreeting::builder().message("an error").build();
                     assert_eq!(format!("{}", variant), "InvalidGreeting: an error");
                     assert_eq!(variant.message(), "an error");
@@ -75,16 +75,18 @@ class ServerCombinedErrorGeneratorTest {
                     // Indicate the original name in the display output.
                     let error = FooException::builder().build();
                     assert_eq!(format!("{}", error), "FooException")
-                """
-            )
+                    """
+                )
+            }
 
-            writer.unitTest(
-                name = "generates_converters_into_combined_error_enums",
-                test = """
+            writer.unitTest("generates_converters_into_combined_error_enums") {
+                rust(
+                    """
                     let variant = InvalidGreeting { message: String::from("an error") };
                     let error: GreetingError = variant.into();
-                """
-            )
+                    """
+                )
+            }
 
             project.compileAndTest()
         }
