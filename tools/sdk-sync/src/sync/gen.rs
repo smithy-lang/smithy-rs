@@ -114,15 +114,36 @@ impl DefaultSdkGenerator {
     #[instrument(skip(self))]
     fn aws_sdk_assemble(&self) -> Result<()> {
         info!("Generating the SDK...");
+
         let mut command = Command::new("./gradlew");
         command.arg("--no-daemon"); // Don't let Gradle continue running after the build
+        command.arg("--no-parallel"); // Disable Gradle parallelism
+        command.arg("--max-workers=1"); // Cap the Gradle workers at 1
         command.arg("--info"); // Increase logging verbosity for failure debugging
+
+        // Customize the Gradle daemon JVM args (these are required even with `--no-daemon`
+        // since Gradle still forks out a daemon process that gets terminated at the end)
+        command.arg(format!(
+            "-Dorg.gradle.jvmargs={}",
+            [
+                // Retain default Gradle JVM args
+                "-Xmx512m",
+                "-XX:MaxMetaspaceSize=256m",
+                // Disable incremental compilation and caching since we're compiling exactly once per commit
+                "-Dkotlin.incremental=false",
+                "-Dkotlin.caching.enabled=false",
+                // Run the compiler in the gradle daemon process to avoid more forking thrash
+                "-Dkotlin.compiler.execution.strategy=in-process"
+            ]
+            .join(" ")
+        ));
 
         // Disable Smithy's codegen parallelism in favor of sdk-sync parallelism
         command.arg(format!(
             "-Djava.util.concurrent.ForkJoinPool.common.parallelism={}",
             self.smithy_parallelism
         ));
+
         command.arg("-Paws.fullsdk=true");
         command.arg(format!(
             "-Paws.sdk.previous.release.versions.manifest={}",
