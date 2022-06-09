@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
-// TODO Unit tests
 /**
  * [ConstrainedMapGenerator] generates a wrapper tuple newtype holding a constrained `std::collections::HashMap`.
  * This type can be built from unconstrained values, yielding a `ConstraintViolation` when the input does not satisfy
