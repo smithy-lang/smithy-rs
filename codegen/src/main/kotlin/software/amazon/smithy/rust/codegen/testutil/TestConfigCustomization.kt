@@ -65,14 +65,13 @@ fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDel
     val generator = ServiceConfigGenerator(customizations = customizations.toList())
     project.withModule(RustModule.Config) {
         generator.render(it)
-        it.unitTest("config_send_sync") {
-            rust(
-                """
-                fn assert_send_sync<T: Send + Sync>() {}
-                assert_send_sync::<Config>();
-                """
-            )
-        }
+        it.unitTest(
+            "config_send_sync",
+            """
+            fn assert_send_sync<T: Send + Sync>() {}
+            assert_send_sync::<Config>();
+            """
+        )
     }
     project.lib { it.rust("pub use config::Config;") }
     return project

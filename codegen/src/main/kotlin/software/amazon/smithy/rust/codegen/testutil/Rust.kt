@@ -19,6 +19,7 @@ import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
@@ -33,7 +34,6 @@ import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.runCommand
-import software.amazon.smithy.utils.AbstractCodeWriter
 import java.io.File
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
@@ -160,16 +160,15 @@ fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectN
     return pluginContext to testPath
 }
 
-/*
- * Writes a Rust-style unit test
- */
-fun <T : AbstractCodeWriter<T>> T.unitTest(
-    name: String,
-    vararg args: Any,
-    block: T.() -> Unit
-): T {
-    // this.write("#[test]")
-    return this.rustBlock("fn $name()", *args, block = block)
+fun RustWriter.unitTest(
+    name: String? = null,
+    @Language("Rust", prefix = "fn test() {", suffix = "}") test: String
+) {
+    val testName = name ?: safeName("test")
+    raw("#[test]")
+    rustBlock("fn $testName()") {
+        writeWithNoFormatting(test)
+    }
 }
 
 /**

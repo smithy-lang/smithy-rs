@@ -82,9 +82,9 @@ class EventStreamUnmarshallerGeneratorTest {
                 """
             )
 
-            writer.unitTest("message_with_blob") {
-                write(
-                    """
+            writer.unitTest(
+                name = "message_with_blob",
+                test = """
                     let message = msg("event", "MessageWithBlob", "application/octet-stream", b"hello, world!");
                     let result = ${writer.format(generator.render())}().unmarshall(&message);
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
@@ -94,214 +94,203 @@ class EventStreamUnmarshallerGeneratorTest {
                         ),
                         expect_event(result.unwrap())
                     );
-                    """
-                )
-            }
+                """,
+            )
 
             if (testCase.target == CodegenTarget.CLIENT) {
-                writer.unitTest("unknown_message") {
-                    write(
-                        """
-                        let message = msg("event", "NewUnmodeledMessageType", "application/octet-stream", b"hello, world!");
-                        let result = ${writer.format(generator.render())}().unmarshall(&message);
-                        assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                        assert_eq!(
-                            TestStream::Unknown,
-                            expect_event(result.unwrap())
-                        );
-                        """
-                    )
-                }
-            }
-
-            writer.unitTest("message_with_string") {
-                write(
+                writer.unitTest(
+                    "unknown_message",
                     """
-                    let message = msg("event", "MessageWithString", "text/plain", b"hello, world!");
+                    let message = msg("event", "NewUnmodeledMessageType", "application/octet-stream", b"hello, world!");
                     let result = ${writer.format(generator.render())}().unmarshall(&message);
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
                     assert_eq!(
-                        TestStream::MessageWithString(MessageWithString::builder().data("hello, world!").build()),
+                        TestStream::Unknown,
                         expect_event(result.unwrap())
                     );
-                    """
+                    """,
                 )
             }
 
-            writer.unitTest("message_with_struct") {
-                write(
-                    """
-                    let message = msg(
-                        "event",
-                        "MessageWithStruct",
-                        "${testCase.responseContentType}",
-                        br#"${testCase.validTestStruct}"#
-                    );
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
-                    assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                    assert_eq!(
-                        TestStream::MessageWithStruct(MessageWithStruct::builder().some_struct(
-                            TestStruct::builder()
-                                .some_string("hello")
-                                .some_int(5)
-                                .build()
-                        ).build()),
-                        expect_event(result.unwrap())
-                    );
-                    """
-                )
-            }
+            writer.unitTest(
+                "message_with_string",
+                """
+                let message = msg("event", "MessageWithString", "text/plain", b"hello, world!");
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                assert_eq!(
+                    TestStream::MessageWithString(MessageWithString::builder().data("hello, world!").build()),
+                    expect_event(result.unwrap())
+                );
+                """,
+            )
 
-            writer.unitTest("message_with_union") {
-                write(
-                    """
-                    let message = msg(
-                        "event",
-                        "MessageWithUnion",
-                        "${testCase.responseContentType}",
-                        br#"${testCase.validTestUnion}"#
-                    );
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
-                    assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                    assert_eq!(
-                        TestStream::MessageWithUnion(MessageWithUnion::builder().some_union(
-                            TestUnion::Foo("hello".into())
-                        ).build()),
-                        expect_event(result.unwrap())
-                    );
-                    """
-                )
-            }
-
-            writer.unitTest("message_with_headers") {
-                write(
-                    """
-                    let message = msg("event", "MessageWithHeaders", "application/octet-stream", b"")
-                        .add_header(Header::new("blob", HeaderValue::ByteArray((&b"test"[..]).into())))
-                        .add_header(Header::new("boolean", HeaderValue::Bool(true)))
-                        .add_header(Header::new("byte", HeaderValue::Byte(55i8)))
-                        .add_header(Header::new("int", HeaderValue::Int32(100_000i32)))
-                        .add_header(Header::new("long", HeaderValue::Int64(9_000_000_000i64)))
-                        .add_header(Header::new("short", HeaderValue::Int16(16_000i16)))
-                        .add_header(Header::new("string", HeaderValue::String("test".into())))
-                        .add_header(Header::new("timestamp", HeaderValue::Timestamp(DateTime::from_secs(5))));
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
-                    assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                    assert_eq!(
-                        TestStream::MessageWithHeaders(MessageWithHeaders::builder()
-                            .blob(Blob::new(&b"test"[..]))
-                            .boolean(true)
-                            .byte(55i8)
-                            .int(100_000i32)
-                            .long(9_000_000_000i64)
-                            .short(16_000i16)
-                            .string("test")
-                            .timestamp(DateTime::from_secs(5))
-                            .build()
-                        ),
-                        expect_event(result.unwrap())
-                    );
-                    """
-                )
-            }
-
-            writer.unitTest("message_with_header_and_payload") {
-                write(
-                    """
-                    let message = msg("event", "MessageWithHeaderAndPayload", "application/octet-stream", b"payload")
-                        .add_header(Header::new("header", HeaderValue::String("header".into())));
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
-                    assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                    assert_eq!(
-                        TestStream::MessageWithHeaderAndPayload(MessageWithHeaderAndPayload::builder()
-                            .header("header")
-                            .payload(Blob::new(&b"payload"[..]))
-                            .build()
-                        ),
-                        expect_event(result.unwrap())
-                    );
-                    """
-                )
-            }
-
-            writer.unitTest("message_with_no_header_payload_traits") {
-                write(
-                    """
-                    let message = msg(
-                        "event",
-                        "MessageWithNoHeaderPayloadTraits",
-                        "${testCase.responseContentType}",
-                        br#"${testCase.validMessageWithNoHeaderPayloadTraits}"#
-                    );
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
-                    assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                    assert_eq!(
-                        TestStream::MessageWithNoHeaderPayloadTraits(MessageWithNoHeaderPayloadTraits::builder()
-                            .some_int(5)
+            writer.unitTest(
+                "message_with_struct",
+                """
+                let message = msg(
+                    "event",
+                    "MessageWithStruct",
+                    "${testCase.responseContentType}",
+                    br#"${testCase.validTestStruct}"#
+                );
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                assert_eq!(
+                    TestStream::MessageWithStruct(MessageWithStruct::builder().some_struct(
+                        TestStruct::builder()
                             .some_string("hello")
+                            .some_int(5)
                             .build()
-                        ),
-                        expect_event(result.unwrap())
-                    );
-                    """
-                )
-            }
+                    ).build()),
+                    expect_event(result.unwrap())
+                );
+                """,
+            )
 
-            writer.unitTest("some_error") {
-                write(
-                    """
-                    let message = msg(
-                        "exception",
-                        "SomeError",
-                        "${testCase.responseContentType}",
-                        br#"${testCase.validSomeError}"#
-                    );
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
-                    assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                    match expect_error(result.unwrap()).kind {
-                        TestStreamOpErrorKind::SomeError(err) => assert_eq!(Some("some error"), err.message()),
-                        kind => panic!("expected SomeError, but got {:?}", kind),
+            writer.unitTest(
+                "message_with_union",
+                """
+                let message = msg(
+                    "event",
+                    "MessageWithUnion",
+                    "${testCase.responseContentType}",
+                    br#"${testCase.validTestUnion}"#
+                );
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                assert_eq!(
+                    TestStream::MessageWithUnion(MessageWithUnion::builder().some_union(
+                        TestUnion::Foo("hello".into())
+                    ).build()),
+                    expect_event(result.unwrap())
+                );
+                """,
+            )
+
+            writer.unitTest(
+                "message_with_headers",
+                """
+                let message = msg("event", "MessageWithHeaders", "application/octet-stream", b"")
+                    .add_header(Header::new("blob", HeaderValue::ByteArray((&b"test"[..]).into())))
+                    .add_header(Header::new("boolean", HeaderValue::Bool(true)))
+                    .add_header(Header::new("byte", HeaderValue::Byte(55i8)))
+                    .add_header(Header::new("int", HeaderValue::Int32(100_000i32)))
+                    .add_header(Header::new("long", HeaderValue::Int64(9_000_000_000i64)))
+                    .add_header(Header::new("short", HeaderValue::Int16(16_000i16)))
+                    .add_header(Header::new("string", HeaderValue::String("test".into())))
+                    .add_header(Header::new("timestamp", HeaderValue::Timestamp(DateTime::from_secs(5))));
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                assert_eq!(
+                    TestStream::MessageWithHeaders(MessageWithHeaders::builder()
+                        .blob(Blob::new(&b"test"[..]))
+                        .boolean(true)
+                        .byte(55i8)
+                        .int(100_000i32)
+                        .long(9_000_000_000i64)
+                        .short(16_000i16)
+                        .string("test")
+                        .timestamp(DateTime::from_secs(5))
+                        .build()
+                    ),
+                    expect_event(result.unwrap())
+                );
+                """,
+            )
+
+            writer.unitTest(
+                "message_with_header_and_payload",
+                """
+                let message = msg("event", "MessageWithHeaderAndPayload", "application/octet-stream", b"payload")
+                    .add_header(Header::new("header", HeaderValue::String("header".into())));
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                assert_eq!(
+                    TestStream::MessageWithHeaderAndPayload(MessageWithHeaderAndPayload::builder()
+                        .header("header")
+                        .payload(Blob::new(&b"payload"[..]))
+                        .build()
+                    ),
+                    expect_event(result.unwrap())
+                );
+                """,
+            )
+
+            writer.unitTest(
+                "message_with_no_header_payload_traits",
+                """
+                let message = msg(
+                    "event",
+                    "MessageWithNoHeaderPayloadTraits",
+                    "${testCase.responseContentType}",
+                    br#"${testCase.validMessageWithNoHeaderPayloadTraits}"#
+                );
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                assert_eq!(
+                    TestStream::MessageWithNoHeaderPayloadTraits(MessageWithNoHeaderPayloadTraits::builder()
+                        .some_int(5)
+                        .some_string("hello")
+                        .build()
+                    ),
+                    expect_event(result.unwrap())
+                );
+                """,
+            )
+
+            writer.unitTest(
+                "some_error",
+                """
+                let message = msg(
+                    "exception",
+                    "SomeError",
+                    "${testCase.responseContentType}",
+                    br#"${testCase.validSomeError}"#
+                );
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                match expect_error(result.unwrap()).kind {
+                    TestStreamOpErrorKind::SomeError(err) => assert_eq!(Some("some error"), err.message()),
+                    kind => panic!("expected SomeError, but got {:?}", kind),
+                }
+                """,
+            )
+
+            writer.unitTest(
+                "generic_error",
+                """
+                let message = msg(
+                    "exception",
+                    "UnmodeledError",
+                    "${testCase.responseContentType}",
+                    br#"${testCase.validUnmodeledError}"#
+                );
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                match expect_error(result.unwrap()).kind {
+                    TestStreamOpErrorKind::Unhandled(err) => {
+                        assert!(format!("{}", err).contains("message: \"unmodeled error\""));
                     }
-                    """
-                )
-            }
+                    kind => panic!("expected generic error, but got {:?}", kind),
+                }
+                """,
+            )
 
-            writer.unitTest("generic_error") {
-                write(
-                    """
-                    let message = msg(
-                        "exception",
-                        "UnmodeledError",
-                        "${testCase.responseContentType}",
-                        br#"${testCase.validUnmodeledError}"#
-                    );
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
-                    assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                    match expect_error(result.unwrap()).kind {
-                        TestStreamOpErrorKind::Unhandled(err) => {
-                            assert!(format!("{}", err).contains("message: \"unmodeled error\""));
-                        }
-                        kind => panic!("expected generic error, but got {:?}", kind),
-                    }
-                    """
-                )
-            }
-
-            writer.unitTest("bad_content_type") {
-                write(
-                    """
-                    let message = msg(
-                        "event",
-                        "MessageWithBlob",
-                        "wrong-content-type",
-                        br#"${testCase.validTestStruct}"#
-                    );
-                    let result = ${writer.format(generator.render())}().unmarshall(&message);
-                    assert!(result.is_err(), "expected error, got: {:?}", result);
-                    assert!(format!("{}", result.err().unwrap()).contains("expected :content-type to be"));
-                    """
-                )
-            }
+            writer.unitTest(
+                "bad_content_type",
+                """
+                let message = msg(
+                    "event",
+                    "MessageWithBlob",
+                    "wrong-content-type",
+                    br#"${testCase.validTestStruct}"#
+                );
+                let result = ${writer.format(generator.render())}().unmarshall(&message);
+                assert!(result.is_err(), "expected error, got: {:?}", result);
+                assert!(format!("{}", result.err().unwrap()).contains("expected :content-type to be"));
+                """,
+            )
         }
         test.project.compileAndTest()
     }

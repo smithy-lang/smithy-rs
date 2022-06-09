@@ -80,14 +80,13 @@ class StructureGeneratorTest {
         project.useShapeWriter(inner) { writer ->
             StructureGenerator(model, provider, writer, inner).render()
             StructureGenerator(model, provider, writer, struct).render()
-            writer.unitTest("struct_fields_optional") {
-                write(
-                    """
-                    let s: Option<MyStruct> = None;
-                    s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
-                    """
-                )
-            }
+            writer.unitTest(
+                "struct_fields_optional",
+                """
+                let s: Option<MyStruct> = None;
+                s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
+                """
+            )
             writer.toString().shouldContainInOrder(
                 "this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct"
             )
@@ -143,18 +142,18 @@ class StructureGeneratorTest {
         val writer = RustWriter.forModule("lib")
         val generator = StructureGenerator(model, provider, writer, credentials)
         generator.render()
-        writer.unitTest("sensitive_fields_redacted") {
-            write(
-                """
-                let creds = Credentials {
-                    username: Some("not_redacted".to_owned()),
-                    password: Some("don't leak me".to_owned()),
-                    secret_key: Some("don't leak me".to_owned())
-                };
-                assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
-                """
-            )
-        }
+        writer.unitTest(
+            "sensitive_fields_redacted",
+            """
+            let creds = Credentials {
+                username: Some("not_redacted".to_owned()),
+                password: Some("don't leak me".to_owned()),
+                secret_key: Some("don't leak me".to_owned())
+            };
+            assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
+            """
+        )
+        writer.compileAndTest()
     }
 
     @Test

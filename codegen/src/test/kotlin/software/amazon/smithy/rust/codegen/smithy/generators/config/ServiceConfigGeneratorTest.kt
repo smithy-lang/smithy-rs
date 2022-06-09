@@ -96,16 +96,15 @@ internal class ServiceConfigGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(RustModule.Config) {
             sut.render(it)
-            it.unitTest("set_config_fields") {
-                write(
-                    """
-                    let mut builder = Config::builder();
-                    builder.config_field = Some(99);
-                    let config = builder.build();
-                    assert_eq!(config.config_field, 99);
-                    """
-                )
-            }
+            it.unitTest(
+                "set_config_fields",
+                """
+                let mut builder = Config::builder();
+                builder.config_field = Some(99);
+                let config = builder.build();
+                assert_eq!(config.config_field, 99);
+                """
+            )
         }
         project.compileAndTest()
     }

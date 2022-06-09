@@ -54,9 +54,9 @@ class CombinedErrorGeneratorTest {
             val generator = CombinedErrorGenerator(model, symbolProvider, model.lookup("error#Greeting"))
             generator.render(writer)
 
-            writer.unitTest("generates_combined_error_enums") {
-                write(
-                    """
+            writer.unitTest(
+                name = "generates_combined_error_enums",
+                test = """
                     let kind = GreetingErrorKind::InvalidGreeting(InvalidGreeting::builder().message("an error").build());
                     let error = GreetingError::new(kind, aws_smithy_types::Error::builder().code("InvalidGreeting").message("an error").build());
                     assert_eq!(format!("{}", error), "InvalidGreeting: an error");
@@ -80,9 +80,8 @@ class CombinedErrorGeneratorTest {
                     // Indicate the original name in the display output.
                     let error = FooError::builder().build();
                     assert_eq!(format!("{}", error), "FooError [FooException]")
-                    """
-                )
-            }
+                """
+            )
 
             println("file:///${project.baseDir}/src/lib.rs")
             println("file:///${project.baseDir}/src/error.rs")

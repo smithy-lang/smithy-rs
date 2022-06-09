@@ -101,39 +101,36 @@ class AwsQuerySerializerGeneratorTest {
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
             writer.unitTest(
-                "query_serializer"
-            ) {
-                write(
-                    """
-                    use model::Top;
+                "query_serializer",
+                """
+                use model::Top;
 
-                    let input = crate::input::OpInput::builder()
-                        .top(
-                            Top::builder()
-                                .field("hello!")
-                                .extra(45)
-                                .recursive(Top::builder().extra(55).build())
-                                .build()
-                        )
-                        .boolean(true)
-                        .build()
-                        .unwrap();
-                    let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
-                    let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
-                    assert_eq!(
-                        output,
-                        "\
-                        Action=Op\
-                        &Version=test\
-                        &some_bool=true\
-                        &top.field=hello%21\
-                        &top.extra=45\
-                        &top.rec.item.1.extra=55\
-                        "
-                    );
-                    """
-                )
-            }
+                let input = crate::input::OpInput::builder()
+                    .top(
+                        Top::builder()
+                            .field("hello!")
+                            .extra(45)
+                            .recursive(Top::builder().extra(55).build())
+                            .build()
+                    )
+                    .boolean(true)
+                    .build()
+                    .unwrap();
+                let serialized = ${writer.format(operationGenerator!!)}(&input).unwrap();
+                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                assert_eq!(
+                    output,
+                    "\
+                    Action=Op\
+                    &Version=test\
+                    &some_bool=true\
+                    &top.field=hello%21\
+                    &top.extra=45\
+                    &top.rec.item.1.extra=55\
+                    "
+                );
+                """
+            )
         }
         project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)

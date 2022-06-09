@@ -125,70 +125,66 @@ class JsonParserGeneratorTest {
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
-            writer.unitTest("json_parser") {
-                write(
-                    """
-                    use model::Choice;
+            writer.unitTest(
+                "json_parser",
+                """
+                use model::Choice;
 
-                    // Generate the document serializer even though it's not tested directly
-                    // ${writer.format(payloadGenerator)}
+                // Generate the document serializer even though it's not tested directly
+                // ${writer.format(payloadGenerator)}
 
-                    let json = br#"
-                        { "top":
-                            { "extra": 45,
-                              "field": "something",
-                              "choice": { "int": 5 },
-                              "empty": { "not_empty": true }
-                            }
+                let json = br#"
+                    { "top":
+                        { "extra": 45,
+                          "field": "something",
+                          "choice": { "int": 5 },
+                          "empty": { "not_empty": true }
                         }
-                    "#;
+                    }
+                "#;
 
-                    let output = ${writer.format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
-                    let top = output.top.expect("top");
-                    assert_eq!(Some(45), top.extra);
-                    assert_eq!(Some("something".to_string()), top.field);
-                    assert_eq!(Some(Choice::Int(5)), top.choice);
-                    """
-                )
-            }
-            writer.unitTest("empty_body") {
-                write(
-                    """
-                    // empty body
-                    let output = ${writer.format(operationGenerator)}(b"", output::op_output::Builder::default()).unwrap().build();
-                    assert_eq!(output.top, None);
-                    """
-                )
-            }
-            writer.unitTest("unknown_variant") {
-                write(
-                    """
-                    // unknown variant
-                    let input = br#"{ "top": { "choice": { "somenewvariant": "data" } } }"#;
-                    let output = ${writer.format(operationGenerator)}(input, output::op_output::Builder::default()).unwrap().build();
-                    assert!(output.top.unwrap().choice.unwrap().is_unknown());
-                    """
-                )
-            }
-            writer.unitTest("empty_error") {
-                write(
-                    """
-                    // empty error
-                    let error_output = ${writer.format(errorParser!!)}(b"", error::error::Builder::default()).unwrap().build();
-                    assert_eq!(error_output.message, None);
-                    """
-                )
-            }
+                let output = ${writer.format(operationGenerator!!)}(json, output::op_output::Builder::default()).unwrap().build();
+                let top = output.top.expect("top");
+                assert_eq!(Some(45), top.extra);
+                assert_eq!(Some("something".to_string()), top.field);
+                assert_eq!(Some(Choice::Int(5)), top.choice);
+                """
+            )
+            writer.unitTest(
+                "empty_body",
+                """
+                // empty body
+                let output = ${writer.format(operationGenerator)}(b"", output::op_output::Builder::default()).unwrap().build();
+                assert_eq!(output.top, None);
+                """
+            )
+            writer.unitTest(
+                "unknown_variant",
+                """
+                // unknown variant
+                let input = br#"{ "top": { "choice": { "somenewvariant": "data" } } }"#;
+                let output = ${writer.format(operationGenerator)}(input, output::op_output::Builder::default()).unwrap().build();
+                assert!(output.top.unwrap().choice.unwrap().is_unknown());
+                """
+            )
 
-            writer.unitTest("error_with_message") {
-                write(
-                    """
-                    // error with message
-                    let error_output = ${writer.format(errorParser)}(br#"{"message": "hello"}"#, error::error::Builder::default()).unwrap().build();
-                    assert_eq!(error_output.message.expect("message should be set"), "hello");
-                    """
-                )
-            }
+            writer.unitTest(
+                "empty_error",
+                """
+                // empty error
+                let error_output = ${writer.format(errorParser!!)}(b"", error::error::Builder::default()).unwrap().build();
+                assert_eq!(error_output.message, None);
+                """
+            )
+
+            writer.unitTest(
+                "error_with_message",
+                """
+                // error with message
+                let error_output = ${writer.format(errorParser)}(br#"{"message": "hello"}"#, error::error::Builder::default()).unwrap().build();
+                assert_eq!(error_output.message.expect("message should be set"), "hello");
+                """
+            )
         }
         project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)

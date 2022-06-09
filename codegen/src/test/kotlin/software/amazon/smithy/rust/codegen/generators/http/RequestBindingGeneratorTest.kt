@@ -167,9 +167,9 @@ class RequestBindingGeneratorTest {
             // Currently rendering the operation renders the protocols—I want to separate that at some point.
             renderOperation(writer)
 
-            writer.unitTest("generate_uris") {
-                write(
-                    """
+            writer.unitTest(
+                name = "generate_uris",
+                test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
                         .bucket_name("somebucket/ok")
@@ -183,13 +183,12 @@ class RequestBindingGeneratorTest {
                     o.clear();
                     inp.test_uri_query(&mut o);
                     assert_eq!(o.as_str(), "?paramName=svq%21%21%25%26&hello=0&hello=1&hello=2&hello=44")
-                    """
-                )
-            }
+                """
+            )
 
-            writer.unitTest("serialize_non_zero_values") {
-                write(
-                    """
+            writer.unitTest(
+                name = "serialize_non_zero_values",
+                test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
                         .bucket_name("somebucket/ok")
@@ -200,13 +199,12 @@ class RequestBindingGeneratorTest {
                     let mut o = String::new();
                     inp.test_uri_query(&mut o);
                     assert_eq!(o.as_str(), "?primitive=1&enabled=true")
-                    """
-                )
-            }
+                """
+            )
 
-            writer.unitTest("build_http_requests") {
-                write(
-                    """
+            writer.unitTest(
+                name = "build_http_requests",
+                test = """
                     use std::collections::HashMap;
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
@@ -234,13 +232,12 @@ class RequestBindingGeneratorTest {
 
                     let prefix_header = http_request.headers().get_all("X-Prefix-k").iter().map(|hv|std::str::from_utf8(hv.as_ref()).unwrap()).collect::<Vec<_>>();
                     assert_eq!(prefix_header, vec!["😹"])
-                    """
-                )
-            }
+                """
+            )
 
-            writer.unitTest("invalid_header_name_produces_error") {
-                write(
-                    """
+            writer.unitTest(
+                name = "invalid_header_name_produces_error",
+                test = """
                     use std::collections::HashMap;
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
@@ -250,13 +247,12 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header out of a cat emoji");
                     assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `😹` cannot be used as a header name: invalid HTTP header name)");
-                    """
-                )
-            }
+                """
+            )
 
-            writer.unitTest("invalid_prefix_header_value_produces_an_error") {
-                write(
-                    """
+            writer.unitTest(
+                name = "invalid_prefix_header_value_produces_an_error",
+                test = """
                     use std::collections::HashMap;
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
@@ -266,12 +262,12 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
                     assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
-                    """
-                )
-            }
-            writer.unitTest("invalid_header_value_produces_an_error") {
-                write(
-                    """
+                """
+            )
+
+            writer.unitTest(
+                name = "invalid_header_value_produces_an_error",
+                test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
                         .bucket_name("buk")
@@ -281,13 +277,12 @@ class RequestBindingGeneratorTest {
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
                     // make sure we obey the sensitive trait
                     assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
-                    """
-                )
-            }
+                """
+            )
 
-            writer.unitTest("missing_uri_label_produces_an_error") {
-                write(
-                    """
+            writer.unitTest(
+                name = "missing_uri_label_produces_an_error",
+                test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
                         // don't set bucket
@@ -296,13 +291,12 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
                     assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
-                    """
-                )
-            }
+                """
+            )
 
-            writer.unitTest("missing_timestamp_uri_label_produces_an_error") {
-                write(
-                    """
+            writer.unitTest(
+                name = "missing_timestamp_uri_label_produces_an_error",
+                test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
                         .bucket_name("buk")
@@ -311,13 +305,12 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
                     assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
-                    """
-                )
-            }
+                """
+            )
 
-            writer.unitTest("empty_uri_label_produces_an_error") {
-                write(
-                    """
+            writer.unitTest(
+                name = "empty_uri_label_produces_an_error",
+                test = """
                     let ts = aws_smithy_types::DateTime::from_secs(10123125);
                     let inp = PutObjectInput::builder()
                         .bucket_name("")
@@ -325,9 +318,8 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
                     assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
-                    """
-                )
-            }
+                """
+            )
         }
 
         project.compileAndTest()

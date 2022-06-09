@@ -52,9 +52,9 @@ class AwsQueryParserGeneratorTest {
         val project = TestWorkspace.testProject(testSymbolProvider(model))
 
         project.lib { writer ->
-            writer.unitTest("valid_input") {
-                write(
-                    """
+            writer.unitTest(
+                name = "valid_input",
+                test = """
                     let xml = br#"
                     <SomeOperationResponse>
                         <SomeOperationResult someAttribute="5">
@@ -65,9 +65,8 @@ class AwsQueryParserGeneratorTest {
                     let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
                     assert_eq!(output.some_attribute, Some(5));
                     assert_eq!(output.some_val, Some("Some value".to_string()));
-                    """
-                )
-            }
+                """
+            )
         }
 
         project.withModule(RustModule.public("model")) {

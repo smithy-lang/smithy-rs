@@ -99,9 +99,9 @@ internal class XmlBindingTraitParserGeneratorTest {
         val operationParser = parserGenerator.operationParser(model.lookup("test#Op"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))
         project.lib { writer ->
-            writer.unitTest("valid_input") {
-                write(
-                    """
+            writer.unitTest(
+                name = "valid_input",
+                test = """
                     let xml = br#"<Top>
                         <choice>
                             <Hi>
@@ -119,13 +119,12 @@ internal class XmlBindingTraitParserGeneratorTest {
                     map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
                     assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
                     assert_eq!(output.renamed_with_prefix.as_deref(), Some("hey"));
-                    """
-                )
-            }
+                """
+            )
 
-            writer.unitTest("ignore_extras") {
-                write(
-                    """
+            writer.unitTest(
+                name = "ignore_extras",
+                test = """
                     let xml = br#"<Top>
                         <notchoice>
                             <extra/>
@@ -147,13 +146,12 @@ internal class XmlBindingTraitParserGeneratorTest {
                     let mut map = std::collections::HashMap::new();
                     map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
                     assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
-                    """
-                )
-            }
+                """
+            )
 
-            writer.unitTest("nopanics_on_invalid") {
-                write(
-                    """
+            writer.unitTest(
+                name = "nopanics_on_invalid",
+                test = """
                     let xml = br#"<Top>
                         <notchoice>
                             <extra/>
@@ -172,13 +170,11 @@ internal class XmlBindingTraitParserGeneratorTest {
                     </Top>
                     "#;
                     ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).expect("unknown union variant does not cause failure");
-                    """
-                )
-            }
-
-            writer.unitTest("unknown_union_variant") {
-                write(
-                    """
+                """
+            )
+            writer.unitTest(
+                name = "unknown_union_variant",
+                test = """
                     let xml = br#"<Top>
                         <choice>
                             <NewVariantName>
@@ -192,9 +188,8 @@ internal class XmlBindingTraitParserGeneratorTest {
                     "#;
                     let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
                     assert!(output.choice.unwrap().is_unknown());
-                    """
-                )
-            }
+                """
+            )
         }
         project.withModule(RustModule.public("model")) {
             model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, it)
