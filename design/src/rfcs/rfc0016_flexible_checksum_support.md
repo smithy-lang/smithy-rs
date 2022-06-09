@@ -1245,12 +1245,14 @@ mod tests {
 
 ### Sigv4 Update
 
-When sending checksum-verified requests with a streaming body, we must update the usual signing process. Instead of signing the request based on the request's body, we must sign it with a magic string instead:
+When sending checksum-verified requests with a streaming body, we must update the usual signing process. Instead of signing the request based on the request body's checksum, we must sign it with a special header instead:
 
 ```HTTP
 Authorization: <computed authorization header value using "STREAMING-UNSIGNED-PAYLOAD-TRAILER">
 x-amz-content-sha256: STREAMING-UNSIGNED-PAYLOAD-TRAILER
 ```
+
+Setting `STREAMING-UNSIGNED-PAYLOAD-TRAILER` tells the signer that we're sending an unsigned streaming body that will be followed by trailers.
 
 We can achieve this by:
 - Adding a new variant to `SignableBody`:
