@@ -846,8 +846,6 @@ use std::task::{Context, Poll};
 
 const CRLF: &str = "\r\n";
 const CHUNK_TERMINATOR: &str = "0\r\n";
-// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
-const MINIMUM_CHUNK_LENGTH: usize = 1024 * 64;
 
 /// Content encoding header value constants
 pub mod header_value {
@@ -866,7 +864,7 @@ pub struct AwsChunkedBodyOptions {
     /// The maximum size of each chunk to be sent. Default value of 8KB.
     /// chunk_length must be at least 8KB.
     ///
-    /// If ChunkLength and stream_length are both specified, the stream will be
+    /// If chunk_length and stream_length are both specified, the stream will be
     /// broken up into chunk_length chunks. The encoded length of the aws-chunked
     /// encoding can still be determined as long as all trailers, if any, have a
     /// fixed length.
@@ -960,9 +958,6 @@ impl AwsChunkedBody<Inner> {
         let stream_length = self.options.stream_length.unwrap_or_default();
         if stream_length != 0 {
             if let Some(chunk_length) = self.options.chunk_length {
-                // I don't think we'll hit this case b/c we only ever send things in one chunk
-                assert!(chunk_length > MINIMUM_CHUNK_LENGTH);
-
                 let num_chunks = stream_length / chunk_length;
                 length += num_chunks * get_unsigned_chunk_bytes_length(chunk_length);
                 let remainder = stream_length % chunk_length;
