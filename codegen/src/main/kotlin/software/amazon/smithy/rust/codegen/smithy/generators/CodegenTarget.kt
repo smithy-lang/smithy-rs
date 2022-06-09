@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.generators
 
 /**
- * The artifact type for whom we are generating the structure.
+ * Code generation mode: In some situations, codegen has different behavior for client vs. server (eg. required fields)
  */
 enum class CodegenTarget {
     CLIENT, SERVER

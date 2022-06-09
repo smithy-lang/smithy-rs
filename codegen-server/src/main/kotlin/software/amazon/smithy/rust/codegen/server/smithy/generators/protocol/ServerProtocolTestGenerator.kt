@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.testutil.TokioTest
@@ -71,7 +72,7 @@ class ServerProtocolTestGenerator(
     private val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
     private val instantiator = with(codegenContext) {
-        Instantiator(symbolProvider, model, runtimeConfig)
+        Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.SERVER)
     }
 
     private val codegenScope = arrayOf(

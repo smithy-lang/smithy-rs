@@ -27,6 +27,10 @@ pub struct Sync {
     smithy_rs: Arc<dyn Git>,
     fs: Arc<dyn Fs>,
     versions: Arc<dyn Versions>,
+    previous_versions_manifest: Arc<PathBuf>,
+    smithy_parallelism: usize,
+    // Keep a reference to the temp directory so that it doesn't get cleaned up until the sync is complete
+    _temp_dir: Arc<tempfile::TempDir>,
 }
 
 impl Sync {
@@ -34,16 +38,32 @@ impl Sync {
         aws_doc_sdk_examples_path: &Path,
         aws_sdk_rust_path: &Path,
         smithy_rs_path: &Path,
+        smithy_parallelism: usize,
     ) -> Result<Self> {
+        let _temp_dir = Arc::new(tempfile::tempdir().context(here!("create temp dir"))?);
+        let aws_sdk_rust = Arc::new(GitCLI::new(aws_sdk_rust_path)?);
+        let fs = Arc::new(DefaultFs::new()) as Arc<dyn Fs>;
+        let previous_versions_manifest =
+            Arc::new(_temp_dir.path().join("previous-release-versions.toml"));
+        fs.copy(
+            &aws_sdk_rust.path().join("versions.toml"),
+            &previous_versions_manifest,
+        )
+        .context("failed to copy versions.toml to temp dir")?;
+
         Ok(Self {
             aws_doc_sdk_examples: Arc::new(GitCLI::new(aws_doc_sdk_examples_path)?),
-            aws_sdk_rust: Arc::new(GitCLI::new(aws_sdk_rust_path)?),
+            aws_sdk_rust,
             smithy_rs: Arc::new(GitCLI::new(smithy_rs_path)?),
-            fs: Arc::new(DefaultFs::new()) as Arc<dyn Fs>,
+            fs,
             versions: Arc::new(DefaultVersions::new()),
+            previous_versions_manifest,
+            smithy_parallelism,
+            _temp_dir,
         })
     }
 
+    #[cfg(test)]
     pub fn new_with(
         aws_doc_sdk_examples: impl Git + 'static,
         aws_sdk_rust: impl Git + 'static,
@@ -57,6 +77,9 @@ impl Sync {
             smithy_rs: Arc::new(smithy_rs),
             fs: Arc::new(fs),
             versions: Arc::new(versions),
+            previous_versions_manifest: Arc::new(PathBuf::from("doesnt-matter-for-tests")),
+            smithy_parallelism: 1,
+            _temp_dir: Arc::new(tempfile::tempdir().unwrap()),
         }
     }
 
@@ -133,11 +156,13 @@ impl Sync {
 
         // Generate with the original examples
         let sdk_gen = DefaultSdkGenerator::new(
+            &self.previous_versions_manifest,
             &versions.aws_doc_sdk_examples_revision,
             &self.aws_sdk_rust.path().join("examples"),
             self.fs.clone(),
             None,
             self.smithy_rs.path(),
+            self.smithy_parallelism,
         )
         .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
@@ -181,10 +206,12 @@ impl Sync {
 
         // Generate code in parallel for each individual commit
         let code_gen_paths = {
+            let previous_versions_manifest = self.previous_versions_manifest.clone();
             let smithy_rs = self.smithy_rs.clone();
             let examples_revision = versions.aws_doc_sdk_examples_revision.clone();
             let examples_path = self.aws_sdk_rust.path().join("examples");
             let fs = self.fs.clone();
+            let smithy_parallelism = self.smithy_parallelism;
 
             commits
                 .par_iter()
@@ -202,11 +229,13 @@ impl Sync {
                     })?;
 
                     let sdk_gen = DefaultSdkGenerator::new(
+                        &previous_versions_manifest,
                         &examples_revision,
                         &examples_path,
                         fs.clone(),
                         Some(commit.hash.clone()),
                         smithy_rs.path(),
+                        smithy_parallelism,
                     )
                     .context(here!())?;
                     let sdk_path = sdk_gen.generate_sdk().context(here!())?;
@@ -252,11 +281,13 @@ impl Sync {
         let examples_head = example_revisions.iter().cloned().next().unwrap();
 
         let sdk_gen = DefaultSdkGenerator::new(
+            &self.previous_versions_manifest,
             &examples_head,
             &self.aws_doc_sdk_examples.path().join("rust_dev_preview"),
             self.fs.clone(),
             None,
             self.smithy_rs.path(),
+            self.smithy_parallelism,
         )
         .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;

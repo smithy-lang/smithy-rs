@@ -134,7 +134,7 @@ fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder {
  * When a symbol name conflicts with another name, we need to rename it. This tracks both names enabling us to generate helpful
  * docs that cover both cases.
  *
- * Note that this is only used for enum shapes an enum variant does not have it's own symbol. For structures, the [Symbol.renamedFrom]
+ * Note that this is only used for enum shapes an enum variant does not have its own symbol. For structures, the [Symbol.renamedFrom]
  * field will be set.
  */
 data class MaybeRenamed(val name: String, val renamedFrom: String?)
@@ -405,6 +405,11 @@ fun Symbol.isOptional(): Boolean = when (this.rustType()) {
     is RustType.Option -> true
     else -> false
 }
+
+/**
+ * Get the referenced symbol for T if [this] is an Option<T>, [this] otherwise
+ */
+fun Symbol.extractSymbolFromOption(): Symbol = this.mapRustType { it.stripOuter<RustType.Option>() }
 
 fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is RustType.Box
 

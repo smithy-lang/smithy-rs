@@ -16,10 +16,10 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
-import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
@@ -86,7 +85,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         symbolProvider =
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
-        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, mode = CodegenMode.Server)
+        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, target = CodegenTarget.SERVER)
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
@@ -184,7 +183,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         logger.info("[rust-server-codegen] Generating an enum $shape")
         shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
-                EnumGenerator(model, symbolProvider, writer, shape, enum).render()
+                ServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.runtimeConfig).render()
             }
         }
     }
