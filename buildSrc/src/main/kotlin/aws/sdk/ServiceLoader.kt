@@ -56,8 +56,9 @@ class AwsServices(private val project: Project, services: List<AwsService>) {
  * Since this function parses all models, it is relatively expensive to call. The result should be cached in a property
  * during build.
  */
-fun Project.discoverServices(serviceMembership: Membership): AwsServices {
-    val models = project.file("aws-models")
+fun Project.discoverServices(awsModelsPath: String?, serviceMembership: Membership): AwsServices {
+    val models = awsModelsPath?.let { File(it) } ?: project.file("aws-models")
+    logger.info("Using model path: $models")
     val baseServices = fileTree(models)
         .sortedBy { file -> file.name }
         .mapNotNull { file ->
@@ -96,6 +97,7 @@ fun Project.discoverServices(serviceMembership: Membership): AwsServices {
             }
         }
     val baseModules = baseServices.map { it.module }.toSet()
+    logger.info("Discovered base service modules to generate: $baseModules")
 
     // validate the full exclusion list hits
     serviceMembership.exclusions.forEach { disabledService ->
@@ -115,6 +117,9 @@ fun Project.discoverServices(serviceMembership: Membership): AwsServices {
         this,
         baseServices.filter {
             serviceMembership.isMember(it.module)
+        }.also { services ->
+            val moduleNames = services.map { it.module }
+            logger.info("Final service module list: $moduleNames")
         }
     )
 }

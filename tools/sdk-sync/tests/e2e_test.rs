@@ -7,10 +7,11 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use sdk_sync::git::{Git, GitCLI};
 use sdk_sync::init_tracing;
+use sdk_sync::sync::gen::CodeGenSettings;
 use sdk_sync::sync::{Sync, BOT_EMAIL, BOT_NAME};
 use smithy_rs_tool_common::shell::handle_failure;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -92,7 +93,10 @@ fn test_without_model_changes() {
         &tmp_dir.as_ref().join("aws-doc-sdk-examples"),
         &tmp_dir.as_ref().join("aws-sdk-rust"),
         &tmp_dir.as_ref().join("smithy-rs"),
-        Default::default(),
+        CodeGenSettings {
+            aws_models_path: Some(PathBuf::from("test-models-path")),
+            ..Default::default()
+        },
     )
     .expect("create sync success");
     sync.sync().expect("sync success");
@@ -211,7 +215,10 @@ fn test_with_model_changes() {
         &tmp_dir.as_ref().join("aws-doc-sdk-examples"),
         &tmp_dir.as_ref().join("aws-sdk-rust"),
         &tmp_dir.as_ref().join("smithy-rs"),
-        Default::default(),
+        CodeGenSettings {
+            aws_models_path: Some(PathBuf::from("test-models-path")),
+            ..Default::default()
+        },
     )
     .expect("create sync success");
     sync.sync().expect("sync success");

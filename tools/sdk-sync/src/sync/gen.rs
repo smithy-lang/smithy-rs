@@ -11,13 +11,14 @@ use smithy_rs_tool_common::shell::handle_failure;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 
 #[derive(Clone, Debug)]
 pub struct CodeGenSettings {
     pub smithy_parallelism: usize,
     pub max_gradle_heap_megabytes: usize,
     pub max_gradle_metaspace_megabytes: usize,
+    pub aws_models_path: Option<PathBuf>,
 }
 
 impl Default for CodeGenSettings {
@@ -26,6 +27,7 @@ impl Default for CodeGenSettings {
             smithy_parallelism: 1,
             max_gradle_heap_megabytes: 512,
             max_gradle_metaspace_megabytes: 512,
+            aws_models_path: None,
         }
     }
 }
@@ -128,8 +130,6 @@ impl DefaultSdkGenerator {
     }
 
     fn do_aws_sdk_assemble(&self) -> Result<()> {
-        info!("Generating the SDK...");
-
         let mut command = Command::new("./gradlew");
         command.arg("--no-daemon"); // Don't let Gradle continue running after the build
         command.arg("--no-parallel"); // Disable Gradle parallelism
@@ -164,7 +164,14 @@ impl DefaultSdkGenerator {
             self.settings.smithy_parallelism
         ));
 
-        command.arg("-Paws.fullsdk=true");
+        if let Some(models_path) = &self.settings.aws_models_path {
+            command.arg(format!(
+                "-Paws.sdk.models.path={}",
+                models_path
+                    .to_str()
+                    .expect("aws models path is a valid str")
+            ));
+        }
         command.arg(format!(
             "-Paws.sdk.previous.release.versions.manifest={}",
             self.previous_versions_manifest
@@ -178,6 +185,8 @@ impl DefaultSdkGenerator {
         command.arg("aws:sdk:assemble");
         command.current_dir(self.smithy_rs.path());
 
+        info!("Generating the SDK with: {:#?}", command);
+
         let output = command.output()?;
         handle_failure("aws_sdk_assemble", &output)?;
         Ok(())
@@ -187,7 +196,8 @@ impl DefaultSdkGenerator {
     #[instrument(skip(self))]
     fn aws_sdk_assemble(&self) -> Result<()> {
         let result = self.do_aws_sdk_assemble();
-        if result.is_err() {
+        if let Err(err) = &result {
+            error!("Codegen failed: {}", err);
             // On failure, do a dump of running processes to give more insight into if there is a process leak going on
             match Command::new("ps").arg("-ef").output() {
                 Ok(output) => info!(

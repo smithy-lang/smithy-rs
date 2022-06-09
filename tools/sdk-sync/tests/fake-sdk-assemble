@@ -34,7 +34,8 @@ def get_previous_release_versions():
     return get_property("aws.sdk.previous.release.versions.manifest")
 
 
-if get_property("aws.fullsdk") != "true":
+if get_property("aws.sdk.models.path") is None:
+    print("Missing aws.sdk.models.path")
     sys.exit(1)
 
 # Verify the versions manifest path was set correctly
