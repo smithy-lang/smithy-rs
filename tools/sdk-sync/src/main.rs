@@ -10,7 +10,7 @@ use sdk_sync::sync::gen::CodeGenSettings;
 use sdk_sync::sync::Sync;
 use smithy_rs_tool_common::macros::here;
 use std::path::PathBuf;
-use sysinfo::{System, SystemExt};
+use systemstat::{Platform, System};
 use tracing::info;
 
 const CODEGEN_MIN_RAM_REQUIRED_GB: usize = 2;
@@ -83,8 +83,7 @@ fn main() -> Result<()> {
     init_tracing();
     let args = Args::parse();
 
-    let sys = System::new_all();
-    let available_ram_gb = (sys.available_memory() / 1024 / 1024) as usize;
+    let available_ram_gb = available_ram_gb();
     let num_cpus = num_cpus::get_physical();
     info!("Available RAM (GB): {available_ram_gb}");
     info!("Num physical CPUs: {num_cpus}");
@@ -111,4 +110,10 @@ fn main() -> Result<()> {
     )?;
 
     sync.sync().map_err(|e| e.context("The sync failed"))
+}
+
+fn available_ram_gb() -> usize {
+    let sys = System::new();
+    let memory = sys.memory().expect("determine free memory");
+    (memory.free.as_u64() / 1024 / 1024 / 1024) as usize
 }

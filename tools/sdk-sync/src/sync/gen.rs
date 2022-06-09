@@ -141,7 +141,7 @@ impl DefaultSdkGenerator {
         command.arg(format!(
             "-Dorg.gradle.jvmargs={}",
             [
-                // Retain default Gradle JVM args
+                // Configure Gradle JVM memory settings
                 format!("-Xmx{}m", self.settings.max_gradle_heap_megabytes),
                 format!(
                     "-XX:MaxMetaspaceSize={}m",

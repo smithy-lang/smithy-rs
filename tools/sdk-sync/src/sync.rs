@@ -11,7 +11,12 @@ use anyhow::{bail, Context, Result};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::{Sender, TryRecvError};
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+use systemstat::{ByteSize, Platform, System};
 use tracing::{debug, info, info_span};
 use tracing_attributes::instrument;
 
@@ -21,6 +26,73 @@ pub const BOT_NAME: &str = "AWS SDK Rust Bot";
 pub const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
 pub const MODEL_STASH_BRANCH_NAME: &str = "__sdk_sync__models_";
 
+#[derive(Default)]
+struct SyncProgress {
+    commits_completed: AtomicUsize,
+    total_commits: AtomicUsize,
+}
+
+struct ProgressThread {
+    handle: Option<thread::JoinHandle<()>>,
+    tx: Sender<bool>,
+}
+
+impl ProgressThread {
+    pub fn spawn(progress: Arc<SyncProgress>) -> ProgressThread {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = thread::spawn(move || {
+            let mut done = false;
+            let system = System::new();
+            while !done {
+                let cpu = system.cpu_load_aggregate().ok();
+                for _ in 0..15 {
+                    thread::sleep(Duration::from_secs(1));
+                    if !matches!(rx.try_recv(), Err(TryRecvError::Empty)) {
+                        done = true;
+                        break;
+                    }
+                }
+                let cpu = if let Some(Ok(cpu)) = cpu.map(|cpu| cpu.done()) {
+                    format!("{:.1}", 100.0 - cpu.idle * 100.0)
+                } else {
+                    "error".to_string()
+                };
+                let (memory, swap) = system.memory_and_swap().unwrap();
+                info!(
+                    "Progress: smithy-rs commit {}/{}, cpu use: {}, memory used: {}, swap used: {}",
+                    progress.commits_completed.load(Ordering::Relaxed),
+                    progress.total_commits.load(Ordering::Relaxed),
+                    cpu,
+                    Self::format_memory(memory.free, memory.total),
+                    Self::format_memory(swap.free, swap.total),
+                );
+            }
+        });
+        ProgressThread {
+            handle: Some(handle),
+            tx,
+        }
+    }
+
+    fn format_memory(free: ByteSize, total: ByteSize) -> String {
+        let (free, total) = (free.as_u64(), total.as_u64());
+        let format_part = |val: u64| format!("{:.3}GB", val as f64 / 1024.0 / 1024.0 / 1024.0);
+        format!(
+            "{}/{}",
+            format_part(total.saturating_sub(free)),
+            format_part(total)
+        )
+    }
+}
+
+impl Drop for ProgressThread {
+    fn drop(&mut self) {
+        // Attempt to stop the loop in the thread
+        let _ = self.tx.send(true);
+        let _ = self.handle.take().map(|handle| handle.join());
+    }
+}
+
 pub struct Sync {
     aws_doc_sdk_examples: Arc<dyn Git>,
     aws_sdk_rust: Arc<dyn Git>,
@@ -29,6 +101,7 @@ pub struct Sync {
     versions: Arc<dyn Versions>,
     previous_versions_manifest: Arc<PathBuf>,
     codegen_settings: CodeGenSettings,
+    progress: Arc<SyncProgress>,
     // Keep a reference to the temp directory so that it doesn't get cleaned up until the sync is complete
     _temp_dir: Arc<tempfile::TempDir>,
 }
@@ -59,6 +132,7 @@ impl Sync {
             versions: Arc::new(DefaultVersions::new()),
             previous_versions_manifest,
             codegen_settings,
+            progress: Default::default(),
             _temp_dir,
         })
     }
@@ -79,12 +153,15 @@ impl Sync {
             versions: Arc::new(versions),
             previous_versions_manifest: Arc::new(PathBuf::from("doesnt-matter-for-tests")),
             codegen_settings: Default::default(),
+            progress: Default::default(),
             _temp_dir: Arc::new(tempfile::tempdir().unwrap()),
         }
     }
 
     #[instrument(skip(self))]
     pub fn sync(&self) -> Result<()> {
+        let _progress_thread = ProgressThread::spawn(self.progress.clone());
+
         info!("Loading versions.toml...");
         let versions = self
             .versions
@@ -203,6 +280,9 @@ impl Sync {
         }
 
         info!("Syncing {} commit(s)...", commits.len());
+        self.progress
+            .total_commits
+            .store(commits.len(), Ordering::Relaxed);
 
         // Generate code in parallel for each individual commit
         let code_gen_paths = {
@@ -212,6 +292,7 @@ impl Sync {
             let examples_path = self.aws_sdk_rust.path().join("examples");
             let fs = self.fs.clone();
             let codegen_settings = self.codegen_settings.clone();
+            let progress = self.progress.clone();
 
             commits
                 .par_iter()
@@ -239,6 +320,7 @@ impl Sync {
                     )
                     .context(here!())?;
                     let sdk_path = sdk_gen.generate_sdk().context(here!())?;
+                    progress.commits_completed.fetch_add(1, Ordering::Relaxed);
                     Ok((commit, sdk_path))
                 })
                 .collect::<Result<Vec<_>>>()?
