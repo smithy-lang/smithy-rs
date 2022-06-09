@@ -30,7 +30,7 @@ class PythonServerServiceGenerator(
 ) : ServerServiceGenerator(rustCrate, protocolGenerator, protocolSupport, httpBindingResolver, context) {
 
     override fun renderCombineErrors(writer: RustWriter, operation: OperationShape) {
-        PythonServerCombinedErrorGenerator(context.model, context, operation).render(writer)
+        PythonServerCombinedErrorGenerator(context.model, context.symbolProvider, operation).render(writer)
     }
 
     override fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {

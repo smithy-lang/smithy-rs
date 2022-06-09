@@ -10,10 +10,10 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerCombinedErrorGenerator
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 
 /**
@@ -22,22 +22,24 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
  */
 class PythonServerCombinedErrorGenerator(
     model: Model,
-    private val codegenContext: CodegenContext,
+    private val symbolProvider: RustSymbolProvider,
     private val operation: OperationShape
-) : ServerCombinedErrorGenerator(model, codegenContext.symbolProvider, operation) {
+) : ServerCombinedErrorGenerator(model, symbolProvider, operation) {
 
     override fun render(writer: RustWriter) {
         super.render(writer)
-        val symbol = operation.errorSymbol(codegenContext.symbolProvider)
-        val errorSymbol = PythonServerCargoDependency.PyO3.asType()
-        writer.rustBlock("impl From<#T::PyErr> for #T", errorSymbol, symbol) {
-            rustBlock("fn from(variant: #T::PyErr) -> #T", errorSymbol, symbol) {
-                rust(
-                    """InternalServerError {
-                    message: variant.to_string(),
-                        }.into()"""
-                )
+        writer.rustTemplate(
+            """
+            impl From<#{pyo3}::PyErr> for #{Error} {
+                fn from(variant: #{pyo3}::PyErr) -> #{Error} {
+                    crate::error::InternalServerError {
+                        message: variant.to_string()
+                    }.into()
+                }
             }
-        }
+            """,
+            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
+            "Error" to operation.errorSymbol(symbolProvider)
+        )
     }
 }
