@@ -147,6 +147,8 @@ impl DefaultSdkGenerator {
                     "-XX:MaxMetaspaceSize={}m",
                     self.settings.max_gradle_metaspace_megabytes
                 ),
+                "-XX:+UseSerialGC".to_string(),
+                "-verbose:gc".to_string(),
                 // Disable incremental compilation and caching since we're compiling exactly once per commit
                 "-Dkotlin.incremental=false".to_string(),
                 "-Dkotlin.caching.enabled=false".to_string(),
