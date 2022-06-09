@@ -29,23 +29,18 @@ class PythonServerServiceGenerator(
     private val context: CodegenContext,
 ) : ServerServiceGenerator(rustCrate, protocolGenerator, protocolSupport, httpBindingResolver, context) {
 
-    /**
-     * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
-     * which assigns a symbol location to each shape.
-     */
-    override fun render() {
-        super.render()
-        rustCrate.withModule(RustModule.public("python_server_application", "Python server and application implementation.")) { writer ->
-            PythonApplicationGenerator(context, operations)
-                .render(writer)
-        }
-    }
-
     override fun renderCombineErrors(writer: RustWriter, operation: OperationShape) {
         PythonServerCombinedErrorGenerator(context.model, context, operation).render(writer)
     }
 
     override fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {
         PythonServerOperationHandlerGenerator(context, operations).render(writer)
+    }
+
+    override fun renderExtras(operations: List<OperationShape>) {
+        rustCrate.withModule(RustModule.public("python_server_application", "Python server and application implementation.")) { writer ->
+            PythonApplicationGenerator(context, operations)
+                .render(writer)
+        }
     }
 }

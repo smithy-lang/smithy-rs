@@ -36,7 +36,7 @@ open class ServerServiceGenerator(
      * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
      */
-    open fun render() {
+    fun render() {
         for (operation in operations) {
             rustCrate.useShapeWriter(operation) { operationWriter ->
                 protocolGenerator.serverRenderOperation(
@@ -58,16 +58,23 @@ open class ServerServiceGenerator(
         rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->
             renderOperationRegistry(writer, operations)
         }
+        renderExtras(operations)
     }
 
+    // Render any extra section needed by subclasses of `ServerServiceGenerator`.
+    open fun renderExtras(operations: List<OperationShape>) { }
+
+    // Render combined errors.
     open fun renderCombineErrors(writer: RustWriter, operation: OperationShape) {
         ServerCombinedErrorGenerator(context.model, context.symbolProvider, operation).render(writer)
     }
 
+    // Render operations handler.
     open fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {
         ServerOperationHandlerGenerator(context, operations).render(writer)
     }
 
+    // Render operations registry.
     private fun renderOperationRegistry(writer: RustWriter, operations: List<OperationShape>) {
         ServerOperationRegistryGenerator(context, httpBindingResolver, operations).render(writer)
     }
