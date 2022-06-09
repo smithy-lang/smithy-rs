@@ -216,6 +216,14 @@ where
         self.inner.insert(value)
     }
 
+    /// This is an alias for [`Set::insert`]. This has been added to make the API across this and
+    /// [`Vec`].
+    #[doc(hidden)]
+    #[inline]
+    pub fn push(&mut self, value: T) -> bool {
+        self.insert(value)
+    }
+
     /// Returns `true` if the set contains a value.
     ///
     /// The value may be any borrowed form of the set's value type, but
