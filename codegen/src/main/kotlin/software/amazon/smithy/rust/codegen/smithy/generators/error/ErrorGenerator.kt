@@ -75,25 +75,6 @@ class ErrorGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val messageShape = shape.errorMessageMember()
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
-        // TODO(https://github.com/awslabs/smithy-rs/pull/1441) Separate commit: Why do we always generate a `pub fn message() -> Option<&str> { None }` for `@error` structure shapes,
-        //  even when they don’t have a `message` field?
-        val (returnType, message) = messageShape?.let {
-            val messageSymbol = symbolProvider.toSymbol(it).mapRustType { t -> t.asDeref() }
-            if (messageSymbol.rustType().stripOuter<RustType.Option>() is RustType.Opaque) {
-                // The string shape has a constraint trait that makes its symbol be a wrapper tuple struct.
-                if (messageSymbol.isOptional()) {
-                    "Option<&${messageSymbol.rustType().stripOuter<RustType.Option>().render()}>" to "self.${symbolProvider.toMemberName(it)}.as_ref()"
-                } else {
-                    "&${messageSymbol.rustType().render()}" to "&self.${symbolProvider.toMemberName(it)}"
-                }
-            } else {
-                if (messageSymbol.isOptional()) {
-                    messageSymbol.rustType().render() to "self.${symbolProvider.toMemberName(it)}.as_deref()"
-                } else {
-                    messageSymbol.rustType().render() to "self.${symbolProvider.toMemberName(it)}.as_ref()"
-                }
-            }
-        } ?: ("Option<&str>" to "None")
         writer.rustBlock("impl ${symbol.name}") {
             val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)
             if (retryKindWriteable != null) {
@@ -102,12 +83,20 @@ class ErrorGenerator(
                     retryKindWriteable(this)
                 }
             }
-            rust(
-                """
-                /// Returns the error message.
-                pub fn message(&self) -> $returnType { $message }
-                """
-            )
+            if (messageShape != null) {
+                val (returnType, message) = if (symbolProvider.toSymbol(messageShape).isOptional()) {
+                    "Option<&str>" to "self.${symbolProvider.toMemberName(messageShape)}.as_deref()"
+                } else {
+                    "&str" to "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
+                }
+
+                rust(
+                    """
+                    /// Returns the error message.
+                    pub fn message(&self) -> $returnType { $message }
+                    """
+                )
+            }
 
             /*
              * If we're generating for a server, the `name` method is added to enable

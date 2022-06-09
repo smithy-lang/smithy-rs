@@ -28,6 +28,7 @@ pub struct Sync {
     fs: Arc<dyn Fs>,
     versions: Arc<dyn Versions>,
     previous_versions_manifest: Arc<PathBuf>,
+    smithy_parallelism: usize,
     // Keep a reference to the temp directory so that it doesn't get cleaned up until the sync is complete
     _temp_dir: Arc<tempfile::TempDir>,
 }
@@ -37,6 +38,7 @@ impl Sync {
         aws_doc_sdk_examples_path: &Path,
         aws_sdk_rust_path: &Path,
         smithy_rs_path: &Path,
+        smithy_parallelism: usize,
     ) -> Result<Self> {
         let _temp_dir = Arc::new(tempfile::tempdir().context(here!("create temp dir"))?);
         let aws_sdk_rust = Arc::new(GitCLI::new(aws_sdk_rust_path)?);
@@ -56,6 +58,7 @@ impl Sync {
             fs,
             versions: Arc::new(DefaultVersions::new()),
             previous_versions_manifest,
+            smithy_parallelism,
             _temp_dir,
         })
     }
@@ -75,6 +78,7 @@ impl Sync {
             fs: Arc::new(fs),
             versions: Arc::new(versions),
             previous_versions_manifest: Arc::new(PathBuf::from("doesnt-matter-for-tests")),
+            smithy_parallelism: 1,
             _temp_dir: Arc::new(tempfile::tempdir().unwrap()),
         }
     }
@@ -158,6 +162,7 @@ impl Sync {
             self.fs.clone(),
             None,
             self.smithy_rs.path(),
+            self.smithy_parallelism,
         )
         .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
@@ -180,6 +185,8 @@ impl Sync {
     /// Run through all commits made to `smithy-rs` since last sync and "replay" them onto `aws-sdk-rust`.
     #[instrument(skip(self, versions))]
     fn sync_smithy_rs(&self, versions: &VersionsManifest) -> Result<()> {
+        use rayon::prelude::*;
+
         info!(
             "Checking for smithy-rs commits in range HEAD..{}",
             versions.smithy_rs_revision
@@ -204,9 +211,10 @@ impl Sync {
             let examples_revision = versions.aws_doc_sdk_examples_revision.clone();
             let examples_path = self.aws_sdk_rust.path().join("examples");
             let fs = self.fs.clone();
+            let smithy_parallelism = self.smithy_parallelism;
 
             commits
-                .iter()
+                .par_iter()
                 .enumerate()
                 .map(move |(commit_num, commit_hash)| {
                     let span = info_span!(
@@ -227,6 +235,7 @@ impl Sync {
                         fs.clone(),
                         Some(commit.hash.clone()),
                         smithy_rs.path(),
+                        smithy_parallelism,
                     )
                     .context(here!())?;
                     let sdk_path = sdk_gen.generate_sdk().context(here!())?;
@@ -278,6 +287,7 @@ impl Sync {
             self.fs.clone(),
             None,
             self.smithy_rs.path(),
+            self.smithy_parallelism,
         )
         .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
