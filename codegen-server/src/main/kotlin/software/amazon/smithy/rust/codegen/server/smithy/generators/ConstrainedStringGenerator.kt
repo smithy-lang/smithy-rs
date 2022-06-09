@@ -38,7 +38,6 @@ class ConstrainedStringGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val name = symbol.name
         val inner = RustType.String.render()
-        // TODO This won't work if the map is only used in operation output, because we don't render the constraint violation symbol.
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
         val condition = if (lengthTrait.min.isPresent && lengthTrait.max.isPresent) {
