@@ -322,7 +322,7 @@ class FluentClientGenerator(
             """
             ##[derive(Debug)]
             pub(crate) struct Handle#{generics_decl:W} {
-                pub(crate) client: #{client}::Client#{smithy_inst:W},
+                ##[allow(dead_code)] pub(crate) client: #{client}::Client#{smithy_inst:W},
                 pub(crate) conf: crate::Config,
             }
 

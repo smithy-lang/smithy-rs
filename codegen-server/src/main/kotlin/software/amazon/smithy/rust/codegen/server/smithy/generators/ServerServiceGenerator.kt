@@ -37,6 +37,12 @@ class ServerServiceGenerator(
      */
     fun render() {
         val operations = index.getContainedOperations(context.serviceShape).sortedBy { it.id }
+
+        if (operations.isEmpty()) {
+            logger.warning("[rust-server-codegen] There are no operations in the service closure")
+            return
+        }
+
         for (operation in operations) {
             rustCrate.useShapeWriter(operation) { operationWriter ->
                 protocolGenerator.serverRenderOperation(
@@ -54,17 +60,23 @@ class ServerServiceGenerator(
                 }
             }
         }
-        if (operations.isNotEmpty()) {
-            rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) { writer ->
-                ServerOperationHandlerGenerator(context, operations)
-                    .render(writer)
-            }
-            rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->
-                ServerOperationRegistryGenerator(context, httpBindingResolver, operations)
-                    .render(writer)
-            }
-        } else {
-            logger.warning("[rust-server-codegen] There are no operations in the service closure")
+        rustCrate.withModule(
+            RustModule.public(
+                "operation_handler",
+                "Operation handlers definition and implementation."
+            )
+        ) { writer ->
+            ServerOperationHandlerGenerator(context, operations)
+                .render(writer)
+        }
+        rustCrate.withModule(
+            RustModule.public(
+                "operation_registry",
+                "A registry of your service's operations."
+            )
+        ) { writer ->
+            ServerOperationRegistryGenerator(context, httpBindingResolver, operations)
+                .render(writer)
         }
     }
 }

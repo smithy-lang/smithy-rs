@@ -40,7 +40,8 @@ class ServiceGenerator(
      */
     fun render() {
         val operations = index.getContainedOperations(config.serviceShape).sortedBy { it.id }
-        operations.map { operation ->
+
+        for (operation in operations) {
             rustCrate.useShapeWriter(operation) { operationWriter ->
                 rustCrate.useShapeWriter(operation.inputShape(config.model)) { inputWriter ->
                     // Render the operation shape & serializers input `input.rs`
