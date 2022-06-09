@@ -34,7 +34,6 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
 // TODO Docs
-// TODO UnitTests
 class UnconstrainedUnionGenerator(
     val model: Model,
     val symbolProvider: RustSymbolProvider,
