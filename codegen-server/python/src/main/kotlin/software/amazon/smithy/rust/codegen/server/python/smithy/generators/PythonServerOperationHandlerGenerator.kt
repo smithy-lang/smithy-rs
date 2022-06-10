@@ -7,9 +7,10 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationHandlerGenerator
@@ -59,80 +60,93 @@ class PythonServerOperationHandlerGenerator(
             val error = "crate::error::${operationName}Error"
             val fnName = operationName.toSnakeCase()
 
-            writer.rustBlockTemplate(
+            writer.rustTemplate(
                 """
                 /// Python handler for operation `$operationName`.
                 pub async fn $fnName(
                     input: $input,
                     state: #{SmithyServer}::Extension<#{SmithyPython}::PyState>,
                     handler: std::sync::Arc<#{SmithyPython}::PyHandler>,
-                ) -> std::result::Result<$output, $error>
-                """.trimIndent(),
-                *codegenScope
-            ) {
-                rustTemplate(
-                    """
+                ) -> std::result::Result<$output, $error> {
                     // Async block used to run the handler and catch any Python error.
                     let result = async {
                         let handler = handler.clone();
                         if handler.is_coroutine {
-                            ${renderPyCoroutine(fnName, output)}
+                            #{pycoroutine:W}
                         } else {
-                            ${renderPyFunction(fnName, output)}
+                            #{pyfunction:W}
                         }
                     };
-                    ${renderPyError()}
-                    """.trimIndent(),
-                    *codegenScope
-                )
-            }
+                    #{pyerror:W}
+                }
+                """.trimIndent(),
+                *codegenScope,
+                "pycoroutine" to renderPyCoroutine(fnName, output),
+                "pyfunction" to renderPyFunction(fnName, output),
+                "pyerror" to renderPyError(),
+            )
         }
     }
 
-    private fun renderPyFunction(name: String, output: String): String =
-        """
-        #{tracing}::debug!("Executing Python handler function `$name()`");
-        #{tokio}::task::spawn_blocking(move || {
-            #{pyo3}::Python::with_gil(|py| {
-                let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
-                let output = if handler.args == 1 {
-                    pyhandler.call1((input,))?
-                } else {
-                    pyhandler.call1((input, &*state.0.context))?
-                };
-                output.extract::<$output>()
-            })
-        })
-        .await.map_err(|e| #{pyo3}::exceptions::PyRuntimeError::new_err(e.to_string()))?
-        """
+    private fun renderPyFunction(name: String, output: String): Writable =
+        writable {
+            rustTemplate(
+                """
+                #{tracing}::debug!("Executing Python handler function `$name()`");
+                #{tokio}::task::spawn_blocking(move || {
+                    #{pyo3}::Python::with_gil(|py| {
+                        let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
+                        let output = if handler.args == 1 {
+                            pyhandler.call1((input,))?
+                        } else {
+                            pyhandler.call1((input, &*state.0.context))?
+                        };
+                        output.extract::<$output>()
+                    })
+                })
+                .await.map_err(|e| #{pyo3}::exceptions::PyRuntimeError::new_err(e.to_string()))?
+                """,
+                *codegenScope
+            )
+        }
 
-    private fun renderPyCoroutine(name: String, output: String): String =
-        """
-        #{tracing}::debug!("Executing Python handler coroutine `$name()`");
-        let result = #{pyo3}::Python::with_gil(|py| {
-            let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
-            let coroutine = if handler.args == 1 {
-                pyhandler.call1((input,))?
-            } else {
-                pyhandler.call1((input, &*state.0.context))?
-            };
-            #{pyo3asyncio}::tokio::into_future(coroutine)
-        })?;
-        result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))?
-        """
+    private fun renderPyCoroutine(name: String, output: String): Writable =
+        writable {
+            rustTemplate(
+                """
+                #{tracing}::debug!("Executing Python handler coroutine `$name()`");
+                let result = #{pyo3}::Python::with_gil(|py| {
+                    let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
+                    let coroutine = if handler.args == 1 {
+                        pyhandler.call1((input,))?
+                    } else {
+                        pyhandler.call1((input, &*state.0.context))?
+                    };
+                    #{pyo3asyncio}::tokio::into_future(coroutine)
+                })?;
+                result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))?
+                """,
+                *codegenScope
+            )
+        }
 
-    private fun renderPyError(): String =
-        """
-        // Catch and record a Python traceback.
-        result.await.map_err(|e| {
-            #{pyo3}::Python::with_gil(|py| {
-                let traceback = match e.traceback(py) {
-                    Some(t) => t.format().unwrap_or_else(|e| e.to_string()),
-                    None => "Unknown traceback".to_string()
-                };
-                #{tracing}::error!("{}\n{}", e, traceback);
-            });
-            e.into()
-        })
-        """
+    private fun renderPyError(): Writable =
+        writable {
+            rustTemplate(
+                """
+                // Catch and record a Python traceback.
+                result.await.map_err(|e| {
+                    #{pyo3}::Python::with_gil(|py| {
+                        let traceback = match e.traceback(py) {
+                            Some(t) => t.format().unwrap_or_else(|e| e.to_string()),
+                            None => "Unknown traceback".to_string()
+                        };
+                        #{tracing}::error!("{}\n{}", e, traceback);
+                    });
+                    e.into()
+                })
+                """,
+                *codegenScope
+            )
+        }
 }

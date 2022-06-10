@@ -77,7 +77,7 @@ open class PythonServerStructureGenerator(
                 """
                 impl $name {
                     ##[new]
-                    pub fn new(#{bodysignature:W}) {
+                    pub fn new(#{bodysignature:W}) -> Self {
                         Self {
                             #{bodymembers:W}
                         }
