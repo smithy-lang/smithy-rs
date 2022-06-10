@@ -11,6 +11,7 @@ import org.jsoup.nodes.Element
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolWriter
+import software.amazon.smithy.codegen.core.SymbolWriter.Factory
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -416,7 +417,7 @@ class RustWriter private constructor(
      */
     fun withModule(
         moduleName: String,
-        rustMetadata: RustMetadata = RustMetadata(public = true),
+        rustMetadata: RustMetadata = RustMetadata(visibility = Visibility.PUBLIC),
         moduleWriter: RustWriter.() -> Unit
     ): RustWriter {
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
