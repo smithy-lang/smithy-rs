@@ -259,6 +259,16 @@ class SymbolVisitor(
 
     override fun setShape(shape: SetShape): Symbol {
         val inner = this.toSymbol(shape.member)
+        /*
+        The smithy spec states that:
+            A set shape requires a single member named member, and the member MUST target either a
+            string, blob, byte, short, integer, long, bigInteger, or bigDecimal shape. The targeted
+            shape MUST NOT be marked with the streaming trait.
+        https://awslabs.github.io/smithy/1.0/spec/core/model.html?highlight=set#set
+
+        As a result the `inner.rustType()` will enjoy `Eq` and `Hash` and therefore will enjoy
+        the full interface provided by `Set` (`RustType.HashSet`).
+        */
         val builder = symbolBuilder(shape, RustType.HashSet(inner.rustType()))
         return builder.addReference(inner).build()
     }
