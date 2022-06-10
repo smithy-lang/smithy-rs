@@ -545,15 +545,14 @@ impl ChecksumBody<SdkBody> {
     /// This is necessary for calculating the true size of the request body for certain
     /// content-encodings.
     pub fn trailer_length(&self) -> u64 {
-        let trailer_name_size_in_bytes = self.checksum.header_name().as_str().len();
-        let base64_encoded_checksum_size_in_bytes =
-            base64::encoded_length(self.checksum.size() as usize);
+        let trailer_name_size_in_bytes = self.checksum.header_name().as_str().len() as u64;
+        let base64_encoded_checksum_size_in_bytes = base64::encoded_length(self.checksum.size());
 
         (trailer_name_size_in_bytes
             // HTTP trailer names and values may be separated by either a single colon or a single
             // colon and a whitespace. In the AWS Rust SDK, we use a single colon.
-            + ":".len()
-            + base64_encoded_checksum_size_in_bytes) as u64
+            + ":".len() as u64
+            + base64_encoded_checksum_size_in_bytes)
     }
 
     fn poll_inner(
@@ -632,6 +631,7 @@ impl http_body::Body for ChecksumBody<SdkBody> {
                 let checksum_size_hint = self.checksum.size();
                 SizeHint::with_exact(size + checksum_size_hint)
             }
+            // TODO is this the right behavior?
             None => {
                 let checksum_size_hint = self.checksum.size();
                 let mut summed_size_hint = SizeHint::new();
@@ -706,7 +706,14 @@ impl ChecksumValidatedBody<SdkBody> {
             // Once the inner body has stopped returning data, check the checksum
             // and return an error if it doesn't match.
             Poll::Ready(None) => {
-                let actual_checksum = checksum.finalize();
+                let actual_checksum = {
+                    match checksum.finalize() {
+                        Ok(checksum) => checksum,
+                        Err(err) => {
+                            return Poll::Ready(Some(Err(err)));
+                        }
+                    }
+                };
                 if *this.precalculated_checksum == actual_checksum {
                     Poll::Ready(None)
                 } else {
@@ -860,18 +867,17 @@ pub struct AwsChunkedBodyOptions {
     /// The total size of the stream. For unsigned encoding this implies that
     /// there will only be a single chunk containing the underlying payload,
     /// unless ChunkLength is also specified.
-    pub stream_length: Option<usize>,
-    /// The maximum size of each chunk to be sent. Default value of 8KB.
-    /// chunk_length must be at least 8KB.
+    pub stream_length: Option<u64>,
+    /// The maximum size of each chunk to be sent.
     ///
-    /// If chunk_length and stream_length are both specified, the stream will be
+    /// If ChunkLength and stream_length are both specified, the stream will be
     /// broken up into chunk_length chunks. The encoded length of the aws-chunked
     /// encoding can still be determined as long as all trailers, if any, have a
     /// fixed length.
-    pub chunk_length: Option<usize>,
+    pub chunk_length: Option<u64>,
     /// The length of each trailer sent within an `AwsChunkedBody`. Necessary in
     /// order to correctly calculate the total size of the body accurately.
-    pub trailer_lens: Vec<usize>,
+    pub trailer_lens: Vec<u64>,
 }
 
 impl AwsChunkedBodyOptions {
@@ -881,19 +887,19 @@ impl AwsChunkedBodyOptions {
     }
 
     /// Set stream length
-    pub fn with_stream_length(mut self, stream_length: usize) -> Self {
+    pub fn with_stream_length(mut self, stream_length: u64) -> Self {
         self.stream_length = Some(stream_length);
         self
     }
 
     /// Set chunk length
-    pub fn with_chunk_length(mut self, chunk_length: usize) -> Self {
+    pub fn with_chunk_length(mut self, chunk_length: u64) -> Self {
         self.chunk_length = Some(chunk_length);
         self
     }
 
     /// Set a trailer len
-    pub fn with_trailer_len(mut self, trailer_len: usize) -> Self {
+    pub fn with_trailer_len(mut self, trailer_len: u64) -> Self {
         self.trailer_lens.push(trailer_len);
         self
     }
@@ -949,7 +955,7 @@ impl AwsChunkedBody<Inner> {
         }
     }
 
-    fn encoded_length(&self) -> Option<usize> {
+    fn encoded_length(&self) -> Option<u64> {
         if self.options.chunk_length.is_none() && self.options.stream_length.is_none() {
             return None;
         }
@@ -970,21 +976,21 @@ impl AwsChunkedBody<Inner> {
         }
 
         // End chunk
-        length += CHUNK_TERMINATOR.len();
+        length += CHUNK_TERMINATOR.len() as u64;
 
         // Trailers
         for len in self.options.trailer_lens.iter() {
-            length += len + CRLF.len();
+            length += len + CRLF.len() as u64;
         }
 
         // Encoding terminator
-        length += CRLF.len();
+        length += CRLF.len() as u64;
 
         Some(length)
     }
 }
 
-fn prefix_with_chunk_size(data: Bytes, chunk_size: usize) -> Bytes {
+fn prefix_with_chunk_size(data: Bytes, chunk_size: u64) -> Bytes {
     // Len is the size of the entire chunk as defined in `AwsChunkedBodyOptions`
     let mut prefixed_data = BytesMut::from(format!("{:X?}\r\n", chunk_size).as_bytes());
     prefixed_data.extend_from_slice(&data);
@@ -992,18 +998,25 @@ fn prefix_with_chunk_size(data: Bytes, chunk_size: usize) -> Bytes {
     prefixed_data.into()
 }
 
-fn get_unsigned_chunk_bytes_length(payload_length: usize) -> usize {
-    let hex_repr_len = int_log16(payload_length) as usize;
-    hex_repr_len + CRLF.len() + payload_length + CRLF.len()
+fn get_unsigned_chunk_bytes_length(payload_length: u64) -> u64 {
+    let hex_repr_len = int_log16(payload_length);
+    hex_repr_len + CRLF.len() as u64 + payload_length + CRLF.len() as u64
 }
 
 fn trailers_as_aws_chunked_bytes(
-    total_length_of_trailers_in_bytes: usize,
+    total_length_of_trailers_in_bytes: u64,
     trailer_map: Option<HeaderMap>,
 ) -> Bytes {
     use std::fmt::Write;
 
-    let mut trailers = String::with_capacity(total_length_of_trailers_in_bytes);
+    // On 32-bit operating systems, we might not be able to convert the u64 to a usize, so we just
+    // use `String::new` in that case.
+    let mut trailers = match usize::try_from(total_length_of_trailers_in_bytes) {
+        Ok(total_length_of_trailers_in_bytes) => {
+            String::with_capacity(total_length_of_trailers_in_bytes)
+        }
+        Err(_) => String::new(),
+    };
     let mut already_wrote_first_trailer = false;
 
     if let Some(trailer_map) = trailer_map {
@@ -1090,7 +1103,7 @@ impl Body for AwsChunkedBody<Inner> {
                     Poll::Ready(Ok(trailers)) => {
                         *this.state = AwsChunkedBodyState::Closed;
                         let total_length_of_trailers_in_bytes =
-                            this.options.trailer_lens.iter().sum();
+                            this.options.trailer_lens.iter().fold(0, |acc, n| acc + n);
 
                         Poll::Ready(Some(Ok(trailers_as_aws_chunked_bytes(
                             total_length_of_trailers_in_bytes,
@@ -1162,10 +1175,10 @@ mod tests {
         let sdk_body = SdkBody::from(input_text);
         let checksum_body = ChecksumBody::new(sdk_body, "sha256");
         let aws_chunked_body_options = AwsChunkedBodyOptions {
-            stream_length: Some(input_text.len()),
+            stream_length: Some(input_text.len() as u64),
             chunk_length: None,
             trailer_lens: vec![
-                "x-amz-checksum-sha256:ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=".len(),
+                "x-amz-checksum-sha256:ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=".len() as u64,
             ],
         };
         let mut aws_chunked_body = AwsChunkedBody::new(checksum_body, aws_chunked_body_options);
@@ -1204,7 +1217,7 @@ mod tests {
             stream_length: Some(0),
             chunk_length: None,
             trailer_lens: vec![
-                "x-amz-checksum-sha256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=".len(),
+                "x-amz-checksum-sha256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=".len() as u64,
             ],
         };
         let mut aws_chunked_body = AwsChunkedBody::new(checksum_body, aws_chunked_body_options);
