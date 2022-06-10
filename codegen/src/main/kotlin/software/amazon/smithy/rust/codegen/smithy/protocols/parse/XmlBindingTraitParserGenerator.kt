@@ -496,18 +496,8 @@ class XmlBindingTraitParserGenerator(
                 *codegenScope,
                 "List" to symbolProvider.toSymbol(target)
             ) {
-                // The conditionals here are a result of the different API of `Vec` and `Set`.
-                //
-                // If we're able to construct an `Iterator` rather than `parseLoop` we can use
-                // `Iterator::collect()` in both cases. Lifetimes seem to obstruct this however.
-                //
-                // `Extend::extend_one` being stabilized might also provide a more even surface.
-                var container = if (target.isSetShape) {
-                    RuntimeType.Set(runtimeConfig)
-                } else {
-                    RuntimeType("Vec", dependency = null, namespace = "std::vec")
-                }
-                rustTemplate("let mut out = #{Container}::new();", "Container" to container)
+                val collectionType = symbolProvider.toSymbol(target)
+                rustTemplate("let mut out: #{Collection} = Default::default();", "Collection" to collectionType)
                 parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
                     case(member) {
                         withBlock("out.push(", ");") {

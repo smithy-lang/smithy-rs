@@ -292,18 +292,8 @@ class JsonParserGenerator(
                 *codegenScope,
             ) {
                 startArrayOrNull {
-                    // The conditionals here are a result of the different API of `Vec` and `Set`.
-                    //
-                    // If we're able to construct an `Iterator` rather than `parseLoop` we can use
-                    // `Iterator::collect()` in both cases. Lifetimes seem to obstruct this however.
-                    //
-                    // `Extend::extend_one` being stabilized might also provide a more even surface.
-                    var container = if (shape.isSetShape) {
-                        RuntimeType.Set(runtimeConfig)
-                    } else {
-                        RuntimeType("Vec", dependency = null, namespace = "std::vec")
-                    }
-                    rustTemplate("let mut items = #{Container}::new();", "Container" to container)
+                    val collectionType = symbolProvider.toSymbol(shape)
+                    rustTemplate("let mut items: #{Collection} = Default::default();", "Collection" to collectionType)
                     rustBlock("loop") {
                         rustBlock("match tokens.peek()") {
                             rustBlockTemplate("Some(Ok(#{Token}::EndArray { .. })) =>", *codegenScope) {

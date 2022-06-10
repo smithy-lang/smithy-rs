@@ -16,7 +16,6 @@ import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -865,12 +864,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rust("let mut seen_${symbolProvider.toMemberName(it.member)} = false;")
             }
             queryBindingsTargettingCollection.forEach {
-                val collection = if (model.expectShape(it.member.target) is SetShape) {
-                    RuntimeType.Set(runtimeConfig)
-                } else {
-                    RuntimeType("Vec", dependency = null, namespace = "std::vec")
-                }
-                rustTemplate("let mut ${symbolProvider.toMemberName(it.member)} = #{Collection}::new();", "Collection" to collection)
+                val collectionType = symbolProvider.toSymbol(model.expectShape(it.member.target))
+                rustTemplate("let mut ${symbolProvider.toMemberName(it.member)}: #{Collection} = Default::default();", "Collection" to collectionType)
             }
 
             rustBlock("for (k, v) in pairs") {
