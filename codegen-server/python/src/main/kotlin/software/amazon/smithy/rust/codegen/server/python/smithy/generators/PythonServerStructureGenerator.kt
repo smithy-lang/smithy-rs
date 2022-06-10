@@ -9,11 +9,14 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -44,9 +47,9 @@ open class PythonServerStructureGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         if (shape.hasTrait<ErrorTrait>()) {
-            writer.rustTemplate("##[#{pyo3}::pyclass(extends = #{pyo3}::exceptions::PyException)]", *codegenScope)
+            writer.renderPyClassException()
         } else {
-            writer.rustTemplate("##[#{pyo3}::pyclass]", *codegenScope)
+            writer.renderPyClass()
         }
         writer.documentShape(shape, model)
         val withoutDebug = containerMeta.derives.copy(
@@ -57,7 +60,7 @@ open class PythonServerStructureGenerator(
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
             forEachMember(members) { member, memberName, memberSymbol ->
                 renderMemberDoc(member, memberSymbol)
-                writer.rustTemplate("##[#{pyo3}(get, set)]", *codegenScope)
+                renderPyGetterSetter()
                 memberSymbol.expectRustMetadata().render(this)
                 write("$memberName: #T,", symbolProvider.toSymbol(member))
             }
@@ -70,34 +73,39 @@ open class PythonServerStructureGenerator(
     private fun renderPyO3Methods() {
         if (shape.hasTrait<ErrorTrait>() || !accessorMembers.isEmpty()) {
             writer.renderPyMethods()
-            writer.rustBlock("impl $name") {
-                write(
-                    """##[new]
-                    /// Create a new `$name` that can be instantiated by Python.
-                    pub fn new("""
-                )
-                // Render field accessor methods.
-                forEachMember(members) { _, memberName, memberSymbol ->
-                    val memberType = memberSymbol.rustType()
-                    write("$memberName: ${memberType.render()},")
-                }
-                rustBlock(") -> Self") {
-                    rustBlock("Self") {
-                        forEachMember(members) { _, memberName, _ -> write("$memberName,") }
+            writer.rustTemplate(
+                """
+                impl $name {
+                    ##[new]
+                    pub fn new(#{bodysignature:W}) {
+                        Self {
+                            #{bodymembers:W}
+                        }
                     }
-                }
-                rustTemplate(
-                    """
                     fn __repr__(&self) -> String  {
                         format!("{self:?}")
                     }
                     fn __str__(&self) -> String {
                         format!("{self:?}")
                     }
-                    """,
-                    *codegenScope
-                )
-            }
+                }
+                """,
+                "bodysignature" to renderStructSignatureMembers(),
+                "bodymembers" to renderStructBodyMembers()
+            )
         }
     }
+
+    private fun renderStructSignatureMembers(): Writable =
+        writable {
+            forEachMember(members) { _, memberName, memberSymbol ->
+                val memberType = memberSymbol.rustType()
+                rust("$memberName: ${memberType.render()},")
+            }
+        }
+
+    private fun renderStructBodyMembers(): Writable =
+        writable {
+            forEachMember(members) { _, memberName, _ -> rust("$memberName,") }
+        }
 }

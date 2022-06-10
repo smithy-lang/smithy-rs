@@ -18,16 +18,22 @@ private val codegenScope = arrayOf(
     "pyo3" to PythonServerCargoDependency.PyO3.asType(),
 )
 
-/**
- * Renders #[pyo3::pyclass] attribute.
- */
+// Renders #[pyo3::pyclass] attribute.
 fun RustWriter.renderPyClass() {
     rustTemplate("##[#{pyo3}::pyclass]", *codegenScope)
 }
 
-/**
- * Renders #[pyo3::pymethods] attribute.
- */
+// Renders #[pyo3::pyclass] attribute, inheriting from `Exception`.
+fun RustWriter.renderPyClassException() {
+    rustTemplate("##[#{pyo3}::pyclass(extends = #{pyo3}::exceptions::PyException)]", *codegenScope)
+}
+
+// Renders #[pyo3::pymethods] attribute.
 fun RustWriter.renderPyMethods() {
     rustTemplate("##[#{pyo3}::pymethods]", *codegenScope)
+}
+
+// Renders #[pyo3(get, set)] attribute.
+fun RustWriter.renderPyGetterSetter() {
+    rustTemplate("##[#{pyo3}(get, set)]", *codegenScope)
 }
