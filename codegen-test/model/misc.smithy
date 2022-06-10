@@ -18,6 +18,9 @@ service MiscService {
         ResponseCodeRequiredOperation,
         ResponseCodeHttpFallbackOperation,
         ResponseCodeDefaultOperation,
+        RequestHttpHeaderSetShapeOperation,
+        ResponseHttpHeaderSetShapeOperation,
+        RequestHttpQuerySetShapeOperation,
     ],
 }
 
@@ -166,6 +169,80 @@ operation ResponseCodeDefaultOperation {
 @http(method: "GET", uri: "/responseCodeHttpFallbackOperation", code: 418)
 operation ResponseCodeHttpFallbackOperation {
     input: EmptyStructure,
+    output: EmptyStructure,
+}
+
+set StringSet {
+    member: String
+}
+
+@input
+structure HeaderSetInput {
+    @httpHeader("Custom-Headers")
+    headerValues: StringSet
+}
+
+/// This operation tests that the `httpHeader` trait works with the `set` shape.
+@httpRequestTests([
+    {
+        id: "RequestHttpHeaderSetShapeOperation",
+        protocol: "aws.protocols#restJson1",
+        method: "GET",
+        uri: "/",
+        body: "",
+        params: { "headerValues": ["a", "b"] },
+        headers: { "Custom-Headers": "a, b" }
+    }
+])
+@http(method: "GET", uri: "/RequestHttpHeaderSetShapeOperation")
+operation RequestHttpHeaderSetShapeOperation {
+    input: HeaderSetInput,
+    output: EmptyStructure,
+}
+
+@output
+structure HeaderSetOutput {
+    @httpHeader("Custom-Headers")
+    headerValues: StringSet
+}
+
+/// This operation tests that the `httpHeader` trait works with the `set` shape.
+@httpResponseTests([
+    {
+        id: "ResponseHttpHeaderSetShapeOperation",
+        protocol: "aws.protocols#restJson1",
+        code: 200,
+        params: { "headerValues": ["a", "b"] },
+        headers: { "Custom-Headers": "a, b" }
+    }
+])
+@http(method: "GET", uri: "/ResponseHttpHeaderSetShapeOperation")
+operation ResponseHttpHeaderSetShapeOperation {
+    input: EmptyStructure,
+    output: HeaderSetOutput,
+}
+
+@input
+structure QuerySetInput {
+    @httpQuery("customQuery")
+    queryValues: StringSet
+}
+
+/// This operation tests that the `httpQuery` trait works with the `set` shape.
+@httpRequestTests([
+    {
+        id: "RequestHttpQuerySetShapeOperation",
+        protocol: "aws.protocols#restJson1",
+        method: "GET",
+        uri: "/",
+        body: "",
+        params: { "queryValues": ["a", "b"] },
+        queryParams: ["customQuery=a", "customQuery=b"]
+    }
+])
+@http(method: "GET", uri: "/RequestHttpQuerySetShapeOperation")
+operation RequestHttpQuerySetShapeOperation {
+    input: QuerySetInput,
     output: EmptyStructure,
 }
 
