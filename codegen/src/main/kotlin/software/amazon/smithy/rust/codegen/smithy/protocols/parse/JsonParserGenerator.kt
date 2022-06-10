@@ -68,6 +68,7 @@ class JsonParserGenerator(
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    // TODO Grab it
     private val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, codegenContext.serviceShape)
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenTarget = codegenContext.target
