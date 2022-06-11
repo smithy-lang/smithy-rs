@@ -1,4 +1,17 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+v0.43.0 (June 9th, 2022)
+========================
+**New this release:**
+- 🎉 ([smithy-rs#1381](https://github.com/awslabs/smithy-rs/issues/1381), @alonlud) Add ability to sign a request with all headers, or to change which headers are excluded from signing
+- 🎉 ([smithy-rs#1390](https://github.com/awslabs/smithy-rs/issues/1390)) Add method `ByteStream::into_async_read`. This makes it easy to convert `ByteStream`s into a struct implementing `tokio:io::AsyncRead`. Available on **crate feature** `rt-tokio` only.
+- ([smithy-rs#1404](https://github.com/awslabs/smithy-rs/issues/1404), @petrosagg) Add ability to specify a different rust crate name than the one derived from the package name
+- ([smithy-rs#1404](https://github.com/awslabs/smithy-rs/issues/1404), @petrosagg) Switch to [RustCrypto](https://github.com/RustCrypto)'s implementation of MD5.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @alonlud ([smithy-rs#1381](https://github.com/awslabs/smithy-rs/issues/1381))
+- @petrosagg ([smithy-rs#1404](https://github.com/awslabs/smithy-rs/issues/1404))
+
 v0.42.0 (May 13th, 2022)
 ========================
 **Breaking Changes:**

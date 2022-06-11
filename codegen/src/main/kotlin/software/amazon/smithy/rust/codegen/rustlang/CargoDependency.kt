@@ -74,15 +74,15 @@ class InlineDependency(
             name: String,
             baseDir: String,
             vararg additionalDependencies: RustDependency
-        ): InlineDependency = forRustFile(name, baseDir, public = false, *additionalDependencies)
+        ): InlineDependency = forRustFile(name, baseDir, visibility = Visibility.PRIVATE, *additionalDependencies)
 
         fun forRustFile(
             name: String,
             baseDir: String,
-            public: Boolean,
+            visibility: Visibility,
             vararg additionalDependencies: RustDependency
         ): InlineDependency {
-            val module = RustModule.default(name, public)
+            val module = RustModule.default(name, visibility)
             val filename = "$name.rs"
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/$baseDir/src/$filename")
