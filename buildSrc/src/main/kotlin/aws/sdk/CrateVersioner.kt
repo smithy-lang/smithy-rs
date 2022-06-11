@@ -128,7 +128,6 @@ class IndependentCrateVersioner(
     override fun independentVersioningEnabled(): Boolean = true
 
     override fun decideCrateVersion(moduleName: String): String {
-        // var reason: String? = null
         var previousVersion: SemVer? = null
         val (reason, newVersion) = when (val existingCrate = versionsManifest.crates.get(moduleName)) {
             // The crate didn't exist before, so create a new major version
