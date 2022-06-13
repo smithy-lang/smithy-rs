@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::meta::region::{future, ProvideRegion};
@@ -32,7 +32,7 @@ impl EnvironmentVariableRegionProvider {
 }
 
 impl ProvideRegion for EnvironmentVariableRegionProvider {
-    fn region(&self) -> future::ProvideRegion {
+    fn region(&self) -> future::ProvideRegion<'_> {
         let region = self
             .env
             .get("AWS_REGION")

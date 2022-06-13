@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use std::borrow::Cow;
@@ -98,7 +98,7 @@ impl CredentialsProviderChain {
 }
 
 impl ProvideCredentials for CredentialsProviderChain {
-    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'_>
     where
         Self: 'a,
     {

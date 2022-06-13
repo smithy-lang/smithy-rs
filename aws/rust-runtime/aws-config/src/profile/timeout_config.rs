@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Load timeout configuration properties from an AWS profile
@@ -56,7 +56,7 @@ pub struct ProfileFileTimeoutConfigProvider {
 }
 
 /// Builder for [`ProfileFileTimeoutConfigProvider`]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     config: Option<ProviderConfig>,
     profile_override: Option<String>,

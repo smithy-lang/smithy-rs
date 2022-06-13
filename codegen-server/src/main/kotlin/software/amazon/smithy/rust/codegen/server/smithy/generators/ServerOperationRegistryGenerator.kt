@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
@@ -119,7 +119,7 @@ class ServerOperationRegistryGenerator(
             pub enum ${operationRegistryBuilderName}Error {
                 UninitializedField(&'static str)
             }
-            impl std::fmt::Display for ${operationRegistryBuilderName}Error {
+            impl #{Display} for ${operationRegistryBuilderName}Error {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         Self::UninitializedField(v) => write!(f, "{}", v),
@@ -128,7 +128,8 @@ class ServerOperationRegistryGenerator(
             }
             impl #{StdError} for ${operationRegistryBuilderName}Error {}
             """.trimIndent(),
-            *codegenScope
+            *codegenScope,
+            "Display" to RuntimeType.Display,
         )
     }
 

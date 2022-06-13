@@ -2344,6 +2344,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The publicly accessible URL of the container service.</p>\n\n         <p>If no public endpoint is specified in the <code>currentDeployment</code>, this URL returns\n      a 404 response.</p>"
                     }
+                },
+                "privateRegistryAccess": {
+                    "target": "com.amazonaws.lightsail#PrivateRegistryAccess",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An object that describes the configuration for the container service to access private\n      container image repositories, such as Amazon Elastic Container Registry (Amazon ECR) private\n      repositories.</p>\n\n         <p>For more information, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-container-service-ecr-private-repo-access\">Configuring access to an Amazon ECR private repository for an Amazon Lightsail container service</a> in the <i>Amazon Lightsail Developer Guide</i>.</p>"
+                    }
                 }
             },
             "traits": {
@@ -2435,6 +2441,40 @@
                         "name": "FAILED"
                     }
                 ]
+            }
+        },
+        "com.amazonaws.lightsail#ContainerServiceECRImagePullerRole": {
+            "type": "structure",
+            "members": {
+                "isActive": {
+                    "target": "com.amazonaws.lightsail#boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A Boolean value that indicates whether the role is activated.</p>"
+                    }
+                },
+                "principalArn": {
+                    "target": "com.amazonaws.lightsail#string",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The Amazon Resource Name (ARN) of the role, if it is activated.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Describes the activation status of the role that you can use to grant an Amazon Lightsail container service access to Amazon Elastic Container Registry (Amazon ECR)\n      private repositories.</p>\n\n         <p>When activated, Lightsail creates an Identity and Access Management (IAM) role\n      for the specified Lightsail container service. You can use the ARN of the role to create a\n      trust relationship between your Lightsail container service and an Amazon ECR private repository in your Amazon Web Services account. This allows your container\n      service to pull images from Amazon ECR private repositories. For more information, see\n        <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-container-service-ecr-private-repo-access\">Configuring access to an Amazon ECR private repository for an Amazon Lightsail container service</a> in the <i>Amazon Lightsail Developer Guide</i>.</p>"
+            }
+        },
+        "com.amazonaws.lightsail#ContainerServiceECRImagePullerRoleRequest": {
+            "type": "structure",
+            "members": {
+                "isActive": {
+                    "target": "com.amazonaws.lightsail#boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A Boolean value that indicates whether to activate the role.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Describes a request to activate or deactivate the role that you can use to grant an\n        Amazon Lightsail container service access to Amazon Elastic Container Registry (Amazon ECR) private repositories.</p>\n\n         <p>When activated, Lightsail creates an Identity and Access Management (IAM) role\n      for the specified Lightsail container service. You can use the ARN of the role to create a\n      trust relationship between your Lightsail container service and an Amazon ECR private repository in your Amazon Web Services account. This allows your container\n      service to pull images from Amazon ECR private repositories. For more information, see\n        <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-container-service-ecr-private-repo-access\">Configuring access to an Amazon ECR private repository for an Amazon Lightsail container service</a> in the <i>Amazon Lightsail Developer Guide</i>.</p>"
             }
         },
         "com.amazonaws.lightsail#ContainerServiceEndpoint": {
@@ -3511,6 +3551,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>An object that describes a deployment for the container service.</p>\n\n         <p>A deployment specifies the containers that will be launched on the container service and\n      their settings, such as the ports to open, the environment variables to apply, and the launch\n      command to run. It also specifies the container that will serve as the public endpoint of the\n      deployment and its settings, such as the HTTP or HTTPS port to use, and the health check\n      configuration.</p>"
                     }
+                },
+                "privateRegistryAccess": {
+                    "target": "com.amazonaws.lightsail#PrivateRegistryAccessRequest",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An object to describe the configuration for the container service to access private\n      container image repositories, such as Amazon Elastic Container Registry (Amazon ECR) private\n      repositories.</p>\n\n         <p>For more information, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-container-service-ecr-private-repo-access\">Configuring access to an Amazon ECR private repository for an Amazon Lightsail container service</a> in the <i>Amazon Lightsail Developer Guide</i>.</p>"
+                    }
                 }
             }
         },
@@ -4575,7 +4621,7 @@
                 "tlsPolicyName": {
                     "target": "com.amazonaws.lightsail#string",
                     "traits": {
-                        "smithy.api#documentation": "<p>The name of the TLS policy to apply to the load balancer.</p>\n\n         <p>Use the <a href=\"https://docs.aws.amazon.com/lightsail/2016-11-28/api-reference/API_GetLoadBalancerTlsPolicies.html\">GetLoadBalancerTlsPolicies</a> action to get a list of TLS policy names that you can\n      specify.</p>\n\n         <p>For more information about load balancer TLS policies, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-configure-load-balancer-tls-security-policy\">Load balancer TLS security policies</a> in the <i>Amazon Lightsail Developer\n        Guide</i>.</p>"
+                        "smithy.api#documentation": "<p>The name of the TLS policy to apply to the load balancer.</p>\n\n         <p>Use the <a href=\"https://docs.aws.amazon.com/lightsail/2016-11-28/api-reference/API_GetLoadBalancerTlsPolicies.html\">GetLoadBalancerTlsPolicies</a> action to get a list of TLS policy names that you can\n      specify.</p>\n\n         <p>For more information about load balancer TLS policies, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-configure-load-balancer-tls-security-policy\">Configuring TLS security policies on your Amazon Lightsail load\n        balancers</a> in the <i>Amazon Lightsail Developer Guide</i>.</p>"
                     }
                 }
             }
@@ -7929,7 +7975,7 @@
                 "includeInactive": {
                     "target": "com.amazonaws.lightsail#boolean",
                     "traits": {
-                        "smithy.api#documentation": "<p>A Boolean value indicating whether to include inactive results in your request.</p>"
+                        "smithy.api#documentation": "<p>A Boolean value that indicates whether to include inactive (unavailable) blueprints in the\n      response of your request.</p>"
                     }
                 },
                 "pageToken": {
@@ -8051,7 +8097,7 @@
                 "includeInactive": {
                     "target": "com.amazonaws.lightsail#boolean",
                     "traits": {
-                        "smithy.api#documentation": "<p>A Boolean value that indicates whether to include inactive (unavailable) bundles in the\n      response.</p>"
+                        "smithy.api#documentation": "<p>A Boolean value that indicates whether to include inactive (unavailable) bundles in the\n      response of your request.</p>"
                     }
                 }
             }
@@ -8284,7 +8330,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Returns the list of bundles that are available for purchase. A bundle describes the specs\n      for your virtual private server (or <i>instance</i>).</p>",
+                "smithy.api#documentation": "<p>Returns the bundles that you can apply to an Amazon Lightsail instance when you create\n      it.</p>\n\n         <p>A bundle describes the specifications of an instance, such as the monthly cost, amount of\n      memory, the number of vCPUs, amount of storage space, and monthly network data transfer\n      quota.</p>\n\n         <note>\n            <p>Bundles are referred to as <i>instance plans</i> in the Lightsail\n        console.</p>\n         </note>",
                 "smithy.api#http": {
                     "method": "POST",
                     "uri": "/ls/api/2016-11-28/GetBundles",
@@ -8298,7 +8344,7 @@
                 "includeInactive": {
                     "target": "com.amazonaws.lightsail#boolean",
                     "traits": {
-                        "smithy.api#documentation": "<p>A Boolean value that indicates whether to include inactive bundle results in your\n      request.</p>"
+                        "smithy.api#documentation": "<p>A Boolean value that indicates whether to include inactive (unavailable) bundles in the\n      response of your request.</p>"
                     }
                 },
                 "pageToken": {
@@ -10704,7 +10750,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Returns a list of TLS security policies that you can apply to Lightsail load\n      balancers.</p>\n\n         <p>For more information about load balancer TLS security policies, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-configure-load-balancer-tls-security-policy\">Load balancer TLS security policies</a> in the <i>Amazon Lightsail Developer\n        Guide</i>.</p>",
+                "smithy.api#documentation": "<p>Returns a list of TLS security policies that you can apply to Lightsail load\n      balancers.</p>\n\n         <p>For more information about load balancer TLS security policies, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-configure-load-balancer-tls-security-policy\">Configuring TLS security policies on your Amazon Lightsail load\n        balancers</a> in the <i>Amazon Lightsail Developer Guide</i>.</p>",
                 "smithy.api#http": {
                     "method": "POST",
                     "uri": "/ls/api/2016-11-28/GetLoadBalancerTlsPolicies",
@@ -11244,6 +11290,12 @@
                     "target": "com.amazonaws.lightsail#string",
                     "traits": {
                         "smithy.api#documentation": "<p>The token to advance to the next page of results from your request.</p>\n         <p>To get a page token, perform an initial <code>GetRelationalDatabaseBundles</code> request.\n      If your results are paginated, the response will return a next page token that you can specify\n      as the page token in a subsequent request.</p>"
+                    }
+                },
+                "includeInactive": {
+                    "target": "com.amazonaws.lightsail#boolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A Boolean value that indicates whether to include inactive (unavailable) bundles in the\n      response of your request.</p>"
                     }
                 }
             }
@@ -14093,7 +14145,7 @@
                 "tlsPolicyName": {
                     "target": "com.amazonaws.lightsail#ResourceName",
                     "traits": {
-                        "smithy.api#documentation": "<p>The name of the TLS security policy for the load balancer.</p>\n\n         <p>The following TLS security policy names are possible:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>TLS-2016-08</code>\n               </p>\n            </li>\n            <li>\n               <p>\n                  <code>TLS-FS-Res-1-2-2019-08</code>\n               </p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>The name of the TLS security policy for the load balancer.</p>"
                     }
                 }
             },
@@ -14681,7 +14733,7 @@
                 "name": {
                     "target": "com.amazonaws.lightsail#ResourceName",
                     "traits": {
-                        "smithy.api#documentation": "<p>The name of the TLS security policy.</p>\n\n         <p>The following TLS security policy names are possible:</p>\n\n         <ul>\n            <li>\n               <p>\n                  <code>TLS-2016-08</code>\n               </p>\n            </li>\n            <li>\n               <p>\n                  <code>TLS-FS-Res-1-2-2019-08</code>\n               </p>\n            </li>\n         </ul>\n\n         <p>You can specify either of these values for the <code>tlsSecurityPolicyName</code> request\n      parameter in the <a href=\"https://docs.aws.amazon.com/lightsail/2016-11-28/api-reference/API_CreateLoadBalancer.html\">CreateLoadBalancer</a> action, and the <code>attributeValue</code> request parameter in\n      the <a href=\"https://docs.aws.amazon.com/lightsail/2016-11-28/api-reference/API_UpdateLoadBalancerAttribute.html\">UpdateLoadBalancerAttribute</a> action.</p>"
+                        "smithy.api#documentation": "<p>The name of the TLS security policy.</p>"
                     }
                 },
                 "isDefault": {
@@ -14699,7 +14751,7 @@
                 "protocols": {
                     "target": "com.amazonaws.lightsail#StringList",
                     "traits": {
-                        "smithy.api#documentation": "<p>The protocols used in a given TLS security policy.</p>\n\n         <p>The following protocols are possible:</p>\n         <ul>\n            <li>\n               <p>\n                  <code>Protocol-TLSv1</code>\n               </p>\n            </li>\n            <li>\n               <p>\n                  <code>Protocol-TLSv1.1</code>\n               </p>\n            </li>\n            <li>\n               <p>\n                  <code>Protocol-TLSv1.2</code>\n               </p>\n            </li>\n         </ul>"
+                        "smithy.api#documentation": "<p>The protocols used in a given TLS security policy.</p>"
                     }
                 },
                 "ciphers": {
@@ -14710,7 +14762,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>Describes the TLS security policies that are available for Lightsail load\n      balancers.</p>\n\n         <p>For more information about load balancer TLS security policies, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-configure-load-balancer-tls-security-policy\">Load balancer TLS security policies</a> in the <i>Amazon Lightsail\n        Developer Guide</i>.</p>"
+                "smithy.api#documentation": "<p>Describes the TLS security policies that are available for Lightsail load\n      balancers.</p>\n\n         <p>For more information about load balancer TLS security policies, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-configure-load-balancer-tls-security-policy\">Configuring TLS security policies on your Amazon Lightsail load\n        balancers</a> in the <i>Amazon Lightsail Developer\n      Guide</i>.</p>"
             }
         },
         "com.amazonaws.lightsail#LoadBalancerTlsPolicyList": {
@@ -16007,6 +16059,34 @@
                         "name": "Closed"
                     }
                 ]
+            }
+        },
+        "com.amazonaws.lightsail#PrivateRegistryAccess": {
+            "type": "structure",
+            "members": {
+                "ecrImagePullerRole": {
+                    "target": "com.amazonaws.lightsail#ContainerServiceECRImagePullerRole",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An object that describes the activation status of the role that you can use to grant a\n        Lightsail container service access to Amazon ECR private\n      repositories. If the role is activated, the Amazon Resource Name (ARN) of the role is also\n      listed.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Describes the configuration for an Amazon Lightsail container service to\n      access private container image repositories, such as Amazon Elastic Container Registry (Amazon ECR) private repositories.</p>\n\n         <p>For more information, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-container-service-ecr-private-repo-access\">Configuring access to an Amazon ECR private repository for an Amazon Lightsail container service</a> in the <i>Amazon Lightsail Developer Guide</i>.</p>"
+            }
+        },
+        "com.amazonaws.lightsail#PrivateRegistryAccessRequest": {
+            "type": "structure",
+            "members": {
+                "ecrImagePullerRole": {
+                    "target": "com.amazonaws.lightsail#ContainerServiceECRImagePullerRoleRequest",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An object to describe a request to activate or deactivate the role that you can use to\n      grant an Amazon Lightsail container service access to Amazon Elastic Container Registry\n        (Amazon ECR) private repositories.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Describes a request to configure an Amazon Lightsail container service to\n      access private container image repositories, such as Amazon Elastic Container Registry (Amazon ECR) private repositories.</p>\n\n         <p>For more information, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-container-service-ecr-private-repo-access\">Configuring access to an Amazon ECR private repository for an Amazon Lightsail container service</a> in the <i>Amazon Lightsail Developer Guide</i>.</p>"
             }
         },
         "com.amazonaws.lightsail#PutAlarm": {
@@ -18730,6 +18810,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The public domain names to use with the container service, such as\n        <code>example.com</code> and <code>www.example.com</code>.</p>\n\n         <p>You can specify up to four public domain names for a container service. The domain names\n      that you specify are used when you create a deployment with a container configured as the\n      public endpoint of your container service.</p>\n\n         <p>If you don't specify public domain names, then you can use the default domain of the\n      container service.</p>\n\n         <important>\n            <p>You must create and validate an SSL/TLS certificate before you can use public domain\n        names with your container service. Use the <code>CreateCertificate</code> action to create a\n        certificate for the public domain names you want to use with your container service.</p>\n         </important>\n\n         <p>You can specify public domain names using a string to array map as shown in the example\n      later on this page.</p>"
                     }
+                },
+                "privateRegistryAccess": {
+                    "target": "com.amazonaws.lightsail#PrivateRegistryAccessRequest",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An object to describe the configuration for the container service to access private\n      container image repositories, such as Amazon Elastic Container Registry (Amazon ECR) private\n      repositories.</p>\n\n         <p>For more information, see <a href=\"https://lightsail.aws.amazon.com/ls/docs/en_us/articles/amazon-lightsail-container-service-ecr-private-repo-access\">Configuring access to an Amazon ECR private repository for an Amazon Lightsail container service</a> in the <i>Amazon Lightsail Developer Guide</i>.</p>"
+                    }
                 }
             }
         },
@@ -19029,7 +19115,7 @@
                 "attributeValue": {
                     "target": "com.amazonaws.lightsail#StringMax256",
                     "traits": {
-                        "smithy.api#documentation": "<p>The value that you want to specify for the attribute name.</p>\n         <p>The following values are supported depending on what you specify for the\n        <code>attributeName</code> request parameter:</p>\n         <ul>\n            <li>\n               <p>If you specify <code>HealthCheckPath</code> for the <code>attributeName</code> request\n          parameter, then the <code>attributeValue</code> request parameter must be the path to ping\n          on the target (for example, <code>/weather/us/wa/seattle</code>).</p>\n            </li>\n            <li>\n               <p>If you specify <code>SessionStickinessEnabled</code> for the\n            <code>attributeName</code> request parameter, then the <code>attributeValue</code>\n          request parameter must be <code>true</code> or <code>false</code>.</p>\n            </li>\n            <li>\n               <p>If you specify <code>SessionStickiness_LB_CookieDurationSeconds</code> for the\n            <code>attributeName</code> request parameter, then the <code>attributeValue</code>\n          request parameter must be an interger that represents the cookie duration in\n          seconds.</p>\n            </li>\n            <li>\n               <p>If you specify <code>HttpsRedirectionEnabled</code> for the <code>attributeName</code>\n          request parameter, then the <code>attributeValue</code> request parameter must be\n            <code>true</code> or <code>false</code>.</p>\n            </li>\n            <li>\n               <p>If you specify <code>TlsPolicyName</code> for the <code>attributeName</code> request\n          parameter, then the <code>attributeValue</code> request parameter must be <code>TLS\n            version 1.0, 1.1, and 1.2</code> or <code>TLS version 1.2</code>.</p>\n            </li>\n         </ul>",
+                        "smithy.api#documentation": "<p>The value that you want to specify for the attribute name.</p>\n         <p>The following values are supported depending on what you specify for the\n        <code>attributeName</code> request parameter:</p>\n         <ul>\n            <li>\n               <p>If you specify <code>HealthCheckPath</code> for the <code>attributeName</code> request\n          parameter, then the <code>attributeValue</code> request parameter must be the path to ping\n          on the target (for example, <code>/weather/us/wa/seattle</code>).</p>\n            </li>\n            <li>\n               <p>If you specify <code>SessionStickinessEnabled</code> for the\n            <code>attributeName</code> request parameter, then the <code>attributeValue</code>\n          request parameter must be <code>true</code> to activate session stickiness or\n            <code>false</code> to deactivate session stickiness.</p>\n            </li>\n            <li>\n               <p>If you specify <code>SessionStickiness_LB_CookieDurationSeconds</code> for the\n            <code>attributeName</code> request parameter, then the <code>attributeValue</code>\n          request parameter must be an interger that represents the cookie duration in\n          seconds.</p>\n            </li>\n            <li>\n               <p>If you specify <code>HttpsRedirectionEnabled</code> for the <code>attributeName</code>\n          request parameter, then the <code>attributeValue</code> request parameter must be\n            <code>true</code> to activate HTTP to HTTPS redirection or <code>false</code> to\n          deactivate HTTP to HTTPS redirection.</p>\n            </li>\n            <li>\n               <p>If you specify <code>TlsPolicyName</code> for the <code>attributeName</code> request\n          parameter, then the <code>attributeValue</code> request parameter must be the name of the\n          TLS policy.</p>\n               <p>Use the <a href=\"https://docs.aws.amazon.com/lightsail/2016-11-28/api-reference/API_GetLoadBalancerTlsPolicies.html\">GetLoadBalancerTlsPolicies</a> action to get a list of TLS policy names that you\n          can specify.</p>\n            </li>\n         </ul>",
                         "smithy.api#required": {}
                     }
                 }

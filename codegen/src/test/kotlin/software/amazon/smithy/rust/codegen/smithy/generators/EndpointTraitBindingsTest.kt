@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators
@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
@@ -61,7 +62,7 @@ internal class EndpointTraitBindingsTest {
             operationShape.expectTrait(EndpointTrait::class.java)
         )
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.default("test", false)) {
+        project.withModule(RustModule.default("test", visibility = Visibility.PRIVATE)) {
             it.rust(
                 """
                 struct GetStatusInput {

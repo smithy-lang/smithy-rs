@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
@@ -9,7 +9,10 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.JsonNameTrait
+import software.amazon.smithy.model.traits.MediaTypeTrait
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
@@ -23,6 +26,8 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredData
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.outputShape
 
 class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     override fun protocol(codegenContext: CodegenContext): Protocol = RestJson(codegenContext)
@@ -56,15 +61,29 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
  * `application/json` if not overridden.
  */
 class RestJsonHttpBindingResolver(
-    model: Model,
+    private val model: Model,
     contentTypes: ProtocolContentTypes,
 ) : HttpTraitHttpBindingResolver(model, contentTypes) {
     /**
      * In the RestJson1 protocol, HTTP responses have a default `Content-Type: application/json` header if it is not
      * overridden by a specific mechanism e.g. an output shape member is targeted with `httpPayload` or `mediaType` traits.
      */
-    override fun responseContentType(operationShape: OperationShape): String =
-        super.responseContentType(operationShape) ?: "application/json"
+    override fun responseContentType(operationShape: OperationShape): String? {
+        val members = operationShape
+            .outputShape(model)
+            .members()
+        // TODO(https://github.com/awslabs/smithy/issues/1259)
+        //  Temporary fix for https://github.com/awslabs/smithy/blob/df456a514f72f4e35f0fb07c7e26006ff03b2071/smithy-model/src/main/java/software/amazon/smithy/model/knowledge/HttpBindingIndex.java#L352
+        for (member in members) {
+            if (member.hasTrait<HttpPayloadTrait>()) {
+                val target = model.expectShape(member.target)
+                if (!target.hasTrait<StreamingTrait>() && !target.hasTrait<MediaTypeTrait>() && target.isBlobShape) {
+                    return null
+                }
+            }
+        }
+        return super.responseContentType(operationShape) ?: "application/json"
+    }
 }
 
 class RestJson(private val codegenContext: CodegenContext) : Protocol {

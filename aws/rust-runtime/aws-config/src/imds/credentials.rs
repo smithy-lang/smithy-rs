@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! IMDSv2 Credentials Provider
@@ -10,7 +10,7 @@
 
 use crate::imds;
 use crate::imds::client::{ImdsError, LazyClient};
-use crate::json_credentials::{parse_json_credentials, JsonCredentials};
+use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_smithy_client::SdkError;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
@@ -155,7 +155,7 @@ impl ImdsCredentialsProvider {
             ));
         }
         tracing::debug!("loading credentials from IMDS");
-        let profile: Cow<str> = match &self.profile {
+        let profile: Cow<'_, str> = match &self.profile {
             Some(profile) => profile.into(),
             None => self.get_profile_uncached().await?.into(),
         };
@@ -170,13 +170,13 @@ impl ImdsCredentialsProvider {
             .await
             .map_err(CredentialsError::provider_error)?;
         match parse_json_credentials(&credentials) {
-            Ok(JsonCredentials::RefreshableCredentials {
+            Ok(JsonCredentials::RefreshableCredentials(RefreshableCredentials {
                 access_key_id,
                 secret_access_key,
                 session_token,
                 expiration,
                 ..
-            }) => Ok(Credentials::new(
+            })) => Ok(Credentials::new(
                 access_key_id,
                 secret_access_key,
                 Some(session_token.to_string()),

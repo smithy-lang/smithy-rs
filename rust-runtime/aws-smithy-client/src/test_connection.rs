@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 //! Module with client connectors useful for testing.
 
@@ -153,7 +153,7 @@ impl ValidateRequest {
 /// TestConnection for use with a [`Client`](crate::Client).
 ///
 /// A basic test connection. It will:
-/// - Response to requests with a preloaded series of responses
+/// - Respond to requests with a preloaded series of responses
 /// - Record requests for future examination
 ///
 /// The generic parameter `B` is the type of the response body.

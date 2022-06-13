@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.parse
@@ -10,7 +10,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
@@ -31,7 +31,7 @@ class EventStreamUnmarshallerGeneratorTest {
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
             testRustSettings(),
-            mode = testCase.mode
+            target = testCase.target
         )
         val protocol = testCase.protocolBuilder(codegenContext)
         val generator = EventStreamUnmarshallerGenerator(
@@ -41,7 +41,7 @@ class EventStreamUnmarshallerGeneratorTest {
             test.symbolProvider,
             test.operationShape,
             test.streamShape,
-            mode = testCase.mode
+            target = testCase.target
         )
 
         test.project.lib { writer ->
@@ -97,7 +97,7 @@ class EventStreamUnmarshallerGeneratorTest {
                 """,
             )
 
-            if (testCase.mode == CodegenMode.Client) {
+            if (testCase.target == CodegenTarget.CLIENT) {
                 writer.unitTest(
                     "unknown_message",
                     """

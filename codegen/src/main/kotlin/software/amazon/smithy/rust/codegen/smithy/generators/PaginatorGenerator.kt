@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators
@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.render
@@ -76,7 +77,7 @@ class PaginatorGenerator private constructor(
         idx.getPaginationInfo(service, operation).orNull() ?: PANIC("failed to load pagination info")
     private val module = RustModule(
         "paginator",
-        RustMetadata(public = true),
+        RustMetadata(visibility = Visibility.PUBLIC),
         documentation = "Paginators for the service"
     )
 

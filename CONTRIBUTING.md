@@ -25,7 +25,8 @@ Contributions via pull requests are much appreciated. Before sending us a pull r
 
 1. You are working against the latest source on the *main* branch.
 2. You check existing open, and recently merged, pull requests to make sure someone else hasn't addressed the problem already.
-3. You open an issue to discuss any significant work - we would hate for your time to be wasted.
+3. **You open an issue to discuss any significant work** - we would hate for your time to be wasted. Alternatively, you
+   may submit an RFC. You can learn about our RFC process [here](./design/src/rfcs/overview.md).
 
 To send us a pull request, please:
 
@@ -57,3 +58,8 @@ If you discover a potential security issue in this project we ask that you notif
 ## Licensing
 
 See the [LICENSE](LICENSE) file for our project's licensing. We will ask you to confirm the licensing of your contribution.
+
+## More helpful information for contributors
+
+Part of our [design docs](./design/src/overview.md) are dedicated to helpful information for contributors.
+[Take a look](./design/src/contributing/overview.md).

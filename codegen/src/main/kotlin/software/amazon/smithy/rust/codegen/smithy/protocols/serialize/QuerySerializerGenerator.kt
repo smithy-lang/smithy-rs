@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
@@ -90,7 +90,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     protected val model = codegenContext.model
     protected val symbolProvider = codegenContext.symbolProvider
     protected val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
+    private val target = codegenContext.target
     private val serviceShape = codegenContext.serviceShape
     private val serializerError = runtimeConfig.serializationError()
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
@@ -323,7 +323,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                             )
                         }
                     }
-                    if (mode.renderUnknownVariant()) {
+                    if (target.renderUnknownVariant()) {
                         rustTemplate(
                             "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                             "Union" to unionSymbol,

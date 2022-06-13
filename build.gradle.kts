@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 buildscript {
     repositories {
@@ -62,7 +62,7 @@ tasks.register<JavaExec>("ktlintFormat") {
 }
 
 @Suppress("UnstableApiUsage")
-task<JacocoMerge>("jacocoMerge") {
+tasks.register<JacocoMerge>("jacocoMerge") {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     description = "Merge the JaCoCo data files from all subprojects into one"
     afterEvaluate {

@@ -12,13 +12,13 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "Log a debug event when a retry is going to be peformed"
-references = ["smithy-rs#1352"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
+message = "Fix bug in profile file credential provider where a missing `default` profile lead to an unintended error."
+references = ["aws-sdk-rust#547", "smithy-rs#1458"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
 
-[[smithy-rs]]
-message = "Log a debug event when a retry is going to be peformed"
-references = ["smithy-rs#1352"]
+[[aws-sdk-rust]]
+message = "Add `Debug` implementation to several types in `aws-config`"
+references = ["smithy-rs#1421"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jdisanti"

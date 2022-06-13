@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
@@ -64,7 +64,7 @@ class XmlBindingTraitSerializerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val model = codegenContext.model
     private val smithyXml = CargoDependency.smithyXml(runtimeConfig).asType()
-    private val mode = codegenContext.mode
+    private val target = codegenContext.target
     private val codegenScope =
         arrayOf(
             "XmlWriter" to smithyXml.member("encode::XmlWriter"),
@@ -398,7 +398,7 @@ class XmlBindingTraitSerializerGenerator(
                         }
                     }
 
-                    if (mode.renderUnknownVariant()) {
+                    if (target.renderUnknownVariant()) {
                         rustTemplate(
                             "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                             "Union" to unionSymbol,

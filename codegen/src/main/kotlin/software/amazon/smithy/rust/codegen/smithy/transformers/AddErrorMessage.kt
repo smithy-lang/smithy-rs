@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.transformers
@@ -18,11 +18,11 @@ import java.util.logging.Logger
 fun StructureShape.errorMessageMember(): MemberShape? = this.getMember("message").or { this.getMember("Message") }.orNull()
 
 /**
- * Ensure that all errors have error messages
+ * Ensure that all errors have error messages.
  *
  * Not all errors are modeled with an error message field. However, in many cases, the server can still send an error.
  * If an error, specifically, a structure shape with the error trait does not have a member `message` or `Message`,
- * this transformer will add a `message` member targetting a string.
+ * this transformer will add a `message` member targeting a string.
  *
  * This ensures that we always generate a modeled error message field enabling end users to easily extract the error
  * message when present.
@@ -33,7 +33,7 @@ object AddErrorMessage {
     private val logger = Logger.getLogger("AddErrorMessage")
 
     /**
-     * Ensure that all errors have error messages
+     * Ensure that all errors have error messages.
      */
     fun transform(model: Model): Model {
         return ModelTransformer.create().mapShapes(model) { shape ->

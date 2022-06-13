@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.parse
@@ -31,10 +31,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
@@ -52,7 +52,7 @@ class EventStreamUnmarshallerGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
-    private val mode: CodegenMode,
+    private val target: CodegenTarget,
 ) {
     private val unionSymbol = symbolProvider.toSymbol(unionShape)
     private val operationErrorSymbol = operationShape.errorSymbol(symbolProvider)
@@ -144,7 +144,7 @@ class EventStreamUnmarshallerGenerator(
                 }
             }
             rustBlock("_unknown_variant => ") {
-                when (mode.renderUnknownVariant()) {
+                when (target.renderUnknownVariant()) {
                     true -> rustTemplate(
                         "Ok(#{UnmarshalledMessage}::Event(#{Output}::${UnionGenerator.UnknownVariantName}))",
                         "Output" to unionSymbol,

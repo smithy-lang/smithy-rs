@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use anyhow::{Context, Result};
@@ -39,6 +39,9 @@ pub trait Fs: Send + Sync {
 
     /// Recursively copies files.
     fn recursive_copy(&self, source: &Path, destination: &Path) -> Result<()>;
+
+    /// Copies a file, overwriting it if it exists.
+    fn copy(&self, source: &Path, destination: &Path) -> Result<()>;
 }
 
 #[derive(Debug, Default)]
@@ -141,6 +144,11 @@ impl Fs for DefaultFs {
 
         let output = command.output()?;
         handle_failure("recursive_copy", &output)?;
+        Ok(())
+    }
+
+    fn copy(&self, source: &Path, destination: &Path) -> Result<()> {
+        std::fs::copy(source, destination)?;
         Ok(())
     }
 }

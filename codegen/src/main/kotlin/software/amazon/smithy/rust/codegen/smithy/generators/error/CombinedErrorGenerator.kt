@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators.error
@@ -15,6 +15,7 @@ import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -62,7 +63,7 @@ class CombinedErrorGenerator(
         val meta = RustMetadata(
             derives = Attribute.Derives(setOf(RuntimeType.Debug)),
             additionalAttributes = listOf(Attribute.NonExhaustive),
-            public = true
+            visibility = Visibility.PUBLIC
         )
 
         writer.rust("/// Error type for the `${operationSymbol.name}` operation.")
@@ -94,7 +95,7 @@ class CombinedErrorGenerator(
                 RuntimeType.StdError
             )
         }
-        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.stdfmt.member("Display")) {
+        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 delegateToVariants {
                     writable { rust("_inner.fmt(f)") }

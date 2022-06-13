@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators.protocol
@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -31,6 +32,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.testutil.TokioTest
@@ -75,7 +77,7 @@ class ProtocolTestGenerator(
     private val operationIndex = OperationIndex.of(codegenContext.model)
 
     private val instantiator = with(codegenContext) {
-        Instantiator(symbolProvider, model, runtimeConfig)
+        Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
     }
 
     private val codegenScope = arrayOf(
@@ -107,7 +109,7 @@ class ProtocolTestGenerator(
             val operationName = operationSymbol.name
             val testModuleName = "${operationName.toSnakeCase()}_request_test"
             val moduleMeta = RustMetadata(
-                public = false,
+                visibility = Visibility.PRIVATE,
                 additionalAttributes = listOf(
                     Attribute.Cfg("test"),
                     Attribute.Custom("allow(unreachable_code, unused_variables)")

@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators
@@ -60,7 +60,7 @@ class CargoTomlGenerator(
                 "version" to settings.moduleVersion,
                 "authors" to settings.moduleAuthors,
                 settings.moduleDescription?.let { "description" to it },
-                "edition" to "2018",
+                "edition" to "2021",
                 "license" to settings.license,
                 "repository" to settings.moduleRepository,
             ).toMap(),

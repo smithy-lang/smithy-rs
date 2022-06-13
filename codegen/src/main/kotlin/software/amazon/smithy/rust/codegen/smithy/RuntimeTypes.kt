@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy
@@ -169,7 +169,9 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         val Clone = std.member("clone::Clone")
         val Debug = stdfmt.member("Debug")
         val Default: RuntimeType = RuntimeType("Default", dependency = null, namespace = "std::default")
+        val Display = stdfmt.member("Display")
         val From = RuntimeType("From", dependency = null, namespace = "std::convert")
+        val TryFrom = RuntimeType("TryFrom", dependency = null, namespace = "std::convert")
         val Infallible = RuntimeType("Infallible", dependency = null, namespace = "std::convert")
         val PartialEq = std.member("cmp::PartialEq")
         val StdError = RuntimeType("Error", dependency = null, namespace = "std::error")
@@ -288,6 +290,12 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             "ParseHttpResponse",
             dependency = CargoDependency.SmithyHttp(runtimeConfig),
             namespace = "aws_smithy_http::response"
+        )
+
+        fun jsonDeserialize(runtimeConfig: RuntimeConfig) = RuntimeType(
+            name = "Error",
+            dependency = CargoDependency.smithyJson(runtimeConfig),
+            namespace = "aws_smithy_json::deserialize"
         )
 
         fun ec2QueryErrors(runtimeConfig: RuntimeConfig) =

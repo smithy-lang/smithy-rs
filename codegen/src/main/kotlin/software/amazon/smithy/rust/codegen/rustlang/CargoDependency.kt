@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.rustlang
@@ -74,15 +74,15 @@ class InlineDependency(
             name: String,
             baseDir: String,
             vararg additionalDependencies: RustDependency
-        ): InlineDependency = forRustFile(name, baseDir, public = false, *additionalDependencies)
+        ): InlineDependency = forRustFile(name, baseDir, visibility = Visibility.PRIVATE, *additionalDependencies)
 
         fun forRustFile(
             name: String,
             baseDir: String,
-            public: Boolean,
+            visibility: Visibility,
             vararg additionalDependencies: RustDependency
         ): InlineDependency {
-            val module = RustModule.default(name, public)
+            val module = RustModule.default(name, visibility)
             val filename = "$name.rs"
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource("/$baseDir/src/$filename")
@@ -115,8 +115,7 @@ class InlineDependency(
     }
 }
 
-fun CargoDependency.asType(): RuntimeType =
-    RuntimeType(null, dependency = this, namespace = this.name.replace("-", "_"))
+fun CargoDependency.asType(): RuntimeType = RuntimeType(null, dependency = this, namespace = rustName)
 
 data class Feature(val name: String, val default: Boolean, val deps: List<String>)
 
@@ -128,7 +127,8 @@ data class CargoDependency(
     private val location: DependencyLocation,
     val scope: DependencyScope = DependencyScope.Compile,
     val optional: Boolean = false,
-    val features: Set<String> = emptySet()
+    val features: Set<String> = emptySet(),
+    val rustName: String = name.replace("-", "_")
 ) : RustDependency(name) {
     val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
 
@@ -143,7 +143,7 @@ data class CargoDependency(
         is Local -> "local"
     }
 
-    fun rustName(name: String): RuntimeType = RuntimeType(name, this, this.name.replace("-", "_"))
+    fun rustName(name: String): RuntimeType = RuntimeType(name, this, this.rustName)
 
     fun toMap(): Map<String, Any> {
         val attribs = mutableMapOf<String, Any>()
@@ -199,7 +199,7 @@ data class CargoDependency(
         val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4"))
-        val Md5: CargoDependency = CargoDependency("md5", CratesIo("0.7"))
+        val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10"), rustName = "md5")
         val PercentEncoding: CargoDependency = CargoDependency("percent-encoding", CratesIo("2"))
         val PrettyAssertions: CargoDependency = CargoDependency("pretty_assertions", CratesIo("1"), scope = DependencyScope.Dev)
         val Regex: CargoDependency = CargoDependency("regex", CratesIo("1"))

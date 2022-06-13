@@ -1,17 +1,22 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-use self::gen::{DefaultSdkGenerator, SdkGenerator};
+use self::gen::{CodeGenSettings, DefaultSdkGenerator, SdkGenerator};
 use crate::fs::{DefaultFs, Fs};
-use crate::git::{Commit, CommitHash, Git, GitCLI};
+use crate::git::{Commit, Git, GitCLI};
 use crate::versions::{DefaultVersions, Versions, VersionsManifest};
 use anyhow::{bail, Context, Result};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::{Sender, TryRecvError};
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+use systemstat::{ByteSize, Platform, System};
 use tracing::{debug, info, info_span};
 use tracing_attributes::instrument;
 
@@ -21,39 +26,70 @@ pub const BOT_NAME: &str = "AWS SDK Rust Bot";
 pub const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
 pub const MODEL_STASH_BRANCH_NAME: &str = "__sdk_sync__models_";
 
-#[cfg_attr(test, mockall::automock)]
-pub trait CreateSdkGenerator: Send + std::marker::Sync {
-    fn create_sdk_generator(
-        &self,
-        aws_doc_sdk_examples_revision: &CommitHash,
-        examples_path: &Path,
-        fs: Arc<dyn Fs>,
-        reset_to_commit: Option<CommitHash>,
-        original_smithy_rs_path: &Path,
-    ) -> Result<Box<dyn SdkGenerator>>;
+#[derive(Default)]
+struct SyncProgress {
+    commits_completed: AtomicUsize,
+    total_commits: AtomicUsize,
 }
 
-pub struct DefaultCreateSdkGenerator;
+struct ProgressThread {
+    handle: Option<thread::JoinHandle<()>>,
+    tx: Sender<bool>,
+}
 
-impl CreateSdkGenerator for DefaultCreateSdkGenerator {
-    fn create_sdk_generator(
-        &self,
-        aws_doc_sdk_examples_revision: &CommitHash,
-        examples_path: &Path,
-        fs: Arc<dyn Fs>,
-        reset_to_commit: Option<CommitHash>,
-        original_smithy_rs_path: &Path,
-    ) -> Result<Box<dyn SdkGenerator>> {
-        Ok(Box::new(
-            DefaultSdkGenerator::new(
-                aws_doc_sdk_examples_revision,
-                examples_path,
-                fs,
-                reset_to_commit,
-                original_smithy_rs_path,
-            )
-            .context(here!())?,
-        ))
+impl ProgressThread {
+    pub fn spawn(progress: Arc<SyncProgress>) -> ProgressThread {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = thread::spawn(move || {
+            let mut done = false;
+            let system = System::new();
+            while !done {
+                let cpu = system.cpu_load_aggregate().ok();
+                for _ in 0..15 {
+                    thread::sleep(Duration::from_secs(1));
+                    if !matches!(rx.try_recv(), Err(TryRecvError::Empty)) {
+                        done = true;
+                        break;
+                    }
+                }
+                let cpu = if let Some(Ok(cpu)) = cpu.map(|cpu| cpu.done()) {
+                    format!("{:.1}", 100.0 - cpu.idle * 100.0)
+                } else {
+                    "error".to_string()
+                };
+                let (memory, swap) = system.memory_and_swap().unwrap();
+                info!(
+                    "Progress: smithy-rs commit {}/{}, cpu use: {}, memory used: {}, swap used: {}",
+                    progress.commits_completed.load(Ordering::Relaxed),
+                    progress.total_commits.load(Ordering::Relaxed),
+                    cpu,
+                    Self::format_memory(memory.free, memory.total),
+                    Self::format_memory(swap.free, swap.total),
+                );
+            }
+        });
+        ProgressThread {
+            handle: Some(handle),
+            tx,
+        }
+    }
+
+    fn format_memory(free: ByteSize, total: ByteSize) -> String {
+        let (free, total) = (free.as_u64(), total.as_u64());
+        let format_part = |val: u64| format!("{:.3}GB", val as f64 / 1024.0 / 1024.0 / 1024.0);
+        format!(
+            "{}/{}",
+            format_part(total.saturating_sub(free)),
+            format_part(total)
+        )
+    }
+}
+
+impl Drop for ProgressThread {
+    fn drop(&mut self) {
+        // Attempt to stop the loop in the thread
+        let _ = self.tx.send(true);
+        let _ = self.handle.take().map(|handle| handle.join());
     }
 }
 
@@ -63,7 +99,11 @@ pub struct Sync {
     smithy_rs: Arc<dyn Git>,
     fs: Arc<dyn Fs>,
     versions: Arc<dyn Versions>,
-    create_sdk_generator: Arc<dyn CreateSdkGenerator>,
+    previous_versions_manifest: Arc<PathBuf>,
+    codegen_settings: CodeGenSettings,
+    progress: Arc<SyncProgress>,
+    // Keep a reference to the temp directory so that it doesn't get cleaned up until the sync is complete
+    _temp_dir: Arc<tempfile::TempDir>,
 }
 
 impl Sync {
@@ -71,24 +111,39 @@ impl Sync {
         aws_doc_sdk_examples_path: &Path,
         aws_sdk_rust_path: &Path,
         smithy_rs_path: &Path,
+        codegen_settings: CodeGenSettings,
     ) -> Result<Self> {
+        let _temp_dir = Arc::new(tempfile::tempdir().context(here!("create temp dir"))?);
+        let aws_sdk_rust = Arc::new(GitCLI::new(aws_sdk_rust_path)?);
+        let fs = Arc::new(DefaultFs::new()) as Arc<dyn Fs>;
+        let previous_versions_manifest =
+            Arc::new(_temp_dir.path().join("previous-release-versions.toml"));
+        fs.copy(
+            &aws_sdk_rust.path().join("versions.toml"),
+            &previous_versions_manifest,
+        )
+        .context("failed to copy versions.toml to temp dir")?;
+
         Ok(Self {
             aws_doc_sdk_examples: Arc::new(GitCLI::new(aws_doc_sdk_examples_path)?),
-            aws_sdk_rust: Arc::new(GitCLI::new(aws_sdk_rust_path)?),
+            aws_sdk_rust,
             smithy_rs: Arc::new(GitCLI::new(smithy_rs_path)?),
-            fs: Arc::new(DefaultFs::new()) as Arc<dyn Fs>,
+            fs,
             versions: Arc::new(DefaultVersions::new()),
-            create_sdk_generator: Arc::new(DefaultCreateSdkGenerator),
+            previous_versions_manifest,
+            codegen_settings,
+            progress: Default::default(),
+            _temp_dir,
         })
     }
 
+    #[cfg(test)]
     pub fn new_with(
         aws_doc_sdk_examples: impl Git + 'static,
         aws_sdk_rust: impl Git + 'static,
         smithy_rs: impl Git + 'static,
         fs: impl Fs + 'static,
         versions: impl Versions + 'static,
-        create_sdk_generator: impl CreateSdkGenerator + 'static,
     ) -> Self {
         Self {
             aws_doc_sdk_examples: Arc::new(aws_doc_sdk_examples),
@@ -96,12 +151,17 @@ impl Sync {
             smithy_rs: Arc::new(smithy_rs),
             fs: Arc::new(fs),
             versions: Arc::new(versions),
-            create_sdk_generator: Arc::new(create_sdk_generator),
+            previous_versions_manifest: Arc::new(PathBuf::from("doesnt-matter-for-tests")),
+            codegen_settings: Default::default(),
+            progress: Default::default(),
+            _temp_dir: Arc::new(tempfile::tempdir().unwrap()),
         }
     }
 
     #[instrument(skip(self))]
     pub fn sync(&self) -> Result<()> {
+        let _progress_thread = ProgressThread::spawn(self.progress.clone());
+
         info!("Loading versions.toml...");
         let versions = self
             .versions
@@ -155,23 +215,33 @@ impl Sync {
     fn sync_model_changes(&self, versions: &VersionsManifest) -> Result<()> {
         info!("Syncing model changes...");
 
-        // Restore the model changes
+        // Restore the model changes. Note: endpoints.json/default config/model changes
+        // may each be in their own commits coming into this, but we want them squashed into
+        // one commit for smithy-rs.
         self.smithy_rs
-            .fast_forward_merge(MODEL_STASH_BRANCH_NAME)
+            .squash_merge(
+                BOT_NAME,
+                BOT_EMAIL,
+                MODEL_STASH_BRANCH_NAME,
+                "Update SDK models",
+            )
+            .context(here!())?;
+        self.smithy_rs
+            .delete_branch(MODEL_STASH_BRANCH_NAME)
             .context(here!())?;
         let model_change_commit = self.smithy_rs.show("HEAD").context(here!())?;
 
         // Generate with the original examples
-        let sdk_gen = self
-            .create_sdk_generator
-            .create_sdk_generator(
-                &versions.aws_doc_sdk_examples_revision,
-                &self.aws_sdk_rust.path().join("examples"),
-                self.fs.clone(),
-                None,
-                self.smithy_rs.path(),
-            )
-            .context(here!("failed to generate the SDK"))?;
+        let sdk_gen = DefaultSdkGenerator::new(
+            &self.previous_versions_manifest,
+            &versions.aws_doc_sdk_examples_revision,
+            &self.aws_sdk_rust.path().join("examples"),
+            self.fs.clone(),
+            None,
+            self.smithy_rs.path(),
+            &self.codegen_settings,
+        )
+        .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
         self.copy_sdk(generated_sdk.path())
             .context(here!("failed to copy the SDK"))?;
@@ -210,14 +280,19 @@ impl Sync {
         }
 
         info!("Syncing {} commit(s)...", commits.len());
+        self.progress
+            .total_commits
+            .store(commits.len(), Ordering::Relaxed);
 
         // Generate code in parallel for each individual commit
         let code_gen_paths = {
+            let previous_versions_manifest = self.previous_versions_manifest.clone();
             let smithy_rs = self.smithy_rs.clone();
-            let create_sdk_generator = self.create_sdk_generator.clone();
             let examples_revision = versions.aws_doc_sdk_examples_revision.clone();
             let examples_path = self.aws_sdk_rust.path().join("examples");
             let fs = self.fs.clone();
+            let codegen_settings = self.codegen_settings.clone();
+            let progress = self.progress.clone();
 
             commits
                 .par_iter()
@@ -234,16 +309,18 @@ impl Sync {
                         format!("couldn't find commit {} in smithy-rs", commit_hash)
                     })?;
 
-                    let sdk_gen = create_sdk_generator
-                        .create_sdk_generator(
-                            &examples_revision,
-                            &examples_path,
-                            fs.clone(),
-                            Some(commit.hash.clone()),
-                            smithy_rs.path(),
-                        )
-                        .context(here!())?;
+                    let sdk_gen = DefaultSdkGenerator::new(
+                        &previous_versions_manifest,
+                        &examples_revision,
+                        &examples_path,
+                        fs.clone(),
+                        Some(commit.hash.clone()),
+                        smithy_rs.path(),
+                        &codegen_settings,
+                    )
+                    .context(here!())?;
                     let sdk_path = sdk_gen.generate_sdk().context(here!())?;
+                    progress.commits_completed.fetch_add(1, Ordering::Relaxed);
                     Ok((commit, sdk_path))
                 })
                 .collect::<Result<Vec<_>>>()?
@@ -285,16 +362,16 @@ impl Sync {
         }
         let examples_head = example_revisions.iter().cloned().next().unwrap();
 
-        let sdk_gen = self
-            .create_sdk_generator
-            .create_sdk_generator(
-                &examples_head,
-                &self.aws_doc_sdk_examples.path().join("rust_dev_preview"),
-                self.fs.clone(),
-                None,
-                self.smithy_rs.path(),
-            )
-            .context(here!())?;
+        let sdk_gen = DefaultSdkGenerator::new(
+            &self.previous_versions_manifest,
+            &examples_head,
+            &self.aws_doc_sdk_examples.path().join("rust_dev_preview"),
+            self.fs.clone(),
+            None,
+            self.smithy_rs.path(),
+            &self.codegen_settings,
+        )
+        .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
         self.copy_sdk(generated_sdk.path())
             .context("failed to copy the SDK")?;
@@ -445,7 +522,7 @@ impl Sync {
 mod tests {
     use super::*;
     use crate::fs::MockFs;
-    use crate::git::MockGit;
+    use crate::git::{CommitHash, MockGit};
     use crate::versions::MockVersions;
 
     // Wish this was in std...
@@ -544,7 +621,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
         assert!(sync
             .commit_sdk_changes(
@@ -596,7 +672,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
         assert!(sync
             .commit_sdk_changes(
@@ -630,7 +705,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
 
         assert!(
@@ -657,7 +731,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
 
         assert!(
@@ -684,7 +757,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
 
         assert!(sync.sdk_has_changes().unwrap(), "it should have changes");
@@ -713,7 +785,6 @@ mod tests {
             MockGit::new(),
             MockFs::new(),
             MockVersions::new(),
-            MockCreateSdkGenerator::new(),
         );
 
         assert!(sync.sdk_has_changes().unwrap(), "it should have changes");

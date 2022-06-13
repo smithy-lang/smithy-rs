@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Load retry configuration properties from an AWS profile
@@ -41,7 +41,7 @@ pub struct ProfileFileRetryConfigProvider {
 }
 
 /// Builder for [ProfileFileRetryConfigProvider]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     config: Option<ProviderConfig>,
     profile_override: Option<String>,

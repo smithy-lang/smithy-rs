@@ -1,12 +1,13 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -43,12 +44,12 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
 object AwsRuntimeType {
     val S3Errors by lazy { RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_errors")) }
     val Presigning by lazy {
-        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", public = true))
+        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
     }
 
     fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
-            "middleware", public = true,
+            "middleware", visibility = Visibility.PUBLIC,
             CargoDependency.SmithyHttp(this),
             CargoDependency.SmithyHttpTower(this),
             CargoDependency.SmithyClient(this),

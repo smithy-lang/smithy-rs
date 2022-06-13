@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use anyhow::{bail, Result};
@@ -101,8 +101,17 @@ pub trait Git: Send + Sync {
     /// Creates a branch at the given revision.
     fn create_branch(&self, branch_name: &str, revision: &str) -> Result<()>;
 
-    /// Fast-forward merges a branch.
-    fn fast_forward_merge(&self, branch_name: &str) -> Result<()>;
+    /// Deletes a branch.
+    fn delete_branch(&self, branch_name: &str) -> Result<()>;
+
+    /// Squash merges a branch into the current branch.
+    fn squash_merge(
+        &self,
+        author_name: &str,
+        author_email: &str,
+        branch_name: &str,
+        commit_message: &str,
+    ) -> Result<()>;
 
     /// Returns list of untracked files.
     fn untracked_files(&self) -> Result<Vec<PathBuf>>;
@@ -322,16 +331,36 @@ impl Git for GitCLI {
         Ok(())
     }
 
-    fn fast_forward_merge(&self, branch_name: &str) -> Result<()> {
+    fn delete_branch(&self, branch_name: &str) -> Result<()> {
         let mut command = Command::new(&self.binary_name);
-        command.arg("merge");
-        command.arg("--ff-only");
+        command.arg("branch");
+        command.arg("-D");
         command.arg(branch_name);
         command.current_dir(&self.repo_path);
 
         let output = log_command(command).output()?;
-        handle_failure("fast_forward_merge", &output)?;
+        handle_failure("delete_branch", &output)?;
         Ok(())
+    }
+
+    fn squash_merge(
+        &self,
+        author_name: &str,
+        author_email: &str,
+        branch_name: &str,
+        commit_message: &str,
+    ) -> Result<()> {
+        let mut command = Command::new(&self.binary_name);
+        command.arg("merge");
+        command.arg("--squash");
+        command.arg(branch_name);
+        command.current_dir(&self.repo_path);
+
+        let output = log_command(command).output()?;
+        handle_failure("squash_merge", &output)?;
+
+        // `git merge --squash` only stages changes, so a commit is necessary after
+        self.commit(author_name, author_email, commit_message)
     }
 
     fn untracked_files(&self) -> Result<Vec<PathBuf>> {
@@ -564,9 +593,21 @@ mod tests {
     }
 
     #[test]
-    fn fast_forward_merge() {
-        cli("git-ff-merge")
-            .fast_forward_merge("test-branch-name")
+    fn delete_branch() {
+        cli("git-delete-branch")
+            .delete_branch("test-branch-name")
+            .expect("successful invocation");
+    }
+
+    #[test]
+    fn squash_merge() {
+        cli("git-squash-merge")
+            .squash_merge(
+                "test-author",
+                "test-author-email",
+                "test-branch-name",
+                "test message",
+            )
             .expect("successful invocation");
     }
 }
