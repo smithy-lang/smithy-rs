@@ -28,7 +28,6 @@ socket2 = { version = "0.4", features = ["all"] }
 thiserror = "1.0.31"
 tokio = { version = "1", features = ["full"] }
 tower = "0.4"
-tower-http = { version = "0.3", features = ["map-response-body", "trace"] }
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

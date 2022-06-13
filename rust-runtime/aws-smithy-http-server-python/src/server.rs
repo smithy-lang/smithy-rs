@@ -98,7 +98,6 @@ impl PyApp {
             tracing::debug!("Add middlewares to Rust Python router");
             let app = router.0.layer(
                 tower::ServiceBuilder::new()
-                    .layer(tower_http::trace::TraceLayer::new_for_http())
                     .layer(aws_smithy_http_server::AddExtensionLayer::new(state)),
             );
             let server = hyper::Server::from_tcp(
