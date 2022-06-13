@@ -159,7 +159,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
 
-        val verifyResponseContentType: Writable = writable {
+        val verifyResponseContentType = writable {
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
