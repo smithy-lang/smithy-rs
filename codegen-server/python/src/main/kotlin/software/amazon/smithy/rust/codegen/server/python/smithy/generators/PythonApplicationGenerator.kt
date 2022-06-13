@@ -108,7 +108,7 @@ class PythonApplicationGenerator(
                     """,
                     *codegenScope
                 )
-                operations.map { operation ->
+                for (operation in operations) {
                     val operationName = symbolProvider.toSymbol(operation).name
                     val name = operationName.toSnakeCase()
                     rustTemplate(

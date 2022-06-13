@@ -23,7 +23,7 @@ class PythonServerEnumGenerator(
     model: Model,
     symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
-    private val shape: StringShape,
+    shape: StringShape,
     enumTrait: EnumTrait,
     runtimeConfig: RuntimeConfig,
 ) : ServerEnumGenerator(model, symbolProvider, writer, shape, enumTrait, runtimeConfig) {

@@ -71,7 +71,7 @@ open class PythonServerStructureGenerator(
     }
 
     private fun renderPyO3Methods() {
-        if (shape.hasTrait<ErrorTrait>() || !accessorMembers.isEmpty()) {
+        if (shape.hasTrait<ErrorTrait>() || accessorMembers.isNotEmpty()) {
             writer.renderPyMethods()
             writer.rustTemplate(
                 """

@@ -23,13 +23,13 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
  */
 class PythonServerServiceGenerator(
     private val rustCrate: RustCrate,
-    private val protocolGenerator: ProtocolGenerator,
-    private val protocolSupport: ProtocolSupport,
-    private val httpBindingResolver: HttpBindingResolver,
+    protocolGenerator: ProtocolGenerator,
+    protocolSupport: ProtocolSupport,
+    httpBindingResolver: HttpBindingResolver,
     private val context: CodegenContext,
 ) : ServerServiceGenerator(rustCrate, protocolGenerator, protocolSupport, httpBindingResolver, context) {
 
-    override fun renderCombineErrors(writer: RustWriter, operation: OperationShape) {
+    override fun renderCombinedErrors(writer: RustWriter, operation: OperationShape) {
         PythonServerCombinedErrorGenerator(context.model, context.symbolProvider, operation).render(writer)
     }
 

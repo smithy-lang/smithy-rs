@@ -79,7 +79,7 @@ class PythonServerOperationHandlerGenerator(
                     };
                     #{pyerror:W}
                 }
-                """.trimIndent(),
+                """,
                 *codegenScope,
                 "pycoroutine" to renderPyCoroutine(fnName, output),
                 "pyfunction" to renderPyFunction(fnName, output),
