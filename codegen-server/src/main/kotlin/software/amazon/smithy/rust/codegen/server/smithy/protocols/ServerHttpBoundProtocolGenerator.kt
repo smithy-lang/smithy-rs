@@ -162,6 +162,26 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
 
+        val verifyResponseContentType = writable {
+            httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
+                rustTemplate(
+                    """
+                    if let Some(headers) = req.headers() {
+                        if let Some(accept) = headers.get(#{http}::header::ACCEPT) {
+                            if accept != "$contentType" {
+                                return Err(Self::Rejection {
+                                    protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
+                                    kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
+                                })
+                            }
+                        }
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+        }
+
         // Implement `FromRequest` trait for input types.
         rustTemplate(
             """
@@ -176,6 +196,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             {
                 type Rejection = #{RuntimeError};
                 async fn from_request(req: &mut #{SmithyHttpServer}::request::RequestParts<B>) -> Result<Self, Self::Rejection> {
+                    #{verify_response_content_type:W}
                     #{parse_request}(req)
                         .await
                         .map($inputName)
@@ -190,7 +211,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             """.trimIndent(),
             *codegenScope,
             "I" to inputSymbol,
-            "parse_request" to serverParseRequest(operationShape)
+            "parse_request" to serverParseRequest(operationShape),
+            "verify_response_content_type" to verifyResponseContentType,
         )
 
         // Implement `IntoResponse` for output types.
@@ -230,7 +252,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         }
                     }
                 }
-                """.trimIndent()
+                """
 
             rustTemplate(
                 """
