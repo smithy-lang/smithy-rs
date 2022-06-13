@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTr
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
+import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
@@ -167,7 +168,7 @@ class HttpBoundProtocolTraitImplGenerator(
                     protocol.parseHttpGenericError(operationShape),
                     errorSymbol
                 )
-                if (operationShape.errors.isNotEmpty()) {
+                if (operationShape.operationErrors(model).isNotEmpty()) {
                     rustTemplate(
                         """
                         let error_code = match generic.code() {
@@ -180,9 +181,10 @@ class HttpBoundProtocolTraitImplGenerator(
                         "error_symbol" to errorSymbol,
                     )
                     withBlock("Err(match error_code {", "})") {
-                        operationShape.errors.forEach { error ->
-                            val errorShape = model.expectShape(error, StructureShape::class.java)
-                            val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
+                        val errors = operationShape.operationErrors(model)
+                        errors.forEach { error ->
+                            val errorShape = model.expectShape(error.id, StructureShape::class.java)
+                            val variantName = symbolProvider.toSymbol(model.expectShape(error.id)).name
                             val errorCode = httpBindingResolver.errorCode(errorShape).dq()
                             withBlock(
                                 "$errorCode => #1T { meta: generic, kind: #1TKind::$variantName({",

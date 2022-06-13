@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.TestSymbolVisitorConfig
@@ -42,7 +43,7 @@ class EventStreamSymbolProviderTest {
         )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
-        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, TestSymbolVisitorConfig), model)
+        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, TestSymbolVisitorConfig), model, CodegenTarget.CLIENT)
 
         // Look up the synthetic input/output rather than the original input/output
         val inputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationInput\$inputStream")) as MemberShape
@@ -51,7 +52,7 @@ class EventStreamSymbolProviderTest {
         val inputType = provider.toSymbol(inputStream).rustType()
         val outputType = provider.toSymbol(outputStream).rustType()
 
-        inputType shouldBe RustType.Opaque("EventStreamInput<crate::model::SomeStream>", "aws_smithy_http::event_stream")
+        inputType shouldBe RustType.Opaque("EventStreamSender<crate::model::SomeStream>", "aws_smithy_http::event_stream")
         outputType shouldBe RustType.Opaque("Receiver<crate::model::SomeStream, crate::error::TestOperationError>", "aws_smithy_http::event_stream")
     }
 
@@ -78,7 +79,7 @@ class EventStreamSymbolProviderTest {
         )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
-        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, TestSymbolVisitorConfig), model)
+        val provider = EventStreamSymbolProvider(TestRuntimeConfig, SymbolVisitor(model, service, TestSymbolVisitorConfig), model, CodegenTarget.CLIENT)
 
         // Look up the synthetic input/output rather than the original input/output
         val inputStream = model.expectShape(ShapeId.from("test.synthetic#TestOperationInput\$inputStream")) as MemberShape

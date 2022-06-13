@@ -299,8 +299,8 @@ class FakeSigningConfig(
                             Ok(message)
                         }
 
-                        fn sign_empty(&mut self) -> Result<#{Message}, #{SignMessageError}> {
-                            Ok(#{Message}::new(Vec::new()))
+                        fn sign_empty(&mut self) -> Option<Result<#{Message}, #{SignMessageError}>> {
+                            Some(Ok(#{Message}::new(Vec::new())))
                         }
                     }
                     """,

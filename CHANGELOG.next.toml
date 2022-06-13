@@ -31,6 +31,18 @@ references = ["smithy-rs#1263"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "Velfi"
 
+[[smithy-rs]]
+message = "Rename EventStreamInput to EventStreamSender"
+references = ["smithy-rs#1157"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "82marbag"
+
+[[aws-sdk-rust]]
+message = "Rename EventStreamInput to EventStreamSender"
+references = ["smithy-rs#1157"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "82marbag"
+
 [[aws-sdk-rust]]
 message = "Re-export aws_types::SdkConfig in aws_config"
 references = ["smithy-rs#1457"]
