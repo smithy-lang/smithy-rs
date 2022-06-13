@@ -99,16 +99,19 @@ fun Project.discoverServices(awsModelsPath: String?, serviceMembership: Membersh
     val baseModules = baseServices.map { it.module }.toSet()
     logger.info("Discovered base service modules to generate: $baseModules")
 
-    // validate the full exclusion list hits
-    serviceMembership.exclusions.forEach { disabledService ->
-        check(baseModules.contains(disabledService)) {
-            "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${
-            baseModules.joinToString(
-                "\n "
-            )
-            }"
+    // validate the full exclusion list hits if the models directory is set
+    if (awsModelsPath != null) {
+        serviceMembership.exclusions.forEach { disabledService ->
+            check(baseModules.contains(disabledService)) {
+                "Service $disabledService was explicitly disabled but no service was generated with that name. Generated:\n ${
+                baseModules.joinToString(
+                    "\n "
+                )
+                }"
+            }
         }
     }
+
     // validate inclusion list hits
     serviceMembership.inclusions.forEach { service ->
         check(baseModules.contains(service)) { "Service $service was in explicit inclusion list but not generated!" }
