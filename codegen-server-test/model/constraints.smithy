@@ -360,8 +360,10 @@ map ConBMap {
 
 @error("client")
 structure ErrorWithLengthStringMessage {
-    @required
-    message: LengthString
+    // TODO Doesn't work yet because constrained string types don't implement
+    // `AsRef<str>`.
+    // @required
+    // message: LengthString
 }
 
 map MapOfMapOfListOfListOfConB {
