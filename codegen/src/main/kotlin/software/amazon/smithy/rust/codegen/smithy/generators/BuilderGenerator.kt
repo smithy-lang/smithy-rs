@@ -213,7 +213,7 @@ class BuilderGenerator(
     }
 
     private fun RustWriter.renderSetHelper(member: MemberShape, memberName: String, coreType: RustType.HashSet) {
-        docs("Appends an item to `$memberName`.")
+        docs("Appends an item to `$memberName` with deduplication.")
         rust("///")
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
