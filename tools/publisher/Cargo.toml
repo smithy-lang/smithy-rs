@@ -18,7 +18,7 @@ anyhow = "1.0"
 async-recursion = "0.3.2"
 async-trait = "0.1.51"
 cargo_toml = "0.10.1"
-clap = { version = "3", features = ["derive"] }
+clap = { version = "~3.1.18", features = ["derive"] }
 crates_io_api = "0.7.3"
 dialoguer = "0.8"
 handlebars = "4.2"
