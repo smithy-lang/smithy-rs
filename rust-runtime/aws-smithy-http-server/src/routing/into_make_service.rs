@@ -48,7 +48,7 @@ pub struct IntoMakeService<S> {
 }
 
 impl<S> IntoMakeService<S> {
-    pub(super) fn new(service: S) -> Self {
+    pub fn new(service: S) -> Self {
         Self { service }
     }
 }

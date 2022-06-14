@@ -171,6 +171,18 @@ fun RustWriter.unitTest(
     }
 }
 
+/*
+ * Writes a Rust-style unit test
+ */
+fun RustWriter.unitTest(
+    name: String,
+    vararg args: Any,
+    block: RustWriter.() -> Unit
+): RustWriter {
+    raw("#[test]")
+    return rustBlock("fn $name()", *args, block = block)
+}
+
 /**
  * WriterDelegator used for test purposes
  *

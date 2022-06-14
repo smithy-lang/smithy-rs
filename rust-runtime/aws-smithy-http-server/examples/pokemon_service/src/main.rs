@@ -17,10 +17,10 @@ use tower_http::trace::TraceLayer;
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// Hyper server bind address.
-    #[clap(short, long, default_value = "127.0.0.1")]
+    #[clap(short, long, action, default_value = "127.0.0.1")]
     address: String,
     /// Hyper server bind port.
-    #[clap(short, long, default_value = "13734")]
+    #[clap(short, long, action, default_value = "13734")]
     port: u16,
 }
 
