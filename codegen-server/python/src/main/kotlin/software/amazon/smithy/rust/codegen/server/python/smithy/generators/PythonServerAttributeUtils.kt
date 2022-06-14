@@ -12,6 +12,8 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCarg
 
 /**
  * This module contains utilities to render PyO3 attributes.
+ *
+ * TODO(https://github.com/awslabs/smithy-rs/issues/1465): Switch to `Attribute.Custom` and get rid of this class.
  */
 
 private val codegenScope = arrayOf(

@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 /**
  * Add at least one error to all operations in the model.
  *
- * When this decorator is applied, even operations that do not have a Smithy error attatched,
+ * When this decorator is applied, even operations that do not have a Smithy error attached,
  * will return `Result<OperationOutput, OperationError>`.
  *
  * To enable this decorator write its class name to a resource file like this:
@@ -44,7 +44,7 @@ class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorat
  * and there is no native mapping of these actual errors to the API errors, servers can generate
  * the code with this decorator to add an internal error shape on-the-fly to all the operations.
  *
- * When this decorator is applied, even operations that do not have a Smithy error attatched,
+ * When this decorator is applied, even operations that do not have a Smithy error attached,
  * will return `Result<OperationOutput, OperationError>`.
  *
  * To enable this decorator write its class name to a resource file like this:
