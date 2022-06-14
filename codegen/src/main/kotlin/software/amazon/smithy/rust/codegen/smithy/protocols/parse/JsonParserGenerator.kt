@@ -82,6 +82,7 @@ class JsonParserGenerator(
         "skip_to_end" to smithyJson.member("deserialize::token::skip_to_end"),
         "Token" to smithyJson.member("deserialize::Token"),
         "or_empty" to orEmptyJson(),
+        "Tracing" to CargoDependency.Tracing.asType()
     )
 
     /**
@@ -314,10 +315,10 @@ class JsonParserGenerator(
                                     rustTemplate(
                                         """
                                         if replaced {
-                                            return Err(#{JsonDeserialize}::custom("duplicate elements found while deserializing to a set"))
+                                            #{Tracing}::warn!("found duplicates in a `set`");
                                         }
                                         """,
-                                        "JsonDeserialize" to RuntimeType.jsonDeserialize(runtimeConfig)
+                                        *codegenScope,
                                     )
                                 } else {
                                     if (isSparse) {
