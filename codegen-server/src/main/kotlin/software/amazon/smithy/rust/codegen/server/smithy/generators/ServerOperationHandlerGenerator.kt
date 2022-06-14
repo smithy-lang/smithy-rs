@@ -25,7 +25,7 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 /**
  * ServerOperationHandlerGenerator
  */
-class ServerOperationHandlerGenerator(
+open class ServerOperationHandlerGenerator(
     codegenContext: CodegenContext,
     private val operations: List<OperationShape>,
 ) {
@@ -48,7 +48,7 @@ class ServerOperationHandlerGenerator(
         "http" to RuntimeType.http,
     )
 
-    fun render(writer: RustWriter) {
+    open fun render(writer: RustWriter) {
         renderHandlerImplementations(writer, false)
         renderHandlerImplementations(writer, true)
     }
