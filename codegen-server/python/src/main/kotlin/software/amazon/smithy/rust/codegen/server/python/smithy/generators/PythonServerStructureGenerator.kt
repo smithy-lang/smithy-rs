@@ -5,20 +5,18 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.hasTrait
@@ -36,30 +34,14 @@ open class PythonServerStructureGenerator(
 ) : StructureGenerator(model, symbolProvider, writer, shape) {
 
     override fun renderStructure() {
-        val symbol = symbolProvider.toSymbol(shape)
-        val containerMeta = symbol.expectRustMetadata()
-        if (shape.hasTrait<ErrorTrait>()) {
-            writer.renderPyClassException()
-        } else {
-            writer.renderPyClass()
-        }
-        writer.documentShape(shape, model)
-        val withoutDebug = containerMeta.derives.copy(
-            derives = containerMeta.derives.derives - RuntimeType.Debug + RuntimeType.Clone
-        )
-        containerMeta.copy(derives = withoutDebug).render(writer)
-
-        writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
-            forEachMember(members) { member, memberName, memberSymbol ->
-                renderMemberDoc(member, memberSymbol)
-                renderPyGetterSetter()
-                memberSymbol.expectRustMetadata().render(this)
-                write("$memberName: #T,", symbolProvider.toSymbol(member))
-            }
-        }
-        renderStructureImpl()
-        renderDebugImpl()
+        writer.renderPyClass(shape)
+        super.renderStructure()
         renderPyO3Methods()
+    }
+
+    override fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+        writer.renderPyGetterSetter()
+        super.renderStructureMember(writer, member, memberName, memberSymbol)
     }
 
     private fun renderPyO3Methods() {

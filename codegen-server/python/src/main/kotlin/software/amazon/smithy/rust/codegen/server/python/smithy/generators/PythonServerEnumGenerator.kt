@@ -23,19 +23,19 @@ class PythonServerEnumGenerator(
     model: Model,
     symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
-    shape: StringShape,
+    private val shape: StringShape,
     enumTrait: EnumTrait,
     runtimeConfig: RuntimeConfig,
 ) : ServerEnumGenerator(model, symbolProvider, writer, shape, enumTrait, runtimeConfig) {
 
     override fun render() {
-        writer.renderPyClass()
+        writer.renderPyClass(shape)
         super.render()
         renderPyO3Methods()
     }
 
     override fun renderFromForStr() {
-        writer.renderPyClass()
+        writer.renderPyClass(shape)
         super.renderFromForStr()
     }
 

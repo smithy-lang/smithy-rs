@@ -90,7 +90,7 @@ open class StructureGenerator(
      * Search for lifetimes used by the members of the struct and generate a declaration.
      * e.g. `<'a, 'b>`
      */
-    protected fun lifetimeDeclaration(): String {
+    private fun lifetimeDeclaration(): String {
         val lifetimes = members
             .map { symbolProvider.toSymbol(it).rustType() }
             .mapNotNull {
@@ -107,7 +107,7 @@ open class StructureGenerator(
     /** Render a custom debug implementation
      * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
      */
-    protected fun renderDebugImpl() {
+    private fun renderDebugImpl() {
         writer.rustBlock("impl ${lifetimeDeclaration()} #T for $name ${lifetimeDeclaration()}", RuntimeType.Debug) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
@@ -125,7 +125,7 @@ open class StructureGenerator(
         }
     }
 
-    protected fun renderStructureImpl() {
+    private fun renderStructureImpl() {
         if (accessorMembers.isEmpty()) {
             return
         }
@@ -153,6 +153,12 @@ open class StructureGenerator(
         }
     }
 
+    open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+        writer.renderMemberDoc(member, memberSymbol)
+        memberSymbol.expectRustMetadata().render(writer)
+        writer.write("$memberName: #T,", symbolProvider.toSymbol(member))
+    }
+
     open fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
@@ -161,10 +167,8 @@ open class StructureGenerator(
         containerMeta.copy(derives = withoutDebug).render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
-            forEachMember(members) { member, memberName, memberSymbol ->
-                renderMemberDoc(member, memberSymbol)
-                memberSymbol.expectRustMetadata().render(this)
-                write("$memberName: #T,", symbolProvider.toSymbol(member))
+            writer.forEachMember(members) { member, memberName, memberSymbol ->
+                renderStructureMember(writer, member, memberName, memberSymbol)
             }
         }
 
@@ -183,7 +187,7 @@ open class StructureGenerator(
         }
     }
 
-    protected fun RustWriter.renderMemberDoc(member: MemberShape, memberSymbol: Symbol) {
+    private fun RustWriter.renderMemberDoc(member: MemberShape, memberSymbol: Symbol) {
         documentShape(
             member,
             model,

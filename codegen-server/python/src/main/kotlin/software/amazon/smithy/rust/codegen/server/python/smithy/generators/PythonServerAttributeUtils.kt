@@ -5,10 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
+import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
  * This module contains utilities to render PyO3 attributes.
@@ -20,14 +23,13 @@ private val codegenScope = arrayOf(
     "pyo3" to PythonServerCargoDependency.PyO3.asType(),
 )
 
-// Renders #[pyo3::pyclass] attribute.
-fun RustWriter.renderPyClass() {
-    rustTemplate("##[#{pyo3}::pyclass]", *codegenScope)
-}
-
-// Renders #[pyo3::pyclass] attribute, inheriting from `Exception`.
-fun RustWriter.renderPyClassException() {
-    rustTemplate("##[#{pyo3}::pyclass(extends = #{pyo3}::exceptions::PyException)]", *codegenScope)
+// Renders #[pyo3::pyclass] attribute, inheriting from `Exception` if the shape has the `ErrorTrait` attached.
+fun RustWriter.renderPyClass(shape: Shape) {
+    if (shape.hasTrait<ErrorTrait>()) {
+        rustTemplate("##[#{pyo3}::pyclass(extends = #{pyo3}::exceptions::PyException)]", *codegenScope)
+    } else {
+        rustTemplate("##[#{pyo3}::pyclass]", *codegenScope)
+    }
 }
 
 // Renders #[pyo3::pymethods] attribute.
