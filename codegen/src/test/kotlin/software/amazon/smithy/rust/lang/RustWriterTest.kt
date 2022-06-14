@@ -70,7 +70,7 @@ class RustWriterTest {
                 write("member: #T,", setSymbol)
                 write("otherMember: #T,", stringSymbol)
             }
-            it.rustBlock("fn inner()") {
+            it.unitTest("manually_created_struct") {
                 rustTemplate(
                     """
                     let test = Test { member: #{Set}::default(), otherMember: "hello".to_string() };
@@ -80,7 +80,6 @@ class RustWriterTest {
                     "Set" to RuntimeType.Set(TestRuntimeConfig)
                 )
             }
-            it.unitTest("manually_created_struct", "inner()")
             val output = it.toString()
             output shouldContain RustType.HashSet.Type
             output shouldContain "struct Test"
