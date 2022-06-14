@@ -188,7 +188,7 @@ structure HeaderSetInput {
         id: "RequestHttpHeaderSetShapeOperation",
         protocol: "aws.protocols#restJson1",
         method: "GET",
-        uri: "/",
+        uri: "/RequestHttpHeaderSetShapeOperation",
         body: "",
         params: { "headerValues": ["a", "b"] },
         headers: { "Custom-Headers": "a, b" }
@@ -234,7 +234,7 @@ structure QuerySetInput {
         id: "RequestHttpQuerySetShapeOperation",
         protocol: "aws.protocols#restJson1",
         method: "GET",
-        uri: "/",
+        uri: "/RequestHttpQuerySetShapeOperation",
         body: "",
         params: { "queryValues": ["a", "b"] },
         queryParams: ["customQuery=a", "customQuery=b"]
