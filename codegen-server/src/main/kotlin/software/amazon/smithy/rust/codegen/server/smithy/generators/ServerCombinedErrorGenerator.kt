@@ -87,7 +87,7 @@ open class ServerCombinedErrorGenerator(
 
         for (error in errors) {
             val errorSymbol = symbolProvider.toSymbol(error)
-            writer.rustBlock("impl From<#T> for #T", errorSymbol, symbol) {
+            writer.rustBlock("impl #T<#T> for #T", RuntimeType.From, errorSymbol, symbol) {
                 rustBlock("fn from(variant: #T) -> #T", errorSymbol, symbol) {
                     rust("Self::${errorSymbol.name}(variant)")
                 }

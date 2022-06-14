@@ -48,7 +48,7 @@ open class ServerServiceGenerator(
             }
             if (operation.errors.isNotEmpty()) {
                 rustCrate.withModule(RustModule.Error) { writer ->
-                    renderCombineErrors(writer, operation)
+                    renderCombinedErrors(writer, operation)
                 }
             }
         }
@@ -65,7 +65,7 @@ open class ServerServiceGenerator(
     open fun renderExtras(operations: List<OperationShape>) { }
 
     // Render combined errors.
-    open fun renderCombineErrors(writer: RustWriter, operation: OperationShape) {
+    open fun renderCombinedErrors(writer: RustWriter, operation: OperationShape) {
         ServerCombinedErrorGenerator(context.model, context.symbolProvider, operation).render(writer)
     }
 

@@ -84,7 +84,7 @@ class PythonServerCodegenVisitor(context: PluginContext, codegenDecorator: RustC
         rustCrate.useShapeWriter(shape) { writer ->
             // Use Python specific structure generator that adds the #[pyclass] attribute
             // and #[pymethods] implementation.
-            PythonServerStructureGenerator(model, codegenContext, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
+            PythonServerStructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
             val builderGenerator =
                 BuilderGenerator(codegenContext.model, codegenContext.symbolProvider, shape)
             builderGenerator.render(writer)

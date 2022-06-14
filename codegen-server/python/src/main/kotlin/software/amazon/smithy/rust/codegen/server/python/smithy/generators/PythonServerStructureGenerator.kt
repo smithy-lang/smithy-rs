@@ -10,15 +10,12 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
-import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
@@ -33,15 +30,10 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
  */
 open class PythonServerStructureGenerator(
     model: Model,
-    private val codegenContext: CodegenContext,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape
 ) : StructureGenerator(model, symbolProvider, writer, shape) {
-    private val codegenScope =
-        arrayOf(
-            "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-        )
 
     override fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
