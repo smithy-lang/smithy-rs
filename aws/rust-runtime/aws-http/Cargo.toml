@@ -10,11 +10,15 @@ repository = "https://github.com/awslabs/smithy-rs"
 [dependencies]
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-types = { path = "../aws-types" }
+bytes = "1.1"
 http = "0.2.3"
+http-body = "0.4.5"
 lazy_static = "1.4.0"
 tracing = "0.1"
 percent-encoding = "2.1.0"
+pin-project = "1.0"
 
 [dev-dependencies]
 async-trait = "0.1.50"

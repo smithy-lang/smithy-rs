@@ -12,6 +12,7 @@ publish = false
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
+aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
 aws-http = { path = "../aws-http" }
@@ -21,6 +22,8 @@ aws-smithy-http-tower= { path = "../../../rust-runtime/aws-smithy-http-tower" }
 aws-types = { path = "../../rust-runtime/aws-types" }
 aws-sig-auth = { path = "../../rust-runtime/aws-sig-auth" }
 http = "0.2.4"
+http-body = "0.4.5"
+md-5 = "0.10.1"
 tower = { version = "0.4", default-features = false }
 
 # Checksum dependencies:

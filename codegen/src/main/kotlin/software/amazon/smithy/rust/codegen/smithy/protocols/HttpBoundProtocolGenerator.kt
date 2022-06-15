@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -74,7 +75,7 @@ class HttpBoundProtocolTraitImplGenerator(
         "Bytes" to RuntimeType.Bytes,
     )
 
-    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
+    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
 
@@ -236,6 +237,7 @@ class HttpBoundProtocolTraitImplGenerator(
             ) {
                 write("let response = op_response.http_mut();")
                 withBlock("Ok({", "})") {
+                    rust("/* zelda: parseStreamingResponse */")
                     renderShapeParser(
                         operationShape,
                         outputShape,
@@ -261,6 +263,7 @@ class HttpBoundProtocolTraitImplGenerator(
                 "E" to errorSymbol
             ) {
                 withBlock("Ok({", "})") {
+                    rust("/* zelda: parseResponse */")
                     renderShapeParser(
                         operationShape,
                         outputShape,
@@ -282,6 +285,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
+        rust("/* zelda: mutate the response here */")
         // avoid non-usage warnings for response
         rust("let _ = response;")
         if (outputShape.id == operationShape.output.get()) {
