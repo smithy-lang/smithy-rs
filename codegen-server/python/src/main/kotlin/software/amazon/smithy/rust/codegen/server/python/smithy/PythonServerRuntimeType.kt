@@ -21,6 +21,12 @@ object PythonServerRuntimeType {
     fun Blob(runtimeConfig: RuntimeConfig) =
         RuntimeType("Blob", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python::types")
 
+    fun ByteStream(runtimeConfig: RuntimeConfig) =
+        RuntimeType("ByteStream", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python::types")
+
+    fun DateTime(runtimeConfig: RuntimeConfig) =
+        RuntimeType("DateTime", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python::types")
+
     fun PyError(runtimeConfig: RuntimeConfig) =
         RuntimeType("Error", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python")
 }

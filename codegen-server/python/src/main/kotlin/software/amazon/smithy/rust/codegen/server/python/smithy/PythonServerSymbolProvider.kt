@@ -10,6 +10,9 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.extractSymbolFromOption
+import software.amazon.smithy.rust.codegen.smithy.isOptional
+import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 
 /**
@@ -32,13 +35,28 @@ class PythonServerSymbolProvider(private val base: RustSymbolProvider) :
      * Swap the shape's symbol if its associated type does not implement `pyo3::PyClass`.
      */
     override fun toSymbol(shape: Shape): Symbol {
-        return when (base.toSymbol(shape).rustType()) {
+        var originalSymbol = base.toSymbol(shape)
+        if (originalSymbol.isOptional()) {
+            originalSymbol = originalSymbol.extractSymbolFromOption()
+        }
+        val newSymbol = when (originalSymbol.rustType()) {
             RuntimeType.Blob(runtimeConfig).toSymbol().rustType() -> {
                 PythonServerRuntimeType.Blob(runtimeConfig).toSymbol()
+            }
+            RuntimeType.ByteStream(runtimeConfig).toSymbol().rustType() -> {
+                PythonServerRuntimeType.ByteStream(runtimeConfig).toSymbol()
+            }
+            RuntimeType.DateTime(runtimeConfig).toSymbol().rustType() -> {
+                PythonServerRuntimeType.DateTime(runtimeConfig).toSymbol()
             }
             else -> {
                 base.toSymbol(shape)
             }
+        }
+        return if (originalSymbol.isOptional()) {
+            newSymbol.makeOptional()
+        } else {
+            return newSymbol
         }
     }
 }

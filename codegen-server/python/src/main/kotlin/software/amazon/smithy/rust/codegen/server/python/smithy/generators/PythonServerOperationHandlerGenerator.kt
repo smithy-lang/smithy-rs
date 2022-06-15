@@ -42,7 +42,7 @@ class PythonServerOperationHandlerGenerator(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
             "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "pyo3asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
             "tokio" to PythonServerCargoDependency.Tokio.asType(),
             "tracing" to PythonServerCargoDependency.Tracing.asType()
         )
@@ -122,7 +122,7 @@ class PythonServerOperationHandlerGenerator(
                     } else {
                         pyhandler.call1((input, &*state.0.context))?
                     };
-                    #{pyo3asyncio}::tokio::into_future(coroutine)
+                    #{pyo3_asyncio}::tokio::into_future(coroutine)
                 })?;
                 result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))?
                 """,

@@ -186,6 +186,9 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
         fun Blob(runtimeConfig: RuntimeConfig) =
             RuntimeType("Blob", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
 
+        fun ByteStream(runtimeConfig: RuntimeConfig) =
+            RuntimeType("ByteStream", CargoDependency.SmithyHttp(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http::byte_stream")
+
         fun Document(runtimeConfig: RuntimeConfig): RuntimeType =
             RuntimeType("Document", CargoDependency.SmithyTypes(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_types")
 
@@ -282,9 +285,6 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             dependency = InlineDependency(name, module, listOf(), func),
             namespace = "crate::${module.name}"
         )
-
-        fun byteStream(runtimeConfig: RuntimeConfig) =
-            CargoDependency.SmithyHttp(runtimeConfig).asType().member("byte_stream::ByteStream")
 
         fun parseResponse(runtimeConfig: RuntimeConfig) = RuntimeType(
             "ParseHttpResponse",

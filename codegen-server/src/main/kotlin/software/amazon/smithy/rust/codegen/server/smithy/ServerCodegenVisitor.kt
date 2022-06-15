@@ -51,8 +51,7 @@ import java.util.logging.Logger
 open class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
     ShapeVisitor.Default<Unit>() {
 
-    private val fileManifest = context.fileManifest
-
+    protected val fileManifest = context.fileManifest
     protected val logger = Logger.getLogger(javaClass.name)
     protected val settings = ServerRustSettings.from(context.model, context.settings)
 
@@ -122,7 +121,7 @@ open class ServerCodegenVisitor(context: PluginContext, private val codegenDecor
      *
      * The main work of code generation (serializers, protocols, etc.) is handled in `fn serviceShape` below.
      */
-    fun execute() {
+    open fun execute() {
         val service = settings.getService(model)
         logger.info(
             "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}"

@@ -7,11 +7,13 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerModuleGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
@@ -24,7 +26,9 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.runCommand
 
 /**
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
@@ -67,6 +71,47 @@ class PythonServerCodegenVisitor(context: PluginContext, codegenDecorator: RustC
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         // Override `protocolGenerator` which carries the symbolProvider.
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
+    }
+
+    /**
+     * Execute code generation
+     *
+     * 1. Load the service from [RustSettings].
+     * 2. Traverse every shape in the closure of the service.
+     * 3. Loop through each shape and visit them (calling the override functions in this class)
+     * 4. Call finalization tasks specified by decorators.
+     * 5. Write the in-memory buffers out to files.
+     *
+     * The main work of code generation (serializers, protocols, etc.) is handled in `fn serviceShape` below.
+     */
+    override fun execute() {
+        val service = settings.getService(model)
+        logger.info(
+            "[python-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}"
+        )
+        val serviceShapes = Walker(model).walkShapes(service)
+        serviceShapes.forEach { it.accept(this) }
+        codegenDecorator.extras(codegenContext, rustCrate)
+        PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
+        rustCrate.finalize(
+            settings,
+            model,
+            codegenDecorator.crateManifestCustomizations(codegenContext),
+            codegenDecorator.libRsCustomizations(codegenContext, listOf()),
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
+            requireDocs = false
+        )
+        try {
+            "cargo fmt".runCommand(
+                fileManifest.baseDir,
+                timeout = settings.codegenConfig.formatTimeoutSeconds.toLong()
+            )
+        } catch (err: CommandFailed) {
+            logger.warning(
+                "[python-server-codegen] Failed to run cargo fmt: [${service.id}]\n${err.output}"
+            )
+        }
+        logger.info("[python-server-codegen] Rust server generation complete!")
     }
 
     /**

@@ -107,6 +107,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenContext: CodegenContext,
     private val protocol: Protocol,
 ) : ProtocolTraitImplGenerator {
+
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -132,6 +133,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
+        "ByteStream" to RuntimeType.ByteStream(runtimeConfig),
         "http" to RuntimeType.http
     )
 
@@ -1160,7 +1162,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun streamingBodyTraitBounds(operationShape: OperationShape) =
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
-            "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
+            "\n B: Into<#{ByteStream}>,"
         } else {
             ""
         }

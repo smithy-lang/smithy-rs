@@ -12,7 +12,7 @@
 //! [PyO3]: https://pyo3.rs/
 
 mod error;
-mod logging;
+pub mod logging;
 mod server;
 mod socket;
 mod state;
@@ -21,7 +21,7 @@ pub mod types;
 #[doc(inline)]
 pub use error::Error;
 #[doc(inline)]
-pub use logging::{setup, LogLevel};
+pub use logging::LogLevel;
 #[doc(inline)]
 pub use server::{PyApp, PyRouter};
 #[doc(inline)]
