@@ -448,7 +448,7 @@ class FluentClientGenerator(
                 Fluent builders are created through the [`Client`](crate::client::Client) by calling
                 one if its operation methods. After parameters are set using the builder methods,
                 the `send` method can be called to initiate the request.
-                """,
+                """.trim(),
                 newlinePrefix = "//! "
             )
             operations.forEach { operation ->
