@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -18,7 +19,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import java.nio.file.Files
 import java.nio.file.Paths
 
-class IntegrationTestDecorator : RustCodegenDecorator {
+class IntegrationTestDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "IntegrationTest"
     override val order: Byte = 0
 
@@ -47,6 +48,8 @@ class IntegrationTestDecorator : RustCodegenDecorator {
             baseCustomizations
         }
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class IntegrationTestDependencies(

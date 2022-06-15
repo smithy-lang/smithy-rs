@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
@@ -30,10 +31,11 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
  * AwsJson 1.0 and 1.1 server-side protocol factory. This factory creates the [ServerHttpBoundProtocolGenerator]
  * with AwsJson specific configurations.
  */
-class ServerAwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator> {
-    override fun protocol(codegenContext: CodegenContext): Protocol = ServerAwsJson(codegenContext, version)
+class ServerAwsJsonFactory(private val version: AwsJsonVersion) :
+    ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
+    override fun protocol(codegenContext: ServerCodegenContext): Protocol = ServerAwsJson(codegenContext, version)
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): ServerHttpBoundProtocolGenerator =
+    override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
         ServerHttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
 
     override fun transformModel(model: Model): Model = model

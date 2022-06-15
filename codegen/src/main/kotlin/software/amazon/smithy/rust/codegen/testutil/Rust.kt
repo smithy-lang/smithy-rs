@@ -21,12 +21,11 @@ import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -91,6 +90,7 @@ object TestWorkspace {
         }
     }
 
+    // TODO This should not be used by the server because it's using ClientCodegenConfig.
     @Suppress("NAME_SHADOWING")
     fun testProject(symbolProvider: RustSymbolProvider? = null, debugMode: Boolean = false): TestWriterDelegator {
         val subprojectDir = subproject()
@@ -110,7 +110,7 @@ object TestWorkspace {
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,
-            CodegenConfig(debugMode = debugMode)
+            ClientCodegenConfig(debugMode = debugMode)
         )
     }
 }
@@ -176,7 +176,7 @@ fun RustWriter.unitTest(
  *
  * This exposes both the base directory and a list of [generatedFiles] for test purposes
  */
-class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider: RustSymbolProvider, val codegenConfig: CodegenConfig) :
+class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider: RustSymbolProvider, val codegenConfig: ClientCodegenConfig) :
     RustCrate(fileManifest, symbolProvider, DefaultPublicModules, codegenConfig) {
     val baseDir: Path = fileManifest.baseDir
 
@@ -221,16 +221,10 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
 }
 
 fun TestWriterDelegator.rustSettings() =
-    RustSettings(
-        ShapeId.from("fake#Fake"),
-        "test_${baseDir.toFile().nameWithoutExtension}",
-        "0.0.1",
-        moduleAuthors = listOf("test@module.com"),
-        moduleDescription = "test",
-        moduleRepository = null,
-        runtimeConfig = TestRuntimeConfig,
-        codegenConfig = this.codegenConfig,
-        license = null
+    testRustSettings(
+        service = ShapeId.from("fake#Fake"),
+        moduleName = "test_${baseDir.toFile().nameWithoutExtension}",
+        codegenConfig = this.codegenConfig
     )
 
 fun String.shouldParseAsRust() {

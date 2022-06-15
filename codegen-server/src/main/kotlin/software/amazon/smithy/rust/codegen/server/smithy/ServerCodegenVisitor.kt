@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.Unconstraine
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.Constrained
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
@@ -43,6 +42,8 @@ import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbol
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.Unconstrained
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
@@ -54,9 +55,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
@@ -71,7 +70,10 @@ import java.util.logging.Logger
  * Entrypoint for server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
  */
-class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
+class ServerCodegenVisitor(
+    context: PluginContext,
+    private val codegenDecorator: RustCodegenDecorator<ServerCodegenContext>
+) :
     ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
@@ -84,8 +86,8 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
     private val model: Model
-    private val codegenContext: CodegenContext
-    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
+    private val codegenContext: ServerCodegenContext
+    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator, ServerCodegenContext>
     private val protocolGenerator: ProtocolGenerator
     private val unconstrainedModule =
         RustModule.private(Unconstrained.namespace, "Unconstrained types for constrained shapes.")
@@ -97,8 +99,9 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         val symbolVisitorConfig =
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
-                codegenConfig = settings.codegenConfig,
-                handleRequired = true
+                renameExceptions = false,
+                handleRequired = true,
+                handleRustBoxing = true,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -132,7 +135,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, service)
         constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, service)
 
-        codegenContext = CodegenContext(
+        codegenContext = ServerCodegenContext(
             model,
             symbolProvider,
             service,
@@ -160,8 +163,6 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary
             .let(RecursiveShapeBoxer::transform)
-            // Normalize the `message` field on errors when enabled in settings (default: true)
-            .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
             // Normalize operations by adding synthetic input and output shapes to every operation
             .let(OperationNormalizer::transform)
             // Drop unsupported event stream operations from the model

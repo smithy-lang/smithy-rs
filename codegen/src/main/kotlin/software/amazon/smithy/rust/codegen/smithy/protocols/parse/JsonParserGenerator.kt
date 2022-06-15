@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -36,7 +37,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
@@ -61,15 +62,13 @@ import software.amazon.smithy.utils.StringUtils
 //  and the function is declared `pub`, Rust will complain, even if the json_deser module is not `pub`.
 
 class JsonParserGenerator(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
-    // TODO Grab it
-    private val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, codegenContext.serviceShape)
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenTarget = codegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
@@ -286,7 +285,7 @@ class JsonParserGenerator(
         withBlock("$escapedStrName.to_unescaped().map(|u|", ")") {
             when (target.hasTrait<EnumTrait>()) {
                 true -> {
-                    if (parseUnconstrainedShape(target)) {
+                    if (returnSymbolToParse(target).first) {
                         rust("u.into_owned()")
                     } else {
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
@@ -321,12 +320,7 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val returnUnconstrainedType = parseUnconstrainedShape(shape)
-        val returnType = if (returnUnconstrainedType) {
-            unconstrainedShapeSymbolProvider.toSymbol(shape)
-        } else {
-            symbolProvider.toSymbol(shape)
-        }
+        val (returnUnconstrainedType, returnSymbol) = returnSymbolToParse(shape)
         val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             // Allow non-snake-case since some SDK models have lists with names prefixed with `__listOf__`,
             // which become `__list_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
@@ -336,7 +330,7 @@ class JsonParserGenerator(
                 pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
-                "ReturnType" to returnType,
+                "ReturnType" to returnSymbol,
                 *codegenScope,
             ) {
                 startArrayOrNull {
@@ -363,7 +357,7 @@ class JsonParserGenerator(
                         }
                     }
                     if (returnUnconstrainedType) {
-                        rust("Ok(Some(#{T}(items)))", returnType)
+                        rust("Ok(Some(#{T}(items)))", returnSymbol)
                     } else {
                         rust("Ok(Some(items))")
                     }
@@ -377,12 +371,7 @@ class JsonParserGenerator(
         val keyTarget = model.expectShape(shape.key.target) as StringShape
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val isSparse = shape.hasTrait<SparseTrait>()
-        val returnUnconstrainedType = parseUnconstrainedShape(shape)
-        val returnType = if (returnUnconstrainedType) {
-            unconstrainedShapeSymbolProvider.toSymbol(shape)
-        } else {
-            symbolProvider.toSymbol(shape)
-        }
+        val (returnUnconstrainedType, returnSymbol) = returnSymbolToParse(shape)
         val parser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             // Allow non-snake-case since some SDK models have maps with names prefixed with `__mapOf__`,
             // which become `__map_of__`, and the Rust compiler warning doesn't like multiple adjacent underscores.
@@ -392,7 +381,7 @@ class JsonParserGenerator(
                 pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
-                "ReturnType" to returnType,
+                "ReturnType" to returnSymbol,
                 *codegenScope,
             ) {
                 startObjectOrNull {
@@ -413,7 +402,7 @@ class JsonParserGenerator(
                         }
                     }
                     if (returnUnconstrainedType) {
-                        rust("Ok(Some(#{T}(map)))", returnType)
+                        rust("Ok(Some(#{T}(map)))", returnSymbol)
                     } else {
                         rust("Ok(Some(map))")
                     }
@@ -426,12 +415,7 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
         val symbol = symbolProvider.toSymbol(shape)
-        val returnBuilder = codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)
-        val returnType = if (returnBuilder) {
-            unconstrainedShapeSymbolProvider.toSymbol(shape)
-        } else {
-            symbol
-        }
+        val (returnBuilder, returnType) = returnSymbolToParse(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 """
@@ -459,11 +443,7 @@ class JsonParserGenerator(
 
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
         val fnName = symbolProvider.deserializeFunctionName(shape)
-        val symbol = if (parseUnconstrainedShape(shape)) {
-            unconstrainedShapeSymbolProvider.toSymbol(shape)
-        } else {
-            symbolProvider.toSymbol(shape)
-        }
+        val (_, symbol) = returnSymbolToParse(shape)
         val nestedParser = RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             it.rustBlockTemplate(
                 """
@@ -595,7 +575,14 @@ class JsonParserGenerator(
      * is a `StructureShape`, we should construct and return a builder instead of building into the final `struct` the
      * user gets. This is only relevant for the server, that parses the incoming request and only after enforces
      * constraint traits.
+     *
+     * The function returns a pair where the second component is the return symbol that should be parsed, and the first
+     * component is whether such symbol is unconstrained or not.
      */
-    private fun parseUnconstrainedShape(shape: Shape) =
-        codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)
+    private fun returnSymbolToParse(shape: Shape): Pair<Boolean, Symbol> =
+        if (codegenTarget == CodegenTarget.SERVER && shape.canReachConstrainedShape(model, symbolProvider)) {
+            true to (codegenContext as ServerCodegenContext).unconstrainedShapeSymbolProvider.toSymbol(shape)
+        } else {
+            false to symbolProvider.toSymbol(shape)
+        }
 }

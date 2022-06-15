@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -102,7 +103,7 @@ fn test_1() {
 }
  */
 
-class TimeoutConfigDecorator : RustCodegenDecorator {
+class TimeoutConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "TimeoutConfig"
     override val order: Byte = 0
 
@@ -112,6 +113,8 @@ class TimeoutConfigDecorator : RustCodegenDecorator {
     ): List<ConfigCustomization> {
         return baseCustomizations + TimeoutConfigProviderConfig(codegenContext)
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {

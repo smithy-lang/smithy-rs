@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -72,7 +73,7 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override fun sendBounds(input: Symbol, output: Symbol, error: RuntimeType): Writable = writable { }
 }
 
-class AwsFluentClientDecorator : RustCodegenDecorator {
+class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "FluentClient"
 
     // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
@@ -110,6 +111,8 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
             }
         }
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 private class AwsFluentClientExtensions(types: Types) {

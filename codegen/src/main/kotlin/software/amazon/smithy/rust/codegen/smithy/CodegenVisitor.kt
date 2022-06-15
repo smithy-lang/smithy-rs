@@ -42,23 +42,28 @@ import java.util.logging.Logger
 /**
  * Base Entrypoint for Code generation
  */
-class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
+class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator<ClientCodegenContext>) :
     ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
-    private val settings = RustSettings.from(context.model, context.settings)
+    private val settings = ClientRustSettings.from(context.model, context.settings)
 
     private val symbolProvider: RustSymbolProvider
     private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
     private val model: Model
-    private val codegenContext: CodegenContext
-    private val protocolGenerator: ProtocolGeneratorFactory<ProtocolGenerator>
+    private val codegenContext: ClientCodegenContext
+    private val protocolGenerator: ProtocolGeneratorFactory<ProtocolGenerator, ClientCodegenContext>
     private val httpGenerator: ProtocolGenerator
 
     init {
         val symbolVisitorConfig =
-            SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig, codegenConfig = settings.codegenConfig)
+            SymbolVisitorConfig(
+                runtimeConfig = settings.runtimeConfig,
+                renameExceptions = settings.codegenConfig.renameExceptions,
+                handleRequired = false,
+                handleRustBoxing = true,
+            )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         val (protocol, generator) = ProtocolLoader(
@@ -69,7 +74,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val baseProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
         symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
-        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, target = CodegenTarget.CLIENT)
+        codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, target = CodegenTarget.CLIENT)
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,

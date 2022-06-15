@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -69,7 +70,7 @@ fn test_1() {
 }
  */
 
-class RegionDecorator : RustCodegenDecorator {
+class RegionDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "Region"
     override val order: Byte = 0
 
@@ -94,6 +95,8 @@ class RegionDecorator : RustCodegenDecorator {
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {

@@ -9,6 +9,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -66,7 +67,7 @@ fn test_1() {
 }
  */
 
-class RetryConfigDecorator : RustCodegenDecorator {
+class RetryConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "RetryConfig"
     override val order: Byte = 0
 
@@ -78,11 +79,13 @@ class RetryConfigDecorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseRetryConfig(codegenContext.runtimeConfig)
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {

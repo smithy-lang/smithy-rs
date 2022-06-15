@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 
 /**
@@ -29,12 +30,14 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator {
+class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator<CodegenContext> {
     override val name: String = "AddInternalServerErrorToInfallibleOps"
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
-        addErrorShapeToModelOps(service, model, { shape -> shape.errors.isEmpty() })
+        addErrorShapeToModelOps(service, model) { shape -> shape.errors.isEmpty() }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(CodegenContext::class.java)
 }
 
 /**
@@ -55,16 +58,18 @@ class AddInternalServerErrorToInfallibleOpsDecorator : RustCodegenDecorator {
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToAllOpsDecorator : RustCodegenDecorator {
+class AddInternalServerErrorToAllOpsDecorator : RustCodegenDecorator<CodegenContext> {
     override val name: String = "AddInternalServerErrorToAllOps"
     override val order: Byte = 0
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
-        addErrorShapeToModelOps(service, model, { _ -> true })
+        addErrorShapeToModelOps(service, model) { true }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(CodegenContext::class.java)
 }
 
-fun addErrorShapeToModelOps(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {
-    val errorShape = internalServerError(service.id.getNamespace())
+private fun addErrorShapeToModelOps(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {
+    val errorShape = internalServerError(service.id.namespace)
     val modelShapes = model.toBuilder().addShapes(listOf(errorShape)).build()
     return ModelTransformer.create().mapShapes(modelShapes) { shape ->
         if (shape is OperationShape && opSelector(shape)) {
@@ -75,7 +80,7 @@ fun addErrorShapeToModelOps(service: ServiceShape, model: Model, opSelector: (Op
     }
 }
 
-fun internalServerError(namespace: String): StructureShape =
+private fun internalServerError(namespace: String): StructureShape =
     StructureShape.builder().id("$namespace#InternalServerError")
         .addTrait(ErrorTrait("server"))
         .addMember(

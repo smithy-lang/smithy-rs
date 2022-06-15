@@ -6,11 +6,12 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.rustlang.raw
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 
-class CrateLicenseDecorator : RustCodegenDecorator {
+class CrateLicenseDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "CrateLicense"
 
     override val order: Byte = 0
@@ -21,4 +22,6 @@ class CrateLicenseDecorator : RustCodegenDecorator {
             it.raw(license)
         }
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }

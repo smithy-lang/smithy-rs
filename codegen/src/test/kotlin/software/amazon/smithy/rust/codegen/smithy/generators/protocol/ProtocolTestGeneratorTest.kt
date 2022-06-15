@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -102,12 +103,12 @@ private class TestProtocolFactory(
     private val httpRequestBuilder: String,
     private val body: String,
     private val correctResponse: String
-) : ProtocolGeneratorFactory<ProtocolGenerator> {
-    override fun protocol(codegenContext: CodegenContext): Protocol {
+) : ProtocolGeneratorFactory<ProtocolGenerator, ClientCodegenContext> {
+    override fun protocol(codegenContext: ClientCodegenContext): Protocol {
         return RestJson(codegenContext)
     }
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): ProtocolGenerator {
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): ProtocolGenerator {
         return TestProtocolGenerator(
             codegenContext,
             protocol(codegenContext),
@@ -211,7 +212,7 @@ class ProtocolTestGeneratorTest {
     private val correctBody = """{"name": "Teddy"}"""
 
     /**
-     * Creates an fake HTTP implementation for SayHello & generates the protocol test
+     * Creates a fake HTTP implementation for SayHello & generates the protocol test
      *
      * Returns the [Path] the service was generated at, suitable for running `cargo test`
      */
@@ -223,13 +224,17 @@ class ProtocolTestGeneratorTest {
         val (pluginContext, testDir) = generatePluginContext(model)
         val visitor = CodegenVisitor(
             pluginContext,
-            object : RustCodegenDecorator {
+            object : RustCodegenDecorator<ClientCodegenContext> {
                 override val name: String = "mock"
                 override val order: Byte = 0
-                override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
+                override fun protocols(
+                    serviceId: ShapeId,
+                    currentProtocols: ProtocolMap<ClientCodegenContext>
+                ): ProtocolMap<ClientCodegenContext> =
                     // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
-                    return mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
-                }
+                    mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
+
+                override fun canOperateWithCodegenContext(t: Class<*>): Boolean = t.isAssignableFrom(ClientCodegenContext::class.java)
             }
         )
         visitor.execute()

@@ -43,8 +43,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -80,7 +80,7 @@ import java.util.logging.Logger
  * See `ServerRestJsonFactory.kt` for more info.
  */
 class ServerHttpBoundProtocolGenerator(
-    codegenContext: CodegenContext,
+    codegenContext: ServerCodegenContext,
     protocol: Protocol,
 ) : ProtocolGenerator(
     codegenContext,
@@ -106,12 +106,12 @@ class ServerHttpBoundProtocolGenerator(
  * non-streaming types.
  */
 private class ServerHttpBoundProtocolTraitImplGenerator(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val protocol: Protocol,
 ) : ProtocolTraitImplGenerator {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
-    private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider!!
+    private val unconstrainedShapeSymbolProvider = codegenContext.unconstrainedShapeSymbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
@@ -1051,7 +1051,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             ServerRequestBindingGenerator(
                 protocol,
                 codegenContext,
-                codegenContext.unconstrainedShapeSymbolProvider!!,
+                codegenContext.unconstrainedShapeSymbolProvider,
                 operationShape,
             )
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
@@ -1071,7 +1071,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             ServerRequestBindingGenerator(
                 protocol,
                 codegenContext,
-                codegenContext.unconstrainedShapeSymbolProvider!!,
+                codegenContext.unconstrainedShapeSymbolProvider,
                 operationShape,
             )
         val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)

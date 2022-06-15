@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.customize
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Feature
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
@@ -18,11 +19,12 @@ import software.amazon.smithy.rust.codegen.smithy.customizations.IdempotencyToke
 import software.amazon.smithy.rust.codegen.smithy.customizations.SmithyTypesPubUseGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 
-/** A set of customizations that are included in all protocols.
+/**
+ * A set of customizations that are included in all protocols.
  *
  * This exists as a convenient place to gather these modifications, these are not true customizations.
  */
-class RequiredCustomizations : RustCodegenDecorator {
+class RequiredCustomizations : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "Required"
     override val order: Byte = -1
 
@@ -30,23 +32,23 @@ class RequiredCustomizations : RustCodegenDecorator {
         codegenContext: CodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
-    ): List<OperationCustomization> {
-        return baseCustomizations +
-            IdempotencyTokenGenerator(codegenContext, operation) +
-            EndpointPrefixGenerator(codegenContext, operation) +
-            HttpChecksumRequiredGenerator(codegenContext, operation) +
-            HttpVersionListCustomization(codegenContext, operation)
-    }
+    ): List<OperationCustomization> =
+        baseCustomizations +
+                IdempotencyTokenGenerator(codegenContext, operation) +
+                EndpointPrefixGenerator(codegenContext, operation) +
+                HttpChecksumRequiredGenerator(codegenContext, operation) +
+                HttpVersionListCustomization(codegenContext, operation)
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>
-    ): List<LibRsCustomization> {
-        return baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) + AllowLintsGenerator()
-    }
+    ): List<LibRsCustomization> =
+        baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) + AllowLintsGenerator()
 
-    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }

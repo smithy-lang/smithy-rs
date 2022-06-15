@@ -76,21 +76,22 @@ interface Protocol {
     fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType
 }
 
-typealias ProtocolMap = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>>
+typealias ProtocolMap<C> = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator, C>>
 
-interface ProtocolGeneratorFactory<out T : ProtocolGenerator> {
-    fun protocol(codegenContext: CodegenContext): Protocol
-    fun buildProtocolGenerator(codegenContext: CodegenContext): T
+interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C: CodegenContext> {
+    fun protocol(codegenContext: C): Protocol
+    fun buildProtocolGenerator(codegenContext: C): T
     fun transformModel(model: Model): Model
     fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
     fun support(): ProtocolSupport
 }
 
-class ProtocolLoader(private val supportedProtocols: ProtocolMap) {
+class ProtocolLoader<C: CodegenContext>(private val supportedProtocols: ProtocolMap<C>) {
+    // TODO Is this function used?
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape
-    ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>> {
+    ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator, C>> {
         val protocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
         val matchingProtocols =
             protocols.keys.mapNotNull { protocolId -> supportedProtocols[protocolId]?.let { protocolId to it } }
