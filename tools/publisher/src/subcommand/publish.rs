@@ -9,7 +9,7 @@ use crate::package::{
 };
 use crate::repo::{resolve_publish_location, Repository};
 use crate::retry::{run_with_retry, BoxError, ErrorClass};
-use crate::CRATE_OWNER;
+use crate::CRATE_OWNERS;
 use crate::{cargo, SDK_REPO_NAME};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
@@ -195,22 +195,36 @@ async fn correct_owner(package: &Package) -> Result<()> {
         Duration::from_secs(5),
         || async {
             let owners = cargo::GetOwners::new(&package.handle.name).spawn().await?;
-            let incorrect_owners = owners.iter().filter(|&owner| owner != CRATE_OWNER);
-            for incorrect_owner in incorrect_owners {
-                cargo::RemoveOwner::new(&package.handle.name, incorrect_owner)
-                    .spawn()
-                    .await
-                    .context("remove incorrect owner")?;
-                info!(
-                    "Removed incorrect owner `{}` from crate `{}`",
-                    incorrect_owner, package.handle
-                );
+            let mut added_individual = false;
+            for &crate_owner in CRATE_OWNERS {
+                if !owners.iter().any(|owner| owner == crate_owner) {
+                    cargo::AddOwner::new(&package.handle.name, crate_owner)
+                        .spawn()
+                        .await?;
+                    info!("Added `{}` as owner of `{}`", crate_owner, package.handle);
+                    // Teams in crates.io start with `github:` while individuals are just the GitHub user name
+                    added_individual |= !crate_owner.starts_with("github:");
+                }
             }
-            if !owners.iter().any(|owner| owner == CRATE_OWNER) {
-                cargo::AddOwner::new(&package.handle.name, CRATE_OWNER)
-                    .spawn()
-                    .await?;
-                info!("Corrected crate ownership of `{}`", package.handle);
+            let incorrect_owners = owners
+                .iter()
+                .filter(|&owner| !CRATE_OWNERS.iter().any(|o| o == owner));
+            for incorrect_owner in incorrect_owners {
+                // Adding an individual owner requires accepting an invite, so don't attempt to remove
+                // anyone if an owner was added, as removing the last individual owner may break.
+                // The next publish run will remove the incorrect owner.
+                if !added_individual {
+                    cargo::RemoveOwner::new(&package.handle.name, incorrect_owner)
+                        .spawn()
+                        .await
+                        .context("remove incorrect owner")?;
+                    info!(
+                        "Removed incorrect owner `{}` from crate `{}`",
+                        incorrect_owner, package.handle
+                    );
+                } else {
+                    info!("Skipping removal of incorrect owner `{}` from crate `{}` due to new owners", incorrect_owner, package.handle);
+                }
             }
             Result::<_, BoxError>::Ok(())
         },
