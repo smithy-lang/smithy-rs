@@ -48,19 +48,20 @@ import java.util.logging.Logger
  * Entrypoint for server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
  */
-class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
+open class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
     ShapeVisitor.Default<Unit>() {
 
-    private val logger = Logger.getLogger(javaClass.name)
-    private val settings = ServerRustSettings.from(context.model, context.settings)
-
-    private val symbolProvider: RustSymbolProvider
-    private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
-    private val model: Model
-    private val codegenContext: CodegenContext
-    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
-    private val protocolGenerator: ProtocolGenerator
+
+    protected val logger = Logger.getLogger(javaClass.name)
+    protected val settings = ServerRustSettings.from(context.model, context.settings)
+
+    var model: Model
+    var protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
+    var protocolGenerator: ProtocolGenerator
+    var codegenContext: CodegenContext
+    var symbolProvider: RustSymbolProvider
+    var rustCrate: RustCrate
 
     init {
         val symbolVisitorConfig =
@@ -92,7 +93,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
      * Base model transformation applied to all services.
      * See below for details.
      */
-    private fun baselineTransform(model: Model) =
+    protected fun baselineTransform(model: Model) =
         model
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
@@ -172,7 +173,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     }
 
     /**
-     * String Shape Visitor
+     * Enum Shape Visitor
      *
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */

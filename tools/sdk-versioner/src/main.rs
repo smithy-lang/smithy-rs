@@ -13,9 +13,6 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use toml::value::{Table, Value};
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/1433): Remove this v1 impl
-mod v1;
-
 #[derive(Parser, Debug)]
 #[clap(
     name = "sdk-versioner",
@@ -79,48 +76,37 @@ struct DependencyContext<'a> {
 }
 
 fn main() -> Result<()> {
-    match Args::try_parse() {
-        Ok(args) => {
-            let args = args.validate()?;
-            let dependency_context = match &args {
-                Args::UsePathDependencies { sdk_path, .. } => DependencyContext {
-                    sdk_path: Some(sdk_path),
-                    versions_manifest: None,
-                },
-                Args::UseVersionDependencies { versions_toml, .. } => DependencyContext {
-                    sdk_path: None,
-                    versions_manifest: Some(VersionsManifest::from_file(&versions_toml)?),
-                },
-                Args::UsePathAndVersionDependencies {
-                    sdk_path,
-                    versions_toml,
-                    ..
-                } => DependencyContext {
-                    sdk_path: Some(sdk_path),
-                    versions_manifest: Some(VersionsManifest::from_file(&versions_toml)?),
-                },
-            };
+    let args = Args::parse().validate()?;
+    let dependency_context = match &args {
+        Args::UsePathDependencies { sdk_path, .. } => DependencyContext {
+            sdk_path: Some(sdk_path),
+            versions_manifest: None,
+        },
+        Args::UseVersionDependencies { versions_toml, .. } => DependencyContext {
+            sdk_path: None,
+            versions_manifest: Some(VersionsManifest::from_file(&versions_toml)?),
+        },
+        Args::UsePathAndVersionDependencies {
+            sdk_path,
+            versions_toml,
+            ..
+        } => DependencyContext {
+            sdk_path: Some(sdk_path),
+            versions_manifest: Some(VersionsManifest::from_file(&versions_toml)?),
+        },
+    };
 
-            let start_time = Instant::now();
-            let mut manifest_paths = Vec::new();
-            for crate_path in args.crate_paths() {
-                discover_manifests(&mut manifest_paths, crate_path)?;
-            }
-
-            for manifest_path in manifest_paths {
-                update_manifest(&manifest_path, &dependency_context)?;
-            }
-
-            println!("Finished in {:?}", start_time.elapsed());
-        }
-        Err(err) => {
-            println!(
-                "WARN: failed to parse args: {}\nAttempting v1 arg format...",
-                err
-            );
-            v1::main()?;
-        }
+    let start_time = Instant::now();
+    let mut manifest_paths = Vec::new();
+    for crate_path in args.crate_paths() {
+        discover_manifests(&mut manifest_paths, crate_path)?;
     }
+
+    for manifest_path in manifest_paths {
+        update_manifest(&manifest_path, &dependency_context)?;
+    }
+
+    println!("Finished in {:?}", start_time.elapsed());
     Ok(())
 }
 

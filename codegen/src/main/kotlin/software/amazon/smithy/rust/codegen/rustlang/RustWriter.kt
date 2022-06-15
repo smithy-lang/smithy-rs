@@ -11,6 +11,7 @@ import org.jsoup.nodes.Element
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolWriter
+import software.amazon.smithy.codegen.core.SymbolWriter.Factory
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -135,8 +136,9 @@ fun <T : AbstractCodeWriter<T>> T.rust(
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
     check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
-    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult ->
+    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
         val keyName = matchResult.groupValues[1]
+        val templateType = matchResult.groupValues[2].ifEmpty { ":T" }
         if (!scope.toMap().keys.contains(keyName)) {
             throw CodegenException(
                 "Rust block template expected `$keyName` but was not present in template.\n  hint: Template contains: ${
@@ -144,7 +146,7 @@ private fun transformTemplate(template: String, scope: Array<out Pair<String, An
                 }"
             )
         }
-        "#{${keyName.lowercase()}:T}"
+        "#{${keyName.lowercase()}$templateType}"
     }.trim()
 }
 
@@ -258,6 +260,9 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
             // Rustdoc warns on tabs in documentation
             it.trimStart().replace("\t", "  ")
         }
+    // Because writing docs relies on the newline prefix, ensure that there was a new line written
+    // before we write the docs
+    this.ensureNewline()
     write(cleaned, *args)
     popState()
     return this
@@ -416,7 +421,7 @@ class RustWriter private constructor(
      */
     fun withModule(
         moduleName: String,
-        rustMetadata: RustMetadata = RustMetadata(public = true),
+        rustMetadata: RustMetadata = RustMetadata(visibility = Visibility.PUBLIC),
         moduleWriter: RustWriter.() -> Unit
     ): RustWriter {
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
