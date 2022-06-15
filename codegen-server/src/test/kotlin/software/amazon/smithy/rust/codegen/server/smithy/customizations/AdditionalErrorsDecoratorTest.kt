@@ -27,9 +27,9 @@ class AdditionalErrorsDecoratorTest {
             output: InputOutput,
             errors: [AnError]
         }
-        
+
         structure InputOutput { }
-        
+
         @error("client")
         structure AnError { }
     """.asSmithyModel()
@@ -40,7 +40,7 @@ class AdditionalErrorsDecoratorTest {
     fun `add InternalServerError to infallible operations only`() {
         model.lookup<OperationShape>("test#Infallible").errors.isEmpty() shouldBe true
         model.lookup<OperationShape>("test#Fallible").errors.size shouldBe 1
-        val transformedModel = AddInternalServerErrorToInfallibleOpsDecorator().transformModel(service, model)
+        val transformedModel = AddInternalServerErrorToInfallibleOperationsDecorator().transformModel(service, model)
         transformedModel.lookup<OperationShape>("test#Infallible").errors.size shouldBe 1
         transformedModel.lookup<OperationShape>("test#Fallible").errors.size shouldBe 1
     }
@@ -49,7 +49,7 @@ class AdditionalErrorsDecoratorTest {
     fun `add InternalServerError to all model operations`() {
         model.lookup<OperationShape>("test#Infallible").errors.isEmpty() shouldBe true
         model.lookup<OperationShape>("test#Fallible").errors.size shouldBe 1
-        val transformedModel = AddInternalServerErrorToAllOpsDecorator().transformModel(service, model)
+        val transformedModel = AddInternalServerErrorToAllOperationsDecorator().transformModel(service, model)
         transformedModel.lookup<OperationShape>("test#Infallible").errors.size shouldBe 1
         transformedModel.lookup<OperationShape>("test#Fallible").errors.size shouldBe 2
     }

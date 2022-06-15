@@ -53,6 +53,7 @@ dependencies {
 
 val awsServices: AwsServices by lazy { discoverServices(loadServiceMembership()) }
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
+val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, properties) }
 
 fun getSdkVersion(): String = properties.get("aws.sdk.version") ?: throw Exception("SDK version missing")
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
@@ -85,6 +86,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                 ""
             )
         }
+        val moduleName = "aws-sdk-${service.module}"
         val eventStreamAllowListMembers = eventStreamAllowList.joinToString(", ") { "\"$it\"" }
         """
             "${service.module}": {
@@ -102,8 +104,8 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "eventStreamAllowList": [$eventStreamAllowListMembers]
                         },
                         "service": "${service.service}",
-                        "module": "aws-sdk-${service.module}",
-                        "moduleVersion": "${getSdkVersion()}",
+                        "module": "$moduleName",
+                        "moduleVersion": "${crateVersioner.decideCrateVersion(moduleName)}",
                         "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                         "moduleDescription": "${service.moduleDescription}",
                         ${service.examplesUri(project)?.let { """"examples": "$it",""" } ?: ""}
@@ -298,7 +300,11 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
 
     toolPath = publisherToolPath
     binaryName = "publisher"
-    arguments = listOf("fix-manifests", "--location", outputDir.absolutePath)
+    arguments = mutableListOf("fix-manifests", "--location", outputDir.absolutePath).apply {
+        if (crateVersioner.independentVersioningEnabled()) {
+            add("--disable-version-number-validation")
+        }
+    }
 
     dependsOn("assemble")
     dependsOn("relocateServices")

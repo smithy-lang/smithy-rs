@@ -159,6 +159,26 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
 
+        val verifyResponseContentType = writable {
+            httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
+                rustTemplate(
+                    """
+                    if let Some(headers) = req.headers() {
+                        if let Some(accept) = headers.get(#{http}::header::ACCEPT) {
+                            if accept != "$contentType" {
+                                return Err(Self::Rejection {
+                                    protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
+                                    kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
+                                })
+                            }
+                        }
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+        }
+
         // Implement `FromRequest` trait for input types.
         rustTemplate(
             """
@@ -173,6 +193,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             {
                 type Rejection = #{RuntimeError};
                 async fn from_request(req: &mut #{SmithyHttpServer}::request::RequestParts<B>) -> Result<Self, Self::Rejection> {
+                    #{verify_response_content_type:W}
                     #{parse_request}(req)
                         .await
                         .map($inputName)
@@ -187,7 +208,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             """.trimIndent(),
             *codegenScope,
             "I" to inputSymbol,
-            "parse_request" to serverParseRequest(operationShape)
+            "parse_request" to serverParseRequest(operationShape),
+            "verify_response_content_type" to verifyResponseContentType,
         )
 
         // Implement `IntoResponse` for output types.
@@ -227,7 +249,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         }
                     }
                 }
-                """.trimIndent()
+                """
 
             rustTemplate(
                 """
@@ -284,7 +306,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         if (operationShape.errors.isNotEmpty()) {
             rustTemplate(
                 """
-                impl From<Result<#{O}, #{E}>> for $outputName {
+                impl #{From}<Result<#{O}, #{E}>> for $outputName {
                     fn from(res: Result<#{O}, #{E}>) -> Self {
                         match res {
                             Ok(v) => Self::Output(v),
@@ -294,31 +316,34 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
                 """.trimIndent(),
                 "O" to outputSymbol,
-                "E" to errorSymbol
+                "E" to errorSymbol,
+                "From" to RuntimeType.From
             )
         } else {
             rustTemplate(
                 """
-                impl From<#{O}> for $outputName {
+                impl #{From}<#{O}> for $outputName {
                     fn from(o: #{O}) -> Self {
                         Self(o)
                     }
                 }
                 """.trimIndent(),
-                "O" to outputSymbol
+                "O" to outputSymbol,
+                "From" to RuntimeType.From
             )
         }
 
         // Implement conversion function to "unwrap" into the model operation input types.
         rustTemplate(
             """
-            impl From<$inputName> for #{I} {
+            impl #{From}<$inputName> for #{I} {
                 fn from(i: $inputName) -> Self {
                     i.0
                 }
             }
             """.trimIndent(),
-            "I" to inputSymbol
+            "I" to inputSymbol,
+            "From" to RuntimeType.From
         )
     }
 

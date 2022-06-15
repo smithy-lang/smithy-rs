@@ -88,7 +88,7 @@ impl From<LogLevel> for Level {
     }
 }
 
-/// Modifies the Python `logging` module to deliver its log messages using `tracing::Subscriber` events.
+/// Modifies the Python `logging` module to deliver its log messages using [tracing::Subscriber] events.
 ///
 /// To achieve this goal, the following changes are made to the module:
 /// - A new builtin function `logging.python_tracing` transcodes `logging.LogRecord`s to `tracing::Event`s. This function
@@ -131,9 +131,10 @@ def basicConfig(*pargs, **kwargs):
     Ok(())
 }
 
-/// Consumes a Python `logging.LogRecord` and emits a Rust `tracing::Event` instead.
+/// Consumes a Python `logging.LogRecord` and emits a Rust [tracing::Event] instead.
 #[cfg(not(test))]
 #[pyfunction]
+#[pyo3(text_signature = "(record)")]
 fn python_tracing(record: &PyAny) -> PyResult<()> {
     let level = record.getattr("levelno")?;
     let message = record.getattr("getMessage")?.call0()?;
@@ -154,6 +155,7 @@ fn python_tracing(record: &PyAny) -> PyResult<()> {
 
 #[cfg(test)]
 #[pyfunction]
+#[pyo3(text_signature = "(record)")]
 fn python_tracing(record: &PyAny) -> PyResult<()> {
     let message = record.getattr("getMessage")?.call0()?;
     pretty_assertions::assert_eq!(message.to_string(), "a message");
@@ -163,19 +165,10 @@ fn python_tracing(record: &PyAny) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Once;
-
-    static INIT: Once = Once::new();
-
-    fn initialize() {
-        INIT.call_once(|| {
-            pyo3::prepare_freethreaded_python();
-        });
-    }
 
     #[test]
     fn tracing_handler_is_injected_in_python() {
-        initialize();
+        crate::tests::initialize();
         Python::with_gil(|py| {
             setup_python_logging(py, LogLevel::Info).unwrap();
             let logging = py.import("logging").unwrap();

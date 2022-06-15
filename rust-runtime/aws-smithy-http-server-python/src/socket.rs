@@ -74,9 +74,17 @@ impl SharedSocket {
 
     /// Clone the inner socket allowing it to be shared between multiple
     /// Python processes.
+    #[pyo3(text_signature = "($self, socket, worker_number)")]
     pub fn try_clone(&self) -> PyResult<SharedSocket> {
         let copied = self.inner.try_clone()?;
         Ok(SharedSocket { inner: copied })
+    }
+}
+
+impl SharedSocket {
+    /// Get a cloned inner socket.
+    pub fn get_socket(&self) -> Result<Socket, std::io::Error> {
+        self.inner.try_clone()
     }
 }
 
