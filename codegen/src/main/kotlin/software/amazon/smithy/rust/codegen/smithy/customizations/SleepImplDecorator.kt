@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -115,7 +116,7 @@ impl Builder {
 }
  */
 
-class SleepImplDecorator : RustCodegenDecorator {
+class SleepImplDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "AsyncSleep"
     override val order: Byte = 0
 
@@ -125,6 +126,8 @@ class SleepImplDecorator : RustCodegenDecorator {
     ): List<ConfigCustomization> {
         return baseCustomizations + SleepImplProviderConfig(codegenContext)
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class SleepImplProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {

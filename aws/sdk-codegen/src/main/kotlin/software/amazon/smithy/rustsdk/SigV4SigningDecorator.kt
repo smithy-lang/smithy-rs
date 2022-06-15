@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -42,7 +43,7 @@ import software.amazon.smithy.rust.codegen.util.isInputEventStream
  * - sets a default `OperationSigningConfig` A future enhancement will customize this for specific services that need
  *   different behavior.
  */
-class SigV4SigningDecorator : RustCodegenDecorator {
+class SigV4SigningDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "SigV4Signing"
     override val order: Byte = 0
 
@@ -75,6 +76,8 @@ class SigV4SigningDecorator : RustCodegenDecorator {
             )
         }
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class SigV4SigningConfig(

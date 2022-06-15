@@ -10,12 +10,12 @@ import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.raw
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.util.getTrait
-import java.lang.StringBuilder
 import java.util.logging.Logger
 
 // Use a sigil that should always be unique in the text to fix line breaks and spaces
@@ -26,7 +26,7 @@ private const val SPACE_SIGIL = "[[smithy-rs-nbsp]]"
 /**
  * Generates a README.md for each service crate for display on crates.io.
  */
-class AwsReadmeDecorator : RustCodegenDecorator {
+class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "AwsReadmeDecorator"
     override val order: Byte = 0
 
@@ -35,7 +35,7 @@ class AwsReadmeDecorator : RustCodegenDecorator {
     override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations =
         mapOf("package" to mapOf("readme" to "README.md"))
 
-    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         rustCrate.withFile("README.md") { writer ->
             val description = normalizeDescription(
                 codegenContext.moduleName,
@@ -88,6 +88,8 @@ class AwsReadmeDecorator : RustCodegenDecorator {
             )
         }
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 
     /**
      * Strips HTML from the description and makes it human-readable Markdown.
@@ -176,7 +178,7 @@ class AwsReadmeDecorator : RustCodegenDecorator {
     private fun Element.normalizeLists() {
         (getElementsByTag("ul") + getElementsByTag("ol"))
             // Only operate on lists that are top-level (are not nested within other lists)
-            .filter { list -> list.parents().none() { it.isList() } }
+            .filter { list -> list.parents().none { it.isList() } }
             .forEach { list -> list.normalizeList() }
     }
 

@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -59,14 +60,14 @@ import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-class FluentClientDecorator : RustCodegenDecorator {
+class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "FluentClient"
     override val order: Byte = 0
 
-    private fun applies(codegenContext: CodegenContext): Boolean =
-        codegenContext.symbolProvider.config().codegenConfig.includeFluentClient
+    private fun applies(codegenContext: ClientCodegenContext): Boolean =
+        codegenContext.settings.codegenConfig.includeFluentClient
 
-    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (!applies(codegenContext)) {
             return
         }
@@ -80,7 +81,7 @@ class FluentClientDecorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         if (!applies(codegenContext)) {
@@ -96,6 +97,8 @@ class FluentClientDecorator : RustCodegenDecorator {
             }
         }
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(CodegenContext::class.java)
 }
 
 sealed class FluentClientSection(name: String) : Section(name) {

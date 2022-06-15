@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy.customizations
 
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
@@ -48,11 +49,13 @@ fun DocsRsMetadataSettings.asMap(): Map<String, Any> {
  * # Notes
  * This decorator is not used by default, code generators must manually configure and include it in their builds.
  */
-class DocsRsMetadataDecorator(private val docsRsMetadataSettings: DocsRsMetadataSettings) : RustCodegenDecorator {
+class DocsRsMetadataDecorator(private val docsRsMetadataSettings: DocsRsMetadataSettings) : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "docsrs-metadata"
     override val order: Byte = 0
 
     override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations {
         return docsRsMetadataSettings.asMap()
     }
+
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }

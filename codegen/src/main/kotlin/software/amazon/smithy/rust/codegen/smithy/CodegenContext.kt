@@ -13,60 +13,66 @@ import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 /**
  * Configuration needed to generate the client for a given Service<->Protocol pair
  */
-data class CodegenContext(
+// TODO Rename to CoreCodegenContext
+open class CodegenContext(
     /**
      * The smithy model.
      *
      * Note: This model may or not be pruned to the given service closure, so ensure that `serviceShape` is used as
      * an entry point.
      */
-    val model: Model,
-    val symbolProvider: RustSymbolProvider,
-    /**
-     * Configuration of the runtime package:
-     * - Where are the runtime crates (smithy-*) located on the file system? Or are they versioned?
-     * - What are they called?
-     */
-    val runtimeConfig: RuntimeConfig,
+    open val model: Model,
+
+    open val symbolProvider: RustSymbolProvider,
+
     /**
      * Entrypoint service shape for code generation
      */
-    val serviceShape: ServiceShape,
+    open val serviceShape: ServiceShape,
     /**
      * Smithy Protocol to generate, e.g. RestJson1
      */
-    val protocol: ShapeId,
+    open val protocol: ShapeId,
     /**
      * Settings loaded from smithy-build.json
      */
-    val settings: RustSettings,
+    open val settings: RustSettings,
+
     /**
      * Server vs. Client codegen
      *
      * Some settings are dependent on whether server vs. client codegen is being invoked.
      */
-    val target: CodegenTarget,
+    open val target: CodegenTarget,
 ) {
-    constructor(
-        model: Model,
-        symbolProvider: RustSymbolProvider,
-        serviceShape: ServiceShape,
-        protocol: ShapeId,
-        settings: RustSettings,
-        target: CodegenTarget,
-    ) : this(model, symbolProvider, settings.runtimeConfig, serviceShape, protocol, settings, target)
+
+    // TODO This is just a convenience: we should remove this property and refactor all code to use the `runtimeConfig`
+    //  inside `settings` directly.
+    val runtimeConfig: RuntimeConfig by lazy { settings.runtimeConfig }
 
     /**
      * The name of the cargo crate to generate e.g. `aws-sdk-s3`
      * This is loaded from the smithy-build.json during codegen.
      */
+    // TODO This is just a convenience: we should remove this property and refactor all code to use the `moduleName`
+    //  inside `settings` directly.
     val moduleName: String by lazy { settings.moduleName }
 
     /**
      * A moduleName for a crate uses kebab-case. When you want to `use` a crate in Rust code,
      * it must be in snake-case. Call this method to get this crate's name in snake-case.
      */
-    fun moduleUseName(): String {
-        return this.moduleName.replace("-", "_")
-    }
+    fun moduleUseName() = moduleName.replace("-", "_")
 }
+
+data class ClientCodegenContext(
+    override val model: Model,
+    override val symbolProvider: RustSymbolProvider,
+    override val serviceShape: ServiceShape,
+    override val protocol: ShapeId,
+    override val settings: ClientRustSettings,
+    override val target: CodegenTarget,
+) : CodegenContext(
+    model, symbolProvider, serviceShape, protocol, settings, target
+)
+
