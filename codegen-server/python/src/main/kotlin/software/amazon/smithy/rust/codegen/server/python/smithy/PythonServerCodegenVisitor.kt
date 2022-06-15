@@ -54,11 +54,8 @@ class PythonServerCodegenVisitor(context: PluginContext, codegenDecorator: RustC
             )
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
-        model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
-        val baseProvider = PythonCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
-        // Override symbolProvider.
-        symbolProvider =
-            codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
+        model = codegenDecorator.transformModel(service, baseModel)
+        symbolProvider = PythonCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         // Override `codegenContext` which carries the symbolProvider.
         codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, target = CodegenTarget.SERVER)

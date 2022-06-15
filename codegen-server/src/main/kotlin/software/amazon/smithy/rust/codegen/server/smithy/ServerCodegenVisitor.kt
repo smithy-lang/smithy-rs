@@ -70,8 +70,8 @@ open class ServerCodegenVisitor(context: PluginContext, private val codegenDecor
                 codegenConfig = settings.codegenConfig,
                 handleRequired = true
             )
-        model = baselineTransform(context.model)
-        val service = settings.getService(model)
+        val baseModel = baselineTransform(context.model)
+        val service = settings.getService(baseModel)
         val (protocol, generator) =
             ServerProtocolLoader(
                 codegenDecorator.protocols(
@@ -81,6 +81,7 @@ open class ServerCodegenVisitor(context: PluginContext, private val codegenDecor
             )
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
+        model = codegenDecorator.transformModel(service, baseModel)
         symbolProvider = RustCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, target = CodegenTarget.SERVER)
