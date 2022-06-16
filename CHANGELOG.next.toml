@@ -17,6 +17,15 @@ references = ["aws-sdk-rust#547", "smithy-rs#1458"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
 
+[[smithy-rs]]
+message = """
+Fix a potential bug with `ByteStream`'s implementation of `futures_core::stream::Stream` and add helpful error messages
+for users on 32-bit systems that try to stream HTTP bodies larger than 4.29Gb.
+"""
+references = ["smithy-rs#1460"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
+
 [[aws-sdk-rust]]
 message = "Add `Debug` implementation to several types in `aws-config`"
 references = ["smithy-rs#1421"]

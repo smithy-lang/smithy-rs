@@ -253,6 +253,9 @@ fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
  *    - Empty newlines are removed
  */
 fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePrefix: String = "/// "): T {
+    // Because writing docs relies on the newline prefix, ensure that there was a new line written
+    // before we write the docs
+    this.ensureNewline()
     pushState()
     setNewlinePrefix(newlinePrefix)
     val cleaned = text.lines()
@@ -260,9 +263,6 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
             // Rustdoc warns on tabs in documentation
             it.trimStart().replace("\t", "  ")
         }
-    // Because writing docs relies on the newline prefix, ensure that there was a new line written
-    // before we write the docs
-    this.ensureNewline()
     write(cleaned, *args)
     popState()
     return this
