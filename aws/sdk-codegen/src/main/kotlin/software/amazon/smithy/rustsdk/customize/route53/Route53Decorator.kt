@@ -12,8 +12,6 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
@@ -70,11 +68,7 @@ class TrimResourceIdCustomization(private val fieldName: String) : OperationCust
 
     private val trimResourceId =
         RuntimeType.forInlineDependency(
-            InlineAwsDependency.forRustFile(
-                "route53_resource_id_preprocessor",
-                visibility = Visibility.PRIVATE,
-                CargoDependency.Regex,
-            )
+            InlineAwsDependency.forRustFile("route53_resource_id_preprocessor")
         )
             .member("trim_resource_id")
 

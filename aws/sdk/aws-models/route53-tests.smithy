@@ -30,5 +30,19 @@ apply GetChange @httpRequestTests([
         params: {
             "Id": "/change/SOMECHANGEID"
         }
-    }
+    },
+])
+
+apply GetReusableDelegationSet @httpRequestTests([
+    {
+        id: "GetReusableDelegationSetTrimDelegationSetId",
+        documentation: "This test validates that delegation set id is correctly trimmed",
+        method: "GET",
+        protocol: "aws.protocols#restXml",
+        uri: "/2013-04-01/delegationset/DELEGATIONSETID",
+        bodyMediaType: "application/xml",
+        params: {
+            "Id": "/delegationset/DELEGATIONSETID"
+        }
+    },
 ])

@@ -12,8 +12,6 @@ pub fn trim_resource_id(resource_id: &mut Option<String>) {
         "hostedzone/",
         "/change/",
         "change/",
-        "/resource/",
-        "resource/",
         "/delegationset/",
         "delegationset/",
     ];
