@@ -37,3 +37,13 @@ message = "Fix RustWriter bugs for `rustTemplate` and `docs` utility methods"
 references = ["smithy-rs#1427", "smithy-rs#1465", "smithy-rs#1459"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Requests to Route53 that return `ResourceId`s often come with a prefix. When passing those IDs directly into another
+request, the request would fail unless they manually stripped the prefix. Now, when making a request with a prefixed ID,
+the prefix will be stripped automatically.
+"""
+references = ["aws-sdk-rust#554"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
