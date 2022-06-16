@@ -9,7 +9,6 @@ members = [
     "kms",
     "polly",
     "qldbsession",
-    "route53",
     "s3",
     "s3control",
     "sts",
