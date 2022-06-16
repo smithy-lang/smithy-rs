@@ -130,7 +130,7 @@ fun Project.registerGenerateSmithyBuildTask(
 
             // If this is a rebuild, cache all the hashes of the generated Rust files. These are later used by the
             // `modifyMtime` task.
-            project.extra["previousBuildHashes"] = project.buildDir.walk()
+            project.extra[previousBuildHashesKey] = project.buildDir.walk()
                 .filter { it.isFile }
                 .map {
                     getChecksumForFile(it) to it.lastModified()
@@ -174,6 +174,8 @@ fun Project.registerGenerateCargoConfigTomlTask(
     }
 }
 
+const val previousBuildHashesKey = "previousBuildHashes"
+
 fun Project.registerModifyMtimeTask() {
     // Cargo uses `mtime` (among other factors) to determine whether a compilation unit needs a rebuild. While developing,
     // it is likely that only a small number of the generated crate files are modified across rebuilds. This task compares
@@ -187,19 +189,23 @@ fun Project.registerModifyMtimeTask() {
         dependsOn("generateSmithyBuild")
 
         doFirst {
-            @Suppress("UNCHECKED_CAST") val previousBuildHashes: Map<String, Long> = project.extra["previousBuildHashes"] as Map<String, Long>
+            if (!project.extra.has(previousBuildHashesKey)) {
+                println("No hashes from a previous build exist because `generateSmithyBuild` is up to date, skipping `mtime` fixups")
+            } else {
+                @Suppress("UNCHECKED_CAST") val previousBuildHashes: Map<String, Long> = project.extra[previousBuildHashesKey] as Map<String, Long>
 
-            project.buildDir.walk()
-                .filter { it.isFile }
-                .map {
-                    getChecksumForFile(it) to it
-                }
-                .forEach { (currentHash, currentFile) ->
-                    previousBuildHashes[currentHash]?.also { oldMtime ->
-                        println("Setting `mtime` of $currentFile back to `$oldMtime` because its hash `$currentHash` remained unchanged after a rebuild.")
-                        currentFile.setLastModified(oldMtime)
+                project.buildDir.walk()
+                    .filter { it.isFile }
+                    .map {
+                        getChecksumForFile(it) to it
                     }
-                }
+                    .forEach { (currentHash, currentFile) ->
+                        previousBuildHashes[currentHash]?.also { oldMtime ->
+                            println("Setting `mtime` of $currentFile back to `$oldMtime` because its hash `$currentHash` remained unchanged after a rebuild.")
+                            currentFile.setLastModified(oldMtime)
+                        }
+                    }
+            }
         }
     }
 }
