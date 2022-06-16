@@ -25,7 +25,7 @@ apply GetChange @httpRequestTests([
         documentation: "This test validates that change id is correctly trimmed",
         method: "GET",
         protocol: "aws.protocols#restXml",
-        uri: "/2013-04-01/change/SOMECHANGEID/rrset",
+        uri: "/2013-04-01/change/SOMECHANGEID",
         bodyMediaType: "application/xml",
         params: {
             "Id": "/change/SOMECHANGEID"
