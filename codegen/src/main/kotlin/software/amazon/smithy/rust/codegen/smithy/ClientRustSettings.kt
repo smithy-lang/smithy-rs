@@ -29,12 +29,21 @@ data class ClientRustSettings(
     override val runtimeConfig: RuntimeConfig,
     override val coreCodegenConfig: ClientCodegenConfig,
     override val license: String?,
-    override val examplesUri: String? = null,
-    override val customizationConfig: ObjectNode? = null
+    override val examplesUri: String?,
+    override val customizationConfig: ObjectNode?
 ) : CoreRustSettings(
-    service, moduleName, moduleVersion, moduleAuthors, moduleDescription, moduleRepository, runtimeConfig, coreCodegenConfig, license
+    service,
+    moduleName,
+    moduleVersion,
+    moduleAuthors,
+    moduleDescription,
+    moduleRepository,
+    runtimeConfig,
+    coreCodegenConfig,
+    license,
+    examplesUri,
+    customizationConfig
 ) {
-
     companion object {
         fun from(model: Model, config: ObjectNode): ClientRustSettings {
             val coreRustSettings = CoreRustSettings.from(model, config)
@@ -64,12 +73,12 @@ data class ClientRustSettings(
  * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
  */
 data class ClientCodegenConfig(
-    override val formatTimeoutSeconds: Int = 20,
-    override val debugMode: Boolean = false,
-    override val eventStreamAllowList: Set<String> = emptySet(),
-    val renameExceptions: Boolean = true,
-    val includeFluentClient: Boolean = true,
-    val addMessageToErrors: Boolean = true,
+    override val formatTimeoutSeconds: Int,
+    override val debugMode: Boolean,
+    override val eventStreamAllowList: Set<String>,
+    val renameExceptions: Boolean,
+    val includeFluentClient: Boolean,
+    val addMessageToErrors: Boolean,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList
 ) {

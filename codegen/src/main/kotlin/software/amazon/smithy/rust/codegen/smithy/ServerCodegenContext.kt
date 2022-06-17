@@ -24,7 +24,7 @@ data class ServerCodegenContext(
     override val symbolProvider: RustSymbolProvider,
     override val serviceShape: ServiceShape,
     override val protocol: ShapeId,
-    override val settings: ServerCoreRustSettings,
+    override val settings: ServerRustSettings,
 ) : CoreCodegenContext(
     model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.SERVER
 )

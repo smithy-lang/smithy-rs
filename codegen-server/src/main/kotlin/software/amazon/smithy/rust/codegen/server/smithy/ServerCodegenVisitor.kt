@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.ServerCoreRustSettings
+import software.amazon.smithy.rust.codegen.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
@@ -53,7 +53,7 @@ open class ServerCodegenVisitor(
 ) : ShapeVisitor.Default<Unit>() {
 
     protected val logger = Logger.getLogger(javaClass.name)
-    protected val settings = ServerCoreRustSettings.from(context.model, context.settings)
+    protected val settings = ServerRustSettings.from(context.model, context.settings)
 
     protected var symbolProvider: RustSymbolProvider
     protected var rustCrate: RustCrate

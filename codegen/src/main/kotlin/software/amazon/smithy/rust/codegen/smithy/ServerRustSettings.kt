@@ -22,7 +22,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 /**
  * Settings used by [RustCodegenServerPlugin].
  */
-data class ServerCoreRustSettings(
+data class ServerRustSettings(
     override val service: ShapeId,
     override val moduleName: String,
     override val moduleVersion: String,
@@ -30,19 +30,29 @@ data class ServerCoreRustSettings(
     override val moduleDescription: String?,
     override val moduleRepository: String?,
     override val runtimeConfig: RuntimeConfig,
-    override val coreCodegenConfig: ServerCoreCodegenConfig,
+    override val coreCodegenConfig: ServerCodegenConfig,
     override val license: String?,
-    override val examplesUri: String? = null,
-    override val customizationConfig: ObjectNode? = null
+    override val examplesUri: String?,
+    override val customizationConfig: ObjectNode?
 ) : CoreRustSettings(
-    service, moduleName, moduleVersion, moduleAuthors, moduleDescription, moduleRepository, runtimeConfig, coreCodegenConfig, license
+    service,
+    moduleName,
+    moduleVersion,
+    moduleAuthors,
+    moduleDescription,
+    moduleRepository,
+    runtimeConfig,
+    coreCodegenConfig,
+    license,
+    examplesUri,
+    customizationConfig
 ) {
     companion object {
-        fun from(model: Model, config: ObjectNode): ServerCoreRustSettings {
+        fun from(model: Model, config: ObjectNode): ServerRustSettings {
             val coreRustSettings = CoreRustSettings.from(model, config)
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
             val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettings)
-            return ServerCoreRustSettings(
+            return ServerRustSettings(
                 service = coreRustSettings.service,
                 moduleName = coreRustSettings.moduleName,
                 moduleVersion = coreRustSettings.moduleVersion,
@@ -50,7 +60,7 @@ data class ServerCoreRustSettings(
                 moduleDescription = coreRustSettings.moduleDescription,
                 moduleRepository = coreRustSettings.moduleRepository,
                 runtimeConfig = coreRustSettings.runtimeConfig,
-                coreCodegenConfig = ServerCoreCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, config),
+                coreCodegenConfig = ServerCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, config),
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
                 customizationConfig = coreRustSettings.customizationConfig
@@ -59,10 +69,10 @@ data class ServerCoreRustSettings(
     }
 }
 
-data class ServerCoreCodegenConfig(
-    override val formatTimeoutSeconds: Int = 20,
-    override val debugMode: Boolean = false,
-    override val eventStreamAllowList: Set<String> = emptySet(),
+data class ServerCodegenConfig(
+    override val formatTimeoutSeconds: Int,
+    override val debugMode: Boolean,
+    override val eventStreamAllowList: Set<String>,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList
 ) {
@@ -71,7 +81,7 @@ data class ServerCoreCodegenConfig(
         // `CodegenConfig`. In the future, the server will have server-specific codegen options just like the client
         // does.
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: ObjectNode) =
-            ServerCoreCodegenConfig(
+            ServerCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,
                 eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
