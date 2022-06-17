@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvid
 import software.amazon.smithy.rust.codegen.smithy.customizations.ClientCustomizations
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -37,7 +38,12 @@ class RustCodegenPlugin : SmithyBuildPlugin {
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
         val codegenDecorator =
-            CombinedCodegenDecorator.fromClasspath(context, ClientCustomizations(), RequiredCustomizations())
+            CombinedCodegenDecorator.fromClasspath(
+                context,
+                ClientCustomizations(),
+                RequiredCustomizations(),
+                FluentClientDecorator()
+            )
 
         // CodegenVisitor is the main driver of code generation that traverses the model and generates code
         CodegenVisitor(context, codegenDecorator).execute()
