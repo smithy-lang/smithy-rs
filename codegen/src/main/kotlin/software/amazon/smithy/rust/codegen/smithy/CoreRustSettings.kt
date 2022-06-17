@@ -45,9 +45,9 @@ open class CoreCodegenConfig(
     open val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
 ) {
     companion object {
-        private const val defaultFormatTimeoutSeconds = 20
-        private const val defaultDebugMode = false
-        private val defaultEventStreamAllowList: Set<String> = emptySet()
+        const val defaultFormatTimeoutSeconds = 20
+        const val defaultDebugMode = false
+        val defaultEventStreamAllowList: Set<String> = emptySet()
 
         fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
             if (node.isPresent) {

@@ -73,24 +73,28 @@ data class ClientRustSettings(
  * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
  */
 data class ClientCodegenConfig(
-    override val formatTimeoutSeconds: Int,
-    override val debugMode: Boolean,
-    override val eventStreamAllowList: Set<String>,
-    val renameExceptions: Boolean,
-    val includeFluentClient: Boolean,
-    val addMessageToErrors: Boolean,
+    override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
+    override val debugMode: Boolean = defaultDebugMode,
+    override val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
+    val renameExceptions: Boolean = defaultRenameExceptions,
+    val includeFluentClient: Boolean = defaultIncludeFluentClient,
+    val addMessageToErrors: Boolean = defaultAddMessageToErrors,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList
 ) {
     companion object {
+        private const val defaultRenameExceptions = true
+        private const val defaultIncludeFluentClient = true
+        private const val defaultAddMessageToErrors = true
+
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: ObjectNode) =
             ClientCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,
                 eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
-                renameExceptions = node.getBooleanMemberOrDefault("renameErrors", true),
-                includeFluentClient = node.getBooleanMemberOrDefault("includeFluentClient", true),
-                addMessageToErrors = node.getBooleanMemberOrDefault("addMessageToErrors", true),
+                renameExceptions = node.getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
+                includeFluentClient = node.getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
+                addMessageToErrors = node.getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
             )
     }
 }
