@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRunt
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -27,7 +28,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizati
  * name = "$CRATE_NAME"
  * crate-type = ["cdylib"]
  */
-class CdylibManifestDecorator : RustCodegenDecorator {
+class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override val name: String = "CdylibDecorator"
     override val order: Byte = 0
 
@@ -57,16 +58,15 @@ class PubUsePythonTypes(private val runtimeConfig: RuntimeConfig) : LibRsCustomi
 /**
  * Decorator applying the customization from [PubUsePythonTypes] class.
  */
-class PubUsePythonTypesDecorator : RustCodegenDecorator {
+class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override val name: String = "PubUsePythonTypesDecorator"
     override val order: Byte = 0
 
     override fun libRsCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ServerCodegenContext,
         baseCustomizations: List<LibRsCustomization>
-    ): List<LibRsCustomization> {
-        return baseCustomizations + PubUsePythonTypes(coreCodegenContext.runtimeConfig)
-    }
+    ): List<LibRsCustomization> =
+        baseCustomizations + PubUsePythonTypes(codegenContext.runtimeConfig)
 }
 
 val DECORATORS = listOf(
@@ -82,7 +82,7 @@ val DECORATORS = listOf(
 )
 
 // Combined codegen decorator for Python services.
-class PythonServerCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {
+class PythonServerCodegenDecorator : CombinedCodegenDecorator<ServerCodegenContext>(DECORATORS) {
     override val name: String = "PythonServerCodegenDecorator"
     override val order: Byte = -1
 }
