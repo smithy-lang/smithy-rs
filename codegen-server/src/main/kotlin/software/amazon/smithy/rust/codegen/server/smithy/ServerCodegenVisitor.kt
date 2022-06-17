@@ -21,10 +21,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServic
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.ServerRustSettings
+import software.amazon.smithy.rust.codegen.smithy.ServerCoreRustSettings
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
@@ -53,7 +53,7 @@ class ServerCodegenVisitor(
 ) : ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
-    private val settings = ServerRustSettings.from(context.model, context.settings)
+    private val settings = ServerCoreRustSettings.from(context.model, context.settings)
 
     private val symbolProvider: RustSymbolProvider
     private val rustCrate: RustCrate
@@ -119,7 +119,7 @@ class ServerCodegenVisitor(
     /**
      * Execute code generation
      *
-     * 1. Load the service from [RustSettings].
+     * 1. Load the service from [CoreRustSettings].
      * 2. Traverse every shape in the closure of the service.
      * 3. Loop through each shape and visit them (calling the override functions in this class)
      * 4. Call finalization tasks specified by decorators.

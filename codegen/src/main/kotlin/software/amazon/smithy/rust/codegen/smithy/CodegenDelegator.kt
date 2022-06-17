@@ -87,7 +87,7 @@ open class RustCrate(
      * This is also where inline dependencies are actually reified and written, potentially recursively.
      */
     fun finalize(
-        settings: RustSettings,
+        settings: CoreRustSettings,
         model: Model,
         manifestCustomizations: ManifestCustomizations,
         libRsCustomizations: List<LibRsCustomization>,
@@ -167,7 +167,7 @@ val DefaultPublicModules = setOf(
  * - generating (and writing) a Cargo.toml based on the settings & the required dependencies
  */
 fun WriterDelegator<RustWriter>.finalize(
-    settings: RustSettings,
+    settings: CoreRustSettings,
     model: Model,
     manifestCustomizations: ManifestCustomizations,
     libRsCustomizations: List<LibRsCustomization>,

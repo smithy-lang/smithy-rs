@@ -45,7 +45,7 @@ open class CoreCodegenContext(
     /**
      * Settings loaded from `smithy-build.json`.
      */
-    open val settings: RustSettings,
+    open val settings: CoreRustSettings,
 
     /**
      * Are we generating code for a smithy-rs client or server?

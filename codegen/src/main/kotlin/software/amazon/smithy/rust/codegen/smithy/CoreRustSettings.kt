@@ -69,14 +69,14 @@ open class CoreCodegenConfig(
 }
 
 /**
- * [RustSettings] contains crate settings that are _common to all_  smithy-rs plugins.
+ * [CoreRustSettings] contains crate settings that are _common to all_  smithy-rs plugins.
  *
  * If your setting is specific to the crate that the `rust-codegen` client plugin generates, put it in
  * [ClientCodegenContext] instead.
  * If your setting is specific to the crate that the `rust-server-codegen` server plugin generates, put it in
  * [ServerCodegenContext] instead.
  */
-open class RustSettings(
+open class CoreRustSettings(
     open val service: ShapeId,
     open val moduleName: String,
     open val moduleVersion: String,
@@ -110,7 +110,7 @@ open class RustSettings(
     }
 
     companion object {
-        private val LOGGER: Logger = Logger.getLogger(RustSettings::class.java.name)
+        private val LOGGER: Logger = Logger.getLogger(CoreRustSettings::class.java.name)
 
         // Infer the service to generate from a model.
         @JvmStatic
@@ -148,7 +148,7 @@ open class RustSettings(
          * @param config Config object to load
          * @return Returns the extracted settings
          */
-        fun from(model: Model, config: ObjectNode): RustSettings {
+        fun from(model: Model, config: ObjectNode): CoreRustSettings {
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
             val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettings)
             return fromCodegenConfig(model, config, coreCodegenConfig)
@@ -162,7 +162,7 @@ open class RustSettings(
          * @param coreCodegenConfig CodegenConfig object to use
          * @return Returns the extracted settings
          */
-        private fun fromCodegenConfig(model: Model, config: ObjectNode, coreCodegenConfig: CoreCodegenConfig): RustSettings {
+        private fun fromCodegenConfig(model: Model, config: ObjectNode, coreCodegenConfig: CoreCodegenConfig): CoreRustSettings {
             config.warnIfAdditionalProperties(
                 arrayListOf(
                     SERVICE,
@@ -184,7 +184,7 @@ open class RustSettings(
                 .orElseGet { inferService(model) }
 
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
-            return RustSettings(
+            return CoreRustSettings(
                 service,
                 moduleName = config.expectStringMember(MODULE_NAME).value,
                 moduleVersion = config.expectStringMember(MODULE_VERSION).value,

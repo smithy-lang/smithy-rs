@@ -31,27 +31,27 @@ data class ClientRustSettings(
     override val license: String?,
     override val examplesUri: String? = null,
     override val customizationConfig: ObjectNode? = null
-): RustSettings(
+): CoreRustSettings(
     service, moduleName, moduleVersion, moduleAuthors, moduleDescription, moduleRepository, runtimeConfig, coreCodegenConfig, license
 ) {
 
     companion object {
         fun from(model: Model, config: ObjectNode): ClientRustSettings {
-            val rustSettings = RustSettings.from(model, config)
+            val coreRustSettings = CoreRustSettings.from(model, config)
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
             val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettings)
             return ClientRustSettings(
-                service = rustSettings.service,
-                moduleName = rustSettings.moduleName,
-                moduleVersion = rustSettings.moduleVersion,
-                moduleAuthors = rustSettings.moduleAuthors,
-                moduleDescription = rustSettings.moduleDescription,
-                moduleRepository = rustSettings.moduleRepository,
-                runtimeConfig = rustSettings.runtimeConfig,
+                service = coreRustSettings.service,
+                moduleName = coreRustSettings.moduleName,
+                moduleVersion = coreRustSettings.moduleVersion,
+                moduleAuthors = coreRustSettings.moduleAuthors,
+                moduleDescription = coreRustSettings.moduleDescription,
+                moduleRepository = coreRustSettings.moduleRepository,
+                runtimeConfig = coreRustSettings.runtimeConfig,
                 coreCodegenConfig = ClientCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, config),
-                license = rustSettings.license,
-                examplesUri = rustSettings.examplesUri,
-                customizationConfig = rustSettings.customizationConfig
+                license = coreRustSettings.license,
+                examplesUri = coreRustSettings.examplesUri,
+                customizationConfig = coreRustSettings.customizationConfig
             )
         }
     }
