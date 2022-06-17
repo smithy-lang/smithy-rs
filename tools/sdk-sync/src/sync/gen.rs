@@ -4,8 +4,8 @@
  */
 
 use crate::fs::Fs;
-use crate::git::{CommitHash, Git, GitCLI};
 use anyhow::{Context, Result};
+use smithy_rs_tool_common::git::{CommitHash, Git, GitCLI};
 use smithy_rs_tool_common::here;
 use smithy_rs_tool_common::shell::handle_failure;
 use std::path::{Path, PathBuf};

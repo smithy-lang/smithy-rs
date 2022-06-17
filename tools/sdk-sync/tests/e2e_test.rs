@@ -5,10 +5,10 @@
 
 use once_cell::sync::Lazy;
 use regex::Regex;
-use sdk_sync::git::{Git, GitCLI};
 use sdk_sync::init_tracing;
 use sdk_sync::sync::gen::CodeGenSettings;
 use sdk_sync::sync::{Sync, BOT_EMAIL, BOT_NAME};
+use smithy_rs_tool_common::git::{Git, GitCLI};
 use smithy_rs_tool_common::shell::handle_failure;
 use std::fs;
 use std::path::{Path, PathBuf};

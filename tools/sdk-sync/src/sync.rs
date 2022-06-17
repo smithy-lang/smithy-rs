@@ -5,9 +5,9 @@
 
 use self::gen::{CodeGenSettings, DefaultSdkGenerator, SdkGenerator};
 use crate::fs::{DefaultFs, Fs};
-use crate::git::{Commit, Git, GitCLI};
 use crate::versions::{DefaultVersions, Versions, VersionsManifest};
 use anyhow::{Context, Result};
+use smithy_rs_tool_common::git::{Commit, Git, GitCLI};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -523,8 +523,47 @@ impl Sync {
 mod tests {
     use super::*;
     use crate::fs::MockFs;
-    use crate::git::{CommitHash, MockGit};
     use crate::versions::MockVersions;
+    use smithy_rs_tool_common::git::CommitHash;
+
+    mockall::mock! {
+        Git {}
+        impl smithy_rs_tool_common::git::Git for Git {
+            fn path(&self) -> &Path;
+            fn clone_to(&self, path: &Path) -> Result<()>;
+            fn get_head_revision(&self) -> Result<CommitHash>;
+            fn stage(&self, path: &Path) -> Result<()>;
+            fn commit_on_behalf(
+                &self,
+                bot_name: &str,
+                bot_email: &str,
+                author_name: &str,
+                author_email: &str,
+                message: &str,
+            ) -> Result<()>;
+            fn commit(&self, name: &str, email: &str, message: &str) -> Result<()>;
+            fn rev_list<'a>(
+                &self,
+                start_inclusive_revision: &str,
+                end_exclusive_revision: &str,
+                path: Option<&'a Path>,
+            ) -> Result<Vec<CommitHash>>;
+            fn show(&self, revision: &str) -> Result<Commit>;
+            fn hard_reset(&self, revision: &str) -> Result<()>;
+            fn current_branch_name(&self) -> Result<String>;
+            fn create_branch(&self, branch_name: &str, revision: &str) -> Result<()>;
+            fn delete_branch(&self, branch_name: &str) -> Result<()>;
+            fn squash_merge(
+                &self,
+                author_name: &str,
+                author_email: &str,
+                branch_name: &str,
+                commit_message: &str,
+            ) -> Result<()>;
+            fn untracked_files(&self) -> Result<Vec<PathBuf>>;
+            fn changed_files(&self) -> Result<Vec<PathBuf>>;
+        }
+    }
 
     // Wish this was in std...
     fn trim_indent(value: &str) -> String {

@@ -12,7 +12,6 @@ use smithy_rs_tool_common::changelog::{
     Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry,
 };
 use smithy_rs_tool_common::git;
-use smithy_rs_tool_common::shell::ShellOperation;
 use std::env;
 use std::fmt::Write;
 use std::fs;
@@ -150,7 +149,7 @@ fn date_title(now: &OffsetDateTime) -> String {
 
 /// Discover the new version for the changelog from gradle.properties and the date.
 fn auto_changelog_meta() -> Result<ChangelogMeta> {
-    let repo_root = git::GetRepoRoot::new(env::current_dir().unwrap()).run()?;
+    let repo_root = git::find_git_repository_root("smithy-rs", env::current_dir().unwrap())?;
     let gradle_props = fs::read_to_string(repo_root.join("gradle.properties"))?;
     let load_gradle_prop = |key: &str| {
         let prop = gradle_props

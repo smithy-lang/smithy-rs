@@ -6,8 +6,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use smithy_rs_tool_common::changelog::Changelog;
-use smithy_rs_tool_common::git;
-use smithy_rs_tool_common::shell::ShellOperation;
+use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
@@ -55,15 +54,16 @@ pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
 fn sdk_entries(args: &SplitArgs, mut changelog: Changelog) -> Result<Changelog> {
     changelog.smithy_rs.clear();
 
-    let last_commit = git::GetLastCommit::new(env::current_dir().unwrap())
-        .run()
+    let repo_root = find_git_repository_root("smithy-rs", env::current_dir().unwrap())?;
+    let last_commit = GitCLI::new(&repo_root)?
+        .get_head_revision()
         .context("failed to get current revision of smithy-rs")?;
     let last_commit = args
         .since_commit
         .as_deref()
         .unwrap_or_else(|| last_commit.as_ref());
     for entry in changelog.aws_sdk_rust.iter_mut() {
-        entry.since_commit = Some(last_commit.clone());
+        entry.since_commit = Some(last_commit.to_string());
     }
     Ok(changelog)
 }
