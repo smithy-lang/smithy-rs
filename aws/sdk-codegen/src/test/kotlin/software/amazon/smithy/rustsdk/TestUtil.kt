@@ -6,10 +6,12 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.testutil.testRustSettings
 import java.io.File
 
 // In aws-sdk-codegen, the working dir when gradle runs tests is actually `./aws`. So, to find the smithy runtime, we need
@@ -22,5 +24,8 @@ val AwsTestRuntimeConfig = TestRuntimeConfig.copy(
     }
 )
 
-fun awsTestCodegenContext(model: Model? = null) =
-    testCodegenContext(model ?: "namespace test".asSmithyModel()).copy(runtimeConfig = AwsTestRuntimeConfig)
+fun awsTestCodegenContext(model: Model? = null, coreRustSettings: CoreRustSettings?) =
+    testCodegenContext(
+        model ?: "namespace test".asSmithyModel(),
+        settings = coreRustSettings ?: testRustSettings(runtimeConfig = AwsTestRuntimeConfig)
+    )
