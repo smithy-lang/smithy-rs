@@ -28,7 +28,7 @@ import java.util.logging.Logger
  * AWS services. A different downstream customer may wish to add a different set of derive
  * attributes to the generated classes.
  */
-interface RustCodegenDecorator<C: CoreCodegenContext> {
+interface RustCodegenDecorator<C : CoreCodegenContext> {
     /**
      * The name of this [RustCodegenDecorator], used for logging and debug information
      */
@@ -78,7 +78,7 @@ interface RustCodegenDecorator<C: CoreCodegenContext> {
  *
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
-open class CombinedCodegenDecorator<C: CoreCodegenContext>(decorators: List<RustCodegenDecorator<C>>) : RustCodegenDecorator<C> {
+open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<RustCodegenDecorator<C>>) : RustCodegenDecorator<C> {
     private val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
         get() = "MetaDecorator"
@@ -147,7 +147,7 @@ open class CombinedCodegenDecorator<C: CoreCodegenContext>(decorators: List<Rust
     }
 
     companion object {
-        inline fun <reified T: CoreCodegenContext> fromClasspath(
+        inline fun <reified T : CoreCodegenContext> fromClasspath(
             context: PluginContext,
             vararg extras: RustCodegenDecorator<T>,
             logger: Logger = Logger.getLogger("RustCodegenSPILoader")

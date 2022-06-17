@@ -31,7 +31,7 @@ data class ClientRustSettings(
     override val license: String?,
     override val examplesUri: String? = null,
     override val customizationConfig: ObjectNode? = null
-): CoreRustSettings(
+) : CoreRustSettings(
     service, moduleName, moduleVersion, moduleAuthors, moduleDescription, moduleRepository, runtimeConfig, coreCodegenConfig, license
 ) {
 
@@ -70,7 +70,7 @@ data class ClientCodegenConfig(
     val renameExceptions: Boolean = true,
     val includeFluentClient: Boolean = true,
     val addMessageToErrors: Boolean = true,
-): CoreCodegenConfig(
+) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList
 ) {
     companion object {

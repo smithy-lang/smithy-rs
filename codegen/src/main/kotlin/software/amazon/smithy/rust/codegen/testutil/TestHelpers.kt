@@ -17,10 +17,10 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin
-import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator

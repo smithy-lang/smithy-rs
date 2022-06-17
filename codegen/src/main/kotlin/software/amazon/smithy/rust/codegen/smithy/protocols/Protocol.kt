@@ -78,7 +78,7 @@ interface Protocol {
 
 typealias ProtocolMap<C> = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator, C>>
 
-interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C: CoreCodegenContext> {
+interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C : CoreCodegenContext> {
     fun protocol(codegenContext: C): Protocol
     fun buildProtocolGenerator(codegenContext: C): T
     fun transformModel(model: Model): Model
@@ -86,7 +86,7 @@ interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C: CoreCodegenCont
     fun support(): ProtocolSupport
 }
 
-class ProtocolLoader<C: CoreCodegenContext>(private val supportedProtocols: ProtocolMap<C>) {
+class ProtocolLoader<C : CoreCodegenContext>(private val supportedProtocols: ProtocolMap<C>) {
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape

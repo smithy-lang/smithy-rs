@@ -29,7 +29,7 @@ data class ServerCoreRustSettings(
     override val license: String?,
     override val examplesUri: String? = null,
     override val customizationConfig: ObjectNode? = null
-): CoreRustSettings(
+) : CoreRustSettings(
     service, moduleName, moduleVersion, moduleAuthors, moduleDescription, moduleRepository, runtimeConfig, coreCodegenConfig, license
 ) {
     companion object {
@@ -58,7 +58,7 @@ data class ServerCoreCodegenConfig(
     override val formatTimeoutSeconds: Int = 20,
     override val debugMode: Boolean = false,
     override val eventStreamAllowList: Set<String> = emptySet(),
-): CoreCodegenConfig(
+) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList
 ) {
     companion object {

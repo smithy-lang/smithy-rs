@@ -34,10 +34,10 @@ class RequiredCustomizations : RustCodegenDecorator<ClientCodegenContext> {
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> =
         baseCustomizations +
-                IdempotencyTokenGenerator(coreCodegenContext, operation) +
-                EndpointPrefixGenerator(coreCodegenContext, operation) +
-                HttpChecksumRequiredGenerator(coreCodegenContext, operation) +
-                HttpVersionListCustomization(coreCodegenContext, operation)
+            IdempotencyTokenGenerator(coreCodegenContext, operation) +
+            EndpointPrefixGenerator(coreCodegenContext, operation) +
+            HttpChecksumRequiredGenerator(coreCodegenContext, operation) +
+            HttpVersionListCustomization(coreCodegenContext, operation)
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
