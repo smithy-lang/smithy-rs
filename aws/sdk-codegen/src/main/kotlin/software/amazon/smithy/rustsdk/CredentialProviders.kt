@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -28,18 +28,18 @@ class CredentialsProviderDecorator : RustCodegenDecorator<ClientCodegenContext> 
     override val order: Byte = 0
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + CredentialProviderConfig(codegenContext.runtimeConfig)
+        return baseCustomizations + CredentialProviderConfig(coreCodegenContext.runtimeConfig)
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + CredentialsProviderFeature(codegenContext.runtimeConfig)
+        return baseCustomizations + CredentialsProviderFeature(coreCodegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(

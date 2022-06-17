@@ -13,7 +13,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.util.orNull
-import java.util.*
+import java.util.Optional
 import java.util.logging.Logger
 import kotlin.streams.toList
 
@@ -30,22 +30,51 @@ const val CUSTOMIZATION_CONFIG = "customizationConfig"
 const val CODEGEN_SETTINGS = "codegen"
 
 /**
- * Configuration of codegen settings.
+ * [CoreCodegenConfig] contains code-generation configuration that is _common to all_  smithy-rs plugins.
  *
- * [renameExceptions]: Rename `Exception` to `Error` in the generated SDK
+ * If your configuration is specific to the `rust-codegen` client plugin, put it in [ClientCodegenContext] instead.
+ * If your configuration is specific to the `rust-server-codegen` server plugin, put it in [ServerCodegenContext] instead.
+ *
  * [formatTimeoutSeconds]: Timeout for running cargo fmt at the end of code generation
  * [debugMode]: Generate comments in the generated code indicating where code was generated from
  */
-// TODO Remove the default params, they should only be needed by TestSymbolVisitorDefaultConfig
-open class CodegenConfig(
-    open val formatTimeoutSeconds: Int = 20,
-    open val debugMode: Boolean = false,
+open class CoreCodegenConfig(
+    open val formatTimeoutSeconds: Int,
+    open val debugMode: Boolean,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
-    open val eventStreamAllowList: Set<String> = emptySet(),
-)
+    open val eventStreamAllowList: Set<String>,
+) {
+    companion object {
+        private const val defaultFormatTimeoutSeconds = 20
+        private const val defaultDebugMode = false
+        private val defaultEventStreamAllowList: Set<String> = emptySet()
+
+        fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
+            if (node.isPresent) {
+                CoreCodegenConfig(
+                    node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
+                    node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
+                    node.get().getArrayMember("eventStreamAllowList")
+                        .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
+                        .orNull()?.toSet() ?: defaultEventStreamAllowList,
+                )
+            } else {
+                CoreCodegenConfig(
+                    formatTimeoutSeconds = defaultFormatTimeoutSeconds,
+                    debugMode = defaultDebugMode,
+                    eventStreamAllowList = defaultEventStreamAllowList
+                )
+            }
+    }
+}
 
 /**
- * Settings used by [RustCodegenPlugin]
+ * [RustSettings] contains crate settings that are _common to all_  smithy-rs plugins.
+ *
+ * If your setting is specific to the crate that the `rust-codegen` client plugin generates, put it in
+ * [ClientCodegenContext] instead.
+ * If your setting is specific to the crate that the `rust-server-codegen` server plugin generates, put it in
+ * [ServerCodegenContext] instead.
  */
 open class RustSettings(
     open val service: ShapeId,
@@ -61,7 +90,7 @@ open class RustSettings(
      * - What are they called?
      */
     open val runtimeConfig: RuntimeConfig,
-    open val codegenConfig: CodegenConfig,
+    open val coreCodegenConfig: CoreCodegenConfig,
     open val license: String?,
     open val examplesUri: String? = null,
     open val customizationConfig: ObjectNode? = null
@@ -95,13 +124,13 @@ open class RustSettings(
                 services.isEmpty() -> {
                     throw CodegenException(
                         "Cannot infer a service to generate because the model does not " +
-                            "contain any service shapes"
+                                "contain any service shapes"
                     )
                 }
                 services.size > 1 -> {
                     throw CodegenException(
                         "Cannot infer service to generate because the model contains " +
-                            "multiple service shapes: " + services
+                                "multiple service shapes: " + services
                     )
                 }
                 else -> {
@@ -111,26 +140,7 @@ open class RustSettings(
                 }
             }
         }
-    }
-}
 
-data class ClientRustSettings(
-    override val service: ShapeId,
-    override val moduleName: String,
-    override val moduleVersion: String,
-    override val moduleAuthors: List<String>,
-    override val moduleDescription: String?,
-    override val moduleRepository: String?,
-    override val runtimeConfig: RuntimeConfig,
-    override val codegenConfig: ClientCodegenConfig,
-    override val license: String?,
-    override val examplesUri: String? = null,
-    override val customizationConfig: ObjectNode? = null
-): RustSettings(
-    service, moduleName, moduleVersion, moduleAuthors, moduleDescription, moduleRepository, runtimeConfig, codegenConfig, license
-) {
-
-    companion object {
         /**
          * Create settings from a configuration object node.
          *
@@ -138,10 +148,10 @@ data class ClientRustSettings(
          * @param config Config object to load
          * @return Returns the extracted settings
          */
-        fun from(model: Model, config: ObjectNode): ClientRustSettings {
+        fun from(model: Model, config: ObjectNode): RustSettings {
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
-            val codegenConfig = ClientCodegenConfig.fromNode(codegenSettings)
-            return fromCodegenConfig(model, config, codegenConfig)
+            val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettings)
+            return fromCodegenConfig(model, config, coreCodegenConfig)
         }
 
         /**
@@ -149,10 +159,10 @@ data class ClientRustSettings(
          *
          * @param model Model to infer the service from (if not explicitly set in config)
          * @param config Config object to load
-         * @param codegenConfig CodegenConfig object to use
+         * @param coreCodegenConfig CodegenConfig object to use
          * @return Returns the extracted settings
          */
-        private fun fromCodegenConfig(model: Model, config: ObjectNode, codegenConfig: ClientCodegenConfig): ClientRustSettings {
+        private fun fromCodegenConfig(model: Model, config: ObjectNode, coreCodegenConfig: CoreCodegenConfig): RustSettings {
             config.warnIfAdditionalProperties(
                 arrayListOf(
                     SERVICE,
@@ -174,7 +184,7 @@ data class ClientRustSettings(
                 .orElseGet { inferService(model) }
 
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
-            return ClientRustSettings(
+            return RustSettings(
                 service,
                 moduleName = config.expectStringMember(MODULE_NAME).value,
                 moduleVersion = config.expectStringMember(MODULE_VERSION).value,
@@ -182,45 +192,11 @@ data class ClientRustSettings(
                 moduleDescription = config.getStringMember(MODULE_DESCRIPTION).orNull()?.value,
                 moduleRepository = config.getStringMember(MODULE_REPOSITORY).orNull()?.value,
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
-                codegenConfig,
+                coreCodegenConfig = coreCodegenConfig,
                 license = config.getStringMember(LICENSE).orNull()?.value,
                 examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
                 customizationConfig = config.getObjectMember(CUSTOMIZATION_CONFIG).orNull()
             )
         }
-    }
-}
-
-/**
- * [includeFluentClient]: Generate a `client` module in the generated SDK (currently the AWS SDK sets this to `false`
- *   and generates its own client)
- * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
- */
-data class ClientCodegenConfig(
-    override val formatTimeoutSeconds: Int = 20,
-    override val debugMode: Boolean = false,
-    override val eventStreamAllowList: Set<String> = emptySet(),
-    val renameExceptions: Boolean = true,
-    val includeFluentClient: Boolean = true,
-    val addMessageToErrors: Boolean = true,
-): CodegenConfig(
-    formatTimeoutSeconds, debugMode, eventStreamAllowList
-) {
-    companion object {
-        fun fromNode(node: Optional<ObjectNode>): ClientCodegenConfig =
-            if (node.isPresent) {
-                ClientCodegenConfig(
-                    node.get().getNumberMemberOrDefault("formatTimeoutSeconds", 20).toInt(),
-                    node.get().getBooleanMemberOrDefault("debugMode", false),
-                    node.get().getArrayMember("eventStreamAllowList")
-                        .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
-                        .orNull()?.toSet() ?: emptySet(),
-                    node.get().getBooleanMemberOrDefault("includeFluentClient", true),
-                    node.get().getBooleanMemberOrDefault("addMessageToErrors", true),
-                    node.get().getBooleanMemberOrDefault("renameErrors", true),
-                )
-            } else {
-                ClientCodegenConfig()
-            }
     }
 }

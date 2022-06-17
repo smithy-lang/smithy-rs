@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.model.Model
@@ -5,19 +10,16 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
 
 /**
- * [ServerRustSettings] and [ServerCodegenConfig] classes.
+ * [ClientRustSettings] and [ClientCodegenConfig] classes.
  *
- * These classes are entirely analogous to [ClientRustSettings] and [ClientCodegenConfig]. Refer to the documentation
- * for those.
- *
- * These classes have to live in the `codegen` subproject because they are referenced in [ServerCodegenContext],
- * which is used in common generators to both client and server.
+ * These are specializations of [RustSettings] and [CodegenConfig] for the `rust-codegen` client Smithy plugin. Refer
+ * to the documentation of those for the inherited properties.
  */
 
 /**
- * Settings used by [RustCodegenServerPlugin].
+ * Settings used by [RustCodegenPlugin].
  */
-data class ServerRustSettings(
+data class ClientRustSettings(
     override val service: ShapeId,
     override val moduleName: String,
     override val moduleVersion: String,
@@ -25,19 +27,20 @@ data class ServerRustSettings(
     override val moduleDescription: String?,
     override val moduleRepository: String?,
     override val runtimeConfig: RuntimeConfig,
-    override val coreCodegenConfig: ServerCoreCodegenConfig,
+    override val coreCodegenConfig: ClientCoreCodegenConfig,
     override val license: String?,
     override val examplesUri: String? = null,
     override val customizationConfig: ObjectNode? = null
 ): RustSettings(
     service, moduleName, moduleVersion, moduleAuthors, moduleDescription, moduleRepository, runtimeConfig, coreCodegenConfig, license
 ) {
+
     companion object {
-        fun from(model: Model, config: ObjectNode): ServerRustSettings {
+        fun from(model: Model, config: ObjectNode): ClientRustSettings {
             val rustSettings = RustSettings.from(model, config)
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
             val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettings)
-            return ServerRustSettings(
+            return ClientRustSettings(
                 service = rustSettings.service,
                 moduleName = rustSettings.moduleName,
                 moduleVersion = rustSettings.moduleVersion,
@@ -45,7 +48,7 @@ data class ServerRustSettings(
                 moduleDescription = rustSettings.moduleDescription,
                 moduleRepository = rustSettings.moduleRepository,
                 runtimeConfig = rustSettings.runtimeConfig,
-                coreCodegenConfig = ServerCoreCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, config),
+                coreCodegenConfig = ClientCoreCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, config),
                 license = rustSettings.license,
                 examplesUri = rustSettings.examplesUri,
                 customizationConfig = rustSettings.customizationConfig
@@ -54,22 +57,31 @@ data class ServerRustSettings(
     }
 }
 
-data class ServerCoreCodegenConfig(
+/**
+ * [renameExceptions]: Rename `Exception` to `Error` in the generated SDK
+ * [includeFluentClient]: Generate a `client` module in the generated SDK (currently the AWS SDK sets this to `false`
+ *   and generates its own client)
+ * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
+ */
+data class ClientCoreCodegenConfig(
     override val formatTimeoutSeconds: Int = 20,
     override val debugMode: Boolean = false,
     override val eventStreamAllowList: Set<String> = emptySet(),
+    val renameExceptions: Boolean = true,
+    val includeFluentClient: Boolean = true,
+    val addMessageToErrors: Boolean = true,
 ): CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList
 ) {
     companion object {
-        // Note `node` is unused, because at the moment `ServerCodegenConfig` has the same properties as
-        // `CodegenConfig`. In the future, the server will have server-specific codegen options just like the client
-        // does.
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: ObjectNode) =
-            ServerCoreCodegenConfig(
+            ClientCoreCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,
                 eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
+                renameExceptions = node.getBooleanMemberOrDefault("renameErrors", true),
+                includeFluentClient = node.getBooleanMemberOrDefault("includeFluentClient", true),
+                addMessageToErrors = node.getBooleanMemberOrDefault("addMessageToErrors", true),
             )
     }
 }

@@ -96,7 +96,7 @@ class ServerCodegenVisitor(
             target = CodegenTarget.SERVER,
         )
 
-        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
+        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.coreCodegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
@@ -147,7 +147,7 @@ class ServerCodegenVisitor(
         try {
             "cargo fmt".runCommand(
                 fileManifest.baseDir,
-                timeout = settings.codegenConfig.formatTimeoutSeconds.toLong()
+                timeout = settings.coreCodegenConfig.formatTimeoutSeconds.toLong()
             )
         } catch (err: CommandFailed) {
             logger.warning(

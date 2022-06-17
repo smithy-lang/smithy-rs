@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -32,9 +32,9 @@ class CdylibManifestDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun crateManifestCustomizations(
-        codegenContext: CodegenContext
+        coreCodegenContext: CoreCodegenContext
     ): ManifestCustomizations =
-        mapOf("lib" to mapOf("name" to codegenContext.settings.moduleName, "crate-type" to listOf("cdylib")))
+        mapOf("lib" to mapOf("name" to coreCodegenContext.settings.moduleName, "crate-type" to listOf("cdylib")))
 }
 
 /**
@@ -62,10 +62,10 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator {
     override val order: Byte = 0
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        return baseCustomizations + PubUsePythonTypes(codegenContext.runtimeConfig)
+        return baseCustomizations + PubUsePythonTypes(coreCodegenContext.runtimeConfig)
     }
 }
 

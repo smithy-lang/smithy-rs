@@ -6,20 +6,17 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 
 /**
- * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustCodegenServerPlugin] plugin
- * from the `rust-codegen-server` subproject.
+ * [ClientCodegenContext] contains code-generation context that is _specific_ to the [RustCodegenPlugin] plugin
+ * from the `rust-codegen` subproject.
  *
  * It inherits from [CoreCodegenContext], which contains code-generation context that is common to _all_ smithy-rs plugins.
- *
- * This class has to live in the `codegen` subproject because it is referenced in common generators to both client
- * and server (like [JsonParserGenerator]).
  */
-data class ServerCodegenContext(
+data class ClientCodegenContext(
     override val model: Model,
     override val symbolProvider: RustSymbolProvider,
     override val serviceShape: ServiceShape,
     override val protocol: ShapeId,
-    override val settings: ServerRustSettings,
+    override val settings: ClientRustSettings,
     override val target: CodegenTarget,
 ) : CoreCodegenContext(
     model, symbolProvider, serviceShape, protocol, settings, target

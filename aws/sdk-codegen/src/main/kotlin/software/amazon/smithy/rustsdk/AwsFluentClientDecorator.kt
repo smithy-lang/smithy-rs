@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -184,12 +184,12 @@ private class AwsFluentClientExtensions(types: Types) {
     }
 }
 
-private class AwsFluentClientDocs(codegenContext: CodegenContext) : FluentClientCustomization() {
-    private val serviceName = codegenContext.serviceShape.expectTrait<TitleTrait>().value
-    private val serviceShape = codegenContext.serviceShape
-    private val crateName = codegenContext.moduleUseName()
+private class AwsFluentClientDocs(coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
+    private val serviceName = coreCodegenContext.serviceShape.expectTrait<TitleTrait>().value
+    private val serviceShape = coreCodegenContext.serviceShape
+    private val crateName = coreCodegenContext.moduleUseName()
     private val codegenScope =
-        arrayOf("aws_config" to codegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
+        arrayOf("aws_config" to coreCodegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
 
     // Usage docs on STS must be suppressed—aws-config cannot be added as a dev-dependency because it would create
     // a circular dependency

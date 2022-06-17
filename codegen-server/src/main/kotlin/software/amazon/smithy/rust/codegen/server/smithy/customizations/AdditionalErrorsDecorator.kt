@@ -13,7 +13,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 
@@ -38,7 +38,7 @@ class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorat
     override fun transformModel(service: ServiceShape, model: Model): Model =
         addErrorShapeToModelOperations(service, model) { shape -> shape.errors.isEmpty() }
 
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(CodegenContext::class.java)
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(CoreCodegenContext::class.java)
 }
 
 /**
@@ -66,7 +66,7 @@ class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator<Serv
     override fun transformModel(service: ServiceShape, model: Model): Model =
         addErrorShapeToModelOperations(service, model) { true }
 
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(CodegenContext::class.java)
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(CoreCodegenContext::class.java)
 }
 
 fun addErrorShapeToModelOperations(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {

@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -60,8 +60,8 @@ class S3Decorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
-class S3(codegenContext: CodegenContext) : RestXml(codegenContext) {
-    private val runtimeConfig = codegenContext.runtimeConfig
+class S3(coreCodegenContext: CoreCodegenContext) : RestXml(coreCodegenContext) {
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),

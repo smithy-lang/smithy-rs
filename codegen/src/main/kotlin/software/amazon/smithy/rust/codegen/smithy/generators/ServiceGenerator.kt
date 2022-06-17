@@ -9,7 +9,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
@@ -30,7 +30,7 @@ class ServiceGenerator(
     private val rustCrate: RustCrate,
     private val protocolGenerator: ProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
-    private val config: CodegenContext,
+    private val config: CoreCodegenContext,
     private val decorator: RustCodegenDecorator<ClientCodegenContext>,
 ) {
     private val index = TopDownIndex.of(config.model)

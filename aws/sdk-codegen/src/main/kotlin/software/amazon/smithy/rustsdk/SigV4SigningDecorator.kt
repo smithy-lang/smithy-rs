@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -47,32 +47,32 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "SigV4Signing"
     override val order: Byte = 0
 
-    private fun applies(codegenContext: CodegenContext): Boolean = codegenContext.serviceShape.hasTrait<SigV4Trait>()
+    private fun applies(coreCodegenContext: CoreCodegenContext): Boolean = coreCodegenContext.serviceShape.hasTrait<SigV4Trait>()
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations.letIf(applies(codegenContext)) { customizations ->
+        return baseCustomizations.letIf(applies(coreCodegenContext)) { customizations ->
             customizations + SigV4SigningConfig(
-                codegenContext.runtimeConfig,
-                codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model),
-                codegenContext.serviceShape.expectTrait()
+                coreCodegenContext.runtimeConfig,
+                coreCodegenContext.serviceShape.hasEventStreamOperations(coreCodegenContext.model),
+                coreCodegenContext.serviceShape.expectTrait()
             )
         }
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations.letIf(applies(codegenContext)) {
+        return baseCustomizations.letIf(applies(coreCodegenContext)) {
             it + SigV4SigningFeature(
-                codegenContext.model,
+                coreCodegenContext.model,
                 operation,
-                codegenContext.runtimeConfig,
-                codegenContext.serviceShape,
+                coreCodegenContext.runtimeConfig,
+                coreCodegenContext.serviceShape,
             )
         }
     }

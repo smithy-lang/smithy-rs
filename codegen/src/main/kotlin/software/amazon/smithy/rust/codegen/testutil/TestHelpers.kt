@@ -15,8 +15,8 @@ import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCoreCodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
@@ -48,7 +48,7 @@ fun testRustSettings(
     moduleDescription: String = "not relevant",
     moduleRepository: String? = null,
     runtimeConfig: RuntimeConfig = TestRuntimeConfig,
-    codegenConfig: ClientCodegenConfig = ClientCodegenConfig(),
+    codegenConfig: ClientCoreCodegenConfig = ClientCoreCodegenConfig(),
     license: String? = null,
     examplesUri: String? = null,
 ) = ClientRustSettings(

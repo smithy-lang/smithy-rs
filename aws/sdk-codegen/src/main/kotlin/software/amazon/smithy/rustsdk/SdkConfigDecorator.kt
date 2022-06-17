@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -29,10 +29,10 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + NewFromShared(codegenContext.runtimeConfig)
+        return baseCustomizations + NewFromShared(coreCodegenContext.runtimeConfig)
     }
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {

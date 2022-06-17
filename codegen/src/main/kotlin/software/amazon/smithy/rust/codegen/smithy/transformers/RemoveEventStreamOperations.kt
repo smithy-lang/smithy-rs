@@ -21,7 +21,7 @@ object RemoveEventStreamOperations {
 
     fun transform(model: Model, settings: RustSettings): Model {
         // If Event Stream is allowed in build config, then don't remove the operations
-        if (settings.codegenConfig.eventStreamAllowList.contains(settings.moduleName)) {
+        if (settings.coreCodegenConfig.eventStreamAllowList.contains(settings.moduleName)) {
             return model
         }
 

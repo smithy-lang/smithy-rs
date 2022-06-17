@@ -47,9 +47,9 @@ open class RustCrate(
      * private as well as any other metadata. [baseModules] enables configuring this. See [DefaultPublicModules].
      */
     baseModules: Map<String, RustModule>,
-    codegenConfig: CodegenConfig
+    coreCodegenConfig: CoreCodegenConfig
 ) {
-    private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(codegenConfig.debugMode))
+    private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(coreCodegenConfig.debugMode))
     private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
     private val features: MutableSet<Feature> = mutableSetOf()
 

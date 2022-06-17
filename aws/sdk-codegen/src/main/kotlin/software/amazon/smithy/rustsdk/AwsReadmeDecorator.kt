@@ -11,7 +11,7 @@ import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
@@ -32,7 +32,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
-    override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations =
+    override fun crateManifestCustomizations(coreCodegenContext: CoreCodegenContext): ManifestCustomizations =
         mapOf("package" to mapOf("readme" to "README.md"))
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {

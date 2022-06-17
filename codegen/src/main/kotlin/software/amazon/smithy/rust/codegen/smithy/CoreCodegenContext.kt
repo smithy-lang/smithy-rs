@@ -11,10 +11,14 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 
 /**
- * Configuration needed to generate the client for a given Service<->Protocol pair
+ * [CoreCodegenContext] contains code-generation context that is _common to all_  smithy-rs plugins.
+ *
+ * Code-generation context is pervasive read-only global data that gets passed around to the generators.
+ *
+ * If your data is specific to the `rust-codegen` client plugin, put it in [ClientCodegenContext] instead.
+ * If your data is specific to the `rust-server-codegen` server plugin, put it in [ServerCodegenContext] instead.
  */
-// TODO Rename to CoreCodegenContext
-open class CodegenContext(
+open class CoreCodegenContext(
     /**
      * The smithy model.
      *
@@ -26,22 +30,27 @@ open class CodegenContext(
     open val symbolProvider: RustSymbolProvider,
 
     /**
-     * Entrypoint service shape for code generation
+     * Entrypoint service shape for code generation.
      */
     open val serviceShape: ServiceShape,
+
     /**
-     * Smithy Protocol to generate, e.g. RestJson1
+     * Shape indicating the protocol to generate, e.g. RestJson1.
      */
     open val protocol: ShapeId,
+
     /**
-     * Settings loaded from smithy-build.json
+     * Settings loaded from `smithy-build.json`.
      */
     open val settings: RustSettings,
 
     /**
      * Server vs. Client codegen
      *
-     * Some settings are dependent on whether server vs. client codegen is being invoked.
+     * Several code generators are reused by both the client and server plugins, but only deviate in small and contained
+     * parts (e.g. changing a return type or adding an attribute).
+     * Instead of splitting the generator in two or setting up an inheritance relationship, sometimes it's best
+     * to just lookup this flag.
      */
     open val target: CodegenTarget,
 ) {
@@ -64,15 +73,3 @@ open class CodegenContext(
      */
     fun moduleUseName() = moduleName.replace("-", "_")
 }
-
-data class ClientCodegenContext(
-    override val model: Model,
-    override val symbolProvider: RustSymbolProvider,
-    override val serviceShape: ServiceShape,
-    override val protocol: ShapeId,
-    override val settings: ClientRustSettings,
-    override val target: CodegenTarget,
-) : CodegenContext(
-    model, symbolProvider, serviceShape, protocol, settings, target
-)
-

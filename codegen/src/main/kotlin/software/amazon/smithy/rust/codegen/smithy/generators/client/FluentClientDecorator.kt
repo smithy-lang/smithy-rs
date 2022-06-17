@@ -38,7 +38,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -65,7 +65,7 @@ class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     private fun applies(codegenContext: ClientCodegenContext): Boolean =
-        codegenContext.settings.codegenConfig.includeFluentClient
+        codegenContext.settings.coreCodegenConfig.includeFluentClient
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (!applies(codegenContext)) {
@@ -98,7 +98,7 @@ class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
         }
     }
 
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(CodegenContext::class.java)
+    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(CoreCodegenContext::class.java)
 }
 
 sealed class FluentClientSection(name: String) : Section(name) {
@@ -114,9 +114,9 @@ sealed class FluentClientSection(name: String) : Section(name) {
 
 abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSection>()
 
-class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
-    private val moduleUseName = codegenContext.moduleUseName()
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
+class GenericFluentClient(coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
+    private val moduleUseName = coreCodegenContext.moduleUseName()
+    private val clientDep = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig)
     private val codegenScope = arrayOf("client" to clientDep.asType())
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
@@ -286,12 +286,12 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
 }
 
 class FluentClientGenerator(
-    private val codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
-        retryDefault = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType().member("retry::Standard"),
-        client = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType()
+        retryDefault = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig).asType().member("retry::Standard"),
+        client = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig).asType()
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
@@ -306,13 +306,13 @@ class FluentClientGenerator(
         )
     }
 
-    private val serviceShape = codegenContext.serviceShape
+    private val serviceShape = coreCodegenContext.serviceShape
     private val operations =
-        TopDownIndex.of(codegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
-    private val symbolProvider = codegenContext.symbolProvider
-    private val model = codegenContext.model
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
-    private val runtimeConfig = codegenContext.runtimeConfig
+        TopDownIndex.of(coreCodegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = coreCodegenContext.model
+    private val clientDep = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig)
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
     fun render(crate: RustCrate) {
@@ -519,7 +519,7 @@ class FluentClientGenerator(
                             .copy(name = "result::SdkError"),
                         "send_bounds" to generics.sendBounds(inputType, outputType, errorType)
                     )
-                    PaginatorGenerator.paginatorType(codegenContext, generics, operation)?.also { paginatorType ->
+                    PaginatorGenerator.paginatorType(coreCodegenContext, generics, operation)?.also { paginatorType ->
                         rustTemplate(
                             """
                             /// Create a paginator for this request

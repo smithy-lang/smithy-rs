@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 
@@ -53,7 +53,7 @@ class DocsRsMetadataDecorator(private val docsRsMetadataSettings: DocsRsMetadata
     override val name: String = "docsrs-metadata"
     override val order: Byte = 0
 
-    override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations {
+    override fun crateManifestCustomizations(coreCodegenContext: CoreCodegenContext): ManifestCustomizations {
         return docsRsMetadataSettings.asMap()
     }
 

@@ -10,7 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -24,19 +24,19 @@ private fun RuntimeConfig.defaultHttpVersionList(): RuntimeType =
     this.httpVersionModule().member("DEFAULT_HTTP_VERSION_LIST")
 
 class HttpVersionListCustomization(
-    private val codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val operationShape: OperationShape
 ) : OperationCustomization() {
-    private val defaultHttpVersions = codegenContext.runtimeConfig.defaultHttpVersionList().fullyQualifiedName()
+    private val defaultHttpVersions = coreCodegenContext.runtimeConfig.defaultHttpVersionList().fullyQualifiedName()
 
     override fun section(section: OperationSection): Writable {
-        val awsProtocolTrait = codegenContext.serviceShape.getTrait<AwsProtocolTrait>()
+        val awsProtocolTrait = coreCodegenContext.serviceShape.getTrait<AwsProtocolTrait>()
         val supportedHttpProtocolVersions = if (awsProtocolTrait == null) {
             // No protocol trait was defined, use default http versions
             "$defaultHttpVersions.clone()"
         } else {
             // Figure out whether we're dealing with an EventStream operation and fetch the corresponding list of desired HTTP versions
-            val versionList = if (operationShape.isEventStream(codegenContext.model)) awsProtocolTrait.eventStreamHttp else awsProtocolTrait.http
+            val versionList = if (operationShape.isEventStream(coreCodegenContext.model)) awsProtocolTrait.eventStreamHttp else awsProtocolTrait.http
             if (versionList.isEmpty()) {
                 // If no desired versions are specified, go with the default
                 "$defaultHttpVersions.clone()"

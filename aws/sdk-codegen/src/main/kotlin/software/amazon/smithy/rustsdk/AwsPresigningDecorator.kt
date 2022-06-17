@@ -28,7 +28,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -94,10 +94,10 @@ class AwsPresigningDecorator internal constructor(
     override val order: Byte = ORDER
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
-    ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(codegenContext, operation))
+    ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(coreCodegenContext, operation))
 
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen
@@ -132,11 +132,11 @@ class AwsPresigningDecorator internal constructor(
 }
 
 class AwsInputPresignedMethod(
-    private val codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val operationShape: OperationShape
 ) : OperationCustomization() {
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val symbolProvider = coreCodegenContext.symbolProvider
 
     private val codegenScope = arrayOf(
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
@@ -161,7 +161,7 @@ class AwsInputPresignedMethod(
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
 
         val makeOperationOp = if (presignableOp.hasModelTransforms()) {
-            codegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
+            coreCodegenContext.model.expectShape(syntheticShapeId(operationShape.id), OperationShape::class.java)
         } else {
             section.operationShape
         }
@@ -169,9 +169,9 @@ class AwsInputPresignedMethod(
 
         val protocol = section.protocol
         MakeOperationGenerator(
-            codegenContext,
+            coreCodegenContext,
             protocol,
-            HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+            HttpBoundProtocolPayloadGenerator(coreCodegenContext, protocol),
             // Prefixed with underscore to avoid colliding with modeled functions
             functionName = makeOperationFn,
             public = false,

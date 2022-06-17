@@ -10,7 +10,7 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
@@ -128,23 +128,23 @@ internal class EndpointConfigCustomizationTest {
             override val name: String = "tests and config"
             override val order: Byte = 0
             override fun configCustomizations(
-                codegenContext: CodegenContext,
+                coreCodegenContext: CoreCodegenContext,
                 baseCustomizations: List<ConfigCustomization>
             ): List<ConfigCustomization> {
                 return baseCustomizations + stubConfigCustomization("a") + EndpointConfigCustomization(
-                    codegenContext,
+                    coreCodegenContext,
                     endpointConfig
                 ) + stubConfigCustomization("b")
             }
 
             override fun libRsCustomizations(
-                codegenContext: CodegenContext,
+                coreCodegenContext: CoreCodegenContext,
                 baseCustomizations: List<LibRsCustomization>
             ): List<LibRsCustomization> {
                 return baseCustomizations + PubUseEndpoint(AwsTestRuntimeConfig) + AllowLintsGenerator(listOf("dead_code"), listOf(), listOf())
             }
 
-            override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+            override fun extras(coreCodegenContext: CoreCodegenContext, rustCrate: RustCrate) {
                 if (test != null) {
                     test(rustCrate)
                 }

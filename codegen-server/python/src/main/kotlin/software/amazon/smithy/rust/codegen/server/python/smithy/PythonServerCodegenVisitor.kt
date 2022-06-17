@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.generators.Pytho
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
@@ -61,7 +61,7 @@ class PythonServerCodegenVisitor(context: PluginContext, codegenDecorator: RustC
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
         // Override `codegenContext` which carries the symbolProvider.
-        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, target = CodegenTarget.SERVER)
+        codegenContext = CoreCodegenContext(model, symbolProvider, service, protocol, settings, target = CodegenTarget.SERVER)
 
         // Override `rustCrate` which carries the symbolProvider.
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)

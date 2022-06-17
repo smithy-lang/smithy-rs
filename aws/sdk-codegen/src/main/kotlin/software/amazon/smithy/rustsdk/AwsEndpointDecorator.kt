@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -47,18 +47,18 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
     }
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + EndpointConfigCustomization(codegenContext, endpoints)
+        return baseCustomizations + EndpointConfigCustomization(coreCodegenContext, endpoints)
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + EndpointResolverFeature(codegenContext.runtimeConfig, operation)
+        return baseCustomizations + EndpointResolverFeature(coreCodegenContext.runtimeConfig, operation)
     }
 
     override fun libRsCustomizations(
@@ -71,11 +71,11 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
-class EndpointConfigCustomization(private val codegenContext: CodegenContext, private val endpointData: ObjectNode) :
+class EndpointConfigCustomization(private val coreCodegenContext: CoreCodegenContext, private val endpointData: ObjectNode) :
     ConfigCustomization() {
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val resolveAwsEndpoint = runtimeConfig.awsEndpoint().asType().copy(name = "ResolveAwsEndpoint")
-    private val moduleUseName = codegenContext.moduleUseName()
+    private val moduleUseName = coreCodegenContext.moduleUseName()
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rust(
@@ -119,7 +119,7 @@ class EndpointConfigCustomization(private val codegenContext: CodegenContext, pr
                     "aws_types" to awsTypes(runtimeConfig).asType()
                 )
             ServiceConfig.BuilderBuild -> {
-                val resolverGenerator = EndpointResolverGenerator(codegenContext, endpointData)
+                val resolverGenerator = EndpointResolverGenerator(coreCodegenContext, endpointData)
                 rust(
                     """
                     endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
@@ -166,9 +166,9 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
     }
 }
 
-class EndpointResolverGenerator(codegenContext: CodegenContext, private val endpointData: ObjectNode) {
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val endpointPrefix = codegenContext.serviceShape.expectTrait<ServiceTrait>().endpointPrefix
+class EndpointResolverGenerator(coreCodegenContext: CoreCodegenContext, private val endpointData: ObjectNode) {
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val endpointPrefix = coreCodegenContext.serviceShape.expectTrait<ServiceTrait>().endpointPrefix
     private val awsEndpoint = runtimeConfig.awsEndpoint().asType()
     private val awsTypes = runtimeConfig.awsTypes().asType()
     private val codegenScope =

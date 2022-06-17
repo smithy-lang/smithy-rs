@@ -10,7 +10,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -29,7 +29,7 @@ import java.util.logging.Logger
  * AWS services. A different downstream customer may wish to add a different set of derive
  * attributes to the generated classes.
  */
-interface RustCodegenDecorator<C: CodegenContext> {
+interface RustCodegenDecorator<C: CoreCodegenContext> {
     /**
      * The name of this [RustCodegenDecorator], used for logging and debug information
      */
@@ -41,13 +41,13 @@ interface RustCodegenDecorator<C: CodegenContext> {
     val order: Byte
 
     fun configCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> = baseCustomizations
 
     // TODO Can we make this exist only for Client decorators?
     fun operationCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> = baseCustomizations
@@ -62,7 +62,7 @@ interface RustCodegenDecorator<C: CodegenContext> {
      * added to the Cargo.toml `[package]` section, a `mapOf("package" to mapOf("homepage", "https://example.com"))`
      * could be returned. Properties here overwrite the default properties.
      */
-    fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations = emptyMap()
+    fun crateManifestCustomizations(coreCodegenContext: CoreCodegenContext): ManifestCustomizations = emptyMap()
 
     fun extras(codegenContext: C, rustCrate: RustCrate) {}
 
@@ -82,7 +82,7 @@ interface RustCodegenDecorator<C: CodegenContext> {
  *
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
-open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCodegenDecorator<C>>) : RustCodegenDecorator<C> {
+open class CombinedCodegenDecorator<C: CoreCodegenContext>(decorators: List<RustCodegenDecorator<C>>) : RustCodegenDecorator<C> {
     private val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
         get() = "MetaDecorator"
@@ -92,21 +92,21 @@ open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCode
     fun withDecorator(decorator: RustCodegenDecorator<C>) = CombinedCodegenDecorator(orderedDecorators + decorator)
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<C>, customizations ->
-            decorator.configCustomizations(codegenContext, customizations)
+            decorator.configCustomizations(coreCodegenContext, customizations)
         }
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        coreCodegenContext: CoreCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<C>, customizations ->
-            decorator.operationCustomizations(codegenContext, operation, customizations)
+            decorator.operationCustomizations(coreCodegenContext, operation, customizations)
         }
     }
 
@@ -134,9 +134,9 @@ open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCode
         }
     }
 
-    override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations {
+    override fun crateManifestCustomizations(coreCodegenContext: CoreCodegenContext): ManifestCustomizations {
         return orderedDecorators.foldRight(emptyMap()) { decorator, customizations ->
-            customizations.deepMergeWith(decorator.crateManifestCustomizations(codegenContext))
+            customizations.deepMergeWith(decorator.crateManifestCustomizations(coreCodegenContext))
         }
     }
 
@@ -155,7 +155,7 @@ open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCode
     }
 
     companion object {
-        inline fun <reified T: CodegenContext> fromClasspathGeneric(
+        inline fun <reified T: CoreCodegenContext> fromClasspathGeneric(
             context: PluginContext,
             vararg extras: RustCodegenDecorator<T>,
             logger: Logger = Logger.getLogger("RustCodegenSPILoader")

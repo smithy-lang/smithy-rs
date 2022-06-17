@@ -10,10 +10,10 @@ import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.ClientCoreCodegenConfig
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.testRustSettings
-import java.util.*
+import java.util.Optional
 
 internal class RemoveEventStreamOperationsTest {
     private val model = """
@@ -50,7 +50,7 @@ internal class RemoveEventStreamOperationsTest {
         val transformed = RemoveEventStreamOperations.transform(
             model,
             testRustSettings(
-                codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("not-test-module")),
+                codegenConfig = ClientCoreCodegenConfig(eventStreamAllowList = setOf("not-test-module")),
             )
         )
         transformed.expectShape(ShapeId.from("test#BlobStream"))
@@ -62,7 +62,7 @@ internal class RemoveEventStreamOperationsTest {
         val transformed = RemoveEventStreamOperations.transform(
             model,
             testRustSettings(
-                codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("test-module")),
+                codegenConfig = ClientCoreCodegenConfig(eventStreamAllowList = setOf("test-module")),
             )
         )
         transformed.expectShape(ShapeId.from("test#BlobStream"))

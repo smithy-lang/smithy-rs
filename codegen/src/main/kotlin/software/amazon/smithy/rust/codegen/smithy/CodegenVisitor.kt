@@ -60,7 +60,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val symbolVisitorConfig =
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
-                renameExceptions = settings.codegenConfig.renameExceptions,
+                renameExceptions = settings.coreCodegenConfig.renameExceptions,
                 handleRequired = false,
                 handleRustBoxing = true,
             )
@@ -79,7 +79,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             context.fileManifest,
             symbolProvider,
             DefaultPublicModules,
-            codegenContext.settings.codegenConfig
+            codegenContext.settings.coreCodegenConfig
         )
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
@@ -95,7 +95,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             // Add `Box<T>` to recursive shapes as necessary
             .let(RecursiveShapeBoxer::transform)
             // Normalize the `message` field on errors when enabled in settings (default: true)
-            .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
+            .letIf(settings.coreCodegenConfig.addMessageToErrors, AddErrorMessage::transform)
             // NormalizeOperations by ensuring every operation has an input & output shape
             .let(OperationNormalizer::transform)
             // Drop unsupported event stream operations from the model
@@ -132,7 +132,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             )
         )
         try {
-            "cargo fmt".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
+            "cargo fmt".runCommand(fileManifest.baseDir, timeout = settings.coreCodegenConfig.formatTimeoutSeconds.toLong())
         } catch (err: CommandFailed) {
             logger.warning("Failed to run cargo fmt: [${service.id}]\n${err.output}")
         }
