@@ -43,6 +43,7 @@ mod tests {
             Args::Split(SplitArgs {
                 source: PathBuf::from("fromplace"),
                 destination: PathBuf::from("someplace"),
+                since_commit: None,
             }),
             Args::try_parse_from([
                 "./changelogger",

@@ -79,6 +79,9 @@ pub struct HandAuthoredEntry {
     pub author: String,
     #[serde(default)]
     pub references: Vec<Reference>,
+    /// Optional commit hash to indicate "since when" these changes were made
+    #[serde(rename = "since-commit")]
+    pub since_commit: Option<String>,
 }
 
 impl HandAuthoredEntry {

@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use smithy_rs_tool_common::changelog::Changelog;
-use std::fs;
+use smithy_rs_tool_common::git;
+use smithy_rs_tool_common::shell::ShellOperation;
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 const INTERMEDIATE_SOURCE_HEADER: &str =
     "# This is an intermediate file that will be replaced after automation is complete.\n\
@@ -27,6 +29,10 @@ pub struct SplitArgs {
     /// The destination to place changelog entries
     #[clap(long, action)]
     pub destination: PathBuf,
+
+    // Git revision to use in `since_commit` fields; for testing only
+    #[clap(skip)]
+    pub since_commit: Option<String>,
 }
 
 pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
@@ -37,15 +43,29 @@ pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
         ))
     })?;
 
-    let (source_log, dest_log) = (smithy_rs_entries(changelog.clone()), sdk_entries(changelog));
+    let (source_log, dest_log) = (
+        smithy_rs_entries(changelog.clone()),
+        sdk_entries(args, changelog)?,
+    );
     write_entries(&args.source, INTERMEDIATE_SOURCE_HEADER, &source_log)?;
     write_entries(&args.destination, DEST_HEADER, &dest_log)?;
     Ok(())
 }
 
-fn sdk_entries(mut changelog: Changelog) -> Changelog {
+fn sdk_entries(args: &SplitArgs, mut changelog: Changelog) -> Result<Changelog> {
     changelog.smithy_rs.clear();
-    changelog
+
+    let last_commit = git::GetLastCommit::new(env::current_dir().unwrap())
+        .run()
+        .context("failed to get current revision of smithy-rs")?;
+    let last_commit = args
+        .since_commit
+        .as_deref()
+        .unwrap_or_else(|| last_commit.as_ref());
+    for entry in changelog.aws_sdk_rust.iter_mut() {
+        entry.since_commit = Some(last_commit.clone());
+    }
+    Ok(changelog)
 }
 
 fn smithy_rs_entries(mut changelog: Changelog) -> Changelog {

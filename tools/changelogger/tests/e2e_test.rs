@@ -64,6 +64,7 @@ fn split_aws_sdk_test() {
     subcommand_split(&SplitArgs {
         source: source_path.clone(),
         destination: dest_path.clone(),
+        since_commit: Some("test-commit-hash".into()),
     })
     .unwrap();
 
@@ -87,7 +88,8 @@ fn split_aws_sdk_test() {
       "author": "another-dev",
       "references": [
         "smithy-rs#1234"
-      ]
+      ],
+      "since-commit": null
     }
   ],
   "aws-sdk-rust": [],
@@ -114,7 +116,8 @@ fn split_aws_sdk_test() {
       "references": [
         "aws-sdk-rust#123",
         "smithy-rs#456"
-      ]
+      ],
+      "since-commit": "test-commit-hash"
     }
   ],
   "aws-sdk-model": [
