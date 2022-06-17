@@ -90,7 +90,7 @@ open class CoreRustSettings(
      * - What are they called?
      */
     open val runtimeConfig: RuntimeConfig,
-    open val coreCodegenConfig: CoreCodegenConfig,
+    open val codegenConfig: CoreCodegenConfig,
     open val license: String?,
     open val examplesUri: String? = null,
     open val customizationConfig: ObjectNode? = null
@@ -192,7 +192,7 @@ open class CoreRustSettings(
                 moduleDescription = config.getStringMember(MODULE_DESCRIPTION).orNull()?.value,
                 moduleRepository = config.getStringMember(MODULE_REPOSITORY).orNull()?.value,
                 runtimeConfig = RuntimeConfig.fromNode(runtimeConfig),
-                coreCodegenConfig = coreCodegenConfig,
+                codegenConfig = coreCodegenConfig,
                 license = config.getStringMember(LICENSE).orNull()?.value,
                 examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
                 customizationConfig = config.getObjectMember(CUSTOMIZATION_CONFIG).orNull()

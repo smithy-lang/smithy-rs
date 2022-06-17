@@ -67,7 +67,7 @@ class PythonServerCodegenVisitor(
         codegenContext = ServerCodegenContext(model, symbolProvider, service, protocol, settings)
 
         // Override `rustCrate` which carries the symbolProvider.
-        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.coreCodegenConfig)
+        rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         // Override `protocolGenerator` which carries the symbolProvider.
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }

@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
+import java.util.Optional
 
 /**
  * [ServerRustSettings] and [ServerCodegenConfig] classes.
@@ -30,7 +31,7 @@ data class ServerRustSettings(
     override val moduleDescription: String?,
     override val moduleRepository: String?,
     override val runtimeConfig: RuntimeConfig,
-    override val coreCodegenConfig: ServerCodegenConfig,
+    override val codegenConfig: ServerCodegenConfig,
     override val license: String?,
     override val examplesUri: String?,
     override val customizationConfig: ObjectNode?
@@ -42,7 +43,7 @@ data class ServerRustSettings(
     moduleDescription,
     moduleRepository,
     runtimeConfig,
-    coreCodegenConfig,
+    codegenConfig,
     license,
     examplesUri,
     customizationConfig
@@ -50,8 +51,8 @@ data class ServerRustSettings(
     companion object {
         fun from(model: Model, config: ObjectNode): ServerRustSettings {
             val coreRustSettings = CoreRustSettings.from(model, config)
-            val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
-            val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettings)
+            val codegenSettingsNode = config.getObjectMember(CODEGEN_SETTINGS)
+            val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettingsNode)
             return ServerRustSettings(
                 service = coreRustSettings.service,
                 moduleName = coreRustSettings.moduleName,
@@ -60,7 +61,7 @@ data class ServerRustSettings(
                 moduleDescription = coreRustSettings.moduleDescription,
                 moduleRepository = coreRustSettings.moduleRepository,
                 runtimeConfig = coreRustSettings.runtimeConfig,
-                coreCodegenConfig = ServerCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, config),
+                codegenConfig = ServerCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, codegenSettingsNode),
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
                 customizationConfig = coreRustSettings.customizationConfig
@@ -80,7 +81,7 @@ data class ServerCodegenConfig(
         // Note `node` is unused, because at the moment `ServerCodegenConfig` has the same properties as
         // `CodegenConfig`. In the future, the server will have server-specific codegen options just like the client
         // does.
-        fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: ObjectNode) =
+        fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             ServerCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,

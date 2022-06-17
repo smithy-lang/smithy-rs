@@ -24,7 +24,7 @@ internal class RegionProviderConfigTest {
             moduleDescription = projectSettings.moduleDescription,
             moduleRepository = projectSettings.moduleRepository,
             runtimeConfig = AwsTestRuntimeConfig,
-            coreCodegenConfig = projectSettings.coreCodegenConfig,
+            codegenConfig = projectSettings.codegenConfig,
             license = projectSettings.license,
             examplesUri = projectSettings.examplesUri,
             customizationConfig = projectSettings.customizationConfig,

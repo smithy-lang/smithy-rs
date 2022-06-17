@@ -65,7 +65,7 @@ class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     private fun applies(codegenContext: ClientCodegenContext): Boolean =
-        codegenContext.settings.coreCodegenConfig.includeFluentClient
+        codegenContext.settings.codegenConfig.includeFluentClient
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (!applies(codegenContext)) {

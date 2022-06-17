@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
+import java.util.Optional
 
 /**
  * [ClientRustSettings] and [ClientCodegenConfig] classes.
@@ -27,7 +28,7 @@ data class ClientRustSettings(
     override val moduleDescription: String?,
     override val moduleRepository: String?,
     override val runtimeConfig: RuntimeConfig,
-    override val coreCodegenConfig: ClientCodegenConfig,
+    override val codegenConfig: ClientCodegenConfig,
     override val license: String?,
     override val examplesUri: String?,
     override val customizationConfig: ObjectNode?
@@ -39,7 +40,7 @@ data class ClientRustSettings(
     moduleDescription,
     moduleRepository,
     runtimeConfig,
-    coreCodegenConfig,
+    codegenConfig,
     license,
     examplesUri,
     customizationConfig
@@ -47,8 +48,8 @@ data class ClientRustSettings(
     companion object {
         fun from(model: Model, config: ObjectNode): ClientRustSettings {
             val coreRustSettings = CoreRustSettings.from(model, config)
-            val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
-            val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettings)
+            val codegenSettingsNode = config.getObjectMember(CODEGEN_SETTINGS)
+            val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettingsNode)
             return ClientRustSettings(
                 service = coreRustSettings.service,
                 moduleName = coreRustSettings.moduleName,
@@ -57,7 +58,7 @@ data class ClientRustSettings(
                 moduleDescription = coreRustSettings.moduleDescription,
                 moduleRepository = coreRustSettings.moduleRepository,
                 runtimeConfig = coreRustSettings.runtimeConfig,
-                coreCodegenConfig = ClientCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, config),
+                codegenConfig = ClientCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, codegenSettingsNode),
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
                 customizationConfig = coreRustSettings.customizationConfig
@@ -87,14 +88,22 @@ data class ClientCodegenConfig(
         private const val defaultIncludeFluentClient = true
         private const val defaultAddMessageToErrors = true
 
-        fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: ObjectNode) =
-            ClientCodegenConfig(
-                formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
-                debugMode = coreCodegenConfig.debugMode,
-                eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
-                renameExceptions = node.getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
-                includeFluentClient = node.getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
-                addMessageToErrors = node.getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
-            )
+        fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
+            if (node.isPresent) {
+                ClientCodegenConfig(
+                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    debugMode = coreCodegenConfig.debugMode,
+                    eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
+                    renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
+                    includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
+                    addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
+                )
+            } else {
+                ClientCodegenConfig(
+                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    debugMode = coreCodegenConfig.debugMode,
+                    eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
+                )
+            }
     }
 }
