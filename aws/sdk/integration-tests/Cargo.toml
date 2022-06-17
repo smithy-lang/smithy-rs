@@ -4,6 +4,7 @@
 members = [
     "dynamodb",
     "ec2",
+    "glacier",
     "iam",
     "kms",
     "polly",
@@ -12,5 +13,4 @@ members = [
     "s3control",
     "sts",
     "transcribestreaming",
-    "glacier"
 ]

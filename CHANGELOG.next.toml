@@ -10,3 +10,40 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Fix bug in profile file credential provider where a missing `default` profile lead to an unintended error."
+references = ["aws-sdk-rust#547", "smithy-rs#1458"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Fix a potential bug with `ByteStream`'s implementation of `futures_core::stream::Stream` and add helpful error messages
+for users on 32-bit systems that try to stream HTTP bodies larger than 4.29Gb.
+"""
+references = ["smithy-rs#1460"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Add `Debug` implementation to several types in `aws-config`"
+references = ["smithy-rs#1421"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix RustWriter bugs for `rustTemplate` and `docs` utility methods"
+references = ["smithy-rs#1427", "smithy-rs#1465", "smithy-rs#1459"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Requests to Route53 that return `ResourceId`s often come with a prefix. When passing those IDs directly into another
+request, the request would fail unless they manually stripped the prefix. Now, when making a request with a prefixed ID,
+the prefix will be stripped automatically.
+"""
+references = ["aws-sdk-rust#554"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
