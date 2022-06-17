@@ -32,8 +32,6 @@ class ApiGatewayDecorator : RustCodegenDecorator<ClientCodegenContext> {
             it + ApiGatewayAddAcceptHeader()
         }
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class ApiGatewayAddAcceptHeader : OperationCustomization() {

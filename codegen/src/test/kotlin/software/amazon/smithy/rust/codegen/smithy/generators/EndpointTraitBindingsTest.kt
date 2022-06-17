@@ -171,11 +171,9 @@ internal class EndpointTraitBindingsTest {
                     )
                 }
             }
-
-            override fun canOperateWithCodegenContext(t: Class<*>): Boolean = t.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
-            CombinedCodegenDecorator.fromClasspathGeneric(ctx, RequiredCustomizations()).withDecorator(codegenDecorator)
+            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(codegenDecorator)
         val visitor = CodegenVisitor(ctx, combinedCodegenDecorator)
         visitor.execute()
         "cargo test".runCommand(testDir)

@@ -87,7 +87,6 @@ interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C: CoreCodegenCont
 }
 
 class ProtocolLoader<C: CoreCodegenContext>(private val supportedProtocols: ProtocolMap<C>) {
-    // TODO Is this function used?
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape

@@ -37,7 +37,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
         val codegenDecorator =
-            CombinedCodegenDecorator.fromClasspathGeneric(context, ClientCustomizations(), RequiredCustomizations())
+            CombinedCodegenDecorator.fromClasspath(context, ClientCustomizations(), RequiredCustomizations())
 
         // CodegenVisitor is the main driver of code generation that traverses the model and generates code
         CodegenVisitor(context, codegenDecorator).execute()

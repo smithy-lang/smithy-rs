@@ -43,7 +43,7 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
         val codegenDecorator: CombinedCodegenDecorator<ServerCodegenContext> =
-            CombinedCodegenDecorator.fromClasspathGeneric(context, ServerRequiredCustomizations())
+            CombinedCodegenDecorator.fromClasspath(context, ServerRequiredCustomizations())
 
         // PythonServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
         logger.info("Loaded plugin to generate Rust/Python bindings for the server SSDK for projection ${context.projectionName}")

@@ -48,8 +48,6 @@ class CredentialsProviderDecorator : RustCodegenDecorator<ClientCodegenContext> 
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 /**

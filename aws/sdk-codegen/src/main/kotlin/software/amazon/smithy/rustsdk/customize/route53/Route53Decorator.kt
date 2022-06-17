@@ -61,8 +61,6 @@ class Route53Decorator : RustCodegenDecorator<ClientCodegenContext> {
     private fun isResourceId(shape: Shape): Boolean {
         return (shape is MemberShape && shape.target == ShapeId.from("com.amazonaws.route53#ResourceId")) && shape.hasTrait<HttpLabelTrait>()
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class TrimResourceIdCustomization(private val fieldName: String) : OperationCustomization() {

@@ -95,8 +95,6 @@ class RegionDecorator : RustCodegenDecorator<ClientCodegenContext> {
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class RegionProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {

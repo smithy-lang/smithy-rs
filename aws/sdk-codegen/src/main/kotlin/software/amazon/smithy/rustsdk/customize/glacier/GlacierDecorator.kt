@@ -36,6 +36,4 @@ class GlacierDecorator : RustCodegenDecorator<ClientCodegenContext> {
         }
         return baseCustomizations + extras
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }

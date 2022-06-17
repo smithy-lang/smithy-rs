@@ -67,8 +67,6 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
             )
         }
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {

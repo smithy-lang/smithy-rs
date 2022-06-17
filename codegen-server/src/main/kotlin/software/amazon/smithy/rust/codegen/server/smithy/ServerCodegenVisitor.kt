@@ -93,7 +93,6 @@ class ServerCodegenVisitor(
             service,
             protocol,
             settings,
-            target = CodegenTarget.SERVER,
         )
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.coreCodegenConfig)

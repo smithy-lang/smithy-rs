@@ -17,7 +17,6 @@ data class ClientCodegenContext(
     override val serviceShape: ServiceShape,
     override val protocol: ShapeId,
     override val settings: ClientRustSettings,
-    override val target: CodegenTarget,
 ) : CoreCodegenContext(
-    model, symbolProvider, serviceShape, protocol, settings, target
+    model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT
 )

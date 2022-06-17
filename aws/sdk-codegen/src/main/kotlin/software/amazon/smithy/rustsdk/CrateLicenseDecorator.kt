@@ -21,6 +21,4 @@ class CrateLicenseDecorator : RustCodegenDecorator<ClientCodegenContext> {
             it.raw(license)
         }
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }

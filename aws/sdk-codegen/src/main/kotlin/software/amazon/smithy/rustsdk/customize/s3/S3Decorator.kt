@@ -56,8 +56,6 @@ class S3Decorator : RustCodegenDecorator<ClientCodegenContext> {
     ): List<LibRsCustomization> = baseCustomizations.letIf(applies(codegenContext.serviceShape.id)) {
         it + S3PubUse()
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class S3(coreCodegenContext: CoreCodegenContext) : RestXml(coreCodegenContext) {

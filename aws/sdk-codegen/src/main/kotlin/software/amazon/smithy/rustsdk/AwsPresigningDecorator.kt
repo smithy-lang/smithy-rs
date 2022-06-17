@@ -127,8 +127,6 @@ class AwsPresigningDecorator internal constructor(
             }
         }.build()
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class AwsInputPresignedMethod(

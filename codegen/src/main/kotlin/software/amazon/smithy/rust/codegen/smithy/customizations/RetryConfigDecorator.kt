@@ -84,8 +84,6 @@ class RetryConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseRetryConfig(codegenContext.runtimeConfig)
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class RetryConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {

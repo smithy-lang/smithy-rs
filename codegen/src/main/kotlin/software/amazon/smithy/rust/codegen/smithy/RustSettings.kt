@@ -39,10 +39,10 @@ const val CODEGEN_SETTINGS = "codegen"
  * [debugMode]: Generate comments in the generated code indicating where code was generated from
  */
 open class CoreCodegenConfig(
-    open val formatTimeoutSeconds: Int,
-    open val debugMode: Boolean,
+    open val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
+    open val debugMode: Boolean = defaultDebugMode,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
-    open val eventStreamAllowList: Set<String>,
+    open val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
 ) {
     companion object {
         private const val defaultFormatTimeoutSeconds = 20

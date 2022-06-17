@@ -27,7 +27,7 @@ data class ClientRustSettings(
     override val moduleDescription: String?,
     override val moduleRepository: String?,
     override val runtimeConfig: RuntimeConfig,
-    override val coreCodegenConfig: ClientCoreCodegenConfig,
+    override val coreCodegenConfig: ClientCodegenConfig,
     override val license: String?,
     override val examplesUri: String? = null,
     override val customizationConfig: ObjectNode? = null
@@ -48,7 +48,7 @@ data class ClientRustSettings(
                 moduleDescription = rustSettings.moduleDescription,
                 moduleRepository = rustSettings.moduleRepository,
                 runtimeConfig = rustSettings.runtimeConfig,
-                coreCodegenConfig = ClientCoreCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, config),
+                coreCodegenConfig = ClientCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, config),
                 license = rustSettings.license,
                 examplesUri = rustSettings.examplesUri,
                 customizationConfig = rustSettings.customizationConfig
@@ -63,7 +63,7 @@ data class ClientRustSettings(
  *   and generates its own client)
  * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
  */
-data class ClientCoreCodegenConfig(
+data class ClientCodegenConfig(
     override val formatTimeoutSeconds: Int = 20,
     override val debugMode: Boolean = false,
     override val eventStreamAllowList: Set<String> = emptySet(),
@@ -75,7 +75,7 @@ data class ClientCoreCodegenConfig(
 ) {
     companion object {
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: ObjectNode) =
-            ClientCoreCodegenConfig(
+            ClientCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,
                 eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,

@@ -28,8 +28,6 @@ class RetryPolicyDecorator : RustCodegenDecorator<ClientCodegenContext> {
     ): List<OperationCustomization> {
         return baseCustomizations + RetryPolicyFeature(coreCodegenContext.runtimeConfig)
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class RetryPolicyFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {

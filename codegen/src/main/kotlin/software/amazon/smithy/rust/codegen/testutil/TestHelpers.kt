@@ -15,12 +15,12 @@ import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.ClientCoreCodegenConfig
-import software.amazon.smithy.rust.codegen.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin
+import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
@@ -48,10 +48,10 @@ fun testRustSettings(
     moduleDescription: String = "not relevant",
     moduleRepository: String? = null,
     runtimeConfig: RuntimeConfig = TestRuntimeConfig,
-    codegenConfig: ClientCoreCodegenConfig = ClientCoreCodegenConfig(),
+    codegenConfig: CoreCodegenConfig = CoreCodegenConfig(),
     license: String? = null,
     examplesUri: String? = null,
-) = ClientRustSettings(
+) = RustSettings(
     service,
     moduleName,
     moduleVersion,
@@ -74,16 +74,17 @@ fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSy
 fun testCodegenContext(
     model: Model,
     serviceShape: ServiceShape? = null,
-    settings: ClientRustSettings = testRustSettings(),
-    mode: CodegenTarget = CodegenTarget.CLIENT
-): ClientCodegenContext = ClientCodegenContext(
+    settings: RustSettings = testRustSettings(),
+    codegenTarget: CodegenTarget = CodegenTarget.CLIENT
+): CoreCodegenContext = CoreCodegenContext(
     model,
     testSymbolProvider(model),
     serviceShape
         ?: model.serviceShapes.firstOrNull()
         ?: ServiceShape.builder().version("test").id("test#Service").build(),
     ShapeId.from("test#Protocol"),
-    settings, mode
+    settings,
+    codegenTarget
 )
 
 private const val SmithyVersion = "1.0"

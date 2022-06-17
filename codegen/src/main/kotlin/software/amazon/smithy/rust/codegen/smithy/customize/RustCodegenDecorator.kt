@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
-import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
 import java.util.*
 import java.util.logging.Logger
@@ -45,7 +44,7 @@ interface RustCodegenDecorator<C: CoreCodegenContext> {
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> = baseCustomizations
 
-    // TODO Can we make this exist only for Client decorators?
+    // This is only used by decorators for smithy-rs _clients_.
     fun operationCustomizations(
         coreCodegenContext: CoreCodegenContext,
         operation: OperationShape,
@@ -72,9 +71,6 @@ interface RustCodegenDecorator<C: CoreCodegenContext> {
     fun transformModel(service: ServiceShape, model: Model): Model = model
 
     fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider = baseProvider
-
-    // TODO Can we remove this and instead in the filter catch ClassCast Exception?
-    fun canOperateWithCodegenContext(t: Class<*>): Boolean
 }
 
 /**
@@ -150,12 +146,8 @@ open class CombinedCodegenDecorator<C: CoreCodegenContext>(decorators: List<Rust
         }
     }
 
-    override fun canOperateWithCodegenContext(t: Class<*>): Boolean {
-        PANIC("You have forgotten to override this method in your class that subclasses `CombinedCodegenDecorator`.")
-    }
-
     companion object {
-        inline fun <reified T: CoreCodegenContext> fromClasspathGeneric(
+        inline fun <reified T: CoreCodegenContext> fromClasspath(
             context: PluginContext,
             vararg extras: RustCodegenDecorator<T>,
             logger: Logger = Logger.getLogger("RustCodegenSPILoader")
@@ -164,7 +156,21 @@ open class CombinedCodegenDecorator<C: CoreCodegenContext>(decorators: List<Rust
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader)
             )
-                .filter { it.canOperateWithCodegenContext(T::class.java) }
+                // The JVM's `ServiceLoader` is woefully underpowered in that it can not load classes with generic
+                // parameters with _fixed_ parameters (like what we're trying to do here; we only want `RustCodegenDecorator`
+                // classes with code-generation context matching the input `T`).
+                // There are various workarounds: https://stackoverflow.com/questions/5451734/loading-generic-service-implementations-via-java-util-serviceloader
+                // All involve loading _all_ classes from the classpath (i.e. all `RustCodegenDecorator<*>`), and then
+                // filtering them. The most elegant way to filter is arguably by checking if we can cast the loaded
+                // class to what we want.
+                .filter {
+                    try {
+                        it as RustCodegenDecorator<T>
+                        true
+                    } catch (e: ClassCastException) {
+                        false
+                    }
+                }
                 .onEach {
                     logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                 }
@@ -174,8 +180,6 @@ open class CombinedCodegenDecorator<C: CoreCodegenContext>(decorators: List<Rust
                     it as RustCodegenDecorator<T>
                 }
                 .toList()
-            // TODO Should probably look like this.
-//            return CombinedCodegenDecorator(decorators + RequiredCustomizations() + extras)
             return CombinedCodegenDecorator(decorators + extras)
         }
     }

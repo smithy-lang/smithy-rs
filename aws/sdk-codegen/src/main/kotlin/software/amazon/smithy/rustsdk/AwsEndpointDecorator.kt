@@ -67,8 +67,6 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseEndpoint(codegenContext.runtimeConfig)
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class EndpointConfigCustomization(private val coreCodegenContext: CoreCodegenContext, private val endpointData: ObjectNode) :

@@ -111,8 +111,6 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
             }
         }
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 private class AwsFluentClientExtensions(types: Types) {

@@ -35,6 +35,4 @@ class ServerRequiredCustomizations : RustCodegenDecorator<ServerCodegenContext> 
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ServerCodegenContext::class.java)
 }

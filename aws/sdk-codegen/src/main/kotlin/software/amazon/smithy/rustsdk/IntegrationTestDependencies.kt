@@ -47,8 +47,6 @@ class IntegrationTestDecorator : RustCodegenDecorator<ClientCodegenContext> {
             baseCustomizations
         }
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class IntegrationTestDependencies(

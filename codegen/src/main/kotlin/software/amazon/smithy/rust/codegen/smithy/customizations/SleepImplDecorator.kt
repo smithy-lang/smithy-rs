@@ -126,8 +126,6 @@ class SleepImplDecorator : RustCodegenDecorator<ClientCodegenContext> {
     ): List<ConfigCustomization> {
         return baseCustomizations + SleepImplProviderConfig(coreCodegenContext)
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class SleepImplProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {

@@ -27,6 +27,9 @@ open class CoreCodegenContext(
      */
     open val model: Model,
 
+    /**
+     * The "canonical" symbol provider to convert Smithy [Shape]s into [Symbol]s, which have an associated [RustType].
+     */
     open val symbolProvider: RustSymbolProvider,
 
     /**
@@ -45,7 +48,7 @@ open class CoreCodegenContext(
     open val settings: RustSettings,
 
     /**
-     * Server vs. Client codegen
+     * Are we generating code for a smithy-rs client or server?
      *
      * Several code generators are reused by both the client and server plugins, but only deviate in small and contained
      * parts (e.g. changing a return type or adding an attribute).
@@ -55,16 +58,21 @@ open class CoreCodegenContext(
     open val target: CodegenTarget,
 ) {
 
-    // TODO This is just a convenience: we should remove this property and refactor all code to use the `runtimeConfig`
-    //  inside `settings` directly.
+    /**
+     * Configuration of the runtime package:
+     * - Where are the runtime crates (smithy-*) located on the file system? Or are they versioned?
+     * - What are they called?
+     */
+    // This is just a convenience. To avoid typing `context.settings.runtimeConfig`, you can simply write
+    // `context.runtimeConfig`.
     val runtimeConfig: RuntimeConfig by lazy { settings.runtimeConfig }
 
     /**
      * The name of the cargo crate to generate e.g. `aws-sdk-s3`
      * This is loaded from the smithy-build.json during codegen.
      */
-    // TODO This is just a convenience: we should remove this property and refactor all code to use the `moduleName`
-    //  inside `settings` directly.
+    // This is just a convenience. To avoid typing `context.settings.moduleName`, you can simply write
+    // `context.moduleName`.
     val moduleName: String by lazy { settings.moduleName }
 
     /**

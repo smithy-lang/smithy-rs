@@ -233,8 +233,6 @@ class ProtocolTestGeneratorTest {
                 ): ProtocolMap<ClientCodegenContext> =
                     // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
                     mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
-
-                override fun canOperateWithCodegenContext(t: Class<*>): Boolean = t.isAssignableFrom(ClientCodegenContext::class.java)
             }
         )
         visitor.execute()
