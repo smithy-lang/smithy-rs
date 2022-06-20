@@ -190,7 +190,6 @@ class AwsInputPresignedMethod(
             rustTemplate(
                 """
                 let (mut request, _) = self.$makeOperationFn(config)
-                    .await
                     .map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?
                     .into_request_response();
                 """,
