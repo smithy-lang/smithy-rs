@@ -160,7 +160,6 @@ class PaginatorGenerator private constructor(
                         };
                         loop {
                             let op = match input.make_operation(&handle.conf)
-                                .await
                                 .map_err(|err| #{SdkError}::ConstructionFailure(err.into())) {
                                 Ok(op) => op,
                                 Err(e) => {
