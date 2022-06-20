@@ -154,11 +154,11 @@ internal class EndpointTraitBindingsTest {
                             let conf = $moduleName::Config::builder().build();
                             $moduleName::operation::SayHello::builder()
                                 .greeting("hey there!").build().expect("input is valid")
-                                .make_operation(&conf).await.expect_err("no spaces or exclamation points in ep prefixes");
+                                .make_operation(&conf).expect_err("no spaces or exclamation points in ep prefixes");
                             let op = $moduleName::operation::SayHello::builder()
                                 .greeting("hello")
                                 .build().expect("valid operation")
-                                .make_operation(&conf).await.expect("hello is a valid prefix");
+                                .make_operation(&conf).expect("hello is a valid prefix");
                             let properties = op.properties();
                             let prefix = properties.get::<aws_smithy_http::endpoint::EndpointPrefix>()
                                 .expect("prefix should be in config")

@@ -71,7 +71,7 @@ internal class HttpVersionListGeneratorTest {
                             let op = $moduleName::operation::SayHello::builder()
                                 .greeting("hello")
                                 .build().expect("valid operation")
-                                .make_operation(&conf).await.expect("hello is a valid prefix");
+                                .make_operation(&conf).expect("hello is a valid prefix");
                             let properties = op.properties();
                             let actual_http_versions = properties.get::<Vec<http::Version>>()
                                 .expect("http versions list should be in property bag");
@@ -130,7 +130,7 @@ internal class HttpVersionListGeneratorTest {
                             let op = $moduleName::operation::SayHello::builder()
                                 .greeting("hello")
                                 .build().expect("valid operation")
-                                .make_operation(&conf).await.expect("hello is a valid prefix");
+                                .make_operation(&conf).expect("hello is a valid prefix");
                             let properties = op.properties();
                             let actual_http_versions = properties.get::<Vec<http::Version>>()
                                 .expect("http versions list should be in property bag");
@@ -209,7 +209,7 @@ internal class HttpVersionListGeneratorTest {
                             let conf = $moduleName::Config::builder().build();
                             let op = $moduleName::operation::SayHello::builder()
                                 .build().expect("valid operation")
-                                .make_operation(&conf).await.unwrap();
+                                .make_operation(&conf).unwrap();
                             let properties = op.properties();
                             let actual_http_versions = properties.get::<Vec<http::Version>>()
                                 .expect("http versions list should be in property bag");
