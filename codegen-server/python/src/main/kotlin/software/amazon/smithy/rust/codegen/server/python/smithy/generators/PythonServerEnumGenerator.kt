@@ -8,11 +8,16 @@ package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
  * To share enums defined in Rust with Python, `pyo3` provides the `PyClass` trait.
@@ -28,19 +33,29 @@ class PythonServerEnumGenerator(
     runtimeConfig: RuntimeConfig,
 ) : ServerEnumGenerator(model, symbolProvider, writer, shape, enumTrait, runtimeConfig) {
 
+    val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.asType())
+
     override fun render() {
-        writer.renderPyClass(shape)
+        renderPyClass()
         super.render()
         renderPyO3Methods()
     }
 
+    private fun renderPyClass() {
+        if (shape.hasTrait<ErrorTrait>())
+            Attribute.Custom("pyo3::pyclass(extends = pyo3::exceptions::PyException)", symbols = pyo3Symbols).render(writer)
+        else
+            Attribute.Custom("pyo3::pyclass", symbols = pyo3Symbols).render(writer)
+    }
+
     override fun renderFromForStr() {
-        writer.renderPyClass(shape)
+        renderPyClass()
         super.renderFromForStr()
     }
 
     private fun renderPyO3Methods() {
-        writer.renderPyMethods()
+        Attribute.Custom("pyo3::pymethods", symbols = pyo3Symbols).render(writer)
+
         writer.rust(
             """
             impl $enumName {
