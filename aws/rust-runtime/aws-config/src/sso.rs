@@ -220,7 +220,6 @@ async fn load_sso_credentials(
             CredentialsError::unhandled(format!("could not construct SSO token input: {}", err))
         })?
         .make_operation(&config)
-        .await
         .map_err(CredentialsError::unhandled)?;
     let resp = sso
         .call(operation)
