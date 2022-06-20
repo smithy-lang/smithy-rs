@@ -76,7 +76,7 @@ open class MakeOperationGenerator(
         val mut = customizations.any { it.mutSelf() }
         val consumes = customizations.any { it.consumesSelf() } || takesOwnership
         val self = "self".letIf(mut) { "mut $it" }.letIf(!consumes) { "&$it" }
-        val fnType = if (public) "pub async fn" else "async fn"
+        val fnType = if (public) "pub fn" else "fn"
 
         implBlockWriter.docs("Consumes the builder and constructs an Operation<#D>", outputSymbol)
         Attribute.AllowUnusedMut.render(implBlockWriter) // For codegen simplicity

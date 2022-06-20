@@ -505,7 +505,6 @@ class FluentClientGenerator(
                         #{send_bounds:W} {
                             let op = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?
                                 .make_operation(&self.handle.conf)
-                                .await
                                 .map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
                             self.handle.client.call(op).await
                         }

@@ -192,7 +192,7 @@ class ProtocolTestGenerator(
         writeInline("let input =")
         instantiator.render(this, inputShape, httpRequestTestCase.params)
 
-        rust(""".make_operation(&config).await.expect("operation failed to build");""")
+        rust(""".make_operation(&config).expect("operation failed to build");""")
         rust("let (http_request, parts) = input.into_request_response().0.into_parts();")
         with(httpRequestTestCase) {
             host.orNull()?.also { host ->
