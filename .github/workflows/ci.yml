@@ -27,7 +27,7 @@ jobs:
         actions:
         - action: generate-aws-sdk
         - action: generate-aws-sdk-smoketest
-        - action: generate-smithy-rs-runtime-bundle
+        - action: generate-smithy-rs-release
     steps:
     - uses: actions/checkout@v3
       with:
