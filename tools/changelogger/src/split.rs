@@ -32,6 +32,9 @@ pub struct SplitArgs {
     // Git revision to use in `since_commit` fields; for testing only
     #[clap(skip)]
     pub since_commit: Option<String>,
+    // Location of the smithy-rs repository; for testing only
+    #[clap(skip)]
+    pub smithy_rs_location: Option<PathBuf>,
 }
 
 pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
@@ -44,17 +47,26 @@ pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
 
     let (source_log, dest_log) = (
         smithy_rs_entries(changelog.clone()),
-        sdk_entries(args, changelog)?,
+        sdk_entries(args, changelog).context("failed to filter SDK entries")?,
     );
-    write_entries(&args.source, INTERMEDIATE_SOURCE_HEADER, &source_log)?;
-    write_entries(&args.destination, DEST_HEADER, &dest_log)?;
+    write_entries(&args.source, INTERMEDIATE_SOURCE_HEADER, &source_log)
+        .context("failed to write source")?;
+    write_entries(&args.destination, DEST_HEADER, &dest_log)
+        .context("failed to write destination")?;
     Ok(())
 }
 
 fn sdk_entries(args: &SplitArgs, mut changelog: Changelog) -> Result<Changelog> {
     changelog.smithy_rs.clear();
 
-    let repo_root = find_git_repository_root("smithy-rs", env::current_dir().unwrap())?;
+    let current_dir = env::current_dir()?;
+    let repo_root = find_git_repository_root(
+        "smithy-rs",
+        args.smithy_rs_location
+            .as_deref()
+            .unwrap_or_else(|| current_dir.as_path()),
+    )
+    .context("failed to find smithy-rs root")?;
     let last_commit = GitCLI::new(&repo_root)?
         .get_head_revision()
         .context("failed to get current revision of smithy-rs")?;

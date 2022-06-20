@@ -4,14 +4,14 @@
  */
 
 use crate::entry::{ChangeSet, ChangelogEntries, ChangelogEntry};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use ordinal::Ordinal;
 use serde::Serialize;
 use smithy_rs_tool_common::changelog::{
     Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry,
 };
-use smithy_rs_tool_common::git;
+use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use std::env;
 use std::fmt::Write;
 use std::fs;
@@ -50,13 +50,25 @@ pub struct RenderArgs {
     /// Whether or not independent crate versions are being used (defaults to false)
     #[clap(long, action)]
     pub independent_versioning: bool,
+    /// Source changelog entries to render
     #[clap(long, action)]
-    pub source: PathBuf,
+    pub source: Vec<PathBuf>,
+    /// Which source to overwrite with an empty changelog template
+    #[clap(long, action)]
+    pub source_to_truncate: PathBuf,
     #[clap(long, action)]
     pub changelog_output: PathBuf,
     /// Optional path to output a release manifest file to
     #[clap(long, action)]
     pub release_manifest_output: Option<PathBuf>,
+    /// Optional path to the SDK's versions.toml file for the previous release.
+    /// This is used to filter out changelog entries that have `since_commit` information.
+    #[clap(long, action)]
+    pub previous_release_versions_manifest: Option<PathBuf>,
+    // Location of the smithy-rs repository. If not specified, the current
+    // working directory will be used to attempt to find it.
+    #[clap(long, action)]
+    pub smithy_rs_location: Option<PathBuf>,
 
     // For testing only
     #[clap(skip)]
@@ -65,13 +77,24 @@ pub struct RenderArgs {
 
 pub fn subcommand_render(args: &RenderArgs) -> Result<()> {
     let now = args.date_override.unwrap_or_else(OffsetDateTime::now_utc);
+
+    let current_dir = env::current_dir()?;
+    let repo_root: PathBuf = find_git_repository_root(
+        "smithy-rs",
+        args.smithy_rs_location
+            .as_deref()
+            .unwrap_or_else(|| current_dir.as_path()),
+    )
+    .context("failed to find smithy-rs repo root")?;
+    let smithy_rs = GitCLI::new(&repo_root)?;
+
     if args.independent_versioning {
         let smithy_rs_metadata =
             date_based_release_metadata(now, "smithy-rs-release-manifest.json");
         let sdk_metadata = date_based_release_metadata(now, "aws-sdk-rust-release-manifest.json");
-        update_changelogs(args, &smithy_rs_metadata, &sdk_metadata)
+        update_changelogs(args, &smithy_rs, &smithy_rs_metadata, &sdk_metadata)
     } else {
-        let auto = auto_changelog_meta()?;
+        let auto = auto_changelog_meta(&smithy_rs)?;
         let smithy_rs_metadata = version_based_release_metadata(
             now,
             &auto.smithy_version,
@@ -82,7 +105,7 @@ pub fn subcommand_render(args: &RenderArgs) -> Result<()> {
             &auto.sdk_version,
             "aws-sdk-rust-release-manifest.json",
         );
-        update_changelogs(args, &smithy_rs_metadata, &sdk_metadata)
+        update_changelogs(args, &smithy_rs, &smithy_rs_metadata, &sdk_metadata)
     }
 }
 
@@ -148,9 +171,9 @@ fn date_title(now: &OffsetDateTime) -> String {
 }
 
 /// Discover the new version for the changelog from gradle.properties and the date.
-fn auto_changelog_meta() -> Result<ChangelogMeta> {
-    let repo_root = git::find_git_repository_root("smithy-rs", env::current_dir().unwrap())?;
-    let gradle_props = fs::read_to_string(repo_root.join("gradle.properties"))?;
+fn auto_changelog_meta(smithy_rs: &dyn Git) -> Result<ChangelogMeta> {
+    let gradle_props = fs::read_to_string(smithy_rs.path().join("gradle.properties"))
+        .context("failed to load gradle.properties")?;
     let load_gradle_prop = |key: &str| {
         let prop = gradle_props
             .lines()
@@ -235,24 +258,34 @@ fn indented_message(message: &str) -> String {
     out
 }
 
+fn load_changelogs(args: &RenderArgs) -> Result<Changelog> {
+    let mut combined = Changelog::new();
+    for source in &args.source {
+        let changelog = Changelog::load_from_file(source)
+            .map_err(|errs| anyhow::Error::msg(format!("failed to load {source:?}: {errs:#?}")))?;
+        combined.merge(changelog);
+    }
+    Ok(combined)
+}
+
 fn update_changelogs(
     args: &RenderArgs,
+    smithy_rs: &dyn Git,
     smithy_rs_metadata: &ReleaseMetadata,
     aws_sdk_rust_metadata: &ReleaseMetadata,
 ) -> Result<()> {
-    let changelog = Changelog::load_from_file(&args.source).map_err(|errs| {
-        anyhow::Error::msg(format!(
-            "cannot update changelogs with changelog errors: {:#?}",
-            errs
-        ))
-    })?;
+    let changelog = load_changelogs(args)?;
     let release_metadata = match args.change_set {
         ChangeSet::AwsSdk => aws_sdk_rust_metadata,
         ChangeSet::SmithyRs => smithy_rs_metadata,
     };
     let entries = ChangelogEntries::from(changelog);
-    let entries = entries.for_change_set(args.change_set);
-    let (release_header, release_notes) = render(entries, &release_metadata.title);
+    let entries = entries.filter(
+        smithy_rs,
+        args.change_set,
+        args.previous_release_versions_manifest.as_deref(),
+    )?;
+    let (release_header, release_notes) = render(&entries, &release_metadata.title);
     if let Some(output_path) = &args.release_manifest_output {
         let release_manifest = ReleaseManifest {
             tag_name: release_metadata.tag.clone(),
@@ -264,7 +297,8 @@ fn update_changelogs(
         std::fs::write(
             output_path.join(&release_metadata.manifest_name),
             serde_json::to_string_pretty(&release_manifest)?,
-        )?;
+        )
+        .context("failed to write release manifest")?;
     }
 
     let mut update = USE_UPDATE_CHANGELOGS.to_string();
@@ -272,12 +306,14 @@ fn update_changelogs(
     update.push_str(&release_header);
     update.push_str(&release_notes);
 
-    let current =
-        std::fs::read_to_string(&args.changelog_output)?.replace(USE_UPDATE_CHANGELOGS, "");
+    let current = std::fs::read_to_string(&args.changelog_output)
+        .context("failed to read rendered destination changelog")?
+        .replace(USE_UPDATE_CHANGELOGS, "");
     update.push_str(&current);
-    std::fs::write(&args.changelog_output, update)?;
+    std::fs::write(&args.changelog_output, update).context("failed to write rendered changelog")?;
 
-    std::fs::write(&args.source, EXAMPLE_ENTRY.trim())?;
+    std::fs::write(&args.source_to_truncate, EXAMPLE_ENTRY.trim())
+        .context("failed to truncate source")?;
     eprintln!("Changelogs updated!");
     Ok(())
 }

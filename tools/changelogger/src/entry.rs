@@ -3,8 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use anyhow::{bail, Result};
 use clap::clap_derive::ArgEnum;
 use smithy_rs_tool_common::changelog::{Changelog, HandAuthoredEntry, SdkModelEntry};
+use smithy_rs_tool_common::git::Git;
+use smithy_rs_tool_common::versions_manifest::VersionsManifest;
+use std::path::Path;
 
 #[derive(ArgEnum, Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ChangeSet {
@@ -18,10 +22,42 @@ pub struct ChangelogEntries {
 }
 
 impl ChangelogEntries {
-    pub fn for_change_set(&self, change_set: ChangeSet) -> &[ChangelogEntry] {
+    pub fn filter(
+        self,
+        smithy_rs: &dyn Git,
+        change_set: ChangeSet,
+        previous_release_versions_manifest: Option<&Path>,
+    ) -> Result<Vec<ChangelogEntry>> {
         match change_set {
-            ChangeSet::AwsSdk => &self.aws_sdk_rust,
-            ChangeSet::SmithyRs => &self.smithy_rs,
+            ChangeSet::AwsSdk => {
+                if let Some(manifest_path) = previous_release_versions_manifest {
+                    let manifest = VersionsManifest::from_file(manifest_path)?;
+                    let revisions =
+                        smithy_rs.rev_list("HEAD", &manifest.smithy_rs_revision, None)?;
+                    Ok(self
+                        .aws_sdk_rust
+                        .into_iter()
+                        .filter(|entry| match entry {
+                            ChangelogEntry::AwsSdkModel(_) => true,
+                            ChangelogEntry::HandAuthored(entry) => {
+                                if let Some(since_commit) = &entry.since_commit {
+                                    revisions.iter().any(|rev| rev.as_ref() == since_commit)
+                                } else {
+                                    true
+                                }
+                            }
+                        })
+                        .collect())
+                } else {
+                    if self.aws_sdk_rust.iter().any(|entry| {
+                        entry.hand_authored().map(|e| e.since_commit.is_some()) == Some(true)
+                    }) {
+                        bail!("SDK changelog entries have `since_commit` information, but no previous release versions manifest was given");
+                    }
+                    Ok(self.aws_sdk_rust)
+                }
+            }
+            ChangeSet::SmithyRs => Ok(self.smithy_rs),
         }
     }
 }

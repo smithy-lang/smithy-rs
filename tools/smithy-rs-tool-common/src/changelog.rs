@@ -119,7 +119,7 @@ pub struct SdkModelEntry {
     pub message: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct Changelog {
     #[serde(rename = "smithy-rs")]
     #[serde(default)]
@@ -133,6 +133,16 @@ pub struct Changelog {
 }
 
 impl Changelog {
+    pub fn new() -> Changelog {
+        Default::default()
+    }
+
+    pub fn merge(&mut self, other: Changelog) {
+        self.smithy_rs.extend(other.smithy_rs.into_iter());
+        self.aws_sdk_rust.extend(other.aws_sdk_rust.into_iter());
+        self.sdk_models.extend(other.sdk_models.into_iter());
+    }
+
     fn parse_str(value: &str) -> Result<Changelog> {
         match toml::from_str(value).context("Invalid TOML changelog format") {
             Ok(parsed) => Ok(parsed),
