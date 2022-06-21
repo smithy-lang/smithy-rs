@@ -33,8 +33,8 @@ pub mod glacier_checksums;
 /// Default middleware stack for AWS services
 pub mod middleware;
 
-/// Strip `hostedzone/` from hosted zone ids
-pub mod hosted_zone_preprocessor;
-
 /// Convert a streaming `SdkBody` into an aws-chunked streaming body with checksum trailers
 pub mod body_with_checksum;
+
+/// Strip prefixes from IDs returned by Route53 operations when those IDs are used to construct requests
+pub mod route53_resource_id_preprocessor;

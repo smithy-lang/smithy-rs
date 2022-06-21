@@ -23,7 +23,6 @@ configure<software.amazon.smithy.gradle.SmithyExtension> {
 }
 
 val smithyVersion: String by project
-val defaultRustFlags: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
@@ -393,35 +392,10 @@ tasks["assemble"].apply {
     finalizedBy("finalizeSdk")
 }
 
-tasks.register<Exec>("cargoCheck") {
-    workingDir(outputDir)
-    environment("RUSTFLAGS", defaultRustFlags)
-    commandLine("cargo", "check", "--lib", "--tests", "--benches")
-    dependsOn("assemble")
-}
+project.registerCargoCommandsTasks(outputDir, defaultRustDocFlags)
+project.registerGenerateCargoConfigTomlTask(outputDir)
 
-tasks.register<Exec>("cargoTest") {
-    workingDir(outputDir)
-    environment("RUSTFLAGS", defaultRustFlags)
-    commandLine("cargo", "test")
-    dependsOn("assemble")
-}
-
-tasks.register<Exec>("cargoDocs") {
-    workingDir(outputDir)
-    environment("RUSTDOCFLAGS", defaultRustDocFlags)
-    commandLine("cargo", "doc", "--no-deps", "--document-private-items")
-    dependsOn("assemble")
-}
-
-tasks.register<Exec>("cargoClippy") {
-    workingDir(outputDir)
-    environment("RUSTFLAGS", defaultRustFlags)
-    commandLine("cargo", "clippy")
-    dependsOn("assemble")
-}
-
-tasks["test"].finalizedBy("cargoClippy", "cargoTest", "cargoDocs")
+tasks["test"].finalizedBy(Cargo.CLIPPY, Cargo.TEST, Cargo.DOCS)
 
 tasks.register<Delete>("deleteSdk") {
     delete = setOf(outputDir)

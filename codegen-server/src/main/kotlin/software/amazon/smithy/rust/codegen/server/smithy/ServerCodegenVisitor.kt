@@ -19,11 +19,12 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
@@ -32,9 +33,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
@@ -48,26 +47,29 @@ import java.util.logging.Logger
  * Entrypoint for server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
  */
-class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
-    ShapeVisitor.Default<Unit>() {
+open class ServerCodegenVisitor(
+    context: PluginContext,
+    private val codegenDecorator: RustCodegenDecorator<ServerCodegenContext>
+) : ShapeVisitor.Default<Unit>() {
 
-    private val logger = Logger.getLogger(javaClass.name)
-    private val settings = ServerRustSettings.from(context.model, context.settings)
+    protected val logger = Logger.getLogger(javaClass.name)
+    protected val settings = ServerRustSettings.from(context.model, context.settings)
 
-    private val symbolProvider: RustSymbolProvider
-    private val rustCrate: RustCrate
+    protected var symbolProvider: RustSymbolProvider
+    protected var rustCrate: RustCrate
     private val fileManifest = context.fileManifest
-    private val model: Model
-    private val codegenContext: CodegenContext
-    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator>
-    private val protocolGenerator: ProtocolGenerator
+    protected var model: Model
+    protected var codegenContext: ServerCodegenContext
+    protected var protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator, ServerCodegenContext>
+    protected var protocolGenerator: ProtocolGenerator
 
     init {
         val symbolVisitorConfig =
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
-                codegenConfig = settings.codegenConfig,
-                handleRequired = true
+                renameExceptions = false,
+                handleRequired = true,
+                handleRustBoxing = true,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -85,7 +87,13 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
         symbolProvider =
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
-        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, target = CodegenTarget.SERVER)
+        codegenContext = ServerCodegenContext(
+            model,
+            symbolProvider,
+            service,
+            protocol,
+            settings,
+        )
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
@@ -95,14 +103,12 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
      * Base model transformation applied to all services.
      * See below for details.
      */
-    private fun baselineTransform(model: Model) =
+    protected fun baselineTransform(model: Model) =
         model
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
             // Add `Box<T>` to recursive shapes as necessary
             .let(RecursiveShapeBoxer::transform)
-            // Normalize the `message` field on errors when enabled in settings (default: true)
-            .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
             // Normalize operations by adding synthetic input and output shapes to every operation
             .let(OperationNormalizer::transform)
             // Drop unsupported event stream operations from the model
@@ -113,7 +119,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     /**
      * Execute code generation
      *
-     * 1. Load the service from [RustSettings].
+     * 1. Load the service from [CoreRustSettings].
      * 2. Traverse every shape in the closure of the service.
      * 3. Loop through each shape and visit them (calling the override functions in this class)
      * 4. Call finalization tasks specified by decorators.
@@ -175,7 +181,7 @@ class ServerCodegenVisitor(context: PluginContext, private val codegenDecorator:
     }
 
     /**
-     * String Shape Visitor
+     * Enum Shape Visitor
      *
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */

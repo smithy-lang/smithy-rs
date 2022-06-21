@@ -14,13 +14,17 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhau
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customizations.ClientCustomizations
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import java.util.logging.Level
 import java.util.logging.Logger
 
-/** Rust Codegen Plugin
- *  This is the entrypoint for code generation, triggered by the smithy-build plugin.
- *  `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
- *  enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
+/**
+ * Rust Codegen Plugin
+ *
+ * This is the entrypoint for code generation, triggered by the smithy-build plugin.
+ * `resources/META-INF.services/software.amazon.smithy.build.SmithyBuildPlugin` refers to this class by name which
+ * enables the smithy-build plugin to invoke `execute` with all of the Smithy plugin context + models.
  */
 class RustCodegenPlugin : SmithyBuildPlugin {
     override fun getName(): String = "rust-codegen"
@@ -28,12 +32,18 @@ class RustCodegenPlugin : SmithyBuildPlugin {
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
-        // Discover `RustCodegenDecorators` on the classpath. `RustCodegenDecorator` return different types of
-        // customization. A customization is a function of:
+        // Discover `RustCodegenDecorators` on the classpath. `RustCodegenDecorator` returns different types of
+        // customizations. A customization is a function of:
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
-        val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context, ClientCustomizations())
+        val codegenDecorator =
+            CombinedCodegenDecorator.fromClasspath(
+                context,
+                ClientCustomizations(),
+                RequiredCustomizations(),
+                FluentClientDecorator()
+            )
 
         // CodegenVisitor is the main driver of code generation that traverses the model and generates code
         CodegenVisitor(context, codegenDecorator).execute()
@@ -46,7 +56,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
          * The Symbol provider is composed of a base `SymbolVisitor` which handles the core functionality, then is layered
          * with other symbol providers, documented inline, to handle the full scope of Smithy types.
          */
-        fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig) =
+        fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model) }

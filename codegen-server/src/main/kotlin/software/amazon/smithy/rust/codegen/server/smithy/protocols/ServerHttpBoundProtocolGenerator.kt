@@ -41,8 +41,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.extractSymbolFromOption
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -78,7 +78,7 @@ import java.util.logging.Logger
  * See `ServerRestJsonFactory.kt` for more info.
  */
 class ServerHttpBoundProtocolGenerator(
-    codegenContext: CodegenContext,
+    codegenContext: ServerCodegenContext,
     protocol: Protocol,
 ) : ProtocolGenerator(
     codegenContext,
@@ -104,7 +104,7 @@ class ServerHttpBoundProtocolGenerator(
  * non-streaming types.
  */
 private class ServerHttpBoundProtocolTraitImplGenerator(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val protocol: Protocol,
 ) : ProtocolTraitImplGenerator {
     private val logger = Logger.getLogger(javaClass.name)
@@ -306,7 +306,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         if (operationShape.errors.isNotEmpty()) {
             rustTemplate(
                 """
-                impl From<Result<#{O}, #{E}>> for $outputName {
+                impl #{From}<Result<#{O}, #{E}>> for $outputName {
                     fn from(res: Result<#{O}, #{E}>) -> Self {
                         match res {
                             Ok(v) => Self::Output(v),
@@ -316,31 +316,34 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
                 """.trimIndent(),
                 "O" to outputSymbol,
-                "E" to errorSymbol
+                "E" to errorSymbol,
+                "From" to RuntimeType.From
             )
         } else {
             rustTemplate(
                 """
-                impl From<#{O}> for $outputName {
+                impl #{From}<#{O}> for $outputName {
                     fn from(o: #{O}) -> Self {
                         Self(o)
                     }
                 }
                 """.trimIndent(),
-                "O" to outputSymbol
+                "O" to outputSymbol,
+                "From" to RuntimeType.From
             )
         }
 
         // Implement conversion function to "unwrap" into the model operation input types.
         rustTemplate(
             """
-            impl From<$inputName> for #{I} {
+            impl #{From}<$inputName> for #{I} {
                 fn from(i: $inputName) -> Self {
                     i.0
                 }
             }
             """.trimIndent(),
-            "I" to inputSymbol
+            "I" to inputSymbol,
+            "From" to RuntimeType.From
         )
     }
 
