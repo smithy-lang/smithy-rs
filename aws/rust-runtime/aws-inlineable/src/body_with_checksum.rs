@@ -5,8 +5,6 @@
 
 //! Functions for modifying requests and responses for the purposes of checksum validation
 
-use std::fmt::Formatter;
-
 /// Given a `&mut http::request::Request`, and checksum algorithm name, calculate a checksum and
 /// then modify the request to include the checksum as a header.
 pub fn build_checksum_validated_request(
@@ -41,7 +39,7 @@ pub enum ChecksumValidatedRequestError {
 }
 
 impl std::fmt::Display for ChecksumValidatedRequestError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UnsizedRequestBody => write!(
                 f,
@@ -114,6 +112,11 @@ pub fn build_checksum_validated_sdk_body(
     checksum_algorithm: &str,
     precalculated_checksum: bytes::Bytes,
 ) -> aws_smithy_http::body::SdkBody {
+    tracing::trace!(
+        "wrapping response body in {} checksum validator, expected checksum is {:#?}",
+        checksum_algorithm,
+        precalculated_checksum,
+    );
     let body = aws_smithy_checksums::body::ChecksumValidatedBody::new(
         body,
         checksum_algorithm,
@@ -126,17 +129,67 @@ pub fn build_checksum_validated_sdk_body(
 /// corresponding header as `Some(Bytes)`. If the header is unset, return `None`.
 pub fn check_headers_for_precalculated_checksum(
     headers: &http::HeaderMap<http::HeaderValue>,
+    response_algorithms: &[&str],
 ) -> Option<(&'static str, bytes::Bytes)> {
-    for header_name in aws_smithy_checksums::CHECKSUM_HEADERS_IN_PRIORITY_ORDER {
+    // TODO sort response_algorithms in priority order based on `aws_smithy_checksums::CHECKSUM_HEADERS_IN_PRIORITY_ORDER`
+    let response_algorithms = response_algorithms.iter().map(|&algorithm| {
+        aws_smithy_checksums::checksum_algorithm_to_checksum_header_name(algorithm)
+    });
+    for header_name in response_algorithms {
         if let Some(precalculated_checksum) = headers.get(&header_name) {
             let checksum_algorithm =
                 aws_smithy_checksums::checksum_header_name_to_checksum_algorithm(&header_name);
-            let precalculated_checksum =
-                bytes::Bytes::copy_from_slice(precalculated_checksum.as_bytes());
+            let base64_encoded_precalculated_checksum = precalculated_checksum
+                .to_str()
+                .expect("base64 uses ASCII characters");
 
+            // TODO this error should get bubbled up. It's not likely a service would send back
+            //      invalid base64, but we should still be thorough.
+            let precalculated_checksum: bytes::Bytes =
+                aws_smithy_types::base64::decode(base64_encoded_precalculated_checksum)
+                    .unwrap()
+                    .into();
             return Some((checksum_algorithm, precalculated_checksum));
         }
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::body_with_checksum::build_checksum_validated_sdk_body;
+    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::byte_stream::ByteStream;
+    use bytes::Bytes;
+    use std::sync::Once;
+
+    static INIT_LOGGER: Once = Once::new();
+    fn init_logger() {
+        INIT_LOGGER.call_once(|| {
+            tracing_subscriber::fmt::init();
+        });
+    }
+
+    #[tokio::test]
+    async fn test_build_checksum_validated_body_works() {
+        init_logger();
+
+        let input_text = "Hello world";
+        let body = ByteStream::new(SdkBody::from(input_text));
+        let precalculated_checksum = Bytes::from_static(&[0x8b, 0xd6, 0x9e, 0x52]);
+
+        let body = body.map(move |sdk_body| {
+            build_checksum_validated_sdk_body(sdk_body, "crc32", precalculated_checksum.clone())
+        });
+
+        let mut validated_body = Vec::new();
+        if let Err(e) = tokio::io::copy(&mut body.into_async_read(), &mut validated_body).await {
+            tracing::error!("{}", e);
+            panic!("checksum validation has failed");
+        };
+        let body = std::str::from_utf8(&validated_body).unwrap();
+
+        assert_eq!(body, input_text);
+    }
 }

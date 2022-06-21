@@ -200,6 +200,11 @@ impl ChecksumValidatedBody<SdkBody> {
                 let len = data.chunk().len();
                 let bytes = data.copy_to_bytes(len);
 
+                tracing::trace!(
+                    "reading {} bytes from the body and updating the checksum calculation",
+                    bytes.len()
+                );
+
                 if let Err(e) = checksum.update(&bytes) {
                     return Poll::Ready(Some(Err(e)));
                 }
@@ -209,6 +214,7 @@ impl ChecksumValidatedBody<SdkBody> {
             // Once the inner body has stopped returning data, check the checksum
             // and return an error if it doesn't match.
             Poll::Ready(None) => {
+                tracing::trace!("finished reading from body, calculating final checksum");
                 let actual_checksum = {
                     match checksum.finalize() {
                         Ok(checksum) => checksum,
@@ -255,8 +261,9 @@ impl Display for Error {
         match self {
             Error::ChecksumMismatch { expected, actual } => write!(
                 f,
-                "body checksum mismatch. expected body checksum to be {:x} but it was {:x}",
-                expected, actual
+                "body checksum mismatch. expected body checksum to be {} but it was {}",
+                hex::encode(expected),
+                hex::encode(actual)
             ),
         }
     }

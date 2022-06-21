@@ -38,7 +38,7 @@ interface ProtocolPayloadGenerator {
     data class PayloadMetadata(val takesOwnership: Boolean)
 
     /**
-     * Code generation needs to handle whether or not [generatePayload] takes ownership of the input or output
+     * Code generation needs to handle whether [generatePayload] takes ownership of the input or output
      * for a given operation shape.
      *
      * Most operations will use the HTTP payload as a reference, but for operations that will consume the entire stream
@@ -70,7 +70,7 @@ interface ProtocolPayloadGenerator {
  *                           must have the complete body to return a result.
  */
 interface ProtocolTraitImplGenerator {
-    fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape)
+    fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>)
 }
 
 /**
@@ -158,7 +158,7 @@ open class ProtocolGenerator(
 
             writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
         }
-        traitGenerator.generateTraitImpls(operationWriter, operationShape)
+        traitGenerator.generateTraitImpls(operationWriter, operationShape, customizations)
     }
 
     /**
@@ -169,7 +169,8 @@ open class ProtocolGenerator(
         operationWriter: RustWriter,
         operationShape: OperationShape,
     ) {
-        traitGenerator.generateTraitImpls(operationWriter, operationShape)
+        // TODO should server folks get operation customizations too?
+        traitGenerator.generateTraitImpls(operationWriter, operationShape, emptyList())
     }
 
     private fun renderTypeAliases(
@@ -179,8 +180,8 @@ open class ProtocolGenerator(
         inputShape: StructureShape
     ) {
         // TODO(https://github.com/awslabs/smithy-rs/issues/976): Callers should be able to invoke
-        // buildOperationType* directly to get the type rather than depending on these aliases.
-        // These are used in fluent clients.
+        //    buildOperationType* directly to get the type rather than depending on these aliases.
+        //    These are used in fluent clients.
         val operationTypeOutput = buildOperationTypeOutput(inputWriter, operationShape)
         val operationTypeRetry = buildOperationTypeRetry(inputWriter, customizations)
         val inputPrefix = symbolProvider.toSymbol(inputShape).name
@@ -197,5 +198,5 @@ open class ProtocolGenerator(
         writer.format(symbolProvider.toSymbol(shape))
 
     private fun buildOperationTypeRetry(writer: RustWriter, customizations: List<OperationCustomization>): String =
-        customizations.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
+        customizations.firstNotNullOfOrNull { it.retryType() }?.let { writer.format(it) } ?: "()"
 }

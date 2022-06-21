@@ -392,6 +392,10 @@ impl ByteStream {
     pub fn into_async_read(self) -> impl tokio::io::AsyncRead {
         tokio_util::io::StreamReader::new(self)
     }
+
+    pub fn map(self, f: impl Fn(SdkBody) -> SdkBody + Send + Sync + 'static) -> ByteStream {
+        ByteStream::new(self.into_inner().map(f))
+    }
 }
 
 impl Default for ByteStream {

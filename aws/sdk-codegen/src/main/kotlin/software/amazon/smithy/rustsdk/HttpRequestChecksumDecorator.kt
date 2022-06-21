@@ -35,6 +35,7 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
         CargoDependency.SmithyChecksums(this),
         CargoDependency.SmithyTypes(this),
         CargoDependency.Bytes,
+        CargoDependency.Tracing,
         this.awsRuntimeDependency("aws-http")
     )
 )

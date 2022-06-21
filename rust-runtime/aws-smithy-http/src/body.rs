@@ -194,6 +194,14 @@ impl SdkBody {
         self.callbacks.push(callback);
         self
     }
+
+    pub fn map(self, f: impl Fn(SdkBody) -> SdkBody + Sync + Send + 'static) -> SdkBody {
+        if self.rebuild.is_some() {
+            SdkBody::retryable(move || f(self.try_clone().unwrap()))
+        } else {
+            f(self)
+        }
+    }
 }
 
 impl From<&str> for SdkBody {

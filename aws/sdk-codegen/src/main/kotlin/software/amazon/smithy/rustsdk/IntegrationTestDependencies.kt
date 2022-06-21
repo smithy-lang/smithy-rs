@@ -6,6 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency.Companion.BytesUtils
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Writable
@@ -80,6 +81,7 @@ class IntegrationTestDependencies(
 
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> = when (moduleName) {
         "transcribestreaming" -> listOf(TranscribeTestDependencies())
+        "s3" -> listOf(S3TestDependencies())
         else -> emptyList()
     }
 }
@@ -89,6 +91,12 @@ class TranscribeTestDependencies : LibRsCustomization() {
         addDependency(AsyncStream)
         addDependency(FuturesCore)
         addDependency(Hound)
+    }
+}
+
+class S3TestDependencies : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable = writable {
+        addDependency(BytesUtils)
     }
 }
 

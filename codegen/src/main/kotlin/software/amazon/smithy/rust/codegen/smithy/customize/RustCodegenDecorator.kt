@@ -50,7 +50,6 @@ interface RustCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> = baseCustomizations
-
     fun libRsCustomizations(
         codegenContext: CodegenContext,
         baseCustomizations: List<LibRsCustomization>
