@@ -43,9 +43,6 @@ struct Args {
     /// The maximum Java metaspace (in megabytes) that the Gradle daemon is allowed to use during code generation.
     #[clap(long)]
     max_gradle_metaspace_megabytes: Option<usize>,
-    /// Path to the AWS service models to code generate.
-    #[clap(long)]
-    aws_models_path: Option<PathBuf>,
 }
 
 impl Args {
@@ -61,7 +58,7 @@ impl Args {
             max_gradle_metaspace_megabytes: self
                 .max_gradle_metaspace_megabytes
                 .unwrap_or(defaults.max_gradle_metaspace_megabytes),
-            aws_models_path: self.aws_models_path.clone(),
+            aws_models_path: Some(self.aws_sdk_rust.join("aws-models")),
         }
     }
 }

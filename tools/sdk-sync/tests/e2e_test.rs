@@ -11,12 +11,9 @@ use sdk_sync::sync::{Sync, BOT_EMAIL, BOT_NAME};
 use smithy_rs_tool_common::git::{Git, GitCLI};
 use smithy_rs_tool_common::shell::handle_failure;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
-
-const ENDPOINTS_JSON_PATH: &str =
-    "aws/sdk-codegen/src/main/resources/software/amazon/smithy/rustsdk/endpoints.json";
 
 static INIT_TRACING: Lazy<bool> = Lazy::new(|| {
     init_tracing();
@@ -68,10 +65,12 @@ fn test_without_model_changes() {
     // Assert pre-conditions
     assert_file_exists(aws_sdk_rust.path().join(".git"));
     assert_file_exists(aws_sdk_rust.path().join(".handwritten"));
-    assert_file_exists(aws_sdk_rust.path().join("some_handwritten"));
-    assert_file_exists(aws_sdk_rust.path().join("versions.toml"));
+    assert_file_exists(aws_sdk_rust.path().join("aws-models/endpoints.json"));
+    assert_file_exists(aws_sdk_rust.path().join("aws-models/s3.json"));
     assert_file_exists(aws_sdk_rust.path().join("sdk/s3/fake_content"));
     assert_file_exists(aws_sdk_rust.path().join("sdk/s3/s3.json"));
+    assert_file_exists(aws_sdk_rust.path().join("some_handwritten"));
+    assert_file_exists(aws_sdk_rust.path().join("versions.toml"));
     assert_file_exists(aws_sdk_rust.path().join("examples/s3/fake_content"));
     assert_no_file(aws_sdk_rust.path().join("examples/Cargo.toml"));
 
@@ -90,11 +89,11 @@ fn test_without_model_changes() {
 
     // Run the sync
     let sync = Sync::new(
-        &tmp_dir.as_ref().join("aws-doc-sdk-examples"),
-        &tmp_dir.as_ref().join("aws-sdk-rust"),
-        &tmp_dir.as_ref().join("smithy-rs"),
+        &tmp_dir.path().join("aws-doc-sdk-examples"),
+        &tmp_dir.path().join("aws-sdk-rust"),
+        &tmp_dir.path().join("smithy-rs"),
         CodeGenSettings {
-            aws_models_path: Some(PathBuf::from("test-models-path")),
+            aws_models_path: Some(tmp_dir.path().join("aws-sdk-rust").join("aws-models")),
             ..Default::default()
         },
     )
@@ -137,6 +136,8 @@ fn test_without_model_changes() {
     // Verify SDK files
     assert_file_exists(aws_sdk_rust.path().join(".git"));
     assert_file_exists(aws_sdk_rust.path().join(".handwritten"));
+    assert_file_exists(aws_sdk_rust.path().join("aws-models/endpoints.json"));
+    assert_file_exists(aws_sdk_rust.path().join("aws-models/s3.json"));
     assert_file_exists(aws_sdk_rust.path().join("some_handwritten"));
     assert_file_exists(aws_sdk_rust.path().join("versions.toml"));
     assert_file_exists(aws_sdk_rust.path().join("sdk/s3/fake_content"));
@@ -157,7 +158,7 @@ fn test_without_model_changes() {
         "Some modified S3 example\n",
     );
 
-    // Verify smithy-rs had no changes since we don't have model updates
+    // Verify smithy-rs had no changes
     assert_eq!(
         smithy_rs_start_revision,
         smithy_rs.get_head_revision().unwrap()
@@ -190,10 +191,12 @@ fn test_with_model_changes() {
     // Assert pre-conditions
     assert_file_exists(aws_sdk_rust.path().join(".git"));
     assert_file_exists(aws_sdk_rust.path().join(".handwritten"));
-    assert_file_exists(aws_sdk_rust.path().join("some_handwritten"));
-    assert_file_exists(aws_sdk_rust.path().join("versions.toml"));
+    assert_file_exists(aws_sdk_rust.path().join("aws-models/endpoints.json"));
+    assert_file_exists(aws_sdk_rust.path().join("aws-models/s3.json"));
     assert_file_exists(aws_sdk_rust.path().join("sdk/s3/fake_content"));
     assert_file_exists(aws_sdk_rust.path().join("sdk/s3/s3.json"));
+    assert_file_exists(aws_sdk_rust.path().join("some_handwritten"));
+    assert_file_exists(aws_sdk_rust.path().join("versions.toml"));
     assert_file_exists(aws_sdk_rust.path().join("examples/s3/fake_content"));
     assert_no_file(aws_sdk_rust.path().join("examples/Cargo.toml"));
 
@@ -212,11 +215,11 @@ fn test_with_model_changes() {
 
     // Run the sync
     let sync = Sync::new(
-        &tmp_dir.as_ref().join("aws-doc-sdk-examples"),
-        &tmp_dir.as_ref().join("aws-sdk-rust"),
-        &tmp_dir.as_ref().join("smithy-rs"),
+        &tmp_dir.path().join("aws-doc-sdk-examples"),
+        &tmp_dir.path().join("aws-sdk-rust"),
+        &tmp_dir.path().join("smithy-rs"),
         CodeGenSettings {
-            aws_models_path: Some(PathBuf::from("test-models-path")),
+            aws_models_path: Some(tmp_dir.path().join("aws-sdk-rust").join("aws-models")),
             ..Default::default()
         },
     )
@@ -232,7 +235,7 @@ fn test_with_model_changes() {
         .map(|commit_hash| aws_sdk_rust.show(commit_hash.as_ref()).unwrap())
         .collect();
 
-    assert_eq!(3, sdk_commits.len());
+    assert_eq!(3, sdk_commits.len(), "commits: {:#?}", sdk_commits);
 
     assert_eq!(BOT_NAME, sdk_commits[0].author_name);
     assert_eq!(BOT_EMAIL, sdk_commits[0].author_email);
@@ -264,6 +267,8 @@ fn test_with_model_changes() {
     // Verify SDK files
     assert_file_exists(aws_sdk_rust.path().join(".git"));
     assert_file_exists(aws_sdk_rust.path().join(".handwritten"));
+    assert_file_exists(aws_sdk_rust.path().join("aws-models/endpoints.json"));
+    assert_file_exists(aws_sdk_rust.path().join("aws-models/s3.json"));
     assert_file_exists(aws_sdk_rust.path().join("some_handwritten"));
     assert_file_exists(aws_sdk_rust.path().join("versions.toml"));
     assert_file_exists(aws_sdk_rust.path().join("sdk/s3/fake_content"));
@@ -276,6 +281,10 @@ fn test_with_model_changes() {
         "Updated S3 model\n",
     );
     assert_file_contents(
+        aws_sdk_rust.path().join("sdk/verify-endpoints.json"),
+        "Updated endpoints.json\n",
+    );
+    assert_file_contents(
         aws_sdk_rust.path().join("sdk/s3/fake_content"),
         "Some updated S3 client code\n",
     );
@@ -284,13 +293,9 @@ fn test_with_model_changes() {
         "Some modified S3 example\n",
     );
 
-    // Verify smithy-rs has the model updates
-    assert_ne!(
+    // Verify smithy-rs had no changes
+    assert_eq!(
         smithy_rs_start_revision,
         smithy_rs.get_head_revision().unwrap()
-    );
-    assert_file_contents(
-        smithy_rs.path().join(ENDPOINTS_JSON_PATH),
-        "Updated endpoints.json\n",
     );
 }
