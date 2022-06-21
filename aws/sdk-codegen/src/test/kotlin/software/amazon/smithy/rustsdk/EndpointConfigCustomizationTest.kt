@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
@@ -129,11 +128,11 @@ internal class EndpointConfigCustomizationTest {
             override val name: String = "tests and config"
             override val order: Byte = 0
             override fun configCustomizations(
-                coreCodegenContext: CoreCodegenContext,
+                codegenContext: ClientCodegenContext,
                 baseCustomizations: List<ConfigCustomization>
             ): List<ConfigCustomization> =
                 baseCustomizations + stubConfigCustomization("a") + EndpointConfigCustomization(
-                    coreCodegenContext,
+                    codegenContext,
                     endpointConfig
                 ) + stubConfigCustomization("b")
 

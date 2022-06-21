@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -203,10 +202,10 @@ internal class HttpVersionListGeneratorTest {
             override val order: Byte = 0
 
             override fun configCustomizations(
-                coreCodegenContext: CoreCodegenContext,
+                codegenContext: ClientCodegenContext,
                 baseCustomizations: List<ConfigCustomization>
             ): List<ConfigCustomization> {
-                return super.configCustomizations(coreCodegenContext, baseCustomizations) + FakeSigningConfig(coreCodegenContext.runtimeConfig)
+                return super.configCustomizations(codegenContext, baseCustomizations) + FakeSigningConfig(codegenContext.runtimeConfig)
             }
 
             override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
