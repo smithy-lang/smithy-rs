@@ -158,6 +158,9 @@ impl DefaultSdkGenerator {
             .join(" ")
         ));
 
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1493): Remove this argument once a release goes out with it removed from `build.gradle.kts`
+        command.arg("-Paws.fullsdk=true");
+
         // Disable Smithy's codegen parallelism in favor of sdk-sync parallelism
         command.arg(format!(
             "-Djava.util.concurrent.ForkJoinPool.common.parallelism={}",

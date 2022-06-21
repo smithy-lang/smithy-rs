@@ -126,14 +126,8 @@ pub trait Git: Send + Sync {
     /// Deletes a branch.
     fn delete_branch(&self, branch_name: &str) -> Result<()>;
 
-    /// Squash merges a branch into the current branch.
-    fn squash_merge(
-        &self,
-        author_name: &str,
-        author_email: &str,
-        branch_name: &str,
-        commit_message: &str,
-    ) -> Result<()>;
+    /// Squash merges a branch into the current branch and leaves the changes staged.
+    fn squash_merge(&self, author_name: &str, author_email: &str, branch_name: &str) -> Result<()>;
 
     /// Returns list of untracked files.
     fn untracked_files(&self) -> Result<Vec<PathBuf>>;
@@ -324,7 +318,7 @@ impl Git for GitCLI {
         command.current_dir(&self.repo_path);
 
         let output = log_command(command).output()?;
-        handle_failure("rev_list", &output)?;
+        handle_failure("hard_reset", &output)?;
         Ok(())
     }
 
@@ -365,24 +359,19 @@ impl Git for GitCLI {
         Ok(())
     }
 
-    fn squash_merge(
-        &self,
-        author_name: &str,
-        author_email: &str,
-        branch_name: &str,
-        commit_message: &str,
-    ) -> Result<()> {
+    fn squash_merge(&self, author_name: &str, author_email: &str, branch_name: &str) -> Result<()> {
         let mut command = Command::new(&self.binary_name);
+        command.arg("-c");
+        command.arg(format!("user.name={}", author_name));
+        command.arg("-c");
+        command.arg(format!("user.email={}", author_email));
         command.arg("merge");
         command.arg("--squash");
         command.arg(branch_name);
         command.current_dir(&self.repo_path);
 
         let output = log_command(command).output()?;
-        handle_failure("squash_merge", &output)?;
-
-        // `git merge --squash` only stages changes, so a commit is necessary after
-        self.commit(author_name, author_email, commit_message)
+        handle_failure("squash_merge", &output)
     }
 
     fn untracked_files(&self) -> Result<Vec<PathBuf>> {
@@ -624,12 +613,7 @@ mod tests {
     #[test]
     fn squash_merge() {
         cli("git-squash-merge")
-            .squash_merge(
-                "test-author",
-                "test-author-email",
-                "test-branch-name",
-                "test message",
-            )
+            .squash_merge("some-dev", "some-email@example.com", "test-branch-name")
             .expect("successful invocation");
     }
 }
