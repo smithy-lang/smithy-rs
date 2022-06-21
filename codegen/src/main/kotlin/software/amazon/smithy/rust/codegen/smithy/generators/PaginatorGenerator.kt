@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientGenerics
@@ -52,15 +52,15 @@ class PaginatorGenerator private constructor(
 
     companion object {
         fun paginatorType(
-            codegenContext: CodegenContext,
+            coreCodegenContext: CoreCodegenContext,
             generics: FluentClientGenerics,
             operationShape: OperationShape
         ): RuntimeType? {
-            return if (operationShape.isPaginated(codegenContext.model)) {
+            return if (operationShape.isPaginated(coreCodegenContext.model)) {
                 PaginatorGenerator(
-                    codegenContext.model,
-                    codegenContext.symbolProvider,
-                    codegenContext.serviceShape,
+                    coreCodegenContext.model,
+                    coreCodegenContext.symbolProvider,
+                    coreCodegenContext.serviceShape,
                     operationShape,
                     generics
                 ).paginatorType()

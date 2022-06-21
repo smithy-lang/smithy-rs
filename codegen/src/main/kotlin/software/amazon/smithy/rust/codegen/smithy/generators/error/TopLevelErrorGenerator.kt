@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 
@@ -37,15 +37,15 @@ import software.amazon.smithy.rust.codegen.smithy.RustCrate
  * }
  * ```
  */
-class TopLevelErrorGenerator(codegenContext: CodegenContext, private val operations: List<OperationShape>) {
-    private val symbolProvider = codegenContext.symbolProvider
-    private val model = codegenContext.model
+class TopLevelErrorGenerator(coreCodegenContext: CoreCodegenContext, private val operations: List<OperationShape>) {
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = coreCodegenContext.model
 
-    private val allErrors = operations.flatMap { it.errors }.distinctBy { it.getName(codegenContext.serviceShape) }
-        .map { codegenContext.model.expectShape(it, StructureShape::class.java) }
-        .sortedBy { it.id.getName(codegenContext.serviceShape) }
+    private val allErrors = operations.flatMap { it.errors }.distinctBy { it.getName(coreCodegenContext.serviceShape) }
+        .map { coreCodegenContext.model.expectShape(it, StructureShape::class.java) }
+        .sortedBy { it.id.getName(coreCodegenContext.serviceShape) }
 
-    private val sdkError = CargoDependency.SmithyHttp(codegenContext.runtimeConfig).asType().member("result::SdkError")
+    private val sdkError = CargoDependency.SmithyHttp(coreCodegenContext.runtimeConfig).asType().member("result::SdkError")
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.default("error_meta", visibility = Visibility.PRIVATE)) { writer ->
             writer.renderDefinition()

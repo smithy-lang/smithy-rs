@@ -10,20 +10,23 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.letIf
 
-class ApiGatewayDecorator : RustCodegenDecorator {
+class ApiGatewayDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "ApiGateway"
     override val order: Byte = 0
 
-    private fun applies(codegenContext: CodegenContext) = codegenContext.serviceShape.id == ShapeId.from("com.amazonaws.apigateway#BackplaneControlService")
+    private fun applies(coreCodegenContext: CoreCodegenContext) =
+        coreCodegenContext.serviceShape.id == ShapeId.from("com.amazonaws.apigateway#BackplaneControlService")
+
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {

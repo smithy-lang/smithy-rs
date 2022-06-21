@@ -18,7 +18,8 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
@@ -29,10 +30,10 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.outputShape
 
-class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
-    override fun protocol(codegenContext: CodegenContext): Protocol = RestJson(codegenContext)
+class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
+    override fun protocol(codegenContext: ClientCodegenContext): Protocol = RestJson(codegenContext)
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): HttpBoundProtocolGenerator =
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, RestJson(codegenContext))
 
     override fun transformModel(model: Model): Model = model
@@ -86,8 +87,8 @@ class RestJsonHttpBindingResolver(
     }
 }
 
-class RestJson(private val codegenContext: CodegenContext) : Protocol {
-    private val runtimeConfig = codegenContext.runtimeConfig
+class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
@@ -99,7 +100,7 @@ class RestJson(private val codegenContext: CodegenContext) : Protocol {
     private val jsonDeserModule = RustModule.private("json_deser")
 
     override val httpBindingResolver: HttpBindingResolver =
-        RestJsonHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
+        RestJsonHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes.consistent("application/json"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
@@ -111,10 +112,10 @@ class RestJson(private val codegenContext: CodegenContext) : Protocol {
         listOf("x-amzn-errortype" to errorShape.id.name)
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
+        JsonParserGenerator(coreCodegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
+        JsonSerializerGenerator(coreCodegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->

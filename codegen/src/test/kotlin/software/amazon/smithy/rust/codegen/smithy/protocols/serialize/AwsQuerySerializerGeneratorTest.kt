@@ -95,7 +95,7 @@ class AwsQuerySerializerGeneratorTest {
             true -> CodegenTarget.CLIENT
             false -> CodegenTarget.SERVER
         }
-        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model).copy(target = target))
+        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model, codegenTarget = target))
         val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
