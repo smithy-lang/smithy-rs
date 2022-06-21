@@ -98,6 +98,11 @@ structure FlavorText {
         value: "it",
         documentation: "Italiano.",
     },
+    {
+        name: "PORTUGUESE",
+        value: "pt",
+        documentation: "Português.",
+    },
 ])
 string Language
 
