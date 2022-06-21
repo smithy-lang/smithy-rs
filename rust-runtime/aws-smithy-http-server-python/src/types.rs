@@ -6,6 +6,9 @@
 //! Python wrapped types from aws-smithy-types.
 
 use pyo3::prelude::*;
+use std::ops::Deref;
+
+use crate::Error;
 
 /// Python Wrapper for [aws_smithy_types::Blob].
 #[pyclass]
@@ -48,6 +51,169 @@ impl Blob {
     #[setter(data)]
     pub fn set_data(&mut self, data: Vec<u8>) {
         *self = Self::pynew(data);
+    }
+}
+
+impl From<aws_smithy_types::Blob> for Blob {
+    fn from(other: aws_smithy_types::Blob) -> Blob {
+        Blob(other)
+    }
+}
+
+impl From<Blob> for aws_smithy_types::Blob {
+    fn from(other: Blob) -> aws_smithy_types::Blob {
+        other.0
+    }
+}
+
+#[pyclass]
+#[derive(Debug, Clone, PartialEq)]
+pub struct DateTime(aws_smithy_types::date_time::DateTime);
+
+impl Deref for DateTime {
+    type Target = aws_smithy_types::date_time::DateTime;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[pyclass]
+/// Formats for representing a `DateTime` in the Smithy protocols.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Format {
+    /// RFC-3339 Date Time.
+    DateTime,
+    /// Date format used by the HTTP `Date` header, specified in RFC-7231.
+    HttpDate,
+    /// Number of seconds since the Unix epoch formatted as a floating point.
+    EpochSeconds,
+}
+
+impl From<Format> for aws_smithy_types::date_time::Format {
+    fn from(variant: Format) -> aws_smithy_types::date_time::Format {
+        match variant {
+            Format::DateTime => aws_smithy_types::date_time::Format::DateTime,
+            Format::HttpDate => aws_smithy_types::date_time::Format::HttpDate,
+            Format::EpochSeconds => aws_smithy_types::date_time::Format::EpochSeconds,
+        }
+    }
+}
+
+/// DateTime in time.
+///
+/// DateTime in time represented as seconds and sub-second nanos since
+/// the Unix epoch (January 1, 1970 at midnight UTC/GMT).
+#[pymethods]
+impl DateTime {
+    /// Creates a `DateTime` from a number of seconds since the Unix epoch.
+    #[staticmethod]
+    pub fn from_secs(epoch_seconds: i64) -> Self {
+        Self(aws_smithy_types::date_time::DateTime::from_secs(
+            epoch_seconds,
+        ))
+    }
+
+    /// Creates a `DateTime` from a number of milliseconds since the Unix epoch.
+    #[staticmethod]
+    pub fn from_millis(epoch_millis: i64) -> Self {
+        Self(aws_smithy_types::date_time::DateTime::from_secs(
+            epoch_millis,
+        ))
+    }
+
+    /// Creates a `DateTime` from a number of nanoseconds since the Unix epoch.
+    #[staticmethod]
+    pub fn from_nanos(epoch_nanos: i128) -> PyResult<Self> {
+        Ok(Self(
+            aws_smithy_types::date_time::DateTime::from_nanos(epoch_nanos)
+                .map_err(Error::DateTimeConversion)?,
+        ))
+    }
+
+    /// Read 1 date of `format` from `s`, expecting either `delim` or EOF.
+    #[staticmethod]
+    pub fn read(s: &str, format: Format, delim: char) -> PyResult<(Self, &str)> {
+        let (self_, next) = aws_smithy_types::date_time::DateTime::read(s, format.into(), delim)
+            .map_err(Error::DateTimeParse)?;
+        Ok((Self(self_), next))
+    }
+
+    /// Creates a `DateTime` from a number of seconds and a fractional second since the Unix epoch.
+    #[staticmethod]
+    pub fn from_fractional_secs(epoch_seconds: i64, fraction: f64) -> Self {
+        Self(aws_smithy_types::date_time::DateTime::from_fractional_secs(
+            epoch_seconds,
+            fraction,
+        ))
+    }
+
+    /// Creates a `DateTime` from a number of seconds and sub-second nanos since the Unix epoch.
+    #[staticmethod]
+    pub fn from_secs_and_nanos(seconds: i64, subsecond_nanos: u32) -> Self {
+        Self(aws_smithy_types::date_time::DateTime::from_secs_and_nanos(
+            seconds,
+            subsecond_nanos,
+        ))
+    }
+
+    /// Creates a `DateTime` from an `f64` representing the number of seconds since the Unix epoch.
+    #[staticmethod]
+    pub fn from_secs_f64(epoch_seconds: f64) -> Self {
+        Self(aws_smithy_types::date_time::DateTime::from_secs_f64(
+            epoch_seconds,
+        ))
+    }
+
+    /// Parses a `DateTime` from a string using the given `format`.
+    #[staticmethod]
+    pub fn from_str(s: &str, format: Format) -> PyResult<Self> {
+        Ok(Self(
+            aws_smithy_types::date_time::DateTime::from_str(s, format.into())
+                .map_err(Error::DateTimeParse)?,
+        ))
+    }
+
+    /// Returns the number of nanoseconds since the Unix epoch that this `DateTime` represents.
+    pub fn as_nanos(&self) -> i128 {
+        self.0.as_nanos()
+    }
+
+    /// Returns the `DateTime` value as an `f64` representing the seconds since the Unix epoch.
+    pub fn as_secs_f64(&self) -> f64 {
+        self.0.as_secs_f64()
+    }
+
+    /// Returns true if sub-second nanos is greater than zero.
+    pub fn has_subsec_nanos(&self) -> bool {
+        self.0.has_subsec_nanos()
+    }
+
+    /// Returns the epoch seconds component of the `DateTime`.
+    pub fn secs(&self) -> i64 {
+        self.0.secs()
+    }
+
+    /// Returns the sub-second nanos component of the `DateTime`.
+    pub fn subsec_nanos(&self) -> u32 {
+        self.0.subsec_nanos()
+    }
+
+    /// Converts the `DateTime` to the number of milliseconds since the Unix epoch.
+    pub fn to_millis(&self) -> PyResult<i64> {
+        Ok(self.0.to_millis().map_err(Error::DateTimeConversion)?)
+    }
+}
+
+impl From<aws_smithy_types::DateTime> for DateTime {
+    fn from(other: aws_smithy_types::DateTime) -> DateTime {
+        DateTime(other)
+    }
+}
+
+impl From<DateTime> for aws_smithy_types::DateTime {
+    fn from(other: DateTime) -> aws_smithy_types::DateTime {
+        other.0
     }
 }
 

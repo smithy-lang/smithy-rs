@@ -61,15 +61,15 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
             symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
-                // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
-                // `aws_smithy_http_server_python::types`.
-                .let { PythonServerSymbolProvider(it) }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let {
                     EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
                 }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }
+                // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
+                // `aws_smithy_http_server_python::types`.
+                .let { PythonServerSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)

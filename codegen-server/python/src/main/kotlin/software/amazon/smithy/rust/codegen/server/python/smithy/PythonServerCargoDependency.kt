@@ -23,6 +23,7 @@ object PythonServerCargoDependency {
     val TowerHttp: CargoDependency = CargoDependency("tower-http", CratesIo("0.3"), features = setOf("trace"))
     val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14"), features = setOf("server", "http1", "http2", "tcp", "stream"))
     val NumCpus: CargoDependency = CargoDependency("num_cpus", CratesIo("1.13"))
+    val SignalHookTokio = CargoDependency("signal-hook-tokio", CratesIo("0.3"), features = setOf("futures-v0_3"))
 
     fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
     fun SmithyHttpServerPython(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server-python")

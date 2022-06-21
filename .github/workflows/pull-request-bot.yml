@@ -103,7 +103,7 @@ jobs:
         sed -i '/examples/d' Cargo.toml
 
         # Add server runtime crates to the workspace
-        sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server",/' Cargo.toml
+        sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server","sdk\/aws-smithy-http-server-python",/' Cargo.toml
 
         cargo doc --no-deps --all-features
         popd

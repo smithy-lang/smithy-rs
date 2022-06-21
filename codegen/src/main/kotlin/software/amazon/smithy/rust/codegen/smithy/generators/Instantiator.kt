@@ -103,7 +103,7 @@ class Instantiator(
             is BlobShape -> if (ctx.streaming) {
                 writer.write(
                     "#T::from_static(b${(arg as StringNode).value.dq()})",
-                    RuntimeType.byteStream(runtimeConfig)
+                    RuntimeType.ByteStream(runtimeConfig)
                 )
             } else {
                 writer.write(

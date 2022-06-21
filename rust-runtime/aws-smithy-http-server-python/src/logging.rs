@@ -15,6 +15,7 @@ use tracing_subscriber::{prelude::*, EnvFilter};
 pub fn setup(py: Python, level: LogLevel) -> PyResult<()> {
     let format = tracing_subscriber::fmt::layer()
         .with_ansi(true)
+        .with_line_number(true)
         .with_level(true);
     match EnvFilter::try_from_default_env() {
         Ok(filter) => {
@@ -141,13 +142,14 @@ fn python_tracing(record: &PyAny) -> PyResult<()> {
     let module = record.getattr("module")?;
     let filename = record.getattr("filename")?;
     let line = record.getattr("lineno")?;
+    let language = "python";
 
     match level.extract()? {
-        40u8 => tracing::event!(Level::ERROR, %module, %filename, %line, "{message}"),
-        30u8 => tracing::event!(Level::WARN, %module, %filename, %line, "{message}"),
-        20u8 => tracing::event!(Level::INFO, %module, %filename, %line, "{message}"),
-        10u8 => tracing::event!(Level::DEBUG, %module, %filename, %line, "{message}"),
-        _ => tracing::event!(Level::TRACE, %module, %filename, %line, "{message}"),
+        40u8 => tracing::event!(Level::ERROR, %language, %module, %filename, %line, "{message}"),
+        30u8 => tracing::event!(Level::WARN, %language, %module, %filename, %line, "{message}"),
+        20u8 => tracing::event!(Level::INFO, %language, %module, %filename, %line, "{message}"),
+        10u8 => tracing::event!(Level::DEBUG, %language, %module, %filename, %line, "{message}"),
+        _ => tracing::event!(Level::TRACE, %language, %module, %filename, %line, "{message}"),
     };
 
     Ok(())
