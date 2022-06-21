@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
@@ -33,9 +32,9 @@ class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override val order: Byte = 0
 
     override fun crateManifestCustomizations(
-        coreCodegenContext: CoreCodegenContext
+        codegenContext: ServerCodegenContext
     ): ManifestCustomizations =
-        mapOf("lib" to mapOf("name" to coreCodegenContext.settings.moduleName, "crate-type" to listOf("cdylib")))
+        mapOf("lib" to mapOf("name" to codegenContext.settings.moduleName, "crate-type" to listOf("cdylib")))
 }
 
 /**

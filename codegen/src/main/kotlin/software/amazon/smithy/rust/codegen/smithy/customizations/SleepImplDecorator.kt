@@ -121,10 +121,10 @@ class SleepImplDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + SleepImplProviderConfig(coreCodegenContext)
+        return baseCustomizations + SleepImplProviderConfig(codegenContext)
     }
 }
 

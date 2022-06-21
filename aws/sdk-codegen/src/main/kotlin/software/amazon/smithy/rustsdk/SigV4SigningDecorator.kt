@@ -50,29 +50,29 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientCodegenContext> {
     private fun applies(coreCodegenContext: CoreCodegenContext): Boolean = coreCodegenContext.serviceShape.hasTrait<SigV4Trait>()
 
     override fun configCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations.letIf(applies(coreCodegenContext)) { customizations ->
+        return baseCustomizations.letIf(applies(codegenContext)) { customizations ->
             customizations + SigV4SigningConfig(
-                coreCodegenContext.runtimeConfig,
-                coreCodegenContext.serviceShape.hasEventStreamOperations(coreCodegenContext.model),
-                coreCodegenContext.serviceShape.expectTrait()
+                codegenContext.runtimeConfig,
+                codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model),
+                codegenContext.serviceShape.expectTrait()
             )
         }
     }
 
     override fun operationCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations.letIf(applies(coreCodegenContext)) {
+        return baseCustomizations.letIf(applies(codegenContext)) {
             it + SigV4SigningFeature(
-                coreCodegenContext.model,
+                codegenContext.model,
                 operation,
-                coreCodegenContext.runtimeConfig,
-                coreCodegenContext.serviceShape,
+                codegenContext.runtimeConfig,
+                codegenContext.serviceShape,
             )
         }
     }

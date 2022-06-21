@@ -40,13 +40,13 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
     val order: Byte
 
     fun configCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: C,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> = baseCustomizations
 
     // This is only used by decorators for smithy-rs _clients_.
     fun operationCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: C,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> = baseCustomizations
@@ -61,7 +61,7 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
      * added to the Cargo.toml `[package]` section, a `mapOf("package" to mapOf("homepage", "https://example.com"))`
      * could be returned. Properties here overwrite the default properties.
      */
-    fun crateManifestCustomizations(coreCodegenContext: CoreCodegenContext): ManifestCustomizations = emptyMap()
+    fun crateManifestCustomizations(codegenContext: C): ManifestCustomizations = emptyMap()
 
     fun extras(codegenContext: C, rustCrate: RustCrate) {}
 
@@ -88,21 +88,21 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
     fun withDecorator(decorator: RustCodegenDecorator<C>) = CombinedCodegenDecorator(orderedDecorators + decorator)
 
     override fun configCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: C,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<C>, customizations ->
-            decorator.configCustomizations(coreCodegenContext, customizations)
+            decorator.configCustomizations(codegenContext, customizations)
         }
     }
 
     override fun operationCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: C,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<C>, customizations ->
-            decorator.operationCustomizations(coreCodegenContext, operation, customizations)
+            decorator.operationCustomizations(codegenContext, operation, customizations)
         }
     }
 
@@ -130,9 +130,9 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
         }
     }
 
-    override fun crateManifestCustomizations(coreCodegenContext: CoreCodegenContext): ManifestCustomizations {
+    override fun crateManifestCustomizations(codegenContext: C): ManifestCustomizations {
         return orderedDecorators.foldRight(emptyMap()) { decorator, customizations ->
-            customizations.deepMergeWith(decorator.crateManifestCustomizations(coreCodegenContext))
+            customizations.deepMergeWith(decorator.crateManifestCustomizations(codegenContext))
         }
     }
 

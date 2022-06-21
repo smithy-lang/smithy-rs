@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -34,10 +33,10 @@ class UserAgentDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 10
 
     override fun configCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + AppNameCustomization(coreCodegenContext.runtimeConfig)
+        return baseCustomizations + AppNameCustomization(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(
@@ -50,11 +49,11 @@ class UserAgentDecorator : RustCodegenDecorator<ClientCodegenContext> {
     }
 
     override fun operationCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + UserAgentFeature(coreCodegenContext.runtimeConfig)
+        return baseCustomizations + UserAgentFeature(codegenContext.runtimeConfig)
     }
 }
 

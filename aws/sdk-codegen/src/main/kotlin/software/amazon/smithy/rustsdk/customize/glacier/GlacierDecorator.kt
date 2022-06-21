@@ -19,17 +19,18 @@ class GlacierDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     private fun applies(coreCodegenContext: CoreCodegenContext) = coreCodegenContext.serviceShape.id == Glacier
+
     override fun operationCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        val extras = if (applies(coreCodegenContext)) {
-            val apiVersion = coreCodegenContext.serviceShape.version
+        val extras = if (applies(codegenContext)) {
+            val apiVersion = codegenContext.serviceShape.version
             listOfNotNull(
                 ApiVersionHeader(apiVersion),
-                TreeHashHeader.forOperation(operation, coreCodegenContext.runtimeConfig),
-                AccountIdAutofill.forOperation(operation, coreCodegenContext.model)
+                TreeHashHeader.forOperation(operation, codegenContext.runtimeConfig),
+                AccountIdAutofill.forOperation(operation, codegenContext.model)
             )
         } else {
             emptyList()

@@ -94,10 +94,10 @@ class AwsPresigningDecorator internal constructor(
     override val order: Byte = ORDER
 
     override fun operationCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
-    ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(coreCodegenContext, operation))
+    ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(codegenContext, operation))
 
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen

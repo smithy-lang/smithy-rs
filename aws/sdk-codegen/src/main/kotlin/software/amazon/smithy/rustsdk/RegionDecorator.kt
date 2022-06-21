@@ -75,14 +75,14 @@ class RegionDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + RegionProviderConfig(coreCodegenContext)
+        return baseCustomizations + RegionProviderConfig(codegenContext)
     }
 
     override fun operationCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {

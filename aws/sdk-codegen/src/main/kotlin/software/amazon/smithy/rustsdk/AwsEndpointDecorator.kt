@@ -47,18 +47,18 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
     }
 
     override fun configCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + EndpointConfigCustomization(coreCodegenContext, endpoints)
+        return baseCustomizations + EndpointConfigCustomization(codegenContext, endpoints)
     }
 
     override fun operationCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations + EndpointResolverFeature(coreCodegenContext.runtimeConfig, operation)
+        return baseCustomizations + EndpointResolverFeature(codegenContext.runtimeConfig, operation)
     }
 
     override fun libRsCustomizations(

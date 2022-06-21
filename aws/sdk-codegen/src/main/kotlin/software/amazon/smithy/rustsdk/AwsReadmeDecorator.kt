@@ -11,7 +11,6 @@ import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
@@ -32,7 +31,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
-    override fun crateManifestCustomizations(coreCodegenContext: CoreCodegenContext): ManifestCustomizations =
+    override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
         mapOf("package" to mapOf("readme" to "README.md"))
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
@@ -176,7 +175,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
     private fun Element.normalizeLists() {
         (getElementsByTag("ul") + getElementsByTag("ol"))
             // Only operate on lists that are top-level (are not nested within other lists)
-            .filter { list -> list.parents().none { it.isList() } }
+            .filter { list -> list.parents().none() { it.isList() } }
             .forEach { list -> list.normalizeList() }
     }
 

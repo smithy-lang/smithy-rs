@@ -22,13 +22,15 @@ class ApiGatewayDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "ApiGateway"
     override val order: Byte = 0
 
-    private fun applies(coreCodegenContext: CoreCodegenContext) = coreCodegenContext.serviceShape.id == ShapeId.from("com.amazonaws.apigateway#BackplaneControlService")
+    private fun applies(coreCodegenContext: CoreCodegenContext) =
+        coreCodegenContext.serviceShape.id == ShapeId.from("com.amazonaws.apigateway#BackplaneControlService")
+
     override fun operationCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        return baseCustomizations.letIf(applies(coreCodegenContext)) {
+        return baseCustomizations.letIf(applies(codegenContext)) {
             it + ApiGatewayAddAcceptHeader()
         }
     }

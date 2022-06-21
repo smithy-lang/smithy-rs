@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -35,6 +34,7 @@ class Route53Decorator : RustCodegenDecorator<ClientCodegenContext> {
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
     private fun applies(service: ServiceShape) = service.id == Route53
+
     override fun transformModel(service: ServiceShape, model: Model): Model {
         return model.letIf(applies(service)) {
             ModelTransformer.create().mapShapes(model) { shape ->
@@ -47,14 +47,14 @@ class Route53Decorator : RustCodegenDecorator<ClientCodegenContext> {
     }
 
     override fun operationCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
         val hostedZoneMember =
-            operation.inputShape(coreCodegenContext.model).members().find { it.hasTrait<TrimResourceId>() }
+            operation.inputShape(codegenContext.model).members().find { it.hasTrait<TrimResourceId>() }
         return if (hostedZoneMember != null) {
-            baseCustomizations + TrimResourceIdCustomization(coreCodegenContext.symbolProvider.toMemberName(hostedZoneMember))
+            baseCustomizations + TrimResourceIdCustomization(codegenContext.symbolProvider.toMemberName(hostedZoneMember))
         } else baseCustomizations
     }
 

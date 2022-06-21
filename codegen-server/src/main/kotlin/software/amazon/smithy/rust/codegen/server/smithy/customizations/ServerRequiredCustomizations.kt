@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
  * See [RequiredCustomizations] from the `rust-codegen` subproject for the client version of this decorator.
  */
 class ServerRequiredCustomizations : RustCodegenDecorator<ServerCodegenContext> {
-    override val name: String = "Required"
+    override val name: String = "ServerRequired"
     override val order: Byte = -1
 
     override fun libRsCustomizations(

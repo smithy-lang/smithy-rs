@@ -72,10 +72,10 @@ class RetryConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + RetryConfigProviderConfig(coreCodegenContext)
+        return baseCustomizations + RetryConfigProviderConfig(codegenContext)
     }
 
     override fun libRsCustomizations(

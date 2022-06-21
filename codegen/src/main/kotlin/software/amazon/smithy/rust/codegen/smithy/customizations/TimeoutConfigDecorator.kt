@@ -108,10 +108,10 @@ class TimeoutConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        coreCodegenContext: CoreCodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + TimeoutConfigProviderConfig(coreCodegenContext)
+        return baseCustomizations + TimeoutConfigProviderConfig(codegenContext)
     }
 }
 
