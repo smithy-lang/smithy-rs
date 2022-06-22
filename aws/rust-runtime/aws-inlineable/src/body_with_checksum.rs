@@ -5,6 +5,11 @@
 
 //! Functions for modifying requests and responses for the purposes of checksum validation
 
+use aws_smithy_checksums::{
+    checksum_algorithm_to_checksum_header_name, CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER,
+    CHECKSUM_HEADERS_IN_PRIORITY_ORDER,
+};
+
 /// Given a `&mut http::request::Request`, and checksum algorithm name, calculate a checksum and
 /// then modify the request to include the checksum as a header.
 pub fn build_checksum_validated_request(
@@ -131,11 +136,19 @@ pub fn check_headers_for_precalculated_checksum(
     headers: &http::HeaderMap<http::HeaderValue>,
     response_algorithms: &[&str],
 ) -> Option<(&'static str, bytes::Bytes)> {
-    // TODO sort response_algorithms in priority order based on `aws_smithy_checksums::CHECKSUM_HEADERS_IN_PRIORITY_ORDER`
-    let response_algorithms = response_algorithms.iter().map(|&algorithm| {
-        aws_smithy_checksums::checksum_algorithm_to_checksum_header_name(algorithm)
-    });
-    for header_name in response_algorithms {
+    let checksum_headers_to_check = CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER
+        .into_iter()
+        // Process list of algorithms, from fastest to slowest, that may have been used to checksum
+        // the response body, ignoring any that aren't marked as supported algorithms by the model.
+        .flat_map(|algo| {
+            response_algorithms
+                .iter()
+                .find(|res_algo| algo.eq_ignore_ascii_case(res_algo))
+        })
+        // Convert algorithms to `HeaderName`s
+        .map(|algo| checksum_algorithm_to_checksum_header_name(algo));
+
+    for header_name in checksum_headers_to_check {
         if let Some(precalculated_checksum) = headers.get(&header_name) {
             let checksum_algorithm =
                 aws_smithy_checksums::checksum_header_name_to_checksum_algorithm(&header_name);

@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -40,12 +40,12 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
     )
 )
 
-class HttpRequestChecksumDecorator : RustCodegenDecorator {
+class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
@@ -53,13 +53,13 @@ class HttpRequestChecksumDecorator : RustCodegenDecorator {
     }
 }
 
-private fun HttpChecksumTrait.requestAlgorithmMember(codegenContext: CodegenContext, operationShape: OperationShape): String? {
+private fun HttpChecksumTrait.requestAlgorithmMember(codegenContext: ClientCodegenContext, operationShape: OperationShape): String? {
     val requestAlgorithmMember = this.requestAlgorithmMember.orNull() ?: return null
     val checksumAlgorithmMemberShape = operationShape.inputShape(codegenContext.model).expectMember(requestAlgorithmMember)
     return codegenContext.symbolProvider.toMemberName(checksumAlgorithmMemberShape)
 }
 
-private fun HttpChecksumTrait.checksumAlgorithmToStr(codegenContext: CodegenContext, operationShape: OperationShape): Writable {
+private fun HttpChecksumTrait.checksumAlgorithmToStr(codegenContext: ClientCodegenContext, operationShape: OperationShape): Writable {
     val requestAlgorithmMember = this.requestAlgorithmMember(codegenContext, operationShape)
     val isRequestChecksumRequired = this.isRequestChecksumRequired
 
@@ -88,7 +88,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(codegenContext: CodegenCont
 // This generator was implemented based on this spec:
 // https://awslabs.github.io/smithy/1.0/spec/aws/aws-core.html#http-request-checksums
 class HttpRequestChecksumCustomization(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape
 ) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig

@@ -76,15 +76,12 @@ impl ChecksumBody<SdkBody> {
         let mut checksum = this.checksum;
 
         match inner.poll_data(cx) {
-            Poll::Ready(Some(Ok(mut data))) => {
-                let len = data.chunk().len();
-                let bytes = data.copy_to_bytes(len);
-
-                if let Err(e) = checksum.update(&bytes) {
+            Poll::Ready(Some(Ok(data))) => {
+                if let Err(e) = checksum.update(&data) {
                     return Poll::Ready(Some(Err(e)));
                 }
 
-                Poll::Ready(Some(Ok(bytes)))
+                Poll::Ready(Some(Ok(data)))
             }
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
@@ -196,20 +193,17 @@ impl ChecksumValidatedBody<SdkBody> {
         let mut checksum = this.checksum;
 
         match inner.poll_data(cx) {
-            Poll::Ready(Some(Ok(mut data))) => {
-                let len = data.chunk().len();
-                let bytes = data.copy_to_bytes(len);
-
+            Poll::Ready(Some(Ok(data))) => {
                 tracing::trace!(
                     "reading {} bytes from the body and updating the checksum calculation",
-                    bytes.len()
+                    data.len()
                 );
 
-                if let Err(e) = checksum.update(&bytes) {
+                if let Err(e) = checksum.update(&data) {
                     return Poll::Ready(Some(Err(e)));
                 }
 
-                Poll::Ready(Some(Ok(bytes)))
+                Poll::Ready(Some(Ok(data)))
             }
             // Once the inner body has stopped returning data, check the checksum
             // and return an error if it doesn't match.

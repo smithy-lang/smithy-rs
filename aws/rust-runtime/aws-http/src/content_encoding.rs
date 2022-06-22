@@ -9,7 +9,7 @@ use aws_smithy_http::body::SdkBody;
 use bytes::{Buf, Bytes, BytesMut};
 use http::{HeaderMap, HeaderValue};
 use http_body::{Body, SizeHint};
-use pin_project::pin_project;
+use pin_project_lite::pin_project;
 
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -76,39 +76,37 @@ enum AwsChunkedBodyState {
     Closed,
 }
 
-/// A request body compatible with `Content-Encoding: aws-chunked`
-///
-/// Chunked-Body grammar is defined in [ABNF] as:
-///
-/// ```txt
-/// Chunked-Body    = *chunk
-///                   last-chunk
-///                   chunked-trailer
-///                   CRLF
-///
-/// chunk           = chunk-size CRLF chunk-data CRLF
-/// chunk-size      = 1*HEXDIG
-/// last-chunk      = 1*("0") CRLF
-/// chunked-trailer = *( entity-header CRLF )
-/// entity-header   = field-name ":" OWS field-value OWS
-/// ```
-/// For more info on what the abbreviations mean, see https://datatracker.ietf.org/doc/html/rfc7230#section-1.2
-///
-/// [ABNF]:https://en.wikipedia.org/wiki/Augmented_Backus%E2%80%93Naur_form
-#[derive(Debug)]
-#[pin_project]
-pub struct AwsChunkedBody<InnerBody> {
-    #[pin]
-    inner: InnerBody,
-    #[pin]
-    state: AwsChunkedBodyState,
-    options: AwsChunkedBodyOptions,
+pin_project! {
+    /// A request body compatible with `Content-Encoding: aws-chunked`
+    ///
+    /// Chunked-Body grammar is defined in [ABNF] as:
+    ///
+    /// ```txt
+    /// Chunked-Body    = *chunk
+    ///                   last-chunk
+    ///                   chunked-trailer
+    ///                   CRLF
+    ///
+    /// chunk           = chunk-size CRLF chunk-data CRLF
+    /// chunk-size      = 1*HEXDIG
+    /// last-chunk      = 1*("0") CRLF
+    /// chunked-trailer = *( entity-header CRLF )
+    /// entity-header   = field-name ":" OWS field-value OWS
+    /// ```
+    /// For more info on what the abbreviations mean, see https://datatracker.ietf.org/doc/html/rfc7230#section-1.2
+    ///
+    /// [ABNF]:https://en.wikipedia.org/wiki/Augmented_Backus%E2%80%93Naur_form
+    #[derive(Debug)]
+    pub struct AwsChunkedBody<InnerBody> {
+        #[pin]
+        inner: InnerBody,
+        #[pin]
+        state: AwsChunkedBodyState,
+        options: AwsChunkedBodyOptions,
+    }
 }
 
-// Currently, we only use this in terms of a streaming request body with checksum trailers
-type Inner = ChecksumBody<SdkBody>;
-
-impl AwsChunkedBody<Inner> {
+impl<Inner> AwsChunkedBody<Inner> {
     /// Wrap the given body in an outer body compatible with `Content-Encoding: aws-chunked`
     pub fn new(body: Inner, options: AwsChunkedBodyOptions) -> Self {
         Self {
@@ -216,7 +214,9 @@ fn trailers_as_aws_chunked_bytes(
     trailers.into()
 }
 
-impl Body for AwsChunkedBody<Inner> {
+impl<Inner: Body<Data = Bytes, Error = aws_smithy_http::body::Error>> Body
+    for AwsChunkedBody<Inner>
+{
     type Data = Bytes;
     type Error = aws_smithy_http::body::Error;
 
@@ -224,14 +224,14 @@ impl Body for AwsChunkedBody<Inner> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        tracing::info!("polling AwsChunkedBody");
+        tracing::trace!("polling AwsChunkedBody");
         let mut this = self.project();
 
         match *this.state {
             AwsChunkedBodyState::WritingChunkSize => match this.inner.poll_data(cx) {
                 Poll::Ready(Some(Ok(data))) => {
                     // A chunk must be prefixed by chunk size in hexadecimal
-                    tracing::info!("writing chunk size and start of chunk");
+                    tracing::trace!("writing chunk size and start of chunk");
                     *this.state = AwsChunkedBodyState::WritingChunk;
                     let total_chunk_size = this
                         .options
@@ -241,7 +241,7 @@ impl Body for AwsChunkedBody<Inner> {
                     Poll::Ready(Some(Ok(prefix_with_chunk_size(data, total_chunk_size))))
                 }
                 Poll::Ready(None) => {
-                    tracing::info!("chunk was empty, writing last-chunk");
+                    tracing::trace!("chunk was empty, writing last-chunk");
                     *this.state = AwsChunkedBodyState::WritingTrailers;
                     Poll::Ready(Some(Ok(Bytes::from("0\r\n"))))
                 }
@@ -249,12 +249,12 @@ impl Body for AwsChunkedBody<Inner> {
                 Poll::Pending => Poll::Pending,
             },
             AwsChunkedBodyState::WritingChunk => match this.inner.poll_data(cx) {
-                Poll::Ready(Some(Ok(mut data))) => {
-                    tracing::info!("writing rest of chunk data");
-                    Poll::Ready(Some(Ok(data.copy_to_bytes(data.len()))))
+                Poll::Ready(Some(Ok(data))) => {
+                    tracing::trace!("writing rest of chunk data");
+                    Poll::Ready(Some(Ok(data)))
                 }
                 Poll::Ready(None) => {
-                    tracing::info!("no more chunk data, writing CRLF and last-chunk");
+                    tracing::trace!("no more chunk data, writing CRLF and last-chunk");
                     *this.state = AwsChunkedBodyState::WritingTrailers;
                     Poll::Ready(Some(Ok(Bytes::from("\r\n0\r\n"))))
                 }

@@ -10,7 +10,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -20,19 +20,19 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 
 private fun HttpChecksumTrait.requestValidationModeMember(
-    codegenContext: CodegenContext,
+    codegenContext: ClientCodegenContext,
     operationShape: OperationShape
 ): MemberShape? {
     val requestValidationModeMember = this.requestValidationModeMember.orNull() ?: return null
     return operationShape.inputShape(codegenContext.model).expectMember(requestValidationModeMember)
 }
 
-class HttpResponseChecksumDecorator : RustCodegenDecorator {
+class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "HttpResponseChecksum"
     override val order: Byte = 0
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
@@ -43,7 +43,7 @@ class HttpResponseChecksumDecorator : RustCodegenDecorator {
 // This generator was implemented based on this spec:
 // https://awslabs.github.io/smithy/1.0/spec/aws/aws-core.html#http-request-checksums
 class HttpResponseChecksumCustomization(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape
 ) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {

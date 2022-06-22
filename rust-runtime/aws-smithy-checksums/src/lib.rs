@@ -31,7 +31,7 @@ const MD5_HEADER_NAME: HeaderName = HeaderName::from_static("content-md5");
 
 /// Given a `&str` representing a checksum algorithm, return the corresponding `HeaderName`
 /// for that checksum algorithm.
-pub fn checksum_algorithm_to_checksum_header_name(checksum_algorithm: &str) -> HeaderName {
+pub fn algorithm_to_header_name(checksum_algorithm: &str) -> HeaderName {
     if checksum_algorithm.eq_ignore_ascii_case(CRC_32_NAME) {
         CRC_32_HEADER_NAME
     } else if checksum_algorithm.eq_ignore_ascii_case(CRC_32_C_NAME) {
@@ -50,9 +50,7 @@ pub fn checksum_algorithm_to_checksum_header_name(checksum_algorithm: &str) -> H
 
 /// Given a `HeaderName` representing a checksum algorithm, return the name of that algorithm
 /// as a `&'static str`.
-pub fn checksum_header_name_to_checksum_algorithm(
-    checksum_header_name: &HeaderName,
-) -> &'static str {
+pub fn header_name_to_algorithm(checksum_header_name: &HeaderName) -> &'static str {
     if checksum_header_name == CRC_32_HEADER_NAME {
         CRC_32_NAME
     } else if checksum_header_name == CRC_32_C_HEADER_NAME {
@@ -72,12 +70,8 @@ pub fn checksum_header_name_to_checksum_algorithm(
 /// When a response has to be checksum-verified, we have to check possible headers until we find the
 /// header with the precalculated checksum. Because a service may send back multiple headers, we have
 /// to check them in order based on how fast each checksum is to calculate.
-pub const CHECKSUM_HEADERS_IN_PRIORITY_ORDER: [HeaderName; 4] = [
-    CRC_32_C_HEADER_NAME,
-    CRC_32_HEADER_NAME,
-    SHA_1_HEADER_NAME,
-    SHA_256_HEADER_NAME,
-];
+pub const CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER: [&str; 4] =
+    [CRC_32_C_NAME, CRC_32_NAME, SHA_1_NAME, SHA_256_NAME];
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 

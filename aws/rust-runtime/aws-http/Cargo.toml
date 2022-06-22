@@ -18,12 +18,13 @@ http-body = "0.4.5"
 lazy_static = "1.4.0"
 tracing = "0.1"
 percent-encoding = "2.1.0"
-pin-project = "1.0"
+pin-project-lite = "0.2.9"
 
 [dev-dependencies]
 async-trait = "0.1.50"
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-protocol-test = { path = "../../../rust-runtime/aws-smithy-protocol-test" }
+bytes-utils = "0.1.2"
 env_logger = "0.9"
 http = "0.2.3"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util"] }
