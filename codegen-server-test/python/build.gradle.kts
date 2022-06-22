@@ -38,9 +38,9 @@ dependencies {
 
 val allCodegenTests = listOf(
     // CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("aws.protocoltests.misc#MiscService", "misc")
+    CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
     // CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
-    // CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
+    CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)

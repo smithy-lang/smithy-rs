@@ -108,6 +108,7 @@ class PythonServerModuleGenerator(
 
     // Render Python shared socket type.
     private fun RustWriter.renderPySocketType() {
+
         rustTemplate(
             """
             let socket = #{pyo3}::types::PyModule::new(py, "socket")?;

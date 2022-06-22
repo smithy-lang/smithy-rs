@@ -300,7 +300,7 @@ impl PyApp {
         // https://github.com/python/cpython/blob/f4c03484da59049eb62a9bf7777b963e2267d187/Lib/multiprocessing/context.py#L164
         mp.call_method0("allow_connection_pickling")?;
         let address = address.unwrap_or_else(|| String::from("127.0.0.1"));
-        let port = port.unwrap_or(8080);
+        let port = port.unwrap_or(13734);
         let socket = SharedSocket::new(address, port, backlog)?;
         // Lock the workers mutex.
         let mut active_workers = self

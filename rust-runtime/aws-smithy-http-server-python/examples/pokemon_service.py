@@ -61,15 +61,15 @@ class Context:
     _database = {
         "pikachu": [
             FlavorText(
-                flavor_text="""When several of these PokÃ©mon gather, their electricity could build and cause lightning storms.""",
+                flavor_text="""When several of these Pokémon gather, their electricity could build and cause lightning storms.""",
                 language=Language.English,
             ),
             FlavorText(
-                flavor_text="""Quando vari PokÃ©mon di questo tipo si radunano, la loro energia puÃ² causare forti tempeste.""",
+                flavor_text="""Quando vari Pokémon di questo tipo si radunano, la loro energia puÃ² causare forti tempeste.""",
                 language=Language.Italian,
             ),
             FlavorText(
-                flavor_text="""Cuando varios de estos PokÃ©mon se juntan, su energÃ­a puede causar fuertes tormentas.""",
+                flavor_text="""Cuando varios de estos Pokémon se juntan, su energÃ­a puede causar fuertes tormentas.""",
                 language=Language.Spanish,
             ),
         ]
@@ -106,7 +106,7 @@ def empty_operation(_: EmptyOperationInput) -> EmptyOperationOutput:
     return EmptyOperationOutput()
 
 
-# Get the translation of a PokÃ¨mon specie or an error.
+# Get the translation of a Pokémon specie or an error.
 # GET /pokemon-species/{name}
 @app.get_pokemon_species
 def get_pokemon_species(
@@ -116,13 +116,13 @@ def get_pokemon_species(
     flavor_text_entries = context.get_pokemon_description(input.name)
     if flavor_text_entries:
         logging.debug("Total requests executed: %s", context.get_calls_count())
-        logging.info("Found description for PokÃ©mon %s", input.name)
+        logging.info("Found description for Pokémon %s", input.name)
         return GetPokemonSpeciesOutput(
             name=input.name, flavor_text_entries=flavor_text_entries
         )
     else:
-        logging.warning("Description for PokÃ©mon %s not in the database", input.name)
-        raise ResourceNotFoundException("Requested PokÃ©mon not available")
+        logging.warning("Description for Pokémon %s not in the database", input.name)
+        raise ResourceNotFoundException("Requested Pokémon not available")
 
 
 # Get the number of requests served by this server.
