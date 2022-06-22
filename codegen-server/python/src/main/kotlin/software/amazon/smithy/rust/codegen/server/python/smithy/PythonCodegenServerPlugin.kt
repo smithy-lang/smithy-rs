@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.DefaultConfig
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.StreamingShapeMetadataProvider
-import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
@@ -66,7 +65,7 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
                     EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
                 }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
-                .let { StreamingShapeSymbolProvider(it, model) }
+                // .let { StreamingShapeSymbolProvider(it, model) }
                 // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
                 // `aws_smithy_http_server_python::types`.
                 .let { PythonServerSymbolProvider(it, model) }

@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
  * This class generates input / output / error structures definitions and implements the
  * `PyClass` trait.
  */
-open class PythonServerStructureGenerator(
+class PythonServerStructureGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
