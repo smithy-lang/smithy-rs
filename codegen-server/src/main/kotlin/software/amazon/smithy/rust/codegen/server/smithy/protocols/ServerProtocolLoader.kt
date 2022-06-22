@@ -15,6 +15,7 @@ import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.Trait
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolGeneratorFactory
@@ -23,11 +24,11 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 /*
  * Protocol dispatcher, responsible for protocol selection.
  */
-class ServerProtocolLoader(private val supportedProtocols: ProtocolMap) {
+class ServerProtocolLoader(private val supportedProtocols: ProtocolMap<ServerCodegenContext>) {
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape
-    ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>> {
+    ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator, ServerCodegenContext>> {
         val protocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
         val matchingProtocols =
             protocols.keys.mapNotNull { protocolId -> supportedProtocols[protocolId]?.let { protocolId to it } }

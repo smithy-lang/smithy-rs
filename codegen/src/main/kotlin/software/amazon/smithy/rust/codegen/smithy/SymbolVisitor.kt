@@ -62,18 +62,10 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
 
 data class SymbolVisitorConfig(
     val runtimeConfig: RuntimeConfig,
-    val codegenConfig: CodegenConfig,
-    val handleRustBoxing: Boolean = true,
-    val handleRequired: Boolean = false
+    val renameExceptions: Boolean,
+    val handleRustBoxing: Boolean,
+    val handleRequired: Boolean,
 )
-
-val DefaultConfig =
-    SymbolVisitorConfig(
-        runtimeConfig = RuntimeConfig(),
-        handleRustBoxing = true,
-        handleRequired = false,
-        codegenConfig = CodegenConfig()
-    )
 
 /**
  * Container type for the file a symbol should be written to
@@ -166,7 +158,7 @@ fun SymbolProvider.toOptional(member: MemberShape, value: String): String = valu
 class SymbolVisitor(
     private val model: Model,
     private val serviceShape: ServiceShape?,
-    private val config: SymbolVisitorConfig = DefaultConfig
+    private val config: SymbolVisitorConfig
 ) : RustSymbolProvider,
     ShapeVisitor<Symbol> {
     private val nullableIndex = NullableIndex.of(model)
@@ -313,7 +305,7 @@ class SymbolVisitor(
         val isError = shape.hasTrait<ErrorTrait>()
         val isInput = shape.hasTrait<SyntheticInputTrait>()
         val isOutput = shape.hasTrait<SyntheticOutputTrait>()
-        val name = shape.contextName().toPascalCase().letIf(isError && config.codegenConfig.renameExceptions) {
+        val name = shape.contextName().toPascalCase().letIf(isError && config.renameExceptions) {
             it.replace("Exception", "Error")
         }
         val builder = symbolBuilder(shape, RustType.Opaque(name))

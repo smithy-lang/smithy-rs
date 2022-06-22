@@ -14,8 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerModuleGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -29,12 +28,12 @@ import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizati
  * name = "$CRATE_NAME"
  * crate-type = ["cdylib"]
  */
-class CdylibManifestDecorator : RustCodegenDecorator {
+class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override val name: String = "CdylibDecorator"
     override val order: Byte = 0
 
     override fun crateManifestCustomizations(
-        codegenContext: CodegenContext
+        codegenContext: ServerCodegenContext
     ): ManifestCustomizations =
         mapOf("lib" to mapOf("name" to codegenContext.settings.moduleName, "crate-type" to listOf("cdylib")))
 }
@@ -74,12 +73,12 @@ class PythonExportModuleDecorator : RustCodegenDecorator {
 /**
  * Decorator applying the customization from [PubUsePythonTypes] class.
  */
-class PubUsePythonTypesDecorator : RustCodegenDecorator {
+class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override val name: String = "PubUsePythonTypesDecorator"
     override val order: Byte = 0
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ServerCodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUsePythonTypes(codegenContext)
@@ -101,7 +100,7 @@ val DECORATORS = listOf(
 )
 
 // Combined codegen decorator for Python services.
-class PythonServerCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {
+class PythonServerCodegenDecorator : CombinedCodegenDecorator<ServerCodegenContext>(DECORATORS) {
     override val name: String = "PythonServerCodegenDecorator"
     override val order: Byte = -1
 }

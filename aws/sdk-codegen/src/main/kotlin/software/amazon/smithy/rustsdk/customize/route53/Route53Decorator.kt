@@ -15,7 +15,7 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -28,12 +28,13 @@ import java.util.logging.Logger
 
 val Route53: ShapeId = ShapeId.from("com.amazonaws.route53#AWSDnsV20130401")
 
-class Route53Decorator : RustCodegenDecorator {
+class Route53Decorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "Route53"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
     private fun applies(service: ServiceShape) = service.id == Route53
+
     override fun transformModel(service: ServiceShape, model: Model): Model {
         return model.letIf(applies(service)) {
             ModelTransformer.create().mapShapes(model) { shape ->
@@ -46,7 +47,7 @@ class Route53Decorator : RustCodegenDecorator {
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {

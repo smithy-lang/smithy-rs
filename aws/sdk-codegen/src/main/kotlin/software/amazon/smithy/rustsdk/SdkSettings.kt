@@ -5,7 +5,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.util.orNull
 
 /**
@@ -13,8 +13,8 @@ import software.amazon.smithy.rust.codegen.util.orNull
  */
 class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
     companion object {
-        fun from(rustSettings: RustSettings): SdkSettings =
-            SdkSettings(rustSettings.customizationConfig?.getObjectMember("awsSdk")?.orNull())
+        fun from(coreRustSettings: CoreRustSettings): SdkSettings =
+            SdkSettings(coreRustSettings.customizationConfig?.getObjectMember("awsSdk")?.orNull())
     }
 
     /** Path to AWS SDK integration tests */

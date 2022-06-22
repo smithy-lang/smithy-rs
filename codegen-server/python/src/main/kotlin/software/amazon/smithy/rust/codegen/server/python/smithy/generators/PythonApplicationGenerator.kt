@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
@@ -53,11 +53,11 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     private val operations: List<OperationShape>,
 ) {
-    private val symbolProvider = codegenContext.symbolProvider
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),

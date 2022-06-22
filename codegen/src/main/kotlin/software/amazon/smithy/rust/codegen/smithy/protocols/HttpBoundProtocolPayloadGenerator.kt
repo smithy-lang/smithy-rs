@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
@@ -44,14 +44,14 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class HttpBoundProtocolPayloadGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     private val protocol: Protocol,
     private val httpMessageType: HttpMessageType = HttpMessageType.REQUEST
 ) : ProtocolPayloadGenerator {
-    private val symbolProvider = codegenContext.symbolProvider
-    private val model = codegenContext.model
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val target = codegenContext.target
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = coreCodegenContext.model
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val target = coreCodegenContext.target
     private val httpBindingResolver = protocol.httpBindingResolver
 
     private val operationSerModule = RustModule.private("operation_ser")

@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.util.dq
@@ -28,15 +28,15 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  * ServerOperationRegistryGenerator
  */
 class ServerOperationRegistryGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     private val operations: List<OperationShape>,
 ) {
-    private val protocol = codegenContext.protocol
-    private val symbolProvider = codegenContext.symbolProvider
-    private val serviceName = codegenContext.serviceShape.toShapeId().name
+    private val protocol = coreCodegenContext.protocol
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val serviceName = coreCodegenContext.serviceShape.toShapeId().name
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Router" to ServerRuntimeType.Router(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),

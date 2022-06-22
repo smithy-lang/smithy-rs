@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
 
 /**
@@ -42,7 +42,7 @@ typealias ManifestCustomizations = Map<String, Any?>
  * Generates the crate manifest Cargo.toml file.
  */
 class CargoTomlGenerator(
-    private val settings: RustSettings,
+    private val settings: CoreRustSettings,
     private val writer: RustWriter,
     private val manifestCustomizations: ManifestCustomizations,
     private val dependencies: List<CargoDependency>,
