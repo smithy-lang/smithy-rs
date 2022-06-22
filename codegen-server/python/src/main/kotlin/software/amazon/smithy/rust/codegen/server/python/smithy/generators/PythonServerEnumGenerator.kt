@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
@@ -38,9 +37,6 @@ class PythonServerEnumGenerator(
 ) : ServerEnumGenerator(model, symbolProvider, writer, shape, enumTrait, runtimeConfig) {
 
     private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.asType())
-    private val codegenScope = arrayOf(
-        "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-    )
 
     override fun render() {
         renderPyClass()
@@ -75,19 +71,17 @@ class PythonServerEnumGenerator(
                 }
             }
             """,
-            *codegenScope,
             "name_method" to renderPyEnumName()
         )
     }
 
     private fun renderPyEnumName(): Writable =
         writable {
-            rustBlockTemplate(
+            rustBlock(
                 """
                 ##[getter]
                 pub fn name(&self) -> &str
                 """,
-                *codegenScope
             ) {
                 rustBlock("match self") {
                     sortedMembers.forEach { member ->

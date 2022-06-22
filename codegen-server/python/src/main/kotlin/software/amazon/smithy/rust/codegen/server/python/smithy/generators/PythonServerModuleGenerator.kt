@@ -16,11 +16,11 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 
 class PythonServerModuleGenerator(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val rustCrate: RustCrate,
     private val serviceShapes: Set<Shape>
 ) {

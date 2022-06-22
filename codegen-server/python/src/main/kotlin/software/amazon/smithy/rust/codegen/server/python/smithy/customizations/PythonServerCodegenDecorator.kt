@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerModuleGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
+import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -41,7 +42,7 @@ class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
 /**
  * Add `pub use aws_smithy_http_server_python::types::$TYPE` to lib.rs.
  */
-class PubUsePythonTypes(private val codegenContext: CodegenContext) : LibRsCustomization() {
+class PubUsePythonTypes(private val codegenContext: ServerCodegenContext) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
             is LibRsSection.Body -> writable {
@@ -59,11 +60,11 @@ class PubUsePythonTypes(private val codegenContext: CodegenContext) : LibRsCusto
 /**
  * Render the Python shared library module export.
  */
-class PythonExportModuleDecorator : RustCodegenDecorator {
+class PythonExportModuleDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override val name: String = "PythonExportModuleDecorator"
     override val order: Byte = 0
 
-    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
         val service = codegenContext.settings.getService(codegenContext.model)
         val serviceShapes = Walker(codegenContext.model).walkShapes(service)
         PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
