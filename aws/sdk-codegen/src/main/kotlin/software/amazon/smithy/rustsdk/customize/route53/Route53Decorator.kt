@@ -32,6 +32,7 @@ class Route53Decorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "Route53"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
+    private val resourceShapes = setOf(ShapeId.from("com.amazonaws.route53#ResourceId"), ShapeId.from("com.amazonaws.route53#ChangeId"))
 
     private fun applies(service: ServiceShape) = service.id == Route53
 
@@ -59,7 +60,7 @@ class Route53Decorator : RustCodegenDecorator<ClientCodegenContext> {
     }
 
     private fun isResourceId(shape: Shape): Boolean {
-        return (shape is MemberShape && shape.target == ShapeId.from("com.amazonaws.route53#ResourceId")) && shape.hasTrait<HttpLabelTrait>()
+        return (shape is MemberShape && resourceShapes.contains(shape.target)) && shape.hasTrait<HttpLabelTrait>()
     }
 }
 
