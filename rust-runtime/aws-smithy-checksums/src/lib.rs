@@ -20,28 +20,28 @@ pub const CRC_32_C_NAME: &str = "crc32c";
 pub const SHA_1_NAME: &str = "sha1";
 pub const SHA_256_NAME: &str = "sha256";
 
-pub const CRC_32_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-crc32");
-pub const CRC_32_C_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-crc32c");
-pub const SHA_1_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-sha1");
-pub const SHA_256_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-sha256");
+pub static CRC_32_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-crc32");
+pub static CRC_32_C_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-crc32c");
+pub static SHA_1_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-sha1");
+pub static SHA_256_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-sha256");
 
 // Preserved for compatibility purposes. This should never be used by users, only within smithy-rs
 const MD5_NAME: &str = "md5";
-const MD5_HEADER_NAME: HeaderName = HeaderName::from_static("content-md5");
+static MD5_HEADER_NAME: HeaderName = HeaderName::from_static("content-md5");
 
 /// Given a `&str` representing a checksum algorithm, return the corresponding `HeaderName`
 /// for that checksum algorithm.
 pub fn algorithm_to_header_name(checksum_algorithm: &str) -> HeaderName {
     if checksum_algorithm.eq_ignore_ascii_case(CRC_32_NAME) {
-        CRC_32_HEADER_NAME
+        CRC_32_HEADER_NAME.clone()
     } else if checksum_algorithm.eq_ignore_ascii_case(CRC_32_C_NAME) {
-        CRC_32_C_HEADER_NAME
+        CRC_32_C_HEADER_NAME.clone()
     } else if checksum_algorithm.eq_ignore_ascii_case(SHA_1_NAME) {
-        SHA_1_HEADER_NAME
+        SHA_1_HEADER_NAME.clone()
     } else if checksum_algorithm.eq_ignore_ascii_case(SHA_256_NAME) {
-        SHA_256_HEADER_NAME
+        SHA_256_HEADER_NAME.clone()
     } else if checksum_algorithm.eq_ignore_ascii_case(MD5_NAME) {
-        MD5_HEADER_NAME
+        MD5_HEADER_NAME.clone()
     } else {
         // TODO what's the best way to handle this case?
         HeaderName::from_static("x-amz-checksum-unknown")
@@ -153,7 +153,7 @@ impl Crc32 {
     }
 
     fn header_name() -> HeaderName {
-        CRC_32_HEADER_NAME
+        CRC_32_HEADER_NAME.clone()
     }
 
     fn header_value(&self) -> HeaderValue {
@@ -221,7 +221,7 @@ impl Crc32c {
     }
 
     fn header_name() -> HeaderName {
-        CRC_32_C_HEADER_NAME
+        CRC_32_C_HEADER_NAME.clone()
     }
 
     fn header_value(&self) -> HeaderValue {
@@ -286,7 +286,7 @@ impl Sha1 {
     }
 
     fn header_name() -> HeaderName {
-        SHA_1_HEADER_NAME
+        SHA_1_HEADER_NAME.clone()
     }
 
     fn header_value(&self) -> HeaderValue {
@@ -351,7 +351,7 @@ impl Sha256 {
     }
 
     fn header_name() -> HeaderName {
-        SHA_256_HEADER_NAME
+        SHA_256_HEADER_NAME.clone()
     }
 
     fn header_value(&self) -> HeaderValue {
@@ -416,7 +416,7 @@ impl Md5 {
     }
 
     fn header_name() -> HeaderName {
-        MD5_HEADER_NAME
+        MD5_HEADER_NAME.clone()
     }
 
     fn header_value(&self) -> HeaderValue {
@@ -478,7 +478,7 @@ mod tests {
         let mut checksum = Crc32::default();
         checksum.update(TEST_DATA.as_bytes()).unwrap();
         let checksum_result = checksum.headers().unwrap().unwrap();
-        let encoded_checksum = checksum_result.get(CRC_32_HEADER_NAME).unwrap();
+        let encoded_checksum = checksum_result.get(&CRC_32_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum = "0xD308AEB2";
@@ -491,7 +491,7 @@ mod tests {
         let mut checksum = Crc32c::default();
         checksum.update(TEST_DATA.as_bytes()).unwrap();
         let checksum_result = checksum.headers().unwrap().unwrap();
-        let encoded_checksum = checksum_result.get(CRC_32_C_HEADER_NAME).unwrap();
+        let encoded_checksum = checksum_result.get(&CRC_32_C_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum = "0x3379B4CA";
@@ -504,7 +504,7 @@ mod tests {
         let mut checksum = Sha1::default();
         checksum.update(TEST_DATA.as_bytes()).unwrap();
         let checksum_result = checksum.headers().unwrap().unwrap();
-        let encoded_checksum = checksum_result.get(SHA_1_HEADER_NAME).unwrap();
+        let encoded_checksum = checksum_result.get(&SHA_1_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum = "0xF48DD853820860816C75D54D0F584DC863327A7C";
@@ -517,7 +517,7 @@ mod tests {
         let mut checksum = Sha256::default();
         checksum.update(TEST_DATA.as_bytes()).unwrap();
         let checksum_result = checksum.headers().unwrap().unwrap();
-        let encoded_checksum = checksum_result.get(SHA_256_HEADER_NAME).unwrap();
+        let encoded_checksum = checksum_result.get(&SHA_256_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum =
@@ -531,7 +531,7 @@ mod tests {
         let mut checksum = Md5::default();
         checksum.update(TEST_DATA.as_bytes()).unwrap();
         let checksum_result = checksum.headers().unwrap().unwrap();
-        let encoded_checksum = checksum_result.get(MD5_HEADER_NAME).unwrap();
+        let encoded_checksum = checksum_result.get(&MD5_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum = "0xEB733A00C0C9D336E65691A37AB54293";

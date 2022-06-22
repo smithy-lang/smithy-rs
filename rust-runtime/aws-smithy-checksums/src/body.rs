@@ -9,7 +9,7 @@ use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::header::append_merge_header_maps;
 use aws_smithy_types::base64;
 
-use bytes::{Buf, Bytes};
+use bytes::Bytes;
 use http::header::HeaderName;
 use http::{HeaderMap, HeaderValue};
 use http_body::{Body, SizeHint};
