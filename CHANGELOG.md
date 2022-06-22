@@ -1,4 +1,15 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+v0.44.0 (June 22nd, 2022)
+=========================
+**New this release:**
+- ([smithy-rs#1460](https://github.com/awslabs/smithy-rs/issues/1460)) Fix a potential bug with `ByteStream`'s implementation of `futures_core::stream::Stream` and add helpful error messages
+    for users on 32-bit systems that try to stream HTTP bodies larger than 4.29Gb.
+- 🐛 ([smithy-rs#1427](https://github.com/awslabs/smithy-rs/issues/1427), [smithy-rs#1465](https://github.com/awslabs/smithy-rs/issues/1465), [smithy-rs#1459](https://github.com/awslabs/smithy-rs/issues/1459)) Fix RustWriter bugs for `rustTemplate` and `docs` utility methods
+- 🐛 ([aws-sdk-rust#554](https://github.com/awslabs/aws-sdk-rust/issues/554)) Requests to Route53 that return `ResourceId`s often come with a prefix. When passing those IDs directly into another
+    request, the request would fail unless they manually stripped the prefix. Now, when making a request with a prefixed ID,
+    the prefix will be stripped automatically.
+
+
 v0.43.0 (June 9th, 2022)
 ========================
 **New this release:**
