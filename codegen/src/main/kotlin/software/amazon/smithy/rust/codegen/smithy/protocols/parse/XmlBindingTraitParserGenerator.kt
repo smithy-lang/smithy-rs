@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -654,18 +655,27 @@ class XmlBindingTraitParserGenerator(
 
     private fun RustWriter.parseStringInner(shape: StringShape, provider: RustWriter.() -> Unit) {
         withBlock("Result::<#T, #T>::Ok(", ")", symbolProvider.toSymbol(shape), xmlError) {
-            if (!shape.hasTrait<EnumTrait>()) {
-                provider()
-                // if it's already `Cow::Owned` then `.into()` is free (vs. to_string())
-                rust(".into()")
-            } else {
+            if (shape.hasTrait<EnumTrait>()) {
                 val enumSymbol = symbolProvider.toSymbol(shape)
-                withBlock("#T::from(", ")", enumSymbol) {
-                    provider()
+                if (convertsToEnumInServer(shape)) {
+                    withBlock("#T::try_from(", ")", enumSymbol) {
+                        provider()
+                    }
+                    rustTemplate(""".map_err(|e| #{XmlError}::custom(format!("unknown variant {}", e)))?""", *codegenScope)
+                } else {
+                    withBlock("#T::from(", ")", enumSymbol) {
+                        provider()
+                    }
                 }
+            } else {
+                provider()
+                // If it's already `Cow::Owned` then `.into()` is free (as opposed to using `to_string()`).
+                rust(".into()")
             }
         }
     }
+
+    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
 
     private fun MemberShape.xmlName(): XmlName {
         return XmlName(xmlIndex.memberName(this))
