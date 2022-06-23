@@ -276,12 +276,9 @@ class ServerOperationRegistryGenerator(
      * Returns the operation name as required by the awsJson1.x protocols.
      */
     private fun OperationShape.awsJsonOperationName(): Writable {
-        val operationNameSymbol = symbolProvider.toSymbol(this).name
+        val operationName = symbolProvider.toSymbol(this).name
         return writable {
-            rustTemplate(
-                """String::from("$serviceName.#{OperationName}")""",
-                "OperationName" to operationNameSymbol
-            )
+            rust("""String::from("$serviceName.$operationName")""")
         }
     }
 
