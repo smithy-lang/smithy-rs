@@ -15,6 +15,9 @@ import software.amazon.smithy.rust.codegen.testutil.TestSymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 
 internal class PythonServerSymbolProviderTest {
+    private val pythonBlobType = RustType.Opaque("Blob", "aws_smithy_http_server_python::types")
+    private val pythonTimestampType = RustType.Opaque("DateTime", "aws_smithy_http_server_python::types")
+
     @Test
     fun `python symbol provider rewrites timestamp shape symbol`() {
         val model = """
@@ -41,19 +44,19 @@ internal class PythonServerSymbolProviderTest {
 
         // Struct test
         val timestamp = provider.toSymbol(model.expectShape(ShapeId.from("test#TimestampStruct\$inner"))).rustType()
-        timestamp shouldBe RustType.Opaque("DateTime", "aws_smithy_http_server_python::types")
+        timestamp shouldBe pythonTimestampType
 
         // List test
         val timestampList = provider.toSymbol(model.expectShape(ShapeId.from("test#TimestampList"))).rustType()
-        timestampList shouldBe RustType.Vec(RustType.Opaque("DateTime", "aws_smithy_http_server_python::types"))
+        timestampList shouldBe RustType.Vec(pythonTimestampType)
 
         // Set test
         val timestampSet = provider.toSymbol(model.expectShape(ShapeId.from("test#TimestampSet"))).rustType()
-        timestampSet shouldBe RustType.Vec(RustType.Opaque("DateTime", "aws_smithy_http_server_python::types"))
+        timestampSet shouldBe RustType.Vec(pythonTimestampType)
 
         // Map test
         val timestampMap = provider.toSymbol(model.expectShape(ShapeId.from("test#TimestampMap"))).rustType()
-        timestampMap shouldBe RustType.HashMap(RustType.String, RustType.Opaque("DateTime", "aws_smithy_http_server_python::types"))
+        timestampMap shouldBe RustType.HashMap(RustType.String, pythonTimestampType)
     }
 
     @Test
@@ -82,18 +85,18 @@ internal class PythonServerSymbolProviderTest {
 
         // Struct test
         val blob = provider.toSymbol(model.expectShape(ShapeId.from("test#BlobStruct\$inner"))).rustType()
-        blob shouldBe RustType.Opaque("Blob", "aws_smithy_http_server_python::types")
+        blob shouldBe pythonBlobType
 
         // List test
         val blobList = provider.toSymbol(model.expectShape(ShapeId.from("test#BlobList"))).rustType()
-        blobList shouldBe RustType.Vec(RustType.Opaque("Blob", "aws_smithy_http_server_python::types"))
+        blobList shouldBe RustType.Vec(pythonBlobType)
 
         // Set test
         val blobSet = provider.toSymbol(model.expectShape(ShapeId.from("test#BlobSet"))).rustType()
-        blobSet shouldBe RustType.Vec(RustType.Opaque("Blob", "aws_smithy_http_server_python::types"))
+        blobSet shouldBe RustType.Vec(pythonBlobType)
 
         // Map test
         val blobMap = provider.toSymbol(model.expectShape(ShapeId.from("test#BlobMap"))).rustType()
-        blobMap shouldBe RustType.HashMap(RustType.String, RustType.Opaque("Blob", "aws_smithy_http_server_python::types"))
+        blobMap shouldBe RustType.HashMap(RustType.String, pythonBlobType)
     }
 }

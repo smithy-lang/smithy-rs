@@ -28,16 +28,7 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-/**
- * Input / output / error structures can refer to complex types like the ones implemented inside
- * `aws_smithy_types` (a good example is `aws_smithy_types::Blob`).
- * `aws_smithy_http_server_python::types` wraps those types that do not implement directly the
- * `pyo3::PyClass` trait and cannot be shared safely with Python, providing an idiomatic Python / Rust API.
- *
- * This symbol provider ensures types not implementing `pyo3::PyClass` are swapped with their wrappers from
- * `aws_smithy_http_server_python::types`.
- */
-
+// Wrapping symbol visitor provider allowing to implement symbol providers that can recursively replace symbols in nested shapes.
 open class PythonWrappingVisitingSymbolProvider(private val base: RustSymbolProvider, private val model: Model) : ShapeVisitor.Default<Symbol>(), RustSymbolProvider {
     override fun getDefault(shape: Shape): Symbol {
         return base.toSymbol(shape)
@@ -98,6 +89,15 @@ open class PythonWrappingVisitingSymbolProvider(private val base: RustSymbolProv
     }
 }
 
+/**
+ * Input / output / error structures can refer to complex types like the ones implemented inside
+ * `aws_smithy_types` (a good example is `aws_smithy_types::Blob`).
+ * `aws_smithy_http_server_python::types` wraps those types that do not implement directly the
+ * `pyo3::PyClass` trait and cannot be shared safely with Python, providing an idiomatic Python / Rust API.
+ *
+ * This symbol provider ensures types not implementing `pyo3::PyClass` are swapped with their wrappers from
+ * `aws_smithy_http_server_python::types`.
+ */
 class PythonServerSymbolProvider(private val base: RustSymbolProvider, private val model: Model) : PythonWrappingVisitingSymbolProvider(base, model) {
     private val runtimeConfig = config().runtimeConfig
 
