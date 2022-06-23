@@ -10,7 +10,6 @@ repository = "https://github.com/awslabs/smithy-rs"
 [dependencies]
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-types = { path = "../aws-types" }
 bytes = "1.1"
 http = "0.2.3"
@@ -23,6 +22,7 @@ pin-project-lite = "0.2.9"
 [dev-dependencies]
 async-trait = "0.1.50"
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
+aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-smithy-protocol-test = { path = "../../../rust-runtime/aws-smithy-protocol-test" }
 bytes-utils = "0.1.2"
 env_logger = "0.9"

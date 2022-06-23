@@ -169,7 +169,6 @@ open class ProtocolGenerator(
         operationWriter: RustWriter,
         operationShape: OperationShape,
     ) {
-        // TODO should server folks get operation customizations too?
         traitGenerator.generateTraitImpls(operationWriter, operationShape, emptyList())
     }
 

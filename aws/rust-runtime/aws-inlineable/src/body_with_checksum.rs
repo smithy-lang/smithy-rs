@@ -168,11 +168,9 @@ pub fn check_headers_for_precalculated_checksum(
                 .to_str()
                 .expect("base64 uses ASCII characters");
 
-            // TODO this error should get bubbled up. It's not likely a service would send back
-            //      invalid base64, but we should still be thorough.
             let precalculated_checksum: bytes::Bytes =
                 aws_smithy_types::base64::decode(base64_encoded_precalculated_checksum)
-                    .unwrap()
+                    .expect("services will always base64 encode the checksum value per the spec")
                     .into();
 
             return Some((checksum_algorithm, precalculated_checksum));

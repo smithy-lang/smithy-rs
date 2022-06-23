@@ -113,15 +113,6 @@ class HttpResponseChecksumCustomization(
                         "validation_mode_name" to codegenContext.symbolProvider.toMemberName(requestValidationModeMember),
                     )
                 }
-
-//                // TODO is there any difference in how these two cases should be handled? I think not.
-//                return {
-//                    if (operationShape.outputShape(codegenContext.model).hasStreamingMember(codegenContext.model)) {
-//                        rust("/* streaming output shape, $responseAlgorithms */")
-//                    } else {
-//                        rust("/* in-memory output shape, $responseAlgorithms */")
-//                    }
-//                }
             }
             else -> return emptySection
         }

@@ -43,7 +43,6 @@ pub fn algorithm_to_header_name(checksum_algorithm: &str) -> HeaderName {
     } else if checksum_algorithm.eq_ignore_ascii_case(MD5_NAME) {
         MD5_HEADER_NAME.clone()
     } else {
-        // TODO what's the best way to handle this case?
         HeaderName::from_static("x-amz-checksum-unknown")
     }
 }
@@ -62,7 +61,6 @@ pub fn header_name_to_algorithm(checksum_header_name: &HeaderName) -> &'static s
     } else if checksum_header_name == MD5_HEADER_NAME {
         MD5_NAME
     } else {
-        // TODO what's the best way to handle this case?
         "unknown-checksum-algorithm"
     }
 }
