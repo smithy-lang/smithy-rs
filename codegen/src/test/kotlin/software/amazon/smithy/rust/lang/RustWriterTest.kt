@@ -157,9 +157,9 @@ class RustWriterTest {
             )
         }
         exception.message shouldBe
-                """
+            """
                 Rust block template expected `Foo` but was not present in template.
                     hint: Template contains: [`Foo Bar`, `Baz`]
-                """.trimIndent()
+            """.trimIndent()
     }
 }
