@@ -10,6 +10,8 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldContainOnlyOnce
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.SetShape
@@ -142,5 +144,22 @@ class RustWriterTest {
             "http" to CargoDependency.Http.asType().member("foo")
         )
         sut.toString().shouldContain("inner: hello, regular: http::foo")
+    }
+
+    @Test
+    fun `missing template parameters are enclosed in backticks in the exception message`() {
+        val sut = RustWriter.forModule("lib")
+        val exception = assertThrows<CodegenException> {
+            sut.rustTemplate(
+                "#{Foo} #{Bar}",
+                "Foo Bar" to CargoDependency.Http.asType().member("foo"),
+                "Baz" to CargoDependency.Http.asType().member("baz")
+            )
+        }
+        exception.message shouldBe
+                """
+                Rust block template expected `Foo` but was not present in template.
+                    hint: Template contains: [`Foo Bar`, `Baz`]
+                """.trimIndent()
     }
 }
