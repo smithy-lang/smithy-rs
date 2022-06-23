@@ -10,50 +10,8 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Fix bug in profile file credential provider where a missing `default` profile lead to an unintended error."
-references = ["aws-sdk-rust#547", "smithy-rs#1458"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "rcoh"
-
 [[smithy-rs]]
-message = """
-Fix a potential bug with `ByteStream`'s implementation of `futures_core::stream::Stream` and add helpful error messages
-for users on 32-bit systems that try to stream HTTP bodies larger than 4.29Gb.
-"""
-references = ["smithy-rs#1460"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "Velfi"
-
-[[aws-sdk-rust]]
-message = "Add `Debug` implementation to several types in `aws-config`"
-references = ["smithy-rs#1421"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Fix RustWriter bugs for `rustTemplate` and `docs` utility methods"
-references = ["smithy-rs#1427", "smithy-rs#1465", "smithy-rs#1459"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "rcoh"
-
-[[smithy-rs]]
-message = """
-Requests to Route53 that return `ResourceId`s often come with a prefix. When passing those IDs directly into another
-request, the request would fail unless they manually stripped the prefix. Now, when making a request with a prefixed ID,
-the prefix will be stripped automatically.
-"""
-references = ["aws-sdk-rust#554"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "Velfi"
-
-[[aws-sdk-rust]]
-message = """
-Fix bug in retry policy where user configured timeouts were not retried. With this fix, setting
-[`with_call_attempt_timeout`](https://docs.rs/aws-smithy-types/0.43.0/aws_smithy_types/timeout/struct.Api.html#method.with_call_attempt_timeout)
-will lead to a retry when retries are enabled.
-"""
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-references = ["aws-sdk-rust#558", "smithy-rs#1478"]
+message = "Upgrade to Gradle 7. This change is not a breaking change, however, users of smithy-rs will need to switch to JDK 17"
+references = ["smithy-rs#1411", "smithy-rs#1167"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "rcoh"
