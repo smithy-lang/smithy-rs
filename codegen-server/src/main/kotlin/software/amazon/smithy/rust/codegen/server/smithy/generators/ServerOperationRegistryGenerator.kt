@@ -147,9 +147,9 @@ class ServerOperationRegistryGenerator(
             rustTemplate(
                 """
                 fn default() -> Self {
-                    Self { 
+                    Self {
                         $defaultOperations,
-                        _phantom: #{Phantom} 
+                        _phantom: #{Phantom}
                     }
                 }
                 """,
@@ -291,7 +291,7 @@ class ServerOperationRegistryGenerator(
     private fun OperationShape.restRequestSpec(): Writable {
         val httpTrait = httpBindingResolver.httpTrait(this)
         val extraCodegenScope =
-            arrayOf("RequestSpec", "UriSpec", "PathAndQuerySpec", "PathSpec", "QuerySpec", "PathSegment, QuerySegment").map {
+            arrayOf("RequestSpec", "UriSpec", "PathAndQuerySpec", "PathSpec", "QuerySpec", "PathSegment", "QuerySegment").map {
                 it to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec::$it")
             }.toTypedArray()
 
@@ -306,18 +306,8 @@ class ServerOperationRegistryGenerator(
                     }
                     rustTemplate(
                         "#{PathSegment}::$variant,",
-                        "PathSegment" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec::PathSegment")
+                        *extraCodegenScope
                     )
-                    // TODO If I instead use the following commented line, I get the error below. Note that I'm doing
-                    //      the same thing for `querySegmentsVec`, and that works.
-                    //   ```
-                    //   Projection simple failed: software.amazon.smithy.codegen.core.CodegenException: Rust block template expected `PathSegment` but was not present in template.
-                    //   hint: Template contains: [RequestSpec, UriSpec, PathAndQuerySpec, PathSpec, QuerySpec, PathSegment, QuerySegment]
-                    //   ```
-                    //   rustTemplate(
-                    //       "#{PathSegment}::$variant,",
-                    //       *extraCodegenScope
-                    //   )
                 }
             }
         }
