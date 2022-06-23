@@ -244,7 +244,6 @@ class HttpBoundProtocolTraitImplGenerator(
                 Attribute.Custom("allow(unused_variables)").render(it)
                 rust("let (response, properties) = op_response.get_parts_mut();")
                 withBlock("Ok({", "})") {
-                    rust("/* zelda: parseStreamingResponse */")
                     renderShapeParser(
                         operationShape,
                         outputShape,
@@ -271,7 +270,6 @@ class HttpBoundProtocolTraitImplGenerator(
                 "E" to errorSymbol
             ) {
                 withBlock("Ok({", "})") {
-                    rust("/* zelda: parseResponse */")
                     renderShapeParser(
                         operationShape,
                         outputShape,
@@ -295,7 +293,6 @@ class HttpBoundProtocolTraitImplGenerator(
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
-        rust("/* zelda: mutate the response here */")
 
         // avoid non-usage warnings for response
         rust("let _ = response;")
