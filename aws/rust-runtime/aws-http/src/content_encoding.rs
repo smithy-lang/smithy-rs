@@ -3,10 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_checksums::body::ChecksumBody;
-use aws_smithy_http::body::SdkBody;
-
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::{Bytes, BytesMut};
 use http::{HeaderMap, HeaderValue};
 use http_body::{Body, SizeHint};
 use pin_project_lite::pin_project;
@@ -266,7 +263,7 @@ impl<Inner: Body<Data = Bytes, Error = aws_smithy_http::body::Error>> Body
                     Poll::Ready(Ok(trailers)) => {
                         *this.state = AwsChunkedBodyState::Closed;
                         let total_length_of_trailers_in_bytes =
-                            this.options.trailer_lens.iter().fold(0, |acc, n| acc + n);
+                            this.options.trailer_lens.iter().sum();
 
                         Poll::Ready(Some(Ok(trailers_as_aws_chunked_bytes(
                             total_length_of_trailers_in_bytes,
@@ -277,9 +274,7 @@ impl<Inner: Body<Data = Bytes, Error = aws_smithy_http::body::Error>> Body
                     Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
                 };
             }
-            AwsChunkedBodyState::Closed => {
-                return Poll::Ready(None);
-            }
+            AwsChunkedBodyState::Closed => Poll::Ready(None),
         }
     }
 

@@ -36,7 +36,7 @@ tokio = { version = "1", features = ["full"] }
 hex = "0.4.3"
 
 [dev-dependencies]
-temp-file = "0.1.6"
+tempfile = "3.2.0"
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
 tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }

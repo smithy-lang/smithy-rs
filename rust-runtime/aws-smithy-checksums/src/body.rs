@@ -13,20 +13,22 @@ use bytes::Bytes;
 use http::header::HeaderName;
 use http::{HeaderMap, HeaderValue};
 use http_body::{Body, SizeHint};
-use pin_project::pin_project;
+use pin_project_lite::pin_project;
 
 use std::fmt::Display;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-/// A `ChecksumBody` will read and calculate a request body as it's being sent. Once the body has
-/// been completely read, it'll append a trailer with the calculated checksum.
-#[pin_project]
-pub struct ChecksumBody<InnerBody> {
-    #[pin]
-    inner: InnerBody,
-    #[pin]
-    checksum: Box<dyn Checksum>,
+// pin_project_lite can't handle triple-slash doc comments
+pin_project! {
+    #[doc = "A `ChecksumBody` will read and calculate a request body as it's being sent. Once the body has"]
+    #[doc = "been completely read, it'll append a trailer with the calculated checksum."]
+    pub struct ChecksumBody<InnerBody> {
+        #[pin]
+        inner: InnerBody,
+        #[pin]
+        checksum: Box<dyn Checksum>,
+    }
 }
 
 impl ChecksumBody<SdkBody> {
@@ -140,7 +142,6 @@ impl http_body::Body for ChecksumBody<SdkBody> {
                 let checksum_size_hint = self.checksum.size();
                 SizeHint::with_exact(size + checksum_size_hint)
             }
-            // TODO is this the right behavior?
             None => {
                 let checksum_size_hint = self.checksum.size();
                 let mut summed_size_hint = SizeHint::new();
@@ -156,16 +157,17 @@ impl http_body::Body for ChecksumBody<SdkBody> {
     }
 }
 
-/// A response body that will calculate a checksum as it is read. If all data is read and the
-/// calculated checksum doesn't match a precalculated checksum, this body will emit an
-/// [asw_smithy_http::body::Error].
-#[pin_project]
-pub struct ChecksumValidatedBody<InnerBody> {
-    #[pin]
-    inner: InnerBody,
-    #[pin]
-    checksum: Box<dyn Checksum>,
-    precalculated_checksum: Bytes,
+pin_project! {
+    #[doc = "A response body that will calculate a checksum as it is read. If all data is read and the"]
+    #[doc = "calculated checksum doesn't match a precalculated checksum, this body will emit an"]
+    #[doc = "[asw_smithy_http::body::Error]."]
+    pub struct ChecksumValidatedBody<InnerBody> {
+        #[pin]
+        inner: InnerBody,
+        #[pin]
+        checksum: Box<dyn Checksum>,
+        precalculated_checksum: Bytes,
+    }
 }
 
 impl ChecksumValidatedBody<SdkBody> {
@@ -343,7 +345,7 @@ mod tests {
             .expect("checksum generation was without error")
             .expect("trailers were set");
         let checksum_trailer = trailers
-            .get(CRC_32_HEADER_NAME)
+            .get(&CRC_32_HEADER_NAME)
             .expect("trailers contain crc32 checksum");
         let checksum_trailer = header_value_as_checksum_string(checksum_trailer);
 
