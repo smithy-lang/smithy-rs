@@ -11,6 +11,7 @@ import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider

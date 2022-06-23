@@ -3,19 +3,30 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.python.smithy
+package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeVisitor
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
+import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
+import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.SHAPE_KEY
+import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.util.toPascalCase
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
  * Input / output / error structures can refer to complex types like the ones implemented inside
@@ -26,66 +37,75 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
  * This symbol provider ensures types not implementing `pyo3::PyClass` are swapped with their wrappers from
  * `aws_smithy_http_server_python::types`.
  */
-class PythonServerSymbolProvider(private val base: RustSymbolProvider, private val model: Model) :
-    WrappingSymbolProvider(base) {
 
-    private val runtimeConfig = config().runtimeConfig
+open class PythonWrappingVisitingSymbolProvider(private val base: RustSymbolProvider, private val model: Model) : ShapeVisitor.Default<Symbol>(), RustSymbolProvider {
+    override fun getDefault(shape: Shape): Symbol {
+        return base.toSymbol(shape)
+    }
 
-    /**
-     * Convert a shape to a Symbol.
-     *
-     * Swap the shape's symbol if its associated type does not implement `pyo3::PyClass`.
-     */
-    override fun toSymbol(shape: Shape): Symbol {
-        var originalSymbol = base.toSymbol(shape)
-        if (shape is MemberShape) {
-            val target = model.expectShape(shape.target)
-            originalSymbol = base.toSymbol(target)
-            return when (target) {
-                is MapShape -> {
-                    val key = base.toSymbol(target.key)
-                    val value = shapeToSymbol(model.expectShape(target.value.target), originalSymbol)
-                    println("AAAAAAAAAAAAAAAAA: $key, $value")
-                    symbolBuilder(target, RustType.HashMap(key.rustType(), value.rustType())).addReference(key).addReference(value).build()
-                }
-                // is ListShape -> {
-                //     val innerTarget = model.expectShape(target.member.target)
-                //     val inner = shapeToSymbol(target.member, originalSymbol)
-                //     println("AAAAAAAAAAAAAAAAA: ${target.member} $inner")
-                //     symbolBuilder(innerTarget, RustType.Vec(inner.rustType())).addReference(inner).build()
-                // }
-                // is SetShape -> {
-                //     val inner = shapeToSymbol(target.member, originalSymbol)
-                //     val builder = if (model.expectShape(target.member.target).isStringShape) {
-                //         symbolBuilder(target, RustType.HashSet(inner.rustType()))
-                //     } else {
-                //         // only strings get put into actual sets because floats are unhashable
-                //         symbolBuilder(target, RustType.Vec(inner.rustType()))
-                //     }
-                //     builder.addReference(inner).build()
-                // }
-                is BlobShape -> {
-                    PythonServerRuntimeType.Blob(runtimeConfig).toSymbol()
-                }
-                is TimestampShape -> PythonServerRuntimeType.DateTime(runtimeConfig).toSymbol()
-                else -> originalSymbol
-            }
+    override fun config(): SymbolVisitorConfig {
+        return base.config()
+    }
+
+    override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
+        return base.toEnumVariantName(definition)
+    }
+
+    override fun toMemberName(shape: MemberShape): String = when (val container = model.expectShape(shape.container)) {
+        is StructureShape -> shape.memberName.toSnakeCase()
+        is UnionShape -> shape.memberName.toPascalCase()
+        else -> error("unexpected container shape: $container")
+    }
+
+    override fun listShape(shape: ListShape): Symbol {
+        val inner = toSymbol(shape.member)
+        return symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
+    }
+
+    override fun mapShape(shape: MapShape): Symbol {
+        val target = model.expectShape(shape.key.target)
+        require(target.isStringShape) { "unexpected key shape: ${shape.key}: $target [keys must be strings]" }
+        val key = toSymbol(shape.key)
+        val value = toSymbol(shape.value)
+        return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).addReference(key)
+            .addReference(value).build()
+    }
+
+    override fun setShape(shape: SetShape): Symbol {
+        val inner = toSymbol(shape.member)
+        val builder = if (model.expectShape(shape.member.target).isStringShape) {
+            symbolBuilder(shape, RustType.HashSet(inner.rustType()))
         } else {
-            return shapeToSymbol(shape, originalSymbol)
+            // only strings get put into actual sets because floats are unhashable
+            symbolBuilder(shape, RustType.Vec(inner.rustType()))
         }
+        return builder.addReference(inner).build()
+    }
+
+    override fun memberShape(shape: MemberShape): Symbol {
+        return toSymbol(model.expectShape(shape.target))
+    }
+
+    override fun toSymbol(shape: Shape): Symbol {
+        return shape.accept(this)
     }
 
     private fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
-        val builder = Symbol.builder().putProperty("shape", shape)
+        val builder = Symbol.builder().putProperty("shape", SHAPE_KEY)
         return builder.rustType(rustType)
             .name(rustType.name)
             .definitionFile("python.rs")
     }
+}
 
-    private fun shapeToSymbol(shape: Shape, originalSymbol: Symbol): Symbol =
-        when (shape) {
-            is BlobShape -> PythonServerRuntimeType.Blob(runtimeConfig).toSymbol()
-            is TimestampShape -> PythonServerRuntimeType.DateTime(runtimeConfig).toSymbol()
-            else -> originalSymbol
-        }
+class PythonServerSymbolProvider(private val base: RustSymbolProvider, private val model: Model) : PythonWrappingVisitingSymbolProvider(base, model) {
+    private val runtimeConfig = config().runtimeConfig
+
+    override fun timestampShape(shape: TimestampShape?): Symbol {
+        return PythonServerRuntimeType.DateTime(runtimeConfig).toSymbol()
+    }
+
+    override fun blobShape(shape: BlobShape?): Symbol {
+        return PythonServerRuntimeType.Blob(runtimeConfig).toSymbol()
+    }
 }

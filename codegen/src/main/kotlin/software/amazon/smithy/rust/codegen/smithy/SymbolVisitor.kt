@@ -192,6 +192,7 @@ class SymbolVisitor(
     }
 
     override fun toMemberName(shape: MemberShape): String = when (val container = model.expectShape(shape.container)) {
+
         is StructureShape -> shape.memberName.toSnakeCase()
         is UnionShape -> shape.memberName.toPascalCase()
         else -> error("unexpected container shape: $container")
@@ -351,7 +352,7 @@ class SymbolVisitor(
 
 // TODO(chore): Move this to a useful place
 private const val RUST_TYPE_KEY = "rusttype"
-private const val SHAPE_KEY = "shape"
+const val SHAPE_KEY = "shape"
 private const val SYMBOL_DEFAULT = "symboldefault"
 private const val RENAMED_FROM_KEY = "renamedfrom"
 
