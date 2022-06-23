@@ -7,7 +7,7 @@ use self::gen::{CodeGenSettings, DefaultSdkGenerator, SdkGenerator};
 use crate::fs::{DefaultFs, Fs};
 use crate::git::{Commit, Git, GitCLI};
 use crate::versions::{DefaultVersions, Versions, VersionsManifest};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use systemstat::{ByteSize, Platform, System};
-use tracing::{debug, info, info_span};
+use tracing::{debug, info, info_span, warn};
 use tracing_attributes::instrument;
 
 pub mod gen;
@@ -422,7 +422,8 @@ impl Sync {
             .find_handwritten_files_and_folders(self.aws_sdk_rust.path(), generated_sdk_path)
             .context(here!())?;
         if !handwritten_files_in_generated_sdk_folder.is_empty() {
-            bail!(
+            // TODO(https://github.com/awslabs/smithy-rs/issues/1493): This can be changed back to `bail!` after release decoupling is completed
+            warn!(
                 "found one or more 'handwritten' files/folders in generated code: {:#?}\nhint: if this file is newly generated, remove it from .handwritten",
                 handwritten_files_in_generated_sdk_folder
             );
