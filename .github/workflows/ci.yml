@@ -61,6 +61,7 @@ jobs:
         - action: check-server-codegen-integration-tests-python
         - action: check-server-codegen-unit-tests-python
         - action: check-server-e2e-test
+        - action: check-server-python-e2e-test
         - action: check-style-and-lints
     steps:
     - uses: actions/checkout@v3
