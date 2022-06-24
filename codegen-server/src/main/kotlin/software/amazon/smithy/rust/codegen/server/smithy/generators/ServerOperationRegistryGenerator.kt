@@ -10,12 +10,12 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.smithy.Outputs
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -100,7 +101,9 @@ class ServerOperationRegistryGenerator(
 /// operation's output. If your operation is fallible (i.e. it
 /// contains the `errors` member in your Smithy model), the function
 /// implementing the operation has to be fallible (i.e. return a
-/// [`Result`]).
+/// [`Result`]). **You must register an implementation for all
+/// operations with the correct signature**, or your application
+/// will fail to compile.
 ///
 /// The operation registry can be converted into an [`#{Router}`] for
 /// your service. This router will take care of routing HTTP
@@ -395,13 +398,6 @@ ${operationImplementationStubs(operations)}
             }
         }
 
-        val foo = writable {
-            rust("hi")
-        }
-
-        foo.isEmpty()
-        foo.toString()
-
         return writable {
             rustTemplate(
                 """
@@ -426,11 +422,16 @@ ${operationImplementationStubs(operations)}
 
     private fun operationImplementationStubs(operations: List<OperationShape>): String =
         operations.joinToString("\n///\n") {
-            """
-            /// ${it.signature()} {
-            ///     todo!()
-            /// }
-            """.trimIndent()
+            val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
+            val ret = if (!operationDocumentation.isNullOrBlank()) {
+                "/// /// $operationDocumentation\n"
+            } else ""
+            ret +
+                    """
+                    /// ${it.signature()} {
+                    ///     todo!()
+                    /// }
+                    """.trimIndent()
         }
 
     /**

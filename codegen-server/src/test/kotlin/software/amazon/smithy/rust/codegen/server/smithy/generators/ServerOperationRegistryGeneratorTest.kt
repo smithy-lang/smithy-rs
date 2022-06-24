@@ -30,6 +30,7 @@ class ServerOperationRegistryGeneratorTest {
             ],
         }
 
+        /// Only the Frobnify operation is documented.
         @http(method: "GET", uri: "/frobnify")
         operation Frobnify {
             input: FrobnifyInputOutput,
@@ -101,6 +102,7 @@ class ServerOperationRegistryGeneratorTest {
                 ///    // }
                 /// }
                 ///
+                /// /// Only the Frobnify operation is documented.
                 /// async fn frobnify(input: input::FrobnifyInputOutput) -> Result<output::FrobnifyInputOutput, error::FrobnifyError> {
                 ///     todo!()
                 /// }
