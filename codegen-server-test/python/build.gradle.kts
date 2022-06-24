@@ -37,9 +37,7 @@ dependencies {
 }
 
 val allCodegenTests = listOf(
-    // CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
-    // CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
+    CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
     CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
 )
 

@@ -305,7 +305,7 @@ impl PyApp {
         // Lock the workers mutex.
         let mut active_workers = self.workers.lock();
         // Register the main signal handler.
-        // TODO: move from num_cpus to thread::available_parallelism after MSRV is 1.60.
+        // TODO(move from num_cpus to thread::available_parallelism after MSRV is 1.60)
         // Start all the workers as new Python processes and store the in the `workers` attribute.
         for idx in 1..workers.unwrap_or_else(num_cpus::get) + 1 {
             let sock = socket.try_clone()?;
