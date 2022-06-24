@@ -183,7 +183,7 @@ class ServerOperationRegistryGenerator(
                             """
                             $operationName: match self.$operationName {
                                 Some(v) => v,
-                                None => return Err(${operationRegistryErrorName}::UninitializedField("operationName")),
+                                None => return Err(${operationRegistryErrorName}::UninitializedField("$operationName")),
                             },
                             """
                         )
