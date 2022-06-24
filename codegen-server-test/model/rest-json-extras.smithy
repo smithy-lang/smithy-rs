@@ -1,0 +1,1 @@
+../../codegen-test/model/rest-json-extras.smithy
