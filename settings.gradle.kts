@@ -4,7 +4,6 @@
  */
 
 rootProject.name = "software.amazon.smithy.rust.codegen.smithy-rs"
-enableFeaturePreview("GRADLE_METADATA")
 
 include(":codegen")
 include(":codegen-test")
