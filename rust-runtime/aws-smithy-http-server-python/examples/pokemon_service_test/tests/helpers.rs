@@ -3,11 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use command_group::{CommandGroup, GroupChild};
 use pokemon_service_client::{Builder, Client, Config};
 use std::{process::Command, thread, time::Duration};
 
 pub(crate) struct PokemonService {
-    child_process: std::process::Child,
+    // We need to ensure all processes forked by the Python interpreter
+    // are on the same process group, otherwise only the main process
+    // will be killed during drop, leaving the test worker alive.
+    child_process: GroupChild,
 }
 
 impl PokemonService {
@@ -15,8 +19,9 @@ impl PokemonService {
     pub(crate) fn run() -> Self {
         let process = Command::new("python")
             .arg("../pokemon_service.py")
-            .spawn()
-            .unwrap();
+            .group_spawn()
+            .expect("failed to spawn the Pokémon Service program");
+        // Them Python interpreter takes a little to startup.
         thread::sleep(Duration::from_secs(2));
         Self {
             child_process: process,
@@ -28,7 +33,8 @@ impl Drop for PokemonService {
     fn drop(&mut self) {
         self.child_process
             .kill()
-            .expect("failed to kill Pokémon Service program")
+            .expect("failed to kill Pokémon Service program");
+        self.child_process.wait().ok();
     }
 }
 

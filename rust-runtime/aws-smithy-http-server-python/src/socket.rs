@@ -34,12 +34,8 @@ impl SharedSocket {
     #[cfg(not(target_os = "windows"))]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
         let address: SocketAddr = format!("{}:{}", address, port).parse()?;
-        let domain = if address.is_ipv6() {
-            Domain::IPV6
-        } else {
-            Domain::IPV4
-        };
-        tracing::info!("Shared socket listening on {address}, IP version: {domain:?}");
+        let (domain, ip_version) = SharedSocket::socket_domain(address);
+        tracing::info!("Shared socket listening on {address}, IP version: {ip_version}");
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
         // Set value for the `SO_REUSEPORT` and `SO_REUSEADDR` options on this socket.
         // This indicates that further calls to `bind` may allow reuse of local
@@ -58,12 +54,8 @@ impl SharedSocket {
     #[cfg(target_os = "windows")]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
         let address: SocketAddr = format!("{}:{}", address, port).parse()?;
-        let domain = if address.is_ipv6() {
-            Domain::IPV6
-        } else {
-            Domain::IPV4
-        };
-        tracing::info!("Shared socket listening on {address}, IP version: {domain:?}");
+        let (domain, ip_version) = SharedSocket::socket_domain(address);
+        tracing::info!("Shared socket listening on {address}, IP version: {ip_version}");
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
         // `SO_REUSEPORT` is not available on Windows.
         socket.set_reuse_address(true)?;
@@ -85,6 +77,15 @@ impl SharedSocket {
     /// Get a cloned inner socket.
     pub fn get_socket(&self) -> Result<Socket, std::io::Error> {
         self.inner.try_clone()
+    }
+
+    /// Find the socket domain
+    fn socket_domain(address: SocketAddr) -> (Domain, &'static str) {
+        if address.is_ipv6() {
+            (Domain::IPV6, "6")
+        } else {
+            (Domain::IPV4, "4")
+        }
     }
 }
 

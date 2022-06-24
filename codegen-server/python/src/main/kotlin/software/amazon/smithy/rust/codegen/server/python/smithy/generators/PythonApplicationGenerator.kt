@@ -98,8 +98,9 @@ class PythonApplicationGenerator(
             rustTemplate(
                 """
                 ##[new]
-                pub(crate) fn new(py: #{pyo3}::Python) -> #{pyo3}::PyResult<Self> {
-                    #{SmithyPython}::logging::setup(py, #{SmithyPython}::LogLevel::Debug)?;
+                pub(crate) fn new(py: #{pyo3}::Python, log_level: Option<#{SmithyPython}::LogLevel>) -> #{pyo3}::PyResult<Self> {
+                    let log_level = log_level.unwrap_or(#{SmithyPython}::LogLevel::Info);
+                    #{SmithyPython}::logging::setup(py, log_level)?;
                     Ok(Self { inner: aws_smithy_http_server_python::PyApp::default() })
                 }
                 pub(crate) fn context(&mut self, py: #{pyo3}::Python, context: #{pyo3}::PyObject) {

@@ -142,14 +142,14 @@ fn python_tracing(record: &PyAny) -> PyResult<()> {
     let module = record.getattr("module")?;
     let filename = record.getattr("filename")?;
     let line = record.getattr("lineno")?;
-    let language = "python";
+    let pid = record.getattr("process")?;
 
     match level.extract()? {
-        40u8 => tracing::event!(Level::ERROR, %language, %module, %filename, %line, "{message}"),
-        30u8 => tracing::event!(Level::WARN, %language, %module, %filename, %line, "{message}"),
-        20u8 => tracing::event!(Level::INFO, %language, %module, %filename, %line, "{message}"),
-        10u8 => tracing::event!(Level::DEBUG, %language, %module, %filename, %line, "{message}"),
-        _ => tracing::event!(Level::TRACE, %language, %module, %filename, %line, "{message}"),
+        40u8 => tracing::event!(Level::ERROR, %pid, %module, %filename, %line, "{message}"),
+        30u8 => tracing::event!(Level::WARN, %pid, %module, %filename, %line, "{message}"),
+        20u8 => tracing::event!(Level::INFO, %pid, %module, %filename, %line, "{message}"),
+        10u8 => tracing::event!(Level::DEBUG, %pid, %module, %filename, %line, "{message}"),
+        _ => tracing::event!(Level::TRACE, %pid, %module, %filename, %line, "{message}"),
     };
 
     Ok(())

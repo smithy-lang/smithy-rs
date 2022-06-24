@@ -27,6 +27,9 @@ release: codegen
 run: build
 	python $(CUR_DIR)/pokemon_service.py
 
+test: build
+	cargo test
+
 doc-open: codegen
 	cargo doc --no-deps --open
 
