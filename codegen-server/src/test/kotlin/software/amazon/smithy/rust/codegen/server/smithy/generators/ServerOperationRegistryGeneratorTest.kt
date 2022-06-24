@@ -52,7 +52,7 @@ class ServerOperationRegistryGeneratorTest {
     """.asSmithyModel()
 
     @Test
-    fun `it generates documentation`() {
+    fun `it generates quickstart example`() {
         val serviceShape = model.lookup<ServiceShape>("test#Service")
         val (protocolShapeId, protocolGeneratorFactory) = ServerProtocolLoader(ServerProtocolLoader.DefaultProtocols).protocolFor(
             model,
