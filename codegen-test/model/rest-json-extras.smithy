@@ -4,6 +4,7 @@ namespace aws.protocoltests.restjson
 
 use aws.protocols#restJson1
 use aws.api#service
+use smithy.test#httpMalformedRequestTests
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
 
@@ -78,7 +79,8 @@ service RestJsonExtras {
         code: 500,
         body: "",
         headers: { "X-Amzn-Errortype": "ExtraError" },
-        params: {}
+        params: {},
+        appliesTo: "client",
     }
 ])
 @error("server")
@@ -93,7 +95,8 @@ structure ExtraError {}
         body: "rawstring",
         params: { payload: "rawstring" },
         method: "POST",
-        protocol: "aws.protocols#restJson1"
+        protocol: "aws.protocols#restJson1",
+        appliesTo: "client",
     }
 ])
 operation StringPayload {
@@ -113,7 +116,8 @@ structure StringPayloadInput {
     uri: "/primitive-document",
     method: "POST",
     body: "{}",
-    params: {}
+    params: {},
+    appliesTo: "client",
 }])
 @http(uri: "/primitive-document", method: "POST")
 operation PrimitiveIntOp {
@@ -131,14 +135,16 @@ structure PrimitiveIntDocument {
         protocol: "aws.protocols#restJson1",
         code: 200,
         headers: { "x-field": "123" },
-        params: { field: 123 }
+        params: { field: 123 },
+        appliesTo: "client",
     },
     {
         id: "DeserPrimitiveHeaderMissing",
         protocol: "aws.protocols#restJson1",
         code: 200,
         headers: { },
-        params: { field: 0 }
+        params: { field: 0 },
+        appliesTo: "client",
     }
 ])
 @http(uri: "/primitive", method: "POST")
@@ -161,7 +167,8 @@ structure PrimitiveIntHeaderInput {
         uri: "/foo/enumvalue",
         params: { enum: "enumvalue" },
         method: "GET",
-        protocol: "aws.protocols#restJson1"
+        protocol: "aws.protocols#restJson1",
+        appliesTo: "client",
     }
 ])
 operation EnumQuery {
@@ -201,7 +208,8 @@ structure MapWithEnumKeyInputOutput {
         method: "POST",
         protocol: "aws.protocols#restJson1",
         body: "{\"map\":{\"enumvalue\":\"something\"}}",
-        params: { map: { "enumvalue": "something" } }
+        params: { map: { "enumvalue": "something" } },
+        appliesTo: "client",
     },
 ])
 @httpResponseTests([
@@ -211,6 +219,7 @@ structure MapWithEnumKeyInputOutput {
         code: 200,
         body: "{\"map\":{\"enumvalue\":\"something\"}}",
         params: { map: { "enumvalue": "something" } },
+        appliesTo: "client",
     },
 ])
 operation MapWithEnumKeyOp {
@@ -240,6 +249,7 @@ structure EscapedStringValuesInputOutput {
         protocol: "aws.protocols#restJson1",
         body: "{\"enum\":\"has\\\"quotes\",\"also\\\"has\\\"quotes\":\"test\"}",
         params: { enum: "has\"quotes", someString: "test" },
+        appliesTo: "client",
     }
 ])
 @httpResponseTests([
@@ -249,6 +259,7 @@ structure EscapedStringValuesInputOutput {
         code: 200,
         body: "{\"enum\":\"has\\\"quotes\",\"also\\\"has\\\"quotes\":\"test\"}",
         params: { enum: "has\"quotes", someString: "test" },
+        appliesTo: "client",
     }
 ])
 operation EscapedStringValues {
@@ -283,6 +294,7 @@ structure NullInNonSparseOutput {
         code: 200,
         body: "{\"list\":[null,\"one\",null,\"two\",null],\"map\":{\"zero\":null,\"one\":\"1\"}}",
         params: { list: ["one", "two"], map: { "one": "1" } },
+        appliesTo: "client",
     }
 ])
 operation NullInNonSparse {
@@ -302,7 +314,8 @@ operation CaseInsensitiveErrorOperation {
         code: 500,
         body: "{\"Message\": \"hello\"}",
         headers: { "X-Amzn-Errortype": "CaseInsensitiveError" },
-        params: { message: "hello" }
+        params: { message: "hello" },
+        appliesTo: "client",
     }
 ])
 @error("server")
@@ -322,9 +335,118 @@ structure EmptyStructWithContentOnWireOpOutput {
         protocol: "aws.protocols#restJson1",
         code: 200,
         body: "{\"empty\": {\"value\":\"not actually empty\"}}",
-        params: { empty: {} }
+        params: { empty: {} },
+        appliesTo: "client",
     }
 ])
 operation EmptyStructWithContentOnWireOp {
     output: EmptyStructWithContentOnWireOpOutput,
 }
+
+apply FixedMalformedAcceptWithGenericString @httpMalformedRequestTests([
+    {
+        id: "RestJsonWithPayloadExpectsImpliedAcceptFixed",
+        documentation: """
+        When there is a payload without a mediaType trait, the accept must match the
+        implied content type of the shape.""",
+        protocol: restJson1,
+        request: {
+            method: "POST",
+            uri: "/FixedMalformedAcceptWithGenericString",
+            headers: {
+                // this should be text/plain
+                "accept": "application/json"
+            }
+        },
+        response: {
+            code: 406,
+            headers: {
+                "x-amzn-errortype": "NotAcceptableException"
+            }
+        },
+        tags: [ "accept" ],
+        appliesTo: "server",
+    }
+])
+
+@suppress(["UnstableTrait"])
+@http(method: "POST", uri: "/FixedMalformedAcceptWithGenericString")
+operation FixedMalformedAcceptWithGenericString {
+    input: FixedMalformedAcceptWithGenericStringInput
+}
+
+structure FixedMalformedAcceptWithGenericStringInput {
+    @httpPayload
+    payload: String
+}
+
+@idempotent
+@http(method: "PUT", uri: "/service/{id}")
+@documentation("Service register operation")
+@httpRequestTests([
+    {
+        id: "FixedRegisterServiceRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/service/1",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        params: { id: "1", name: "TestService" },
+        body: "{\"name\":\"TestService\"}",
+        method: "PUT",
+        appliesTo: "server",
+    }
+])
+@httpResponseTests([
+    {
+        id: "FixedRegisterServiceResponseTest",
+        protocol: "aws.protocols#restJson1",
+        params: { id: "1", name: "TestService" },
+        headers: {
+            "Content-Type": "TestService",
+        },
+        body: "{\"id\":\"1\"}",
+        code: 200,
+        appliesTo: "server",
+    }
+])
+operation FixedRegisterService {
+    input: FixedRegisterServiceInputRequest,
+    output: FixedRegisterServiceOutputResponse,
+    errors: [FixedResourceAlreadyExists]
+}
+
+@documentation("Service register input structure")
+structure FixedRegisterServiceInputRequest {
+    @required
+    @httpLabel
+    id: ServiceId,
+    name: ServiceName,
+}
+
+@documentation("Service register output structure")
+structure FixedRegisterServiceOutputResponse {
+    @required
+    id: ServiceId,
+
+    @required
+    @httpHeader("Content-Type")
+    name: ServiceName,
+}
+
+@error("client")
+@documentation(
+    """
+    Returned when a new resource cannot be created because one already exists.
+    """
+)
+structure FixedResourceAlreadyExists {
+    @required
+    message: String
+}
+
+@documentation("Id of the service that will be registered")
+string ServiceId
+
+@documentation("Name of the service that will be registered")
+string ServiceName
