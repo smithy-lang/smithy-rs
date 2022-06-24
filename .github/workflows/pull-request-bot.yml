@@ -95,7 +95,7 @@ jobs:
         ./gradlew -Paws.services=+sts,+sso,+transcribestreaming,+dynamodb :aws:sdk:assemble
 
         # Copy the Server runtime crate(s) in
-        cp -r rust-runtime/aws-smithy-http-server aws/sdk/build/aws-sdk/sdk
+        cp -r rust-runtime/aws-smithy-http-server rust-runtime/aws-smithy-http-server-python aws/sdk/build/aws-sdk/sdk
 
         pushd aws/sdk/build/aws-sdk
 
