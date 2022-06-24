@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -25,9 +26,14 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.Errors
+import software.amazon.smithy.rust.codegen.smithy.Inputs
+import software.amazon.smithy.rust.codegen.smithy.Outputs
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
@@ -46,6 +52,7 @@ class ServerOperationRegistryGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     private val operations: List<OperationShape>,
 ) {
+    private val crateName = coreCodegenContext.settings.moduleName
     private val model = coreCodegenContext.model
     private val protocol = coreCodegenContext.protocol
     private val symbolProvider = coreCodegenContext.symbolProvider
@@ -70,12 +77,78 @@ class ServerOperationRegistryGenerator(
     private val operationRegistryBuilderNameWithArguments = "$operationRegistryBuilderName<$genericArguments>"
 
     fun render(writer: RustWriter) {
+        renderOperationRegistryRustDocs(writer)
         renderOperationRegistryStruct(writer)
         renderOperationRegistryBuilderStruct(writer)
         renderOperationRegistryBuilderError(writer)
         renderOperationRegistryBuilderDefault(writer)
         renderOperationRegistryBuilderImplementation(writer)
         renderRouterImplementationFromOperationRegistryBuilder(writer)
+    }
+
+    private fun renderOperationRegistryRustDocs(writer: RustWriter) {
+        writer.rustTemplate(
+            """
+/// The `${operationRegistryName}` is the place where you can register
+/// your service's operation implementations.
+/// 
+/// Use [`${operationRegistryBuilderName}`] to construct the
+/// `${operationRegistryName}`. For each of the [operations] modeled in
+/// your Smithy service, you need to provide an implementation in the
+/// form of a Rust async function or closure that takes in the
+/// operation's input as their first parameter, and returns the
+/// operation's output. If your operation is fallible (i.e. it
+/// contains the `errors` member in your Smithy model), the function
+/// implementing the operation has to be fallible (i.e. return a
+/// [`Result`]).
+///
+/// The operation registry can be converted into an [`#{Router}`] for
+/// your service. This router will take care of routing HTTP
+/// requests to the matching operation implementation, adhering to
+/// your service's protocol and the [HTTP binding traits]  that you
+/// used in your Smithy model. This router can be converted into a
+/// type implementing [`tower::make::MakeService`], a _service
+/// factory_. You can feed this value to a [Hyper server], and the
+/// server will instantiate and [`serve`] your service.
+/// 
+/// Here's a full example to get you started:
+/// 
+/// ```rust
+/// use std::net::SocketAddr;
+/// use ${crateName}::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};
+/// use ${crateName}::operation_registry::${operationRegistryBuilderName};
+/// use #{Router};
+///
+/// ##[tokio::main]
+/// pub async fn main() {
+///    let app: Router = ${operationRegistryBuilderName}::default()
+${operationNames.map { ".$it($it)" }.joinToString("\n") { it.prependIndent("///        ") }}
+///        .build()
+///        .expect("unable to build operation registry")
+///        .into();
+///
+///    let bind: SocketAddr = format!("{}:{}", "127.0.0.1", "6969")
+///        .parse()
+///        .expect("unable to parse the server bind address and port");
+///
+///    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
+///
+///    // Run your service!
+///    // if let Err(err) = server.await {
+///    //   eprintln!("server error: {}", err);
+///    // }
+/// }
+///
+${operationImplementationStubs(operations)}
+/// ```
+///
+/// [`serve`]: https://docs.rs/hyper/0.14.16/hyper/server/struct.Builder.html##method.serve
+/// [`tower::make::MakeService`]: https://docs.rs/tower/latest/tower/make/trait.MakeService.html
+/// [HTTP binding traits]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
+/// [operations]: https://awslabs.github.io/smithy/1.0/spec/core/model.html##operation
+/// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
+""", "Router" to ServerRuntimeType.Router(runtimeConfig)
+        )
     }
 
     private fun renderOperationRegistryStruct(writer: RustWriter) {
@@ -183,7 +256,7 @@ class ServerOperationRegistryGenerator(
                             """
                             $operationName: match self.$operationName {
                                 Some(v) => v,
-                                None => return Err(${operationRegistryErrorName}::UninitializedField("operationName")),
+                                None => return Err(${operationRegistryErrorName}::UninitializedField("$operationName")),
                             },
                             """
                         )
@@ -322,6 +395,13 @@ class ServerOperationRegistryGenerator(
             }
         }
 
+        val foo = writable {
+            rust("hi")
+        }
+
+        foo.isEmpty()
+        foo.toString()
+
         return writable {
             rustTemplate(
                 """
@@ -342,5 +422,35 @@ class ServerOperationRegistryGenerator(
                 "Method" to CargoDependency.Http.asType().member("Method"),
             )
         }
+    }
+
+    private fun operationImplementationStubs(operations: List<OperationShape>): String =
+        operations.joinToString("\n///\n") {
+            """
+            /// ${it.signature()} {
+            ///     todo!()
+            /// }
+            """.trimIndent()
+        }
+
+    /**
+     * Returns the function signature for an operation handler implementation. Used in the documentation.
+     */
+    private fun OperationShape.signature(): String {
+        val inputSymbol = symbolProvider.toSymbol(inputShape(model))
+        val outputSymbol = symbolProvider.toSymbol(outputShape(model))
+        val errorSymbol = errorSymbol(symbolProvider)
+
+        val inputT = "${Inputs.namespace}::${inputSymbol.name}"
+        val t = "${Outputs.namespace}::${outputSymbol.name}"
+        val outputT = if (errors.isEmpty()) {
+            t
+        } else {
+            val e = "${Errors.namespace}::${errorSymbol.name}"
+            "Result<$t, $e>"
+        }
+
+        val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
+        return "async fn $operationName(input: $inputT) -> $outputT"
     }
 }
