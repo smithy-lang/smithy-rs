@@ -53,29 +53,27 @@ class PythonServerStructureGenerator(
     }
 
     private fun renderPyO3Methods() {
-        if (shape.hasTrait<ErrorTrait>() || accessorMembers.isNotEmpty()) {
-            Attribute.Custom("pyo3::pymethods", symbols = pyo3Symbols).render(writer)
-            writer.rustTemplate(
-                """
-                impl $name {
-                    ##[new]
-                    pub fn new(#{bodysignature:W}) -> Self {
-                        Self {
-                            #{bodymembers:W}
-                        }
-                    }
-                    fn __repr__(&self) -> String  {
-                        format!("{self:?}")
-                    }
-                    fn __str__(&self) -> String {
-                        format!("{self:?}")
+        Attribute.Custom("pyo3::pymethods", symbols = pyo3Symbols).render(writer)
+        writer.rustTemplate(
+            """
+            impl $name {
+                ##[new]
+                pub fn new(#{BodySignature:W}) -> Self {
+                    Self {
+                        #{BodyMembers:W}
                     }
                 }
-                """,
-                "bodysignature" to renderStructSignatureMembers(),
-                "bodymembers" to renderStructBodyMembers()
-            )
-        }
+                fn __repr__(&self) -> String  {
+                    format!("{self:?}")
+                }
+                fn __str__(&self) -> String {
+                    format!("{self:?}")
+                }
+            }
+            """,
+            "BodySignature" to renderStructSignatureMembers(),
+            "BodyMembers" to renderStructBodyMembers()
+        )
     }
 
     private fun renderStructSignatureMembers(): Writable =

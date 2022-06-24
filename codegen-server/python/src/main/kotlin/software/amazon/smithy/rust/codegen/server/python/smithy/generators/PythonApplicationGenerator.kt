@@ -77,7 +77,7 @@ class PythonApplicationGenerator(
             """
             ##[#{pyo3}::pyclass]
             ##[derive(Debug, Clone)]
-            pub struct App {
+            pub(crate) struct App {
                 inner: #{SmithyPython}::PyApp
             }
             """,
@@ -98,14 +98,14 @@ class PythonApplicationGenerator(
             rustTemplate(
                 """
                 ##[new]
-                pub fn new(py: #{pyo3}::Python) -> #{pyo3}::PyResult<Self> {
+                pub(crate) fn new(py: #{pyo3}::Python) -> #{pyo3}::PyResult<Self> {
                     #{SmithyPython}::logging::setup(py, #{SmithyPython}::LogLevel::Debug)?;
                     Ok(Self { inner: aws_smithy_http_server_python::PyApp::default() })
                 }
-                pub fn context(&mut self, py: #{pyo3}::Python, context: #{pyo3}::PyObject) {
+                pub(crate) fn context(&mut self, py: #{pyo3}::Python, context: #{pyo3}::PyObject) {
                     self.inner.context(py, context)
                 }
-                pub fn run(
+                pub(crate) fn run(
                     &mut self,
                     py: #{pyo3}::Python,
                     address: Option<String>,
@@ -123,7 +123,7 @@ class PythonApplicationGenerator(
                 """
                 /// Override the `router()` function of #{SmithyPython}::PyApp allowing to dynamically
                 /// codegenerate the routes.
-                pub fn build_router(&mut self, py: #{pyo3}::Python) -> #{pyo3}::PyResult<()>
+                pub(crate) fn build_router(&mut self, py: #{pyo3}::Python) -> #{pyo3}::PyResult<()>
                 """,
                 *codegenScope
             ) {
@@ -166,7 +166,7 @@ class PythonApplicationGenerator(
                     """
                     /// Method to register `$name` Python implementation inside the handlers map.
                     /// It can be used as a function decorator in Python.
-                    pub fn $name(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
+                    pub(crate) fn $name(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
                         self.inner.register_operation(py, "$name", func)
                     }
                     """,
