@@ -8,7 +8,6 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 plugins {
     kotlin("jvm")
     jacoco
-    maven
     `maven-publish`
 }
 
