@@ -64,7 +64,7 @@ class ServerOperationRegistryGenerator(
     )
     private val operationRegistryName = "OperationRegistry"
     private val operationRegistryBuilderName = "${operationRegistryName}Builder"
-    private val operationRegistryErrorName = "${operationRegistryName}Error"
+    private val operationRegistryErrorName = "${operationRegistryBuilderName}Error"
     private val genericArguments = "B, " + operations.mapIndexed { i, _ -> "Op$i, In$i" }.joinToString()
     private val operationRegistryNameWithArguments = "$operationRegistryName<$genericArguments>"
     private val operationRegistryBuilderNameWithArguments = "$operationRegistryBuilderName<$genericArguments>"
