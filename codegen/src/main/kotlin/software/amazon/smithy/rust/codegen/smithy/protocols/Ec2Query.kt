@@ -15,7 +15,8 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.Ec2QueryParserGenerator
@@ -23,10 +24,10 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredData
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.Ec2QuerySerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
-class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
-    override fun protocol(codegenContext: CodegenContext): Protocol = Ec2QueryProtocol(codegenContext)
+class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
+    override fun protocol(codegenContext: ClientCodegenContext): Protocol = Ec2QueryProtocol(codegenContext)
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): HttpBoundProtocolGenerator =
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
 
     override fun transformModel(model: Model): Model = model
@@ -47,8 +48,8 @@ class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
     }
 }
 
-class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
-    private val runtimeConfig = codegenContext.runtimeConfig
+class Ec2QueryProtocol(private val coreCodegenContext: CoreCodegenContext) : Protocol {
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val ec2QueryErrors: RuntimeType = RuntimeType.ec2QueryErrors(runtimeConfig)
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -60,7 +61,7 @@ class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     private val xmlDeserModule = RustModule.private("xml_deser")
 
     override val httpBindingResolver: HttpBindingResolver = StaticHttpBindingResolver(
-        codegenContext.model,
+        coreCodegenContext.model,
         HttpTrait.builder()
             .code(200)
             .method("POST")
@@ -73,10 +74,10 @@ class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        Ec2QueryParserGenerator(codegenContext, ec2QueryErrors)
+        Ec2QueryParserGenerator(coreCodegenContext, ec2QueryErrors)
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        Ec2QuerySerializerGenerator(codegenContext)
+        Ec2QuerySerializerGenerator(coreCodegenContext)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) { writer ->

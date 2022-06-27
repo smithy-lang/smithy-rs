@@ -1,4 +1,26 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+v0.14.0 (June 22nd, 2022)
+=========================
+**New this release:**
+- 🐛 ([aws-sdk-rust#547](https://github.com/awslabs/aws-sdk-rust/issues/547), [smithy-rs#1458](https://github.com/awslabs/smithy-rs/issues/1458)) Fix bug in profile file credential provider where a missing `default` profile lead to an unintended error.
+- ([smithy-rs#1421](https://github.com/awslabs/smithy-rs/issues/1421)) Add `Debug` implementation to several types in `aws-config`
+- 🐛 ([aws-sdk-rust#558](https://github.com/awslabs/aws-sdk-rust/issues/558), [smithy-rs#1478](https://github.com/awslabs/smithy-rs/issues/1478)) Fix bug in retry policy where user configured timeouts were not retried. With this fix, setting
+    [`with_call_attempt_timeout`](https://docs.rs/aws-smithy-types/0.43.0/aws_smithy_types/timeout/struct.Api.html#method.with_call_attempt_timeout)
+    will lead to a retry when retries are enabled.
+
+
+v0.13.0 (June 9th, 2022)
+========================
+**New this release:**
+- 🎉 ([smithy-rs#1390](https://github.com/awslabs/smithy-rs/issues/1390)) Add method `ByteStream::into_async_read`. This makes it easy to convert `ByteStream`s into a struct implementing `tokio:io::AsyncRead`. Available on **crate feature** `rt-tokio` only.
+- 🎉 ([smithy-rs#1356](https://github.com/awslabs/smithy-rs/issues/1356), @jszwedko) Add support for `credential_process` in AWS configs for fetching credentials from an external process.
+- ([smithy-rs#1404](https://github.com/awslabs/smithy-rs/issues/1404), @petrosagg) Switch to [RustCrypto](https://github.com/RustCrypto)'s implementation of MD5.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @jszwedko ([smithy-rs#1356](https://github.com/awslabs/smithy-rs/issues/1356))
+- @petrosagg ([smithy-rs#1404](https://github.com/awslabs/smithy-rs/issues/1404))
+
 v0.12.0 (May 13th, 2022)
 ========================
 **New this release:**

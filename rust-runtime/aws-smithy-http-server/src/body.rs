@@ -4,22 +4,21 @@
  */
 
 //! HTTP body utilities.
+
+// Used in the codegen in trait bounds.
 #[doc(hidden)]
 pub use http_body::Body as HttpBody;
 
-#[doc(hidden)]
 pub use hyper::body::Body;
 
 use bytes::Bytes;
 
 use crate::error::{BoxError, Error};
 
-#[doc(hidden)]
 pub type BoxBody = http_body::combinators::UnsyncBoxBody<Bytes, Error>;
 
 // `boxed` is used in the codegen of the implementation of the operation `Handler` trait.
 /// Convert a [`http_body::Body`] into a [`BoxBody`].
-#[doc(hidden)]
 pub fn boxed<B>(body: B) -> BoxBody
 where
     B: http_body::Body<Data = Bytes> + Send + 'static,

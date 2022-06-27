@@ -17,7 +17,15 @@ use tracing::info;
 /// For now, this validates:
 /// - `aws-config` version number matches all `aws-sdk-` prefixed versions
 /// - `aws-smithy-` prefixed versions match `aws-` (NOT `aws-sdk-`) prefixed versions
-pub(super) fn validate_before_fixes(versions: &BTreeMap<String, Version>) -> Result<()> {
+pub(super) fn validate_before_fixes(
+    versions: &BTreeMap<String, Version>,
+    disable_version_number_validation: bool,
+) -> Result<()> {
+    // Later when we only generate independently versioned SDK crates, this flag can become permanent.
+    if disable_version_number_validation {
+        return Ok(());
+    }
+
     info!("Pre-validation manifests...");
     let maybe_sdk_version = versions.get("aws-config");
     let expected_smithy_version = versions
@@ -75,12 +83,12 @@ mod test {
 
     #[track_caller]
     fn expect_success(version_tuples: &[(&'static str, &'static str)]) {
-        validate_before_fixes(&versions(version_tuples)).expect("success");
+        validate_before_fixes(&versions(version_tuples), false).expect("success");
     }
 
     #[track_caller]
     fn expect_failure(message: &str, version_tuples: &[(&'static str, &'static str)]) {
-        if let Err(err) = validate_before_fixes(&versions(version_tuples)) {
+        if let Err(err) = validate_before_fixes(&versions(version_tuples), false) {
             assert_eq!(message, format!("{}", err));
         } else {
             panic!("Expected validation failure");

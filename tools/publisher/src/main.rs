@@ -26,7 +26,15 @@ mod subcommand;
 pub const SDK_REPO_CRATE_PATH: &str = "sdk";
 pub const SDK_REPO_NAME: &str = "aws-sdk-rust";
 pub const SMITHYRS_REPO_NAME: &str = "smithy-rs";
-pub const CRATE_OWNER: &str = "github:awslabs:rust-sdk-owners";
+
+// Crate ownership for SDK crates. Crates.io requires that at least one owner
+// is an individual rather than a team, so we use the automation user for that.
+pub const CRATE_OWNERS: &[&str] = &[
+    // https://github.com/orgs/awslabs/teams/rust-sdk-owners
+    "github:awslabs:rust-sdk-owners",
+    // https://github.com/aws-sdk-rust-ci
+    "aws-sdk-rust-ci",
+];
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]

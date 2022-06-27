@@ -11,10 +11,33 @@
 //!
 //! [PyO3]: https://pyo3.rs/
 
+mod error;
 mod logging;
+mod server;
 mod socket;
+mod state;
+pub mod types;
 
+#[doc(inline)]
+pub use error::Error;
 #[doc(inline)]
 pub use logging::{setup, LogLevel};
 #[doc(inline)]
+pub use server::{PyApp, PyRouter};
+#[doc(inline)]
 pub use socket::SharedSocket;
+#[doc(inline)]
+pub use state::{PyHandler, PyHandlers, PyState};
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    pub(crate) fn initialize() {
+        INIT.call_once(|| {
+            pyo3::prepare_freethreaded_python();
+        });
+    }
+}

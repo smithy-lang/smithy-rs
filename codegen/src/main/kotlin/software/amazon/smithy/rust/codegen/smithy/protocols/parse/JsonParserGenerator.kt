@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
@@ -54,15 +54,15 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
 class JsonParserGenerator(
-    codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
 ) : StructuredDataParserGenerator {
-    private val model = codegenContext.model
-    private val symbolProvider = codegenContext.symbolProvider
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val target = codegenContext.target
+    private val model = coreCodegenContext.model
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val target = coreCodegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
     private val codegenScope = arrayOf(
