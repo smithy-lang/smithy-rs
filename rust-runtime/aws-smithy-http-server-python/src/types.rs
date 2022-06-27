@@ -263,4 +263,28 @@ mod tests {
             );
         })
     }
+
+    #[test]
+    fn datetime_can_be_used_in_python_when_initialized_in_rust() {
+        crate::tests::initialize();
+        Python::with_gil(|py| {
+            let datetime = DateTime::from_secs(100);
+            let datetime = PyCell::new(py, datetime).unwrap();
+            py_run!(py, datetime, "assert datetime.secs() == 100");
+        })
+    }
+
+    #[test]
+    fn datetime_can_by_initialized_in_python() {
+        crate::tests::initialize();
+        Python::with_gil(|py| {
+            let types = PyModule::new(py, "types").unwrap();
+            types.add_class::<DateTime>().unwrap();
+            py_run!(
+                py,
+                types,
+                "assert types.DateTime.from_secs(100).secs() == 100"
+            );
+        })
+    }
 }
