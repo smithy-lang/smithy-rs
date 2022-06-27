@@ -51,7 +51,7 @@ pub struct RenderArgs {
     #[clap(long, action)]
     pub independent_versioning: bool,
     /// Source changelog entries to render
-    #[clap(long, action)]
+    #[clap(long, action, required(true))]
     pub source: Vec<PathBuf>,
     /// Which source to overwrite with an empty changelog template
     #[clap(long, action)]
