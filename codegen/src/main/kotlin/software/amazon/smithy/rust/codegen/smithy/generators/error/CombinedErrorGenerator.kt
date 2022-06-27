@@ -15,6 +15,7 @@ import software.amazon.smithy.model.traits.RetryableTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -62,7 +63,7 @@ class CombinedErrorGenerator(
         val meta = RustMetadata(
             derives = Attribute.Derives(setOf(RuntimeType.Debug)),
             additionalAttributes = listOf(Attribute.NonExhaustive),
-            public = true
+            visibility = Visibility.PUBLIC
         )
 
         writer.rust("/// Error type for the `${operationSymbol.name}` operation.")

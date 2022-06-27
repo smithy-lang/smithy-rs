@@ -35,7 +35,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
@@ -88,14 +88,14 @@ public enum class HttpMessageType {
  */
 class HttpBindingGenerator(
     private val protocol: Protocol,
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     private val operationShape: OperationShape
 ) {
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val symbolProvider = codegenContext.symbolProvider
-    private val target = codegenContext.target
-    private val model = codegenContext.model
-    private val service = codegenContext.serviceShape
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val target = coreCodegenContext.target
+    private val model = coreCodegenContext.model
+    private val service = coreCodegenContext.serviceShape
     private val index = HttpBindingIndex.of(model)
     private val headerUtil = CargoDependency.SmithyHttp(runtimeConfig).asType().member("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
@@ -297,7 +297,7 @@ class HttpBindingGenerator(
                 }
                 is BlobShape -> rust(
                     "Ok(#T::new(body))",
-                    RuntimeType.Blob(runtimeConfig)
+                    symbolProvider.toSymbol(targetShape)
                 )
                 // `httpPayload` can be applied to set/map/list shapes.
                 // However, none of the AWS protocols support it.

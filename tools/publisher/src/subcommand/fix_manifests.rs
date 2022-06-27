@@ -38,10 +38,18 @@ pub struct FixManifestsArgs {
     /// Checks manifests rather than fixing them
     #[clap(long)]
     check: bool,
+    /// Disable expected version number validation. This should only be used
+    /// when SDK crates are being generated with independent version numbers.
+    #[clap(long)]
+    disable_version_number_validation: bool,
 }
 
 pub async fn subcommand_fix_manifests(
-    FixManifestsArgs { location, check }: &FixManifestsArgs,
+    FixManifestsArgs {
+        location,
+        check,
+        disable_version_number_validation,
+    }: &FixManifestsArgs,
 ) -> Result<()> {
     let mode = match check {
         true => Mode::Check,
@@ -51,7 +59,7 @@ pub async fn subcommand_fix_manifests(
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;
 
-    validate::validate_before_fixes(&versions)?;
+    validate::validate_before_fixes(&versions, *disable_version_number_validation)?;
     fix_manifests(Fs::Real, &versions, &mut manifests, mode).await?;
     validate::validate_after_fixes(location).await?;
     info!("Successfully fixed manifests!");

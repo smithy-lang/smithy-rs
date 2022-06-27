@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
@@ -25,17 +25,17 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 /**
  * ServerOperationHandlerGenerator
  */
-class ServerOperationHandlerGenerator(
-    codegenContext: CodegenContext,
+open class ServerOperationHandlerGenerator(
+    coreCodegenContext: CoreCodegenContext,
     private val operations: List<OperationShape>,
 ) {
     private val serverCrate = "aws_smithy_http_server"
-    private val service = codegenContext.serviceShape
-    private val model = codegenContext.model
-    private val protocol = codegenContext.protocol
-    private val symbolProvider = codegenContext.symbolProvider
+    private val service = coreCodegenContext.serviceShape
+    private val model = coreCodegenContext.model
+    private val protocol = coreCodegenContext.protocol
+    private val symbolProvider = coreCodegenContext.symbolProvider
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name }
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
         "PinProjectLite" to ServerCargoDependency.PinProjectLite.asType(),
@@ -48,7 +48,7 @@ class ServerOperationHandlerGenerator(
         "http" to RuntimeType.http,
     )
 
-    fun render(writer: RustWriter) {
+    open fun render(writer: RustWriter) {
         renderHandlerImplementations(writer, false)
         renderHandlerImplementations(writer, true)
     }

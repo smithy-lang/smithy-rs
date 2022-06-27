@@ -20,11 +20,10 @@ class ClientDocsGenerator : LibRsCustomization() {
             else -> emptySection
         }
     }
-}
 
-private fun crateLayout(): Writable = writable {
-    containerDocs(
-        """
+    private fun crateLayout(): Writable = writable {
+        containerDocs(
+            """
         The entry point for most customers will be [`Client`]. [`Client`] exposes one method for each API offered
         by the service.
 
@@ -35,5 +34,6 @@ private fun crateLayout(): Writable = writable {
 
         The other modules within this crate are not required for normal usage.
         """.trimEnd()
-    )
+        )
+    }
 }

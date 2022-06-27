@@ -265,13 +265,19 @@ fun RustType.isCopy(): Boolean = when (this) {
     else -> false
 }
 
+enum class Visibility {
+    PRIVATE,
+    PUBCRATE,
+    PUBLIC
+}
+
 /**
  * Meta information about a Rust construction (field, struct, or enum).
  */
 data class RustMetadata(
     val derives: Attribute.Derives = Attribute.Derives.Empty,
     val additionalAttributes: List<Attribute> = listOf(),
-    val public: Boolean
+    val visibility: Visibility = Visibility.PRIVATE
 ) {
     fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
@@ -289,9 +295,13 @@ data class RustMetadata(
     }
 
     private fun renderVisibility(writer: RustWriter): RustMetadata {
-        if (public) {
-            writer.writeInline("pub ")
-        }
+        writer.writeInline(
+            when (visibility) {
+                Visibility.PRIVATE -> ""
+                Visibility.PUBCRATE -> "pub(crate) "
+                Visibility.PUBLIC -> "pub "
+            }
+        )
         return this
     }
 

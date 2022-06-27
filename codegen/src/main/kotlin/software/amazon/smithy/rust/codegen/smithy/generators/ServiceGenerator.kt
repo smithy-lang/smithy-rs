@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
@@ -29,44 +29,44 @@ class ServiceGenerator(
     private val rustCrate: RustCrate,
     private val protocolGenerator: ProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
-    private val config: CodegenContext,
-    private val decorator: RustCodegenDecorator,
+    private val clientCodegenContext: ClientCodegenContext,
+    private val decorator: RustCodegenDecorator<ClientCodegenContext>,
 ) {
-    private val index = TopDownIndex.of(config.model)
+    private val index = TopDownIndex.of(clientCodegenContext.model)
 
     /**
      * Render Service-specific code. Code will end up in different files via `useShapeWriter`. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
      */
     fun render() {
-        val operations = index.getContainedOperations(config.serviceShape).sortedBy { it.id }
+        val operations = index.getContainedOperations(clientCodegenContext.serviceShape).sortedBy { it.id }
         operations.map { operation ->
             rustCrate.useShapeWriter(operation) { operationWriter ->
-                rustCrate.useShapeWriter(operation.inputShape(config.model)) { inputWriter ->
+                rustCrate.useShapeWriter(operation.inputShape(clientCodegenContext.model)) { inputWriter ->
                     // Render the operation shape & serializers input `input.rs`
                     protocolGenerator.renderOperation(
                         operationWriter,
                         inputWriter,
                         operation,
-                        decorator.operationCustomizations(config, operation, listOf())
+                        decorator.operationCustomizations(clientCodegenContext, operation, listOf())
                     )
 
                     // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
-                    ProtocolTestGenerator(config, protocolSupport, operation, operationWriter).render()
+                    ProtocolTestGenerator(clientCodegenContext, protocolSupport, operation, operationWriter).render()
                 }
             }
             // Render a service-level error enum containing every error that the service can emit
             rustCrate.withModule(RustModule.Error) { writer ->
-                CombinedErrorGenerator(config.model, config.symbolProvider, operation).render(writer)
+                CombinedErrorGenerator(clientCodegenContext.model, clientCodegenContext.symbolProvider, operation).render(writer)
             }
         }
 
-        TopLevelErrorGenerator(config, operations).render(rustCrate)
+        TopLevelErrorGenerator(clientCodegenContext, operations).render(rustCrate)
 
         rustCrate.withModule(RustModule.Config) { writer ->
             ServiceConfigGenerator.withBaseBehavior(
-                config,
-                extraCustomizations = decorator.configCustomizations(config, listOf())
+                clientCodegenContext,
+                extraCustomizations = decorator.configCustomizations(clientCodegenContext, listOf())
             ).render(writer)
         }
 

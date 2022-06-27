@@ -1,4 +1,28 @@
 <!-- Do not manually edit this file, use `update-changelogs` -->
+v0.44.0 (June 22nd, 2022)
+=========================
+**New this release:**
+- ([smithy-rs#1460](https://github.com/awslabs/smithy-rs/issues/1460)) Fix a potential bug with `ByteStream`'s implementation of `futures_core::stream::Stream` and add helpful error messages
+    for users on 32-bit systems that try to stream HTTP bodies larger than 4.29Gb.
+- 🐛 ([smithy-rs#1427](https://github.com/awslabs/smithy-rs/issues/1427), [smithy-rs#1465](https://github.com/awslabs/smithy-rs/issues/1465), [smithy-rs#1459](https://github.com/awslabs/smithy-rs/issues/1459)) Fix RustWriter bugs for `rustTemplate` and `docs` utility methods
+- 🐛 ([aws-sdk-rust#554](https://github.com/awslabs/aws-sdk-rust/issues/554)) Requests to Route53 that return `ResourceId`s often come with a prefix. When passing those IDs directly into another
+    request, the request would fail unless they manually stripped the prefix. Now, when making a request with a prefixed ID,
+    the prefix will be stripped automatically.
+
+
+v0.43.0 (June 9th, 2022)
+========================
+**New this release:**
+- 🎉 ([smithy-rs#1381](https://github.com/awslabs/smithy-rs/issues/1381), @alonlud) Add ability to sign a request with all headers, or to change which headers are excluded from signing
+- 🎉 ([smithy-rs#1390](https://github.com/awslabs/smithy-rs/issues/1390)) Add method `ByteStream::into_async_read`. This makes it easy to convert `ByteStream`s into a struct implementing `tokio:io::AsyncRead`. Available on **crate feature** `rt-tokio` only.
+- ([smithy-rs#1404](https://github.com/awslabs/smithy-rs/issues/1404), @petrosagg) Add ability to specify a different rust crate name than the one derived from the package name
+- ([smithy-rs#1404](https://github.com/awslabs/smithy-rs/issues/1404), @petrosagg) Switch to [RustCrypto](https://github.com/RustCrypto)'s implementation of MD5.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @alonlud ([smithy-rs#1381](https://github.com/awslabs/smithy-rs/issues/1381))
+- @petrosagg ([smithy-rs#1404](https://github.com/awslabs/smithy-rs/issues/1404))
+
 v0.42.0 (May 13th, 2022)
 ========================
 **Breaking Changes:**

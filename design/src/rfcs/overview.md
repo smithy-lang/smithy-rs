@@ -23,3 +23,6 @@
 - [RFC-0011: Publishing Alpha to Crates.io](./rfc0011_crates_io_alpha_publishing.md)
 - [RFC-0012: Independent Crate Versioning](./rfc0012_independent_crate_versioning.md)
 - [RFC-0013: Body Callback APIs](./rfc0013_body_callback_apis.md)
+- [RFC-0014: Fine-grained timeout configuration](./rfcs/rfc0014_timeout_config.md)
+- [RFC-0015: How Cargo "features" should be used in the SDK and runtime crates](./rfcs/rfc0015_using_features_responsibly.md)
+- [RFC-0016: Supporting Flexible Checksums](./rfcs/rfc0016_flexible_checksum_support.md)
