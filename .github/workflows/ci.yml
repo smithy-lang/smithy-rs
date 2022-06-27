@@ -124,8 +124,8 @@ jobs:
       run: |
         for runtime_path in "rust-runtime" "aws/rust-runtime"; do
           pushd "${runtime_path}" &>/dev/null
-          cargo test --all-features
-          cargo doc --no-deps --document-private-items --all-features
+          cargo test --all-features --workspace --exclude aws-smithy-http-server-python
+          cargo doc --no-deps --document-private-items --all-features --workspace --exclude aws-smithy-http-server-python
           popd &>/dev/null
         done
 
