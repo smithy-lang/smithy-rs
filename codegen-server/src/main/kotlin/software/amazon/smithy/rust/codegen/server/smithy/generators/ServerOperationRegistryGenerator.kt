@@ -91,6 +91,7 @@ class ServerOperationRegistryGenerator(
     private fun renderOperationRegistryRustDocs(writer: RustWriter) {
         writer.rustTemplate(
             """
+##[allow(clippy::tabs_in_doc_comments)]
 /// The `${operationRegistryName}` is the place where you can register
 /// your service's operation implementations.
 /// 
@@ -119,7 +120,11 @@ class ServerOperationRegistryGenerator(
 /// 
 /// ```rust
 /// use std::net::SocketAddr;
-/// use ${crateName}::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};
+${ if (operations.any { it.errors.isNotEmpty() }) {
+"/// use ${crateName}::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};"
+} else {
+"/// use ${crateName}::{${Inputs.namespace}, ${Outputs.namespace}};"
+} }
 /// use ${crateName}::operation_registry::${operationRegistryBuilderName};
 /// use #{Router};
 ///
