@@ -1,0 +1,47 @@
+[[smithy-rs]]
+message = "Code generation settings for client and server have been separated into different classes"
+references = ["smithy-rs#1473"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "david-perez"
+
+
+[[smithy-rs]]
+message = "Server routing for URIs with prefixes has been fixed"
+references = ["smithy-rs#1484"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "david-perez"
+
+[[smithy-rs]]
+message = "modifyMTime task is not run when generateSmithyBuild task is upto date"
+references = ["smithy-rs#1471"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "david-perez"
+
+[[smithy-rs]]
+message = "Avoid unnecessary Cargo crate rebuilds"
+references = ["smithy-rs#1422"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "david-perez"
+
+[[smithy-rs]]
+message = "Remove deprecated v1 arg format from sdk-versioner"
+references = ["smithy-rs#1456"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Create ownership during publish has been fixed"
+references = ["smithy-rs#1454"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Runtime server implementation to support business logic in Python has been added"
+references = ["smithy-rs#1454"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "crisidev"
+
+
+
+
+
