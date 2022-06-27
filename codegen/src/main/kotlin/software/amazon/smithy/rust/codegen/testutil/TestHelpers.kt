@@ -95,7 +95,7 @@ fun String.asSmithyModel(sourceLocation: String? = null): Model {
 }
 
 /**
- * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder
+ * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
 fun StructureShape.renderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter, forWhom: CodegenTarget = CodegenTarget.CLIENT) {
     StructureGenerator(model, symbolProvider, writer, this).render(forWhom)
