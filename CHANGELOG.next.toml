@@ -47,3 +47,9 @@ instead of the `0` field.
 references = ["smithy-rs#932"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Add comments for docker settings needed when using this sdk"
+references = ["aws-sdk-rust#540"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jmklix"
