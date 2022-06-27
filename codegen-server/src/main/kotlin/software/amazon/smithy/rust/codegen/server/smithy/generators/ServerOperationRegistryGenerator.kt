@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -32,8 +33,8 @@ import software.amazon.smithy.rust.codegen.smithy.Outputs
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
-import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -122,7 +123,7 @@ class ServerOperationRegistryGenerator(
 /// use ${crateName}::operation_registry::${operationRegistryBuilderName};
 /// use #{Router};
 ///
-/// ##[tokio::main]
+/// ##[#{Tokio}::main]
 /// pub async fn main() {
 ///    let app: Router = ${operationRegistryBuilderName}::default()
 ${operationNames.map { ".$it($it)" }.joinToString("\n") { it.prependIndent("///        ") }}
@@ -134,7 +135,7 @@ ${operationNames.map { ".$it($it)" }.joinToString("\n") { it.prependIndent("/// 
 ///        .parse()
 ///        .expect("unable to parse the server bind address and port");
 ///
-///    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
+///    let server = #{Hyper}::Server::bind(&bind).serve(app.into_make_service());
 ///
 ///    // Run your service!
 ///    // if let Err(err) = server.await {
@@ -150,7 +151,12 @@ ${operationImplementationStubs(operations)}
 /// [HTTP binding traits]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 /// [operations]: https://awslabs.github.io/smithy/1.0/spec/core/model.html##operation
 /// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
-""", "Router" to ServerRuntimeType.Router(runtimeConfig)
+""",
+            "Router" to ServerRuntimeType.Router(runtimeConfig),
+            // These should be dev-dependencies. Not all sSDKs depend on `Hyper` (only those that convert the body
+            // `to_bytes`), and none depend on `tokio`.
+            "Tokio" to ServerCargoDependency.Tokio.asType(),
+            "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).asType()
         )
     }
 
@@ -424,7 +430,7 @@ ${operationImplementationStubs(operations)}
         operations.joinToString("\n///\n") {
             val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
             val ret = if (!operationDocumentation.isNullOrBlank()) {
-                "/// /// $operationDocumentation\n"
+                operationDocumentation.replace("#", "##").prependIndent("/// /// ") + "\n"
             } else ""
             ret +
                     """

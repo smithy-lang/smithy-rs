@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 
@@ -21,6 +22,7 @@ object ServerCargoDependency {
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
+    val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.0"), scope = DependencyScope.Dev)
 
     fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
 }

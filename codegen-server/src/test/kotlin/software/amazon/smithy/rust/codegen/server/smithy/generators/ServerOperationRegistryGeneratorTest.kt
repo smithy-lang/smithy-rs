@@ -30,7 +30,9 @@ class ServerOperationRegistryGeneratorTest {
             ],
         }
 
-        /// Only the Frobnify operation is documented.
+        /// Only the Frobnify operation is documented,
+        /// over multiple lines.
+        /// And here are #hash #tags!
         @http(method: "GET", uri: "/frobnify")
         operation Frobnify {
             input: FrobnifyInputOutput,
@@ -102,7 +104,9 @@ class ServerOperationRegistryGeneratorTest {
                 ///    // }
                 /// }
                 ///
-                /// /// Only the Frobnify operation is documented.
+                /// /// Only the Frobnify operation is documented,
+                /// /// over multiple lines.
+                /// /// And here are #hash #tags!
                 /// async fn frobnify(input: input::FrobnifyInputOutput) -> Result<output::FrobnifyInputOutput, error::FrobnifyError> {
                 ///     todo!()
                 /// }
