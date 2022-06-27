@@ -53,6 +53,7 @@ class PythonServerStructureGenerator(
     }
 
     private fun renderPyO3Methods() {
+        Attribute.Custom("allow(clippy::new_without_default)").render(writer)
         Attribute.Custom("pyo3::pymethods", symbols = pyo3Symbols).render(writer)
         writer.rustTemplate(
             """

@@ -132,7 +132,6 @@ class PythonApplicationGenerator(
                     """
                     let asyncio = py.import("asyncio")?;
                     let event_loop = asyncio.call_method0("get_event_loop")?;
-                    let locals = pyo3_asyncio::TaskLocals::new(event_loop);
                     let router = crate::operation_registry::OperationRegistryBuilder::default();
                     """,
                     *codegenScope
@@ -142,7 +141,7 @@ class PythonApplicationGenerator(
                     val name = operationName.toSnakeCase()
                     rustTemplate(
                         """
-                        let ${name}_locals = locals.clone();
+                        let ${name}_locals = pyo3_asyncio::TaskLocals::new(event_loop);
                         let handler = self.inner.handlers.get("$name").expect("Python handler for `{$name}` not found").clone();
                         let router = router.$name(move |input, state| {
                             #{pyo3_asyncio}::tokio::scope(${name}_locals, crate::operation_handler::$name(input, state, handler))
