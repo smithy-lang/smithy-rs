@@ -127,6 +127,7 @@ RUN set -eux; \
         pkgconfig \
         python3 \
         python3-devel \
+        python3-pip \
         shadow-utils; \
     yum clean all; \
     rm -rf /var/cache/yum; \
