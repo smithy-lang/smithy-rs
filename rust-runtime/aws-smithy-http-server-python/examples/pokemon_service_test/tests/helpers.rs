@@ -17,7 +17,7 @@ pub(crate) struct PokemonService {
 impl PokemonService {
     #[allow(dead_code)]
     pub(crate) fn run() -> Self {
-        let process = Command::new("python")
+        let process = Command::new("python3")
             .arg("../pokemon_service.py")
             .group_spawn()
             .expect("failed to spawn the Pokémon Service program");
