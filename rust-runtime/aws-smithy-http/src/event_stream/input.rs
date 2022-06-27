@@ -8,7 +8,7 @@ use crate::result::SdkError;
 use aws_smithy_eventstream::frame::{MarshallMessage, SignMessage};
 use bytes::Bytes;
 use futures_core::Stream;
-use pin_project::pin_project;
+use pin_project_lite::pin_project;
 use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
@@ -48,19 +48,20 @@ where
     }
 }
 
-/// Adapts a `Stream<SmithyMessageType>` to a signed `Stream<Bytes>` by using the provided
-/// message marshaller and signer implementations.
-///
-/// This will yield an `Err(SdkError::ConstructionFailure)` if a message can't be
-/// marshalled into an Event Stream frame, (e.g., if the message payload was too large).
-#[pin_project]
-pub struct MessageStreamAdapter<T, E> {
-    marshaller: Box<dyn MarshallMessage<Input = T> + Send + Sync>,
-    signer: Box<dyn SignMessage + Send + Sync>,
-    #[pin]
-    stream: Pin<Box<dyn Stream<Item = Result<T, BoxError>> + Send>>,
-    end_signal_sent: bool,
-    _phantom: PhantomData<E>,
+pin_project! {
+    /// Adapts a `Stream<SmithyMessageType>` to a signed `Stream<Bytes>` by using the provided
+    /// message marshaller and signer implementations.
+    ///
+    /// This will yield an `Err(SdkError::ConstructionFailure)` if a message can't be
+    /// marshalled into an Event Stream frame, (e.g., if the message payload was too large).
+    pub struct MessageStreamAdapter {
+        marshaller: Box<dyn MarshallMessage<Input = T> + Send + Sync>,
+        signer: Box<dyn SignMessage + Send + Sync>,
+        #[pin]
+        stream: Pin<Box<dyn Stream<Item = Result<T, BoxError>> + Send>>,
+        end_signal_sent: bool,
+        _phantom: PhantomData<E>,
+    }
 }
 
 impl<T, E> MessageStreamAdapter<T, E>

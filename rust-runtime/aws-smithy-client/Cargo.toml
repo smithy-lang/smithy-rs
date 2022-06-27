@@ -18,6 +18,7 @@ client-hyper = ["hyper"]
 aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-http-tower = { path = "../aws-smithy-http-tower" }
+aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
 fastrand = "1.4.0"
@@ -28,23 +29,17 @@ hyper-rustls = { version = "0.22.1", optional = true, features = ["rustls-native
 hyper-tls = { version = "0.5.0", optional = true }
 lazy_static = { version = "1", optional = true }
 pin-project-lite = "0.2.7"
-# tokio but with no features enabled (traits only)
+serde = { version = "1", features = ["derive"], optional = true }
 tokio = { version = "1"}
 tower = { version = "0.4.6", features = ["util", "retry"] }
-
-pin-project = "1"
 tracing = "0.1"
 
-aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
-serde = { version = "1", features = ["derive"], optional = true }
-
 [dev-dependencies]
-tokio = { version = "1", features = ["full", "test-util"] }
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio"] }
-
-tower-test = "0.4.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = { version = "1", features = ["full", "test-util"] }
+tower-test = "0.4.0"
 tracing-test = "0.2.1"
 
 [package.metadata.docs.rs]
