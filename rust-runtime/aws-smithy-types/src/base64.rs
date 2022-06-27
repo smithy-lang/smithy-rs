@@ -151,9 +151,17 @@ fn decode_inner(inp: &str) -> Result<Vec<u8>, DecodeError> {
     Ok(ret)
 }
 
+/// Given the length of some data in bytes, return how many bytes it would take to base64 encode
+/// that data.
+pub fn encoded_length(length: u64) -> u64 {
+    (length + 2) / 3 * 4
+}
+
 #[cfg(test)]
 mod test {
-    use crate::base64::{decode, encode, DecodeError, BASE64_DECODE_TABLE, BASE64_ENCODE_TABLE};
+    use crate::base64::{
+        decode, encode, encoded_length, DecodeError, BASE64_DECODE_TABLE, BASE64_ENCODE_TABLE,
+    };
     use proptest::prelude::*;
 
     proptest! {
@@ -247,5 +255,18 @@ mod test {
             let decoded = BASE64_DECODE_TABLE[encoded as usize];
             assert_eq!(decoded, Some(i as u8))
         }
+    }
+
+    #[test]
+    fn test_base64_encoded_length() {
+        let decoded = "Alas, eleventy-one years is far too short a time to live among such excellent and admirable hobbits. I don't know half of you half as well as I should like, and I like less than half of you half as well as you deserve.";
+        let expected_encoded_length = encode(decoded).len() as u64;
+        let actual_encoded_length = encoded_length(decoded.len() as u64);
+        assert_eq!(expected_encoded_length, actual_encoded_length);
+
+        let decoded = "ユニコードとはか？";
+        let expected_encoded_length = encode(decoded).len() as u64;
+        let actual_encoded_length = encoded_length(decoded.len() as u64);
+        assert_eq!(expected_encoded_length, actual_encoded_length);
     }
 }
