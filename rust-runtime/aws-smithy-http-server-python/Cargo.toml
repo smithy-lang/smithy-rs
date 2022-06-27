@@ -23,7 +23,7 @@ aws-smithy-types = { path = "../aws-smithy-types" }
 hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp", "stream"] }
 num_cpus = "1.13"
 parking_lot = "0.12"
-pyo3 = { version = "0.16.5", features = ["extension-module"] }
+pyo3 = "0.16"
 signal-hook = { version = "0.3", features = ["extended-siginfo"] }
 socket2 = { version = "0.4", features = ["all"] }
 thiserror = "1.0.31"
