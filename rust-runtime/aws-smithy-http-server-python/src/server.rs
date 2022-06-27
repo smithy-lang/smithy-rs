@@ -266,7 +266,7 @@ impl PyApp {
             args: func_args.len(),
         };
         tracing::info!(
-            "Registering function `{name}`, coroutine: {}, {}, arguments: {}",
+            "Registering function `{name}`, coroutine: {}, arguments: {}",
             handler.is_coroutine,
             handler.args,
         );
