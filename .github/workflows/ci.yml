@@ -27,11 +27,17 @@ jobs:
         actions:
         - action: generate-aws-sdk
         - action: generate-aws-sdk-smoketest
-        - action: generate-smithy-rs-runtime-bundle
+        - action: generate-smithy-rs-release
     steps:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+    # The models from aws-sdk-rust are needed to generate the full SDK for CI
+    - uses: actions/checkout@v3
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+    # The examples from aws-doc-sdk-examples are needed to see if smithy-rs changes break examples
     - uses: actions/checkout@v3
       with:
         repository: awsdocs/aws-doc-sdk-examples

@@ -113,7 +113,9 @@ fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
 /** Set the symbolLocation for this symbol builder */
 fun Symbol.Builder.locatedIn(symbolLocation: SymbolLocation): Symbol.Builder {
     val currentRustType = this.build().rustType()
-    check(currentRustType is RustType.Opaque) { "Only Opaque can have their namespace updated" }
+    check(currentRustType is RustType.Opaque) {
+        "Only `Opaque` can have their namespace updated"
+    }
     val newRustType = currentRustType.copy(namespace = "crate::${symbolLocation.namespace}")
     return this.definitionFile("src/${symbolLocation.filename}")
         .namespace("crate::${symbolLocation.namespace}", "::")
@@ -149,6 +151,18 @@ fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = va
 fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) { "Some($value)" }
 
 /**
+ * Services can rename their contained shapes. See https://awslabs.github.io/smithy/1.0/spec/core/model.html#service
+ * specifically, `rename`
+ */
+fun Shape.contextName(serviceShape: ServiceShape?): String {
+    return if (serviceShape != null) {
+        id.getName(serviceShape)
+    } else {
+        id.name
+    }
+}
+
+/**
  * Base converter from `Shape` to `Symbol`. Shapes are the direct contents of the `Smithy` model. `Symbols` carry information
  * about Rust types, namespaces, dependencies, metadata as well as other information required to render a symbol.
  *
@@ -166,18 +180,6 @@ class SymbolVisitor(
 
     override fun toSymbol(shape: Shape): Symbol {
         return shape.accept(this)
-    }
-
-    /**
-     * Services can rename their contained shapes. See https://awslabs.github.io/smithy/1.0/spec/core/model.html#service
-     * specifically, `rename`
-     */
-    private fun Shape.contextName(): String {
-        return if (serviceShape != null) {
-            id.getName(serviceShape)
-        } else {
-            id.name
-        }
     }
 
     /**
@@ -239,7 +241,8 @@ class SymbolVisitor(
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
     override fun stringShape(shape: StringShape): Symbol {
         return if (shape.hasTrait<EnumTrait>()) {
-            symbolBuilder(shape, RustType.Opaque(shape.contextName().toPascalCase())).locatedIn(Models).build()
+            val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
+            symbolBuilder(shape, rustType).locatedIn(Models).build()
         } else {
             simpleShape(shape)
         }
@@ -286,7 +289,7 @@ class SymbolVisitor(
         return symbolBuilder(
             shape,
             RustType.Opaque(
-                shape.contextName()
+                shape.contextName(serviceShape)
                     .replaceFirstChar { it.uppercase() }
             )
         )
@@ -306,7 +309,7 @@ class SymbolVisitor(
         val isError = shape.hasTrait<ErrorTrait>()
         val isInput = shape.hasTrait<SyntheticInputTrait>()
         val isOutput = shape.hasTrait<SyntheticOutputTrait>()
-        val name = shape.contextName().toPascalCase().letIf(isError && config.renameExceptions) {
+        val name = shape.contextName(serviceShape).toPascalCase().letIf(isError && config.renameExceptions) {
             it.replace("Exception", "Error")
         }
         val builder = symbolBuilder(shape, RustType.Opaque(name))
@@ -319,7 +322,7 @@ class SymbolVisitor(
     }
 
     override fun unionShape(shape: UnionShape): Symbol {
-        val name = shape.contextName().toPascalCase()
+        val name = shape.contextName(serviceShape).toPascalCase()
         val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(Models)
 
         return builder.build()
@@ -356,9 +359,7 @@ const val SHAPE_KEY = "shape"
 private const val SYMBOL_DEFAULT = "symboldefault"
 private const val RENAMED_FROM_KEY = "renamedfrom"
 
-fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder {
-    return this.putProperty(RUST_TYPE_KEY, rustType)
-}
+fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProperty(RUST_TYPE_KEY, rustType)
 
 fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
     return this.putProperty(RENAMED_FROM_KEY, name)
@@ -367,9 +368,7 @@ fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
 fun Symbol.renamedFrom(): String? = this.getProperty(RENAMED_FROM_KEY, String::class.java).orNull()
 
 fun Symbol.defaultValue(): Default = this.getProperty(SYMBOL_DEFAULT, Default::class.java).orElse(Default.NoDefault)
-fun Symbol.Builder.setDefault(default: Default): Symbol.Builder {
-    return this.putProperty(SYMBOL_DEFAULT, default)
-}
+fun Symbol.Builder.setDefault(default: Default): Symbol.Builder = this.putProperty(SYMBOL_DEFAULT, default)
 
 /**
  * Type representing the default value for a given type. (eg. for Strings, this is `""`)
@@ -407,7 +406,7 @@ fun Symbol.extractSymbolFromOption(): Symbol = this.mapRustType { it.stripOuter<
 fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is RustType.Box
 
 // Symbols should _always_ be created with a Rust type & shape attached
-fun Symbol.rustType(): RustType = this.getProperty(RUST_TYPE_KEY, RustType::class.java).get()
+fun Symbol.rustType(): RustType = this.expectProperty(RUST_TYPE_KEY, RustType::class.java)
 fun Symbol.shape(): Shape = this.expectProperty(SHAPE_KEY, Shape::class.java)
 
 /**
