@@ -64,7 +64,7 @@ fn user_agent() -> AwsUserAgent {
 /// for more information._
 ///
 /// **Note**: When running in a Docker container, all network requests will incur an additional hop. When combined with the default IMDS hop limit of 1, this will cause requests to IMDS to timeout! To fix this issue, you'll need to set the following instance metadata settings :
-/// ```
+/// ```txt
 /// amazonec2-metadata-token=required
 /// amazonec2-metadata-token-response-hop-limit=2
 /// ```
