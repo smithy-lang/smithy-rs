@@ -51,7 +51,7 @@ dependencies {
 
 // Class and functions for service and protocol membership for SDK generation
 
-val awsServices: AwsServices by lazy { discoverServices(loadServiceMembership()) }
+val awsServices: AwsServices by lazy { discoverServices(properties.get("aws.sdk.models.path"), loadServiceMembership()) }
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, properties) }
 
@@ -63,14 +63,8 @@ fun loadServiceMembership(): Membership {
     val membershipOverride = properties.get("aws.services")?.let { parseMembership(it) }
     println(membershipOverride)
     val fullSdk =
-        parseMembership(properties.get("aws.services.fullsdk") ?: throw Exception("full sdk list missing"))
-    val tier1 =
-        parseMembership(properties.get("aws.services.smoketest") ?: throw Exception("smoketest list missing"))
-    return membershipOverride ?: if ((properties.get("aws.fullsdk") ?: "") == "true") {
-        fullSdk
-    } else {
-        tier1
-    }
+        parseMembership(properties.get("aws.services") ?: throw Exception("aws.services list missing"))
+    return membershipOverride ?: fullSdk
 }
 
 fun eventStreamAllowList(): Set<String> {

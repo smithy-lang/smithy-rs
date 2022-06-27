@@ -18,7 +18,6 @@ use subcommand::publish::PublishArgs;
 mod cargo;
 mod fs;
 mod package;
-mod repo;
 mod retry;
 mod sort;
 mod subcommand;

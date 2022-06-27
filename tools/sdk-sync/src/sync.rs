@@ -5,9 +5,9 @@
 
 use self::gen::{CodeGenSettings, DefaultSdkGenerator, SdkGenerator};
 use crate::fs::{DefaultFs, Fs};
-use crate::git::{Commit, Git, GitCLI};
 use crate::versions::{DefaultVersions, Versions, VersionsManifest};
 use anyhow::{Context, Result};
+use smithy_rs_tool_common::git::{Commit, Git, GitCLI};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -186,27 +186,27 @@ impl Sync {
     #[instrument(skip(self))]
     fn stash_model_changes(&self) -> Result<bool> {
         info!("Stashing model changes...");
-        let original_revision = self.smithy_rs.get_head_revision().context(here!())?;
+        let original_revision = self.aws_sdk_rust.get_head_revision().context(here!())?;
         info!(
-            "smithy-rs revision with model changes: {}",
+            "aws-sdk-rust revision with model changes: {}",
             original_revision
         );
 
         // Create a branch to hold the model changes without switching to it
-        self.smithy_rs
+        self.aws_sdk_rust
             .create_branch(MODEL_STASH_BRANCH_NAME, "HEAD")
             .context(here!())?;
         // Get the name of the current branch
-        let branch_name = self.smithy_rs.current_branch_name().context(here!())?;
+        let branch_name = self.aws_sdk_rust.current_branch_name().context(here!())?;
         // Reset the start branch to what's in origin
-        self.smithy_rs
+        self.aws_sdk_rust
             .hard_reset(&format!("origin/{}", branch_name))
             .context(here!())?;
 
-        let head = self.smithy_rs.get_head_revision().context(here!())?;
-        info!("smithy-rs revision without model changes: {}", head);
+        let head = self.aws_sdk_rust.get_head_revision().context(here!())?;
+        info!("aws-sdk-rust revision without model changes: {}", head);
         let has_model_changes = head != original_revision;
-        info!("smithy-rs has model changes: {}", has_model_changes);
+        info!("aws-sdk-rust has model changes: {}", has_model_changes);
         Ok(has_model_changes)
     }
 
@@ -218,18 +218,12 @@ impl Sync {
         // Restore the model changes. Note: endpoints.json/default config/model changes
         // may each be in their own commits coming into this, but we want them squashed into
         // one commit for smithy-rs.
-        self.smithy_rs
-            .squash_merge(
-                BOT_NAME,
-                BOT_EMAIL,
-                MODEL_STASH_BRANCH_NAME,
-                "Update SDK models",
-            )
+        self.aws_sdk_rust
+            .squash_merge(BOT_NAME, BOT_EMAIL, MODEL_STASH_BRANCH_NAME)
             .context(here!())?;
-        self.smithy_rs
+        self.aws_sdk_rust
             .delete_branch(MODEL_STASH_BRANCH_NAME)
             .context(here!())?;
-        let model_change_commit = self.smithy_rs.show("HEAD").context(here!())?;
 
         // Generate with the original examples
         let sdk_gen = DefaultSdkGenerator::new(
@@ -252,7 +246,7 @@ impl Sync {
                 .stage(&PathBuf::from("."))
                 .context(here!())?;
             self.aws_sdk_rust
-                .commit(BOT_NAME, BOT_EMAIL, &model_change_commit.message())
+                .commit(BOT_NAME, BOT_EMAIL, "Update SDK models")
                 .context(here!())?;
         }
 
@@ -459,21 +453,37 @@ impl Sync {
         Ok(())
     }
 
-    /// Returns true if the aws-sdk-rust repo has changes (excluding changes to versions.toml).
-    /// The versions.toml shouldn't be considered since there's a high probability it is only
+    /// Returns true if the aws-sdk-rust repo has changes (excluding changes to `versions.toml`
+    /// and `aws-models/`).
+    ///
+    /// The `versions.toml` shouldn't be considered since there's a high probability it is only
     /// a `smithy_rs_revision` change. It can also safely be ignored since any changes to version
     /// numbers will show up in individual crate manifests.
+    ///
+    /// The `aws-models/` can be ignored since they will be updated, but are not code generated.
+    /// This function only cares about code generated files.
     #[instrument(skip(self))]
     fn sdk_has_changes(&self) -> Result<bool> {
         let untracked_files = self.aws_sdk_rust.untracked_files()?;
         let changed_files = self.aws_sdk_rust.changed_files()?;
-        let has_changes = !untracked_files.is_empty()
-            || !changed_files.is_empty()
-                && (changed_files.len() != 1 || changed_files[0].to_str() != Some("versions.toml"));
-        debug!("aws-sdk-rust untracked files: {:?}", untracked_files);
-        debug!("aws-sdk-rust changed files: {:?}", changed_files);
+        let all_relevant_changed_files: Vec<_> = untracked_files
+            .into_iter()
+            .chain(changed_files.into_iter())
+            .filter(|path| {
+                if let Some(path) = path.to_str() {
+                    path != "versions.toml" && !path.starts_with("aws-models/")
+                } else {
+                    true
+                }
+            })
+            .collect();
+        let has_changes = !all_relevant_changed_files.is_empty();
+        debug!(
+            "aws-sdk-rust relevant changed files: {:?}",
+            all_relevant_changed_files
+        );
         info!(
-            "aws-sdk-rust has changes (not considering versions.toml): {}",
+            "aws-sdk-rust has changes (not considering versions.toml and aws-models): {}",
             has_changes
         );
         Ok(has_changes)
@@ -523,8 +533,41 @@ impl Sync {
 mod tests {
     use super::*;
     use crate::fs::MockFs;
-    use crate::git::{CommitHash, MockGit};
     use crate::versions::MockVersions;
+    use smithy_rs_tool_common::git::CommitHash;
+
+    mockall::mock! {
+        Git {}
+        impl smithy_rs_tool_common::git::Git for Git {
+            fn path(&self) -> &Path;
+            fn clone_to(&self, path: &Path) -> Result<()>;
+            fn get_head_revision(&self) -> Result<CommitHash>;
+            fn stage(&self, path: &Path) -> Result<()>;
+            fn commit_on_behalf(
+                &self,
+                bot_name: &str,
+                bot_email: &str,
+                author_name: &str,
+                author_email: &str,
+                message: &str,
+            ) -> Result<()>;
+            fn commit(&self, name: &str, email: &str, message: &str) -> Result<()>;
+            fn rev_list<'a>(
+                &self,
+                start_inclusive_revision: &str,
+                end_exclusive_revision: &str,
+                path: Option<&'a Path>,
+            ) -> Result<Vec<CommitHash>>;
+            fn show(&self, revision: &str) -> Result<Commit>;
+            fn hard_reset(&self, revision: &str) -> Result<()>;
+            fn current_branch_name(&self) -> Result<String>;
+            fn create_branch(&self, branch_name: &str, revision: &str) -> Result<()>;
+            fn delete_branch(&self, branch_name: &str) -> Result<()>;
+            fn squash_merge(&self, author_name: &str, author_email: &str, branch_name: &str) -> Result<()>;
+            fn untracked_files(&self) -> Result<Vec<PathBuf>>;
+            fn changed_files(&self) -> Result<Vec<PathBuf>>;
+        }
+    }
 
     // Wish this was in std...
     fn trim_indent(value: &str) -> String {
