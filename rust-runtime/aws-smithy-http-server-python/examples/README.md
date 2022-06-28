@@ -22,3 +22,10 @@ can be used directly.
 
 `cargo run` can be used to start the Pokémon service on
 `http://localhost:13734`.
+
+## Test
+
+`cargo test` can be used to spawn the Python service and run some simple integration
+tests against it.
+
+More info can be found in the `tests` folder of `pokemon_service_test` package.
