@@ -56,7 +56,6 @@ pin_project! {
     #[project = InnerProj]
     enum Inner {
         Once {
-            #[pin]
             inner: Option<Bytes>
         },
         Streaming {
