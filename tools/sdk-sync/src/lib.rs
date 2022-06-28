@@ -8,7 +8,6 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
 pub mod fs;
-pub mod git;
 pub mod sync;
 pub mod versions;
 
