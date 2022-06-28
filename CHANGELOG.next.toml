@@ -23,6 +23,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
 
 [[smithy-rs]]
+
 message = "Add checksum calculation and validation wrappers for HTTP bodies."
 references = ["smithy-rs#1263"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
@@ -33,6 +34,32 @@ message = "`aws_smithy_http::header::append_merge_header_maps`, a function for m
 references = ["smithy-rs#1263"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "Velf"
+
+[[smithy-rs]]
+message = """
+Replaced use of `pin-project` with equivalent `pin-project-lite`. For pinned enum tuple variants and tuple structs, this
+change requires that we switch to using enum struct variants and regular structs. Most of the structs and enums that
+were updated had only private fields/variants and so have the same public API. However, this change does affect the
+public API of `aws_smithy_http_tower::map_request::MapRequestFuture<F, E>`. The `Inner` and `Ready` variants contained a
+single value. Each have been converted to struct variants and the inner value is now accessible by the `inner` field
+instead of the `0` field.
+"""
+references = ["smithy-rs#932"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+Replaced use of `pin-project` with equivalent `pin-project-lite`. For pinned enum tuple variants and tuple structs, this
+change requires that we switch to using enum struct variants and regular structs. Most of the structs and enums that
+were updated had only private fields/variants and so have the same public API. However, this change does affect the
+public API of `aws_smithy_http_tower::map_request::MapRequestFuture<F, E>`. The `Inner` and `Ready` variants contained a
+single value. Each have been converted to struct variants and the inner value is now accessible by the `inner` field
+instead of the `0` field.
+"""
+references = ["smithy-rs#932"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
 
 [[aws-sdk-rust]]
 message = "Add comments for docker settings needed when using this sdk"
