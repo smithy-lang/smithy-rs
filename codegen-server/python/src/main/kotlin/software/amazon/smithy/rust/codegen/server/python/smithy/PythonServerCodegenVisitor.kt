@@ -11,6 +11,7 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
@@ -85,10 +86,10 @@ class PythonServerCodegenVisitor(
      * This function _does not_ generate any serializers.
      */
     override fun structureShape(shape: StructureShape) {
-        logger.info("[python-server-codegen] Generating a structure $shape")
         if (shape.hasStreamingMember(model)) {
             throw CodegenException("Streaming members are not supported in Python yet")
         }
+        logger.info("[python-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
             // Use Python specific structure generator that adds the #[pyclass] attribute
             // and #[pymethods] implementation.
@@ -114,6 +115,17 @@ class PythonServerCodegenVisitor(
                 PythonServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.runtimeConfig).render()
             }
         }
+    }
+
+    /**
+     * Union Shape Visitor
+     *
+     * Generate an `enum` for union shapes.
+     *
+     * Note: this does not generate serializers
+     */
+    override fun unionShape(shape: UnionShape) {
+        throw CodegenException("Union shapes are not supported in Python yet")
     }
 
     /**
