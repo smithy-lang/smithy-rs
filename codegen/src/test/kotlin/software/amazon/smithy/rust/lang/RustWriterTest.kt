@@ -143,4 +143,10 @@ class RustWriterTest {
         )
         sut.toString().shouldContain("inner: hello, regular: http::foo")
     }
+
+    @Test
+    fun `can handle file paths properly when determining module`() {
+        val sut = RustWriter.forModule("src/module_name")
+        sut.module().shouldBe("module_name")
+    }
 }
