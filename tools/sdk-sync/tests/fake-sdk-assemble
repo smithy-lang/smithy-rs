@@ -34,7 +34,14 @@ def get_previous_release_versions():
     return get_property("aws.sdk.previous.release.versions.manifest")
 
 
-if get_property("aws.fullsdk") != "true":
+def get_models_path():
+    return get_property("aws.sdk.models.path")
+
+
+# Verify the models path was set correctly
+models_path = get_models_path()
+if models_path is None or not os.path.isfile(f"{models_path}/s3.json"):
+    print(f"Missing or wrong aws.sdk.models.path: {models_path}")
     sys.exit(1)
 
 # Verify the versions manifest path was set correctly
@@ -60,7 +67,13 @@ with open("aws/sdk/build/aws-sdk/versions.toml", "w") as versions:
 
 # Emulate generating code from the models by just copying the model into the build artifacts.
 # The model doesn't get copied like this in reality, but this is an easy way to fake it.
-subprocess.run(shlex.split("cp aws/sdk/aws-models/s3.json aws/sdk/build/aws-sdk/sdk/s3/"), check=True)
+subprocess.run(shlex.split(f"cp {models_path}/s3.json aws/sdk/build/aws-sdk/sdk/s3/"), check=True)
+
+# Emulate using the updated endpoints.json by copying it into sdk/verify-endpoints.json.
+subprocess.run(
+    shlex.split(f"cp {models_path}/endpoints.json aws/sdk/build/aws-sdk/sdk/verify-endpoints.json"),
+    check=True
+)
 
 # Emulate copying the examples into the build output
 subprocess.run(shlex.split("cp -r aws/sdk/examples aws/sdk/build/aws-sdk/"), check=True)
