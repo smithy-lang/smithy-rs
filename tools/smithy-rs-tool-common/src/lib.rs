@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+pub mod changelog;
 pub mod ci;
 pub mod git;
 #[macro_use]

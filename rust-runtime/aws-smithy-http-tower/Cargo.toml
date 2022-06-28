@@ -10,7 +10,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
 tower = { version = "0.4.4" }
-pin-project = "1"
+pin-project-lite = "0.2.9"
 http = "0.2.3"
 bytes = "1"
 http-body = "0.4.4"
