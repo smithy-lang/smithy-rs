@@ -192,6 +192,13 @@ mod test {
             let ours = encode(v.as_slice());
             assert_eq!(ours, correct);
         }
+
+        #[test]
+        fn encoded_length_is_correct(v in any::<Vec<u8>>()) {
+            let correct = encode(v.as_slice()).len() as u64;
+            let ours = encoded_length(v.len() as u64);
+            assert_eq!(ours, correct);
+        }
     }
 
     #[test]
@@ -255,18 +262,5 @@ mod test {
             let decoded = BASE64_DECODE_TABLE[encoded as usize];
             assert_eq!(decoded, Some(i as u8))
         }
-    }
-
-    #[test]
-    fn test_base64_encoded_length() {
-        let decoded = "Alas, eleventy-one years is far too short a time to live among such excellent and admirable hobbits. I don't know half of you half as well as I should like, and I like less than half of you half as well as you deserve.";
-        let expected_encoded_length = encode(decoded).len() as u64;
-        let actual_encoded_length = encoded_length(decoded.len() as u64);
-        assert_eq!(expected_encoded_length, actual_encoded_length);
-
-        let decoded = "ユニコードとはか？";
-        let expected_encoded_length = encode(decoded).len() as u64;
-        let actual_encoded_length = encoded_length(decoded.len() as u64);
-        assert_eq!(expected_encoded_length, actual_encoded_length);
     }
 }

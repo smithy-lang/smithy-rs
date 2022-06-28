@@ -134,7 +134,8 @@ impl Sha1 {
 
     // Size of the checksum in bytes
     fn size() -> u64 {
-        20
+        use sha1::Digest;
+        sha1::Sha1::output_size() as u64
     }
 }
 
@@ -174,7 +175,8 @@ impl Sha256 {
 
     // Size of the checksum in bytes
     fn size() -> u64 {
-        32
+        use sha2::Digest;
+        sha2::Sha256::output_size() as u64
     }
 }
 
@@ -213,7 +215,8 @@ impl Md5 {
 
     // Size of the checksum in bytes
     fn size() -> u64 {
-        16
+        use md5::Digest;
+        md5::Md5::output_size() as u64
     }
 }
 

@@ -19,10 +19,9 @@ use std::fmt::Display;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-// pin_project_lite can't handle triple-slash doc comments
 pin_project! {
-    /// A `ChecksumBody` will read and calculate a request body as it's being sent. Once the body has"
-    /// been completely read, it'll append a trailer with the calculated checksum."
+    /// A `ChecksumBody` will read and calculate a request body as it's being sent. Once the body has
+    /// been completely read, it'll append a trailer with the calculated checksum.
     pub struct ChecksumBody<InnerBody> {
         #[pin]
         inner: InnerBody,
