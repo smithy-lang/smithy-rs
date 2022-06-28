@@ -53,3 +53,9 @@ message = "Add comments for docker settings needed when using this sdk"
 references = ["aws-sdk-rust#540"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jmklix"
+
+[[smithy-rs]]
+message = "Fix issue with codegen on Windows where module names were incorrectly determined from filenames"
+references = ["smithy-rs#1505"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "kiiadi"
