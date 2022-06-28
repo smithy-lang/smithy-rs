@@ -112,7 +112,7 @@ class PythonServerModuleGenerator(
         rustTemplate(
             """
             let socket = #{pyo3}::types::PyModule::new(py, "socket")?;
-            socket.add_class::<#{SmithyPython}::SharedSocket>()?;
+            socket.add_class::<#{SmithyPython}::PySocket>()?;
             #{pyo3}::py_run!(
                 py,
                 socket,

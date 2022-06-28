@@ -13,15 +13,15 @@ use signal_hook::{consts::*, iterator::Signals};
 use tokio::runtime;
 use tower::ServiceBuilder;
 
-use crate::{PyHandler, PyHandlers, PyState, SharedSocket};
+use crate::{PyHandler, PyHandlers, PySocket, PyState};
 
 /// Python compatible wrapper for the [aws_smithy_http_server::Router] type.
 #[pyclass(text_signature = "(router)")]
 #[derive(Debug, Clone)]
 pub struct PyRouter(pub Router);
 
-/// Python application definition, holding the handlers map, the optional Python context object
-/// and the asyncio task locals with the running event loop.
+/// Python application definition, holding the handlers map, the optional Python context object,
+/// the list of workers and the [PyRouter].
 #[pyclass(subclass, text_signature = "()")]
 #[derive(Debug, Default)]
 pub struct PyApp {
@@ -44,6 +44,9 @@ impl Clone for PyApp {
 
 #[allow(dead_code)]
 impl PyApp {
+    /// Handle the graceful termination of Python workers by looping through all the
+    /// active workers and calling `terminate()` on them. If termination fails, this
+    /// method will try to `kill()` any failed worker.
     fn graceful_termination(&self, workers: &Mutex<Vec<PyObject>>) -> ! {
         let workers = workers.lock();
         for (idx, worker) in workers.iter().enumerate() {
@@ -65,7 +68,7 @@ impl PyApp {
                                     "Unable to kill kill worker {idx}, PID: {pid}: {e}"
                                 );
                             })
-                            .expect("A zombie process has been probably left in the process table");
+                            .unwrap();
                     }
                 }
             });
@@ -73,6 +76,8 @@ impl PyApp {
         process::exit(0);
     }
 
+    /// Handler the immediate termination of Python workers by looping through all the
+    /// active workers and calling `kill()` on them.
     fn immediate_termination(&self, workers: &Mutex<Vec<PyObject>>) -> ! {
         let workers = workers.lock();
         for (idx, worker) in workers.iter().enumerate() {
@@ -88,7 +93,7 @@ impl PyApp {
                     .map_err(|e| {
                         tracing::error!("Unable to kill kill worker {idx}, PID: {pid}: {e}");
                     })
-                    .expect("A zombie process has been probably left in the process table");
+                    .unwrap();
             });
         }
         process::exit(0);
@@ -98,8 +103,10 @@ impl PyApp {
     /// in this method are ignored.
     ///
     /// Signals supported:
-    ///   * SIGTERM|SIGQUIT - graceful termination.
+    ///   * SIGTERM|SIGQUIT - graceful termination of all workers.
     ///   * SIGINT - immediate termination of all workers.
+    ///
+    /// Other signals are NOOP.
     fn block_on_rust_signals(&self) {
         let mut signals =
             Signals::new(&[SIGINT, SIGHUP, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2, SIGWINCH])
@@ -126,10 +133,13 @@ impl PyApp {
         }
     }
 
+    /// Register and handle termination of all the tasks on the Python asynchronous event loop.
+    /// We only register SIGQUIT and SIGINT since the main signal handling is done by Rust.
     fn register_python_signals(&self, py: Python, event_loop: PyObject) -> PyResult<()> {
         let locals = [("event_loop", event_loop)].into_py_dict(py);
         py.run(
             r#"
+import asyncio
 import logging
 import functools
 import signal
@@ -184,7 +194,7 @@ impl PyApp {
     pub fn start_worker(
         &mut self,
         py: Python,
-        socket: &PyCell<SharedSocket>,
+        socket: &PyCell<PySocket>,
         worker_number: isize,
     ) -> PyResult<()> {
         // Setup the Python asyncio loop to use `uvloop`.
@@ -201,7 +211,7 @@ impl PyApp {
         let router: PyRouter = self.router.as_ref().expect("something").clone();
         // Clone the socket.
         let borrow = socket.try_borrow_mut()?;
-        let held_socket: &SharedSocket = &*borrow;
+        let held_socket: &PySocket = &*borrow;
         let raw_socket = held_socket.get_socket()?;
         // Register signals on the Python event loop.
         self.register_python_signals(py, event_loop.to_object(py))?;
@@ -282,7 +292,7 @@ impl PyApp {
     /// The multiprocessing server is achieved using the ability of a Python interpreter
     /// to clone and start itself as a new process.
     /// The shared sockets is created and Using the [multiprocessing::Process] module, multiple
-    /// workers with the method `self.start_single_python_worker()` as target are started.
+    /// workers with the method `self.start_worker()` as target are started.
     ///
     /// [multiprocessing::Process]: https://docs.python.org/3/library/multiprocessing.html
     #[pyo3(text_signature = "($self, address, port, backlog, workers)")]
@@ -301,7 +311,7 @@ impl PyApp {
         mp.call_method0("allow_connection_pickling")?;
         let address = address.unwrap_or_else(|| String::from("127.0.0.1"));
         let port = port.unwrap_or(13734);
-        let socket = SharedSocket::new(address, port, backlog)?;
+        let socket = PySocket::new(address, port, backlog)?;
         // Lock the workers mutex.
         let mut active_workers = self.workers.lock();
         // Register the main signal handler.

@@ -75,6 +75,8 @@ class PythonApplicationGenerator(
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
+            /// Main Python application, used to register operations and context and start multiple
+            /// workers on the same shared socket.
             ##[#{pyo3}::pyclass]
             ##[derive(Debug, Clone)]
             pub(crate) struct App {
@@ -97,15 +99,18 @@ class PythonApplicationGenerator(
         ) {
             rustTemplate(
                 """
+                /// Create a new [App].
                 ##[new]
                 pub(crate) fn new(py: #{pyo3}::Python, log_level: Option<#{SmithyPython}::LogLevel>) -> #{pyo3}::PyResult<Self> {
                     let log_level = log_level.unwrap_or(#{SmithyPython}::LogLevel::Info);
                     #{SmithyPython}::logging::setup(py, log_level)?;
                     Ok(Self { inner: aws_smithy_http_server_python::PyApp::default() })
                 }
+                /// Register a context object that will be shared between handlers.
                 pub(crate) fn context(&mut self, py: #{pyo3}::Python, context: #{pyo3}::PyObject) {
                     self.inner.context(py, context)
                 }
+                /// Run the Python application.
                 pub(crate) fn run(
                     &mut self,
                     py: #{pyo3}::Python,
@@ -122,8 +127,7 @@ class PythonApplicationGenerator(
             )
             rustBlockTemplate(
                 """
-                /// Override the `router()` function of #{SmithyPython}::PyApp allowing to dynamically
-                /// codegenerate the routes.
+                /// Dynamically codegenerate the routes, allowing to build the Smithy [Router].
                 pub(crate) fn build_router(&mut self, py: #{pyo3}::Python) -> #{pyo3}::PyResult<()>
                 """,
                 *codegenScope

@@ -3,7 +3,6 @@
 #  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #  SPDX-License-Identifier: Apache-2.0
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from typing import List, Optional
@@ -20,7 +19,7 @@ from libpokemon_service_sdk.output import (
 from libpokemon_service_sdk import App
 
 
-# A slightly more atomic counter.
+# A slightly more atomic counter using a threading lock.
 class FastWriteCounter:
     def __init__(self):
         self._number_of_read = 0
@@ -73,6 +72,10 @@ class Context:
                 flavor_text="""Cuando varios de estos Pokémon se juntan, su energÃ­a puede causar fuertes tormentas.""",
                 language=Language.Spanish,
             ),
+            FlavorText(
+                flavor_text="ほっぺたの りょうがわに ちいさい でんきぶくろを もつ。ピンチのときに ほうでんする。",
+                language=Language.Japanese,
+            )
         ]
     }
     _calls_count = FastWriteCounter()
@@ -100,7 +103,6 @@ app.context(Context())
 # App handlers definition
 ###########################################################
 # Empty operation used for raw benchmarking.
-# GET /empty-operation
 @app.empty_operation
 def empty_operation(_: EmptyOperationInput) -> EmptyOperationOutput:
     logging.debug("Running the empty operation")
@@ -108,7 +110,6 @@ def empty_operation(_: EmptyOperationInput) -> EmptyOperationOutput:
 
 
 # Get the translation of a Pokémon specie or an error.
-# GET /pokemon-species/{name}
 @app.get_pokemon_species
 def get_pokemon_species(
     input: GetPokemonSpeciesInput, context: Context
@@ -127,7 +128,6 @@ def get_pokemon_species(
 
 
 # Get the number of requests served by this server.
-# GET /server-statistics
 @app.get_server_statistics
 def get_server_statistics(
     _: GetServerStatisticsInput, context: Context
@@ -136,6 +136,7 @@ def get_server_statistics(
     logging.debug("The service handled %d requests", calls_count)
     return GetServerStatisticsOutput(calls_count=calls_count)
 
-
+###########################################################
 # Run the server.
+###########################################################
 app.run(workers=1)

@@ -25,7 +25,7 @@ pub use logging::LogLevel;
 #[doc(inline)]
 pub use server::{PyApp, PyRouter};
 #[doc(inline)]
-pub use socket::SharedSocket;
+pub use socket::PySocket;
 #[doc(inline)]
 pub use state::{PyHandler, PyHandlers, PyState};
 

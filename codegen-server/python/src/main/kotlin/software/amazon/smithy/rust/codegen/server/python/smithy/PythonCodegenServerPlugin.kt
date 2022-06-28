@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
 import java.util.logging.Level
 import java.util.logging.Logger
 

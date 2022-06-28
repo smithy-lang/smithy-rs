@@ -15,8 +15,8 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
  */
 object PythonServerRuntimeType {
 
-    fun SharedSocket(runtimeConfig: RuntimeConfig) =
-        RuntimeType("SharedSocket", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python")
+    fun PySocket(runtimeConfig: RuntimeConfig) =
+        RuntimeType("PySocket", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python")
 
     fun Blob(runtimeConfig: RuntimeConfig) =
         RuntimeType("Blob", PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server_python::types")

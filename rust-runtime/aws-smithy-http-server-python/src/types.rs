@@ -66,6 +66,7 @@ impl From<Blob> for aws_smithy_types::Blob {
     }
 }
 
+/// Python Wrapper for [aws_smithy_types::date_time::DateTime].
 #[pyclass]
 #[derive(Debug, Clone, PartialEq)]
 pub struct DateTime(aws_smithy_types::date_time::DateTime);

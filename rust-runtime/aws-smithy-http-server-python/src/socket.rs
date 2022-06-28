@@ -22,18 +22,18 @@ use std::net::SocketAddr;
 /// [GIL]: https://wiki.python.org/moin/GlobalInterpreterLock
 #[pyclass]
 #[derive(Debug)]
-pub struct SharedSocket {
+pub struct PySocket {
     pub(crate) inner: Socket,
 }
 
 #[pymethods]
-impl SharedSocket {
+impl PySocket {
     /// Create a new UNIX `SharedSocket` from an address, port and backlog.
     /// If not specified, the backlog defaults to 1024 connections.
     #[new]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
         let address: SocketAddr = format!("{}:{}", address, port).parse()?;
-        let (domain, ip_version) = SharedSocket::socket_domain(address);
+        let (domain, ip_version) = PySocket::socket_domain(address);
         tracing::info!("Shared socket listening on {address}, IP version: {ip_version}");
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
         // Set value for the `SO_REUSEPORT` and `SO_REUSEADDR` options on this socket.
@@ -44,19 +44,19 @@ impl SharedSocket {
         socket.set_reuse_address(true)?;
         socket.bind(&address.into())?;
         socket.listen(backlog.unwrap_or(1024))?;
-        Ok(SharedSocket { inner: socket })
+        Ok(PySocket { inner: socket })
     }
 
     /// Clone the inner socket allowing it to be shared between multiple
     /// Python processes.
     #[pyo3(text_signature = "($self, socket, worker_number)")]
-    pub fn try_clone(&self) -> PyResult<SharedSocket> {
+    pub fn try_clone(&self) -> PyResult<PySocket> {
         let copied = self.inner.try_clone()?;
-        Ok(SharedSocket { inner: copied })
+        Ok(PySocket { inner: copied })
     }
 }
 
-impl SharedSocket {
+impl PySocket {
     /// Get a cloned inner socket.
     pub fn get_socket(&self) -> Result<Socket, std::io::Error> {
         self.inner.try_clone()
@@ -78,13 +78,13 @@ mod tests {
 
     #[test]
     fn socket_can_bind_on_random_port() {
-        let socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
+        let socket = PySocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
         assert!(socket.inner.is_listener().is_ok());
     }
 
     #[test]
     fn socket_can_be_cloned() {
-        let socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
+        let socket = PySocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
         let cloned_socket = socket.try_clone().unwrap();
         assert!(cloned_socket.inner.is_listener().is_ok());
     }
