@@ -9,7 +9,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
@@ -26,7 +26,7 @@ class PythonServerServiceGenerator(
     protocolGenerator: ProtocolGenerator,
     protocolSupport: ProtocolSupport,
     httpBindingResolver: HttpBindingResolver,
-    private val context: CodegenContext,
+    private val context: CoreCodegenContext,
 ) : ServerServiceGenerator(rustCrate, protocolGenerator, protocolSupport, httpBindingResolver, context) {
 
     override fun renderCombinedErrors(writer: RustWriter, operation: OperationShape) {

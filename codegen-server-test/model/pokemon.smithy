@@ -99,6 +99,11 @@ structure FlavorText {
         documentation: "Italiano.",
     },
     {
+        name: "JAPANESE",
+        value: "jp",
+        documentation: "日本語。",
+    },
+    {
         name: "PORTUGUESE",
         value: "pt",
         documentation: "Português.",

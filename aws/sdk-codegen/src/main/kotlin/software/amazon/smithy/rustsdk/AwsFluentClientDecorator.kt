@@ -19,7 +19,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -72,13 +73,13 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
     override fun sendBounds(input: Symbol, output: Symbol, error: RuntimeType): Writable = writable { }
 }
 
-class AwsFluentClientDecorator : RustCodegenDecorator {
+class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "FluentClient"
 
     // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
     override val order: Byte = (AwsPresigningDecorator.ORDER + 1).toByte()
 
-    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val types = Types(codegenContext.runtimeConfig)
         FluentClientGenerator(
             codegenContext,
@@ -97,7 +98,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         return baseCustomizations + object : LibRsCustomization() {
@@ -181,12 +182,12 @@ private class AwsFluentClientExtensions(types: Types) {
     }
 }
 
-private class AwsFluentClientDocs(codegenContext: CodegenContext) : FluentClientCustomization() {
-    private val serviceName = codegenContext.serviceShape.expectTrait<TitleTrait>().value
-    private val serviceShape = codegenContext.serviceShape
-    private val crateName = codegenContext.moduleUseName()
+private class AwsFluentClientDocs(coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
+    private val serviceName = coreCodegenContext.serviceShape.expectTrait<TitleTrait>().value
+    private val serviceShape = coreCodegenContext.serviceShape
+    private val crateName = coreCodegenContext.moduleUseName()
     private val codegenScope =
-        arrayOf("aws_config" to codegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
+        arrayOf("aws_config" to coreCodegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
 
     // Usage docs on STS must be suppressed—aws-config cannot be added as a dev-dependency because it would create
     // a circular dependency

@@ -8,26 +8,22 @@ package software.amazon.smithy.rust.codegen.server.smithy.testutil
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.server.smithy.RustCodegenServerPlugin
-import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 
+// These are the settings we default to if the user does not override them in their `smithy-build.json`.
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
-    // These are the settings we default to if the user does not override them in their `smithy-build.json`.
-    codegenConfig = CodegenConfig(
-        renameExceptions = false,
-        includeFluentClient = false,
-        addMessageToErrors = false,
-        formatTimeoutSeconds = 20,
-        eventStreamAllowList = emptySet()
-    ),
+    renameExceptions = false,
     handleRustBoxing = true,
     handleRequired = true
 )
 
-fun serverTestSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
+fun serverTestSymbolProvider(
+    model: Model,
+    serviceShape: ServiceShape? = null,
+): RustSymbolProvider =
     RustCodegenServerPlugin.baseSymbolProvider(
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),

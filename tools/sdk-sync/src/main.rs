@@ -58,6 +58,7 @@ impl Args {
             max_gradle_metaspace_megabytes: self
                 .max_gradle_metaspace_megabytes
                 .unwrap_or(defaults.max_gradle_metaspace_megabytes),
+            aws_models_path: Some(self.aws_sdk_rust.join("aws-models")),
         }
     }
 }

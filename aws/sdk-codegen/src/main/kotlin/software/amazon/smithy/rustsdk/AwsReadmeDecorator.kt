@@ -10,12 +10,11 @@ import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.raw
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.util.getTrait
-import java.lang.StringBuilder
 import java.util.logging.Logger
 
 // Use a sigil that should always be unique in the text to fix line breaks and spaces
@@ -26,16 +25,16 @@ private const val SPACE_SIGIL = "[[smithy-rs-nbsp]]"
 /**
  * Generates a README.md for each service crate for display on crates.io.
  */
-class AwsReadmeDecorator : RustCodegenDecorator {
+class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "AwsReadmeDecorator"
     override val order: Byte = 0
 
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
-    override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations =
+    override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
         mapOf("package" to mapOf("readme" to "README.md"))
 
-    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         rustCrate.withFile("README.md") { writer ->
             val description = normalizeDescription(
                 codegenContext.moduleName,

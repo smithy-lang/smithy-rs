@@ -4,8 +4,8 @@
  */
 
 use crate::fs::{DefaultFs, Fs};
-use crate::git::CommitHash;
 use anyhow::Result;
+use smithy_rs_tool_common::git::CommitHash;
 use std::path::Path;
 use std::str::FromStr;
 

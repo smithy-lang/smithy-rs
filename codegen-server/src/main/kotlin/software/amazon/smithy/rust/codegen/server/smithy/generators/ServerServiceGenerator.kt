@@ -10,7 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
@@ -27,10 +27,10 @@ open class ServerServiceGenerator(
     private val protocolGenerator: ProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
     private val httpBindingResolver: HttpBindingResolver,
-    private val context: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
 ) {
-    private val index = TopDownIndex.of(context.model)
-    protected val operations = index.getContainedOperations(context.serviceShape).sortedBy { it.id }
+    private val index = TopDownIndex.of(coreCodegenContext.model)
+    protected val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
 
     /**
      * Render Service Specific code. Code will end up in different files via [useShapeWriter]. See `SymbolVisitor.kt`
@@ -43,7 +43,7 @@ open class ServerServiceGenerator(
                     operationWriter,
                     operation,
                 )
-                ServerProtocolTestGenerator(context, protocolSupport, operation, operationWriter)
+                ServerProtocolTestGenerator(coreCodegenContext, protocolSupport, operation, operationWriter)
                     .render()
             }
             if (operation.errors.isNotEmpty()) {
@@ -66,16 +66,16 @@ open class ServerServiceGenerator(
 
     // Render combined errors.
     open fun renderCombinedErrors(writer: RustWriter, operation: OperationShape) {
-        ServerCombinedErrorGenerator(context.model, context.symbolProvider, operation).render(writer)
+        ServerCombinedErrorGenerator(coreCodegenContext.model, coreCodegenContext.symbolProvider, operation).render(writer)
     }
 
     // Render operations handler.
     open fun renderOperationHandler(writer: RustWriter, operations: List<OperationShape>) {
-        ServerOperationHandlerGenerator(context, operations).render(writer)
+        ServerOperationHandlerGenerator(coreCodegenContext, operations).render(writer)
     }
 
     // Render operations registry.
     private fun renderOperationRegistry(writer: RustWriter, operations: List<OperationShape>) {
-        ServerOperationRegistryGenerator(context, httpBindingResolver, operations).render(writer)
+        ServerOperationRegistryGenerator(coreCodegenContext, httpBindingResolver, operations).render(writer)
     }
 }

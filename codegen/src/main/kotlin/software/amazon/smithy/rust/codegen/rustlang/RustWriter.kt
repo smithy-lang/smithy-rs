@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.utils.AbstractCodeWriter
+import java.io.File
 import java.util.function.BiFunction
 
 /**
@@ -393,7 +394,7 @@ class RustWriter private constructor(
     }
 
     fun module(): String? = if (filename.startsWith("src") && filename.endsWith(".rs")) {
-        filename.removeSuffix(".rs").split('/').last()
+        filename.removeSuffix(".rs").substringAfterLast(File.separatorChar)
     } else null
 
     fun safeName(prefix: String = "var"): String {

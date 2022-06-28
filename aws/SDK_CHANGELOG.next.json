@@ -1,0 +1,49 @@
+# This file will be used by automation when cutting a release of the SDK
+# to include code generator change log entries into the release notes.
+# This is an auto-generated file. Do not edit.
+
+{
+  "smithy-rs": [],
+  "aws-sdk-rust": [
+    {
+      "message": "Add method `ByteStream::into_async_read`. This makes it easy to convert `ByteStream`s into a struct implementing `tokio:io::AsyncRead`. Available on **crate feature** `rt-tokio` only.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#1390"
+      ],
+      "since-commit": "1d81b4f717c1f4416cd3e9680704624ce07c57c4"
+    },
+    {
+      "message": "Switch to [RustCrypto](https://github.com/RustCrypto)'s implementation of MD5.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "petrosagg",
+      "references": [
+        "smithy-rs#1404"
+      ],
+      "since-commit": "1d81b4f717c1f4416cd3e9680704624ce07c57c4"
+    },
+    {
+      "message": "Add support for `credential_process` in AWS configs for fetching credentials from an external process.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "jszwedko",
+      "references": [
+        "smithy-rs#1356"
+      ],
+      "since-commit": "1d81b4f717c1f4416cd3e9680704624ce07c57c4"
+    }
+  ],
+  "aws-sdk-model": []
+}

@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.rustlang.rust
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.smithy.customize.NamedSectionGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -31,7 +31,7 @@ sealed class LibRsSection(name: String) : Section(name) {
 typealias LibRsCustomization = NamedSectionGenerator<LibRsSection>
 
 class LibRsGenerator(
-    private val settings: RustSettings,
+    private val settings: CoreRustSettings,
     private val model: Model,
     private val modules: List<RustModule>,
     private val customizations: List<LibRsCustomization>,
