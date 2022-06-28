@@ -7,5 +7,5 @@ v0.44.0 (June 23rd, 2022)
 - ⚠ ([smithy-rs#1424](https://github.com/awslabs/smithy-rs/issues/1424)) An error is raised if the http `Accept` header does not match the content type specified in smithy file
 
 **New this release:**
-- 🎉 ([smithy-rs#1454](https://github.com/awslabs/smithy-rs/issues/1454)) Python can be used for writing business logic, executing on top of smithy-rs Rust runtime
+- 🎉 ([smithy-rs#1403](https://github.com/awslabs/smithy-rs/issues/1403)) Initial support to code-generate support to write the business logic in Python, executing on top of Rust. This PR introduce code-generation of operations and simple shapes (Structure and Enum) and add runtime support to start the Hyper server from Python, but does not generate an importable shared library yet.
 
