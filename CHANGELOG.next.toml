@@ -22,7 +22,7 @@ references = ["aws-sdk-rust#560", "smithy-rs#1487"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
 
-[[smithy-rs]]
+[[aws-sdk-rust]]
 message = "Add support for aws-chunked content encoding"
 references = ["smithy-rs#1263"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
