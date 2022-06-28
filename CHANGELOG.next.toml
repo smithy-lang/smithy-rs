@@ -45,7 +45,7 @@ single value. Each have been converted to struct variants and the inner value is
 instead of the `0` field.
 """
 references = ["smithy-rs#932"]
-meta = { "breaking" = true, "tada" = false, "bug" = true }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
 
 [[aws-sdk-rust]]
