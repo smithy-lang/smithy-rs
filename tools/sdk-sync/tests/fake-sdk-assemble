@@ -38,6 +38,11 @@ def get_models_path():
     return get_property("aws.sdk.models.path")
 
 
+# Fail on the first few attempts to test retry
+if int(get_property("aws.sdk.sync.attempt")) < 3:
+    print("Timeout waiting to connect to the Gradle daemon")
+    sys.exit(1)
+
 # Verify the models path was set correctly
 models_path = get_models_path()
 if models_path is None or not os.path.isfile(f"{models_path}/s3.json"):
