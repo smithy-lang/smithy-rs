@@ -21,3 +21,9 @@ message = "Add a trailing slash to the URI `/latest/meta-data/iam/security-crede
 references = ["aws-sdk-rust#560", "smithy-rs#1487"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add comments for docker settings needed when using this sdk"
+references = ["aws-sdk-rust#540"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jmklix"
