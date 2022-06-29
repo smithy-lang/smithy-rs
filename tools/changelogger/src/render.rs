@@ -55,9 +55,12 @@ pub struct RenderArgs {
     pub source: Vec<PathBuf>,
     /// Which source to overwrite with an empty changelog template
     #[clap(long, action)]
-    pub source_to_truncate: Option<PathBuf>,
+    pub source_to_truncate: PathBuf,
     #[clap(long, action)]
     pub changelog_output: PathBuf,
+    /// where should smity_rs entries marked as server / both be written to
+    #[clap(long, action)]
+    pub server_changelog_output: Option<PathBuf>,
     /// Optional path to output a release manifest file to
     #[clap(long, action)]
     pub release_manifest_output: Option<PathBuf>,
@@ -69,6 +72,7 @@ pub struct RenderArgs {
     // working directory will be used to attempt to find it.
     #[clap(long, action)]
     pub smithy_rs_location: Option<PathBuf>,
+    /// which entries are to be processed (server, client or both), None implies both
     #[clap(long, action)]
     pub smithy_rs_sdk : Option<SdkAffected>,
 
@@ -288,7 +292,7 @@ fn update_changelogs(
         args.change_set,
         args.previous_release_versions_manifest.as_deref(),
     )?;
-
+    
     let (release_header, release_notes) = render(&entries, &release_metadata.title);
     if let Some(output_path) = &args.release_manifest_output {
         let release_manifest = ReleaseManifest {
@@ -314,12 +318,10 @@ fn update_changelogs(
         .context("failed to read rendered destination changelog")?
         .replace(USE_UPDATE_CHANGELOGS, "");
     update.push_str(&current);
-    std::fs::write(&args.changelog_output, update).context("failed to write rendered changelog")?;
 
-    if let Some(ref source_to_truncate) = args.source_to_truncate {
-        std::fs::write(&source_to_truncate, EXAMPLE_ENTRY.trim())
+    std::fs::write(&args.changelog_output, update).context("failed to write rendered changelog")?;
+    std::fs::write(&args.source_to_truncate, EXAMPLE_ENTRY.trim())
             .context("failed to truncate source")?;
-    }
 
     eprintln!("Changelogs updated!");
     Ok(())
@@ -382,19 +384,50 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
     }
     header.push('\n');
 
-    let mut out = String::new();
+    let (server_entries, client_entries) = entries
+            .iter()
+            .filter_map(ChangelogEntry::hand_authored)
+            .partition::<Vec<_>, _>(|entry| match entry.meta.sdk {
+                None => false,
+                Some(affected_sdk) => affected_sdk == SdkAffected::Server
+            });
+
+    let mut server_out = String::new();
     render_handauthored(
-        entries.iter().filter_map(ChangelogEntry::hand_authored),
-        &mut out,
-    );
-    render_sdk_model_entries(
-        entries.iter().filter_map(ChangelogEntry::aws_sdk_model),
-        &mut out,
+        server_entries.into_iter(),
+        &mut server_out,
     );
 
-    let mut external_contribs = entries
-        .iter()
-        .filter_map(|entry| entry.hand_authored().map(|e| e.author.to_ascii_lowercase()))
+    let mut client_out = String::new();
+    render_handauthored(
+        client_entries.into_iter(),
+        &mut client_out,
+    );
+
+    let mut sdk_model_out = String::new();
+    render_sdk_model_entries(
+        entries.iter().filter_map(ChangelogEntry::aws_sdk_model),
+        &mut sdk_model_out,
+    );
+
+    // append aws_sdk_model entries in both server and client
+    if !server_out.is_empty() {
+        server_out.push_str(sdk_model_out.as_str());
+    }
+    client_out.push_str(sdk_model_out.as_str());
+
+    let mut server_contributors = String::new();
+    let server_side_contrib = get_contributors(server_entries.into_iter(), &mut server_contributors);
+    let mut client_contributors = String::new();
+    let client_side_contrib = get_contributors(client_entries.into_iter(), &mut client_contributors);
+
+
+    (header, out)
+}
+
+fn get_contributors<'a>(entries_iter : impl Iterator<Item = &'a HandAuthoredEntry>, out : &mut String) {
+    let mut external_contribs = entries_iter
+        .map(|e| e.author.to_ascii_lowercase())
         .filter(|author| !maintainers().contains(&author.as_str()))
         .collect::<Vec<_>>();
     external_contribs.sort();
@@ -403,18 +436,10 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
         out.push_str("**Contributors**\nThank you for your contributions! ❤\n");
         for contributor_handle in external_contribs {
             // retrieve all contributions this author made
-            let mut contribution_references = entries
-                .iter()
-                .filter(|entry| {
-                    entry
-                        .hand_authored()
-                        .map(|e| e.author.eq_ignore_ascii_case(contributor_handle.as_str()))
-                        .unwrap_or(false)
-                })
+            let mut contribution_references = entries_iter
+                .filter(|e| e.author.eq_ignore_ascii_case(contributor_handle.as_str()))
                 .flat_map(|entry| {
                     entry
-                        .hand_authored()
-                        .unwrap()
                         .references
                         .iter()
                         .map(to_md_link)
@@ -431,8 +456,6 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
             out.push('\n');
         }
     }
-
-    (header, out)
 }
 
 #[cfg(test)]
