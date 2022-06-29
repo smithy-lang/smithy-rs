@@ -384,13 +384,37 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
     }
     header.push('\n');
 
-    let (server_entries, client_entries) = entries
-            .iter()
-            .filter_map(ChangelogEntry::hand_authored)
-            .partition::<Vec<_>, _>(|entry| match entry.meta.sdk {
-                None => false,
-                Some(affected_sdk) => affected_sdk == SdkAffected::Server
-            });
+    entries.iter()
+        .filter_map(ChangelogEntry::hand_authored)
+        .map(|entry|
+            match entry.meta.sdk {
+                None => (None, Some(entry)),
+                Some(affected_sdk) => match affected_sdk {
+                    SdkAffected::Client => (None, Some(entry)),
+                    SdkAffected::Server => (Some(entry), None),
+                    SdkAffected::Both => (Some(entry), Some(entry))
+                }
+            }
+        );
+    
+    let se = Vec::<&HandAuthoredEntry>::new();
+    let ce =  Vec::<&HandAuthoredEntry>::new();
+
+    for e in entries {
+        if let ChangelogEntry::HandAuthored(he) = e {
+            match he.meta.sdk {
+                None => ce.push(he),
+                Some(affected_sdk) => match affected_sdk {
+                    SdkAffected::Client => ce.push(he),
+                    SdkAffected::Server => se.push(he),
+                    SdkAffected::Both => {
+                        ce.push(he);
+                        se.push(he);
+                    }
+                }
+            }
+        }
+    }
 
     let mut server_out = String::new();
     render_handauthored(
