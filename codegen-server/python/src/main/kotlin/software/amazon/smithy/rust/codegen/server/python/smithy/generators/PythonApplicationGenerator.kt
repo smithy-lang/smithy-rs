@@ -146,7 +146,7 @@ class PythonApplicationGenerator(
                     rustTemplate(
                         """
                         let ${name}_locals = pyo3_asyncio::TaskLocals::new(event_loop);
-                        let handler = self.inner.handlers.get("$name").expect("Python handler for `{$name}` not found").clone();
+                        let handler = self.inner.handlers.get("$name").expect("Python handler for operation `$name` not found").clone();
                         let router = router.$name(move |input, state| {
                             #{pyo3_asyncio}::tokio::scope(${name}_locals, crate::operation_handler::$name(input, state, handler))
                         });
