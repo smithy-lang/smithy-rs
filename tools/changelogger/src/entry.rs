@@ -5,7 +5,7 @@
 
 use anyhow::{bail, Result};
 use clap::clap_derive::ArgEnum;
-use smithy_rs_tool_common::changelog::{Changelog, HandAuthoredEntry, SdkModelEntry};
+use smithy_rs_tool_common::changelog::{Changelog, HandAuthoredEntry, SdkModelEntry, SdkAffected};
 use smithy_rs_tool_common::git::Git;
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
 use std::path::Path;
@@ -25,6 +25,7 @@ impl ChangelogEntries {
     pub fn filter(
         self,
         smithy_rs: &dyn Git,
+        smithy_rs_sdk : Option<SdkAffected>,
         change_set: ChangeSet,
         previous_release_versions_manifest: Option<&Path>,
     ) -> Result<Vec<ChangelogEntry>> {
@@ -57,7 +58,38 @@ impl ChangelogEntries {
                     Ok(self.aws_sdk_rust)
                 }
             }
-            ChangeSet::SmithyRs => Ok(self.smithy_rs),
+            ChangeSet::SmithyRs => {
+                let sdk_to_include = if let Some(sdk_query) = smithy_rs_sdk {
+                    sdk_query
+                }
+                else {
+                    SdkAffected::Both
+                };
+
+                if sdk_to_include == SdkAffected::Both {
+                    Ok(self.smithy_rs)
+                }
+                else {
+                    let result = self.smithy_rs
+                        .into_iter()
+                        .filter(|entry| {
+                            match entry {
+                                ChangelogEntry::HandAuthored(hand_entry) => {
+                                    if let Some(sdk) = hand_entry.meta.sdk {
+                                        sdk_to_include == sdk
+                                    }
+                                    else {
+                                        // a missing sdk entry in the meta is considered a client
+                                        sdk_to_include == SdkAffected::Client
+                                    }
+                                },
+                                _ => true,
+                            }
+                        })
+                        .collect();
+                    Ok(result)
+                }
+            }
         }
     }
 }

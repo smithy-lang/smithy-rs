@@ -9,7 +9,7 @@ use clap::Parser;
 use ordinal::Ordinal;
 use serde::Serialize;
 use smithy_rs_tool_common::changelog::{
-    Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry,
+    Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry, SdkAffected
 };
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use std::env;
@@ -69,6 +69,8 @@ pub struct RenderArgs {
     // working directory will be used to attempt to find it.
     #[clap(long, action)]
     pub smithy_rs_location: Option<PathBuf>,
+    #[clap(long, action)]
+    pub smithy_rs_sdk : Option<SdkAffected>,
 
     // For testing only
     #[clap(skip)]
@@ -282,9 +284,11 @@ fn update_changelogs(
     let entries = ChangelogEntries::from(changelog);
     let entries = entries.filter(
         smithy_rs,
+        args.smithy_rs_sdk,
         args.change_set,
         args.previous_release_versions_manifest.as_deref(),
     )?;
+
     let (release_header, release_notes) = render(&entries, &release_metadata.title);
     if let Some(output_path) = &args.release_manifest_output {
         let release_manifest = ReleaseManifest {
@@ -432,7 +436,7 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
 mod test {
     use super::{
         date_based_release_metadata, render, version_based_release_metadata, Changelog,
-        ChangelogEntries, ChangelogEntry,
+        ChangelogEntries, ChangelogEntry,FilterQuery
     };
     use time::OffsetDateTime;
 
@@ -554,6 +558,91 @@ Thank you for your contributions! ❤
 "#
         .trim_start();
         pretty_assertions::assert_str_eq!(aws_sdk_expected, aws_sdk_rust_rendered);
+    }
+
+    #[test]
+    fn end_to_end_changelog_filter_entry() {
+        let changelog_toml = r#"
+[[smithy-rs]]
+author = "rcoh"
+message = "I made a major change to update the code generator"
+meta = { breaking = true, tada = false, bug = false }
+references = ["smithy-rs#445"]
+change-type = "Server"
+
+[[smithy-rs]]
+author = "external-contrib"
+message = "I made a change to update the code generator"
+meta = { breaking = false, tada = true, bug = false }
+references = ["smithy-rs#446"]
+changeType = "Client"
+
+[[smithy-rs]]
+author = "another-contrib"
+message = "I made a minor change"
+meta = { breaking = false, tada = false, bug = false }
+
+[[aws-sdk-rust]]
+author = "rcoh"
+message = "I made a major change to update the AWS SDK"
+meta = { breaking = true, tada = false, bug = false }
+references = ["smithy-rs#445"]
+
+[[aws-sdk-rust]]
+author = "external-contrib"
+message = "I made a change to update the code generator"
+meta = { breaking = false, tada = true, bug = false }
+references = ["smithy-rs#446"]
+
+[[smithy-rs]]
+author = "external-contrib"
+message = """
+I made a change to update the code generator
+
+**Update guide:**
+blah blah
+"""
+meta = { breaking = false, tada = true, bug = false }
+references = ["smithy-rs#446"]
+
+[[aws-sdk-model]]
+module = "aws-sdk-s3"
+version = "0.14.0"
+kind = "Feature"
+message = "Some new API to do X"
+
+[[aws-sdk-model]]
+module = "aws-sdk-ec2"
+version = "0.12.0"
+kind = "Documentation"
+message = "Updated some docs"
+
+[[aws-sdk-model]]
+module = "aws-sdk-ec2"
+version = "0.12.0"
+kind = "Feature"
+message = "Some API change"
+        "#;
+        let changelog: Changelog = toml::from_str(changelog_toml).expect("valid changelog");
+        let ChangelogEntries {
+            aws_sdk_rust,
+            smithy_rs,
+        } = changelog.into();
+    let query : FilterQuery = std::str::FromStr::from_str(&"change_type=server").expect("change_type should have converted");
+    let matching_entries : Vec<ChangelogEntry> =
+            smithy_rs.into_iter()
+            .filter(|entry| {
+                match entry {
+                    ChangelogEntry::AwsSdkModel(_) => true,
+                    ChangelogEntry::HandAuthored(hand_authored_entry) => query.try_element(hand_authored_entry),
+                }
+            })
+            .collect();
+
+    for m in &matching_entries {
+        println!("{m:?}");
+    }
+    println!("did you see something");
     }
 
     #[test]
