@@ -5,10 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
-import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
-import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -32,7 +28,7 @@ import software.amazon.smithy.rust.codegen.smithy.Inputs
 import software.amazon.smithy.rust.codegen.smithy.Outputs
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -51,12 +47,11 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  */
 class ServerOperationRegistryGenerator(
     coreCodegenContext: CoreCodegenContext,
-    private val httpBindingResolver: HttpBindingResolver,
+    private val protocol: Protocol,
     private val operations: List<OperationShape>,
 ) {
     private val crateName = coreCodegenContext.settings.moduleName
     private val model = coreCodegenContext.model
-    private val protocol = coreCodegenContext.protocol
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val serviceName = coreCodegenContext.serviceShape.toShapeId().name
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
@@ -320,7 +315,11 @@ ${operationImplementationStubs(operations)}
                     )
                 }
 
-                withBlockTemplate("#{Router}::${runtimeRouterConstructor()}(vec![", "])", *codegenScope) {
+                withBlockTemplate(
+                    "#{Router}::${protocol.serverRouterRuntimeConstructor()}(vec![",
+                    "])",
+                    *codegenScope
+                ) {
                     requestSpecsVarNames.zip(operationNames).forEach { (requestSpecVarName, operationName) ->
                         rustTemplate(
                             "(#{Tower}::util::BoxCloneService::new(#{ServerOperationHandler}::operation(registry.$operationName)), $requestSpecVarName),",
@@ -336,100 +335,6 @@ ${operationImplementationStubs(operations)}
      * Returns the `PhantomData` generic members in a comma-separated list.
      */
     private fun phantomMembers() = operationNames.mapIndexed { i, _ -> "In$i" }.joinToString(separator = ",\n")
-
-    /**
-     * Finds the runtime function to construct a new `Router` based on the Protocol.
-     */
-    private fun runtimeRouterConstructor(): String =
-        when (protocol) {
-            RestJson1Trait.ID -> "new_rest_json_router"
-            RestXmlTrait.ID -> "new_rest_xml_router"
-            AwsJson1_0Trait.ID -> "new_aws_json_10_router"
-            AwsJson1_1Trait.ID -> "new_aws_json_11_router"
-            else -> TODO("Protocol $protocol not supported yet")
-        }
-
-    /**
-     * Returns a writable for the `RequestSpec` for an operation based on the service's protocol.
-     */
-    private fun OperationShape.requestSpec(): Writable =
-        when (protocol) {
-            RestJson1Trait.ID, RestXmlTrait.ID -> restRequestSpec()
-            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> awsJsonOperationName()
-            else -> TODO("Protocol $protocol not supported yet")
-        }
-
-    /**
-     * Returns the operation name as required by the awsJson1.x protocols.
-     */
-    private fun OperationShape.awsJsonOperationName(): Writable {
-        val operationName = symbolProvider.toSymbol(this).name
-        return writable {
-            rust("""String::from("$serviceName.$operationName")""")
-        }
-    }
-
-    /**
-     * Generates a restJson1 or restXml specific `RequestSpec`.
-     */
-    private fun OperationShape.restRequestSpec(): Writable {
-        val httpTrait = httpBindingResolver.httpTrait(this)
-        val extraCodegenScope =
-            arrayOf("RequestSpec", "UriSpec", "PathAndQuerySpec", "PathSpec", "QuerySpec", "PathSegment", "QuerySegment").map {
-                it to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec::$it")
-            }.toTypedArray()
-
-        // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
-        val pathSegmentsVec = writable {
-            withBlock("vec![", "]") {
-                for (segment in httpTrait.uri.segments) {
-                    val variant = when {
-                        segment.isGreedyLabel -> "Greedy"
-                        segment.isLabel -> "Label"
-                        else -> """Literal(String::from("${segment.content}"))"""
-                    }
-                    rustTemplate(
-                        "#{PathSegment}::$variant,",
-                        *extraCodegenScope
-                    )
-                }
-            }
-        }
-
-        val querySegmentsVec = writable {
-            withBlock("vec![", "]") {
-                for (queryLiteral in httpTrait.uri.queryLiterals) {
-                    val variant = if (queryLiteral.value == "") {
-                        """Key(String::from("${queryLiteral.key}"))"""
-                    } else {
-                        """KeyValue(String::from("${queryLiteral.key}"), String::from("${queryLiteral.value}"))"""
-                    }
-                    rustTemplate("#{QuerySegment}::$variant,", *extraCodegenScope)
-                }
-            }
-        }
-
-        return writable {
-            rustTemplate(
-                """
-                #{RequestSpec}::new(
-                    #{Method}::${httpTrait.method},
-                    #{UriSpec}::new(
-                        #{PathAndQuerySpec}::new(
-                            #{PathSpec}::from_vector_unchecked(#{PathSegmentsVec:W}),
-                            #{QuerySpec}::from_vector_unchecked(#{QuerySegmentsVec:W})
-                        )
-                    ),
-                )
-                """,
-                *codegenScope,
-                *extraCodegenScope,
-                "PathSegmentsVec" to pathSegmentsVec,
-                "QuerySegmentsVec" to querySegmentsVec,
-                "Method" to CargoDependency.Http.asType().member("Method"),
-            )
-        }
-    }
 
     private fun operationImplementationStubs(operations: List<OperationShape>): String =
         operations.joinToString("\n///\n") {
@@ -465,4 +370,14 @@ ${operationImplementationStubs(operations)}
         val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
         return "async fn $operationName(input: $inputT) -> $outputT"
     }
+
+    /**
+     * Returns a writable for the `RequestSpec` for an operation based on the service's protocol.
+     */
+    private fun OperationShape.requestSpec(): Writable = protocol.serverRouterRequestSpec(
+        this,
+        symbolProvider.toSymbol(this).name,
+        serviceName,
+        ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec")
+    )
 }
