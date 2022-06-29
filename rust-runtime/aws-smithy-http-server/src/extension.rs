@@ -73,6 +73,16 @@ impl OperationExtension {
         }
     }
 
+    /// Returns the Smithy model namespace.
+    pub fn namespace(&self) -> &'static str {
+        self.namespace
+    }
+
+    /// Returns the Smithy operation name.
+    pub fn operation_name(&self) -> &'static str {
+        self.operation_name
+    }
+
     /// Returns the current operation formatted as `<namespace>#<operation_name>`.
     pub fn operation(&self) -> String {
         format!("{}#{}", self.namespace, self.operation_name)
