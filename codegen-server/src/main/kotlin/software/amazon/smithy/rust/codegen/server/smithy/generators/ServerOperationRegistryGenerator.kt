@@ -110,7 +110,7 @@ class ServerOperationRegistryGenerator(
 /// The operation registry can be converted into an [`#{Router}`] for
 /// your service. This router will take care of routing HTTP
 /// requests to the matching operation implementation, adhering to
-/// your service's protocol and the [HTTP binding traits]  that you
+/// your service's protocol and the [HTTP binding traits] that you
 /// used in your Smithy model. This router can be converted into a
 /// type implementing [`tower::make::MakeService`], a _service
 /// factory_. You can feed this value to a [Hyper server], and the
@@ -160,7 +160,7 @@ ${operationImplementationStubs(operations)}
             "Router" to ServerRuntimeType.Router(runtimeConfig),
             // These should be dev-dependencies. Not all sSDKs depend on `Hyper` (only those that convert the body
             // `to_bytes`), and none depend on `tokio`.
-            "Tokio" to ServerCargoDependency.Tokio.asType(),
+            "Tokio" to ServerCargoDependency.TokioDev.asType(),
             "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).asType()
         )
     }
