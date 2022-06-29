@@ -29,7 +29,7 @@ pub const EXAMPLE_ENTRY: &str = r#"
 # [[smithy-rs]]
 # message = "Fix typos in module documentation for generated crates"
 # references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
+# meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "client | server | both" }
 # author = "rcoh"
 "#;
 
@@ -436,9 +436,11 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
 mod test {
     use super::{
         date_based_release_metadata, render, version_based_release_metadata, Changelog,
-        ChangelogEntries, ChangelogEntry,FilterQuery
+        ChangelogEntries, ChangelogEntry, SdkAffected, PathBuf, ChangeSet,find_git_repository_root,
+        GitCLI
     };
     use time::OffsetDateTime;
+    use std::env;
 
     fn render_full(entries: &[ChangelogEntry], release_header: &str) -> String {
         let (header, body) = render(entries, release_header);
@@ -561,48 +563,46 @@ Thank you for your contributions! ❤
     }
 
     #[test]
-    fn end_to_end_changelog_filter_entry() {
+    fn end_to_end_changelog_sdk_meta(){
         let changelog_toml = r#"
 [[smithy-rs]]
 author = "rcoh"
-message = "I made a major change to update the code generator"
-meta = { breaking = true, tada = false, bug = false }
+message = "server changed"
+meta = { breaking = true, tada = false, bug = false, sdk="server" }
 references = ["smithy-rs#445"]
-change-type = "Server"
 
 [[smithy-rs]]
 author = "external-contrib"
 message = "I made a change to update the code generator"
 meta = { breaking = false, tada = true, bug = false }
 references = ["smithy-rs#446"]
-changeType = "Client"
 
 [[smithy-rs]]
 author = "another-contrib"
-message = "I made a minor change"
-meta = { breaking = false, tada = false, bug = false }
+message = "server changed 2"
+meta = { breaking = false, tada = false, bug = false, sdk="server" }
 
-[[aws-sdk-rust]]
+[[smithy-rs]]
 author = "rcoh"
-message = "I made a major change to update the AWS SDK"
-meta = { breaking = true, tada = false, bug = false }
+message = "client changed"
+meta = { breaking = true, tada = false, bug = false, sdk="client" }
 references = ["smithy-rs#445"]
 
-[[aws-sdk-rust]]
-author = "external-contrib"
-message = "I made a change to update the code generator"
-meta = { breaking = false, tada = true, bug = false }
+[[smithy-rs]]
+author = "rcoh"
+message = "both changed"
+meta = { breaking = false, tada = false, bug = false, sdk="both" }
 references = ["smithy-rs#446"]
 
 [[smithy-rs]]
 author = "external-contrib"
 message = """
-I made a change to update the code generator
+this is a multiline message
 
 **Update guide:**
 blah blah
 """
-meta = { breaking = false, tada = true, bug = false }
+meta = { breaking = false, tada = true, bug = false, sdk="server" }
 references = ["smithy-rs#446"]
 
 [[aws-sdk-model]]
@@ -623,26 +623,95 @@ version = "0.12.0"
 kind = "Feature"
 message = "Some API change"
         "#;
-        let changelog: Changelog = toml::from_str(changelog_toml).expect("valid changelog");
-        let ChangelogEntries {
-            aws_sdk_rust,
-            smithy_rs,
-        } = changelog.into();
-    let query : FilterQuery = std::str::FromStr::from_str(&"change_type=server").expect("change_type should have converted");
-    let matching_entries : Vec<ChangelogEntry> =
-            smithy_rs.into_iter()
-            .filter(|entry| {
-                match entry {
-                    ChangelogEntry::AwsSdkModel(_) => true,
-                    ChangelogEntry::HandAuthored(hand_authored_entry) => query.try_element(hand_authored_entry),
-                }
-            })
-            .collect();
 
-    for m in &matching_entries {
-        println!("{m:?}");
-    }
-    println!("did you see something");
+        let filter_out = |effect| {
+            let current_dir = env::current_dir().expect("current_dir did not work");
+            let repo_root: PathBuf = find_git_repository_root(
+                "smithy-rs", current_dir.as_path()).expect("find_git_repo root did not work");
+            let changelog: Changelog = toml::from_str(changelog_toml).expect("valid changelog");
+            let entries: ChangelogEntries = changelog.into();
+            let git = GitCLI::new(&repo_root).expect("GitCLI could not be created");
+            let entries = entries.filter(
+                &git,
+                effect,
+                ChangeSet::SmithyRs,
+                None
+            ).expect("entries.filter fialed");
+
+            return entries;
+        };
+
+        // only server changes are to be extracted
+        let entries = filter_out(Some(SdkAffected::Server));
+        let smithy_rs_rendered = render_full(&entries, "v0.3.0 (January 4th, 2022)");
+        let smithy_rs_expected = r#"
+v0.3.0 (January 4th, 2022)
+==========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) server changed
+
+**New this release:**
+- 🎉 ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) this is a multiline message
+
+    **Update guide:**
+    blah blah
+- (@another-contrib) server changed 2
+- ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446)) both changed
+
+**Contributors**
+Thank you for your contributions! ❤
+- @another-contrib
+- @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446))
+"#
+        .trim_start();
+        pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
+
+        // only client changes are extracted
+        let entries = filter_out(Some(SdkAffected::Client));
+        let smithy_rs_rendered = render_full(&entries, "v0.3.0 (January 4th, 2022)");
+        let smithy_rs_expected = r#"
+v0.3.0 (January 4th, 2022)
+==========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) client changed
+
+**New this release:**
+- 🎉 ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446)) both changed
+
+**Contributors**
+Thank you for your contributions! ❤
+- @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446))
+"#
+        .trim_start();
+        pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
+      
+        // both changes are extracted
+        let entries = filter_out(Some(SdkAffected::Both));
+        let smithy_rs_rendered = render_full(&entries, "v0.3.0 (January 4th, 2022)");
+        let smithy_rs_expected = r#"
+v0.3.0 (January 4th, 2022)
+==========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) server changed
+- ⚠ ([smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) client changed
+
+**New this release:**
+- 🎉 ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- 🎉 ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) this is a multiline message
+
+    **Update guide:**
+    blah blah
+- (@another-contrib) server changed 2
+- ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446)) both changed
+
+**Contributors**
+Thank you for your contributions! ❤
+- @another-contrib
+- @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446))
+"#
+        .trim_start();
+        pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
     }
 
     #[test]

@@ -58,38 +58,40 @@ impl ChangelogEntries {
                     Ok(self.aws_sdk_rust)
                 }
             }
-            ChangeSet::SmithyRs => {
-                let sdk_to_include = if let Some(sdk_query) = smithy_rs_sdk {
-                    sdk_query
-                }
-                else {
-                    SdkAffected::Both
-                };
+            ChangeSet::SmithyRs => self.filter_smithy_rs_sdk_type(smithy_rs_sdk)
+        }
+    }
 
-                if sdk_to_include == SdkAffected::Both {
-                    Ok(self.smithy_rs)
-                }
-                else {
-                    let result = self.smithy_rs
-                        .into_iter()
-                        .filter(|entry| {
-                            match entry {
-                                ChangelogEntry::HandAuthored(hand_entry) => {
-                                    if let Some(sdk) = hand_entry.meta.sdk {
-                                        sdk_to_include == sdk
-                                    }
-                                    else {
-                                        // a missing sdk entry in the meta is considered a client
-                                        sdk_to_include == SdkAffected::Client
-                                    }
-                                },
-                                _ => true,
+    fn filter_smithy_rs_sdk_type(self, smithy_rs_sdk : Option<SdkAffected>) -> Result<Vec<ChangelogEntry>> {
+        let sdk_to_include = if let Some(sdk_query) = smithy_rs_sdk {
+            sdk_query
+        }
+        else {
+            SdkAffected::Both
+        };
+
+        if sdk_to_include == SdkAffected::Both {
+            Ok(self.smithy_rs)
+        }
+        else {
+            let result = self.smithy_rs
+                .into_iter()
+                .filter(|entry| {
+                    match entry {
+                        ChangelogEntry::HandAuthored(hand_entry) => {
+                            if let Some(change_affects) = hand_entry.meta.sdk {
+                                sdk_to_include == change_affects || change_affects == SdkAffected::Both
                             }
-                        })
-                        .collect();
-                    Ok(result)
-                }
-            }
+                            else {
+                                // a missing sdk entry in the meta is considered a client
+                                sdk_to_include == SdkAffected::Client
+                            }
+                        },
+                        _ => true,
+                    }
+                })
+                .collect();
+            Ok(result)
         }
     }
 }

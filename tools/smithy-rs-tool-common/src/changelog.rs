@@ -47,6 +47,7 @@ pub struct Meta {
     pub bug: bool,
     pub breaking: bool,
     pub tada: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sdk: Option<SdkAffected>
 }
 
