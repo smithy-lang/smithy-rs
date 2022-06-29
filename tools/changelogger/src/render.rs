@@ -55,7 +55,7 @@ pub struct RenderArgs {
     pub source: Vec<PathBuf>,
     /// Which source to overwrite with an empty changelog template
     #[clap(long, action)]
-    pub source_to_truncate: PathBuf,
+    pub source_to_truncate: Option<PathBuf>,
     #[clap(long, action)]
     pub changelog_output: PathBuf,
     /// Optional path to output a release manifest file to
@@ -316,8 +316,11 @@ fn update_changelogs(
     update.push_str(&current);
     std::fs::write(&args.changelog_output, update).context("failed to write rendered changelog")?;
 
-    std::fs::write(&args.source_to_truncate, EXAMPLE_ENTRY.trim())
-        .context("failed to truncate source")?;
+    if let Some(ref source_to_truncate) = args.source_to_truncate {
+        std::fs::write(&source_to_truncate, EXAMPLE_ENTRY.trim())
+            .context("failed to truncate source")?;
+    }
+
     eprintln!("Changelogs updated!");
     Ok(())
 }
@@ -624,11 +627,12 @@ kind = "Feature"
 message = "Some API change"
         "#;
 
-        let filter_out = |effect| {
-            let current_dir = env::current_dir().expect("current_dir did not work");
-            let repo_root: PathBuf = find_git_repository_root(
-                "smithy-rs", current_dir.as_path()).expect("find_git_repo root did not work");
-            let changelog: Changelog = toml::from_str(changelog_toml).expect("valid changelog");
+        let current_dir = env::current_dir().expect("current_dir did not work");
+        let repo_root: PathBuf = find_git_repository_root(
+            "smithy-rs", current_dir.as_path()).expect("find_git_repo root did not work");
+        let changelog: Changelog = toml::from_str(changelog_toml).expect("valid changelog");
+
+        let filter_out = |effect, changelog : Changelog| {
             let entries: ChangelogEntries = changelog.into();
             let git = GitCLI::new(&repo_root).expect("GitCLI could not be created");
             let entries = entries.filter(
@@ -642,7 +646,7 @@ message = "Some API change"
         };
 
         // only server changes are to be extracted
-        let entries = filter_out(Some(SdkAffected::Server));
+        let entries = filter_out(Some(SdkAffected::Server), changelog.clone());
         let smithy_rs_rendered = render_full(&entries, "v0.3.0 (January 4th, 2022)");
         let smithy_rs_expected = r#"
 v0.3.0 (January 4th, 2022)
@@ -667,7 +671,7 @@ Thank you for your contributions! ❤
         pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
 
         // only client changes are extracted
-        let entries = filter_out(Some(SdkAffected::Client));
+        let entries = filter_out(Some(SdkAffected::Client), changelog.clone());
         let smithy_rs_rendered = render_full(&entries, "v0.3.0 (January 4th, 2022)");
         let smithy_rs_expected = r#"
 v0.3.0 (January 4th, 2022)
@@ -687,7 +691,7 @@ Thank you for your contributions! ❤
         pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
       
         // both changes are extracted
-        let entries = filter_out(Some(SdkAffected::Both));
+        let entries = filter_out(Some(SdkAffected::Both), changelog.clone());
         let smithy_rs_rendered = render_full(&entries, "v0.3.0 (January 4th, 2022)");
         let smithy_rs_expected = r#"
 v0.3.0 (January 4th, 2022)
