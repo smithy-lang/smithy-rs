@@ -441,4 +441,13 @@ mod tests {
 
         assert_eq!(expected_length, actual_length);
     }
+
+    #[tokio::test]
+    async fn test_total_rendered_length_of_empty_trailers() {
+        let trailers = Some(HeaderMap::new());
+        let actual_length = total_rendered_length_of_trailers(trailers.as_ref());
+        let expected_length = (trailers_as_aws_chunked_bytes(trailers).len()) as u64;
+
+        assert_eq!(expected_length, actual_length);
+    }
 }
