@@ -473,6 +473,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     val status =
                         variantShape.getTrait<HttpErrorTrait>()?.let { trait -> trait.code }
                             ?: errorTrait.defaultHttpStatusCode
+
+                    serverRenderContentLengthHeader()
+
                     rustTemplate(
                         """
                         builder.status($status).body(#{SmithyHttpServer}::body::to_boxed(payload))?
@@ -508,19 +511,22 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             val memberName = symbolProvider.toMemberName(it)
             rustTemplate(
                 """
-                let body = #{SmithyHttpServer}::body::to_boxed(#{SmithyHttpServer}::body::Body::wrap_stream(output.$memberName));
+                let payload = #{SmithyHttpServer}::body::Body::wrap_stream(output.$memberName);
                 """,
                 *codegenScope,
             )
         } ?: run {
             val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
-            withBlockTemplate("let body = #{SmithyHttpServer}::body::to_boxed(", ");", *codegenScope) {
+            withBlockTemplate("let payload = ", ";") {
                 payloadGenerator.generatePayload(this, "output", operationShape)
             }
+
+            serverRenderContentLengthHeader()
         }
 
         rustTemplate(
             """
+            let body = #{SmithyHttpServer}::body::to_boxed(payload);
             builder.body(body)?
             """,
             *codegenScope,
@@ -583,6 +589,22 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 )
             }
         }
+    }
+
+    /**
+     * Adds the `Content-Length` header.
+     *
+     * Unlike the headers added in `serverRenderResponseHeaders` the `Content-Length` depends on
+     * the payload post-serialization.
+     */
+    private fun RustWriter.serverRenderContentLengthHeader() {
+        rustTemplate(
+            """
+            let content_length = payload.len();
+            builder = #{header_util}::set_response_header_if_absent(builder, #{http}::header::CONTENT_LENGTH, content_length);
+            """,
+            *codegenScope
+        )
     }
 
     private fun serverRenderHttpResponseCode(
