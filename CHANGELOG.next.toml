@@ -22,9 +22,3 @@ message = "Add `Debug` implementation to several types in `aws-config`"
 references = ["smithy-rs#1421"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jdisanti"
-
-[[smithy-rs]]
-message = "Add `OperationExtension::namespace` and `OperationExtension::operation_name` getters"
-references = ["smithy-rs#1466"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "hlbarber"
