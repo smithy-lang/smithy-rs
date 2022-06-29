@@ -1,3 +1,21 @@
+<!-- Do not manually edit this file. Use the `changelogger` tool. -->
+v0.45.0 (June 28th, 2022)
+=========================
+**Breaking Changes:**
+- ⚠ ([smithy-rs#932](https://github.com/awslabs/smithy-rs/issues/932)) Replaced use of `pin-project` with equivalent `pin-project-lite`. For pinned enum tuple variants and tuple structs, this
+    change requires that we switch to using enum struct variants and regular structs. Most of the structs and enums that
+    were updated had only private fields/variants and so have the same public API. However, this change does affect the
+    public API of `aws_smithy_http_tower::map_request::MapRequestFuture<F, E>`. The `Inner` and `Ready` variants contained a
+    single value. Each have been converted to struct variants and the inner value is now accessible by the `inner` field
+    instead of the `0` field.
+
+**New this release:**
+- 🎉 ([smithy-rs#1411](https://github.com/awslabs/smithy-rs/issues/1411), [smithy-rs#1167](https://github.com/awslabs/smithy-rs/issues/1167)) Upgrade to Gradle 7. This change is not a breaking change, however, users of smithy-rs will need to switch to JDK 17
+- 🐛 ([smithy-rs#1505](https://github.com/awslabs/smithy-rs/issues/1505), @kiiadi) Fix issue with codegen on Windows where module names were incorrectly determined from filenames
+
+**Contributors**
+Thank you for your contributions! ❤
+- @kiiadi ([smithy-rs#1505](https://github.com/awslabs/smithy-rs/issues/1505))
 <!-- Do not manually edit this file, use `update-changelogs` -->
 v0.44.0 (June 22nd, 2022)
 =========================

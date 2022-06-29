@@ -10,20 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
-[[smithy-rs]]
-message = "Upgrade to Gradle 7. This change is not a breaking change, however, users of smithy-rs will need to switch to JDK 17"
-references = ["smithy-rs#1411", "smithy-rs#1167"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Add a trailing slash to the URI `/latest/meta-data/iam/security-credentials/ when loading credentials from IMDS"
-references = ["aws-sdk-rust#560", "smithy-rs#1487"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Add comments for docker settings needed when using this sdk"
-references = ["aws-sdk-rust#540"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jmklix"

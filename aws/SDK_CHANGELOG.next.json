@@ -6,43 +6,44 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Add method `ByteStream::into_async_read`. This makes it easy to convert `ByteStream`s into a struct implementing `tokio:io::AsyncRead`. Available on **crate feature** `rt-tokio` only.",
+      "message": "Add a trailing slash to the URI `/latest/meta-data/iam/security-credentials/ when loading credentials from IMDS",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "aws-sdk-rust#560",
+        "smithy-rs#1487"
+      ],
+      "since-commit": "5fc23464f67f356b8ba0c815fed739cd8997a650"
+    },
+    {
+      "message": "Replaced use of `pin-project` with equivalent `pin-project-lite`. For pinned enum tuple variants and tuple structs, this\nchange requires that we switch to using enum struct variants and regular structs. Most of the structs and enums that\nwere updated had only private fields/variants and so have the same public API. However, this change does affect the\npublic API of `aws_smithy_http_tower::map_request::MapRequestFuture<F, E>`. The `Inner` and `Ready` variants contained a\nsingle value. Each have been converted to struct variants and the inner value is now accessible by the `inner` field\ninstead of the `0` field.\n",
       "meta": {
         "bug": false,
-        "breaking": false,
-        "tada": true
+        "breaking": true,
+        "tada": false
       },
       "author": "Velfi",
       "references": [
-        "smithy-rs#1390"
+        "smithy-rs#932"
       ],
-      "since-commit": "1d81b4f717c1f4416cd3e9680704624ce07c57c4"
+      "since-commit": "5fc23464f67f356b8ba0c815fed739cd8997a650"
     },
     {
-      "message": "Switch to [RustCrypto](https://github.com/RustCrypto)'s implementation of MD5.",
+      "message": "Add comments for docker settings needed when using this sdk",
       "meta": {
         "bug": false,
         "breaking": false,
         "tada": false
       },
-      "author": "petrosagg",
+      "author": "jmklix",
       "references": [
-        "smithy-rs#1404"
+        "aws-sdk-rust#540"
       ],
-      "since-commit": "1d81b4f717c1f4416cd3e9680704624ce07c57c4"
-    },
-    {
-      "message": "Add support for `credential_process` in AWS configs for fetching credentials from an external process.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "jszwedko",
-      "references": [
-        "smithy-rs#1356"
-      ],
-      "since-commit": "1d81b4f717c1f4416cd3e9680704624ce07c57c4"
+      "since-commit": "5fc23464f67f356b8ba0c815fed739cd8997a650"
     }
   ],
   "aws-sdk-model": []
