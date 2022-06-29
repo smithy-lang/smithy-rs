@@ -239,11 +239,17 @@ where
                 return match this.inner.poll_trailers(cx) {
                     Poll::Ready(Ok(trailers)) => {
                         *this.state = AwsChunkedBodyState::Closed;
-                        let expected_total_trailer_length =
-                            total_rendered_length_of_trailers(trailers.as_ref());
-                        let actual_total_trailer_length = this.options.total_trailer_length();
-                        assert_eq!(expected_total_trailer_length, actual_total_trailer_length,
-                        "while writing trailers, the expected length of trailers ({expected_total_trailer_length}) differed from the actual length ({actual_total_trailer_length})");
+                        let expected_length = total_rendered_length_of_trailers(trailers.as_ref());
+                        let actual_length = this.options.total_trailer_length();
+
+                        if expected_length != actual_length {
+                            let err =
+                                Box::new(AwsChunkedBodyError::ReportedTrailerLengthMismatch {
+                                    actual: actual_length,
+                                    expected: expected_length,
+                                });
+                            return Poll::Ready(Some(Err(err)));
+                        }
 
                         let mut trailers = trailers_as_aws_chunked_bytes(trailers);
                         // Insert the final CRLF to close the body
@@ -275,6 +281,28 @@ where
         SizeHint::with_exact(self.encoded_length())
     }
 }
+
+/// Errors related to `AwsChunkedBody`
+#[derive(Debug)]
+enum AwsChunkedBodyError {
+    /// Error that occurs when the sum of `trailer_lengths` set when creating an `AwsChunkedBody` is
+    /// not equal to the actual length of the trailers returned by the inner `http::Body`
+    /// implementor. These trailer lengths are necessary in order to correctly calculate the total
+    /// size of the body for setting the content length header.
+    ReportedTrailerLengthMismatch { actual: u64, expected: u64 },
+}
+
+impl std::fmt::Display for AwsChunkedBodyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ReportedTrailerLengthMismatch { actual, expected } => {
+                write!(f, "When creating this AwsChunkedBody, length of trailers was reported as {expected}. However, when double checking during trailer encoding, length was found to be {actual} instead.")
+            }
+        }
+    }
+}
+
+impl std::error::Error for AwsChunkedBodyError {}
 
 // Used for finding how many hexadecimal digits it takes to represent a base 10 integer
 fn int_log16<T>(mut i: T) -> u64
@@ -341,7 +369,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic = "assertion failed: `(left == right)`\n  left: `0`,\n right: `42`: while writing trailers, the expected length of trailers (0) differed from the actual length (42)"]
+    #[should_panic = "called `Result::unwrap()` on an `Err` value: ReportedTrailerLengthMismatch { actual: 42, expected: 0 }"]
     async fn test_aws_chunked_encoding_incorrect_trailer_length_panic() {
         let input_str = "Hello world";
         // Test body has no trailers, so this length is incorrect and will trigger an assert panic
