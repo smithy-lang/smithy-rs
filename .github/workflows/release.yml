@@ -91,5 +91,5 @@ jobs:
           echo "Checking cargo auth token..."
           cargo owner --list aws-smithy-types
         else
-          publisher publish --location .
+          publisher publish -y --location .
         fi
