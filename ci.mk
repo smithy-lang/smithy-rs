@@ -88,8 +88,8 @@ generate-aws-sdk:
 generate-codegen-diff:
 	$(CI_ACTION) $@ $(ARGS)
 
-.PHONY: generate-smithy-rs-runtime-bundle
-generate-smithy-rs-runtime-bundle:
+.PHONY: generate-smithy-rs-release
+generate-smithy-rs-release:
 	$(CI_ACTION) $@ $(ARGS)
 
 .PHONY: sanity-test

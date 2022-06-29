@@ -16,9 +16,9 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.generators.Pytho
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
@@ -30,18 +30,21 @@ import software.amazon.smithy.rust.codegen.util.getTrait
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
  *
- * This class inherits from [ServerCodegenVisitor] since it uses most of the functionlities of the super class
+ * This class inherits from [ServerCodegenVisitor] since it uses most of the functionalities of the super class
  * and have to override the symbol provider with [PythonServerSymbolProvider].
  */
-class PythonServerCodegenVisitor(context: PluginContext, codegenDecorator: RustCodegenDecorator) :
-    ServerCodegenVisitor(context, codegenDecorator) {
+class PythonServerCodegenVisitor(
+    context: PluginContext,
+    codegenDecorator: RustCodegenDecorator<ServerCodegenContext>
+) : ServerCodegenVisitor(context, codegenDecorator) {
 
     init {
         val symbolVisitorConfig =
             SymbolVisitorConfig(
                 runtimeConfig = settings.runtimeConfig,
-                codegenConfig = settings.codegenConfig,
-                handleRequired = true
+                renameExceptions = false,
+                handleRequired = true,
+                handleRustBoxing = true,
             )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -61,7 +64,7 @@ class PythonServerCodegenVisitor(context: PluginContext, codegenDecorator: RustC
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
         // Override `codegenContext` which carries the symbolProvider.
-        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, target = CodegenTarget.SERVER)
+        codegenContext = ServerCodegenContext(model, symbolProvider, service, protocol, settings)
 
         // Override `rustCrate` which carries the symbolProvider.
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)

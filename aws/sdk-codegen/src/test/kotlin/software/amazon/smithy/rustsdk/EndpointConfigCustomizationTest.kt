@@ -10,7 +10,7 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
@@ -124,27 +124,25 @@ internal class EndpointConfigCustomizationTest {
 
     private fun validateEndpointCustomizationForService(service: String, test: ((RustCrate) -> Unit)? = null) {
         val (context, testDir) = generatePluginContext(model, service = service, runtimeConfig = AwsTestRuntimeConfig)
-        val codegenDecorator = object : RustCodegenDecorator {
+        val codegenDecorator = object : RustCodegenDecorator<ClientCodegenContext> {
             override val name: String = "tests and config"
             override val order: Byte = 0
             override fun configCustomizations(
-                codegenContext: CodegenContext,
+                codegenContext: ClientCodegenContext,
                 baseCustomizations: List<ConfigCustomization>
-            ): List<ConfigCustomization> {
-                return baseCustomizations + stubConfigCustomization("a") + EndpointConfigCustomization(
+            ): List<ConfigCustomization> =
+                baseCustomizations + stubConfigCustomization("a") + EndpointConfigCustomization(
                     codegenContext,
                     endpointConfig
                 ) + stubConfigCustomization("b")
-            }
 
             override fun libRsCustomizations(
-                codegenContext: CodegenContext,
+                codegenContext: ClientCodegenContext,
                 baseCustomizations: List<LibRsCustomization>
-            ): List<LibRsCustomization> {
-                return baseCustomizations + PubUseEndpoint(AwsTestRuntimeConfig) + AllowLintsGenerator(listOf("dead_code"), listOf(), listOf())
-            }
+            ): List<LibRsCustomization> =
+                baseCustomizations + PubUseEndpoint(AwsTestRuntimeConfig) + AllowLintsGenerator(listOf("dead_code"), listOf(), listOf())
 
-            override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
                 if (test != null) {
                     test(rustCrate)
                 }

@@ -7,17 +7,16 @@ use crate::fs::Fs;
 use crate::package::{
     discover_and_validate_package_batches, Package, PackageBatch, PackageHandle, PackageStats,
 };
-use crate::repo::{resolve_publish_location, Repository};
 use crate::retry::{run_with_retry, BoxError, ErrorClass};
-use crate::CRATE_OWNERS;
 use crate::{cargo, SDK_REPO_NAME};
+use crate::{CRATE_OWNERS, SDK_REPO_CRATE_PATH};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use crates_io_api::{AsyncClient, Error};
 use dialoguer::Confirm;
 use lazy_static::lazy_static;
+use smithy_rs_tool_common::git;
 use smithy_rs_tool_common::shell::ShellOperation;
-use smithy_rs_tool_common::versions_manifest::VersionsManifest;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -57,9 +56,6 @@ pub async fn subcommand_publish(
     info!("Discovering crates to publish...");
     let (batches, stats) = discover_and_validate_package_batches(Fs::Real, &location).await?;
     info!("Finished crate discovery.");
-
-    // Sanity check the repository tag if publishing from `aws-sdk-rust`
-    confirm_correct_tag(&location).await?;
 
     // Don't proceed unless the user confirms the plan
     confirm_plan(&batches, stats, *skip_confirmation)?;
@@ -103,6 +99,17 @@ pub async fn subcommand_publish(
     Ok(())
 }
 
+/// Given a `location`, this function looks for the `aws-sdk-rust` git repository. If found,
+/// it resolves the `sdk/` directory. Otherwise, it returns the original `location`.
+pub fn resolve_publish_location(location: &Path) -> PathBuf {
+    match git::find_git_repository_root(SDK_REPO_NAME, location) {
+        // If the given path was the `aws-sdk-rust` repo root, then resolve the `sdk/` directory to publish from
+        Ok(sdk_repo) => sdk_repo.join(SDK_REPO_CRATE_PATH),
+        // Otherwise, publish from the given path (likely the smithy-rs runtime bundle)
+        Err(_) => location.into(),
+    }
+}
+
 async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
     info!("Publishing `{}`...", handle);
     run_with_retry(
@@ -118,27 +125,6 @@ async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
         |_err| ErrorClass::Retry,
     )
     .await?;
-    Ok(())
-}
-
-async fn confirm_correct_tag(location: &Path) -> Result<()> {
-    let repository = Repository::new(SDK_REPO_NAME, location)?;
-    let versions_manifest = VersionsManifest::from_file(location.join("../versions.toml"))?;
-    if versions_manifest.release.is_none() {
-        // The release metadata is required for yanking in the event of a bad release, so don't
-        // allow publish if it's missing.
-        bail!("Generated `versions.toml` doesn't have release metadata. Refusing to publish!");
-    }
-    let expected_tag = versions_manifest.release.unwrap().tag;
-    let current_tag = repository.current_tag().await?;
-    if expected_tag != current_tag {
-        bail!(
-            "Current tag `{}` in the local `aws-sdk-rust` repository didn't match expected \
-             release tag `{}` from the `versions.toml` file",
-            current_tag,
-            expected_tag
-        );
-    }
     Ok(())
 }
 

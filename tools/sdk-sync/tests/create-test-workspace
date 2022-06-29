@@ -18,8 +18,6 @@ if [[ $# -eq 1 && "$1" == "--with-model-changes" ]]; then
     INCLUDE_MODEL_CHANGES=1
 fi
 
-ENDPOINTS_JSON_PATH="aws/sdk-codegen/src/main/resources/software/amazon/smithy/rustsdk/endpoints.json"
-
 mkdir aws-doc-sdk-examples
 mkdir aws-sdk-rust
 mkdir smithy-rs
@@ -40,13 +38,9 @@ popd
 # Set up a fake smithy-rs repo
 pushd smithy-rs
 git init .
-mkdir -p aws/sdk/aws-models
 mkdir -p aws/sdk/examples
 mkdir -p aws/sdk/build/aws-sdk/examples/s3
 mkdir -p aws/sdk/build/aws-sdk/sdk/s3
-mkdir -p $(dirname "${ENDPOINTS_JSON_PATH}")
-echo "Ancient S3 model" > aws/sdk/aws-models/s3.json
-echo "Old endpoints.json" > "${ENDPOINTS_JSON_PATH}"
 echo "Some S3 client code" > aws/sdk/build/aws-sdk/sdk/s3/fake_content
 cat "${SCRIPT_PATH}/fake-sdk-assemble" > gradlew
 chmod +x gradlew
@@ -60,25 +54,14 @@ git add .
 git -c user.name="Server Dev" -c user.email="serverdev@example.com" commit -m "Make some server changes"
 popd
 
-# Make an origin for smithy-rs
-mv smithy-rs smithy-rs-origin
-git clone smithy-rs-origin smithy-rs
-
-# (Optionally) Add model changes
-if [[ "${INCLUDE_MODEL_CHANGES}" == "1" ]]; then
-    pushd smithy-rs
-    echo "Updated S3 model" > aws/sdk/aws-models/s3.json
-    git -c user.name="Automated Process" -c user.email="bot@example.com" commit -am "Update the S3 model"
-    echo "Updated endpoints.json" > "${ENDPOINTS_JSON_PATH}"
-    git -c user.name="Automated Process" -c user.email="bot@example.com" commit -am "Update endpoints.json"
-    popd
-fi
-
 # Set up a fake aws-sdk-rust repo
 pushd aws-sdk-rust
 git init .
+mkdir -p aws-models
 mkdir -p examples/s3
 mkdir -p sdk/s3
+echo "Ancient S3 model" > aws-models/s3.json
+echo "Old endpoints.json" > aws-models/endpoints.json
 echo "Some S3 client code" > sdk/s3/fake_content
 echo "Ancient S3 model" > sdk/s3/s3.json
 echo "Some S3 example" > examples/s3/fake_content
@@ -87,6 +70,7 @@ echo "Some handwritten file" > some_handwritten
     echo ".git"; \
     echo ".handwritten"; \
     echo "some_handwritten"; \
+    echo "/aws-models/"; \
 ) > .handwritten
 ( \
     echo '# special test comment: this came from the previous release'; \
@@ -101,3 +85,17 @@ echo "Some handwritten file" > some_handwritten
 git add .
 git -c user.name="Test Dev" -c user.email="testdev@example.com" commit -m "Initial commit"
 popd
+
+# Make an origin for aws-sdk-rust
+mv aws-sdk-rust aws-sdk-rust-origin
+git clone aws-sdk-rust-origin aws-sdk-rust
+
+# (Optionally) Add model changes
+if [[ "${INCLUDE_MODEL_CHANGES}" == "1" ]]; then
+    pushd aws-sdk-rust
+    echo "Updated S3 model" > aws-models/s3.json
+    git -c user.name="Automated Process" -c user.email="bot@example.com" commit -am "Update the S3 model"
+    echo "Updated endpoints.json" > aws-models/endpoints.json
+    git -c user.name="Automated Process" -c user.email="bot@example.com" commit -am "Update endpoints.json"
+    popd
+fi

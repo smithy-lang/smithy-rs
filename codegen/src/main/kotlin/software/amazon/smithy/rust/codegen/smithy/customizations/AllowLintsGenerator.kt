@@ -42,7 +42,11 @@ val AllowDocsLints = listOf(
     "bare_urls"
 )
 
-class AllowLintsGenerator(private val bareLints: List<String> = listOf(), private val clippyLints: List<String> = ClippyAllowLints, private val docsLints: List<String> = AllowDocsLints) : LibRsCustomization() {
+class AllowLintsGenerator(
+    private val bareLints: List<String> = listOf(),
+    private val clippyLints: List<String> = ClippyAllowLints,
+    private val docsLints: List<String> = AllowDocsLints
+) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Attributes -> writable {
             bareLints.forEach {

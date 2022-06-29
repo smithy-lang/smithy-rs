@@ -37,7 +37,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
@@ -57,14 +57,14 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
 class XmlBindingTraitSerializerGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     private val httpBindingResolver: HttpBindingResolver
 ) : StructuredDataSerializerGenerator {
-    private val symbolProvider = codegenContext.symbolProvider
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val model = codegenContext.model
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val model = coreCodegenContext.model
     private val smithyXml = CargoDependency.smithyXml(runtimeConfig).asType()
-    private val target = codegenContext.target
+    private val target = coreCodegenContext.target
     private val codegenScope =
         arrayOf(
             "XmlWriter" to smithyXml.member("encode::XmlWriter"),
@@ -76,7 +76,7 @@ class XmlBindingTraitSerializerGenerator(
     private val xmlSerModule = RustModule.private("xml_ser")
 
     private val xmlIndex = XmlNameIndex.of(model)
-    private val rootNamespace = codegenContext.serviceShape.getTrait<XmlNamespaceTrait>()
+    private val rootNamespace = coreCodegenContext.serviceShape.getTrait<XmlNamespaceTrait>()
     private val util = SerializerUtil(model)
 
     sealed class Ctx {

@@ -11,9 +11,10 @@ import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
-import software.amazon.smithy.rust.codegen.smithy.DefaultConfig
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
@@ -35,12 +36,13 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
-        // Discover [RustCodegenDecorators] on the classpath. [RustCodegenDecorator] return different types of
-        // customization. A customization is a function of:
+        // Discover [RustCodegenDecorators] on the classpath. [RustCodegenDecorator] returns different types of
+        // customizations. A customization is a function of:
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
-        val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context)
+        val codegenDecorator: CombinedCodegenDecorator<ServerCodegenContext> =
+            CombinedCodegenDecorator.fromClasspath(context, ServerRequiredCustomizations())
 
         // ServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
         logger.info("Loaded plugin to generate pure Rust bindings for the server SSDK")
@@ -57,7 +59,7 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
         fun baseSymbolProvider(
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig
+            symbolVisitorConfig: SymbolVisitorConfig
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)

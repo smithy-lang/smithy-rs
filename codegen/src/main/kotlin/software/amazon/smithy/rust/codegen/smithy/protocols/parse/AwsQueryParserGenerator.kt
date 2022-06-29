@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 
 /**
@@ -25,14 +25,14 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
  * of the response parsing, but it overrides [operationParser] to add the protocol differences.
  */
 class AwsQueryParserGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     xmlErrors: RuntimeType,
     private val xmlBindingTraitParserGenerator: XmlBindingTraitParserGenerator =
         XmlBindingTraitParserGenerator(
-            codegenContext,
+            coreCodegenContext,
             xmlErrors
         ) { context, inner ->
-            val operationName = codegenContext.symbolProvider.toSymbol(context.shape).name
+            val operationName = coreCodegenContext.symbolProvider.toSymbol(context.shape).name
             val responseWrapperName = operationName + "Response"
             val resultWrapperName = operationName + "Result"
             rustTemplate(
