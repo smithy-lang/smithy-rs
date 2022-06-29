@@ -10,7 +10,8 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -69,19 +70,19 @@ fn test_1() {
 }
  */
 
-class RegionDecorator : RustCodegenDecorator {
+class RegionDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "Region"
     override val order: Byte = 0
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return baseCustomizations + RegionProviderConfig(codegenContext)
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
@@ -89,16 +90,16 @@ class RegionDecorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
     }
 }
 
-class RegionProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val region = region(codegenContext.runtimeConfig)
-    private val moduleUseName = codegenContext.moduleUseName()
+class RegionProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
+    private val region = region(coreCodegenContext.runtimeConfig)
+    private val moduleUseName = coreCodegenContext.moduleUseName()
     private val codegenScope = arrayOf("Region" to region.member("Region"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {

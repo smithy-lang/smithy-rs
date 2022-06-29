@@ -37,7 +37,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
@@ -66,7 +66,7 @@ data class OperationWrapperContext(
 )
 
 class XmlBindingTraitParserGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     private val xmlErrors: RuntimeType,
     private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
@@ -92,12 +92,12 @@ class XmlBindingTraitParserGenerator(
      */
     data class Ctx(val tag: String, val accum: String?)
 
-    private val symbolProvider = codegenContext.symbolProvider
-    private val smithyXml = CargoDependency.smithyXml(codegenContext.runtimeConfig).asType()
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val smithyXml = CargoDependency.smithyXml(coreCodegenContext.runtimeConfig).asType()
     private val xmlError = smithyXml.member("decode::XmlError")
 
     private val scopedDecoder = smithyXml.member("decode::ScopedDecoder")
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
 
     // The symbols we want all the time
     private val codegenScope = arrayOf(
@@ -109,10 +109,10 @@ class XmlBindingTraitParserGenerator(
         "ScopedDecoder" to scopedDecoder,
         "aws_smithy_types" to CargoDependency.SmithyTypes(runtimeConfig).asType()
     )
-    private val model = codegenContext.model
+    private val model = coreCodegenContext.model
     private val index = HttpBindingIndex.of(model)
     private val xmlIndex = XmlNameIndex.of(model)
-    private val target = codegenContext.target
+    private val target = coreCodegenContext.target
     private val xmlDeserModule = RustModule.private("xml_deser")
 
     /**

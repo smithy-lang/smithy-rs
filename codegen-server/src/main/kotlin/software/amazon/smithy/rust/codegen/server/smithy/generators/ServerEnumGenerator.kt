@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.util.dq
 
-class ServerEnumGenerator(
+open class ServerEnumGenerator(
     model: Model,
     symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
@@ -55,15 +55,12 @@ class ServerEnumGenerator(
                     Self::EnumVariantNotFound(Box::new(e))
                 }
             }
-
             impl #{From}<$errorStruct> for #{JsonDeserialize} {
                 fn from(e: $errorStruct) -> Self {
                     Self::custom(format!("unknown variant {}", e))
                 }
             }
-
             impl #{StdError} for $errorStruct { }
-
             impl #{Display} for $errorStruct {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     self.0.fmt(f)
@@ -83,7 +80,6 @@ class ServerEnumGenerator(
             """
             impl std::str::FromStr for $enumName {
                 type Err = $errorStruct;
-
                 fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
                     $enumName::try_from(s)
                 }

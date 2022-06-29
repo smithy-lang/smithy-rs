@@ -111,7 +111,7 @@ structure HealthcheckOutputResponse {
 }
 
 @readonly
-@http(method: "GET", uri: "/service/{id}/blob")
+@http(method: "POST", uri: "/service/{id}/blob")
 @documentation("Stores a blob for a service id")
 operation StoreServiceBlob {
     input: StoreServiceBlobInput,

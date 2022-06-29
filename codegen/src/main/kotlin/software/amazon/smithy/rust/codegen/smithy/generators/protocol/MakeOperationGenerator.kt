@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -35,7 +35,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 
 /** Generates the `make_operation` function on input structs */
 open class MakeOperationGenerator(
-    protected val codegenContext: CodegenContext,
+    protected val coreCodegenContext: CoreCodegenContext,
     private val protocol: Protocol,
     private val bodyGenerator: ProtocolPayloadGenerator,
     private val public: Boolean,
@@ -43,23 +43,23 @@ open class MakeOperationGenerator(
     private val includeDefaultPayloadHeaders: Boolean,
     private val functionName: String = "make_operation",
 ) {
-    protected val model = codegenContext.model
-    protected val runtimeConfig = codegenContext.runtimeConfig
-    protected val symbolProvider = codegenContext.symbolProvider
+    protected val model = coreCodegenContext.model
+    protected val runtimeConfig = coreCodegenContext.runtimeConfig
+    protected val symbolProvider = coreCodegenContext.symbolProvider
     protected val httpBindingResolver = protocol.httpBindingResolver
 
     private val sdkId =
-        codegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")
-            ?: codegenContext.serviceShape.id.getName(codegenContext.serviceShape)
+        coreCodegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")
+            ?: coreCodegenContext.serviceShape.id.getName(coreCodegenContext.serviceShape)
 
     private val codegenScope = arrayOf(
         "config" to RuntimeType.Config,
         "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
         "http" to RuntimeType.http,
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
-        "OpBuildError" to codegenContext.runtimeConfig.operationBuildError(),
+        "OpBuildError" to coreCodegenContext.runtimeConfig.operationBuildError(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
-        "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig)
+        "SdkBody" to RuntimeType.sdkBody(coreCodegenContext.runtimeConfig)
     )
 
     fun generateMakeOperation(
@@ -160,7 +160,7 @@ open class MakeOperationGenerator(
 
     open fun createHttpRequest(writer: RustWriter, operationShape: OperationShape) {
         val httpBindingGenerator = RequestBindingGenerator(
-            codegenContext,
+            coreCodegenContext,
             protocol,
             operationShape
         )

@@ -23,9 +23,8 @@ use cloudwatch::model::StandardUnit;
 use s3::ByteStream;
 use semver::Version;
 use serde::Deserialize;
-use smithy_rs_tool_common::git;
+use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::macros::here;
-use smithy_rs_tool_common::shell::ShellOperation;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 use std::{env, path::Path};
@@ -190,13 +189,13 @@ pub async fn run(opt: RunOpt) -> Result<()> {
 }
 
 async fn run_canary(options: &Options, config: &aws_config::Config) -> Result<Duration> {
-    let repo_root = git_root().await?;
-    env::set_current_dir(repo_root.join("tools/ci-cdk/canary-lambda"))
+    let smithy_rs_root = find_git_repository_root("smithy-rs", ".").context(here!())?;
+    let smithy_rs = GitCLI::new(&smithy_rs_root).context(here!())?;
+    env::set_current_dir(smithy_rs_root.join("tools/ci-cdk/canary-lambda"))
         .context("failed to change working directory")?;
 
     if let Some(sdk_version) = &options.sdk_version {
-        use_correct_revision(sdk_version)
-            .await
+        use_correct_revision(&smithy_rs, sdk_version)
             .context(here!("failed to select correct revision of smithy-rs"))?;
     }
 
@@ -246,7 +245,7 @@ async fn run_canary(options: &Options, config: &aws_config::Config) -> Result<Du
     invoke_result.map(|_| invoke_time)
 }
 
-async fn use_correct_revision(sdk_version: &str) -> Result<()> {
+fn use_correct_revision(smithy_rs: &dyn Git, sdk_version: &str) -> Result<()> {
     let sdk_version = Version::parse(sdk_version).expect("valid version");
     if let Some((version, commit_hash)) = PINNED_SMITHY_RS_VERSIONS
         .iter()
@@ -256,13 +255,9 @@ async fn use_correct_revision(sdk_version: &str) -> Result<()> {
             "SDK version {} requires smithy-rs@{} to successfully compile the canary",
             version, commit_hash
         );
-        let smithy_rs_root = git::find_git_repository_root("smithy-rs", ".").context(here!())?;
         // Reset to the revision rather than checkout since the very act of running the
         // canary-runner can make the working tree dirty by modifying the Cargo.lock file
-        git::Reset::new(smithy_rs_root, &["--hard", *commit_hash])
-            .spawn()
-            .await
-            .context(here!())?;
+        smithy_rs.hard_reset(commit_hash).context(here!())?;
     }
     Ok(())
 }
@@ -416,14 +411,4 @@ async fn delete_lambda_fn(lambda_client: lambda::Client, bundle_name: &str) -> R
         .await
         .context(here!("failed to delete Lambda"))?;
     Ok(())
-}
-
-async fn git_root() -> Result<PathBuf> {
-    let output = Command::new("git")
-        .arg("rev-parse")
-        .arg("--show-toplevel")
-        .output()
-        .await
-        .context("couldn't find repository root")?;
-    Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
 }
