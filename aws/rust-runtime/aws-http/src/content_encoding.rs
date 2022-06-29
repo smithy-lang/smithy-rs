@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use http::{HeaderMap, HeaderValue};
 use http_body::{Body, SizeHint};
 use pin_project_lite::pin_project;
@@ -13,6 +13,7 @@ use std::task::{Context, Poll};
 
 const CRLF: &str = "\r\n";
 const CHUNK_TERMINATOR: &str = "0\r\n";
+const TRAILER_SEPARATOR: &[u8] = b":";
 
 /// Content encoding header value constants
 pub mod header_value {
@@ -40,13 +41,6 @@ impl AwsChunkedBodyOptions {
             stream_length,
             trailer_lengths,
         }
-    }
-
-    /// The total size of the stream. Because we only support unsigned encoding
-    /// this implies that there will only be a single chunk containing the
-    /// underlying payload.
-    pub fn stream_length(&self) -> u64 {
-        self.stream_length
     }
 
     fn total_trailer_length(&self) -> u64 {
@@ -143,44 +137,57 @@ fn get_unsigned_chunk_bytes_length(payload_length: u64) -> u64 {
     hex_repr_len + CRLF.len() as u64 + payload_length + CRLF.len() as u64
 }
 
-fn trailers_as_aws_chunked_bytes(trailer_map: Option<HeaderMap>) -> Bytes {
-    use std::fmt::Write;
-
-    let mut trailers = String::new();
-    let mut already_wrote_first_trailer = false;
-
+/// Writes trailers out into a `string` and then converts that `String` to a `Bytes` before
+/// returning.
+///
+/// - Trailer names are separated by a single colon only, no space.
+/// - Trailer names with multiple values will be written out one line per value, with the name
+///   appearing on each line.
+fn trailers_as_aws_chunked_bytes(trailer_map: Option<HeaderMap>) -> BytesMut {
     if let Some(trailer_map) = trailer_map {
+        let mut current_header_name = None;
+        let mut trailers = BytesMut::new();
+
         for (header_name, header_value) in trailer_map.into_iter() {
-            match header_name {
-                // New name, new value
-                Some(header_name) => {
-                    if already_wrote_first_trailer {
-                        // First trailer shouldn't have a preceding CRLF, but every trailer after it should
-                        trailers.write_str(CRLF).unwrap();
-                    } else {
-                        already_wrote_first_trailer = true;
-                    }
+            // When a header has multiple values, the name only comes up in iteration the first time
+            // we see it. Therefore, we need to keep track of the last name we saw and fall back to
+            // it when `header_name == None`.
+            current_header_name = header_name.or(current_header_name);
 
-                    trailers.write_str(header_name.as_str()).unwrap();
-                    trailers.write_char(':').unwrap();
-                }
-                // Same name, new value
-                None => {
-                    trailers.write_char(',').unwrap();
-                }
+            // In practice, this will always exist, but `if let` is nicer than unwrap
+            if let Some(header_name) = current_header_name.as_ref() {
+                trailers.extend_from_slice(header_name.as_ref());
+                trailers.extend_from_slice(TRAILER_SEPARATOR);
+                trailers.extend_from_slice(header_value.as_bytes());
+                trailers.extend_from_slice(CRLF.as_bytes());
             }
-            trailers.write_str(header_value.to_str().unwrap()).unwrap();
         }
-    }
 
-    // Write CRLF to end the body
-    trailers.write_str(CRLF).unwrap();
-    // If we wrote at least one trailer, we need to write an extra CRLF
-    if already_wrote_first_trailer {
-        trailers.write_str(CRLF).unwrap();
+        trailers
+    } else {
+        BytesMut::new()
     }
+}
 
-    trailers.into()
+/// Given an optional `HeaderMap`, calculate the total number of bytes required to represent the
+/// `HeaderMap`. If no `HeaderMap` is given as input, return 0.
+///
+/// - Trailer names are separated by a single colon only, no space.
+/// - Trailer names with multiple values will be written out one line per value, with the name
+///   appearing on each line.
+fn total_rendered_length_of_trailers(trailer_map: Option<&HeaderMap>) -> u64 {
+    match trailer_map {
+        Some(trailer_map) => trailer_map
+            .iter()
+            .map(|(trailer_name, trailer_value)| {
+                trailer_name.as_str().len()
+                    + TRAILER_SEPARATOR.len()
+                    + trailer_value.to_str().unwrap().len()
+                    + CRLF.len()
+            })
+            .sum::<usize>() as u64,
+        None => 0,
+    }
 }
 
 impl<Inner> Body for AwsChunkedBody<Inner>
@@ -194,7 +201,7 @@ where
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        tracing::trace!("polling AwsChunkedBody (state = {:?})", self.state);
+        tracing::trace!(state = ?self.state, "polling AwsChunkedBody");
         let mut this = self.project();
 
         match *this.state {
@@ -208,14 +215,14 @@ where
                     *this.state = AwsChunkedBodyState::WritingChunk;
                     // A chunk must be prefixed by chunk size in hexadecimal
                     let chunk_size = format!("{:X?}{CRLF}", this.options.stream_length);
-                    tracing::trace!("writing chunk size (size = 0x{})", &chunk_size);
+                    tracing::trace!(%chunk_size, "writing chunk size");
                     let chunk_size = Bytes::from(chunk_size);
                     Poll::Ready(Some(Ok(chunk_size)))
                 }
             }
             AwsChunkedBodyState::WritingChunk => match this.inner.poll_data(cx) {
                 Poll::Ready(Some(Ok(data))) => {
-                    tracing::trace!("writing chunk data (len = {})", data.len());
+                    tracing::trace!(len = data.len(), "writing chunk data");
                     Poll::Ready(Some(Ok(data)))
                 }
                 Poll::Ready(None) => {
@@ -238,7 +245,11 @@ where
                         assert_eq!(expected_total_trailer_length, actual_total_trailer_length,
                         "while writing trailers, the expected length of trailers ({expected_total_trailer_length}) differed from the actual length ({actual_total_trailer_length})");
 
-                        Poll::Ready(Some(Ok(trailers_as_aws_chunked_bytes(trailers))))
+                        let mut trailers = trailers_as_aws_chunked_bytes(trailers);
+                        // Insert the final CRLF to close the body
+                        trailers.extend_from_slice(CRLF.as_bytes());
+
+                        Poll::Ready(Some(Ok(trailers.into())))
                     }
                     Poll::Pending => Poll::Pending,
                     Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
@@ -280,30 +291,6 @@ where
     }
 
     len
-}
-
-fn total_rendered_length_of_trailers(header_map: Option<&HeaderMap>) -> u64 {
-    match header_map {
-        Some(header_map) => {
-            let mut total = 0;
-            for key in header_map.keys() {
-                total += key.as_str().len() + ": ".len();
-
-                let mut values = header_map.get_all(key).into_iter();
-
-                if let Some(value) = values.next() {
-                    total += value.len() + CRLF.len();
-                }
-
-                for value in values {
-                    total += value.len() + ",".len();
-                }
-            }
-
-            total as u64
-        }
-        None => 0,
-    }
 }
 
 #[cfg(test)]
@@ -403,5 +390,27 @@ mod tests {
                 .is_none(),
             "aws-chunked encoded bodies don't have normal HTTP trailers"
         );
+    }
+
+    #[tokio::test]
+    async fn test_total_rendered_length_of_trailers() {
+        let mut trailers = HeaderMap::new();
+
+        trailers.insert("empty_value", HeaderValue::from_static(""));
+
+        trailers.insert("single_value", HeaderValue::from_static("value 1"));
+
+        trailers.insert("two_values", HeaderValue::from_static("value 1"));
+        trailers.append("two_values", HeaderValue::from_static("value 2"));
+
+        trailers.insert("three_values", HeaderValue::from_static("value 1"));
+        trailers.append("three_values", HeaderValue::from_static("value 2"));
+        trailers.append("three_values", HeaderValue::from_static("value 3"));
+
+        let trailers = Some(trailers);
+        let actual_length = total_rendered_length_of_trailers(trailers.as_ref());
+        let expected_length = (trailers_as_aws_chunked_bytes(trailers).len()) as u64;
+
+        assert_eq!(expected_length, actual_length);
     }
 }
