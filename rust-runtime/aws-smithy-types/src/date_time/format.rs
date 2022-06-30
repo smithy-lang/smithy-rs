@@ -380,7 +380,7 @@ pub(crate) mod rfc3339 {
         let timezone_offset = "-02:00".len() - 1;
         if matches!(s.chars().rev().nth(timezone_offset), Some('-') | Some('+')) {
             return Err(DateTimeParseError::Invalid(
-                format!("invalid RFC-3339 date-time: timezone offset not supported").into(),
+                "invalid RFC-3339 date-time: timezone offset not supported".into(),
             ));
         }
         let date_time = OffsetDateTime::parse(s, &Rfc3339).map_err(|err| {
