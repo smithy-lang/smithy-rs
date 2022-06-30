@@ -71,9 +71,9 @@ data class ServerRustSettings(
 }
 
 data class ServerCodegenConfig(
-    override val formatTimeoutSeconds: Int,
-    override val debugMode: Boolean,
-    override val eventStreamAllowList: Set<String>,
+    override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
+    override val debugMode: Boolean = defaultDebugMode,
+    override val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList
 ) {
