@@ -50,7 +50,7 @@ open class PythonWrappingVisitingSymbolProvider(private val base: RustSymbolProv
 
     override fun listShape(shape: ListShape): Symbol {
         val inner = toSymbol(shape.member)
-        return symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
+        return symbolBuilder(RustType.Vec(inner.rustType())).addReference(inner).build()
     }
 
     override fun mapShape(shape: MapShape): Symbol {
@@ -58,17 +58,17 @@ open class PythonWrappingVisitingSymbolProvider(private val base: RustSymbolProv
         require(target.isStringShape) { "unexpected key shape: ${shape.key}: $target [keys must be strings]" }
         val key = toSymbol(shape.key)
         val value = toSymbol(shape.value)
-        return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).addReference(key)
+        return symbolBuilder(RustType.HashMap(key.rustType(), value.rustType())).addReference(key)
             .addReference(value).build()
     }
 
     override fun setShape(shape: SetShape): Symbol {
         val inner = toSymbol(shape.member)
         val builder = if (model.expectShape(shape.member.target).isStringShape) {
-            symbolBuilder(shape, RustType.HashSet(inner.rustType()))
+            symbolBuilder(RustType.HashSet(inner.rustType()))
         } else {
             // only strings get put into actual sets because floats are unhashable
-            symbolBuilder(shape, RustType.Vec(inner.rustType()))
+            symbolBuilder(RustType.Vec(inner.rustType()))
         }
         return builder.addReference(inner).build()
     }
@@ -81,10 +81,8 @@ open class PythonWrappingVisitingSymbolProvider(private val base: RustSymbolProv
         return shape.accept(this)
     }
 
-    private fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
-        val builder = Symbol.builder().shape(shape)
-        return builder.rustType(rustType)
-            .name(rustType.name)
+    private fun symbolBuilder(rustType: RustType): Symbol.Builder {
+        return Symbol.builder().rustType(rustType)
             .definitionFile("python.rs")
     }
 }
