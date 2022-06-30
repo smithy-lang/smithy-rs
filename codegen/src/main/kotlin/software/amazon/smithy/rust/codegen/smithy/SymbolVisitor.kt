@@ -344,7 +344,7 @@ class SymbolVisitor(
     }
 
     private fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
-        val builder = Symbol.builder().putProperty(SHAPE_KEY, shape)
+        val builder = Symbol.builder().shape(shape)
         return builder.rustType(rustType)
             .name(rustType.name)
             // Every symbol that actually gets defined somewhere should set a definition file
@@ -355,7 +355,7 @@ class SymbolVisitor(
 
 // TODO(chore): Move this to a useful place
 private const val RUST_TYPE_KEY = "rusttype"
-const val SHAPE_KEY = "shape"
+private const val SHAPE_KEY = "shape"
 private const val SYMBOL_DEFAULT = "symboldefault"
 private const val RENAMED_FROM_KEY = "renamedfrom"
 
@@ -363,6 +363,10 @@ fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProper
 
 fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder {
     return this.putProperty(RENAMED_FROM_KEY, name)
+}
+
+fun Symbol.Builder.shape(shape: Shape?): Symbol.Builder {
+    return this.putProperty(SHAPE_KEY, shape)
 }
 
 fun Symbol.renamedFrom(): String? = this.getProperty(RENAMED_FROM_KEY, String::class.java).orNull()

@@ -22,9 +22,9 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.SHAPE_KEY
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.smithy.shape
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -82,7 +82,7 @@ open class PythonWrappingVisitingSymbolProvider(private val base: RustSymbolProv
     }
 
     private fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
-        val builder = Symbol.builder().putProperty("shape", SHAPE_KEY)
+        val builder = Symbol.builder().shape(shape)
         return builder.rustType(rustType)
             .name(rustType.name)
             .definitionFile("python.rs")
