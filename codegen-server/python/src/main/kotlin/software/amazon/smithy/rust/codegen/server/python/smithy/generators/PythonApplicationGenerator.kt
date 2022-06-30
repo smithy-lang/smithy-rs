@@ -79,7 +79,7 @@ class PythonApplicationGenerator(
             /// workers on the same shared socket.
             ##[#{pyo3}::pyclass]
             ##[derive(Debug, Clone)]
-            pub(crate) struct App {
+            pub struct App {
                 inner: #{SmithyPython}::PyApp
             }
             """,
@@ -101,17 +101,17 @@ class PythonApplicationGenerator(
                 """
                 /// Create a new [App].
                 ##[new]
-                pub(crate) fn new(py: #{pyo3}::Python, log_level: Option<#{SmithyPython}::LogLevel>) -> #{pyo3}::PyResult<Self> {
+                pub fn new(py: #{pyo3}::Python, log_level: Option<#{SmithyPython}::LogLevel>) -> #{pyo3}::PyResult<Self> {
                     let log_level = log_level.unwrap_or(#{SmithyPython}::LogLevel::Info);
                     #{SmithyPython}::logging::setup(py, log_level)?;
                     Ok(Self { inner: aws_smithy_http_server_python::PyApp::default() })
                 }
                 /// Register a context object that will be shared between handlers.
-                pub(crate) fn context(&mut self, py: #{pyo3}::Python, context: #{pyo3}::PyObject) {
+                pub fn context(&mut self, py: #{pyo3}::Python, context: #{pyo3}::PyObject) {
                     self.inner.context(py, context)
                 }
                 /// Run the Python application.
-                pub(crate) fn run(
+                pub fn run(
                     &mut self,
                     py: #{pyo3}::Python,
                     address: Option<String>,
@@ -128,7 +128,7 @@ class PythonApplicationGenerator(
             rustBlockTemplate(
                 """
                 /// Dynamically codegenerate the routes, allowing to build the Smithy [Router].
-                pub(crate) fn build_router(&mut self, py: #{pyo3}::Python) -> #{pyo3}::PyResult<()>
+                pub fn build_router(&mut self, py: #{pyo3}::Python) -> #{pyo3}::PyResult<()>
                 """,
                 *codegenScope
             ) {
@@ -170,7 +170,7 @@ class PythonApplicationGenerator(
                     """
                     /// Method to register `$name` Python implementation inside the handlers map.
                     /// It can be used as a function decorator in Python.
-                    pub(crate) fn $name(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
+                    pub fn $name(&mut self, py: #{pyo3}::Python, func: #{pyo3}::PyObject) -> #{pyo3}::PyResult<()> {
                         self.inner.register_operation(py, "$name", func)
                     }
                     """,

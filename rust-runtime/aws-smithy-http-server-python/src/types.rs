@@ -6,7 +6,6 @@
 //! Python wrapped types from aws-smithy-types.
 
 use pyo3::prelude::*;
-use std::ops::Deref;
 
 use crate::Error;
 
@@ -70,14 +69,6 @@ impl From<Blob> for aws_smithy_types::Blob {
 #[pyclass]
 #[derive(Debug, Clone, PartialEq)]
 pub struct DateTime(aws_smithy_types::date_time::DateTime);
-
-impl Deref for DateTime {
-    type Target = aws_smithy_types::date_time::DateTime;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 #[pyclass]
 /// Formats for representing a `DateTime` in the Smithy protocols.
