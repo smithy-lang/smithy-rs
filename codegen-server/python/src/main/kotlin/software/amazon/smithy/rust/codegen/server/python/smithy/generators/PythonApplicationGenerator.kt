@@ -190,23 +190,22 @@ class PythonApplicationGenerator(
     }
 
     private fun renderPyApplicationRustDocs(writer: RustWriter) {
-        writer.rust(
-            """
-            ##[allow(clippy::tabs_in_doc_comments)]
-            /// Main Python application, used to register operations and context and start multiple
-            /// workers on the same shared socket.
-            ///
-            /// Here's a full example to get you started:
-            ///
-            /// ```python
-            ${ if (operations.any { it.errors.isNotEmpty() }) {
-                """/// from $crateName import ${Inputs.namespace}
+        writer.rust("""
+##[allow(clippy::tabs_in_doc_comments)]
+/// Main Python application, used to register operations and context and start multiple
+/// workers on the same shared socket.
+///
+/// Here's a full example to get you started:
+///
+/// ```python
+${ if (operations.any { it.errors.isNotEmpty() }) {
+"""/// from $crateName import ${Inputs.namespace}
 /// from $crateName import ${Outputs.namespace}
 /// from $crateName import ${Errors.namespace}"""
-            } else {
+} else {
 """/// from $crateName import ${Inputs.namespace}
 /// from $crateName import ${Outputs.namespace}"""
-            } }
+} }
 /// from $crateName import App
 ///
 /// @dataclass
