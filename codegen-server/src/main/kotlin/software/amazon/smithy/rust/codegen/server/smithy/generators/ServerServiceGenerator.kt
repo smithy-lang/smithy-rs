@@ -55,7 +55,15 @@ open class ServerServiceGenerator(
         rustCrate.withModule(RustModule.public("operation_handler", "Operation handlers definition and implementation.")) { writer ->
             renderOperationHandler(writer, operations)
         }
-        rustCrate.withModule(RustModule.public("operation_registry", "A registry of your service's operations.")) { writer ->
+        rustCrate.withModule(
+            RustModule.public(
+                "operation_registry",
+                """
+                Contains the [`operation_registry::OperationRegistry`], a place where
+                you can register your service's operation implementations.
+                """
+            )
+        ) { writer ->
             renderOperationRegistry(writer, operations)
         }
         renderExtras(operations)
