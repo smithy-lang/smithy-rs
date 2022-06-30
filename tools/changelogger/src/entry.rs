@@ -25,13 +25,16 @@ impl ChangelogEntries {
     pub fn filter(
         self,
         smithy_rs: &dyn Git,
-        smithy_rs_sdk : Option<SdkAffected>,
+        smithy_rs_sdk : SdkAffected,
         change_set: ChangeSet,
         previous_release_versions_manifest: Option<&Path>,
     ) -> Result<Vec<ChangelogEntry>> {
         match change_set {
             ChangeSet::AwsSdk => {
-                if let Some(manifest_path) = previous_release_versions_manifest {
+                if smithy_rs_sdk == SdkAffected::Server {
+                    Ok(vec![])
+                }
+                else if let Some(manifest_path) = previous_release_versions_manifest {
                     let manifest = VersionsManifest::from_file(manifest_path)?;
                     let revisions =
                         smithy_rs.rev_list("HEAD", &manifest.smithy_rs_revision, None)?;
@@ -62,37 +65,28 @@ impl ChangelogEntries {
         }
     }
 
-    fn filter_smithy_rs_sdk_type(self, smithy_rs_sdk : Option<SdkAffected>) -> Result<Vec<ChangelogEntry>> {
-        let sdk_to_include = if let Some(sdk_query) = smithy_rs_sdk {
-            sdk_query
-        }
-        else {
-            SdkAffected::Both
-        };
-
+    pub fn filter_smithy_rs_sdk_type(self, sdk_to_include : SdkAffected) -> Result<Vec<ChangelogEntry>> {
         if sdk_to_include == SdkAffected::Both {
-            Ok(self.smithy_rs)
+            return Ok(self.smithy_rs);
         }
-        else {
-            let result = self.smithy_rs
-                .into_iter()
-                .filter(|entry| {
-                    match entry {
-                        ChangelogEntry::HandAuthored(hand_entry) => {
-                            if let Some(change_affects) = hand_entry.meta.sdk {
-                                sdk_to_include == change_affects || change_affects == SdkAffected::Both
-                            }
-                            else {
-                                // a missing sdk entry in the meta is considered a client
-                                sdk_to_include == SdkAffected::Client
-                            }
-                        },
-                        _ => true,
-                    }
-                })
-                .collect();
-            Ok(result)
-        }
+        let result = self.smithy_rs
+            .into_iter()
+            .filter(|entry| {
+                match entry {
+                    ChangelogEntry::HandAuthored(hand_entry) => {
+                        if let Some(change_affects) = hand_entry.meta.sdk {
+                            sdk_to_include == change_affects || change_affects == SdkAffected::Both
+                        }
+                        else {
+                            // a missing sdk entry in the meta is considered a client
+                            sdk_to_include == SdkAffected::Client
+                        }
+                    },
+                    _ => true,  // only hand authored entires are filtered
+                }
+            })
+            .collect();
+        Ok(result)
     }
 }
 

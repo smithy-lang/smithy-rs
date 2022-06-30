@@ -72,9 +72,6 @@ pub struct RenderArgs {
     // working directory will be used to attempt to find it.
     #[clap(long, action)]
     pub smithy_rs_location: Option<PathBuf>,
-    /// which entries are to be processed (server, client or both), None implies both
-    #[clap(long, action)]
-    pub smithy_rs_sdk : Option<SdkAffected>,
 
     // For testing only
     #[clap(skip)]
@@ -283,22 +280,57 @@ fn update_changelogs(
     let changelog = load_changelogs(args)?;
     let release_metadata = match args.change_set {
         ChangeSet::AwsSdk => aws_sdk_rust_metadata,
-        ChangeSet::SmithyRs => smithy_rs_metadata,
+        ChangeSet::SmithyRs => smithy_rs_metadata
     };
-    let entries = ChangelogEntries::from(changelog);
+    let entries = ChangelogEntries::from(changelog.clone());
     let entries = entries.filter(
         smithy_rs,
-        args.smithy_rs_sdk,
+        SdkAffected::Client,
         args.change_set,
         args.previous_release_versions_manifest.as_deref(),
     )?;
-    
+    let client_sdk_count = entries.len();
+
     let (release_header, release_notes) = render(&entries, &release_metadata.title);
+    let (server_release_header, server_release_notes, server_sdk_count) = 
+        match args.server_changelog_output {
+            None => (None, None, 0),
+            Some(_) => {
+                if args.change_set == ChangeSet::AwsSdk {
+                    (None, None, 0)
+                }
+                else {
+                    let entries = ChangelogEntries::from(changelog);
+                    let server_entries = entries.filter(
+                        smithy_rs,
+                        SdkAffected::Server,
+                        args.change_set,
+                        args.previous_release_versions_manifest.as_deref(),
+                    )?;
+                    let (header, release_notes) = render(&server_entries, &release_metadata.title);
+                    (Some(header), Some(release_notes), server_entries.len())
+                }
+            }
+        };
+
+    let manifest_release_notes = match server_release_notes {
+        None => release_notes.clone(),
+        Some(ref server_notes) => {
+            println!("Server notes: {server_notes}");
+            let mut notes = String::new();
+            notes.push_str("**Client SDK Changes**\n");
+            notes.push_str(release_notes.as_str());
+            notes.push_str("\n\n**Server SDK Changes**\n");
+            notes.push_str(server_notes.as_str());
+            notes
+        }
+    };
+
     if let Some(output_path) = &args.release_manifest_output {
         let release_manifest = ReleaseManifest {
             tag_name: release_metadata.tag.clone(),
             name: release_metadata.title.clone(),
-            body: release_notes.clone(),
+            body: manifest_release_notes,
             // All releases are pre-releases for now
             prerelease: true,
         };
@@ -309,21 +341,30 @@ fn update_changelogs(
         .context("failed to write release manifest")?;
     }
 
+    write_changelog_output(&release_header, &release_notes, &args.changelog_output)?;
+    if let Some(ref server_output) = args.server_changelog_output {
+        let header = server_release_header.context("Server SDK release header has not been set")?;
+        let notes = server_release_notes.context("Server SDK release notes have not been set")?;
+        write_changelog_output(&header, &notes, server_output)?;
+    }
+
+    std::fs::write(&args.source_to_truncate, EXAMPLE_ENTRY.trim())
+            .context("failed to truncate source")?;
+    eprintln!("Changelogs updated! ClientSDK:{client_sdk_count} ServerSDK:{server_sdk_count}");
+    Ok(())
+}
+
+fn write_changelog_output(release_header : &str, release_notes: &str, output_file_path: &PathBuf) -> Result<()> {
     let mut update = USE_UPDATE_CHANGELOGS.to_string();
     update.push('\n');
-    update.push_str(&release_header);
-    update.push_str(&release_notes);
+    update.push_str(release_header);
+    update.push_str(release_notes);
 
-    let current = std::fs::read_to_string(&args.changelog_output)
+    let current = std::fs::read_to_string(output_file_path)
         .context("failed to read rendered destination changelog")?
         .replace(USE_UPDATE_CHANGELOGS, "");
     update.push_str(&current);
-
-    std::fs::write(&args.changelog_output, update).context("failed to write rendered changelog")?;
-    std::fs::write(&args.source_to_truncate, EXAMPLE_ENTRY.trim())
-            .context("failed to truncate source")?;
-
-    eprintln!("Changelogs updated!");
+    std::fs::write(output_file_path, update).context("failed to write rendered changelog")?;
     Ok(())
 }
 
@@ -375,6 +416,8 @@ fn render_sdk_model_entries<'a>(
 
 /// Convert a list of changelog entries into markdown.
 /// Returns (header, body)
+/// Convert a list of changelog entries into markdown.
+/// Returns (header, body)
 fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) {
     let mut header = String::new();
     header.push_str(release_header);
@@ -384,74 +427,19 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
     }
     header.push('\n');
 
-    entries.iter()
-        .filter_map(ChangelogEntry::hand_authored)
-        .map(|entry|
-            match entry.meta.sdk {
-                None => (None, Some(entry)),
-                Some(affected_sdk) => match affected_sdk {
-                    SdkAffected::Client => (None, Some(entry)),
-                    SdkAffected::Server => (Some(entry), None),
-                    SdkAffected::Both => (Some(entry), Some(entry))
-                }
-            }
-        );
-    
-    let se = Vec::<&HandAuthoredEntry>::new();
-    let ce =  Vec::<&HandAuthoredEntry>::new();
-
-    for e in entries {
-        if let ChangelogEntry::HandAuthored(he) = e {
-            match he.meta.sdk {
-                None => ce.push(he),
-                Some(affected_sdk) => match affected_sdk {
-                    SdkAffected::Client => ce.push(he),
-                    SdkAffected::Server => se.push(he),
-                    SdkAffected::Both => {
-                        ce.push(he);
-                        se.push(he);
-                    }
-                }
-            }
-        }
-    }
-
-    let mut server_out = String::new();
+    let mut out = String::new();
     render_handauthored(
-        server_entries.into_iter(),
-        &mut server_out,
+        entries.iter().filter_map(ChangelogEntry::hand_authored),
+        &mut out,
     );
-
-    let mut client_out = String::new();
-    render_handauthored(
-        client_entries.into_iter(),
-        &mut client_out,
-    );
-
-    let mut sdk_model_out = String::new();
     render_sdk_model_entries(
         entries.iter().filter_map(ChangelogEntry::aws_sdk_model),
-        &mut sdk_model_out,
+        &mut out,
     );
 
-    // append aws_sdk_model entries in both server and client
-    if !server_out.is_empty() {
-        server_out.push_str(sdk_model_out.as_str());
-    }
-    client_out.push_str(sdk_model_out.as_str());
-
-    let mut server_contributors = String::new();
-    let server_side_contrib = get_contributors(server_entries.into_iter(), &mut server_contributors);
-    let mut client_contributors = String::new();
-    let client_side_contrib = get_contributors(client_entries.into_iter(), &mut client_contributors);
-
-
-    (header, out)
-}
-
-fn get_contributors<'a>(entries_iter : impl Iterator<Item = &'a HandAuthoredEntry>, out : &mut String) {
-    let mut external_contribs = entries_iter
-        .map(|e| e.author.to_ascii_lowercase())
+    let mut external_contribs = entries
+        .iter()
+        .filter_map(|entry| entry.hand_authored().map(|e| e.author.to_ascii_lowercase()))
         .filter(|author| !maintainers().contains(&author.as_str()))
         .collect::<Vec<_>>();
     external_contribs.sort();
@@ -460,10 +448,18 @@ fn get_contributors<'a>(entries_iter : impl Iterator<Item = &'a HandAuthoredEntr
         out.push_str("**Contributors**\nThank you for your contributions! ❤\n");
         for contributor_handle in external_contribs {
             // retrieve all contributions this author made
-            let mut contribution_references = entries_iter
-                .filter(|e| e.author.eq_ignore_ascii_case(contributor_handle.as_str()))
+            let mut contribution_references = entries
+                .iter()
+                .filter(|entry| {
+                    entry
+                        .hand_authored()
+                        .map(|e| e.author.eq_ignore_ascii_case(contributor_handle.as_str()))
+                        .unwrap_or(false)
+                })
                 .flat_map(|entry| {
                     entry
+                        .hand_authored()
+                        .unwrap()
                         .references
                         .iter()
                         .map(to_md_link)
@@ -480,6 +476,8 @@ fn get_contributors<'a>(entries_iter : impl Iterator<Item = &'a HandAuthoredEntr
             out.push('\n');
         }
     }
+
+    (header, out)
 }
 
 #[cfg(test)]
@@ -693,7 +691,7 @@ message = "Some API change"
         };
 
         // only server changes are to be extracted
-        let entries = filter_out(Some(SdkAffected::Server), changelog.clone());
+        let entries = filter_out(SdkAffected::Server, changelog.clone());
         let smithy_rs_rendered = render_full(&entries, "v0.3.0 (January 4th, 2022)");
         let smithy_rs_expected = r#"
 v0.3.0 (January 4th, 2022)
@@ -718,7 +716,7 @@ Thank you for your contributions! ❤
         pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
 
         // only client changes are extracted
-        let entries = filter_out(Some(SdkAffected::Client), changelog.clone());
+        let entries = filter_out(SdkAffected::Client, changelog.clone());
         let smithy_rs_rendered = render_full(&entries, "v0.3.0 (January 4th, 2022)");
         let smithy_rs_expected = r#"
 v0.3.0 (January 4th, 2022)
@@ -736,9 +734,12 @@ Thank you for your contributions! ❤
 "#
         .trim_start();
         pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
-      
+
         // both changes are extracted
-        let entries = filter_out(Some(SdkAffected::Both), changelog.clone());
+        let entries = filter_out(SdkAffected::Both, changelog.clone());
+
+        println!("Both entries: {entries:?}");
+
         let smithy_rs_rendered = render_full(&entries, "v0.3.0 (January 4th, 2022)");
         let smithy_rs_expected = r#"
 v0.3.0 (January 4th, 2022)

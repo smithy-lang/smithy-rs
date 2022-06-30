@@ -68,7 +68,7 @@ mod tests {
                 previous_release_versions_manifest: None,
                 date_override: None,
                 smithy_rs_location: None,
-                smithy_rs_sdk: None,
+                server_changelog_output: None,
             }),
             Args::try_parse_from([
                 "./changelogger",
@@ -101,7 +101,7 @@ mod tests {
                 previous_release_versions_manifest: None,
                 date_override: None,
                 smithy_rs_location: None,
-                smithy_rs_sdk: None,
+                server_changelog_output: None,
             }),
             Args::try_parse_from([
                 "./changelogger",
@@ -132,7 +132,7 @@ mod tests {
                 previous_release_versions_manifest: Some(PathBuf::from("path/to/versions.toml")),
                 date_override: None,
                 smithy_rs_location: None,
-                smithy_rs_sdk: None,
+                server_changelog_output : None,
             }),
             Args::try_parse_from([
                 "./changelogger",
