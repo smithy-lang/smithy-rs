@@ -8,7 +8,6 @@ use changelogger::render::{subcommand_render, RenderArgs, EXAMPLE_ENTRY, USE_UPD
 use changelogger::split::{subcommand_split, SplitArgs};
 use smithy_rs_tool_common::git::{CommitHash, Git, GitCLI};
 use smithy_rs_tool_common::shell::handle_failure;
-use smithy_rs_tool_common::changelog::SdkAffected;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -258,7 +257,7 @@ fn render_smithy_rs_test() {
         date_override: Some(OffsetDateTime::UNIX_EPOCH),
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
-        smithy_rs_sdk: None,
+        server_changelog_output: None,
     })
     .unwrap();
 
@@ -326,7 +325,7 @@ fn render_smithy_rs_test_with_sdk() {
         date_override: Some(OffsetDateTime::UNIX_EPOCH),
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
-        smithy_rs_sdk: Some(SdkAffected::Server),
+        server_changelog_output: None,
     })
     .unwrap();
 
@@ -392,7 +391,7 @@ fn render_smithy_rs_test_with_sdk_client() {
         date_override: Some(OffsetDateTime::UNIX_EPOCH),
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
-        smithy_rs_sdk: Some(SdkAffected::Client),
+        server_changelog_output: None,
     })
     .unwrap();
 
@@ -480,7 +479,7 @@ fn render_aws_sdk_test() {
         date_override: Some(OffsetDateTime::UNIX_EPOCH),
         previous_release_versions_manifest: Some(versions_manifest_path),
         smithy_rs_location: Some(tmp_dir.path().into()),
-        smithy_rs_sdk: None,
+        server_changelog_output: None,
     })
     .unwrap();
 
