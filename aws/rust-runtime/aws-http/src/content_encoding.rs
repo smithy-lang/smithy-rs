@@ -143,10 +143,13 @@ fn get_unsigned_chunk_bytes_length(payload_length: u64) -> u64 {
 /// - Trailer names are separated by a single colon only, no space.
 /// - Trailer names with multiple values will be written out one line per value, with the name
 ///   appearing on each line.
-fn trailers_as_aws_chunked_bytes(trailer_map: Option<HeaderMap>) -> BytesMut {
+fn trailers_as_aws_chunked_bytes(
+    trailer_map: Option<HeaderMap>,
+    estimated_length: u64,
+) -> BytesMut {
     if let Some(trailer_map) = trailer_map {
         let mut current_header_name = None;
-        let mut trailers = BytesMut::new();
+        let mut trailers = BytesMut::with_capacity(estimated_length.try_into().unwrap_or_default());
 
         for (header_name, header_value) in trailer_map.into_iter() {
             // When a header has multiple values, the name only comes up in iteration the first time
@@ -182,7 +185,7 @@ fn total_rendered_length_of_trailers(trailer_map: Option<&HeaderMap>) -> u64 {
             .map(|(trailer_name, trailer_value)| {
                 trailer_name.as_str().len()
                     + TRAILER_SEPARATOR.len()
-                    + trailer_value.to_str().unwrap().len()
+                    + trailer_value.len()
                     + CRLF.len()
             })
             .sum::<usize>() as u64,
@@ -251,7 +254,8 @@ where
                             return Poll::Ready(Some(Err(err)));
                         }
 
-                        let mut trailers = trailers_as_aws_chunked_bytes(trailers);
+                        let mut trailers =
+                            trailers_as_aws_chunked_bytes(trailers, actual_length + 1);
                         // Insert the final CRLF to close the body
                         trailers.extend_from_slice(CRLF.as_bytes());
 
@@ -437,7 +441,7 @@ mod tests {
 
         let trailers = Some(trailers);
         let actual_length = total_rendered_length_of_trailers(trailers.as_ref());
-        let expected_length = (trailers_as_aws_chunked_bytes(trailers).len()) as u64;
+        let expected_length = (trailers_as_aws_chunked_bytes(trailers, actual_length).len()) as u64;
 
         assert_eq!(expected_length, actual_length);
     }
@@ -446,7 +450,7 @@ mod tests {
     async fn test_total_rendered_length_of_empty_trailers() {
         let trailers = Some(HeaderMap::new());
         let actual_length = total_rendered_length_of_trailers(trailers.as_ref());
-        let expected_length = (trailers_as_aws_chunked_bytes(trailers).len()) as u64;
+        let expected_length = (trailers_as_aws_chunked_bytes(trailers, actual_length).len()) as u64;
 
         assert_eq!(expected_length, actual_length);
     }
