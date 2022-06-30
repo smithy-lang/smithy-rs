@@ -65,11 +65,11 @@ class Context:
                 language=Language.English,
             ),
             FlavorText(
-                flavor_text="""Quando vari Pokémon di questo tipo si radunano, la loro energia puÃ² causare forti tempeste.""",
+                flavor_text="""Quando vari Pokémon di questo tipo si radunano, la loro energia può causare forti tempeste.""",
                 language=Language.Italian,
             ),
             FlavorText(
-                flavor_text="""Cuando varios de estos Pokémon se juntan, su energÃ­a puede causar fuertes tormentas.""",
+                flavor_text="""Cuando varios de estos Pokémon se juntan, su energía puede causar fuertes tormentas.""",
                 language=Language.Spanish,
             ),
             FlavorText(

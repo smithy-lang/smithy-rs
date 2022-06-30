@@ -21,7 +21,7 @@ impl PokemonService {
             .arg("../pokemon_service.py")
             .group_spawn()
             .expect("failed to spawn the Pokémon Service program");
-        // Them Python interpreter takes a little to startup.
+        // The Python interpreter takes a little to startup.
         thread::sleep(Duration::from_secs(2));
         Self {
             child_process: process,
