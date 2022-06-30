@@ -300,6 +300,7 @@ fn render_smithy_rs_test_with_sdk() {
     let tmp_dir = TempDir::new().unwrap();
     let source_path = tmp_dir.path().join("source.toml");
     let dest_path = tmp_dir.path().join("dest.md");
+    let server_path = tmp_dir.path().join("server.md");
     let release_manifest_path = tmp_dir.path().join("smithy-rs-release-manifest.json");
 
     create_fake_repo_root(tmp_dir.path(), "0.42.0", "0.12.0");
@@ -307,6 +308,14 @@ fn render_smithy_rs_test_with_sdk() {
     fs::write(&source_path, SOURCE_TOML_WITH_SDK).unwrap();
     fs::write(
         &dest_path,
+        format!(
+            "{}\nv0.41.0 (Some date in the past)\n=========\n\nOld entry contents\n",
+            USE_UPDATE_CHANGELOGS
+        ),
+    )
+    .unwrap();
+    fs::write(
+        &server_path,
         format!(
             "{}\nv0.41.0 (Some date in the past)\n=========\n\nOld entry contents\n",
             USE_UPDATE_CHANGELOGS
@@ -325,15 +334,36 @@ fn render_smithy_rs_test_with_sdk() {
         date_override: Some(OffsetDateTime::UNIX_EPOCH),
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
-        server_changelog_output: None,
+        server_changelog_output: Some(server_path.clone()),
     })
     .unwrap();
 
     let source = fs::read_to_string(&source_path).unwrap();
     let dest = fs::read_to_string(&dest_path).unwrap();
+    let server = fs::read_to_string(&server_path).unwrap();
     let release_manifest = fs::read_to_string(&release_manifest_path).unwrap();
-
+    
     pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), source);
+    pretty_assertions::assert_str_eq!(
+        r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
+v0.42.0 (January 1st, 1970)
+===========================
+**New this release:**
+- ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234), @another-dev) Another change
+- ([smithy-rs#1235](https://github.com/awslabs/smithy-rs/issues/1235)) Client change
+- ([smithy-rs#1237](https://github.com/awslabs/smithy-rs/issues/1237)) Both change
+
+**Contributors**
+Thank you for your contributions! ❤
+- @another-dev ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234))
+
+v0.41.0 (Some date in the past)
+=========
+
+Old entry contents
+"#,
+        dest
+    );
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
 v0.42.0 (January 1st, 1970)
@@ -348,13 +378,13 @@ v0.41.0 (Some date in the past)
 
 Old entry contents
 "#,
-        dest
+        server
     );
     pretty_assertions::assert_str_eq!(
         r#"{
   "tagName": "v0.42.0",
   "name": "v0.42.0 (January 1st, 1970)",
-  "body": "**New this release:**\n- ([smithy-rs#1236](https://github.com/awslabs/smithy-rs/issues/1236)) Server change\n- ([smithy-rs#1237](https://github.com/awslabs/smithy-rs/issues/1237)) Both change\n\n",
+  "body": "**Client SDK Changes**\n**New this release:**\n- ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234), @another-dev) Another change\n- ([smithy-rs#1235](https://github.com/awslabs/smithy-rs/issues/1235)) Client change\n- ([smithy-rs#1237](https://github.com/awslabs/smithy-rs/issues/1237)) Both change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234))\n\n\n**Server SDK Changes**\n**New this release:**\n- ([smithy-rs#1236](https://github.com/awslabs/smithy-rs/issues/1236)) Server change\n- ([smithy-rs#1237](https://github.com/awslabs/smithy-rs/issues/1237)) Both change\n\n",
   "prerelease": true
 }"#,
         release_manifest
