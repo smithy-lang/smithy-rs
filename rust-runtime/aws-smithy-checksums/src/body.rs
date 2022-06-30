@@ -25,7 +25,6 @@ pin_project! {
     pub struct ChecksumBody<InnerBody> {
         #[pin]
         inner: InnerBody,
-        #[pin]
         checksum: Box<dyn HttpChecksum>,
     }
 }
@@ -74,11 +73,10 @@ impl ChecksumBody<SdkBody> {
     ) -> Poll<Option<Result<Bytes, aws_smithy_http::body::Error>>> {
         let this = self.project();
         let inner = this.inner;
-        let mut checksum = this.checksum;
 
         match inner.poll_data(cx) {
             Poll::Ready(Some(Ok(data))) => {
-                if let Err(e) = checksum.update(&data) {
+                if let Err(e) = this.checksum.update(&data) {
                     return Poll::Ready(Some(Err(e)));
                 }
 
