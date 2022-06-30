@@ -98,6 +98,7 @@ pin_project! {
         #[pin]
         state: AwsChunkedBodyState,
         options: AwsChunkedBodyOptions,
+        inner_body_bytes_read_so_far: usize,
     }
 }
 
@@ -108,6 +109,7 @@ impl<Inner> AwsChunkedBody<Inner> {
             inner: body,
             state: AwsChunkedBodyState::WritingChunkSize,
             options,
+            inner_body_bytes_read_so_far: 0,
         }
     }
 
@@ -226,9 +228,20 @@ where
             AwsChunkedBodyState::WritingChunk => match this.inner.poll_data(cx) {
                 Poll::Ready(Some(Ok(data))) => {
                     tracing::trace!(len = data.len(), "writing chunk data");
+                    *this.inner_body_bytes_read_so_far += data.len();
                     Poll::Ready(Some(Ok(data)))
                 }
                 Poll::Ready(None) => {
+                    let actual_stream_length = *this.inner_body_bytes_read_so_far as u64;
+                    let expected_stream_length = this.options.stream_length;
+                    if actual_stream_length != expected_stream_length {
+                        let err = Box::new(AwsChunkedBodyError::StreamLengthMismatch {
+                            actual: actual_stream_length,
+                            expected: expected_stream_length,
+                        });
+                        return Poll::Ready(Some(Err(err)));
+                    };
+
                     tracing::trace!("no more chunk data, writing CRLF and chunk terminator");
                     *this.state = AwsChunkedBodyState::WritingTrailers;
                     // Since we wrote chunk data, we end it with a CRLF and since we only write
@@ -290,10 +303,14 @@ where
 #[derive(Debug)]
 enum AwsChunkedBodyError {
     /// Error that occurs when the sum of `trailer_lengths` set when creating an `AwsChunkedBody` is
-    /// not equal to the actual length of the trailers returned by the inner `http::Body`
+    /// not equal to the actual length of the trailers returned by the inner `http_body::Body`
     /// implementor. These trailer lengths are necessary in order to correctly calculate the total
     /// size of the body for setting the content length header.
     ReportedTrailerLengthMismatch { actual: u64, expected: u64 },
+    /// Error that occurs when the `stream_length` set when creating an `AwsChunkedBody` is not
+    /// equal to the actual length of the body returned by the inner `http_body::Body` implementor.
+    /// `stream_length` must be correct in order to set an accurate content length header.
+    StreamLengthMismatch { actual: u64, expected: u64 },
 }
 
 impl std::fmt::Display for AwsChunkedBodyError {
@@ -301,6 +318,9 @@ impl std::fmt::Display for AwsChunkedBodyError {
         match self {
             Self::ReportedTrailerLengthMismatch { actual, expected } => {
                 write!(f, "When creating this AwsChunkedBody, length of trailers was reported as {expected}. However, when double checking during trailer encoding, length was found to be {actual} instead.")
+            }
+            Self::StreamLengthMismatch { actual, expected } => {
+                write!(f, "When creating this AwsChunkedBody, stream length was reported as {expected}. However, when double checking during body encoding, length was found to be {actual} instead.")
             }
         }
     }
@@ -327,12 +347,85 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        total_rendered_length_of_trailers, trailers_as_aws_chunked_bytes, AwsChunkedBody,
+        AwsChunkedBodyOptions, CHUNK_TERMINATOR, CRLF,
+    };
+
     use aws_smithy_http::body::SdkBody;
-    use bytes::Buf;
+    use bytes::{Buf, Bytes};
     use bytes_utils::SegmentedBuf;
+    use http::{HeaderMap, HeaderValue};
+    use http_body::{Body, SizeHint};
+    use pin_project_lite::pin_project;
+
     use std::io::Read;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
     use std::time::Duration;
+
+    pin_project! {
+        struct SputteringBody {
+            parts: Vec<Option<Bytes>>,
+            cursor: usize,
+            delay_in_millis: u64,
+        }
+    }
+
+    impl SputteringBody {
+        fn len(&self) -> usize {
+            self.parts.iter().flat_map(|b| b).map(|b| b.len()).sum()
+        }
+    }
+
+    impl Body for SputteringBody {
+        type Data = Bytes;
+        type Error = aws_smithy_http::body::Error;
+
+        fn poll_data(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+            if self.cursor == self.parts.len() {
+                return Poll::Ready(None);
+            }
+
+            let this = self.project();
+            let delay_in_millis = *this.delay_in_millis;
+            let next_part = this.parts.get_mut(*this.cursor).unwrap().take();
+
+            match next_part {
+                None => {
+                    *this.cursor += 1;
+                    let waker = cx.waker().clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(delay_in_millis)).await;
+                        waker.wake();
+                    });
+                    Poll::Pending
+                }
+                Some(data) => {
+                    *this.cursor += 1;
+                    Poll::Ready(Some(Ok(data)))
+                }
+            }
+        }
+
+        fn poll_trailers(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
+            Poll::Ready(Ok(None))
+        }
+
+        fn is_end_stream(&self) -> bool {
+            false
+        }
+
+        fn size_hint(&self) -> SizeHint {
+            SizeHint::new()
+        }
+    }
 
     #[tokio::test]
     async fn test_aws_chunked_encoding() {
@@ -369,6 +462,59 @@ mod tests {
         let timeout_duration = Duration::from_secs(3);
         if let Err(_) = tokio::time::timeout(timeout_duration, test_fut).await {
             panic!("test_aws_chunked_encoding timed out after {timeout_duration:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_aws_chunked_encoding_sputtering_body() {
+        let test_fut = async {
+            let input = SputteringBody {
+                parts: vec![
+                    Some(Bytes::from_static(b"chunk 1, ")),
+                    None,
+                    Some(Bytes::from_static(b"chunk 2, ")),
+                    Some(Bytes::from_static(b"chunk 3, ")),
+                    None,
+                    None,
+                    Some(Bytes::from_static(b"chunk 4, ")),
+                    Some(Bytes::from_static(b"chunk 5, ")),
+                    Some(Bytes::from_static(b"chunk 6")),
+                ],
+                cursor: 0,
+                delay_in_millis: 500,
+            };
+            let opts = AwsChunkedBodyOptions::new(input.len() as u64, Vec::new());
+            let mut body = AwsChunkedBody::new(input, opts);
+
+            let mut output = SegmentedBuf::new();
+            while let Some(buf) = body.data().await {
+                output.push(buf.unwrap());
+            }
+
+            let mut actual_output = String::new();
+            output
+                .reader()
+                .read_to_string(&mut actual_output)
+                .expect("Doesn't cause IO errors");
+
+            let expected_output =
+                "34\r\nchunk 1, chunk 2, chunk 3, chunk 4, chunk 5, chunk 6\r\n0\r\n\r\n";
+
+            assert_eq!(expected_output, actual_output);
+            assert!(
+                body.trailers()
+                    .await
+                    .expect("no errors occurred during trailer polling")
+                    .is_none(),
+                "aws-chunked encoded bodies don't have normal HTTP trailers"
+            );
+        };
+
+        let timeout_duration = Duration::from_secs(3);
+        if let Err(_) = tokio::time::timeout(timeout_duration, test_fut).await {
+            panic!(
+                "test_aws_chunked_encoding_sputtering_body timed out after {timeout_duration:?}"
+            );
         }
     }
 
