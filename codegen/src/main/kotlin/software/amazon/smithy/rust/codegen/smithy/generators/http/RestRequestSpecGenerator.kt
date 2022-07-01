@@ -23,7 +23,8 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
  * (even though only the `codegen-server` subproject calls `serverRouterRequestSpec`).
  */
 class RestRequestSpecGenerator(
-    private val httpBindingResolver: HttpBindingResolver, private val requestSpecModule: RuntimeType
+    private val httpBindingResolver: HttpBindingResolver,
+    private val requestSpecModule: RuntimeType
 ) {
     fun generate(operationShape: OperationShape): Writable {
         val httpTrait = httpBindingResolver.httpTrait(operationShape)
