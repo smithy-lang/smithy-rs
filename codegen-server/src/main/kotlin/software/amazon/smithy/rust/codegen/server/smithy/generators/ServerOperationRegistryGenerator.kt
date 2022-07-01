@@ -84,14 +84,20 @@ class ServerOperationRegistryGenerator(
     }
 
     private fun renderOperationRegistryRustDocs(writer: RustWriter) {
+        val inputOutputErrorsImport = if (operations.any { it.errors.isNotEmpty() }) {
+            "/// use $crateName::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};"
+        } else {
+            "/// use $crateName::{${Inputs.namespace}, ${Outputs.namespace}};"
+        }
+
         writer.rustTemplate(
             """
 ##[allow(clippy::tabs_in_doc_comments)]
-/// The `${operationRegistryName}` is the place where you can register
+/// The `$operationRegistryName` is the place where you can register
 /// your service's operation implementations.
 /// 
-/// Use [`${operationRegistryBuilderName}`] to construct the
-/// `${operationRegistryName}`. For each of the [operations] modeled in
+/// Use [`$operationRegistryBuilderName`] to construct the
+/// `$operationRegistryName`. For each of the [operations] modeled in
 /// your Smithy service, you need to provide an implementation in the
 /// form of a Rust async function or closure that takes in the
 /// operation's input as their first parameter, and returns the
@@ -115,17 +121,13 @@ class ServerOperationRegistryGenerator(
 /// 
 /// ```rust
 /// use std::net::SocketAddr;
-${ if (operations.any { it.errors.isNotEmpty() }) {
-"/// use ${crateName}::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};"
-} else {
-"/// use ${crateName}::{${Inputs.namespace}, ${Outputs.namespace}};"
-} }
-/// use ${crateName}::operation_registry::${operationRegistryBuilderName};
+$inputOutputErrorsImport
+/// use $crateName::operation_registry::$operationRegistryBuilderName;
 /// use #{Router};
 ///
 /// ##[#{Tokio}::main]
 /// pub async fn main() {
-///    let app: Router = ${operationRegistryBuilderName}::default()
+///    let app: Router = $operationRegistryBuilderName::default()
 ${operationNames.map { ".$it($it)" }.joinToString("\n") { it.prependIndent("///        ") }}
 ///        .build()
 ///        .expect("unable to build operation registry")
@@ -201,10 +203,10 @@ ${operationImplementationStubs(operations)}
         Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
         writer.rustTemplate(
             """
-            pub enum ${operationRegistryErrorName}{
+            pub enum $operationRegistryErrorName {
                 UninitializedField(&'static str)
             }
-            impl #{Display} for ${operationRegistryErrorName}{
+            impl #{Display} for $operationRegistryErrorName {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         Self::UninitializedField(v) => write!(f, "{}", v),
@@ -258,14 +260,14 @@ ${operationImplementationStubs(operations)}
                 )
             }
 
-            rustBlock("pub fn build(self) -> Result<$operationRegistryNameWithArguments, ${operationRegistryErrorName}>") {
+            rustBlock("pub fn build(self) -> Result<$operationRegistryNameWithArguments, $operationRegistryErrorName>") {
                 withBlock("Ok( $operationRegistryName {", "})") {
                     for (operationName in operationNames) {
                         rust(
                             """
                             $operationName: match self.$operationName {
                                 Some(v) => v,
-                                None => return Err(${operationRegistryErrorName}::UninitializedField("$operationName")),
+                                None => return Err($operationRegistryErrorName::UninitializedField("$operationName")),
                             },
                             """
                         )
@@ -343,11 +345,11 @@ ${operationImplementationStubs(operations)}
                 operationDocumentation.replace("#", "##").prependIndent("/// /// ") + "\n"
             } else ""
             ret +
-                    """
+                """
                     /// ${it.signature()} {
                     ///     todo!()
                     /// }
-                    """.trimIndent()
+                """.trimIndent()
         }
 
     /**
