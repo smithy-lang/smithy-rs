@@ -328,7 +328,7 @@ class RustWriter private constructor(
     private val commentCharacter: String = "//",
     private val printWarning: Boolean = true,
     /** Insert comments indicating where code was generated */
-    private val debugMode: Boolean = false,
+    private val debugMode: Boolean = true,
 ) :
     SymbolWriter<RustWriter, UseDeclarations>(UseDeclarations(namespace)) {
     companion object {
