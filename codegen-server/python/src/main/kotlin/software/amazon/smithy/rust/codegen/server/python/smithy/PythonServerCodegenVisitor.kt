@@ -7,9 +7,11 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
@@ -25,6 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 
 /**
  * Entrypoint for Python server-side code generation. This class will walk the in-memory model and
@@ -83,6 +86,9 @@ class PythonServerCodegenVisitor(
      * This function _does not_ generate any serializers.
      */
     override fun structureShape(shape: StructureShape) {
+        if (shape.hasStreamingMember(model)) {
+            throw CodegenException("Streaming members are not supported in Python yet")
+        }
         logger.info("[python-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
             // Use Python specific structure generator that adds the #[pyclass] attribute
@@ -109,6 +115,17 @@ class PythonServerCodegenVisitor(
                 PythonServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.runtimeConfig).render()
             }
         }
+    }
+
+    /**
+     * Union Shape Visitor
+     *
+     * Generate an `enum` for union shapes.
+     *
+     * Note: this does not generate serializers
+     */
+    override fun unionShape(shape: UnionShape) {
+        throw CodegenException("Union shapes are not supported in Python yet")
     }
 
     /**
