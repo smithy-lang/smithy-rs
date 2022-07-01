@@ -257,7 +257,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     Output(#{O}),
                     Error(#{E})
                 }
-                ##[#{AsyncTrait}::async_trait]
                 impl #{SmithyHttpServer}::response::IntoResponse for $outputName {
                     fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         $intoResponseImpl
@@ -289,7 +288,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             rustTemplate(
                 """
                 pub(crate) struct $outputName(#{O});
-                ##[#{AsyncTrait}::async_trait]
                 impl #{SmithyHttpServer}::response::IntoResponse for $outputName {
                     fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         $intoResponseImpl
