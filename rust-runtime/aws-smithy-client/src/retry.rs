@@ -58,19 +58,19 @@ pub struct Config {
     timeout_retry_cost: usize,
     max_attempts: u32,
     max_backoff: Duration,
-    base: fn() -> f64,
+    base: u32,
 }
 
 impl Config {
     /// Override `b` in the exponential backoff computation
     ///
-    /// By default, `base` is a randomly generated value between 0 and 1. In tests, it can
+    /// By default, `base` is 100ms. In tests, it can
     /// be helpful to override this:
     /// ```no_run
     /// use aws_smithy_client::retry::Config;
-    /// let conf = Config::default().with_base(||1_f64);
+    /// let conf = Config::default().with_base(50);
     /// ```
-    pub fn with_base(mut self, base: fn() -> f64) -> Self {
+    pub fn with_base(mut self, base: u32) -> Self {
         self.base = base;
         self
     }
@@ -94,7 +94,7 @@ impl Default for Config {
             max_attempts: MAX_ATTEMPTS,
             max_backoff: Duration::from_secs(20),
             // by default, use a random base for exponential backoff
-            base: fastrand::f64,
+            base: BASE,
         }
     }
 }
@@ -108,6 +108,7 @@ impl From<aws_smithy_types::retry::RetryConfig> for Config {
 const MAX_ATTEMPTS: u32 = 3;
 const INITIAL_RETRY_TOKENS: usize = 500;
 const RETRY_COST: usize = 5;
+const BASE: u32 = 100; // Defaults to 100 ms for all services except DynamoDB, where it defaults to 50ms
 
 /// Manage retries for a service
 ///
@@ -264,16 +265,15 @@ impl RetryHandler {
         };
         /*
         From the retry spec:
-            b = random number within the range of: 0 <= b <= 1
+            b = default 100
             r = 2
             t_i = min(br^i, MAX_BACKOFF);
          */
         let r: i32 = 2;
-        let b = (self.config.base)();
         // `self.local.attempts` tracks number of requests made including the initial request
         // The initial attempt shouldn't count towards backoff calculations so we subtract it
-        let backoff = b * (r.pow(self.local.attempts - 1) as f64);
-        let backoff = Duration::from_secs_f64(backoff).min(self.config.max_backoff);
+        let backoff = self.config.base as f64 * (r.pow(self.local.attempts - 1) as f64);
+        let backoff = Duration::from_millis(backoff as u64).min(self.config.max_backoff);
         let next = RetryHandler {
             local: RequestLocalRetryState {
                 attempts: self.local.attempts + 1,
@@ -368,7 +368,7 @@ mod test {
     use std::time::Duration;
 
     fn test_config() -> Config {
-        Config::default().with_base(|| 1_f64)
+        Config::default().with_base(1)
     }
 
     #[test]
@@ -384,13 +384,13 @@ mod test {
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(1));
+        assert_eq!(dur, Duration::from_millis(1));
         assert_eq!(policy.retry_quota(), 495);
 
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(2));
+        assert_eq!(dur, Duration::from_millis(2));
         assert_eq!(policy.retry_quota(), 490);
 
         let no_retry = policy.should_retry(&RetryKind::Unnecessary);
@@ -404,13 +404,13 @@ mod test {
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(1));
+        assert_eq!(dur, Duration::from_millis(1));
         assert_eq!(policy.retry_quota(), 495);
 
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(2));
+        assert_eq!(dur, Duration::from_millis(2));
         assert_eq!(policy.retry_quota(), 490);
 
         let no_retry = policy.should_retry(&RetryKind::Error(ErrorKind::ServerError));
@@ -427,7 +427,7 @@ mod test {
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(1));
+        assert_eq!(dur, Duration::from_millis(1));
         assert_eq!(policy.retry_quota(), 0);
 
         let no_retry = policy.should_retry(&RetryKind::Error(ErrorKind::ServerError));
@@ -443,13 +443,13 @@ mod test {
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::TransientError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(1));
+        assert_eq!(dur, Duration::from_millis(1));
         assert_eq!(policy.retry_quota(), 90);
 
         let (policy, dur) = policy
-            .should_retry(&RetryKind::Explicit(Duration::from_secs(1)))
+            .should_retry(&RetryKind::Explicit(Duration::from_millis(1)))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(1));
+        assert_eq!(dur, Duration::from_millis(1));
         assert_eq!(
             policy.retry_quota(),
             90,
@@ -472,25 +472,25 @@ mod test {
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(1));
+        assert_eq!(dur, Duration::from_millis(1));
         assert_eq!(policy.retry_quota(), 495);
 
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(2));
+        assert_eq!(dur, Duration::from_millis(2));
         assert_eq!(policy.retry_quota(), 490);
 
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(4));
+        assert_eq!(dur, Duration::from_millis(4));
         assert_eq!(policy.retry_quota(), 485);
 
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(8));
+        assert_eq!(dur, Duration::from_millis(8));
         assert_eq!(policy.retry_quota(), 480);
 
         let no_retry = policy.should_retry(&RetryKind::Error(ErrorKind::ServerError));
@@ -502,30 +502,30 @@ mod test {
     fn max_backoff_time() {
         let mut conf = test_config();
         conf.max_attempts = 5;
-        conf.max_backoff = Duration::from_secs(3);
+        conf.max_backoff = Duration::from_millis(3);
         let policy = Standard::new(conf).new_request_policy(None);
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(1));
+        assert_eq!(dur, Duration::from_millis(1));
         assert_eq!(policy.retry_quota(), 495);
 
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(2));
+        assert_eq!(dur, Duration::from_millis(2));
         assert_eq!(policy.retry_quota(), 490);
 
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(3));
+        assert_eq!(dur, Duration::from_millis(3));
         assert_eq!(policy.retry_quota(), 485);
 
         let (policy, dur) = policy
             .should_retry(&RetryKind::Error(ErrorKind::ServerError))
             .expect("should retry");
-        assert_eq!(dur, Duration::from_secs(3));
+        assert_eq!(dur, Duration::from_millis(3));
         assert_eq!(policy.retry_quota(), 480);
 
         let no_retry = policy.should_retry(&RetryKind::Error(ErrorKind::ServerError));

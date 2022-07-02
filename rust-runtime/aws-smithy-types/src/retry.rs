@@ -134,6 +134,7 @@ impl FromStr for RetryMode {
 pub struct RetryConfigBuilder {
     mode: Option<RetryMode>,
     max_attempts: Option<u32>,
+    with_base: Option<u32>,
 }
 
 impl RetryConfigBuilder {
@@ -154,6 +155,12 @@ impl RetryConfigBuilder {
         self
     }
 
+    /// The base number of milliseconds to use in the exponential backoff for operation retries. Defaults to 100 ms for all services. DynamoDB, should be set to 50ms.
+    pub fn set_with_base(&mut self, with_base: Option<u32>) -> &mut Self {
+        self.with_base = with_base;
+        self
+    }
+
     /// Sets the retry mode.
     pub fn mode(mut self, mode: RetryMode) -> Self {
         self.set_mode(Some(mode));
@@ -163,6 +170,12 @@ impl RetryConfigBuilder {
     /// Sets the max attempts. This value must be greater than zero.
     pub fn max_attempts(mut self, max_attempts: u32) -> Self {
         self.set_max_attempts(Some(max_attempts));
+        self
+    }
+
+    /// The base number of milliseconds to use in the exponential backoff for operation retries. Defaults to 100 ms for all services. DynamoDB, should be set to 50ms.
+    pub fn with_base(&mut self, with_base: Option<u32>) -> &mut Self {
+        self.with_base = with_base;
         self
     }
 
@@ -186,6 +199,7 @@ impl RetryConfigBuilder {
         Self {
             mode: self.mode.or(other.mode),
             max_attempts: self.max_attempts.or(other.max_attempts),
+            with_base: self.with_base.or(other.with_base),
         }
     }
 
