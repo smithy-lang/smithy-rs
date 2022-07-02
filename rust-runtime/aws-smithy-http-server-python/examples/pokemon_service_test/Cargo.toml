@@ -1,0 +1,15 @@
+[package]
+name = "pokemon_service_test"
+version = "0.1.0"
+edition = "2021"
+publish = false
+authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
+description = "Run tests against the Python server implementation"
+
+[dev-dependencies]
+command-group = "1.0"
+tokio = { version = "1.19.2", features = ["full"] }
+
+# Local paths
+aws-smithy-client  = { path = "../../../aws-smithy-client/", features = ["rustls"] }
+pokemon_service_client = { path = "../pokemon_service_client/" }

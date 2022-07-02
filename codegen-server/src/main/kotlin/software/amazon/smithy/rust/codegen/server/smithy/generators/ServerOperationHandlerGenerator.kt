@@ -38,7 +38,6 @@ open class ServerOperationHandlerGenerator(
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
-        "PinProjectLite" to ServerCargoDependency.PinProjectLite.asType(),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),

@@ -22,24 +22,19 @@ use std::net::SocketAddr;
 /// [GIL]: https://wiki.python.org/moin/GlobalInterpreterLock
 #[pyclass]
 #[derive(Debug)]
-pub struct SharedSocket {
+pub struct PySocket {
     pub(crate) inner: Socket,
 }
 
 #[pymethods]
-impl SharedSocket {
+impl PySocket {
     /// Create a new UNIX `SharedSocket` from an address, port and backlog.
     /// If not specified, the backlog defaults to 1024 connections.
     #[new]
-    #[cfg(not(target_os = "windows"))]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
         let address: SocketAddr = format!("{}:{}", address, port).parse()?;
-        let domain = if address.is_ipv6() {
-            Domain::IPV6
-        } else {
-            Domain::IPV4
-        };
-        tracing::info!("Shared socket listening on {address}, IP version: {domain:?}");
+        let (domain, ip_version) = PySocket::socket_domain(address);
+        tracing::info!("Shared socket listening on {address}, IP version: {ip_version}");
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
         // Set value for the `SO_REUSEPORT` and `SO_REUSEADDR` options on this socket.
         // This indicates that further calls to `bind` may allow reuse of local
@@ -49,42 +44,31 @@ impl SharedSocket {
         socket.set_reuse_address(true)?;
         socket.bind(&address.into())?;
         socket.listen(backlog.unwrap_or(1024))?;
-        Ok(SharedSocket { inner: socket })
-    }
-
-    /// Create a new Windows `SharedSocket` from an address, port and backlog.
-    /// If not specified, the backlog defaults to 1024 connections.
-    #[new]
-    #[cfg(target_os = "windows")]
-    pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
-        let address: SocketAddr = format!("{}:{}", address, port).parse()?;
-        let domain = if address.is_ipv6() {
-            Domain::IPV6
-        } else {
-            Domain::IPV4
-        };
-        tracing::info!("Shared socket listening on {address}, IP version: {domain:?}");
-        let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
-        // `SO_REUSEPORT` is not available on Windows.
-        socket.set_reuse_address(true)?;
-        socket.bind(&address.into())?;
-        socket.listen(backlog.unwrap_or(1024))?;
-        Ok(SharedSocket { inner: socket })
+        Ok(PySocket { inner: socket })
     }
 
     /// Clone the inner socket allowing it to be shared between multiple
     /// Python processes.
     #[pyo3(text_signature = "($self, socket, worker_number)")]
-    pub fn try_clone(&self) -> PyResult<SharedSocket> {
+    pub fn try_clone(&self) -> PyResult<PySocket> {
         let copied = self.inner.try_clone()?;
-        Ok(SharedSocket { inner: copied })
+        Ok(PySocket { inner: copied })
     }
 }
 
-impl SharedSocket {
+impl PySocket {
     /// Get a cloned inner socket.
     pub fn get_socket(&self) -> Result<Socket, std::io::Error> {
         self.inner.try_clone()
+    }
+
+    /// Find the socket domain
+    fn socket_domain(address: SocketAddr) -> (Domain, &'static str) {
+        if address.is_ipv6() {
+            (Domain::IPV6, "6")
+        } else {
+            (Domain::IPV4, "4")
+        }
     }
 }
 
@@ -94,17 +78,14 @@ mod tests {
 
     #[test]
     fn socket_can_bind_on_random_port() {
-        let _socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
-        #[cfg(not(target_os = "windows"))]
-        assert!(_socket.inner.is_listener().is_ok());
+        let socket = PySocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
+        assert!(socket.inner.is_listener().is_ok());
     }
 
     #[test]
-    #[cfg(not(target_os = "windows"))]
     fn socket_can_be_cloned() {
-        let socket = SharedSocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
-        let _cloned_socket = socket.try_clone().unwrap();
-        #[cfg(not(target_os = "windows"))]
-        assert!(_cloned_socket.inner.is_listener().is_ok());
+        let socket = PySocket::new("127.0.0.1".to_owned(), 0, None).unwrap();
+        let cloned_socket = socket.try_clone().unwrap();
+        assert!(cloned_socket.inner.is_listener().is_ok());
     }
 }
