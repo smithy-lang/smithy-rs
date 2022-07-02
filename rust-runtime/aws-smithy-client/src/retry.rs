@@ -58,19 +58,21 @@ pub struct Config {
     timeout_retry_cost: usize,
     max_attempts: u32,
     max_backoff: Duration,
-    base: u32,
+    base: u64,
 }
 
 impl Config {
     /// Override `b` in the exponential backoff computation
     ///
-    /// By default, `base` is 100ms. In tests, it can
+    /// By default, `base` is 100ms.
+    /// Max is 20s
+    /// In tests, it can
     /// be helpful to override this:
     /// ```no_run
     /// use aws_smithy_client::retry::Config;
     /// let conf = Config::default().with_base(50);
     /// ```
-    pub fn with_base(mut self, base: u32) -> Self {
+    pub fn with_base(mut self, base: u64) -> Self {
         self.base = base;
         self
     }
@@ -108,7 +110,7 @@ impl From<aws_smithy_types::retry::RetryConfig> for Config {
 const MAX_ATTEMPTS: u32 = 3;
 const INITIAL_RETRY_TOKENS: usize = 500;
 const RETRY_COST: usize = 5;
-const BASE: u32 = 100; // Defaults to 100 ms for all services except DynamoDB, where it defaults to 50ms
+const BASE: u64 = 100; // Defaults to 100 ms for all services except DynamoDB, where it defaults to 50ms
 
 /// Manage retries for a service
 ///
