@@ -295,7 +295,6 @@ class ServerProtocolTestGenerator(
         rustTemplate(
             """
             let output = super::$operationImpl;
-            use #{SmithyHttpServer}::response::IntoResponse;
             let http_response = output.into_response();
             """,
             *codegenScope,
@@ -319,7 +318,6 @@ class ServerProtocolTestGenerator(
             """
             let mut http_request = #{SmithyHttpServer}::request::RequestParts::new(http_request);
             let rejection = super::$operationName::from_request(&mut http_request).await.expect_err("request was accepted but we expected it to be rejected");
-            use #{SmithyHttpServer}::response::IntoResponse;
             let http_response = rejection.into_response();
             """,
             *codegenScope,

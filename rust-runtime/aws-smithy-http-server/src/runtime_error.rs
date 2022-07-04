@@ -21,10 +21,7 @@
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
 //! [`crate::response::IntoResponse`] implementation to render and send a response.
 
-use crate::{
-    protocols::Protocol,
-    response::{IntoResponse, Response},
-};
+use crate::{protocols::Protocol, response::Response};
 
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
@@ -59,8 +56,8 @@ pub struct RuntimeError {
     pub kind: RuntimeErrorKind,
 }
 
-impl IntoResponse for RuntimeError {
-    fn into_response(self) -> Response {
+impl RuntimeError {
+    pub fn into_response(self) -> Response {
         let status_code = match self.kind {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
             RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,

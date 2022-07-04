@@ -143,7 +143,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     /*
-     * Generation of `from_request` and `IntoResponse`.
+     * Generation of `from_request` and `into_response`.
      * For non-streaming request bodies, that is, models without streaming traits
      * (https://awslabs.github.io/smithy/1.0/spec/core/stream-traits.html)
      * we require the HTTP body to be fully read in memory before parsing or deserialization.
@@ -211,7 +211,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             "verify_response_content_type" to verifyResponseContentType,
         )
 
-        // Implement `IntoResponse` for output types.
+        // Implement `into_response` for output types.
 
         val outputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
@@ -256,9 +256,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     Output(#{O}),
                     Error(#{E})
                 }
-                ##[#{AsyncTrait}::async_trait]
-                impl #{SmithyHttpServer}::response::IntoResponse for $outputName {
-                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                impl $outputName {
+                    pub fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         $intoResponseImpl
                     }
                 }
@@ -288,9 +287,8 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             rustTemplate(
                 """
                 pub(crate) struct $outputName(#{O});
-                ##[#{AsyncTrait}::async_trait]
-                impl #{SmithyHttpServer}::response::IntoResponse for $outputName {
-                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                impl $outputName {
+                    pub fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         $intoResponseImpl
                     }
                 }
