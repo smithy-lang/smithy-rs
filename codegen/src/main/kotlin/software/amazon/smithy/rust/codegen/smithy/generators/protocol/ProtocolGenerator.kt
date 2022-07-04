@@ -162,7 +162,7 @@ open class ProtocolGenerator(
     }
 
     /**
-     * The server implementation uses this method to generate implementations of the `FromRequest` and `IntoResponse`
+     * The server implementation uses this method to generate implementations of the `from_request` and `IntoResponse`
      * traits for operation input and output shapes, respectively.
      */
     fun serverRenderOperation(
