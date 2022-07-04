@@ -9,7 +9,7 @@
 //!
 //! As opposed to rejection types (see [`crate::rejection`]), which are an internal detail about
 //! the framework, `RuntimeError` is surfaced to clients in HTTP responses: indeed, it implements
-//! [`crate::response::IntoResponse`]. Rejections can be "grouped" and converted into a
+//! [`RuntimeError::into_response`]. Rejections can be "grouped" and converted into a
 //! specific `RuntimeError` kind: for example, all request rejections due to serialization issues
 //! can be conflated under the [`RuntimeErrorKind::Serialization`] enum variant.
 //!
@@ -19,7 +19,7 @@
 //! Generated code works always works with [`crate::rejection`] types when deserializing requests
 //! and serializing response. Just before a response needs to be sent, the generated code looks up
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
-//! [`crate::response::IntoResponse`] implementation to render and send a response.
+//! [`RuntimeError::into_response`] method to render and send a response.
 
 use crate::{protocols::Protocol, response::Response};
 
