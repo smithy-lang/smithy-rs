@@ -5,8 +5,8 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
 #
-# [[smithy-rs]]
-# message = "Fix typos in module documentation for generated crates"
-# references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
-# author = "rcoh"
+[[smithy-rs]]
+message = "Fix retry logic"
+references = ["aws-sdk-rust#567"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ymwjbxxq"
