@@ -65,6 +65,7 @@ impl Config {
     /// Override `b` in the exponential backoff computation
     ///
     /// By default, `base` is 100ms.
+    /// DynamoDb should be set to 50ms
     /// Max is 20s
     /// In tests, it can
     /// be helpful to override this:
@@ -110,7 +111,7 @@ impl From<aws_smithy_types::retry::RetryConfig> for Config {
 const MAX_ATTEMPTS: u32 = 3;
 const INITIAL_RETRY_TOKENS: usize = 500;
 const RETRY_COST: usize = 5;
-const BASE: u64 = 100; // Defaults to 100 ms for all services except DynamoDB, where it defaults to 50ms
+const BASE: u64 = 100;
 
 /// Manage retries for a service
 ///
