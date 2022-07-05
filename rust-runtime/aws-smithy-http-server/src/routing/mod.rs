@@ -12,7 +12,6 @@ use self::tiny_map::TinyMap;
 use crate::body::{boxed, Body, BoxBody, HttpBody};
 use crate::error::BoxError;
 use crate::protocols::Protocol;
-use crate::response::IntoResponse;
 use crate::runtime_error::{RuntimeError, RuntimeErrorKind};
 use http::{Request, Response, StatusCode};
 use std::{
