@@ -15,8 +15,10 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -130,7 +132,7 @@ class AwsJsonSerializerGenerator(
 
 open class AwsJson(
     private val coreCodegenContext: CoreCodegenContext,
-    awsJsonVersion: AwsJsonVersion
+    private val awsJsonVersion: AwsJsonVersion
 ) : Protocol {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(
@@ -181,6 +183,23 @@ open class AwsJson(
                 *errorScope
             )
         }
+
+    /**
+     * Returns the operation name as required by the awsJson1.x protocols.
+     */
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType
+    ) = writable {
+        rust("""String::from("$serviceName.$operationName")""")
+    }
+
+    override fun serverRouterRuntimeConstructor() = when (awsJsonVersion) {
+        AwsJsonVersion.Json10 -> "new_aws_json_10_router"
+        AwsJsonVersion.Json11 -> "new_aws_json_11_router"
+    }
 }
 
 fun awsJsonFieldName(member: MemberShape): String = member.memberName

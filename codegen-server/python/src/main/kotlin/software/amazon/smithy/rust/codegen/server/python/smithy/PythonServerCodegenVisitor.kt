@@ -143,8 +143,8 @@ class PythonServerCodegenVisitor(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext).httpBindingResolver,
-            codegenContext,
+            protocolGeneratorFactory.protocol(codegenContext),
+            codegenContext
         )
             .render()
     }
