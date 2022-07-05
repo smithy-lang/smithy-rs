@@ -105,8 +105,6 @@ open class ServerOperationHandlerGenerator(
                     type Sealed = #{ServerOperationHandler}::sealed::Hidden;
                     async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::body::BoxBody> {
                         let mut req = #{SmithyHttpServer}::request::RequestParts::new(req);
-                        use #{SmithyHttpServer}::request::FromRequest;
-                        use #{SmithyHttpServer}::response::IntoResponse;
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
                             Err(runtime_error) => {
