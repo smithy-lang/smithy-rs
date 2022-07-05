@@ -6,54 +6,107 @@
 //! Functions to create signing keys and calculate signatures.
 
 use crate::date_time::format_date;
+#[cfg(feature = "ring")]
 use ring::{
     digest::{self},
     hmac::{self, Key, Tag},
 };
+
+#[cfg(feature = "openssl")]
+use openssl::{hash::MessageDigest, pkey::PKey, sign::Signer};
+
 use std::time::SystemTime;
 
 /// HashedPayload = Lowercase(HexEncode(Hash(requestPayload)))
 #[allow(dead_code)] // Unused when compiling without certain features
 pub(crate) fn sha256_hex_string(bytes: impl AsRef<[u8]>) -> String {
     // hex::encode returns a lowercase string
-    hex::encode(digest::digest(&digest::SHA256, bytes.as_ref()))
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "ring")] {
+            hex::encode(digest::digest(&digest::SHA256, bytes.as_ref()))
+        } else if #[cfg(feature = "openssl")] {
+            hex::encode(openssl::sha::sha256(bytes.as_ref()))
+        } else {
+            compile_error!("Either feature \"openssl\" or \"ring\" must be enabled for this crate.");
+        }
+    }
 }
 
-/// Calculates a Sigv4 signature
-pub fn calculate_signature(signing_key: Tag, string_to_sign: &[u8]) -> String {
-    let s_key = Key::new(hmac::HMAC_SHA256, signing_key.as_ref());
-    let tag = hmac::sign(&s_key, string_to_sign);
-    hex::encode(tag)
-}
+cfg_if::cfg_if! {
+    if #[cfg(feature = "ring")] {
+        /// Calculates a Sigv4 signature
+        pub fn calculate_signature(signing_key: Tag, string_to_sign: &[u8]) -> String {
+            let s_key = Key::new(hmac::HMAC_SHA256, signing_key.as_ref());
+            let tag = hmac::sign(&s_key, string_to_sign);
+            hex::encode(tag)
+        }
 
-/// Generates a signing key for Sigv4
-pub fn generate_signing_key(
-    secret: &str,
-    time: SystemTime,
-    region: &str,
-    service: &str,
-) -> hmac::Tag {
-    // kSecret = your secret access key
-    // kDate = HMAC("AWS4" + kSecret, Date)
-    // kRegion = HMAC(kDate, Region)
-    // kService = HMAC(kRegion, Service)
-    // kSigning = HMAC(kService, "aws4_request")
+        /// Generates a signing key for Sigv4
+        pub fn generate_signing_key(
+            secret: &str,
+            time: SystemTime,
+            region: &str,
+            service: &str,
+        ) -> hmac::Tag {
+            // kSecret = your secret access key
+            // kDate = HMAC("AWS4" + kSecret, Date)
+            // kRegion = HMAC(kDate, Region)
+            // kService = HMAC(kRegion, Service)
+            // kSigning = HMAC(kService, "aws4_request")
 
-    let secret = format!("AWS4{}", secret);
-    let secret = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
-    let tag = hmac::sign(&secret, format_date(time).as_bytes());
+            let secret = format!("AWS4{}", secret);
+            let secret = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
+            let tag = hmac::sign(&secret, format_date(time).as_bytes());
 
-    // sign region
-    let key = hmac::Key::new(hmac::HMAC_SHA256, tag.as_ref());
-    let tag = hmac::sign(&key, region.as_bytes());
+            // sign region
+            let key = hmac::Key::new(hmac::HMAC_SHA256, tag.as_ref());
+            let tag = hmac::sign(&key, region.as_bytes());
 
-    // sign service
-    let key = hmac::Key::new(hmac::HMAC_SHA256, tag.as_ref());
-    let tag = hmac::sign(&key, service.as_bytes());
+            // sign service
+            let key = hmac::Key::new(hmac::HMAC_SHA256, tag.as_ref());
+            let tag = hmac::sign(&key, service.as_bytes());
 
-    // sign request
-    let key = hmac::Key::new(hmac::HMAC_SHA256, tag.as_ref());
-    hmac::sign(&key, "aws4_request".as_bytes())
+            // sign request
+            let key = hmac::Key::new(hmac::HMAC_SHA256, tag.as_ref());
+            hmac::sign(&key, "aws4_request".as_bytes())
+        }
+    } else if #[cfg(feature = "openssl")] {
+
+        fn sign_sha256(secret: &[u8], buf_to_sign: &[u8]) -> Vec<u8> {
+            let key = PKey::hmac(secret).unwrap();
+            let mut signer = Signer::new(MessageDigest::sha256(), &key).unwrap();
+            signer.update(buf_to_sign).unwrap();
+            signer.sign_to_vec().unwrap()
+        }
+
+        /// Calculates a Sigv4 signature
+        pub fn calculate_signature(signing_key: Vec<u8>, string_to_sign: &[u8]) -> String {
+            hex::encode(sign_sha256(signing_key.as_slice(), string_to_sign))
+        }
+
+        /// Generates a signing key for Sigv4
+        pub fn generate_signing_key(
+            secret: &str,
+            time: SystemTime,
+            region: &str,
+            service: &str,
+        ) -> Vec<u8> {
+            // kSecret = your secret access key
+            // kDate = HMAC("AWS4" + kSecret, Date)
+            // kRegion = HMAC(kDate, Region)
+            // kService = HMAC(kRegion, Service)
+            // kSigning = HMAC(kService, "aws4_request")
+
+            let secret = format!("AWS4{}", secret);
+            let signature = sign_sha256(secret.as_bytes(), format_date(time).as_bytes());
+            // sign region
+            let signature = sign_sha256(signature.as_slice(), region.as_bytes());
+            let signature = sign_sha256(signature.as_slice(), service.as_bytes());
+            sign_sha256(signature.as_slice(), "aws4_request".as_bytes())
+        }
+    } else {
+        compile_error!("Either feature \"openssl\" or \"ring\" must be enabled for this crate.");
+    }
 }
 
 #[cfg(test)]

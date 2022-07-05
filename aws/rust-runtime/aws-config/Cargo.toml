@@ -10,8 +10,8 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 client-hyper = ["aws-smithy-client/client-hyper"]
-rustls = ["aws-smithy-client/rustls"]
-native-tls = ["aws-smithy-client/native-tls"]
+rustls = ["ring", "aws-smithy-client/rustls"]
+native-tls = ["openssl", "aws-smithy-client/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
 
 default = ["client-hyper", "rustls", "rt-tokio"]
@@ -27,6 +27,7 @@ time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1.8.4", features = ["sync"] }
 tracing = { version = "0.1" }
 hyper = { version = "0.14.12", default-features = false }
+cfg-if = "1.0.0"
 
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
@@ -34,7 +35,8 @@ aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-to
 aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json" }
 
 # implementation detail of SSO credential caching
-ring = "0.16"
+ring = { version = "0.16", optional = true }
+openssl = { version = "0.10.40", optional = true }
 hex = "0.4.3"
 zeroize = "1"
 

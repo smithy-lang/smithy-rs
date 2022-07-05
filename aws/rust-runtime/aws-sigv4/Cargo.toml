@@ -11,7 +11,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 sign-http = ["http", "percent-encoding", "form_urlencoded"]
 sign-eventstream = ["aws-smithy-eventstream", "bytes"]
-default = ["sign-http"]
+default = ["sign-http", "ring"]
 
 [dependencies]
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
@@ -23,9 +23,11 @@ http = { version = "0.2", optional = true }
 once_cell = "1.8"
 percent-encoding = { version = "2.1", optional = true }
 regex = "1.5"
-ring = "0.16"
+ring = { version = "0.16", optional = true }
+openssl = { version = "0.10.40", optional = true }
 time = "0.3.5"
 tracing = "0.1"
+cfg-if = "1.0.0"
 
 [dev-dependencies]
 bytes = "1"

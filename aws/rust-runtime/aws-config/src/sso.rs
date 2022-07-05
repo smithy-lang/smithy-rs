@@ -31,7 +31,6 @@ use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::PathBuf;
 
-use ring::digest;
 use zeroize::Zeroizing;
 
 impl crate::provider_config::ProviderConfig {
@@ -325,16 +324,28 @@ fn parse_token_json(input: &[u8]) -> Result<SsoToken, InvalidJsonCredentials> {
     })
 }
 
+fn sha1(buf: &[u8]) -> [u8; 20] {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "ring")] {
+            use ring::digest::{self, digest};
+            let mut ret: [u8; 20] = [0; 20];
+            ret.clone_from_slice(digest(&digest::SHA1_FOR_LEGACY_USE_ONLY, buf).as_ref());
+            ret
+        } else if #[cfg(feature = "openssl")] {
+            openssl::sha::sha1(buf)
+        } else {
+            compile_error!("Either feature \"openssl\" or \"ring\" must be enabled for this crate.");
+        }
+    }
+}
+
 /// Determine the SSO token path for a given start_url
 fn sso_token_path(start_url: &str, home: &str) -> PathBuf {
     // hex::encode returns a lowercase string
     let mut out = PathBuf::with_capacity(home.len() + "/.aws/sso/cache".len() + ".json".len() + 40);
     out.push(home);
     out.push(".aws/sso/cache");
-    out.push(&hex::encode(digest::digest(
-        &digest::SHA1_FOR_LEGACY_USE_ONLY,
-        start_url.as_bytes(),
-    )));
+    out.push(&hex::encode(sha1(start_url.as_bytes())));
     out.set_extension("json");
     out
 }
