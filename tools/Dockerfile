@@ -47,9 +47,9 @@ RUN set -eux; \
 FROM bare_base_image AS install_rust
 ARG rust_stable_version=1.58.1
 ARG rust_nightly_version=nightly-2022-03-29
-ARG cargo_udeps_version=0.1.27
-ARG cargo_hack_version=0.5.12
-ARG cargo_minimal_versions_version=0.1.3
+ARG cargo_udeps_version=0.1.29
+ARG cargo_hack_version=0.5.14
+ARG cargo_minimal_versions_version=0.1.4
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
@@ -93,20 +93,21 @@ ARG smithy_rs_commit_hash=main
 # source code by checking out awslabs/smithy-rs/main rather than copying them from the local directory.
 ARG checkout_smithy_rs_tools=false
 RUN set -eux; \
-    cargo +${rust_nightly_version} install cargo-udeps --version ${cargo_udeps_version}; \
-    cargo install cargo-hack --version ${cargo_hack_version}; \
+    cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}; \
+    cargo install cargo-hack --locked --version ${cargo_hack_version}; \
     cargo install cargo-minimal-versions --version ${cargo_minimal_versions_version}; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
         git clone https://github.com/awslabs/smithy-rs.git; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
-    cargo install --path tools/publisher; \
-    cargo +${rust_nightly_version} install --path tools/api-linter; \
-    cargo install --path tools/crate-hasher; \
-    cargo install --path tools/sdk-lints; \
-    cargo install --path tools/sdk-sync; \
-    cargo install --path tools/sdk-versioner; \
+    cargo install --locked --path tools/publisher; \
+    cargo +${rust_nightly_version} install --locked --path tools/api-linter; \
+    cargo install --locked --path tools/changelogger; \
+    cargo install --locked --path tools/crate-hasher; \
+    cargo install --locked --path tools/sdk-lints; \
+    cargo install --locked --path tools/sdk-sync; \
+    cargo install --locked --path tools/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
 
 #
@@ -127,6 +128,7 @@ RUN set -eux; \
         pkgconfig \
         python3 \
         python3-devel \
+        python3-pip \
         shadow-utils; \
     yum clean all; \
     rm -rf /var/cache/yum; \
@@ -152,7 +154,7 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
 # This is used primarily by the `build.gradle.kts` files in choosing how to execute build tools. If inside the image,
 # they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
-RUN npm install -g diff2html-cli@5.1.11
+RUN npm install -g diff2html-cli@5.1.11 && pip3 install --no-cache-dir uvloop==0.16.0
 WORKDIR /home/build
 COPY ci-build/scripts/sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test

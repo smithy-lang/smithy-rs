@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.rustlang.autoDeref
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
@@ -53,16 +53,16 @@ fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {
  * headers & URL based on the HTTP trait implementation.
  */
 class RequestBindingGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     private val protocol: Protocol,
     private val operationShape: OperationShape,
 ) {
-    private val model = codegenContext.model
+    private val model = coreCodegenContext.model
     private val inputShape = operationShape.inputShape(model)
-    private val symbolProvider = codegenContext.symbolProvider
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val httpTrait = protocol.httpBindingResolver.httpTrait(operationShape)
-    private val httpBindingGenerator = HttpBindingGenerator(protocol, codegenContext, operationShape)
+    private val httpBindingGenerator = HttpBindingGenerator(protocol, coreCodegenContext, operationShape)
     private val index = HttpBindingIndex.of(model)
     private val Encoder = CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Encoder")
 

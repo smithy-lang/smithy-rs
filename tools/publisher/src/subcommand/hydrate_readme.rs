@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::repo::Repository;
 use crate::SMITHYRS_REPO_NAME;
 use anyhow::{Context, Result};
 use clap::Parser;
 use handlebars::Handlebars;
 use semver::Version;
 use serde_json::json;
+use smithy_rs_tool_common::git;
 use std::fs;
 use std::path::PathBuf;
 
@@ -34,8 +34,8 @@ pub async fn subcommand_hydrate_readme(
     }: &HydrateReadmeArgs,
 ) -> Result<()> {
     let cwd = std::env::current_dir()?;
-    let repository = Repository::new(SMITHYRS_REPO_NAME, &cwd)?;
-    let template_path = repository.root.join("aws/SDK_README.md.hb");
+    let repo_root = git::find_git_repository_root(SMITHYRS_REPO_NAME, &cwd)?;
+    let template_path = repo_root.join("aws/SDK_README.md.hb");
     let template_contents = fs::read(&template_path)
         .with_context(|| format!("Failed to read README template file at {:?}", template_path))?;
     let template_string =

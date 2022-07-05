@@ -72,6 +72,10 @@ check-server-codegen-unit-tests-python:
 check-server-e2e-test:
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-server-python-e2e-test
+check-server-python-e2e-test:
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-style-and-lints
 check-style-and-lints:
 	$(CI_ACTION) $@ $(ARGS)
@@ -88,8 +92,8 @@ generate-aws-sdk:
 generate-codegen-diff:
 	$(CI_ACTION) $@ $(ARGS)
 
-.PHONY: generate-smithy-rs-runtime-bundle
-generate-smithy-rs-runtime-bundle:
+.PHONY: generate-smithy-rs-release
+generate-smithy-rs-release:
 	$(CI_ACTION) $@ $(ARGS)
 
 .PHONY: sanity-test

@@ -1,5 +1,0 @@
-#!/bin/bash
-if [[ "$1" != "reset" || "$2" != "--hard" || "$3" != "some-commit-hash" ]]; then
-    echo "wrong arguments" >&2
-    exit 1
-fi

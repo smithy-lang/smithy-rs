@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.utils.AbstractCodeWriter
+import java.io.File
 import java.util.function.BiFunction
 
 /**
@@ -136,8 +137,9 @@ fun <T : AbstractCodeWriter<T>> T.rust(
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
     check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
-    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult ->
+    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
         val keyName = matchResult.groupValues[1]
+        val templateType = matchResult.groupValues[2].ifEmpty { ":T" }
         if (!scope.toMap().keys.contains(keyName)) {
             throw CodegenException(
                 "Rust block template expected `$keyName` but was not present in template.\n  hint: Template contains: ${
@@ -145,7 +147,7 @@ private fun transformTemplate(template: String, scope: Array<out Pair<String, An
                 }"
             )
         }
-        "#{${keyName.lowercase()}:T}"
+        "#{${keyName.lowercase()}$templateType}"
     }.trim()
 }
 
@@ -252,6 +254,9 @@ fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
  *    - Empty newlines are removed
  */
 fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePrefix: String = "/// "): T {
+    // Because writing docs relies on the newline prefix, ensure that there was a new line written
+    // before we write the docs
+    this.ensureNewline()
     pushState()
     setNewlinePrefix(newlinePrefix)
     val cleaned = text.lines()
@@ -389,7 +394,7 @@ class RustWriter private constructor(
     }
 
     fun module(): String? = if (filename.startsWith("src") && filename.endsWith(".rs")) {
-        filename.removeSuffix(".rs").split('/').last()
+        filename.removeSuffix(".rs").substringAfterLast(File.separatorChar)
     } else null
 
     fun safeName(prefix: String = "var"): String {
