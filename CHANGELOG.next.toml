@@ -10,3 +10,12 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """
+Add support for aws-chunked content encoding. Only single-chunk encoding is supported. Multiple chunks and
+chunk signing are not supported at this time.
+"""
+references = ["smithy-rs#1263"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
