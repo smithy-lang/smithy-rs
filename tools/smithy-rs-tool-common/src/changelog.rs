@@ -7,7 +7,7 @@
 
 use anyhow::{bail, Context, Result};
 use serde::{de, Deserialize, Deserializer, Serialize};
-use std::fmt;
+use std::fmt::{self, Display};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -16,6 +16,21 @@ pub enum SdkAffected {
     Client,
     Server,
     Both
+}
+
+impl Default for SdkAffected {
+    fn default() -> Self {
+        SdkAffected::Both
+    }
+}
+impl Display for SdkAffected {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SdkAffected::Client => write!(f, "client"),
+            SdkAffected::Server => write!(f, "server"),
+            SdkAffected::Both => write!(f, "all"),
+        }
+    }
 }
 
 impl FromStr for SdkAffected {
@@ -43,12 +58,13 @@ impl<'de> Deserialize<'de> for SdkAffected {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Meta {
     pub bug: bool,
     pub breaking: bool,
     pub tada: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sdk: Option<SdkAffected>
+    pub target: Option<SdkAffected>
 }
 
 #[derive(Clone, Debug)]
@@ -278,66 +294,45 @@ mod tests {
 
     #[test]
     fn test_hand_authored_sdk() {
+        // server target
         let value = r#"
             message = "Fix typos in module documentation for generated crates"
             references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "server" }
+            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "Server" }
             author = "rcoh"
         "#;
         {
            let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed").unwrap();
-            assert_eq!(value.meta.sdk, Some(SdkAffected::Server));
-        }
-        // different case enum value
-        let value = r#"
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "Server" }
-            author = "rcoh"
-        "#;
-        {
-           let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed").unwrap();
-            assert_eq!(value.meta.sdk, Some(SdkAffected::Server));
+            assert_eq!(value.meta.target, Some(SdkAffected::Server));
         }
 
-        // different enum value
+        // client target
         let value = r#"
             message = "Fix typos in module documentation for generated crates"
             references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "Client" }
+            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "Client" }
             author = "rcoh"
         "#;
         {
            let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed").unwrap();
-            assert_eq!(value.meta.sdk, Some(SdkAffected::Client));
+            assert_eq!(value.meta.target, Some(SdkAffected::Client));
         }
-        // Both enum value
+        // Both target
         let value = r#"
             message = "Fix typos in module documentation for generated crates"
             references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "Both" }
+            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "Both" }
             author = "rcoh"
         "#;
         {
            let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed").unwrap();
-            assert_eq!(value.meta.sdk, Some(SdkAffected::Both));
-        }
-        // both enum value
-        let value = r#"
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "both" }
-            author = "rcoh"
-        "#;
-        {
-           let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed").unwrap();
-            assert_eq!(value.meta.sdk, Some(SdkAffected::Both));
+            assert_eq!(value.meta.target, Some(SdkAffected::Both));
         }
         // an invalid sdk value
         let value = r#"
             message = "Fix typos in module documentation for generated crates"
             references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "Some other invalid" }
+            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "Some other invalid" }
             author = "rcoh"
         "#;
         {
@@ -353,7 +348,7 @@ mod tests {
         "#;
         {
             let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed as it has none meta.sdk").unwrap();
-            assert_eq!(value.meta.sdk, None);
+            assert_eq!(value.meta.target, None);
         }
     }
 }

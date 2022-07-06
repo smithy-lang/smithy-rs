@@ -5,7 +5,7 @@
 
 use anyhow::{bail, Result};
 use clap::clap_derive::ArgEnum;
-use smithy_rs_tool_common::changelog::{Changelog, HandAuthoredEntry, SdkModelEntry, SdkAffected};
+use smithy_rs_tool_common::changelog::{Changelog, HandAuthoredEntry, SdkModelEntry};
 use smithy_rs_tool_common::git::Git;
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
 use std::path::Path;
@@ -25,16 +25,12 @@ impl ChangelogEntries {
     pub fn filter(
         self,
         smithy_rs: &dyn Git,
-        smithy_rs_sdk : SdkAffected,
         change_set: ChangeSet,
         previous_release_versions_manifest: Option<&Path>,
     ) -> Result<Vec<ChangelogEntry>> {
         match change_set {
             ChangeSet::AwsSdk => {
-                if smithy_rs_sdk == SdkAffected::Server {
-                    Ok(vec![])
-                }
-                else if let Some(manifest_path) = previous_release_versions_manifest {
+                if let Some(manifest_path) = previous_release_versions_manifest {
                     let manifest = VersionsManifest::from_file(manifest_path)?;
                     let revisions =
                         smithy_rs.rev_list("HEAD", &manifest.smithy_rs_revision, None)?;
@@ -61,32 +57,8 @@ impl ChangelogEntries {
                     Ok(self.aws_sdk_rust)
                 }
             }
-            ChangeSet::SmithyRs => self.filter_smithy_rs_sdk_type(smithy_rs_sdk)
+            ChangeSet::SmithyRs => Ok(self.smithy_rs),
         }
-    }
-
-    pub fn filter_smithy_rs_sdk_type(self, sdk_to_include : SdkAffected) -> Result<Vec<ChangelogEntry>> {
-        if sdk_to_include == SdkAffected::Both {
-            return Ok(self.smithy_rs);
-        }
-        let result = self.smithy_rs
-            .into_iter()
-            .filter(|entry| {
-                match entry {
-                    ChangelogEntry::HandAuthored(hand_entry) => {
-                        if let Some(change_affects) = hand_entry.meta.sdk {
-                            sdk_to_include == change_affects || change_affects == SdkAffected::Both
-                        }
-                        else {
-                            // a missing sdk entry in the meta is considered a client
-                            sdk_to_include == SdkAffected::Client
-                        }
-                    },
-                    _ => true,  // only hand authored entires are filtered
-                }
-            })
-            .collect();
-        Ok(result)
     }
 }
 
