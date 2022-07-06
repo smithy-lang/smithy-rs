@@ -16,6 +16,8 @@ use publisher::subcommand::hydrate_readme::{
 };
 use publisher::subcommand::publish::subcommand_publish;
 use publisher::subcommand::publish::PublishArgs;
+use publisher::subcommand::tag_versions_manifest::subcommand_tag_versions_manifest;
+use publisher::subcommand::tag_versions_manifest::TagVersionsManifestArgs;
 use publisher::subcommand::yank_release::{subcommand_yank_release, YankReleaseArgs};
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove V1 args
@@ -49,6 +51,8 @@ enum Args {
     HydrateReadme(HydrateReadmeArgs),
     /// Generates a version manifest file for a generated SDK
     GenerateVersionManifest(GenerateVersionManifestArgs),
+    /// Adds a release tag to an existing version manifest
+    TagVersionsManifest(TagVersionsManifestArgs),
 }
 
 #[tokio::main]
@@ -68,6 +72,7 @@ async fn main() -> Result<()> {
             Args::GenerateVersionManifest(args) => {
                 subcommand_generate_version_manifest(&args).await?
             }
+            Args::TagVersionsManifest(args) => subcommand_tag_versions_manifest(&args)?,
         }
     } else {
         // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove V1 args

@@ -15,7 +15,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 /// Root struct representing a `versions.toml` manifest
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct VersionsManifest {
     /// Git commit hash of the version of smithy-rs used to generate this SDK
     pub smithy_rs_revision: String,
@@ -61,17 +61,17 @@ impl FromStr for VersionsManifest {
 }
 
 /// Release metadata
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct Release {
     /// The release tag associated with this `versions.toml`
-    pub tag: String,
+    pub tag: Option<String>,
 
     /// Which crate versions were published with this release
     pub crates: BTreeMap<String, String>,
 }
 
 /// Version metadata for a crate
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct CrateVersion {
     /// What kind of crate this is. Is it the Smithy runtime? AWS runtime? SDK crate?
     pub category: PackageCategory,

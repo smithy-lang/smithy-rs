@@ -29,11 +29,12 @@ pub struct GenerateVersionManifestArgs {
     /// Path containing the generated SDK to generate a version manifest for
     #[clap(long)]
     location: PathBuf,
-    /// Optional tag for the release the newly generated `versions.toml` will be for
-    #[clap(long, requires("previous-release-versions"))]
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove the unused `--release-tag` arg
+    /// Unused.
+    #[clap(long)]
     release_tag: Option<String>,
     /// Optional path to the `versions.toml` manifest from the previous SDK release
-    #[clap(long, requires("release-tag"))]
+    #[clap(long)]
     previous_release_versions: Option<PathBuf>,
 }
 
@@ -42,8 +43,8 @@ pub async fn subcommand_generate_version_manifest(
         smithy_build,
         examples_revision,
         location,
-        release_tag,
         previous_release_versions,
+        ..
     }: &GenerateVersionManifestArgs,
 ) -> Result<()> {
     verify_crate_hasher_available()?;
@@ -100,7 +101,7 @@ pub async fn subcommand_generate_version_manifest(
         release: None,
     };
     versions_manifest.release =
-        generate_release_metadata(&versions_manifest, release_tag, previous_release_versions)?;
+        generate_release_metadata(&versions_manifest, previous_release_versions)?;
     let manifest_file_name = location.join("versions.toml");
     info!("Writing {:?}...", manifest_file_name);
     versions_manifest.write_to_file(&manifest_file_name)?;
@@ -109,18 +110,16 @@ pub async fn subcommand_generate_version_manifest(
 
 fn generate_release_metadata(
     versions_manifest: &VersionsManifest,
-    maybe_release_tag: &Option<String>,
     maybe_previous_release_versions: &Option<PathBuf>,
 ) -> Result<Option<Release>> {
-    match (maybe_release_tag, maybe_previous_release_versions) {
-        (Some(release_tag), Some(previous_release_versions)) => {
-            let old_versions = VersionsManifest::from_file(previous_release_versions)?;
-            Ok(Some(Release {
-                tag: release_tag.into(),
-                crates: find_released_versions(&old_versions, versions_manifest)?,
-            }))
-        }
-        _ => Ok(None),
+    if let Some(previous_release_versions) = maybe_previous_release_versions {
+        let old_versions = VersionsManifest::from_file(previous_release_versions)?;
+        Ok(Some(Release {
+            tag: None,
+            crates: find_released_versions(&old_versions, versions_manifest)?,
+        }))
+    } else {
+        Ok(None)
     }
 }
 
