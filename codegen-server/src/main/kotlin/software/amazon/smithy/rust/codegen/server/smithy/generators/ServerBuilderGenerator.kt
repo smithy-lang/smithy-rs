@@ -24,10 +24,10 @@ import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -35,13 +35,13 @@ import software.amazon.smithy.rust.codegen.smithy.hasConstraintTraitOrTargetHasC
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.letIf
+import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -53,7 +53,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 //     - Always implements either From<Builder> for Structure or TryFrom<Builder> for Structure.
 //     - `pubCrateConstrainedShapeSymbolProvider` only needed if we want the builder to take in unconstrained types.
 class ServerBuilderGenerator(
-    codegenContext: CodegenContext,
+    codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider? = null,
 ) {
@@ -278,7 +278,7 @@ class ServerBuilderGenerator(
      *
      * See [PubCrateConstrainedShapeSymbolProvider] too.
      */
-    fun constrainedTypeHoldsFinalType(member: MemberShape): Boolean {
+    private fun constrainedTypeHoldsFinalType(member: MemberShape): Boolean {
         val targetShape = model.expectShape(member.target)
         return targetShape is StructureShape ||
                 targetShape is UnionShape ||

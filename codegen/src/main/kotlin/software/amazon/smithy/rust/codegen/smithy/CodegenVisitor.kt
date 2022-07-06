@@ -18,7 +18,6 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
@@ -53,8 +52,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     private val fileManifest = context.fileManifest
     private val model: Model
     private val codegenContext: ClientCodegenContext
-    private val protocolGenerator: ProtocolGeneratorFactory<ProtocolGenerator, ClientCodegenContext>
-    private val httpGenerator: ProtocolGenerator
+    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator, ClientCodegenContext>
+    private val protocolGenerator: ProtocolGenerator
 
     init {
         val symbolVisitorConfig =
@@ -69,19 +68,19 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val (protocol, generator) = ProtocolLoader(
             codegenDecorator.protocols(service.id, ProtocolLoader.DefaultProtocols)
         ).protocolFor(context.model, service)
-        protocolGenerator = generator
+        protocolGeneratorFactory = generator
         model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
         val baseProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
         symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
-        codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings, target = CodegenTarget.CLIENT)
+        codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings)
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
             DefaultPublicModules,
             codegenContext.settings.codegenConfig
         )
-        httpGenerator = protocolGenerator.buildProtocolGenerator(codegenContext)
+        protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
     /**
@@ -152,8 +151,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     override fun serviceShape(shape: ServiceShape) {
         ServiceGenerator(
             rustCrate,
-            httpGenerator,
-            protocolGenerator.support(),
+            protocolGenerator,
+            protocolGeneratorFactory.support(),
             codegenContext,
             codegenDecorator
         ).render()

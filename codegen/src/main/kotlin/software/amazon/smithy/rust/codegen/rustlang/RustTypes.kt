@@ -301,7 +301,7 @@ data class RustMetadata(
         return this
     }
 
-    fun renderVisibility(writer: RustWriter): RustMetadata {
+    private fun renderVisibility(writer: RustWriter): RustMetadata {
         writer.writeInline(
             when (visibility) {
                 Visibility.PRIVATE -> ""

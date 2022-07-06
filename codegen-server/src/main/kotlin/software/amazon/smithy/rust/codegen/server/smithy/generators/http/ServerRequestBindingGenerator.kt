@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpBindingGenerator
@@ -17,12 +17,12 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 
 class ServerRequestBindingGenerator(
     protocol: Protocol,
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     operationShape: OperationShape
 ) {
     private val httpBindingGenerator =
-        HttpBindingGenerator(protocol, codegenContext, unconstrainedShapeSymbolProvider, operationShape)
+        HttpBindingGenerator(protocol, coreCodegenContext, unconstrainedShapeSymbolProvider, operationShape)
 
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType =
         httpBindingGenerator.generateDeserializeHeaderFn(binding)

@@ -55,6 +55,4 @@ val DECORATORS = listOf(
 class AwsCodegenDecorator : CombinedCodegenDecorator<ClientCodegenContext>(DECORATORS) {
     override val name: String = "AwsSdkCodegenDecorator"
     override val order: Byte = -1
-
-    override fun canOperateWithCodegenContext(t: Class<*>): Boolean = t.isAssignableFrom(ClientCodegenContext::class.java)
 }

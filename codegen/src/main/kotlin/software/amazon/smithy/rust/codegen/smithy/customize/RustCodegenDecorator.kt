@@ -10,7 +10,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -29,7 +29,7 @@ import java.util.logging.Logger
  * AWS services. A different downstream customer may wish to add a different set of derive
  * attributes to the generated classes.
  */
-interface RustCodegenDecorator<C: CodegenContext> {
+interface RustCodegenDecorator<C : CoreCodegenContext> {
     /**
      * The name of this [RustCodegenDecorator], used for logging and debug information
      */
@@ -41,13 +41,12 @@ interface RustCodegenDecorator<C: CodegenContext> {
     val order: Byte
 
     fun configCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: C,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> = baseCustomizations
 
-    // TODO Can we make this exist only for Client decorators?
     fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: C,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> = baseCustomizations
@@ -62,7 +61,7 @@ interface RustCodegenDecorator<C: CodegenContext> {
      * added to the Cargo.toml `[package]` section, a `mapOf("package" to mapOf("homepage", "https://example.com"))`
      * could be returned. Properties here overwrite the default properties.
      */
-    fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations = emptyMap()
+    fun crateManifestCustomizations(codegenContext: C): ManifestCustomizations = emptyMap()
 
     fun extras(codegenContext: C, rustCrate: RustCrate) {}
 
@@ -72,9 +71,6 @@ interface RustCodegenDecorator<C: CodegenContext> {
     fun transformModel(service: ServiceShape, model: Model): Model = model
 
     fun symbolProvider(baseProvider: RustSymbolProvider): RustSymbolProvider = baseProvider
-
-    // TODO Can we remove this and instead in the filter catch ClassCast Exception?
-    fun canOperateWithCodegenContext(t: Class<*>): Boolean
 }
 
 /**
@@ -82,7 +78,7 @@ interface RustCodegenDecorator<C: CodegenContext> {
  *
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
-open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCodegenDecorator<C>>) : RustCodegenDecorator<C> {
+open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<RustCodegenDecorator<C>>) : RustCodegenDecorator<C> {
     private val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
         get() = "MetaDecorator"
@@ -92,7 +88,7 @@ open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCode
     fun withDecorator(decorator: RustCodegenDecorator<C>) = CombinedCodegenDecorator(orderedDecorators + decorator)
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: C,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<C>, customizations ->
@@ -101,7 +97,7 @@ open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCode
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: C,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
@@ -134,7 +130,7 @@ open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCode
         }
     }
 
-    override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations {
+    override fun crateManifestCustomizations(codegenContext: C): ManifestCustomizations {
         return orderedDecorators.foldRight(emptyMap()) { decorator, customizations ->
             customizations.deepMergeWith(decorator.crateManifestCustomizations(codegenContext))
         }
@@ -150,12 +146,8 @@ open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCode
         }
     }
 
-    override fun canOperateWithCodegenContext(t: Class<*>): Boolean {
-        PANIC("You have forgotten to override this method in your class that subclasses `CombinedCodegenDecorator`.")
-    }
-
     companion object {
-        inline fun <reified T: CodegenContext> fromClasspathGeneric(
+        inline fun <reified T : CoreCodegenContext> fromClasspath(
             context: PluginContext,
             vararg extras: RustCodegenDecorator<T>,
             logger: Logger = Logger.getLogger("RustCodegenSPILoader")
@@ -164,7 +156,21 @@ open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCode
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader)
             )
-                .filter { it.canOperateWithCodegenContext(T::class.java) }
+                // The JVM's `ServiceLoader` is woefully underpowered in that it can not load classes with generic
+                // parameters with _fixed_ parameters (like what we're trying to do here; we only want `RustCodegenDecorator`
+                // classes with code-generation context matching the input `T`).
+                // There are various workarounds: https://stackoverflow.com/questions/5451734/loading-generic-service-implementations-via-java-util-serviceloader
+                // All involve loading _all_ classes from the classpath (i.e. all `RustCodegenDecorator<*>`), and then
+                // filtering them. The most elegant way to filter is arguably by checking if we can cast the loaded
+                // class to what we want.
+                .filter {
+                    try {
+                        it as RustCodegenDecorator<T>
+                        true
+                    } catch (e: ClassCastException) {
+                        false
+                    }
+                }
                 .onEach {
                     logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                 }
@@ -174,8 +180,6 @@ open class CombinedCodegenDecorator<C: CodegenContext>(decorators: List<RustCode
                     it as RustCodegenDecorator<T>
                 }
                 .toList()
-            // TODO Should probably look like this.
-//            return CombinedCodegenDecorator(decorators + RequiredCustomizations() + extras)
             return CombinedCodegenDecorator(decorators + extras)
         }
     }

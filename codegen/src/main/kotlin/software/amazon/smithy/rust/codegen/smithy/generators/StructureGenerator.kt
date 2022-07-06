@@ -69,20 +69,20 @@ fun MemberShape.deserializerBuilderSetterName(model: Model, symbolProvider: Symb
     }
 }
 
-class StructureGenerator(
+open class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape
 ) {
     private val errorTrait = shape.getTrait<ErrorTrait>()
-    private val members: List<MemberShape> = shape.allMembers.values.toList()
-    private val accessorMembers: List<MemberShape> = when (errorTrait) {
+    protected val members: List<MemberShape> = shape.allMembers.values.toList()
+    protected val accessorMembers: List<MemberShape> = when (errorTrait) {
         null -> members
         // Let the ErrorGenerator render the error message accessor if this is an error struct
         else -> members.filter { "message" != symbolProvider.toMemberName(it) }
     }
-    private val name = symbolProvider.toSymbol(shape).name
+    protected val name = symbolProvider.toSymbol(shape).name
 
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
@@ -190,7 +190,13 @@ class StructureGenerator(
         }
     }
 
-    private fun renderStructure() {
+    open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+        writer.renderMemberDoc(member, memberSymbol)
+        memberSymbol.expectRustMetadata().render(writer)
+        writer.write("$memberName: #T,", symbolProvider.toSymbol(member))
+    }
+
+    open fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
@@ -198,10 +204,8 @@ class StructureGenerator(
         containerMeta.copy(derives = withoutDebug).render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
-            forEachMember(members) { member, memberName, memberSymbol ->
-                renderMemberDoc(member, memberSymbol)
-                memberSymbol.expectRustMetadata().render(this)
-                write("$memberName: #T,", symbolProvider.toSymbol(member))
+            writer.forEachMember(members) { member, memberName, memberSymbol ->
+                renderStructureMember(writer, member, memberName, memberSymbol)
             }
         }
 
@@ -209,7 +213,7 @@ class StructureGenerator(
         renderDebugImpl()
     }
 
-    private fun RustWriter.forEachMember(
+    protected fun RustWriter.forEachMember(
         toIterate: List<MemberShape>,
         block: RustWriter.(MemberShape, String, Symbol) -> Unit
     ) {

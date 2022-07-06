@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.testutil
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -23,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
@@ -30,30 +32,6 @@ val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
     renameExceptions = false,
     handleRustBoxing = true,
     handleRequired = true
-)
-
-fun serverTestRustSettings(
-    service: ShapeId = ShapeId.from("notrelevant#notrelevant"),
-    moduleName: String = "test-module",
-    moduleVersion: String = "notrelevant",
-    moduleAuthors: List<String> = listOf("notrelevant"),
-    moduleDescription: String = "not relevant",
-    moduleRepository: String? = null,
-    runtimeConfig: RuntimeConfig = TestRuntimeConfig,
-    codegenConfig: ServerCodegenConfig = ServerCodegenConfig(),
-    license: String? = null,
-    examplesUri: String? = null,
-) = ServerRustSettings(
-    service,
-    moduleName,
-    moduleVersion,
-    moduleAuthors,
-    moduleDescription,
-    moduleRepository,
-    runtimeConfig,
-    codegenConfig,
-    license,
-    examplesUri
 )
 
 fun serverTestSymbolProvider(
@@ -68,11 +46,37 @@ fun serverTestSymbolProvider(
         publicConstrainedTypesEnabled = publicConstrainedTypesEnabled
     )
 
+fun serverTestRustSettings(
+    service: ShapeId = ShapeId.from("notrelevant#notrelevant"),
+    moduleName: String = "test-module",
+    moduleVersion: String = "0.0.1",
+    moduleAuthors: List<String> = listOf("notrelevant"),
+    moduleDescription: String = "not relevant",
+    moduleRepository: String? = null,
+    runtimeConfig: RuntimeConfig = TestRuntimeConfig,
+    codegenConfig: ServerCodegenConfig = ServerCodegenConfig(),
+    license: String? = null,
+    examplesUri: String? = null,
+    customizationConfig: ObjectNode? = null
+) = ServerRustSettings(
+    service,
+    moduleName,
+    moduleVersion,
+    moduleAuthors,
+    moduleDescription,
+    moduleRepository,
+    runtimeConfig,
+    codegenConfig,
+    license,
+    examplesUri,
+    customizationConfig
+)
+
 fun serverTestCodegenContext(
     model: Model,
     serviceShape: ServiceShape? = null,
     settings: ServerRustSettings = serverTestRustSettings(),
-    codegenTarget: CodegenTarget = CodegenTarget.SERVER
+    protocolShapeId: ShapeId? = null
 ): ServerCodegenContext {
     val service =
         serviceShape
@@ -80,13 +84,13 @@ fun serverTestCodegenContext(
             ?: ServiceShape.builder().version("test").id("test#Service").build()
     val symbolProvider = serverTestSymbolProvider(model, serviceShape)
     val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, service)
+    val protocol = protocolShapeId ?: ShapeId.from("test#Protocol")
     return ServerCodegenContext(
         model,
         symbolProvider,
         service,
-        ShapeId.from("test#Protocol"),
+        protocol,
         settings,
-        codegenTarget,
         unconstrainedShapeSymbolProvider
     )
 }

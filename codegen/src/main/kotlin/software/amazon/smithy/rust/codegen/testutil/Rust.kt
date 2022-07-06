@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
@@ -110,7 +110,7 @@ object TestWorkspace {
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,
-            ClientCodegenConfig(debugMode = debugMode)
+            CoreCodegenConfig(debugMode = debugMode)
         )
     }
 }
@@ -171,12 +171,28 @@ fun RustWriter.unitTest(
     }
 }
 
+/*
+ * Writes a Rust-style unit test
+ */
+fun RustWriter.unitTest(
+    name: String,
+    vararg args: Any,
+    block: RustWriter.() -> Unit
+): RustWriter {
+    raw("#[test]")
+    return rustBlock("fn $name()", *args, block = block)
+}
+
 /**
  * WriterDelegator used for test purposes
  *
  * This exposes both the base directory and a list of [generatedFiles] for test purposes
  */
-class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider: RustSymbolProvider, val codegenConfig: ClientCodegenConfig) :
+class TestWriterDelegator(
+    private val fileManifest: FileManifest,
+    symbolProvider: RustSymbolProvider,
+    val codegenConfig: CoreCodegenConfig
+) :
     RustCrate(fileManifest, symbolProvider, DefaultPublicModules, codegenConfig) {
     val baseDir: Path = fileManifest.baseDir
 

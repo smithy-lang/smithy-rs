@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.customizations
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
@@ -108,19 +108,17 @@ class TimeoutConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return baseCustomizations + TimeoutConfigProviderConfig(codegenContext)
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
-class TimeoutConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val smithyTypesCrate = codegenContext.runtimeConfig.runtimeCrate("types")
+class TimeoutConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
+    private val smithyTypesCrate = coreCodegenContext.runtimeConfig.runtimeCrate("types")
     private val timeoutModule = RuntimeType("timeout", smithyTypesCrate, "aws_smithy_types")
-    private val moduleUseName = codegenContext.moduleUseName()
+    private val moduleUseName = coreCodegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         "TimeoutConfig" to timeoutModule.member("Config"),
     )

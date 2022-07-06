@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -29,13 +28,13 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return baseCustomizations + NewFromShared(codegenContext.runtimeConfig)
     }
 
-    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val codegenScope = arrayOf(
             "SdkConfig" to awsTypes(runtimeConfig = codegenContext.runtimeConfig).asType().member("sdk_config::SdkConfig")
         )
@@ -67,8 +66,6 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
             )
         }
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {

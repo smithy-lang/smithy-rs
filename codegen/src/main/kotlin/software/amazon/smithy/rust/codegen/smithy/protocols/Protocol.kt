@@ -20,7 +20,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
@@ -78,7 +78,7 @@ interface Protocol {
 
 typealias ProtocolMap<C> = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator, C>>
 
-interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C: CodegenContext> {
+interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C : CoreCodegenContext> {
     fun protocol(codegenContext: C): Protocol
     fun buildProtocolGenerator(codegenContext: C): T
     fun transformModel(model: Model): Model
@@ -86,8 +86,7 @@ interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C: CodegenContext>
     fun support(): ProtocolSupport
 }
 
-class ProtocolLoader<C: CodegenContext>(private val supportedProtocols: ProtocolMap<C>) {
-    // TODO Is this function used?
+class ProtocolLoader<C : CoreCodegenContext>(private val supportedProtocols: ProtocolMap<C>) {
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape

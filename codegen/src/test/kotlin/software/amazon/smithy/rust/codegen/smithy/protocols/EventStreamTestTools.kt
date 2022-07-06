@@ -18,7 +18,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
@@ -126,7 +126,7 @@ object EventStreamTestModels {
         val validSomeError: String,
         val validUnmodeledError: String,
         val target: CodegenTarget = CodegenTarget.CLIENT,
-        val protocolBuilder: (CodegenContext) -> Protocol,
+        val protocolBuilder: (CoreCodegenContext) -> Protocol,
     ) {
         override fun toString(): String = protocolShapeId
     }

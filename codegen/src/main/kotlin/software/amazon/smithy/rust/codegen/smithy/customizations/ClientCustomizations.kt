@@ -20,6 +20,4 @@ class ClientCustomizations : RustCodegenDecorator<ClientCodegenContext> {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> = baseCustomizations + ClientDocsGenerator()
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }

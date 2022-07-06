@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-class ServerEnumGenerator(
+open class ServerEnumGenerator(
     model: Model,
     symbolProvider: RustSymbolProvider,
     constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
@@ -31,6 +31,8 @@ class ServerEnumGenerator(
     private val unknownVariantSymbol = constraintViolationSymbolProvider.toSymbol(shape)
 
     override fun renderFromForStr() {
+        // TODO Shouldn't `ConstraintViolation` be unknownVariantSymbol.name?
+        // TODO We could put all the impl blocks / trait impls inside the mod.
         writer.rust(
             """
             pub mod ${enumName.toSnakeCase()} {
@@ -69,7 +71,6 @@ class ServerEnumGenerator(
             """
             impl std::str::FromStr for $enumName {
                 type Err = #{UnknownVariantSymbol};
-
                 fn from_str(s: &str) -> std::result::Result<Self, <Self as std::str::FromStr>::Err> {
                     Self::try_from(s)
                 }

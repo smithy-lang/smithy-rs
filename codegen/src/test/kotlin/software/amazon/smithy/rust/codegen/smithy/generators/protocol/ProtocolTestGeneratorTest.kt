@@ -17,8 +17,8 @@ import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -44,10 +44,10 @@ private class TestProtocolPayloadGenerator(private val body: String) : ProtocolP
 }
 
 private class TestProtocolTraitImplGenerator(
-    private val codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val correctResponse: String
 ) : ProtocolTraitImplGenerator {
-    private val symbolProvider = codegenContext.symbolProvider
+    private val symbolProvider = coreCodegenContext.symbolProvider
 
     override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
         operationWriter.rustTemplate(
@@ -58,8 +58,8 @@ private class TestProtocolTraitImplGenerator(
                     ${operationWriter.escape(correctResponse)}
                 }
                     }""",
-            "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
-            "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
+            "parse_strict" to RuntimeType.parseStrictResponse(coreCodegenContext.runtimeConfig),
+            "output" to symbolProvider.toSymbol(operationShape.outputShape(coreCodegenContext.model)),
             "error" to operationShape.errorSymbol(symbolProvider),
             "response" to RuntimeType.Http("Response"),
             "bytes" to RuntimeType.Bytes
@@ -68,12 +68,12 @@ private class TestProtocolTraitImplGenerator(
 }
 
 private class TestProtocolMakeOperationGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     protocol: Protocol,
     body: String,
     private val httpRequestBuilder: String
 ) : MakeOperationGenerator(
-    codegenContext,
+    coreCodegenContext,
     protocol,
     TestProtocolPayloadGenerator(body),
     public = true,
@@ -87,16 +87,16 @@ private class TestProtocolMakeOperationGenerator(
 
 // A stubbed test protocol to do enable testing intentionally broken protocols
 private class TestProtocolGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     protocol: Protocol,
     httpRequestBuilder: String,
     body: String,
     correctResponse: String
 ) : ProtocolGenerator(
-    codegenContext,
+    coreCodegenContext,
     protocol,
-    TestProtocolMakeOperationGenerator(codegenContext, protocol, body, httpRequestBuilder),
-    TestProtocolTraitImplGenerator(codegenContext, correctResponse)
+    TestProtocolMakeOperationGenerator(coreCodegenContext, protocol, body, httpRequestBuilder),
+    TestProtocolTraitImplGenerator(coreCodegenContext, correctResponse)
 )
 
 private class TestProtocolFactory(
@@ -233,8 +233,6 @@ class ProtocolTestGeneratorTest {
                 ): ProtocolMap<ClientCodegenContext> =
                     // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
                     mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
-
-                override fun canOperateWithCodegenContext(t: Class<*>): Boolean = t.isAssignableFrom(ClientCodegenContext::class.java)
             }
         )
         visitor.execute()

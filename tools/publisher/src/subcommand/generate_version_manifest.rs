@@ -9,9 +9,9 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
 use serde::Deserialize;
-use smithy_rs_tool_common::git::GetLastCommit;
+use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::package::PackageCategory;
-use smithy_rs_tool_common::shell::{self, ShellOperation};
+use smithy_rs_tool_common::shell;
 use smithy_rs_tool_common::versions_manifest::{CrateVersion, Release, VersionsManifest};
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -48,9 +48,9 @@ pub async fn subcommand_generate_version_manifest(
 ) -> Result<()> {
     verify_crate_hasher_available()?;
 
-    let smithy_rs_revision = GetLastCommit::new(std::env::current_dir()?)
-        .spawn()
-        .await
+    let repo_root = find_git_repository_root("smithy-rs", &std::env::current_dir()?)?;
+    let smithy_rs_revision = GitCLI::new(&repo_root)?
+        .get_head_revision()
         .context("get smithy-rs revision")?;
     info!("Resolved smithy-rs revision to {}", smithy_rs_revision);
 
@@ -94,7 +94,7 @@ pub async fn subcommand_generate_version_manifest(
     }
     info!("Discovered and hashed {} crates", crates.len());
     let mut versions_manifest = VersionsManifest {
-        smithy_rs_revision,
+        smithy_rs_revision: smithy_rs_revision.to_string(),
         aws_doc_sdk_examples_revision: examples_revision.to_string(),
         crates,
         release: None,

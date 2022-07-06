@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.smithy.customize
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.CrateVersionGenerator
@@ -29,15 +28,15 @@ class RequiredCustomizations : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = -1
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> =
         baseCustomizations +
-                IdempotencyTokenGenerator(codegenContext, operation) +
-                EndpointPrefixGenerator(codegenContext, operation) +
-                HttpChecksumRequiredGenerator(codegenContext, operation) +
-                HttpVersionListCustomization(codegenContext, operation)
+            IdempotencyTokenGenerator(codegenContext, operation) +
+            EndpointPrefixGenerator(codegenContext, operation) +
+            HttpChecksumRequiredGenerator(codegenContext, operation) +
+            HttpVersionListCustomization(codegenContext, operation)
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
@@ -49,6 +48,4 @@ class RequiredCustomizations : RustCodegenDecorator<ClientCodegenContext> {
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }

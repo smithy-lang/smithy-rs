@@ -232,6 +232,7 @@ class SymbolVisitor(
     }
 
     override fun toMemberName(shape: MemberShape): String = when (val container = model.expectShape(shape.container)) {
+
         is StructureShape -> shape.memberName.toSnakeCase()
         is UnionShape -> shape.memberName.toPascalCase()
         else -> error("unexpected container shape: $container")
@@ -299,8 +300,7 @@ class SymbolVisitor(
     }
 
     override fun operationShape(shape: OperationShape): Symbol {
-        return symbolBuilder(
-            shape,
+        return symbolBuilder(shape,
             RustType.Opaque(
                 shape.contextName(serviceShape)
                     .replaceFirstChar { it.uppercase() }

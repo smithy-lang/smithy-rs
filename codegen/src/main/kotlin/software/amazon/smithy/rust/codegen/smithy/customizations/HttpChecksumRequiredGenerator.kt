@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -23,14 +23,14 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
 class HttpChecksumRequiredGenerator(
-    private val codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val operationShape: OperationShape
 ) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         if (!operationShape.hasTrait<HttpChecksumRequiredTrait>()) {
             return emptySection
         }
-        if (operationShape.inputShape(codegenContext.model).hasStreamingMember(codegenContext.model)) {
+        if (operationShape.inputShape(coreCodegenContext.model).hasStreamingMember(coreCodegenContext.model)) {
             throw CodegenException("HttpChecksum required cannot be applied to a streaming shape")
         }
         return when (section) {
@@ -52,8 +52,8 @@ class HttpChecksumRequiredGenerator(
                     """,
                     "md5" to CargoDependency.Md5.asType(),
                     "http" to CargoDependency.Http.asType(),
-                    "base64_encode" to RuntimeType.Base64Encode(codegenContext.runtimeConfig),
-                    "BuildError" to codegenContext.runtimeConfig.operationBuildError()
+                    "base64_encode" to RuntimeType.Base64Encode(coreCodegenContext.runtimeConfig),
+                    "BuildError" to coreCodegenContext.runtimeConfig.operationBuildError()
                 )
             }
             else -> emptySection

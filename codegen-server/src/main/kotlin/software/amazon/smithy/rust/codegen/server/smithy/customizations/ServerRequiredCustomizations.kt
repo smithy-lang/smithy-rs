@@ -18,12 +18,12 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
  * A set of customizations that are included in all protocols.
  *
  * This exists as a convenient place to gather these modifications, these are not true customizations.
+ *
+ * See [RequiredCustomizations] from the `rust-codegen` subproject for the client version of this decorator.
  */
 class ServerRequiredCustomizations : RustCodegenDecorator<ServerCodegenContext> {
-    override val name: String = "Required"
+    override val name: String = "ServerRequired"
     override val order: Byte = -1
-
-    // TODO Convert ServerCodegenContext into CodegenContext and depend on RequiredCustomizations.kt
 
     override fun libRsCustomizations(
         codegenContext: ServerCodegenContext,
@@ -35,6 +35,4 @@ class ServerRequiredCustomizations : RustCodegenDecorator<ServerCodegenContext> 
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ServerCodegenContext::class.java)
 }

@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -72,7 +72,7 @@ class RetryConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val order: Byte = 0
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return baseCustomizations + RetryConfigProviderConfig(codegenContext)
@@ -84,13 +84,11 @@ class RetryConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseRetryConfig(codegenContext.runtimeConfig)
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
-class RetryConfigProviderConfig(codegenContext: CodegenContext) : ConfigCustomization() {
-    private val retryConfig = smithyTypesRetry(codegenContext.runtimeConfig)
-    private val moduleUseName = codegenContext.moduleUseName()
+class RetryConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
+    private val retryConfig = smithyTypesRetry(coreCodegenContext.runtimeConfig)
+    private val moduleUseName = coreCodegenContext.moduleUseName()
     private val codegenScope = arrayOf("RetryConfig" to retryConfig.member("RetryConfig"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {

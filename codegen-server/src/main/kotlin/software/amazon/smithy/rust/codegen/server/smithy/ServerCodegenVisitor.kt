@@ -40,7 +40,6 @@ import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.ServerRustSettings
@@ -70,14 +69,13 @@ import java.util.logging.Logger
  * Entrypoint for server-side code generation. This class will walk the in-memory model and
  * generate all the needed types by calling the accept() function on the available shapes.
  */
-class ServerCodegenVisitor(
+open class ServerCodegenVisitor(
     context: PluginContext,
     private val codegenDecorator: RustCodegenDecorator<ServerCodegenContext>
-) :
-    ShapeVisitor.Default<Unit>() {
+) : ShapeVisitor.Default<Unit>() {
 
-    private val logger = Logger.getLogger(javaClass.name)
-    private val settings = ServerRustSettings.from(context.model, context.settings)
+    protected val logger = Logger.getLogger(javaClass.name)
+    protected val settings = ServerRustSettings.from(context.model, context.settings)
 
     private val symbolProvider: RustSymbolProvider
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider
@@ -141,8 +139,7 @@ class ServerCodegenVisitor(
             service,
             protocol,
             settings,
-            target = CodegenTarget.SERVER,
-            unconstrainedShapeSymbolProvider
+            unconstrainedShapeSymbolProvider = unconstrainedShapeSymbolProvider
         )
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
@@ -157,7 +154,7 @@ class ServerCodegenVisitor(
      * Base model transformation applied to all services.
      * See below for details.
      */
-    private fun baselineTransform(model: Model) =
+    protected fun baselineTransform(model: Model) =
         model
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
@@ -173,7 +170,7 @@ class ServerCodegenVisitor(
     /**
      * Execute code generation
      *
-     * 1. Load the service from [RustSettings].
+     * 1. Load the service from [CoreRustSettings].
      * 2. Traverse every shape in the closure of the service.
      * 3. Loop through each shape and visit them (calling the override functions in this class)
      * 4. Call finalization tasks specified by decorators.
@@ -343,7 +340,7 @@ class ServerCodegenVisitor(
     }
 
     /**
-     * String Shape Visitor
+     * Enum Shape Visitor
      *
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */

@@ -28,6 +28,4 @@ class Ec2Decorator : RustCodegenDecorator<ClientCodegenContext> {
             BoxPrimitiveShapes::processModel
         )
     }
-
-    override fun canOperateWithCodegenContext(t: Class<*>) = t.isAssignableFrom(ClientCodegenContext::class.java)
 }
