@@ -67,7 +67,8 @@ class PythonServerCodegenVisitor(
             codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
 
         // Override `codegenContext` which carries the symbolProvider.
-        codegenContext = ServerCodegenContext(model, symbolProvider, service, protocol, settings)
+        codegenContext =
+            ServerCodegenContext(model, symbolProvider, service, protocol, settings, unconstrainedShapeSymbolProvider)
 
         // Override `rustCrate` which carries the symbolProvider.
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
@@ -112,7 +113,14 @@ class PythonServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating an enum $shape")
         shape.getTrait<EnumTrait>()?.also { enum ->
             rustCrate.useShapeWriter(shape) { writer ->
-                PythonServerEnumGenerator(model, symbolProvider, writer, shape, enum, codegenContext.runtimeConfig).render()
+                PythonServerEnumGenerator(
+                    model,
+                    symbolProvider,
+                    constraintViolationSymbolProvider,
+                    writer,
+                    shape,
+                    enum
+                ).render()
             }
         }
     }

@@ -77,16 +77,16 @@ open class ServerCodegenVisitor(
     protected val logger = Logger.getLogger(javaClass.name)
     protected val settings = ServerRustSettings.from(context.model, context.settings)
 
-    private val symbolProvider: RustSymbolProvider
-    private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider
+    protected var symbolProvider: RustSymbolProvider
+    protected val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider
-    private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider
-    private val rustCrate: RustCrate
+    protected val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider
+    protected var rustCrate: RustCrate
     private val fileManifest = context.fileManifest
-    private val model: Model
-    private val codegenContext: ServerCodegenContext
-    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator, ServerCodegenContext>
-    private val protocolGenerator: ProtocolGenerator
+    protected var model: Model
+    protected var codegenContext: ServerCodegenContext
+    protected var protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator, ServerCodegenContext>
+    protected var protocolGenerator: ProtocolGenerator
     private val unconstrainedModule =
         RustModule.private(Unconstrained.namespace, "Unconstrained types for constrained shapes.")
     private val constrainedModule =
@@ -139,7 +139,7 @@ open class ServerCodegenVisitor(
             service,
             protocol,
             settings,
-            unconstrainedShapeSymbolProvider = unconstrainedShapeSymbolProvider
+            unconstrainedShapeSymbolProvider
         )
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)

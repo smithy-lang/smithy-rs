@@ -17,8 +17,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
-import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.util.dq
 
@@ -30,11 +30,18 @@ import software.amazon.smithy.rust.codegen.util.dq
 class PythonServerEnumGenerator(
     model: Model,
     symbolProvider: RustSymbolProvider,
+    constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     private val writer: RustWriter,
-    private val shape: StringShape,
+    shape: StringShape,
     enumTrait: EnumTrait,
-    runtimeConfig: RuntimeConfig,
-) : ServerEnumGenerator(model, symbolProvider, writer, shape, enumTrait, runtimeConfig) {
+) : ServerEnumGenerator(
+    model,
+    symbolProvider,
+    constraintViolationSymbolProvider,
+    writer,
+    shape,
+    enumTrait,
+) {
 
     private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.asType())
 
