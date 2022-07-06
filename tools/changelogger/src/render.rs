@@ -47,6 +47,7 @@ pub struct RenderArgs {
     /// Which set of changes to render
     #[clap(long, action)]
     pub change_set: ChangeSet,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Require this arg to be `true`
     /// Whether or not independent crate versions are being used (defaults to false)
     #[clap(long, action)]
     pub independent_versioning: bool,
@@ -94,6 +95,7 @@ pub fn subcommand_render(args: &RenderArgs) -> Result<()> {
         let sdk_metadata = date_based_release_metadata(now, "aws-sdk-rust-release-manifest.json");
         update_changelogs(args, &smithy_rs, &smithy_rs_metadata, &sdk_metadata)
     } else {
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove this code path entirely
         let auto = auto_changelog_meta(&smithy_rs)?;
         let smithy_rs_metadata = version_based_release_metadata(
             now,
@@ -170,6 +172,7 @@ fn date_title(now: &OffsetDateTime) -> String {
     )
 }
 
+// TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove this function
 /// Discover the new version for the changelog from gradle.properties and the date.
 fn auto_changelog_meta(smithy_rs: &dyn Git) -> Result<ChangelogMeta> {
     let gradle_props = fs::read_to_string(smithy_rs.path().join("gradle.properties"))
