@@ -69,52 +69,53 @@ class ServerOperationRegistryGeneratorTest {
 
         val index = TopDownIndex.of(serverCodegenContext.model)
         val operations = index.getContainedOperations(serverCodegenContext.serviceShape).sortedBy { it.id }
-        val httpBindingResolver = protocolGeneratorFactory.protocol(serverCodegenContext).httpBindingResolver
+        val protocol = protocolGeneratorFactory.protocol(serverCodegenContext)
 
-        val generator = ServerOperationRegistryGenerator(serverCodegenContext, httpBindingResolver, operations)
+        val generator = ServerOperationRegistryGenerator(serverCodegenContext, protocol, operations)
         val writer = RustWriter.forModule("operation_registry")
         generator.render(writer)
 
         writer.toString() shouldContain
-                """
-                /// ```rust
-                /// use std::net::SocketAddr;
-                /// use service::{input, output, error};
-                /// use service::operation_registry::OperationRegistryBuilder;
-                /// use aws_smithy_http_server::routing::Router;
-                ///
-                /// #[tokio::main]
-                /// pub async fn main() {
-                ///    let app: Router = OperationRegistryBuilder::default()
-                ///        .frobnify(frobnify)
-                ///        .say_hello(say_hello)
-                ///        .build()
-                ///        .expect("unable to build operation registry")
-                ///        .into();
-                ///
-                ///    let bind: SocketAddr = format!("{}:{}", "127.0.0.1", "6969")
-                ///        .parse()
-                ///        .expect("unable to parse the server bind address and port");
-                ///
-                ///    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
-                ///
-                ///    // Run your service!
-                ///    // if let Err(err) = server.await {
-                ///    //   eprintln!("server error: {}", err);
-                ///    // }
-                /// }
-                ///
-                /// /// Only the Frobnify operation is documented,
-                /// /// over multiple lines.
-                /// /// And here are #hash #tags!
-                /// async fn frobnify(input: input::FrobnifyInputOutput) -> Result<output::FrobnifyInputOutput, error::FrobnifyError> {
-                ///     todo!()
-                /// }
-                ///
-                /// async fn say_hello(input: input::SayHelloInputOutput) -> output::SayHelloInputOutput {
-                ///     todo!()
-                /// }
-                /// ```
-                ///""".trimIndent()
+            """
+            /// ```rust
+            /// use std::net::SocketAddr;
+            /// use service::{input, output, error};
+            /// use service::operation_registry::OperationRegistryBuilder;
+            /// use aws_smithy_http_server::routing::Router;
+            ///
+            /// #[tokio::main]
+            /// pub async fn main() {
+            ///    let app: Router = OperationRegistryBuilder::default()
+            ///        .frobnify(frobnify)
+            ///        .say_hello(say_hello)
+            ///        .build()
+            ///        .expect("unable to build operation registry")
+            ///        .into();
+            ///
+            ///    let bind: SocketAddr = format!("{}:{}", "127.0.0.1", "6969")
+            ///        .parse()
+            ///        .expect("unable to parse the server bind address and port");
+            ///
+            ///    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
+            ///
+            ///    // Run your service!
+            ///    // if let Err(err) = server.await {
+            ///    //   eprintln!("server error: {}", err);
+            ///    // }
+            /// }
+            ///
+            /// /// Only the Frobnify operation is documented,
+            /// /// over multiple lines.
+            /// /// And here are #hash #tags!
+            /// async fn frobnify(input: input::FrobnifyInputOutput) -> Result<output::FrobnifyInputOutput, error::FrobnifyError> {
+            ///     todo!()
+            /// }
+            ///
+            /// async fn say_hello(input: input::SayHelloInputOutput) -> output::SayHelloInputOutput {
+            ///     todo!()
+            /// }
+            /// ```
+            ///
+            """.trimIndent()
     }
 }

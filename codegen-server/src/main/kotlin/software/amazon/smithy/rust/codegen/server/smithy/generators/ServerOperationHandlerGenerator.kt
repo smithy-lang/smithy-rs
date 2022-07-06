@@ -34,7 +34,6 @@ open class ServerOperationHandlerGenerator(
     private val model = coreCodegenContext.model
     private val protocol = coreCodegenContext.protocol
     private val symbolProvider = coreCodegenContext.symbolProvider
-    private val operationNames = operations.map { symbolProvider.toSymbol(it).name }
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
@@ -52,7 +51,7 @@ open class ServerOperationHandlerGenerator(
         renderHandlerImplementations(writer, true)
     }
 
-    /*
+    /**
      * Renders the implementation of the `Handler` trait for all operations.
      * Handlers are implemented for `FnOnce` function types whose signatures take in state or not.
      */
@@ -126,7 +125,7 @@ open class ServerOperationHandlerGenerator(
         }
     }
 
-    /*
+    /**
      * Generates the trait bounds of the `Handler` trait implementation, depending on:
      *     - the presence of state; and
      *     - whether the operation is fallible or not.

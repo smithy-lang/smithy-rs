@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustom
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
-import java.util.*
+import java.util.ServiceLoader
 import java.util.logging.Logger
 
 /**

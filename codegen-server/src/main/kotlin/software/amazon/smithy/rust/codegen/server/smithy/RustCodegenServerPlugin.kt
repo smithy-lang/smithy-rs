@@ -47,7 +47,7 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
             CombinedCodegenDecorator.fromClasspath(context, ServerRequiredCustomizations())
 
         // ServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
-        logger.info("Loaded plugin to generate pure Rust bindings for the server SSDK")
+        logger.info("Loaded plugin to generate pure Rust bindings for the server SDK")
         ServerCodegenVisitor(context, codegenDecorator).execute()
     }
 
