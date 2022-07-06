@@ -25,3 +25,13 @@ message = "Re-export aws_types::SdkConfig in aws_config"
 references = ["smithy-rs#1457"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "calavera"
+
+[[aws-sdk-rust]]
+message = "aws-smithy-client: Support using rustls with either native roots or webpki-roots"
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "joshtriplett"
+
+[[aws-sdk-rust]]
+message = "aws-smithy-client: Upgrade hyper-rustls to 0.23.0"
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "joshtriplett"

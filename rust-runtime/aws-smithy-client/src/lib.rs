@@ -5,14 +5,15 @@
 
 //! A Hyper-based Smithy service client.
 //!
-//! | Feature           | Description |
-//! |-------------------|-------------|
-//! | `event-stream`    | Provides Sender/Receiver implementations for Event Stream codegen. |
-//! | `rt-tokio`        | Run async code with the `tokio` runtime |
-//! | `test-util`       | Include various testing utils |
-//! | `native-tls`      | Use `native-tls` as the HTTP client's TLS implementation |
-//! | `rustls`          | Use `rustls` as the HTTP client's TLS implementation |
-//! | `client-hyper`    | Use `hyper` to handle HTTP requests |
+//! | Feature               | Description |
+//! |-----------------------|-------------|
+//! | `event-stream`        | Provides Sender/Receiver implementations for Event Stream codegen. |
+//! | `rt-tokio`            | Run async code with the `tokio` runtime |
+//! | `test-util`           | Include various testing utils |
+//! | `native-tls`          | Use `native-tls` as the HTTP client's TLS implementation |
+//! | `rustls-native-roots` | Use `rustls` for TLS with native certificate roots |
+//! | `rustls-webpki-roots` | Use `rustls` for TLS with webpki-roots certificate roots |
+//! | `client-hyper`        | Use `hyper` to handle HTTP requests |
 
 #![warn(
     missing_debug_implementations,
@@ -54,21 +55,38 @@ pub use timeout::TimeoutLayer;
 #[cfg(feature = "client-hyper")]
 #[allow(missing_docs)]
 pub mod conns {
-    #[cfg(feature = "rustls")]
+    #[cfg(any(feature = "rustls-native-roots", feature = "rustls-webpki-roots"))]
     pub type Https = hyper_rustls::HttpsConnector<hyper::client::HttpConnector>;
 
     // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
     // don't need to repeatedly incur that cost.
-    #[cfg(feature = "rustls")]
+    #[cfg(all(feature = "rustls-native-roots", not(feature = "rustls-webpki-roots")))]
     lazy_static::lazy_static! {
-        static ref HTTPS_NATIVE_ROOTS: Https = {
-            hyper_rustls::HttpsConnector::with_native_roots()
+        static ref HTTPS_CONNECTOR: Https = {
+            hyper_rustls::HttpsConnectorBuilder::new()
+                .with_native_roots()
+                .https_only()
+                .enable_http1()
+                .enable_http2()
+                .build()
         };
     }
 
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "rustls-webpki-roots")]
+    lazy_static::lazy_static! {
+        static ref HTTPS_CONNECTOR: Https = {
+            hyper_rustls::HttpsConnectorBuilder::new()
+                .with_webpki_roots()
+                .https_only()
+                .enable_http1()
+                .enable_http2()
+                .build()
+        };
+    }
+
+    #[cfg(any(feature = "rustls-native-roots", feature = "rustls-webpki-roots"))]
     pub fn https() -> Https {
-        HTTPS_NATIVE_ROOTS.clone()
+        HTTPS_CONNECTOR.clone()
     }
 
     #[cfg(feature = "native-tls")]
@@ -79,7 +97,7 @@ pub mod conns {
     #[cfg(feature = "native-tls")]
     pub type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
 
-    #[cfg(feature = "rustls")]
+    #[cfg(any(feature = "rustls-native-roots", feature = "rustls-webpki-roots"))]
     pub type Rustls =
         crate::hyper_ext::Adapter<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
 }
@@ -116,9 +134,9 @@ use aws_smithy_types::tristate::TriState;
 /// to the inner service, and then ultimately returning the inner service's response.
 ///
 /// With the `hyper` feature enabled, you can construct a `Client` directly from a
-/// [`hyper::Client`] using [`hyper_ext::Adapter::builder`]. You can also enable the `rustls` or `native-tls`
-/// features to construct a Client against a standard HTTPS endpoint using [`Builder::rustls`] and
-/// `Builder::native_tls` respectively.
+/// [`hyper::Client`] using [`hyper_ext::Adapter::builder`]. You can also enable the `rustls-*` or
+/// `native-tls` features to construct a Client against a standard HTTPS endpoint using
+/// [`Builder::rustls`] and `Builder::native_tls` respectively.
 #[derive(Debug)]
 pub struct Client<
     Connector = erase::DynConnector,

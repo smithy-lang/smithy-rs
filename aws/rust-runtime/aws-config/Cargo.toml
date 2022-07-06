@@ -9,11 +9,13 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-rustls = ["aws-smithy-client/rustls"]
+rustls = ["rustls-native-roots"]
+rustls-native-roots = ["aws-smithy-client/rustls-native-roots"]
+rustls-webpki-roots = ["aws-smithy-client/rustls-webpki-roots"]
 native-tls = ["aws-smithy-client/native-tls"]
 rt-tokio = ["aws-smithy-async/rt-tokio"]
 
-default = ["rustls", "rt-tokio"]
+default = ["rustls-native-roots", "rt-tokio"]
 
 [dependencies]
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }

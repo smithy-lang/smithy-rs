@@ -257,7 +257,7 @@ impl Builder {
     }
 }
 
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[cfg(any(feature = "rustls-native-roots", feature = "rustls-webpki-roots", feature = "native-tls"))]
 impl<M> crate::Builder<crate::erase::DynConnector, M>
 where
     M: Default,
@@ -273,10 +273,9 @@ where
     /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use
     /// [`Builder::rustls`](ClientBuilder::rustls) or `Builder::native_tls` instead.
     pub fn dyn_https() -> Self {
-        #[cfg(feature = "rustls")]
+        #[cfg(any(feature = "rustls-native-roots", feature = "rustls-webpki-roots"))]
         let with_https = |b: ClientBuilder<_>| b.rustls();
-        // If we are compiling this function & rustls is not enabled, then native-tls MUST be enabled
-        #[cfg(not(feature = "rustls"))]
+        #[cfg(feature = "native-tls")]
         let with_https = |b: ClientBuilder<_>| b.native_tls();
 
         with_https(ClientBuilder::new())
@@ -285,7 +284,7 @@ where
     }
 }
 
-#[cfg(any(feature = "rustls", feature = "native_tls"))]
+#[cfg(any(feature = "rustls-native-roots", feature = "rustls-webpki-roots", feature = "native-tls"))]
 impl<M> crate::Client<crate::erase::DynConnector, M>
 where
     M: Default,
@@ -305,7 +304,7 @@ where
     }
 }
 
-#[cfg(feature = "rustls")]
+#[cfg(any(feature = "rustls-native-roots", feature = "rustls-webpki-roots"))]
 impl<M, R> ClientBuilder<(), M, R> {
     /// Connect to the service over HTTPS using Rustls using dynamic dispatch.
     pub fn rustls(self) -> ClientBuilder<DynConnector, M, R> {
@@ -646,7 +645,7 @@ mod test {
 
     #[test]
     fn builder_connection_helpers_are_dyn() {
-        #[cfg(feature = "rustls")]
+        #[cfg(any(feature = "rustls-native-roots", feature = "rustls-webpki-roots"))]
         let _builder: ClientBuilder<DynConnector, (), _> = ClientBuilder::new().rustls();
         #[cfg(feature = "native-tls")]
         let _builder: ClientBuilder<DynConnector, (), _> = ClientBuilder::new().native_tls();
