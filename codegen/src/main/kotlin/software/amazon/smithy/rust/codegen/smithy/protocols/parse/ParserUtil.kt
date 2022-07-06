@@ -16,6 +16,13 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.rustType
 
+/*
+ * Utility class used to force casting a non primitive type into one overriden by a new symbol provider,
+ * by explicitly calling `from()`.
+ *
+ * For example we use this in the server Python implementation, where we override types like [Blob] and [DateTime]
+ * with wrappers compatibile with Python, without touching the original implementation coming from `aws-smithy-types`.
+ */
 class ParserUtil(private val symbolProvider: RustSymbolProvider, private val runtimeConfig: RuntimeConfig) {
     fun convertViaFrom(shape: Shape): Writable =
         writable {

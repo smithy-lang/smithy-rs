@@ -25,3 +25,11 @@ message = "Re-export aws_types::SdkConfig in aws_config"
 references = ["smithy-rs#1457"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "calavera"
+
+[[smithy-rs]]
+message = """
+Codegenerate Python application example and add explicit cast during JSON deserialization.
+"""
+references = ["smithy-rs#1520"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "both" }
+author = "crisidev"

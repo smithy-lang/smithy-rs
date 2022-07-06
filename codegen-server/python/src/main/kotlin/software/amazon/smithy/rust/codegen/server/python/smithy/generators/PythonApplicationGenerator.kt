@@ -190,22 +190,25 @@ class PythonApplicationGenerator(
     }
 
     private fun renderPyApplicationRustDocs(writer: RustWriter) {
-        writer.rust("""
+        writer.rust(
+"""
 ##[allow(clippy::tabs_in_doc_comments)]
 /// Main Python application, used to register operations and context and start multiple
 /// workers on the same shared socket.
 ///
-/// Here's a full example to get you started:
+/// Operations can be registrered using the application object as a decorator (`@app.operation_name`).
+///
+/// Here's a full example to get you started using coroutines:
 ///
 /// ```python
 ${ if (operations.any { it.errors.isNotEmpty() }) {
 """/// from $crateName import ${Inputs.namespace}
 /// from $crateName import ${Outputs.namespace}
 /// from $crateName import ${Errors.namespace}"""
-} else {
+            } else {
 """/// from $crateName import ${Inputs.namespace}
 /// from $crateName import ${Outputs.namespace}"""
-} }
+            } }
 /// from $crateName import App
 ///
 /// @dataclass
@@ -219,6 +222,9 @@ ${operationImplementationStubs(operations)}
 ///
 /// app.run()
 /// ```
+///
+/// Any of operations above can be written as well prepending the `async` keyword and
+/// the Python application will automatically handle it and schedule it on the even loop for you.
             """
         )
     }
@@ -245,6 +251,6 @@ ${operationImplementationStubs(operations)}
         val inputT = "${Inputs.namespace}::${inputSymbol.name}"
         val outputT = "${Outputs.namespace}::${outputSymbol.name}"
         val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
-        return "@app.$operationName\n/// async def $operationName(input: $inputT, ctx: Context) -> $outputT"
+        return "@app.$operationName\n/// def $operationName(input: $inputT, ctx: Context) -> $outputT"
     }
 }
