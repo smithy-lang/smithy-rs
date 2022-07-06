@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.utils.AbstractCodeWriter
+import java.io.File
 import java.util.function.BiFunction
 
 /**
@@ -253,6 +254,9 @@ fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
  *    - Empty newlines are removed
  */
 fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePrefix: String = "/// "): T {
+    // Because writing docs relies on the newline prefix, ensure that there was a new line written
+    // before we write the docs
+    this.ensureNewline()
     pushState()
     setNewlinePrefix(newlinePrefix)
     val cleaned = text.lines()
@@ -260,9 +264,6 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
             // Rustdoc warns on tabs in documentation
             it.trimStart().replace("\t", "  ")
         }
-    // Because writing docs relies on the newline prefix, ensure that there was a new line written
-    // before we write the docs
-    this.ensureNewline()
     write(cleaned, *args)
     popState()
     return this
@@ -393,7 +394,7 @@ class RustWriter private constructor(
     }
 
     fun module(): String? = if (filename.startsWith("src") && filename.endsWith(".rs")) {
-        filename.removeSuffix(".rs").split('/').last()
+        filename.removeSuffix(".rs").substringAfterLast(File.separatorChar)
     } else null
 
     fun safeName(prefix: String = "var"): String {

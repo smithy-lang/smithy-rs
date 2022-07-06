@@ -11,9 +11,11 @@ import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
-import software.amazon.smithy.rust.codegen.smithy.DefaultConfig
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
@@ -41,7 +43,8 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
-        val codegenDecorator = CombinedCodegenDecorator.fromClasspath(context)
+        val codegenDecorator: CombinedCodegenDecorator<ServerCodegenContext> =
+            CombinedCodegenDecorator.fromClasspath(context, ServerRequiredCustomizations())
 
         // PythonServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
         logger.info("Loaded plugin to generate Rust/Python bindings for the server SSDK for projection ${context.projectionName}")
@@ -58,18 +61,18 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
         fun baseSymbolProvider(
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig = DefaultConfig
+            symbolVisitorConfig: SymbolVisitorConfig,
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
-                // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
-                // `aws_smithy_http_server_python::types`.
-                .let { PythonServerSymbolProvider(it) }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let {
                     EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
                 }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }
+                // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
+                // `aws_smithy_http_server_python::types`.
+                .let { PythonServerSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)

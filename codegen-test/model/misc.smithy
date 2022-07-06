@@ -161,6 +161,9 @@ operation ResponseCodeDefaultOperation {
         id: "ResponseCodeHttpFallbackOperation",
         protocol: "aws.protocols#restJson1",
         code: 418,
+        headers: {
+            "Content-Length": "2"
+        }
     }
 ])
 @http(method: "GET", uri: "/responseCodeHttpFallbackOperation", code: 418)
@@ -178,7 +181,10 @@ structure EmptyStructure {}
         id: "ResponseCodeRequiredOperation",
         protocol: "aws.protocols#restJson1",
         code: 201,
-        params: {"responseCode": 201}
+        params: {"responseCode": 201},
+        headers: {
+            "Content-Length": "2"
+        }
     }
 ])
 @http(method: "GET", uri: "/responseCodeRequiredOperation", code: 200)

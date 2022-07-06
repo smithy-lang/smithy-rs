@@ -1435,6 +1435,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "serde",
+ "serde_json",
  "tokio",
  "toml",
  "tracing",

@@ -11,12 +11,13 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
@@ -58,10 +59,11 @@ internal class HttpVersionListGeneratorTest {
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val testWriter = object : RustCodegenDecorator {
+        val testWriter = object : RustCodegenDecorator<ClientCodegenContext> {
             override val name: String = "add tests"
             override val order: Byte = 0
-            override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+
+            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
                 rustCrate.withFile("tests/validate_defaults.rs") {
                     TokioTest.render(it)
                     it.rust(
@@ -83,7 +85,9 @@ internal class HttpVersionListGeneratorTest {
                 }
             }
         }
-        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx).withDecorator(testWriter))
+        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
+            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(testWriter)
+        val visitor = CodegenVisitor(ctx, combinedCodegenDecorator)
         visitor.execute()
         "cargo test".runCommand(testDir)
     }
@@ -117,10 +121,11 @@ internal class HttpVersionListGeneratorTest {
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val testWriter = object : RustCodegenDecorator {
+        val testWriter = object : RustCodegenDecorator<ClientCodegenContext> {
             override val name: String = "add tests"
             override val order: Byte = 0
-            override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+
+            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
                 rustCrate.withFile("tests/validate_http.rs") {
                     TokioTest.render(it)
                     it.rust(
@@ -142,7 +147,10 @@ internal class HttpVersionListGeneratorTest {
                 }
             }
         }
-        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx).withDecorator(testWriter))
+
+        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
+            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(testWriter)
+        val visitor = CodegenVisitor(ctx, combinedCodegenDecorator)
         visitor.execute()
         "cargo test".runCommand(testDir)
     }
@@ -189,18 +197,18 @@ internal class HttpVersionListGeneratorTest {
 
         val (ctx, testDir) = generatePluginContext(model, addModuleToEventStreamAllowList = true)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val codegenDecorator = object : RustCodegenDecorator {
+        val codegenDecorator = object : RustCodegenDecorator<ClientCodegenContext> {
             override val name: String = "add tests"
             override val order: Byte = 0
 
             override fun configCustomizations(
-                codegenContext: CodegenContext,
+                codegenContext: ClientCodegenContext,
                 baseCustomizations: List<ConfigCustomization>
             ): List<ConfigCustomization> {
                 return super.configCustomizations(codegenContext, baseCustomizations) + FakeSigningConfig(codegenContext.runtimeConfig)
             }
 
-            override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
                 rustCrate.withFile("tests/validate_eventstream_http.rs") {
                     TokioTest.render(it)
                     it.rust(
@@ -222,7 +230,9 @@ internal class HttpVersionListGeneratorTest {
             }
         }
 
-        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx).withDecorator(codegenDecorator))
+        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
+            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(codegenDecorator)
+        val visitor = CodegenVisitor(ctx, combinedCodegenDecorator)
         visitor.execute()
         "cargo test".runCommand(testDir)
     }

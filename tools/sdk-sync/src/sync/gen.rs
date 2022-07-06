@@ -4,20 +4,21 @@
  */
 
 use crate::fs::Fs;
-use crate::git::{CommitHash, Git, GitCLI};
 use anyhow::{Context, Result};
+use smithy_rs_tool_common::git::{CommitHash, Git, GitCLI};
 use smithy_rs_tool_common::here;
 use smithy_rs_tool_common::shell::handle_failure;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
-use tracing::{info, instrument};
+use tracing::{error, info, instrument, warn};
 
 #[derive(Clone, Debug)]
 pub struct CodeGenSettings {
     pub smithy_parallelism: usize,
     pub max_gradle_heap_megabytes: usize,
     pub max_gradle_metaspace_megabytes: usize,
+    pub aws_models_path: Option<PathBuf>,
 }
 
 impl Default for CodeGenSettings {
@@ -26,6 +27,7 @@ impl Default for CodeGenSettings {
             smithy_parallelism: 1,
             max_gradle_heap_megabytes: 512,
             max_gradle_metaspace_megabytes: 512,
+            aws_models_path: None,
         }
     }
 }
@@ -127,9 +129,7 @@ impl DefaultSdkGenerator {
         Ok(())
     }
 
-    fn do_aws_sdk_assemble(&self) -> Result<()> {
-        info!("Generating the SDK...");
-
+    fn do_aws_sdk_assemble(&self, attempt: u32) -> Result<()> {
         let mut command = Command::new("./gradlew");
         command.arg("--no-daemon"); // Don't let Gradle continue running after the build
         command.arg("--no-parallel"); // Disable Gradle parallelism
@@ -164,7 +164,14 @@ impl DefaultSdkGenerator {
             self.settings.smithy_parallelism
         ));
 
-        command.arg("-Paws.fullsdk=true");
+        if let Some(models_path) = &self.settings.aws_models_path {
+            command.arg(format!(
+                "-Paws.sdk.models.path={}",
+                models_path
+                    .to_str()
+                    .expect("aws models path is a valid str")
+            ));
+        }
         command.arg(format!(
             "-Paws.sdk.previous.release.versions.manifest={}",
             self.previous_versions_manifest
@@ -175,8 +182,12 @@ impl DefaultSdkGenerator {
             "-Paws.sdk.examples.revision={}",
             &self.aws_doc_sdk_examples_revision
         ));
+        // This property doesn't affect the build at all, but allows us to reliably test retry with `fake-sdk-assemble`
+        command.arg(format!("-Paws.sdk.sync.attempt={}", attempt));
         command.arg("aws:sdk:assemble");
         command.current_dir(self.smithy_rs.path());
+
+        info!("Generating the SDK with: {:#?}", command);
 
         let output = command.output()?;
         handle_failure("aws_sdk_assemble", &output)?;
@@ -186,21 +197,29 @@ impl DefaultSdkGenerator {
     /// Runs `aws:sdk:assemble` target with property `aws.fullsdk=true` set
     #[instrument(skip(self))]
     fn aws_sdk_assemble(&self) -> Result<()> {
-        let result = self.do_aws_sdk_assemble();
-        if result.is_err() {
-            // On failure, do a dump of running processes to give more insight into if there is a process leak going on
-            match Command::new("ps").arg("-ef").output() {
-                Ok(output) => info!(
-                    "Running processes shortly after failure:\n---\n{}---\n",
-                    String::from_utf8_lossy(&output.stdout)
-                ),
-                Err(err) => info!(
-                    "Failed to get running processes shortly after failure: {}",
-                    err
-                ),
+        // Retry gradle daemon startup failures up to 3 times
+        let (mut attempt, max_attempts) = (1, 3);
+        loop {
+            match self.do_aws_sdk_assemble(attempt) {
+                Ok(_) => return Ok(()),
+                Err(err) => {
+                    let error_message = format!("{}", err);
+                    let should_retry = attempt < max_attempts
+                        && error_message
+                            .contains("Timeout waiting to connect to the Gradle daemon");
+                    if !should_retry {
+                        error!("Codegen failed after {} attempt(s): {}", attempt, err);
+                        return Err(err);
+                    } else {
+                        warn!(
+                            "Gradle daemon start failed. Will retry. Full error: {}",
+                            error_message
+                        );
+                    }
+                }
             }
+            attempt += 1;
         }
-        result
     }
 }
 

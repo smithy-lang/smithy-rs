@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+
+SMITHY_RS_DIR="$(pwd)/smithy-rs"
+ARTIFACTS_DIR="$(pwd)/artifacts/smithy-rs-release"
+mkdir -p "${ARTIFACTS_DIR}"
+
+pushd "${SMITHY_RS_DIR}"
+# Split AWS SDK changelog entries into a separate file
+changelogger split \
+    --source CHANGELOG.next.toml \
+    --destination aws/SDK_CHANGELOG.next.json
+# Render the remaining smithy-rs changelog entries
+changelogger render \
+    --change-set smithy-rs \
+    --source CHANGELOG.next.toml \
+    --source-to-truncate CHANGELOG.next.toml \
+    --changelog-output CHANGELOG.md \
+    --release-manifest-output "${ARTIFACTS_DIR}"
+# Commit changelog changes if there are any
+git add .
+git diff --staged --quiet || \
+    git -c "user.name=AWS SDK Rust Bot" \
+        -c "user.email=aws-sdk-rust-primary@amazon.com" \
+        commit \
+        -am "Update changelog"
+# Generate the crates to publish
+./gradlew rust-runtime:assemble
+popd
+
+# Move crates into `crates-to-publish` part of the `smithy-rs-release` artifact
+mv "${SMITHY_RS_DIR}/rust-runtime/build/smithy-rs/rust-runtime" \
+   "${ARTIFACTS_DIR}/crates-to-publish"
+
+# Clone smithy-rs repo changes (changelog updates) into
+# the `smithy-rs-release` artifact for push to GitHub
+pushd "${ARTIFACTS_DIR}"
+git clone "${SMITHY_RS_DIR}"
+# Copy over the original remotes so that it's possibel to push to `origin`
+cp "${SMITHY_RS_DIR}/.git/config" smithy-rs/.git/config
+popd

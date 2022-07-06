@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 
 /**
@@ -29,7 +30,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorator {
+class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override val name: String = "AddInternalServerErrorToInfallibleOperations"
     override val order: Byte = 0
 
@@ -55,7 +56,7 @@ class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorat
  * mkdir -p "$D" && echo "$C" > "$D/$F"
  * ```
  */
-class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator {
+class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override val name: String = "AddInternalServerErrorToAllOperations"
     override val order: Byte = 0
 
@@ -75,7 +76,7 @@ fun addErrorShapeToModelOperations(service: ServiceShape, model: Model, opSelect
     }
 }
 
-fun internalServerError(namespace: String): StructureShape =
+private fun internalServerError(namespace: String): StructureShape =
     StructureShape.builder().id("$namespace#InternalServerError")
         .addTrait(ErrorTrait("server"))
         .addMember(

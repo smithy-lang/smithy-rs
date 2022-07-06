@@ -1,0 +1,95 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# This workflow performs a release of smithy-rs. It is manually
+# kicked off via GitHub Actions workflow dispatch.
+
+# Allow only one release to run at a time
+concurrency:
+  group: release-smithy-rs
+  cancel-in-progress: true
+
+env:
+  rust_version: 1.58.1
+
+name: Release smithy-rs
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Dry runs will only produce release artifacts, but will not cut a release tag in GitHub nor publish to crates.io
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  release-ci:
+    name: Prerelease checks
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Release
+    needs:
+    - release-ci
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.rust_version }}
+        default: true
+    - name: Checkout smithy-rs
+      uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+    - name: Generate release artifacts
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: generate-smithy-rs-release
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
+    - name: Push smithy-rs changes
+      shell: bash
+      working-directory: smithy-rs-release/smithy-rs
+      run: |
+        if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+          echo "Pushing a preview of the release to the smithy-rs-release-preview branch"
+          git push --force origin HEAD:smithy-rs-release-preview
+        else
+          echo "Pushing release commits..."
+          git push origin
+        fi
+    - name: Tag release
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        script: |
+          const createReleaseScript = require("./smithy-rs/.github/workflows/release-scripts/create-release.js");
+          await createReleaseScript({
+            github,
+            isDryRun: ${{ inputs.dry_run }},
+            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json"
+          });
+    - name: Publish to crates.io
+      shell: bash
+      working-directory: smithy-rs-release/crates-to-publish
+      env:
+        RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+      run: |
+        cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
+        cargo install --path "$(realpath ../smithy-rs/tools/publisher)"
+        # Verify the publisher tool installed successfully
+        publisher --version
+
+        if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+          if [[ ! -f aws-smithy-types/Cargo.toml ]]; then
+            echo "Crates to publish not found!"
+            exit 1
+          fi
+          # The following owner list command fails without a valid crates.io auth token
+          echo "Checking cargo auth token..."
+          cargo owner --list aws-smithy-types
+        else
+          publisher publish -y --location .
+        fi

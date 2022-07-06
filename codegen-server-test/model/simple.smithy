@@ -66,6 +66,9 @@ resource Service {
         params: { id: "1", name: "TestService" },
         body: "{\"id\":\"1\",\"name\":\"TestService\"}",
         code: 200,
+        headers: {
+            "Content-Length": "31"
+        }
     }
 ])
 operation RegisterService {
@@ -108,7 +111,7 @@ structure HealthcheckOutputResponse {
 }
 
 @readonly
-@http(method: "GET", uri: "/service/{id}/blob")
+@http(method: "POST", uri: "/service/{id}/blob")
 @documentation("Stores a blob for a service id")
 operation StoreServiceBlob {
     input: StoreServiceBlobInput,

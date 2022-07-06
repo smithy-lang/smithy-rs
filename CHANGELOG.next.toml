@@ -12,19 +12,16 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "Fix bug in profile file credential provider where a missing `default` profile lead to an unintended error."
-references = ["aws-sdk-rust#547", "smithy-rs#1458"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "rcoh"
+message = """
+Add support for aws-chunked content encoding. Only single-chunk encoding is supported. Multiple chunks and
+chunk signing are not supported at this time.
+"""
+references = ["smithy-rs#1263"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
 
 [[aws-sdk-rust]]
-message = "Add `Debug` implementation to several types in `aws-config`"
-references = ["smithy-rs#1421"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Fix RustWriter bugs for `rustTemplate` and `docs` utility methods"
-references = ["smithy-rs#1427", "smithy-rs#1465", "smithy-rs#1459"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "rcoh"
+message = "Re-export aws_types::SdkConfig in aws_config"
+references = ["smithy-rs#1457"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "calavera"

@@ -11,20 +11,20 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.generators.EndpointTraitBindings
 
-class EndpointPrefixGenerator(private val codegenContext: CodegenContext, private val shape: OperationShape) :
+class EndpointPrefixGenerator(private val coreCodegenContext: CoreCodegenContext, private val shape: OperationShape) :
     OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.MutateRequest -> writable {
             shape.getTrait(EndpointTrait::class.java).map { epTrait ->
                 val endpointTraitBindings = EndpointTraitBindings(
-                    codegenContext.model,
-                    codegenContext.symbolProvider,
-                    codegenContext.runtimeConfig,
+                    coreCodegenContext.model,
+                    coreCodegenContext.symbolProvider,
+                    coreCodegenContext.runtimeConfig,
                     shape,
                     epTrait
                 )

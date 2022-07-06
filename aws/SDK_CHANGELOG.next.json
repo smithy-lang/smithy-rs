@@ -1,0 +1,50 @@
+# This file will be used by automation when cutting a release of the SDK
+# to include code generator change log entries into the release notes.
+# This is an auto-generated file. Do not edit.
+
+{
+  "smithy-rs": [],
+  "aws-sdk-rust": [
+    {
+      "message": "Add a trailing slash to the URI `/latest/meta-data/iam/security-credentials/ when loading credentials from IMDS",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "aws-sdk-rust#560",
+        "smithy-rs#1487"
+      ],
+      "since-commit": "5fc23464f67f356b8ba0c815fed739cd8997a650"
+    },
+    {
+      "message": "Replaced use of `pin-project` with equivalent `pin-project-lite`. For pinned enum tuple variants and tuple structs, this\nchange requires that we switch to using enum struct variants and regular structs. Most of the structs and enums that\nwere updated had only private fields/variants and so have the same public API. However, this change does affect the\npublic API of `aws_smithy_http_tower::map_request::MapRequestFuture<F, E>`. The `Inner` and `Ready` variants contained a\nsingle value. Each have been converted to struct variants and the inner value is now accessible by the `inner` field\ninstead of the `0` field.\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#932"
+      ],
+      "since-commit": "5fc23464f67f356b8ba0c815fed739cd8997a650"
+    },
+    {
+      "message": "Add comments for docker settings needed when using this sdk",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jmklix",
+      "references": [
+        "aws-sdk-rust#540"
+      ],
+      "since-commit": "5fc23464f67f356b8ba0c815fed739cd8997a650"
+    }
+  ],
+  "aws-sdk-model": []
+}
