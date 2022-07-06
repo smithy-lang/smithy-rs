@@ -11,33 +11,21 @@ import org.slf4j.LoggerFactory
 
 const val LOCAL_DEV_VERSION: String = "0.0.0-local"
 
-// Example command for generating with independent versions:
-// ```
-// ./gradlew --no-daemon \
-//     -Paws.sdk.independent.versions=true \
-//     -Paws.sdk.model.metadata=$HOME/model-metadata.toml \
-//     -Paws.sdk.previous.release.versions.manifest=$HOME/versions.toml \
-//     aws:sdk:assemble
-// ```
 object CrateVersioner {
     fun defaultFor(rootProject: Project, properties: PropertyRetriever): VersionCrate =
-        // Putting independent crate versioning behind a feature flag for now
-        when (properties.get("aws.sdk.independent.versions")) {
-            "true" -> when (val versionsManifestPath = properties.get("aws.sdk.previous.release.versions.manifest")) {
-                // In local dev, use special `0.0.0-local` version number for all SDK crates
-                null -> SynchronizedCrateVersioner(properties, sdkVersion = LOCAL_DEV_VERSION)
-                else -> {
-                    val modelMetadataPath = properties.get("aws.sdk.model.metadata")
-                        ?: throw IllegalArgumentException("Property `aws.sdk.model.metadata` required for independent crate version builds")
-                    IndependentCrateVersioner(
-                        VersionsManifest.fromFile(versionsManifestPath),
-                        ModelMetadata.fromFile(modelMetadataPath),
-                        devPreview = true,
-                        smithyRsVersion = getSmithyRsVersion(rootProject)
-                    )
-                }
+        when (val versionsManifestPath = properties.get("aws.sdk.previous.release.versions.manifest")) {
+            // In local dev, use special `0.0.0-local` version number for all SDK crates
+            null -> SynchronizedCrateVersioner(properties, sdkVersion = LOCAL_DEV_VERSION)
+            else -> {
+                val modelMetadataPath = properties.get("aws.sdk.model.metadata")
+                    ?: throw IllegalArgumentException("Property `aws.sdk.model.metadata` required for independent crate version builds")
+                IndependentCrateVersioner(
+                    VersionsManifest.fromFile(versionsManifestPath),
+                    ModelMetadata.fromFile(modelMetadataPath),
+                    devPreview = true,
+                    smithyRsVersion = getSmithyRsVersion(rootProject)
+                )
             }
-            else -> SynchronizedCrateVersioner(properties)
         }
 }
 
@@ -49,7 +37,8 @@ interface VersionCrate {
 
 class SynchronizedCrateVersioner(
     properties: PropertyRetriever,
-    private val sdkVersion: String = properties.get("aws.sdk.version") ?: throw Exception("SDK version missing")
+    private val sdkVersion: String = properties.get("smithy.rs.runtime.crate.version")
+        ?: throw Exception("SDK runtime crate version missing")
 ) : VersionCrate {
     init {
         LoggerFactory.getLogger(javaClass).info("Using synchronized SDK crate versioning with version `$sdkVersion`")
@@ -165,5 +154,6 @@ class IndependentCrateVersioner(
         true -> bumpPatch()
         else -> bumpMinor()
     }
+
     private fun SemVer.bumpDocsChanged(): SemVer = bumpPatch()
 }

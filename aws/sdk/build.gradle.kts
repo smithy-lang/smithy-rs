@@ -55,7 +55,6 @@ val awsServices: AwsServices by lazy { discoverServices(properties.get("aws.sdk.
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, properties) }
 
-fun getSdkVersion(): String = properties.get("aws.sdk.version") ?: throw Exception("SDK version missing")
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
 fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
 
@@ -240,7 +239,7 @@ tasks.register("relocateAwsRuntime") {
         // Patch the Cargo.toml files
         CrateSet.AWS_SDK_RUNTIME.forEach { moduleName ->
             patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteAwsSdkCrateVersion(properties, line.let(::rewritePathDependency))
+                rewriteRuntimeCrateVersion(properties, line.let(::rewritePathDependency))
             }
         }
     }
@@ -251,7 +250,7 @@ tasks.register("relocateRuntime") {
         // Patch the Cargo.toml files
         CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { moduleName ->
             patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteSmithyRsCrateVersion(properties, line)
+                rewriteRuntimeCrateVersion(properties, line)
             }
         }
     }
@@ -310,15 +309,19 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
 tasks.register<ExecRustBuildTool>("hydrateReadme") {
     description = "Run the publisher tool's `hydrate-readme` sub-command to create the final AWS Rust SDK README file"
 
+    dependsOn("generateVersionManifest")
+
     inputs.dir(publisherToolPath)
-    outputs.dir(outputDir)
+    inputs.file(rootProject.projectDir.resolve("aws/SDK_README.md.hb"))
+    outputs.file(outputDir.resolve("README.md").absolutePath)
 
     toolPath = publisherToolPath
     binaryName = "publisher"
     arguments = listOf(
         "hydrate-readme",
-        "--sdk-version", getSdkVersion(),
+        "--versions-manifest", outputDir.resolve("versions.toml").toString(),
         "--msrv", getRustMSRV(),
+        "--input", rootProject.projectDir.resolve("aws/SDK_README.md.hb").toString(),
         "--output", outputDir.resolve("README.md").absolutePath
     )
 }
@@ -350,8 +353,6 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
         val previousReleaseManifestPath = getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
             add("--previous-release-versions")
             add(manifestPath)
-            add("--release-tag")
-            add("v" + getSdkVersion())
         }
     }
 }
