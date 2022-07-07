@@ -38,6 +38,6 @@ cd smithy-rs
     -Paws.sdk.models.path="${AWS_SDK_MODELS_PATH}" \
     -Paws.sdk.examples.revision="${examples_revision}" \
     -Paws.sdk.previous.release.versions.manifest="${PREVIOUS_RELEASE_VERSIONS_ARG}" \
-    -Paws.sdk.model.metadata="${MODEL_METADATA_PATH}"
+    -Paws.sdk.model.metadata="${MODEL_METADATA_PATH}" \
     aws:sdk:assemble
 mv aws/sdk/build/aws-sdk ../artifacts/
