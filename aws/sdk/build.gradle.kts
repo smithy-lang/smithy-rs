@@ -72,6 +72,8 @@ fun eventStreamAllowList(): Set<String> {
 }
 
 fun generateSmithyBuild(services: AwsServices): String {
+    val awsConfigVersion = properties.get("smithy.rs.runtime.crate.version")
+        ?: throw IllegalStateException("missing smithy.rs.runtime.crate.version for aws-config version")
     val serviceProjections = services.services.map { service ->
         val files = service.modelFiles().map { extraFile ->
             software.amazon.smithy.utils.StringUtils.escapeJavaString(
@@ -106,6 +108,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "license": "Apache-2.0",
                         "customizationConfig": {
                             "awsSdk": {
+                                "awsConfigVersion": "$awsConfigVersion",
                                 "integrationTestPath": "${project.projectDir.resolve("integration-tests")}"
                             }
                         }

@@ -20,4 +20,9 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
     /** Path to AWS SDK integration tests */
     val integrationTestPath: String get() =
         awsSdk?.getStringMember("integrationTestPath")?.orNull()?.value ?: "aws/sdk/integration-tests"
+
+    /** Version number of the `aws-config` crate */
+    val awsConfigVersion: String get() =
+        awsSdk?.getStringMember("awsConfigVersion")?.orNull()?.value
+            ?: throw IllegalStateException("missing `awsConfigVersion` codegen setting")
 }
