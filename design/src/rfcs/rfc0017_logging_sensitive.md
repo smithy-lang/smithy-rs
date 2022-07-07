@@ -73,7 +73,9 @@ The crates existing in `rust-runtime` are non-generated - their source code is a
 
 ## Proposal
 
-All data known to be sensitive should be replaced with `"__"` when logged. Implementation wise this means that [tracing::Event](https://docs.rs/tracing/latest/tracing/struct.Event.html)s and [tracing::Span](https://docs.rs/tracing/latest/tracing/struct.Span.html)s of the form `debug!(field = "sensitive data")` and `span!(..., field = "sensitive data")` must change become `debug!(field = "__")` and `span!(..., field = "__")`.
+This proposal serves to honor the sensitivity specification via code generation of a logging `Layer`s which is aware of the sensitivity, together with a developer contract disallowing logging potentially sensitive data in the runtime crates. An internal and external guideline should be provided in addition to the `Layer`s.
+
+All data known to be sensitive should be replaced with `"_redacted_"` when logged. Implementation wise this means that [tracing::Event](https://docs.rs/tracing/latest/tracing/struct.Event.html)s and [tracing::Span](https://docs.rs/tracing/latest/tracing/struct.Span.html)s of the form `debug!(field = "sensitive data")` and `span!(..., field = "sensitive data")` must become `debug!(field = "_redacted_")` and `span!(..., field = "_redacted_")`.
 
 ### Debug Logging
 
@@ -85,7 +87,7 @@ To prevent excessive branches such as
 if cfg!(feature = "debug-logging") {
     debug!(%data, "logging here");
 } else {
-    debug!(data = "__", "logging here");
+    debug!(data = "_redacted_", "logging here");
 }
 ```
 
@@ -102,7 +104,7 @@ where
         if cfg!(feature = "debug-logging") {
             self.0.fmt(f)
         } else {
-            "__".fmt(f)
+            "_redacted_".fmt(f)
         }
     }
 }
@@ -115,7 +117,7 @@ where
         if cfg!(feature = "debug-logging") {
             self.0.fmt(f)
         } else {
-            "__".fmt(f)
+            "_redacted_".fmt(f)
         }
     }
 }
@@ -178,9 +180,9 @@ structure Stocked {
 should generate the following
 
 ```rust
-// NOTE: This code is intended to show behavioral - it does not compile
+// NOTE: This code is intended to show behavior - it does not compile
 
-const SENSITIVE_MARKER: &str = "__";
+const SENSITIVE_MARKER: &str = "_redacted_";
 
 pub struct InventoryLogging<S> {
     inner: S
@@ -200,29 +202,23 @@ where
 {
     type Response = Response<BoxBody>;
     type Error = S::Error;
-    type LoggingFuture = /* Implementation detail */;
+    type Future = /* Implementation detail */;
 
-    fn call(&mut self, request: Request<B>) -> Self::LoggingFuture {
+    fn call(&mut self, request: Request<B>) -> Self::Future {
+        // Remove sensitive data from path
+        let mut uri = redact(request.uri());
+
         let fut = async {
-            // Remove sensitive data from path
-            let mut uri = redact(request.uri());
-
-            debug!(
-                %method,
-                %uri,
-                headers = request.headers(),
-                "received request"
-            );
-
             let response = self.inner.call(request).await;
 
             debug!(status_code = %Sensitive(request.status()), "sending response");
+
+            response
         };
 
         // Instrument the future with a span
-        let fut = fut.instrument("inventory_operation");
-
-        fut
+        let span = span!(%method, %uri, headers = request.headers(), "received request");
+        fut.instrument(span)
     }
 }
 ```
@@ -247,7 +243,133 @@ A guideline should be made available to customers to outline the following:
   - Sensitive data leaking from middleware applied to the `Router`
 - How to use the `Sensitive` struct and the `debug-logging` feature flag described in [Debug Logging](#debug-logging)
 
-Changes checklist
------------------
+## Alternative Proposals
 
-- [x] Create new struct `NewFeature`
+All of the following proposals are compatible with, and benefit from, [Debug Logging](#debug-logging), [Internal Guideline](#internal-guideline)/[External Guideline](#external-guideline) portions of the main proposal.
+
+The main proposal disallows the logging of potentially sensitive data in the runtime crates, instead opting for a dedicated code generated logging layer. In contrast, the following proposals all seek ways to accommodate logging of potentially sensitive data in the runtime crates.
+
+### Use Request Extensions
+
+Request extensions are mechanism to adjoin data to a Request as it passes through the middleware layers - the type map [http::Extensions](https://docs.rs/http/latest/http/struct.Extensions.html).
+
+These can be used to provide data to middleware interested in logging potentially sensitive data.
+
+```rust
+struct Sensitivity {
+    /* Data concerning which parts of the request are sensitive */
+}
+
+struct Middleware<S> {
+    inner: S
+}
+
+impl<B, S> Service<Request<B>> for Middleware<S> {
+    /* ... */
+
+    fn call(&mut self, request: Request<B>) -> Self::Future {
+        if let Some(sensitivity) = request.extensions().get::<Sensitivity>() {
+            if sensitivity.is_method_sensitive() {
+                debug!(method = %request.method());
+            }
+        }
+
+        /* ... */
+
+        self.inner.call(request)
+    }
+}
+```
+
+A middleware layer must be code generated (much in the same way as the logging layer) which is dedicated to inserting the `Sensitivity` struct into the extensions of each incoming request.
+
+```rust
+impl<B, S> Service<Request<B>> for SensitivityInserter<S>
+where
+    S: Service<Request<B>>
+{
+    /* ... */
+
+    fn call(&mut self, request: Request<B>) -> Self::Future {
+        let sensitivity = Sensitivity {
+            /* .. */
+        };
+        request.extensions_mut().insert(sensitivity);
+
+        self.inner.call(request)
+    }
+}
+```
+
+#### Advantages
+
+- Applicable to _all_ middleware which takes `http::Request<B>`.
+- Does not pollute the API of the middleware - code internal to middleware simply inspects the request's extensions and performs logic based on its value.
+
+#### Disadvantages
+
+- The sensitivity and HTTP bindings are known at compile time whereas the insertion/retrieval of the extension data is done at runtime.
+  - [http::Extensions](https://docs.rs/http/latest/http/struct.Extensions.html) is approximately a `HashMap<u64, Box<dyn Any>>` so lookup/insertion involves indirection/cache misses/heap allocation.
+
+### Accommodate the Sensitivity in Middleware API
+
+It is possible that sensitivity is a parameter passed to middleware during construction. This is similar in nature to [Use Request Extensions](#use-request-extensions) except that the `Sensitivity` is passed to middleware at startup.
+
+```rust
+struct Middleware<S> {
+    inner: S,
+    sensitivity: Sensitivity
+}
+
+impl Middleware<S> {
+    pub fn new(inner: S) -> Self { /* ... */ }
+
+    pub fn new_with_sensitivity(inner: S, sensitivity: Sensitivity) -> Self { /* ... */ }
+}
+
+impl<B, S> Service<Request<B>> for Middleware<S> {
+    /* ... */
+
+    fn call(&mut self, request: Request<B>) -> Self::Future {
+        if self.sensitivity.is_method_sensitive() {
+            debug!(method = %Sensitive(request.method()));
+        }
+
+        /* ... */
+
+        self.inner.call(request)
+    }
+}
+```
+
+It would then be required that the code generation responsible constructing a `Sensitivity` for each operation. Additionally, if any middleware is being applied to a operation then the code generation would be responsible for passing that middleware the appropriate `Sensitivity` before applying it.
+
+#### Advantages
+
+- Applicable to _all_ middleware.
+- As the `Sensitivity` struct will be known statically, the compiler will remove branches, making it potentially free.
+
+#### Disadvantages
+
+- Pollutes the API of middleware.
+
+### Redact values using a tracing Layer
+
+Distinct from `tower::Layer`, a [tracing::Layer](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html) is a "composable handler for `tracing` events". Leveraging this we might be able to filter out events which contain sensitive data.
+
+Examples of this approach already exist in the form of the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) and [Targets](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html) `tracing::Layer`s. It is unlikely that we'll be able to leverage them for our use, but the underlying principle remains the same - the `tracing::Layer` inspects `tracing::Event`s/`tracing::Span`s filtering them based on some criteria.
+
+Code generation would be need to be used in order to produce the filtering rules from the models. Internal developers would need to adhere to a common set of field names in order for them to be subject to the filtering. Spans would need to be opened after routing occurs in order for the `tracing::Layer` to know which operation `Event`s are being produced within and hence which filtering rules to apply.
+
+#### Advantages
+
+- Applicable to _all_ middleware.
+- Good separation of concerns:
+  - Does not pollute the API of the middleware
+  - No specific logic required within middleware.
+
+#### Disadvantages
+
+- Complex implementation.
+- Not necessarily fast.
+- `tracing::Layer`s seem to only support filtering entire `Event`s, rather than more fine grained removal of fields.
