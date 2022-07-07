@@ -16,10 +16,11 @@ This RFC proposes a new logging `Layer` to be generated and applied to each `Ope
 
 ## Terminology
 
-- **Runtime crate**: A crate existing within the `/rust-runtime/` folder.
+- **Model**: A [Smithy Model](https://awslabs.github.io/smithy/1.0/spec/core/model.html), usually pertaining to the one in use by the customer.
+- **Runtime crate**: A crate existing within the `rust-runtime/` folder.
 - **Service**: A trait defined in the [`tower-service` crate][tower_service::Service]. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.
 - **Layer**: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services within services, but Layers allow us to do it in a flexible and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service. Layers can be thought of as middleware. *NOTE: The use of [Layers can produce compiler errors] that are difficult to interpret and defining a layer requires a large amount of boilerplate code.*
-- **Potentially sensitive**: Data that has been bound to a sensitive field of a structure, for example [HTTP Binding Traits](#http-binding-traits).
+- **Potentially sensitive**: Data that _could_ be bound to a sensitive field of a structure, for example [HTTP Binding Traits](#http-binding-traits).
 
 ## Background
 
@@ -59,7 +60,7 @@ These two cases illustrate that `smithy-rs` can only prevent violation of the sp
 
 ### Routing
 
-The sensitivity and HTTP binding traits are applied within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any `Layer` applied _before_ routing has taken place cannot log anything sensitive without performing routing logic itself.
+The sensitivity and HTTP bindings are declared within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any `Layer` applied _before_ routing has taken place cannot log anything sensitive without performing routing logic itself.
 
 Note that:
 - We are not required to deserialize the entire request before we can make judgments on what data is sensitive or not - only which operation it has been routed to.
@@ -69,7 +70,7 @@ Note that:
 
 ### Runtime Crates
 
-The crates existing in `rust-runtime` are non-generated - their source code is agnostic to the specific smithy models in use. For this reason, if such a crate wanted to log data which could be sensitive then there must be a way to conditionally toggle that log without manipulation of the source code. Any proposed solution must acknowledge this concern.
+The crates existing in `rust-runtime` are not code generated - their source code is agnostic to the specific model in use. For this reason, if such a crate wanted to log potentially sensitive data then there must be a way to conditionally toggle that log without manipulation of the source code. Any proposed solution must acknowledge this concern.
 
 ## Proposal
 
@@ -79,7 +80,7 @@ All data known to be sensitive should be replaced with `"_redacted_"` when logge
 
 ### Debug Logging
 
-Developers might want to observe sensitive data for debugging purposes. It should be possible to opt-out of the redactions via a feature flag `debug-logging` which is disabled by default.
+Developers might want to observe sensitive data for debugging purposes. It should be possible to opt-out of the redactions by enabling a feature flag `debug-logging` (which is disabled by default).
 
 To prevent excessive branches such as
 
