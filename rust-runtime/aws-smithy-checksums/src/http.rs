@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::{BoxError, Checksum, Crc32, Crc32c, Md5, Sha1, Sha256};
+use crate::{Checksum, Crc32, Crc32c, Md5, Sha1, Sha256};
+
 use aws_smithy_types::base64;
+
 use http::header::{HeaderMap, HeaderName, HeaderValue};
 
 // Valid checksum algorithm names
@@ -90,46 +92,51 @@ pub const CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER: [&str; 4] =
 pub trait HttpChecksum: Checksum + Send + Sync {
     /// Either return this checksum as a `HeaderMap` containing one HTTP header, or return an error
     /// describing why checksum calculation failed.
-    fn headers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError>;
-    /// Return the `HeaderName` used to represent this checksum algorithm
-    fn header_name(&self) -> HeaderName;
-    /// Return the calculated checksum as a base64-encoded `HeaderValue`
-    fn header_value(&self) -> HeaderValue;
-}
-
-impl HttpChecksum for Crc32 {
-    fn headers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
+    fn headers(self: Box<Self>) -> HeaderMap<HeaderValue> {
         let mut header_map = HeaderMap::new();
         header_map.insert(self.header_name(), self.header_value());
 
-        Ok(Some(header_map))
+        header_map
     }
 
+    /// Return the `HeaderName` used to represent this checksum algorithm
+    fn header_name(&self) -> HeaderName;
+
+    /// Return the calculated checksum as a base64-encoded `HeaderValue`
+    fn header_value(self: Box<Self>) -> HeaderValue;
+
+    /// Return the size of the base64-encoded `HeaderValue` for this checksum
+    fn size(&self) -> u64 {
+        let trailer_name_size_in_bytes = self.header_name().as_str().len() as u64;
+        let base64_encoded_checksum_size_in_bytes = base64::encoded_length(Checksum::size(self));
+
+        trailer_name_size_in_bytes
+            // HTTP trailer names and values may be separated by either a single colon or a single
+            // colon and a whitespace. In the AWS Rust SDK, we use a single colon.
+            + ":".len() as u64
+            + base64_encoded_checksum_size_in_bytes
+    }
+}
+
+impl HttpChecksum for Crc32 {
     fn header_name(&self) -> HeaderName {
         CRC_32_HEADER_NAME.clone()
     }
 
-    fn header_value(&self) -> HeaderValue {
+    fn header_value(self: Box<Self>) -> HeaderValue {
         // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.clone().finalize();
+        let hash = self.hasher.finalize();
         HeaderValue::from_str(&base64::encode(u32::to_be_bytes(hash)))
             .expect("will always produce a valid header value from a CRC32 checksum")
     }
 }
 
 impl HttpChecksum for Crc32c {
-    fn headers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
-        let mut header_map = HeaderMap::new();
-        header_map.insert(self.header_name(), self.header_value());
-
-        Ok(Some(header_map))
-    }
-
     fn header_name(&self) -> HeaderName {
         CRC_32_C_HEADER_NAME.clone()
     }
 
-    fn header_value(&self) -> HeaderValue {
+    fn header_value(self: Box<Self>) -> HeaderValue {
         // If no data was provided to this callback and no CRC was ever calculated, return zero as the checksum.
         let hash = self.state.unwrap_or_default();
         HeaderValue::from_str(&base64::encode(u32::to_be_bytes(hash)))
@@ -138,64 +145,82 @@ impl HttpChecksum for Crc32c {
 }
 
 impl HttpChecksum for Sha1 {
-    fn headers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
-        let mut header_map = HeaderMap::new();
-        header_map.insert(self.header_name(), self.header_value());
-
-        Ok(Some(header_map))
-    }
-
     fn header_name(&self) -> HeaderName {
         SHA_1_HEADER_NAME.clone()
     }
 
-    fn header_value(&self) -> HeaderValue {
+    fn header_value(self: Box<Self>) -> HeaderValue {
         use sha1::Digest;
         // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.clone().finalize();
+        let hash = self.hasher.finalize();
         HeaderValue::from_str(&base64::encode(&hash[..]))
             .expect("will always produce a valid header value from a SHA-1 checksum")
     }
 }
 
 impl HttpChecksum for Sha256 {
-    fn headers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
-        let mut header_map = HeaderMap::new();
-        header_map.insert(self.header_name(), self.header_value());
-
-        Ok(Some(header_map))
-    }
-
     fn header_name(&self) -> HeaderName {
         SHA_256_HEADER_NAME.clone()
     }
 
-    fn header_value(&self) -> HeaderValue {
+    fn header_value(self: Box<Self>) -> HeaderValue {
         use sha2::Digest;
         // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.clone().finalize();
+        let hash = self.hasher.finalize();
         HeaderValue::from_str(&base64::encode(&hash[..]))
             .expect("will always produce a valid header value from a SHA-256 checksum")
     }
 }
 
 impl HttpChecksum for Md5 {
-    fn headers(&self) -> Result<Option<HeaderMap<HeaderValue>>, BoxError> {
-        let mut header_map = HeaderMap::new();
-        header_map.insert(self.header_name(), self.header_value());
-
-        Ok(Some(header_map))
-    }
-
     fn header_name(&self) -> HeaderName {
         MD5_HEADER_NAME.clone()
     }
 
-    fn header_value(&self) -> HeaderValue {
+    fn header_value(self: Box<Self>) -> HeaderValue {
         use md5::Digest;
         // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.clone().finalize();
+        let hash = self.hasher.finalize();
         HeaderValue::from_str(&base64::encode(&hash[..]))
             .expect("will always produce a valid header value from an MD5 checksum")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        new_from_algorithm, HttpChecksum, CRC_32_C_NAME, CRC_32_NAME, SHA_1_NAME, SHA_256_NAME,
+    };
+
+    #[test]
+    fn test_trailer_length_of_crc32_checksum_body() {
+        let checksum = new_from_algorithm(CRC_32_NAME);
+        let expected_size = 29;
+        let actual_size = HttpChecksum::size(&*checksum);
+        assert_eq!(expected_size, actual_size)
+    }
+
+    #[test]
+    fn test_trailer_length_of_crc32c_checksum_body() {
+        let checksum = new_from_algorithm(CRC_32_C_NAME);
+        let expected_size = 30;
+        let actual_size = HttpChecksum::size(&*checksum);
+        assert_eq!(expected_size, actual_size)
+    }
+
+    #[test]
+    fn test_trailer_length_of_sha1_checksum_body() {
+        let checksum = new_from_algorithm(SHA_1_NAME);
+        let expected_size = 48;
+        let actual_size = HttpChecksum::size(&*checksum);
+        assert_eq!(expected_size, actual_size)
+    }
+
+    #[test]
+    fn test_trailer_length_of_sha256_checksum_body() {
+        let checksum = new_from_algorithm(SHA_256_NAME);
+        let expected_size = 66;
+        let actual_size = HttpChecksum::size(&*checksum);
+        assert_eq!(expected_size, actual_size)
     }
 }

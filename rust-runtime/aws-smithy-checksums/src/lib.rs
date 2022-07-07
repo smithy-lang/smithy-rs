@@ -6,29 +6,22 @@
 //! Checksum calculation and verification callbacks
 
 use bytes::Bytes;
-use std::io::Write;
 
 pub mod body;
 pub mod http;
-
-type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 /// Checksum algorithms are use to validate the integrity of data. Structs that implement this trait
 /// can be used as checksum calculators. This trait requires Send + Sync because these checksums are
 /// often used in a threaded context.
 pub trait Checksum: Send + Sync {
     /// Given a slice of bytes, update this checksum's internal state.
-    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError>;
+    fn update(&mut self, bytes: &[u8]);
     /// "Finalize" this checksum, returning the calculated value as `Bytes` or an error that
     /// occurred during checksum calculation. To print this value in a human-readable hexadecimal
     /// format, you can print it using Rust's builtin [formatter].
     ///
-    /// _**NOTE:** typically in Rust, "finalizing" a checksum in Rust will take ownership of the
-    /// checksum struct. In this method, we clone the checksum's state before finalizing because
-    /// these checksums may be used in a situation where taking ownership is not possible._
-    ///
     /// [formatter]: https://doc.rust-lang.org/std/fmt/trait.UpperHex.html
-    fn finalize(&self) -> Result<Bytes, BoxError>;
+    fn finalize(self: Box<Self>) -> Bytes;
     /// Return the size of this checksum algorithms resulting checksum, in bytes. For example, the
     /// CRC32 checksum algorithm calculates a 32 bit checksum, so a CRC32 checksum struct
     /// implementing this trait method would return 4.
@@ -41,15 +34,12 @@ struct Crc32 {
 }
 
 impl Crc32 {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
+    fn update(&mut self, bytes: &[u8]) {
         self.hasher.update(bytes);
-        Ok(())
     }
 
-    fn finalize(&self) -> Result<Bytes, BoxError> {
-        Ok(Bytes::copy_from_slice(
-            &self.hasher.clone().finalize().to_be_bytes(),
-        ))
+    fn finalize(self) -> Bytes {
+        Bytes::copy_from_slice(self.hasher.finalize().to_be_bytes().as_slice())
     }
 
     // Size of the checksum in bytes
@@ -59,14 +49,11 @@ impl Crc32 {
 }
 
 impl Checksum for Crc32 {
-    fn update(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>> {
+    fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
     }
-    fn finalize(&self) -> Result<Bytes, BoxError> {
-        Self::finalize(self)
+    fn finalize(self: Box<Self>) -> Bytes {
+        Self::finalize(*self)
     }
     fn size(&self) -> u64 {
         Self::size()
@@ -79,18 +66,15 @@ struct Crc32c {
 }
 
 impl Crc32c {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
+    fn update(&mut self, bytes: &[u8]) {
         self.state = match self.state {
             Some(crc) => Some(crc32c::crc32c_append(crc, bytes)),
             None => Some(crc32c::crc32c(bytes)),
         };
-        Ok(())
     }
 
-    fn finalize(&self) -> Result<Bytes, BoxError> {
-        Ok(Bytes::copy_from_slice(
-            &self.state.unwrap_or_default().to_be_bytes(),
-        ))
+    fn finalize(self) -> Bytes {
+        Bytes::copy_from_slice(self.state.unwrap_or_default().to_be_bytes().as_slice())
     }
 
     // Size of the checksum in bytes
@@ -100,14 +84,11 @@ impl Crc32c {
 }
 
 impl Checksum for Crc32c {
-    fn update(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>> {
+    fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
     }
-    fn finalize(&self) -> Result<Bytes, BoxError> {
-        Self::finalize(self)
+    fn finalize(self: Box<Self>) -> Bytes {
+        Self::finalize(*self)
     }
     fn size(&self) -> u64 {
         Self::size()
@@ -120,16 +101,14 @@ struct Sha1 {
 }
 
 impl Sha1 {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
-        self.hasher.write_all(bytes)?;
-        Ok(())
+    fn update(&mut self, bytes: &[u8]) {
+        use sha1::Digest;
+        self.hasher.update(bytes);
     }
 
-    fn finalize(&self) -> Result<Bytes, BoxError> {
+    fn finalize(self) -> Bytes {
         use sha1::Digest;
-        Ok(Bytes::copy_from_slice(
-            self.hasher.clone().finalize().as_slice(),
-        ))
+        Bytes::copy_from_slice(self.hasher.finalize().as_slice())
     }
 
     // Size of the checksum in bytes
@@ -140,15 +119,12 @@ impl Sha1 {
 }
 
 impl Checksum for Sha1 {
-    fn update(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>> {
+    fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
     }
 
-    fn finalize(&self) -> Result<Bytes, BoxError> {
-        Self::finalize(self)
+    fn finalize(self: Box<Self>) -> Bytes {
+        Self::finalize(*self)
     }
     fn size(&self) -> u64 {
         Self::size()
@@ -161,16 +137,14 @@ struct Sha256 {
 }
 
 impl Sha256 {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
-        self.hasher.write_all(bytes)?;
-        Ok(())
+    fn update(&mut self, bytes: &[u8]) {
+        use sha2::Digest;
+        self.hasher.update(bytes);
     }
 
-    fn finalize(&self) -> Result<Bytes, BoxError> {
+    fn finalize(self) -> Bytes {
         use sha2::Digest;
-        Ok(Bytes::copy_from_slice(
-            self.hasher.clone().finalize().as_slice(),
-        ))
+        Bytes::copy_from_slice(self.hasher.finalize().as_slice())
     }
 
     // Size of the checksum in bytes
@@ -181,14 +155,11 @@ impl Sha256 {
 }
 
 impl Checksum for Sha256 {
-    fn update(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>> {
-        Self::update(self, bytes)
+    fn update(&mut self, bytes: &[u8]) {
+        Self::update(self, bytes);
     }
-    fn finalize(&self) -> Result<Bytes, BoxError> {
-        Self::finalize(self)
+    fn finalize(self: Box<Self>) -> Bytes {
+        Self::finalize(*self)
     }
     fn size(&self) -> u64 {
         Self::size()
@@ -201,16 +172,14 @@ struct Md5 {
 }
 
 impl Md5 {
-    fn update(&mut self, bytes: &[u8]) -> Result<(), BoxError> {
-        self.hasher.write_all(bytes)?;
-        Ok(())
+    fn update(&mut self, bytes: &[u8]) {
+        use md5::Digest;
+        self.hasher.update(bytes);
     }
 
-    fn finalize(&self) -> Result<Bytes, BoxError> {
+    fn finalize(self) -> Bytes {
         use md5::Digest;
-        Ok(Bytes::copy_from_slice(
-            self.hasher.clone().finalize().as_slice(),
-        ))
+        Bytes::copy_from_slice(self.hasher.finalize().as_slice())
     }
 
     // Size of the checksum in bytes
@@ -221,14 +190,11 @@ impl Md5 {
 }
 
 impl Checksum for Md5 {
-    fn update(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<(), Box<(dyn std::error::Error + Send + Sync + 'static)>> {
+    fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
     }
-    fn finalize(&self) -> Result<Bytes, BoxError> {
-        Self::finalize(self)
+    fn finalize(self: Box<Self>) -> Bytes {
+        Self::finalize(*self)
     }
     fn size(&self) -> u64 {
         Self::size()
@@ -265,8 +231,8 @@ mod tests {
     #[test]
     fn test_crc32_checksum() {
         let mut checksum = Crc32::default();
-        checksum.update(TEST_DATA.as_bytes()).unwrap();
-        let checksum_result = checksum.headers().unwrap().unwrap();
+        checksum.update(TEST_DATA.as_bytes());
+        let checksum_result = Box::new(checksum).headers();
         let encoded_checksum = checksum_result.get(&CRC_32_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
@@ -278,8 +244,8 @@ mod tests {
     #[test]
     fn test_crc32c_checksum() {
         let mut checksum = Crc32c::default();
-        checksum.update(TEST_DATA.as_bytes()).unwrap();
-        let checksum_result = checksum.headers().unwrap().unwrap();
+        checksum.update(TEST_DATA.as_bytes());
+        let checksum_result = Box::new(checksum).headers();
         let encoded_checksum = checksum_result.get(&CRC_32_C_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
@@ -291,8 +257,8 @@ mod tests {
     #[test]
     fn test_sha1_checksum() {
         let mut checksum = Sha1::default();
-        checksum.update(TEST_DATA.as_bytes()).unwrap();
-        let checksum_result = checksum.headers().unwrap().unwrap();
+        checksum.update(TEST_DATA.as_bytes());
+        let checksum_result = Box::new(checksum).headers();
         let encoded_checksum = checksum_result.get(&SHA_1_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
@@ -304,8 +270,8 @@ mod tests {
     #[test]
     fn test_sha256_checksum() {
         let mut checksum = Sha256::default();
-        checksum.update(TEST_DATA.as_bytes()).unwrap();
-        let checksum_result = checksum.headers().unwrap().unwrap();
+        checksum.update(TEST_DATA.as_bytes());
+        let checksum_result = Box::new(checksum).headers();
         let encoded_checksum = checksum_result.get(&SHA_256_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
@@ -318,8 +284,8 @@ mod tests {
     #[test]
     fn test_md5_checksum() {
         let mut checksum = Md5::default();
-        checksum.update(TEST_DATA.as_bytes()).unwrap();
-        let checksum_result = checksum.headers().unwrap().unwrap();
+        checksum.update(TEST_DATA.as_bytes());
+        let checksum_result = Box::new(checksum).headers();
         let encoded_checksum = checksum_result.get(&MD5_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 

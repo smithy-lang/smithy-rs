@@ -7,12 +7,10 @@ use crate::http::{new_from_algorithm, HttpChecksum};
 
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::header::append_merge_header_maps;
-use aws_smithy_types::base64;
 
 use bytes::Bytes;
-use http::header::HeaderName;
 use http::{HeaderMap, HeaderValue};
-use http_body::{Body, SizeHint};
+use http_body::SizeHint;
 use pin_project_lite::pin_project;
 
 use std::fmt::Display;
@@ -23,68 +21,18 @@ pin_project! {
     /// A `ChecksumBody` will read and calculate a request body as it's being sent. Once the body has
     /// been completely read, it'll append a trailer with the calculated checksum.
     pub struct ChecksumBody<InnerBody> {
-        #[pin]
-        inner: InnerBody,
-        checksum: Box<dyn HttpChecksum>,
+            #[pin]
+            body: InnerBody,
+            checksum: Option<Box<dyn HttpChecksum>>,
     }
 }
 
 impl ChecksumBody<SdkBody> {
-    /// Given an `SdkBody` and the name of a checksum algorithm as a `&str`, create a new
-    /// `ChecksumBody<SdkBody>`. Valid checksum algorithm names are defined in this crate's
-    /// [root module](super).
-    ///
-    /// # Panics
-    ///
-    /// This will panic if the given checksum algorithm is not supported.
-    pub fn new(body: SdkBody, checksum_algorithm: &str) -> Self {
+    /// Given an `SdkBody` and a `Box<dyn HttpChecksum>`, create a new `ChecksumBody<SdkBody>`.
+    pub fn new(body: SdkBody, checksum: Box<dyn HttpChecksum>) -> Self {
         Self {
-            checksum: new_from_algorithm(checksum_algorithm),
-            inner: body,
-        }
-    }
-
-    /// Return the name of the trailer that will be emitted by this `ChecksumBody`
-    pub fn trailer_name(&self) -> HeaderName {
-        self.checksum.header_name()
-    }
-
-    /// Calculate and return the sum of the:
-    /// - checksum when base64 encoded
-    /// - trailer name
-    /// - trailer separator
-    ///
-    /// This is necessary for calculating the true size of the request body for certain
-    /// content-encodings.
-    pub fn trailer_length(&self) -> u64 {
-        let trailer_name_size_in_bytes = self.checksum.header_name().as_str().len() as u64;
-        let base64_encoded_checksum_size_in_bytes = base64::encoded_length(self.checksum.size());
-
-        trailer_name_size_in_bytes
-            // HTTP trailer names and values may be separated by either a single colon or a single
-            // colon and a whitespace. In the AWS Rust SDK, we use a single colon.
-            + ":".len() as u64
-            + base64_encoded_checksum_size_in_bytes
-    }
-
-    fn poll_inner(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Bytes, aws_smithy_http::body::Error>>> {
-        let this = self.project();
-        let inner = this.inner;
-
-        match inner.poll_data(cx) {
-            Poll::Ready(Some(Ok(data))) => {
-                if let Err(e) = this.checksum.update(&data) {
-                    return Poll::Ready(Some(Err(e)));
-                }
-
-                Poll::Ready(Some(Ok(data)))
-            }
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-            Poll::Pending => Poll::Pending,
+            body,
+            checksum: Some(checksum),
         }
     }
 }
@@ -97,72 +45,64 @@ impl http_body::Body for ChecksumBody<SdkBody> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        self.poll_inner(cx)
+        let this = self.project();
+        match this.checksum {
+            Some(checksum) => {
+                let poll_res = this.body.poll_data(cx);
+                match &poll_res {
+                    Poll::Ready(Some(Ok(data))) => checksum.update(&data),
+                    _ => (),
+                }
+
+                poll_res
+            }
+            _ => Poll::Ready(Some(Err(Box::new(Error::Taken)))),
+        }
     }
 
     fn poll_trailers(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
+    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
         let this = self.project();
-        match (
-            this.checksum.headers(),
-            http_body::Body::poll_trailers(this.inner, cx),
-        ) {
-            // If everything is ready, return trailers, merging them if we have more than one map
-            (Ok(outer_trailers), Poll::Ready(Ok(inner_trailers))) => {
-                let trailers = match (outer_trailers, inner_trailers) {
-                    // Values from the inner trailer map take precedent over values from the outer map
-                    (Some(outer), Some(inner)) => Some(append_merge_header_maps(inner, outer)),
-                    // If only one or neither produced trailers, just combine the `Option`s with `or`
-                    (outer, inner) => outer.or(inner),
-                };
-                Poll::Ready(Ok(trailers))
-            }
-            // If the inner poll is Ok but the outer body's checksum callback encountered an error,
-            // return the error
-            (Err(e), Poll::Ready(Ok(_))) => Poll::Ready(Err(e)),
-            // Otherwise return the result of the inner poll.
-            // It may be pending or it may be ready with an error.
-            (_, inner_poll) => inner_poll,
+        let poll_res = this.body.poll_trailers(cx);
+
+        if let Poll::Ready(Ok(maybe_inner_trailers)) = poll_res {
+            let checksum_headers = if let Some(checksum) = this.checksum.take() {
+                checksum.headers()
+            } else {
+                return Poll::Ready(Err(Box::new(Error::Taken)));
+            };
+
+            return match maybe_inner_trailers {
+                Some(inner_trailers) => Poll::Ready(Ok(Some(append_merge_header_maps(
+                    inner_trailers,
+                    checksum_headers,
+                )))),
+                None => Poll::Ready(Ok(Some(checksum_headers))),
+            };
         }
+
+        poll_res
     }
 
     fn is_end_stream(&self) -> bool {
-        self.inner.is_end_stream()
+        self.body.is_end_stream()
     }
 
     fn size_hint(&self) -> SizeHint {
-        let body_size_hint = self.inner.size_hint();
-        match body_size_hint.exact() {
-            Some(size) => {
-                let checksum_size_hint = self.checksum.size();
-                SizeHint::with_exact(size + checksum_size_hint)
-            }
-            None => {
-                let checksum_size_hint = self.checksum.size();
-                let mut summed_size_hint = SizeHint::new();
-                summed_size_hint.set_lower(body_size_hint.lower() + checksum_size_hint);
-
-                if let Some(body_size_hint_upper) = body_size_hint.upper() {
-                    summed_size_hint.set_upper(body_size_hint_upper + checksum_size_hint);
-                }
-
-                summed_size_hint
-            }
-        }
+        self.body.size_hint()
     }
 }
 
 pin_project! {
-    #[doc = "A response body that will calculate a checksum as it is read. If all data is read and the"]
-    #[doc = "calculated checksum doesn't match a precalculated checksum, this body will emit an"]
-    #[doc = "[asw_smithy_http::body::Error]."]
+    /// A response body that will calculate a checksum as it is read. If all data is read and the
+    /// calculated checksum doesn't match a precalculated checksum, this body will emit an
+    /// [asw_smithy_http::body::Error].
     pub struct ChecksumValidatedBody<InnerBody> {
         #[pin]
         inner: InnerBody,
-        #[pin]
-        checksum: Box<dyn HttpChecksum>,
+        checksum: Option<Box<dyn HttpChecksum>>,
         precalculated_checksum: Bytes,
     }
 }
@@ -177,7 +117,7 @@ impl ChecksumValidatedBody<SdkBody> {
     /// This will panic if the given checksum algorithm is not supported.
     pub fn new(body: SdkBody, checksum_algorithm: &str, precalculated_checksum: Bytes) -> Self {
         Self {
-            checksum: new_from_algorithm(checksum_algorithm),
+            checksum: Some(new_from_algorithm(checksum_algorithm)),
             inner: body,
             precalculated_checksum,
         }
@@ -187,43 +127,43 @@ impl ChecksumValidatedBody<SdkBody> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Bytes, aws_smithy_http::body::Error>>> {
-        let this = self.project();
-        let inner = this.inner;
-        let mut checksum = this.checksum;
+        use http_body::Body;
 
-        match inner.poll_data(cx) {
+        let this = self.project();
+        let checksum = this.checksum;
+
+        match this.inner.poll_data(cx) {
             Poll::Ready(Some(Ok(data))) => {
                 tracing::trace!(
                     "reading {} bytes from the body and updating the checksum calculation",
                     data.len()
                 );
+                let checksum = match checksum.as_mut() {
+                    Some(checksum) => checksum,
+                    None => panic!("{}", Error::Taken),
+                };
 
-                if let Err(e) = checksum.update(&data) {
-                    return Poll::Ready(Some(Err(e)));
-                }
-
+                checksum.update(&data);
                 Poll::Ready(Some(Ok(data)))
             }
             // Once the inner body has stopped returning data, check the checksum
             // and return an error if it doesn't match.
             Poll::Ready(None) => {
                 tracing::trace!("finished reading from body, calculating final checksum");
-                let actual_checksum = {
-                    match checksum.finalize() {
-                        Ok(checksum) => checksum,
-                        Err(err) => {
-                            return Poll::Ready(Some(Err(err)));
-                        }
-                    }
+                let checksum = match checksum.take() {
+                    Some(checksum) => checksum,
+                    None => panic!("{}", Error::Taken),
                 };
+
+                let actual_checksum = checksum.finalize();
                 if *this.precalculated_checksum == actual_checksum {
                     Poll::Ready(None)
                 } else {
                     // So many parens it's starting to look like LISP
-                    Poll::Ready(Some(Err(Box::new(Error::checksum_mismatch(
-                        this.precalculated_checksum.clone(),
-                        actual_checksum,
-                    )))))
+                    Poll::Ready(Some(Err(Box::new(Error::ChecksumMismatch {
+                        expected: this.precalculated_checksum.clone(),
+                        actual: actual_checksum,
+                    }))))
                 }
             }
             Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
@@ -239,14 +179,8 @@ pub enum Error {
     /// The actual checksum didn't match the expected checksum. The checksummed data has been
     /// altered since the expected checksum was calculated.
     ChecksumMismatch { expected: Bytes, actual: Bytes },
-}
-
-impl Error {
-    /// Given an expected checksum and an actual checksum in `Bytes` form, create a new
-    /// `Error::ChecksumMismatch`.
-    pub fn checksum_mismatch(expected: Bytes, actual: Bytes) -> Self {
-        Self::ChecksumMismatch { expected, actual }
-    }
+    /// This checksum was accessed after it was consumed
+    Taken,
 }
 
 impl Display for Error {
@@ -258,6 +192,7 @@ impl Display for Error {
                 hex::encode(expected),
                 hex::encode(actual)
             ),
+            Self::Taken => write!(f, "this checksum body was accessed after finalization. Once a checksum body is finalized, it should not be accessed again."),
         }
     }
 }
@@ -296,9 +231,10 @@ impl http_body::Body for ChecksumValidatedBody<SdkBody> {
 #[cfg(test)]
 mod tests {
     use super::ChecksumBody;
+    use crate::http::new_from_algorithm;
     use crate::{
         body::ChecksumValidatedBody,
-        http::{CRC_32_C_NAME, CRC_32_HEADER_NAME, CRC_32_NAME, SHA_1_NAME, SHA_256_NAME},
+        http::{CRC_32_HEADER_NAME, CRC_32_NAME},
     };
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_types::base64;
@@ -321,7 +257,8 @@ mod tests {
     async fn test_checksum_body() {
         let input_text = "This is some test text for an SdkBody";
         let body = SdkBody::from(input_text);
-        let mut body = ChecksumBody::new(body, "crc32");
+        let checksum = new_from_algorithm(CRC_32_NAME);
+        let mut body = ChecksumBody::new(body, checksum);
 
         let mut output = SegmentedBuf::new();
         while let Some(buf) = body.data().await {
@@ -401,41 +338,5 @@ mod tests {
             .expect("Doesn't cause IO errors");
         // Verify data is complete and unaltered
         assert_eq!(input_text, output_text);
-    }
-
-    #[test]
-    fn test_trailer_length_of_crc32_checksum_body() {
-        let input_text = "Hello world";
-        let body = ChecksumBody::new(SdkBody::from(input_text), CRC_32_NAME);
-        let expected_size = 29;
-        let actual_size = body.trailer_length();
-        assert_eq!(expected_size, actual_size)
-    }
-
-    #[test]
-    fn test_trailer_length_of_crc32c_checksum_body() {
-        let input_text = "Hello world";
-        let body = ChecksumBody::new(SdkBody::from(input_text), CRC_32_C_NAME);
-        let expected_size = 30;
-        let actual_size = body.trailer_length();
-        assert_eq!(expected_size, actual_size)
-    }
-
-    #[test]
-    fn test_trailer_length_of_sha1_checksum_body() {
-        let input_text = "Hello world";
-        let body = ChecksumBody::new(SdkBody::from(input_text), SHA_1_NAME);
-        let expected_size = 48;
-        let actual_size = body.trailer_length();
-        assert_eq!(expected_size, actual_size)
-    }
-
-    #[test]
-    fn test_trailer_length_of_sha256_checksum_body() {
-        let input_text = "Hello world";
-        let body = ChecksumBody::new(SdkBody::from(input_text), SHA_256_NAME);
-        let expected_size = 66;
-        let actual_size = body.trailer_length();
-        assert_eq!(expected_size, actual_size)
     }
 }
