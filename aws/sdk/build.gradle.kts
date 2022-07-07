@@ -73,7 +73,7 @@ fun eventStreamAllowList(): Set<String> {
 
 fun generateSmithyBuild(services: AwsServices): String {
     val serviceProjections = services.services.map { service ->
-        val files = service.files().map { extraFile ->
+        val files = service.modelFiles().map { extraFile ->
             software.amazon.smithy.utils.StringUtils.escapeJavaString(
                 extraFile.absolutePath,
                 ""
@@ -98,7 +98,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
-                        "moduleVersion": "${crateVersioner.decideCrateVersion(moduleName)}",
+                        "moduleVersion": "${crateVersioner.decideCrateVersion(moduleName, service)}",
                         "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                         "moduleDescription": "${service.moduleDescription}",
                         ${service.examplesUri(project)?.let { """"examples": "$it",""" } ?: ""}

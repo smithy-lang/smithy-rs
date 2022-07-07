@@ -8,6 +8,8 @@ package aws.sdk
 import PropertyRetriever
 import org.gradle.api.Project
 import org.slf4j.LoggerFactory
+import java.io.File
+import java.security.MessageDigest
 
 const val LOCAL_DEV_VERSION: String = "0.0.0-local"
 
@@ -30,7 +32,7 @@ object CrateVersioner {
 }
 
 interface VersionCrate {
-    fun decideCrateVersion(moduleName: String): String
+    fun decideCrateVersion(moduleName: String, service: AwsService): String
 
     fun independentVersioningEnabled(): Boolean
 }
@@ -44,7 +46,7 @@ class SynchronizedCrateVersioner(
         LoggerFactory.getLogger(javaClass).info("Using synchronized SDK crate versioning with version `$sdkVersion`")
     }
 
-    override fun decideCrateVersion(moduleName: String): String = sdkVersion
+    override fun decideCrateVersion(moduleName: String, service: AwsService): String = sdkVersion
 
     override fun independentVersioningEnabled(): Boolean = sdkVersion == LOCAL_DEV_VERSION
 }
@@ -100,7 +102,8 @@ class IndependentCrateVersioner(
     private val versionsManifest: VersionsManifest,
     private val modelMetadata: ModelMetadata,
     private val devPreview: Boolean,
-    smithyRsVersion: String
+    smithyRsVersion: String,
+    private val hashModelsFn: (AwsService) -> String = { service -> hashModels(service) }
 ) : VersionCrate {
     private val smithyRsChanged = versionsManifest.smithyRsRevision != smithyRsVersion
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -116,7 +119,7 @@ class IndependentCrateVersioner(
 
     override fun independentVersioningEnabled(): Boolean = true
 
-    override fun decideCrateVersion(moduleName: String): String {
+    override fun decideCrateVersion(moduleName: String, service: AwsService): String {
         var previousVersion: SemVer? = null
         val (reason, newVersion) = when (val existingCrate = versionsManifest.crates.get(moduleName)) {
             // The crate didn't exist before, so create a new major version
@@ -127,9 +130,17 @@ class IndependentCrateVersioner(
                     "smithy-rs changed" to previousVersion.bumpCodegenChanged()
                 } else {
                     when (modelMetadata.changeType(moduleName)) {
-                        ChangeType.UNCHANGED -> "no change" to previousVersion
                         ChangeType.FEATURE -> "its API changed" to previousVersion.bumpModelChanged()
                         ChangeType.DOCUMENTATION -> "it has new docs" to previousVersion.bumpDocsChanged()
+                        ChangeType.UNCHANGED -> {
+                            val currentModelsHash = hashModelsFn(service)
+                            val previousModelsHash = existingCrate.modelHash
+                            if (currentModelsHash != previousModelsHash) {
+                                "its model(s) changed" to previousVersion.bumpModelChanged()
+                            } else {
+                                "no change" to previousVersion
+                            }
+                        }
                     }
                 }
             }
@@ -156,4 +167,16 @@ class IndependentCrateVersioner(
     }
 
     private fun SemVer.bumpDocsChanged(): SemVer = bumpPatch()
+}
+
+private fun ByteArray.toLowerHex(): String = joinToString("") { byte -> "%02x".format(byte) }
+
+fun hashModels(awsService: AwsService, loadFile: (File) -> ByteArray = File::readBytes): String {
+    // Needs to match hashing done in the `generate-version-manifest` tool:
+    val sha256 = MessageDigest.getInstance("SHA-256")
+    val hashes = awsService.modelFiles().fold("") { hashes, file ->
+        val fileHash = sha256.digest(loadFile(file)).toLowerHex()
+        hashes + fileHash + "\n"
+    }
+    return sha256.digest(hashes.toByteArray(Charsets.UTF_8)).toLowerHex()
 }

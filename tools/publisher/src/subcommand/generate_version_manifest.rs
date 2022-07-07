@@ -76,7 +76,7 @@ pub async fn subcommand_generate_version_manifest(
                 .projections
                 .get(&package.handle.name["aws-sdk-".len()..])
             {
-                model_hash = Some(hash_model(projection)?);
+                model_hash = Some(hash_models(projection)?);
             }
         }
         assert!(
@@ -203,7 +203,8 @@ fn hash_crate(path: &Path) -> Result<String> {
     Ok(stdout.trim().into())
 }
 
-fn hash_model(projection: &SmithyBuildProjection) -> Result<String> {
+fn hash_models(projection: &SmithyBuildProjection) -> Result<String> {
+    // Must match `hashModels` in `CrateVersioner.kt`
     let mut hashes = String::new();
     for import in &projection.imports {
         hashes.push_str(&sha256::digest_file(import).context("hash model")?);
@@ -231,8 +232,10 @@ struct SmithyBuildProjection {
 
 #[cfg(test)]
 mod tests {
-    use super::{find_released_versions, CrateVersion, VersionsManifest};
+    use super::*;
     use smithy_rs_tool_common::package::PackageCategory;
+    use std::fs;
+    use tempfile::TempDir;
 
     fn fake_manifest(crates: &[(&str, &str)]) -> VersionsManifest {
         VersionsManifest {
@@ -322,5 +325,28 @@ mod tests {
         assert_eq!("0.1.0", result.get("aws-sdk-somethingnew").unwrap());
         assert!(result.get("aws-sdk-dynamodb").is_none());
         assert_eq!(3, result.len());
+    }
+
+    #[test]
+    fn test_hash_models() {
+        let tmp = TempDir::new().unwrap();
+        let model1a = tmp.path().join("model1a");
+        let model1b = tmp.path().join("model1b");
+
+        fs::write(&model1a, "foo").unwrap();
+        fs::write(&model1b, "bar").unwrap();
+
+        let hash = hash_models(&SmithyBuildProjection {
+            imports: vec![
+                model1a.to_str().unwrap().to_string(),
+                model1b.to_str().unwrap().to_string(),
+            ],
+        })
+        .unwrap();
+
+        assert_eq!(
+            "964021077fb6c3d42ae162ab2e2255be64c6d96a6d77bca089569774d54ef69b",
+            hash
+        );
     }
 }

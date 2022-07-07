@@ -91,7 +91,8 @@ fun Project.discoverServices(awsModelsPath: String?, serviceMembership: Membersh
                     module = sdkId,
                     moduleDescription = "AWS SDK for $title",
                     modelFile = file,
-                    extraFiles = extras,
+                    // Order is important for the versions.toml model hash calculation
+                    extraFiles = extras.sorted(),
                     humanName = title
                 )
             }
@@ -138,7 +139,7 @@ data class AwsService(
     val extraFiles: List<File>,
     val humanName: String
 ) {
-    fun files(): List<File> = listOf(modelFile) + extraFiles
+    fun modelFiles(): List<File> = listOf(modelFile) + extraFiles
     fun Project.examples(): File = projectDir.resolve("examples").resolve(module)
     /**
      * Generate a link to the examples for a given service
