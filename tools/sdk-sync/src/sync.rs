@@ -3,15 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use self::gen::{DefaultSdkGenerator, SdkGenerator};
+use self::gen::{CodeGenSettings, DefaultSdkGenerator, SdkGenerator};
 use crate::fs::{DefaultFs, Fs};
-use crate::git::{Commit, Git, GitCLI};
 use crate::versions::{DefaultVersions, Versions, VersionsManifest};
 use anyhow::{bail, Context, Result};
+use smithy_rs_tool_common::git::{Commit, Git, GitCLI};
 use smithy_rs_tool_common::macros::here;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::{Sender, TryRecvError};
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+use systemstat::{ByteSize, Platform, System};
 use tracing::{debug, info, info_span};
 use tracing_attributes::instrument;
 
@@ -21,6 +26,73 @@ pub const BOT_NAME: &str = "AWS SDK Rust Bot";
 pub const BOT_EMAIL: &str = "aws-sdk-rust-primary@amazon.com";
 pub const MODEL_STASH_BRANCH_NAME: &str = "__sdk_sync__models_";
 
+#[derive(Default)]
+struct SyncProgress {
+    commits_completed: AtomicUsize,
+    total_commits: AtomicUsize,
+}
+
+struct ProgressThread {
+    handle: Option<thread::JoinHandle<()>>,
+    tx: Sender<bool>,
+}
+
+impl ProgressThread {
+    pub fn spawn(progress: Arc<SyncProgress>) -> ProgressThread {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = thread::spawn(move || {
+            let mut done = false;
+            let system = System::new();
+            while !done {
+                let cpu = system.cpu_load_aggregate().ok();
+                for _ in 0..15 {
+                    thread::sleep(Duration::from_secs(1));
+                    if !matches!(rx.try_recv(), Err(TryRecvError::Empty)) {
+                        done = true;
+                        break;
+                    }
+                }
+                let cpu = if let Some(Ok(cpu)) = cpu.map(|cpu| cpu.done()) {
+                    format!("{:.1}", 100.0 - cpu.idle * 100.0)
+                } else {
+                    "error".to_string()
+                };
+                let (memory, swap) = system.memory_and_swap().unwrap();
+                info!(
+                    "Progress: smithy-rs commit {}/{}, cpu use: {}, memory used: {}, swap used: {}",
+                    progress.commits_completed.load(Ordering::Relaxed),
+                    progress.total_commits.load(Ordering::Relaxed),
+                    cpu,
+                    Self::format_memory(memory.free, memory.total),
+                    Self::format_memory(swap.free, swap.total),
+                );
+            }
+        });
+        ProgressThread {
+            handle: Some(handle),
+            tx,
+        }
+    }
+
+    fn format_memory(free: ByteSize, total: ByteSize) -> String {
+        let (free, total) = (free.as_u64(), total.as_u64());
+        let format_part = |val: u64| format!("{:.3}GB", val as f64 / 1024.0 / 1024.0 / 1024.0);
+        format!(
+            "{}/{}",
+            format_part(total.saturating_sub(free)),
+            format_part(total)
+        )
+    }
+}
+
+impl Drop for ProgressThread {
+    fn drop(&mut self) {
+        // Attempt to stop the loop in the thread
+        let _ = self.tx.send(true);
+        let _ = self.handle.take().map(|handle| handle.join());
+    }
+}
+
 pub struct Sync {
     aws_doc_sdk_examples: Arc<dyn Git>,
     aws_sdk_rust: Arc<dyn Git>,
@@ -28,7 +100,8 @@ pub struct Sync {
     fs: Arc<dyn Fs>,
     versions: Arc<dyn Versions>,
     previous_versions_manifest: Arc<PathBuf>,
-    smithy_parallelism: usize,
+    codegen_settings: CodeGenSettings,
+    progress: Arc<SyncProgress>,
     // Keep a reference to the temp directory so that it doesn't get cleaned up until the sync is complete
     _temp_dir: Arc<tempfile::TempDir>,
 }
@@ -38,7 +111,7 @@ impl Sync {
         aws_doc_sdk_examples_path: &Path,
         aws_sdk_rust_path: &Path,
         smithy_rs_path: &Path,
-        smithy_parallelism: usize,
+        codegen_settings: CodeGenSettings,
     ) -> Result<Self> {
         let _temp_dir = Arc::new(tempfile::tempdir().context(here!("create temp dir"))?);
         let aws_sdk_rust = Arc::new(GitCLI::new(aws_sdk_rust_path)?);
@@ -58,7 +131,8 @@ impl Sync {
             fs,
             versions: Arc::new(DefaultVersions::new()),
             previous_versions_manifest,
-            smithy_parallelism,
+            codegen_settings,
+            progress: Default::default(),
             _temp_dir,
         })
     }
@@ -78,13 +152,16 @@ impl Sync {
             fs: Arc::new(fs),
             versions: Arc::new(versions),
             previous_versions_manifest: Arc::new(PathBuf::from("doesnt-matter-for-tests")),
-            smithy_parallelism: 1,
+            codegen_settings: Default::default(),
+            progress: Default::default(),
             _temp_dir: Arc::new(tempfile::tempdir().unwrap()),
         }
     }
 
     #[instrument(skip(self))]
     pub fn sync(&self) -> Result<()> {
+        let _progress_thread = ProgressThread::spawn(self.progress.clone());
+
         info!("Loading versions.toml...");
         let versions = self
             .versions
@@ -109,27 +186,27 @@ impl Sync {
     #[instrument(skip(self))]
     fn stash_model_changes(&self) -> Result<bool> {
         info!("Stashing model changes...");
-        let original_revision = self.smithy_rs.get_head_revision().context(here!())?;
+        let original_revision = self.aws_sdk_rust.get_head_revision().context(here!())?;
         info!(
-            "smithy-rs revision with model changes: {}",
+            "aws-sdk-rust revision with model changes: {}",
             original_revision
         );
 
         // Create a branch to hold the model changes without switching to it
-        self.smithy_rs
+        self.aws_sdk_rust
             .create_branch(MODEL_STASH_BRANCH_NAME, "HEAD")
             .context(here!())?;
         // Get the name of the current branch
-        let branch_name = self.smithy_rs.current_branch_name().context(here!())?;
+        let branch_name = self.aws_sdk_rust.current_branch_name().context(here!())?;
         // Reset the start branch to what's in origin
-        self.smithy_rs
+        self.aws_sdk_rust
             .hard_reset(&format!("origin/{}", branch_name))
             .context(here!())?;
 
-        let head = self.smithy_rs.get_head_revision().context(here!())?;
-        info!("smithy-rs revision without model changes: {}", head);
+        let head = self.aws_sdk_rust.get_head_revision().context(here!())?;
+        info!("aws-sdk-rust revision without model changes: {}", head);
         let has_model_changes = head != original_revision;
-        info!("smithy-rs has model changes: {}", has_model_changes);
+        info!("aws-sdk-rust has model changes: {}", has_model_changes);
         Ok(has_model_changes)
     }
 
@@ -141,18 +218,12 @@ impl Sync {
         // Restore the model changes. Note: endpoints.json/default config/model changes
         // may each be in their own commits coming into this, but we want them squashed into
         // one commit for smithy-rs.
-        self.smithy_rs
-            .squash_merge(
-                BOT_NAME,
-                BOT_EMAIL,
-                MODEL_STASH_BRANCH_NAME,
-                "Update SDK models",
-            )
+        self.aws_sdk_rust
+            .squash_merge(BOT_NAME, BOT_EMAIL, MODEL_STASH_BRANCH_NAME)
             .context(here!())?;
-        self.smithy_rs
+        self.aws_sdk_rust
             .delete_branch(MODEL_STASH_BRANCH_NAME)
             .context(here!())?;
-        let model_change_commit = self.smithy_rs.show("HEAD").context(here!())?;
 
         // Generate with the original examples
         let sdk_gen = DefaultSdkGenerator::new(
@@ -162,7 +233,7 @@ impl Sync {
             self.fs.clone(),
             None,
             self.smithy_rs.path(),
-            self.smithy_parallelism,
+            &self.codegen_settings,
         )
         .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
@@ -175,7 +246,7 @@ impl Sync {
                 .stage(&PathBuf::from("."))
                 .context(here!())?;
             self.aws_sdk_rust
-                .commit(BOT_NAME, BOT_EMAIL, &model_change_commit.message())
+                .commit(BOT_NAME, BOT_EMAIL, "Update SDK models")
                 .context(here!())?;
         }
 
@@ -203,6 +274,9 @@ impl Sync {
         }
 
         info!("Syncing {} commit(s)...", commits.len());
+        self.progress
+            .total_commits
+            .store(commits.len(), Ordering::Relaxed);
 
         // Generate code in parallel for each individual commit
         let code_gen_paths = {
@@ -211,7 +285,8 @@ impl Sync {
             let examples_revision = versions.aws_doc_sdk_examples_revision.clone();
             let examples_path = self.aws_sdk_rust.path().join("examples");
             let fs = self.fs.clone();
-            let smithy_parallelism = self.smithy_parallelism;
+            let codegen_settings = self.codegen_settings.clone();
+            let progress = self.progress.clone();
 
             commits
                 .par_iter()
@@ -235,10 +310,11 @@ impl Sync {
                         fs.clone(),
                         Some(commit.hash.clone()),
                         smithy_rs.path(),
-                        smithy_parallelism,
+                        &codegen_settings,
                     )
                     .context(here!())?;
                     let sdk_path = sdk_gen.generate_sdk().context(here!())?;
+                    progress.commits_completed.fetch_add(1, Ordering::Relaxed);
                     Ok((commit, sdk_path))
                 })
                 .collect::<Result<Vec<_>>>()?
@@ -287,7 +363,7 @@ impl Sync {
             self.fs.clone(),
             None,
             self.smithy_rs.path(),
-            self.smithy_parallelism,
+            &self.codegen_settings,
         )
         .context(here!())?;
         let generated_sdk = sdk_gen.generate_sdk().context(here!())?;
@@ -376,21 +452,37 @@ impl Sync {
         Ok(())
     }
 
-    /// Returns true if the aws-sdk-rust repo has changes (excluding changes to versions.toml).
-    /// The versions.toml shouldn't be considered since there's a high probability it is only
+    /// Returns true if the aws-sdk-rust repo has changes (excluding changes to `versions.toml`
+    /// and `aws-models/`).
+    ///
+    /// The `versions.toml` shouldn't be considered since there's a high probability it is only
     /// a `smithy_rs_revision` change. It can also safely be ignored since any changes to version
     /// numbers will show up in individual crate manifests.
+    ///
+    /// The `aws-models/` can be ignored since they will be updated, but are not code generated.
+    /// This function only cares about code generated files.
     #[instrument(skip(self))]
     fn sdk_has_changes(&self) -> Result<bool> {
         let untracked_files = self.aws_sdk_rust.untracked_files()?;
         let changed_files = self.aws_sdk_rust.changed_files()?;
-        let has_changes = !untracked_files.is_empty()
-            || !changed_files.is_empty()
-                && (changed_files.len() != 1 || changed_files[0].to_str() != Some("versions.toml"));
-        debug!("aws-sdk-rust untracked files: {:?}", untracked_files);
-        debug!("aws-sdk-rust changed files: {:?}", changed_files);
+        let all_relevant_changed_files: Vec<_> = untracked_files
+            .into_iter()
+            .chain(changed_files.into_iter())
+            .filter(|path| {
+                if let Some(path) = path.to_str() {
+                    path != "versions.toml" && !path.starts_with("aws-models/")
+                } else {
+                    true
+                }
+            })
+            .collect();
+        let has_changes = !all_relevant_changed_files.is_empty();
+        debug!(
+            "aws-sdk-rust relevant changed files: {:?}",
+            all_relevant_changed_files
+        );
         info!(
-            "aws-sdk-rust has changes (not considering versions.toml): {}",
+            "aws-sdk-rust has changes (not considering versions.toml and aws-models): {}",
             has_changes
         );
         Ok(has_changes)
@@ -440,8 +532,41 @@ impl Sync {
 mod tests {
     use super::*;
     use crate::fs::MockFs;
-    use crate::git::{CommitHash, MockGit};
     use crate::versions::MockVersions;
+    use smithy_rs_tool_common::git::CommitHash;
+
+    mockall::mock! {
+        Git {}
+        impl smithy_rs_tool_common::git::Git for Git {
+            fn path(&self) -> &Path;
+            fn clone_to(&self, path: &Path) -> Result<()>;
+            fn get_head_revision(&self) -> Result<CommitHash>;
+            fn stage(&self, path: &Path) -> Result<()>;
+            fn commit_on_behalf(
+                &self,
+                bot_name: &str,
+                bot_email: &str,
+                author_name: &str,
+                author_email: &str,
+                message: &str,
+            ) -> Result<()>;
+            fn commit(&self, name: &str, email: &str, message: &str) -> Result<()>;
+            fn rev_list<'a>(
+                &self,
+                start_inclusive_revision: &str,
+                end_exclusive_revision: &str,
+                path: Option<&'a Path>,
+            ) -> Result<Vec<CommitHash>>;
+            fn show(&self, revision: &str) -> Result<Commit>;
+            fn hard_reset(&self, revision: &str) -> Result<()>;
+            fn current_branch_name(&self) -> Result<String>;
+            fn create_branch(&self, branch_name: &str, revision: &str) -> Result<()>;
+            fn delete_branch(&self, branch_name: &str) -> Result<()>;
+            fn squash_merge(&self, author_name: &str, author_email: &str, branch_name: &str) -> Result<()>;
+            fn untracked_files(&self) -> Result<Vec<PathBuf>>;
+            fn changed_files(&self) -> Result<Vec<PathBuf>>;
+        }
+    }
 
     // Wish this was in std...
     fn trim_indent(value: &str) -> String {

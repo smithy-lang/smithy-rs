@@ -11,7 +11,7 @@ The latest unreleased SDK build can be found in [aws-sdk-rust/next](https://gith
 Setup
 -----
 
-1. `./gradlew` will setup gradle for you. JDK 11 is required.
+1. `./gradlew` will setup gradle for you. JDK 17 is required.
 2. Running tests requires a working Rust installation. See [Rust docs](https://www.rust-lang.org/learn/get-started) for
 installation instructions on your platform. Minimum supported Rust version is the latest released Rust version, although older versions may work.
 

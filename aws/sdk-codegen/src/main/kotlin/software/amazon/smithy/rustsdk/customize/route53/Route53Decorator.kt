@@ -15,7 +15,7 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -28,51 +28,59 @@ import java.util.logging.Logger
 
 val Route53: ShapeId = ShapeId.from("com.amazonaws.route53#AWSDnsV20130401")
 
-class Route53Decorator : RustCodegenDecorator {
+class Route53Decorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "Route53"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
+    private val resourceShapes = setOf(ShapeId.from("com.amazonaws.route53#ResourceId"), ShapeId.from("com.amazonaws.route53#ChangeId"))
 
     private fun applies(service: ServiceShape) = service.id == Route53
+
     override fun transformModel(service: ServiceShape, model: Model): Model {
         return model.letIf(applies(service)) {
             ModelTransformer.create().mapShapes(model) { shape ->
-                shape.letIf(isHostId(shape)) {
-                    logger.info("Adding TrimHostedZone trait to $shape")
-                    (shape as MemberShape).toBuilder().addTrait(TrimHostedZone()).build()
+                shape.letIf(isResourceId(shape)) {
+                    logger.info("Adding TrimResourceId trait to $shape")
+                    (shape as MemberShape).toBuilder().addTrait(TrimResourceId()).build()
                 }
             }
         }
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
-        val hostedZoneMember = operation.inputShape(codegenContext.model).members().find { it.hasTrait<TrimHostedZone>() }
+        val hostedZoneMember =
+            operation.inputShape(codegenContext.model).members().find { it.hasTrait<TrimResourceId>() }
         return if (hostedZoneMember != null) {
-            baseCustomizations + TrimHostedZoneCustomization(codegenContext.symbolProvider.toMemberName(hostedZoneMember))
+            baseCustomizations + TrimResourceIdCustomization(codegenContext.symbolProvider.toMemberName(hostedZoneMember))
         } else baseCustomizations
     }
 
-    private fun isHostId(shape: Shape): Boolean {
-        return (shape is MemberShape && shape.target == ShapeId.from("com.amazonaws.route53#ResourceId")) && shape.hasTrait<HttpLabelTrait>()
+    private fun isResourceId(shape: Shape): Boolean {
+        return (shape is MemberShape && resourceShapes.contains(shape.target)) && shape.hasTrait<HttpLabelTrait>()
     }
 }
 
-class TrimHostedZoneCustomization(private val fieldName: String) : OperationCustomization() {
+class TrimResourceIdCustomization(private val fieldName: String) : OperationCustomization() {
     override fun mutSelf(): Boolean = true
     override fun consumesSelf(): Boolean = true
 
-    private val trimZone =
-        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("hosted_zone_preprocessor"))
-            .member("trim_hosted_zone")
+    private val trimResourceId =
+        RuntimeType.forInlineDependency(
+            InlineAwsDependency.forRustFile("route53_resource_id_preprocessor")
+        )
+            .member("trim_resource_id")
 
     override fun section(section: OperationSection): Writable {
         return when (section) {
             is OperationSection.MutateInput -> writable {
-                rustTemplate("#{trim_hosted_zone}(&mut ${section.input}.$fieldName);", "trim_hosted_zone" to trimZone)
+                rustTemplate(
+                    "#{trim_resource_id}(&mut ${section.input}.$fieldName);",
+                    "trim_resource_id" to trimResourceId
+                )
             }
             else -> emptySection
         }
