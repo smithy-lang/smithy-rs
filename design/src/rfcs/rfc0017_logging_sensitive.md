@@ -18,7 +18,7 @@ This RFC proposes a new logging `Layer` to be generated and applied to each `Ope
 
 - **Model**: A [Smithy Model](https://awslabs.github.io/smithy/1.0/spec/core/model.html), usually pertaining to the one in use by the customer.
 - **Runtime crate**: A crate existing within the `rust-runtime/` folder.
-- **Service**: A trait defined in the [`tower-service` crate][tower_service::Service]. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.
+- **Service**: The [tower::Service](https://docs.rs/tower-service/latest/tower_service/trait.Service.html) trait. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.
 - **Layer**: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services within services, but Layers allow us to do it in a flexible and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service. Layers can be thought of as middleware. *NOTE: The use of [Layers can produce compiler errors] that are difficult to interpret and defining a layer requires a large amount of boilerplate code.*
 - **Potentially sensitive**: Data that _could_ be bound to a sensitive field of a structure, for example [HTTP Binding Traits](#http-binding-traits).
 
@@ -132,7 +132,7 @@ debug!(sensitive_data = %Sensitive(data));
 
 ### Code Generated Logging Layer
 
-Using the smithy model, for each operation, a logging `Layer` should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the `Logging` layer can be careful crafted to avoid leaking sensitive data.
+Using the smithy model, for each operation, a logging `Layer` should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging `Layer` can be careful crafted to avoid leaking sensitive data.
 
 This `Layer` should be applied to the [OperationHandler](https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) directly after its construction in the generated `operation_registry.rs`. The `Layer` should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) so cause minimal breakage.
 
@@ -224,7 +224,7 @@ where
 }
 ```
 
-As this path latency-sensitive, careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping `Uri` and `HeaderMap` then providing a new `Display` implementation which skips over the sensitive data is preferable over allocating a new `String`/`HeaderMap` and mutating it.
+As this path is latency-sensitive, careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping `Uri` and `HeaderMap` then providing a new `Display` implementation which skips over the sensitive data is preferable over allocating a new `String`/`HeaderMap` and mutating it.
 
 ### Internal Guideline
 
