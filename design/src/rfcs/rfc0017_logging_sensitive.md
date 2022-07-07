@@ -10,9 +10,9 @@ This RFC is concerned with solving the problem of honouring this specification.
 
 Progress has been made towards this goal in the form of the [Sensitive Trait PR](https://github.com/awslabs/smithy-rs/pull/229), which uses code generation to remove sensitive fields from `Debug` implementations.
 
-The problem remains open due to the existence of HTTP binding traits and a lack of clearly defined user guidelines which customers may follow, in the context of `smithy-rs`, to honour the specification.
+The problem remains open due to the existence of HTTP binding traits and a lack of clearly defined user guidelines which customers may follow to honour the specification.
 
-This RFC proposes a new logging `Layer` to be applied to the `Routes` `Service`, and internal and external developer guidelines on how to avoid violating the specification.
+This RFC proposes a new logging `Layer` to be generated and applied to each `OperationHandler` `Service`, and internal and external developer guidelines on how to avoid violating the specification.
 
 ## Terminology
 
@@ -55,6 +55,10 @@ let app = app.map_request(|request| {
 A more subtle violation of the specification may occur when the customer enables verbose logging - a third-party dependency might simply log data marked as sensitive, for example `tokio` or `hyper`.
 
 These two cases illustrate that `smithy-rs` can only prevent violation of the specification in a restricted scope - logs emitted from generated code and the runtime crates. A `smithy-rs` specific guideline should be available to the customer which outlines how to avoid violating the specification in areas outside of our control.
+
+### Routing
+
+The sensitive trait is applied to fields of structures. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any `Layer` applied _before_ routing has taken place cannot log anything sensitive without performing routing logic itself.
 
 ### Runtime Crates
 
