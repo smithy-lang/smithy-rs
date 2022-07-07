@@ -252,7 +252,7 @@ The main proposal disallows the logging of potentially sensitive data in the run
 
 ### Use Request Extensions
 
-Request extensions are mechanism to adjoin data to a Request as it passes through the middleware layers - the type map [http::Extensions](https://docs.rs/http/latest/http/struct.Extensions.html).
+Request extensions can be used to adjoin data to a Request as it passes through the middleware layers. Concretely, they exist as the type map [http::Extensions](https://docs.rs/http/latest/http/struct.Extensions.html) accessed via [http::extensions](https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions) and [http::extensions_mut](https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions_mut).
 
 These can be used to provide data to middleware interested in logging potentially sensitive data.
 
@@ -356,11 +356,11 @@ It would then be required that the code generation responsible constructing a `S
 
 ### Redact values using a tracing Layer
 
-Distinct from `tower::Layer`, a [tracing::Layer](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html) is a "composable handler for `tracing` events". Leveraging this we might be able to filter out events which contain sensitive data.
+Distinct from `tower::Layer`, a [tracing::Layer](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html) is a "composable handler for `tracing` events". It would be possible to write an implementation which would filter out events which contain sensitive data.
 
-Examples of this approach already exist in the form of the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) and [Targets](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html) `tracing::Layer`s. It is unlikely that we'll be able to leverage them for our use, but the underlying principle remains the same - the `tracing::Layer` inspects `tracing::Event`s/`tracing::Span`s filtering them based on some criteria.
+Examples of filtering `tracing::Layer`s already exist in the form of the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) and [Targets](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html). It is unlikely that we'll be able to leverage them for our use, but the underlying principle remains the same - the `tracing::Layer` inspects `tracing::Event`s/`tracing::Span`s filtering them based on some criteria.
 
-Code generation would be need to be used in order to produce the filtering rules from the models. Internal developers would need to adhere to a common set of field names in order for them to be subject to the filtering. Spans would need to be opened after routing occurs in order for the `tracing::Layer` to know which operation `Event`s are being produced within and hence which filtering rules to apply.
+Code generation would be need to be used in order to produce the filtering criteria from the models. Internal developers would need to adhere to a common set of field names in order for them to be subject to the filtering. Spans would need to be opened after routing occurs in order for the `tracing::Layer` to know which operation `Event`s are being produced within and hence which filtering rules to apply.
 
 #### Advantages
 
