@@ -25,3 +25,15 @@ message = "Re-export aws_types::SdkConfig in aws_config"
 references = ["smithy-rs#1457"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "calavera"
+
+[[aws-sdk-rust]]
+message = """
+Until now, SDK crates have all shared the exact same version numbers.
+This changes with this release. From now on, SDK crates will only version
+bump if they have changes. Coincidentally, they may share the same version
+number for some releases since changes to the code generator will cause
+a version bump in all of them, but this should not be relied upon.
+"""
+references = ["smithy-rs#1540"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
