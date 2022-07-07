@@ -230,19 +230,19 @@ As this path latency-sensitive, careful implementation is required to avoid exce
 
 A guideline should be made available to internal smithy developers to outline the following:
 
-- The [HTTP bindings traits](#http-binding-traits) and why they are of concern
-- The [Debug implementation](https://github.com/awslabs/smithy-rs/pull/229) on structures
-- How to use the `Sensitive` struct and the `debug-logging` feature flag described in [Debug Logging](#debug-logging)
+- The [HTTP bindings traits](#http-binding-traits) and why they are of concern.
+- The [Debug implementation](https://github.com/awslabs/smithy-rs/pull/229) on structures.
+- How to use the `Sensitive` struct and the `debug-logging` feature flag described in [Debug Logging](#debug-logging).
 
 ### Public Guideline
 
 A guideline should be made available to customers to outline the following:
 
 - The [HTTP bindings traits](#http-binding-traits) and why they are of concern.
-- Warn against the two potential leaks described in [Scope and Guidelines](#scope-and-guidelines)
-  - Sensitive data leaking from third-party dependencies
-  - Sensitive data leaking from middleware applied to the `Router`
-- How to use the `Sensitive` struct and the `debug-logging` feature flag described in [Debug Logging](#debug-logging)
+- Warn against the two potential leaks described in [Scope and Guidelines](#scope-and-guidelines):
+  - Sensitive data leaking from third-party dependencies.
+  - Sensitive data leaking from middleware applied to the `Router`.
+- How to use the `Sensitive` struct and the `debug-logging` feature flag described in [Debug Logging](#debug-logging).
 
 ## Alternative Proposals
 
