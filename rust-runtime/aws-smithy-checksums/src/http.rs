@@ -103,7 +103,11 @@ pub trait HttpChecksum: Checksum + Send + Sync {
     fn header_name(&self) -> HeaderName;
 
     /// Return the calculated checksum as a base64-encoded `HeaderValue`
-    fn header_value(self: Box<Self>) -> HeaderValue;
+    fn header_value(self: Box<Self>) -> HeaderValue {
+        let hash = self.finalize();
+        HeaderValue::from_str(&base64::encode(&hash[..]))
+            .expect("base64 encoded bytes are always valid header values")
+    }
 
     /// Return the size of the base64-encoded `HeaderValue` for this checksum
     fn size(&self) -> u64 {
@@ -122,25 +126,11 @@ impl HttpChecksum for Crc32 {
     fn header_name(&self) -> HeaderName {
         CRC_32_HEADER_NAME.clone()
     }
-
-    fn header_value(self: Box<Self>) -> HeaderValue {
-        // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.finalize();
-        HeaderValue::from_str(&base64::encode(u32::to_be_bytes(hash)))
-            .expect("will always produce a valid header value from a CRC32 checksum")
-    }
 }
 
 impl HttpChecksum for Crc32c {
     fn header_name(&self) -> HeaderName {
         CRC_32_C_HEADER_NAME.clone()
-    }
-
-    fn header_value(self: Box<Self>) -> HeaderValue {
-        // If no data was provided to this callback and no CRC was ever calculated, return zero as the checksum.
-        let hash = self.state.unwrap_or_default();
-        HeaderValue::from_str(&base64::encode(u32::to_be_bytes(hash)))
-            .expect("will always produce a valid header value from a CRC32C checksum")
     }
 }
 
@@ -148,41 +138,17 @@ impl HttpChecksum for Sha1 {
     fn header_name(&self) -> HeaderName {
         SHA_1_HEADER_NAME.clone()
     }
-
-    fn header_value(self: Box<Self>) -> HeaderValue {
-        use sha1::Digest;
-        // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.finalize();
-        HeaderValue::from_str(&base64::encode(&hash[..]))
-            .expect("will always produce a valid header value from a SHA-1 checksum")
-    }
 }
 
 impl HttpChecksum for Sha256 {
     fn header_name(&self) -> HeaderName {
         SHA_256_HEADER_NAME.clone()
     }
-
-    fn header_value(self: Box<Self>) -> HeaderValue {
-        use sha2::Digest;
-        // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.finalize();
-        HeaderValue::from_str(&base64::encode(&hash[..]))
-            .expect("will always produce a valid header value from a SHA-256 checksum")
-    }
 }
 
 impl HttpChecksum for Md5 {
     fn header_name(&self) -> HeaderName {
         MD5_HEADER_NAME.clone()
-    }
-
-    fn header_value(self: Box<Self>) -> HeaderValue {
-        use md5::Digest;
-        // We clone the hasher because `Hasher::finalize` consumes `self`
-        let hash = self.hasher.finalize();
-        HeaderValue::from_str(&base64::encode(&hash[..]))
-            .expect("will always produce a valid header value from an MD5 checksum")
     }
 }
 

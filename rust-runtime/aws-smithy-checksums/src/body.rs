@@ -49,14 +49,13 @@ impl http_body::Body for ChecksumBody<SdkBody> {
         match this.checksum {
             Some(checksum) => {
                 let poll_res = this.body.poll_data(cx);
-                match &poll_res {
-                    Poll::Ready(Some(Ok(data))) => checksum.update(&data),
-                    _ => (),
+                if let Poll::Ready(Some(Ok(data))) = &poll_res {
+                    checksum.update(&data);
                 }
 
                 poll_res
             }
-            _ => Poll::Ready(Some(Err(Box::new(Error::Taken)))),
+            None => unreachable!("This can only fail if poll_data is called again after poll_trailers, which is invalid"),
         }
     }
 
@@ -71,7 +70,7 @@ impl http_body::Body for ChecksumBody<SdkBody> {
             let checksum_headers = if let Some(checksum) = this.checksum.take() {
                 checksum.headers()
             } else {
-                return Poll::Ready(Err(Box::new(Error::Taken)));
+                return Poll::Ready(Ok(None));
             };
 
             return match maybe_inner_trailers {
@@ -87,7 +86,9 @@ impl http_body::Body for ChecksumBody<SdkBody> {
     }
 
     fn is_end_stream(&self) -> bool {
-        self.body.is_end_stream()
+        // If inner body is finished and we've already consumed the checksum then we must be
+        // at the end of the stream.
+        self.body.is_end_stream() && self.checksum.is_none()
     }
 
     fn size_hint(&self) -> SizeHint {
@@ -140,7 +141,9 @@ impl ChecksumValidatedBody<SdkBody> {
                 );
                 let checksum = match checksum.as_mut() {
                     Some(checksum) => checksum,
-                    None => panic!("{}", Error::Taken),
+                    None => {
+                        unreachable!("The checksum must exist because it's only taken out once the inner body has been completely polled.");
+                    }
                 };
 
                 checksum.update(&data);
@@ -152,7 +155,11 @@ impl ChecksumValidatedBody<SdkBody> {
                 tracing::trace!("finished reading from body, calculating final checksum");
                 let checksum = match checksum.take() {
                     Some(checksum) => checksum,
-                    None => panic!("{}", Error::Taken),
+                    None => {
+                        // If the checksum was already taken and this was polled again anyways,
+                        // then return nothing
+                        return Poll::Ready(None);
+                    }
                 };
 
                 let actual_checksum = checksum.finalize();
@@ -179,8 +186,6 @@ pub enum Error {
     /// The actual checksum didn't match the expected checksum. The checksummed data has been
     /// altered since the expected checksum was calculated.
     ChecksumMismatch { expected: Bytes, actual: Bytes },
-    /// This checksum was accessed after it was consumed
-    Taken,
 }
 
 impl Display for Error {
@@ -192,7 +197,6 @@ impl Display for Error {
                 hex::encode(expected),
                 hex::encode(actual)
             ),
-            Self::Taken => write!(f, "this checksum body was accessed after finalization. Once a checksum body is finalized, it should not be accessed again."),
         }
     }
 }

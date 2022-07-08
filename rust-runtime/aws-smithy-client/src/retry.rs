@@ -251,6 +251,22 @@ impl RetryHandler {
 }
 
 impl RetryHandler {
+    fn calculate_backoff(&self) -> Duration {
+        // From the retry spec:
+        //     b = random number within the range of: 0 <= b <= 1
+        //     r = 2
+        //     t_i = min(br^i, MAX_BACKOFF);
+        //
+        // `self.local.attempts` tracks number of requests made including the initial request
+        // The initial attempt shouldn't count towards backoff calculations so we subtract it
+        let b = (self.config.base)();
+        let r = 2.0_f64;
+        // This subtraction is safe because this function is only called after at least 1 attempt
+        let attempts = (self.local.attempts - 1) as f64;
+        let backoff_in_seconds = b * r.powf(attempts);
+        Duration::from_secs_f64(backoff_in_seconds).min(self.config.max_backoff)
+    }
+
     /// Determine the correct response given `retry_kind`
     ///
     /// If a retry is specified, this function returns `(next, backoff_duration)`
@@ -262,18 +278,8 @@ impl RetryHandler {
             }
             self.shared.quota_acquire(error_kind, &self.config)?
         };
-        /*
-        From the retry spec:
-            b = random number within the range of: 0 <= b <= 1
-            r = 2
-            t_i = min(br^i, MAX_BACKOFF);
-         */
-        let r: i32 = 2;
-        let b = (self.config.base)();
-        // `self.local.attempts` tracks number of requests made including the initial request
-        // The initial attempt shouldn't count towards backoff calculations so we subtract it
-        let backoff = b * (r.pow(self.local.attempts - 1) as f64);
-        let backoff = Duration::from_secs_f64(backoff).min(self.config.max_backoff);
+
+        let backoff = self.calculate_backoff();
         let next = RetryHandler {
             local: RequestLocalRetryState {
                 attempts: self.local.attempts + 1,
