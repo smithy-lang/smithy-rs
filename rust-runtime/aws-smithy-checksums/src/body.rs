@@ -50,7 +50,7 @@ impl http_body::Body for ChecksumBody<SdkBody> {
             Some(checksum) => {
                 let poll_res = this.body.poll_data(cx);
                 if let Poll::Ready(Some(Ok(data))) = &poll_res {
-                    checksum.update(&data);
+                    checksum.update(data);
                 }
 
                 poll_res
