@@ -359,8 +359,8 @@ class RustWriter private constructor(
     }
 
     override fun write(content: Any?, vararg args: Any?): RustWriter {
-        // The second condition introduced to prevent the following bug
-        // https://github.com/rust-lang/rustfmt/issues/5425
+        // TODO(https://github.com/rust-lang/rustfmt/issues/5425): The second condition introduced here is to prevent
+        // this rustfmt bug
         if (debugMode && (content as? String?)?.let { it.trim() != "," } ?: false) {
             val location = Thread.currentThread().stackTrace
             location.first { it.isRelevant() }?.let { "/* ${it.fileName}:${it.lineNumber} */" }
