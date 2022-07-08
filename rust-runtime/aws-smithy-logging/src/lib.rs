@@ -4,8 +4,10 @@
  */
 
 mod sensitive;
+mod uri;
 
 pub use sensitive::*;
+pub use uri::*;
 
 /// The string placeholder for redacted data.
 pub const REDACTED: &str = "{redacted}";
