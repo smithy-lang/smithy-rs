@@ -9,6 +9,7 @@ members = [
     "aws-smithy-http",
     "aws-smithy-http-tower",
     "aws-smithy-json",
+    "aws-smithy-logging",
     "aws-smithy-protocol-test",
     "aws-smithy-query",
     "aws-smithy-types",
