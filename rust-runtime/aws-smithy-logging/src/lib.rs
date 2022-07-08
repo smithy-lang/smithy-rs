@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+mod headers;
 mod sensitive;
 mod uri;
 
+pub use headers::*;
 pub use sensitive::*;
 pub use uri::*;
 
