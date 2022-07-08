@@ -42,7 +42,7 @@ class PythonServerOperationHandlerGenerator(
             "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).asType(),
             "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "pyo3asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
+            "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
             "tokio" to PythonServerCargoDependency.Tokio.asType(),
             "tracing" to PythonServerCargoDependency.Tracing.asType()
         )
@@ -63,27 +63,26 @@ class PythonServerOperationHandlerGenerator(
             writer.rustTemplate(
                 """
                 /// Python handler for operation `$operationName`.
-                pub async fn $fnName(
+                pub(crate) async fn $fnName(
                     input: $input,
                     state: #{SmithyServer}::Extension<#{SmithyPython}::PyState>,
                     handler: std::sync::Arc<#{SmithyPython}::PyHandler>,
                 ) -> std::result::Result<$output, $error> {
                     // Async block used to run the handler and catch any Python error.
                     let result = async {
-                        let handler = handler.clone();
                         if handler.is_coroutine {
-                            #{pycoroutine:W}
+                            #{PyCoroutine:W}
                         } else {
-                            #{pyfunction:W}
+                            #{PyFunction:W}
                         }
                     };
-                    #{pyerror:W}
+                    #{PyError:W}
                 }
                 """,
                 *codegenScope,
-                "pycoroutine" to renderPyCoroutine(fnName, output),
-                "pyfunction" to renderPyFunction(fnName, output),
-                "pyerror" to renderPyError(),
+                "PyCoroutine" to renderPyCoroutine(fnName, output),
+                "PyFunction" to renderPyFunction(fnName, output),
+                "PyError" to renderPyError(),
             )
         }
     }
@@ -93,7 +92,7 @@ class PythonServerOperationHandlerGenerator(
             rustTemplate(
                 """
                 #{tracing}::debug!("Executing Python handler function `$name()`");
-                #{tokio}::task::spawn_blocking(move || {
+                #{tokio}::task::block_in_place(move || {
                     #{pyo3}::Python::with_gil(|py| {
                         let pyhandler: &#{pyo3}::types::PyFunction = handler.extract(py)?;
                         let output = if handler.args == 1 {
@@ -104,7 +103,6 @@ class PythonServerOperationHandlerGenerator(
                         output.extract::<$output>()
                     })
                 })
-                .await.map_err(|e| #{pyo3}::exceptions::PyRuntimeError::new_err(e.to_string()))?
                 """,
                 *codegenScope
             )
@@ -122,7 +120,7 @@ class PythonServerOperationHandlerGenerator(
                     } else {
                         pyhandler.call1((input, &*state.0.context))?
                     };
-                    #{pyo3asyncio}::tokio::into_future(coroutine)
+                    #{pyo3_asyncio}::tokio::into_future(coroutine)
                 })?;
                 result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))?
                 """,
@@ -136,14 +134,15 @@ class PythonServerOperationHandlerGenerator(
                 """
                 // Catch and record a Python traceback.
                 result.await.map_err(|e| {
-                    #{pyo3}::Python::with_gil(|py| {
-                        let traceback = match e.traceback(py) {
+                    let traceback = #{pyo3}::Python::with_gil(|py| {
+                        match e.traceback(py) {
                             Some(t) => t.format().unwrap_or_else(|e| e.to_string()),
-                            None => "Unknown traceback".to_string()
-                        };
-                        #{tracing}::error!("{}\n{}", e, traceback);
+                            None => "Unknown traceback\n".to_string()
+                        }
                     });
-                    e.into()
+                    let error = e.into();
+                    #{tracing}::error!("{}{}", traceback, error);
+                    error
                 })
                 """,
                 *codegenScope

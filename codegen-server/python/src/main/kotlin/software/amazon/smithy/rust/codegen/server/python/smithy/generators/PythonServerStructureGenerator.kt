@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
  * This class generates input / output / error structures definitions and implements the
  * `PyClass` trait.
  */
-open class PythonServerStructureGenerator(
+class PythonServerStructureGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
@@ -53,29 +53,28 @@ open class PythonServerStructureGenerator(
     }
 
     private fun renderPyO3Methods() {
-        if (shape.hasTrait<ErrorTrait>() || accessorMembers.isNotEmpty()) {
-            Attribute.Custom("pyo3::pymethods", symbols = pyo3Symbols).render(writer)
-            writer.rustTemplate(
-                """
-                impl $name {
-                    ##[new]
-                    pub fn new(#{bodysignature:W}) -> Self {
-                        Self {
-                            #{bodymembers:W}
-                        }
-                    }
-                    fn __repr__(&self) -> String  {
-                        format!("{self:?}")
-                    }
-                    fn __str__(&self) -> String {
-                        format!("{self:?}")
+        Attribute.Custom("allow(clippy::new_without_default)").render(writer)
+        Attribute.Custom("pyo3::pymethods", symbols = pyo3Symbols).render(writer)
+        writer.rustTemplate(
+            """
+            impl $name {
+                ##[new]
+                pub fn new(#{BodySignature:W}) -> Self {
+                    Self {
+                        #{BodyMembers:W}
                     }
                 }
-                """,
-                "bodysignature" to renderStructSignatureMembers(),
-                "bodymembers" to renderStructBodyMembers()
-            )
-        }
+                fn __repr__(&self) -> String  {
+                    format!("{self:?}")
+                }
+                fn __str__(&self) -> String {
+                    format!("{self:?}")
+                }
+            }
+            """,
+            "BodySignature" to renderStructSignatureMembers(),
+            "BodyMembers" to renderStructBodyMembers()
+        )
     }
 
     private fun renderStructSignatureMembers(): Writable =

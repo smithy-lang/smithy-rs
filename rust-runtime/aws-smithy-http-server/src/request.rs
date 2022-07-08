@@ -32,23 +32,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-use async_trait::async_trait;
 use http::{Extensions, HeaderMap, Request, Uri};
-
-use crate::response::IntoResponse;
-
-/// Trait for extracting information from requests.
-///
-/// A type implementing the `FromRequest` trait is used to handle and extract information from an async handler taking in a `RequestParts` as input.
-#[async_trait]
-pub trait FromRequest<B>: Sized {
-    /// If the extractor fails it'll use this "rejection" type. A rejection is
-    /// a kind of error that can be converted into a response.
-    type Rejection: IntoResponse;
-
-    /// Perform the extraction.
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection>;
-}
 
 #[doc(hidden)]
 #[derive(Debug)]
