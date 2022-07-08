@@ -15,20 +15,21 @@ use std::str::FromStr;
 pub enum SdkAffected {
     Client,
     Server,
-    Both
+    All
 }
 
 impl Default for SdkAffected {
     fn default() -> Self {
-        SdkAffected::Both
+        SdkAffected::All
     }
 }
+
 impl Display for SdkAffected {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SdkAffected::Client => write!(f, "client"),
             SdkAffected::Server => write!(f, "server"),
-            SdkAffected::Both => write!(f, "all"),
+            SdkAffected::All => write!(f, "all"),
         }
     }
 }
@@ -40,7 +41,7 @@ impl FromStr for SdkAffected {
         match sdk.to_lowercase().as_str() {
             "client" => Ok(SdkAffected::Client),
             "server" => Ok(SdkAffected::Server),
-            "both" => Ok(SdkAffected::Both),
+            "all" => Ok(SdkAffected::All),
             _ => bail!("An invalid type of SDK type {sdk} has been mentioned in the meta tags")
         }
     }
@@ -321,12 +322,12 @@ mod tests {
         let value = r#"
             message = "Fix typos in module documentation for generated crates"
             references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "Both" }
+            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
             author = "rcoh"
         "#;
         {
            let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed").unwrap();
-            assert_eq!(value.meta.target, Some(SdkAffected::Both));
+            assert_eq!(value.meta.target, Some(SdkAffected::All));
         }
         // an invalid sdk value
         let value = r#"
