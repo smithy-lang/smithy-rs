@@ -9,4 +9,5 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 debug-logging = []
 
-[dependencies]
+[dev-dependencies]
+tracing = "0.1.35"
