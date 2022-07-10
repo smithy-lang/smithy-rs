@@ -6,34 +6,43 @@ use std::fmt::{Debug, Error, Formatter};
 
 use http::{header::HeaderName, HeaderMap};
 
-use crate::Sensitive;
+use crate::{OrFmt, Sensitive};
 
-fn noop_header_filter(_: &HeaderName) -> HeaderMarker {
+/// Marks the sensitive data of a header pair.
+#[derive(Default, Debug)]
+pub struct HeaderMarker {
+    /// Set to `true` to mark the value as sensitive.
+    pub value: bool,
+    /// Set to `Some(x)` to mark `key[x..]` as sensitive.
+    pub key_suffix: Option<usize>,
+}
+
+pub(crate) fn noop_header_marker(_: &HeaderName) -> HeaderMarker {
     HeaderMarker::default()
 }
 
-/// A wrapper around [`&HeaderMap`](HeaderMap) which modifies the behavior of [`Debug`]. Different filters can be
-/// applied to mark specific parts of the `Uri`.
+/// A wrapper around [`&HeaderMap`](HeaderMap) which modifies the behavior of [`Debug`]. Closures are used to mark
+/// mark specific parts of the `Uri`.
 ///
 /// The [`Debug`] implementation will respect the `debug-logging` flag.
 pub struct SensitiveHeaders<'a, F> {
     headers: &'a HeaderMap,
-    filter: F,
+    marker: F,
 }
 
 impl<'a> SensitiveHeaders<'a, fn(&'a HeaderName) -> HeaderMarker> {
-    /// Constructs a new [`SensitiveHeaders`] with no filtering.
+    /// Constructs a new [`SensitiveHeaders`] with nothing marked as sensitive.
     pub fn new(headers: &'a HeaderMap) -> Self {
         Self {
             headers,
-            filter: noop_header_filter,
+            marker: noop_header_marker,
         }
     }
 }
 
 impl<'a, F> SensitiveHeaders<'a, F> {
-    /// Sets specific header values and prefixed header keys as sensitive by supplying a filter
-    /// over the header key/values pairs. The filter takes the form
+    /// Marks specific header values and prefixed header keys as sensitive by supplying a closure
+    /// over the header key/values pairs. The closure takes the form
     /// `Fn(&HeaderKey) -> HeaderMarker` where `HeaderMarker` marks the parts of the header pair
     /// which are sensitive.
     ///
@@ -46,7 +55,7 @@ impl<'a, F> SensitiveHeaders<'a, F> {
     /// # use http::header::HeaderMap;
     /// # let headers = HeaderMap::new();
     /// // Headers with keys equal to "header-name" are sensitive
-    /// let headers = SensitiveHeaders::new(&headers).filter(|key|
+    /// let headers = SensitiveHeaders::new(&headers).mark(|key|
     ///     HeaderMarker {
     ///         value: key == "header-name",
     ///         key_suffix: None
@@ -57,42 +66,15 @@ impl<'a, F> SensitiveHeaders<'a, F> {
     ///
     /// [httpPrefixHeaders trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpprefixheaders-trait
     /// [httpHeader trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpheader-trait
-    pub fn filter<G>(self, filter: G) -> SensitiveHeaders<'a, G> {
+    pub fn mark<G>(self, marker: G) -> SensitiveHeaders<'a, G> {
         SensitiveHeaders {
             headers: self.headers,
-            filter,
+            marker,
         }
     }
 }
 
-/// Marks the sensitive data of a header pair.
-#[derive(Default, Debug)]
-pub struct HeaderMarker {
-    /// Set to `true` to mark the value as sensitive.
-    pub value: bool,
-    /// Set to `Some(x)` to mark `key[x..]` as sensitive.
-    pub key_suffix: Option<usize>,
-}
-
-enum OrDebug<Left, Right> {
-    Left(Left),
-    Right(Right),
-}
-
-impl<Left, Right> Debug for OrDebug<Left, Right>
-where
-    Left: Debug,
-    Right: Debug,
-{
-    #[inline]
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Left(left) => left.fmt(f),
-            Self::Right(right) => right.fmt(f),
-        }
-    }
-}
-
+/// Concatenates the [`Debug`] of [`&str`](str) and ['Sensitive<&str>`](Sensitive).
 struct ThenDebug<'a>(&'a str, Sensitive<&'a str>);
 
 impl<'a> Debug for ThenDebug<'a> {
@@ -111,22 +93,22 @@ where
             let HeaderMarker {
                 value: value_sensitive,
                 key_suffix,
-            } = (self.filter)(key);
+            } = (self.marker)(key);
 
             let key = if let Some(key_suffix) = key_suffix {
                 let key_str = key.as_str();
-                OrDebug::Left(ThenDebug(
+                OrFmt::Left(ThenDebug(
                     &key_str[..key_suffix],
                     Sensitive(&key_str[key_suffix..]),
                 ))
             } else {
-                OrDebug::Right(key)
+                OrFmt::Right(key)
             };
 
             let value = if value_sensitive {
-                OrDebug::Left(Sensitive(value))
+                OrFmt::Left(Sensitive(value))
             } else {
-                OrDebug::Right(value)
+                OrFmt::Right(value)
             };
 
             (key, value)
@@ -177,7 +159,7 @@ mod tests {
     // "{\"name-a\": \"value-a\", \"name-b\": \"value-b\", \"prefix-a-{redacted}\": \"value-c\", \"prefix-b-y\": \"value-d\"}"
 
     #[test]
-    fn filter_none() {
+    fn mark_none() {
         let original: HeaderMap = to_header_map(HEADER_MAP);
 
         let output = SensitiveHeaders::new(&original);
@@ -195,11 +177,11 @@ mod tests {
     const ALL_VALUES_HEADER_MAP: [(&str, &str); 4] = HEADER_MAP;
 
     #[test]
-    fn filter_all_values() {
+    fn mark_all_values() {
         let original: HeaderMap = to_header_map(HEADER_MAP);
         let expected = TestDebugMap(ALL_VALUES_HEADER_MAP);
 
-        let output = SensitiveHeaders::new(&original).filter(|_| HeaderMarker {
+        let output = SensitiveHeaders::new(&original).mark(|_| HeaderMarker {
             value: true,
             key_suffix: None,
         });
@@ -217,11 +199,11 @@ mod tests {
     const NAME_A_HEADER_MAP: [(&str, &str); 4] = HEADER_MAP;
 
     #[test]
-    fn filter_name_a_values() {
+    fn mark_name_a_values() {
         let original: HeaderMap = to_header_map(HEADER_MAP);
         let expected = TestDebugMap(NAME_A_HEADER_MAP);
 
-        let output = SensitiveHeaders::new(&original).filter(|name| HeaderMarker {
+        let output = SensitiveHeaders::new(&original).mark(|name| HeaderMarker {
             value: name == "name-a",
             key_suffix: None,
         });
@@ -239,12 +221,12 @@ mod tests {
     const PREFIX_A_HEADER_MAP: [(&str, &str); 4] = HEADER_MAP;
 
     #[test]
-    fn filter_prefix_a_values() {
+    fn mark_prefix_a_values() {
         let original: HeaderMap = to_header_map(HEADER_MAP);
         let expected = TestDebugMap(PREFIX_A_HEADER_MAP);
 
         let prefix = "prefix-a";
-        let output = SensitiveHeaders::new(&original).filter(|name: &HeaderName| HeaderMarker {
+        let output = SensitiveHeaders::new(&original).mark(|name: &HeaderName| HeaderMarker {
             value: false,
             key_suffix: if name.as_str().starts_with(prefix) {
                 Some(prefix.len())

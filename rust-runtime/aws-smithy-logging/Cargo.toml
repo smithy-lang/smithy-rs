@@ -10,7 +10,13 @@ repository = "https://github.com/awslabs/smithy-rs"
 debug-logging = []
 
 [dependencies]
+futures-util = "0.3.21"
 http = "0.2.8"
+pin-project-lite = "0.2.9"
+tower-service = "0.3.2"
+tracing = "0.1.35"
 
 [dev-dependencies]
-tracing = "0.1.35"
+tokio = { version = "1.19.2", features = ["rt-multi-thread", "macros"] }
+tower = { version = "0.4.13", features = ["util"] }
+tracing-subscriber = { version = "0.3.14", features = ["fmt", "env-filter"] }

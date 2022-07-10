@@ -5,7 +5,7 @@
 mod path;
 mod query;
 
-use std::fmt::{Display, Error, Formatter};
+use std::fmt::{self, Display, Error, Formatter};
 
 use http::Uri;
 
@@ -14,35 +14,53 @@ pub use query::*;
 
 use crate::Sensitive;
 
-enum QueryFilter<Q> {
+enum QueryMarker<Q> {
     All,
     Keyed(Q),
 }
 
-/// A wrapper around [`&Uri`](Uri) which modifies the behavior of [`Display`]. Different filters can be
-/// applied to mark specific parts of the `Uri`.
+impl<Q> fmt::Debug for QueryMarker<Q> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::All => write!(f, "All"),
+            Self::Keyed(_) => f.debug_tuple("Keyed").field(&"...").finish(),
+        }
+    }
+}
+
+/// A wrapper around [`&Uri`](Uri) which modifies the behavior of [`Display`]. Closures are used to mark specific parts
+/// of the [`Uri`] as sensitive.
 ///
 /// The [`Display`] implementation will respect the `debug-logging` flag.
 pub struct SensitiveUri<'a, P, Q> {
     uri: &'a Uri,
-    path_filter: Option<P>,
-    query_filter: Option<QueryFilter<Q>>,
+    path_marker: Option<P>,
+    query_marker: Option<QueryMarker<Q>>,
+}
+
+impl<'a, P, Q> fmt::Debug for SensitiveUri<'a, P, Q> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SensitiveUri")
+            .field("uri", &self.uri)
+            .field("query_marker", &self.query_marker)
+            .finish_non_exhaustive()
+    }
 }
 
 impl<'a> SensitiveUri<'a, fn(usize) -> bool, fn(&str) -> bool> {
-    /// Constructs a new [`SensitiveUri`] with no filtering.
+    /// Constructs a new [`SensitiveUri`] with nothing marked as sensitive.
     pub fn new(uri: &'a Uri) -> Self {
         Self {
             uri,
-            path_filter: None,
-            query_filter: None,
+            path_marker: None,
+            query_marker: None,
         }
     }
 }
 
 impl<'a, P, Q> SensitiveUri<'a, P, Q> {
-    /// Sets specific path segments as sensitive by supplying a filter over the path index.
-    /// The filter takes the form `Fn(usize) -> bool` where `usize` represents the index of the
+    /// Marks specific path segments as sensitive by supplying a closure over the path index.
+    /// The closure takes the form `Fn(usize) -> bool` where `usize` represents the index of the
     /// segment and the `bool` marks that segment as sensitive.
     ///
     /// This accommodates the [httpLabel trait].
@@ -54,24 +72,24 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     /// # use http::Uri;
     /// # let uri = Uri::from_static("http://a/");
     /// // First path segment is sensitive
-    /// let uri = SensitiveUri::new(&uri).path_filter(|x| x != 0);
+    /// let uri = SensitiveUri::new(&uri).path(|x| x == 0);
     /// println!("{uri}");
     /// ```
     ///
     /// [httpLabel trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait
-    pub fn path_filter<F>(self, filter: F) -> SensitiveUri<'a, F, Q> {
+    pub fn path<F>(self, marker: F) -> SensitiveUri<'a, F, Q> {
         SensitiveUri {
             uri: self.uri,
-            path_filter: Some(filter),
-            query_filter: self.query_filter,
+            path_marker: Some(marker),
+            query_marker: self.query_marker,
         }
     }
 
-    /// Sets specific query string values as sensitive by supplying a filter over the query string
-    /// keys. The filter takes the form `Fn(&str) -> bool` where `&str` represents the key of the
+    /// Marks specific query string values as sensitive by supplying a closure over the query string
+    /// keys. The closure takes the form `Fn(&str) -> bool` where `&str` represents the key of the
     /// query string pair and the `bool` marks that value as sensitive.
     ///
-    /// This will override the [`query_filter`](SensitiveUri::query_filter).
+    /// This will override the [`query`](SensitiveUri::query).
     ///
     /// This accommodates the [httpQuery trait].
     ///
@@ -82,24 +100,22 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     /// # use http::Uri;
     /// # let uri = Uri::from_static("http://a/");
     /// // Query string pair with key "name" is sensitive
-    /// let uri = SensitiveUri::new(&uri).query_key_filter(|x| x != "name");
+    /// let uri = SensitiveUri::new(&uri).query_key(|x| x == "name");
     /// println!("{uri}");
     /// ```
     ///
     /// [httpQuery trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait
-    pub fn query_key_filter<F>(self, filter: F) -> SensitiveUri<'a, P, F> {
+    pub fn query_key<F>(self, marker: F) -> SensitiveUri<'a, P, F> {
         SensitiveUri {
             uri: self.uri,
-            path_filter: self.path_filter,
-            query_filter: Some(QueryFilter::Keyed(filter)),
+            path_marker: self.path_marker,
+            query_marker: Some(QueryMarker::Keyed(marker)),
         }
     }
 
-    /// Sets specific query string values as sensitive by supplying a filter over the query string
-    /// keys. The filter takes the form `Fn(&str) -> bool` where `&str` represents the key of the
-    /// query string pair and the `bool` marks that value as sensitive.
+    /// Marks the entire query string as sensitive.
     ///
-    /// This will override the [`query_key_filter`](SensitiveUri::query_key_filter).
+    /// This will override the [`query_key`](SensitiveUri::query_key).
     ///
     /// This accommodates the [httpQueryParams trait].
     ///
@@ -110,16 +126,16 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     /// # use http::Uri;
     /// # let uri = Uri::from_static("http://a/");
     /// // All of the query string is sensitive
-    /// let uri = SensitiveUri::new(&uri).query_filter();
+    /// let uri = SensitiveUri::new(&uri).query();
     /// println!("{uri}");
     /// ```
     ///
     /// [httpQueryParams trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpqueryparams-trait
-    pub fn query_filter(self) -> SensitiveUri<'a, P, Q> {
+    pub fn query(self) -> SensitiveUri<'a, P, Q> {
         SensitiveUri {
             uri: self.uri,
-            path_filter: self.path_filter,
-            query_filter: Some(QueryFilter::All),
+            path_marker: self.path_marker,
+            query_marker: Some(QueryMarker::All),
         }
     }
 }
@@ -139,21 +155,21 @@ where
         }
 
         let path = self.uri.path();
-        if let Some(path_filter) = &self.path_filter {
-            let path = SensitivePath::new(path).filter(path_filter);
+        if let Some(path_marker) = &self.path_marker {
+            let path = SensitivePath::new(path).mark(path_marker);
             write!(f, "{path}")?;
         } else {
             write!(f, "{path}")?;
         }
 
         if let Some(query) = self.uri.query() {
-            match &self.query_filter {
-                Some(QueryFilter::All) => {
+            match &self.query_marker {
+                Some(QueryMarker::All) => {
                     let query = Sensitive(query);
                     write!(f, "?{query}")
                 }
-                Some(QueryFilter::Keyed(query_filter)) => {
-                    let query = SensitiveQuery::new(query).filter(query_filter);
+                Some(QueryMarker::Keyed(query_marker)) => {
+                    let query = SensitiveQuery::new(query).mark(query_marker);
                     write!(f, "?{query}")
                 }
                 None => write!(f, "?{query}"),
@@ -212,7 +228,7 @@ mod tests {
     ];
 
     #[test]
-    fn path_filter_none() {
+    fn path_mark_none() {
         let originals = EXAMPLES.into_iter().map(Uri::from_static);
         for original in originals {
             let output = SensitiveUri::new(&original).to_string();
@@ -249,13 +265,11 @@ mod tests {
     const FIRST_PATH_EXAMPLES: [&str; 22] = EXAMPLES;
 
     #[test]
-    fn path_filter_first_segment() {
+    fn path_mark_first_segment() {
         let originals = EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = FIRST_PATH_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveUri::new(&original)
-                .path_filter(|x| x != 0)
-                .to_string();
+            let output = SensitiveUri::new(&original).path(|x| x == 0).to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }
@@ -289,13 +303,13 @@ mod tests {
     const LAST_PATH_EXAMPLES: [&str; 22] = EXAMPLES;
 
     #[test]
-    fn path_filter_last_segment() {
+    fn path_mark_last_segment() {
         let originals = EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = LAST_PATH_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let path_len = original.path().split('/').skip(1).count();
             let output = SensitiveUri::new(&original)
-                .path_filter(|x| x + 1 != path_len)
+                .path(|x| x + 1 == path_len)
                 .to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
@@ -319,13 +333,11 @@ mod tests {
     pub const ALL_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]
-    fn query_filter_all() {
+    fn query_mark_all() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = ALL_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveUri::new(&original)
-                .query_key_filter(|_| false)
-                .to_string();
+            let output = SensitiveUri::new(&original).query_key(|_| true).to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }
@@ -348,12 +360,12 @@ mod tests {
     pub const X_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]
-    fn query_filter_x() {
+    fn query_mark_x() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = X_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = SensitiveUri::new(&original)
-                .query_key_filter(|key| key != "x")
+                .query_key(|key| key == "x")
                 .to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
