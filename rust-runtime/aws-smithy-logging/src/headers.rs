@@ -155,9 +155,6 @@ mod tests {
             .collect()
     }
 
-    // "{\"name-a\": \"value-a\", \"name-b\": \"value-b\", \"prefix-a{redacted}\": \"value-c\", \"prefix-b-y\": \"value-d\"}"
-    // "{\"name-a\": \"value-a\", \"name-b\": \"value-b\", \"prefix-a-{redacted}\": \"value-c\", \"prefix-b-y\": \"value-d\"}"
-
     #[test]
     fn mark_none() {
         let original: HeaderMap = to_header_map(HEADER_MAP);

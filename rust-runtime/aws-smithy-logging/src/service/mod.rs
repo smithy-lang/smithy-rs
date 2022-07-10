@@ -1,3 +1,7 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 mod sensitivity;
 
 use std::{
@@ -21,7 +25,7 @@ use crate::{
 pub use sensitivity::*;
 
 pin_project_lite::pin_project! {
-    /// An instrumented [`Future`] responsible for opening a request span and logging the response.
+    /// An instrumented [`Future`] responsible for logging the response status code and headers.
     pub struct LoggingFuture<Fut, Header> {
         #[pin]
         inner: Fut,
