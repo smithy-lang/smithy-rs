@@ -12,7 +12,7 @@ use http::Uri;
 pub use path::*;
 pub use query::*;
 
-use crate::Sensitive;
+use super::Sensitive;
 
 enum QueryMarker<Q> {
     All,
@@ -68,7 +68,7 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     /// # Example
     ///
     /// ```
-    /// # use aws_smithy_logging::SensitiveUri;
+    /// # use aws_smithy_http_server::logging::SensitiveUri;
     /// # use http::Uri;
     /// # let uri = Uri::from_static("http://a/");
     /// // First path segment is sensitive
@@ -96,7 +96,7 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     /// # Example
     ///
     /// ```
-    /// # use aws_smithy_logging::SensitiveUri;
+    /// # use aws_smithy_http_server::logging::SensitiveUri;
     /// # use http::Uri;
     /// # let uri = Uri::from_static("http://a/");
     /// // Query string pair with key "name" is sensitive
@@ -122,7 +122,7 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     /// # Example
     ///
     /// ```
-    /// # use aws_smithy_logging::SensitiveUri;
+    /// # use aws_smithy_http_server::logging::SensitiveUri;
     /// # use http::Uri;
     /// # let uri = Uri::from_static("http://a/");
     /// // All of the query string is sensitive
@@ -308,9 +308,7 @@ mod tests {
         let expecteds = LAST_PATH_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let path_len = original.path().split('/').skip(1).count();
-            let output = SensitiveUri::new(&original)
-                .path(|x| x + 1 == path_len)
-                .to_string();
+            let output = SensitiveUri::new(&original).path(|x| x + 1 == path_len).to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }
@@ -364,9 +362,7 @@ mod tests {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = X_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveUri::new(&original)
-                .query_key(|key| key == "x")
-                .to_string();
+            let output = SensitiveUri::new(&original).query_key(|key| key == "x").to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }

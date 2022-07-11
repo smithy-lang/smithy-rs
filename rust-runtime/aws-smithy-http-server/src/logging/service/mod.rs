@@ -13,10 +13,10 @@ use std::{
 
 use futures_util::ready;
 use http::{header::HeaderName, Request, Response};
-use tower_service::Service;
+use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
 
-use crate::{
+use super::{
     headers::{HeaderMarker, SensitiveHeaders},
     uri::SensitiveUri,
     OrFmt, Sensitive,
@@ -59,7 +59,7 @@ where
     }
 }
 
-/// A middleware [`Service`](tower_service::Service) responsible for:
+/// A middleware [`Service`](tower::Service) responsible for:
 ///     - Opening a [`tracing::debug_span`] for the lifetime of the request, which includes the operation name, the
 ///     [`Uri`](http::Uri), and the request headers.
 ///     - A [`tracing::debug`] during response, which includes the response status code and headers.
@@ -68,12 +68,12 @@ where
 /// [`sensitivity`](InstrumentOperation::sensitivity) method. Using the `debug-logging` feature flag will ignore these
 /// markings.
 ///
-/// Data marked as sensitive will be replaced with [{redacted}](crate::REDACTED).
+/// Data marked as sensitive will be replaced with [{redacted}](crate::logging::REDACTED).
 ///
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_logging::{Sensitivity, InstrumentOperation};
+/// # use aws_smithy_http_server::logging::{Sensitivity, InstrumentOperation};
 /// # let svc = ();
 /// let sensitivity = Sensitivity::new().path(|index| index == 1).status_code();
 /// let mut svc = InstrumentOperation::new(svc, "foo-operation").sensitivity(sensitivity);
@@ -100,10 +100,7 @@ impl<Svc> InstrumentOperation<Svc> {
 
 impl<Svc, Sensitivity> InstrumentOperation<Svc, Sensitivity> {
     /// Configures the data marked as sensitive.
-    pub fn sensitivity<NewSensitivity>(
-        self,
-        sensitivity: NewSensitivity,
-    ) -> InstrumentOperation<Svc, NewSensitivity> {
+    pub fn sensitivity<NewSensitivity>(self, sensitivity: NewSensitivity) -> InstrumentOperation<Svc, NewSensitivity> {
         InstrumentOperation {
             inner: self.inner,
             operation_name: self.operation_name,
@@ -141,9 +138,7 @@ where
             resp_header,
         } = &self.sensitivity;
         let headers = SensitiveHeaders::new(request.headers()).mark(&req_header);
-        let uri = SensitiveUri::new(request.uri())
-            .path(&path)
-            .query_key(&query_key);
+        let uri = SensitiveUri::new(request.uri()).path(&path).query_key(&query_key);
         let uri = if *query { uri.query() } else { uri };
         let span = debug_span!("request", operation = %self.operation_name, %uri, ?headers);
 

@@ -4,7 +4,7 @@
  */
 use std::fmt::{self, Display, Error, Formatter};
 
-use crate::Sensitive;
+use crate::logging::Sensitive;
 
 pub(crate) fn noop_path_marker(_: usize) -> bool {
     false
@@ -70,9 +70,7 @@ where
 mod tests {
     use http::Uri;
 
-    use crate::uri::tests::EXAMPLES;
-
-    use super::SensitivePath;
+    use crate::logging::{uri::tests::EXAMPLES, SensitivePath};
 
     #[test]
     fn mark_none() {
@@ -118,9 +116,7 @@ mod tests {
         let originals = EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = ALL_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitivePath::new(&original.path())
-                .mark(|_| true)
-                .to_string();
+            let output = SensitivePath::new(&original.path()).mark(|_| true).to_string();
             assert_eq!(output, expected.path(), "original = {original}");
         }
     }

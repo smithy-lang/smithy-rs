@@ -6,7 +6,7 @@ use std::fmt;
 
 use http::header::HeaderName;
 
-use crate::{noop_header_marker, noop_path_marker, noop_query_marker, HeaderMarker};
+use crate::logging::{noop_header_marker, noop_path_marker, noop_query_marker, HeaderMarker};
 
 /// A representation of the data marked as sensitive.
 pub struct Sensitivity<RequestHeader, Path, QueryKey, ResponseHeader> {
@@ -32,9 +32,7 @@ impl<RequestHeader, Path, QueryKey, ResponseHeader> fmt::Debug
     }
 }
 
-impl<RequestHeader, Path, QueryKey, ResponseHeader>
-    Sensitivity<RequestHeader, Path, QueryKey, ResponseHeader>
-{
+impl<RequestHeader, Path, QueryKey, ResponseHeader> Sensitivity<RequestHeader, Path, QueryKey, ResponseHeader> {
     /// Marks request headers as sensitive using a closure.
     ///
     /// See [`SensitiveHeaders::mark`](crate::SensitiveHeaders::mark) for more info.
@@ -128,12 +126,8 @@ impl<RequestHeader, Path, QueryKey, ResponseHeader>
     }
 }
 
-pub(crate) type DefaultSensitivity = Sensitivity<
-    fn(&HeaderName) -> HeaderMarker,
-    fn(usize) -> bool,
-    fn(&str) -> bool,
-    fn(&HeaderName) -> HeaderMarker,
->;
+pub(crate) type DefaultSensitivity =
+    Sensitivity<fn(&HeaderName) -> HeaderMarker, fn(usize) -> bool, fn(&str) -> bool, fn(&HeaderName) -> HeaderMarker>;
 
 impl Default
     for Sensitivity<
@@ -157,12 +151,7 @@ impl Default
 }
 
 impl
-    Sensitivity<
-        fn(&HeaderName) -> HeaderMarker,
-        fn(usize) -> bool,
-        fn(&str) -> bool,
-        fn(&HeaderName) -> HeaderMarker,
-    >
+    Sensitivity<fn(&HeaderName) -> HeaderMarker, fn(usize) -> bool, fn(&str) -> bool, fn(&HeaderName) -> HeaderMarker>
 {
     /// Constructs a new [`Sensitivity`] with nothing marked as sensitive.
     pub fn new() -> Self {

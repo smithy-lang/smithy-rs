@@ -4,7 +4,7 @@
  */
 use std::fmt::{self, Display, Error, Formatter};
 
-use crate::Sensitive;
+use crate::logging::Sensitive;
 
 pub(crate) fn noop_query_marker(_: &str) -> bool {
     false
@@ -91,7 +91,7 @@ where
 mod tests {
     use http::Uri;
 
-    use crate::uri::tests::{
+    use crate::logging::uri::tests::{
         ALL_QUERY_STRING_EXAMPLES, EXAMPLES, QUERY_STRING_EXAMPLES, X_QUERY_STRING_EXAMPLES,
     };
 
@@ -99,10 +99,7 @@ mod tests {
 
     #[test]
     fn mark_none() {
-        let originals = EXAMPLES
-            .into_iter()
-            .chain(QUERY_STRING_EXAMPLES)
-            .map(Uri::from_static);
+        let originals = EXAMPLES.into_iter().chain(QUERY_STRING_EXAMPLES).map(Uri::from_static);
         for original in originals {
             if let Some(query) = original.query() {
                 let output = SensitiveQuery::new(&query).to_string();

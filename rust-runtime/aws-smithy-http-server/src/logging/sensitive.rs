@@ -5,7 +5,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use crate::REDACTED;
+use super::REDACTED;
 
 /// A wrapper used to modify the [`Display`] and [`Debug`] implementation of the inner structure
 /// based on the feature flag `debug-logging`. When the `debug-logging` feature is enabled, the
@@ -18,7 +18,7 @@ use crate::REDACTED;
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_logging::Sensitive;
+/// # use aws_smithy_http_server::logging::Sensitive;
 /// # let address = "";
 /// tracing::debug!(
 ///     name = %Sensitive("Alice"),
@@ -56,7 +56,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::REDACTED;
+    use crate::logging::REDACTED;
 
     use super::Sensitive;
 
