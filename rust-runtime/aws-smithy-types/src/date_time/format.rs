@@ -377,8 +377,7 @@ pub(crate) mod rfc3339 {
     // Timezones not supported:
     // Not OK: 1985-04-12T23:20:50-02:00
     pub(crate) fn parse(s: &str) -> Result<DateTime, DateTimeParseError> {
-        let timezone_offset = "-02:00".len() - 1;
-        if matches!(s.chars().rev().nth(timezone_offset), Some('-') | Some('+')) {
+        if !matches!(s.chars().last(), Some('Z')) {
             return Err(DateTimeParseError::Invalid(
                 "invalid RFC-3339 date-time: timezone offset not supported".into(),
             ));
