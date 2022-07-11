@@ -12,7 +12,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 client-hyper = ["aws-smithy-client/client-hyper"]
 rustls = ["aws-smithy-client/rustls"]
 native-tls = ["aws-smithy-client/native-tls"]
-rt-tokio = ["aws-smithy-async/rt-tokio"]
+rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
 
 default = ["client-hyper", "rustls", "rt-tokio"]
 
