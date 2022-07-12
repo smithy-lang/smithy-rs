@@ -12,48 +12,31 @@ use http::Uri;
 pub use path::*;
 pub use query::*;
 
-use super::Sensitive;
-
-enum QueryMarker<Q> {
-    All,
-    Keyed(Q),
-}
-
-impl<Q> fmt::Debug for QueryMarker<Q> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::All => write!(f, "All"),
-            Self::Keyed(_) => f.debug_tuple("Keyed").field(&"...").finish(),
-        }
-    }
-}
-
 /// A wrapper around [`&Uri`](Uri) which modifies the behavior of [`Display`]. Closures are used to mark specific parts
 /// of the [`Uri`] as sensitive.
 ///
 /// The [`Display`] implementation will respect the `debug-logging` flag.
 pub struct SensitiveUri<'a, P, Q> {
     uri: &'a Uri,
-    path_marker: Option<P>,
-    query_marker: Option<QueryMarker<Q>>,
+    path_marker: P,
+    query_marker: Q,
 }
 
 impl<'a, P, Q> fmt::Debug for SensitiveUri<'a, P, Q> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("SensitiveUri")
             .field("uri", &self.uri)
-            .field("query_marker", &self.query_marker)
             .finish_non_exhaustive()
     }
 }
 
-impl<'a> SensitiveUri<'a, fn(usize) -> bool, fn(&str) -> bool> {
+impl<'a> SensitiveUri<'a, fn(usize) -> bool, fn(&str) -> QueryMarker> {
     /// Constructs a new [`SensitiveUri`] with nothing marked as sensitive.
     pub fn new(uri: &'a Uri) -> Self {
         Self {
             uri,
-            path_marker: None,
-            query_marker: None,
+            path_marker: noop_path_marker,
+            query_marker: noop_query_marker,
         }
     }
 }
@@ -80,62 +63,35 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     pub fn path<F>(self, marker: F) -> SensitiveUri<'a, F, Q> {
         SensitiveUri {
             uri: self.uri,
-            path_marker: Some(marker),
+            path_marker: marker,
             query_marker: self.query_marker,
         }
     }
 
     /// Marks specific query string values as sensitive by supplying a closure over the query string
-    /// keys. The closure takes the form `Fn(&str) -> bool` where `&str` represents the key of the
-    /// query string pair and the `bool` marks that value as sensitive.
+    /// keys. The closure takes the form `Fn(&str) -> Option<QueryMarker>` where `&str` represents the key of the
+    /// query string pair and the `Option<QueryMarker>` marks the key, value, or entire pair as sensitive.
     ///
-    /// This will override the [`query`](SensitiveUri::query).
-    ///
-    /// This accommodates the [httpQuery trait].
+    /// This accommodates the [httpQuery trait] and [httpQueryParams trait].
     ///
     /// # Example
     ///
     /// ```
-    /// # use aws_smithy_http_server::logging::SensitiveUri;
+    /// # use aws_smithy_http_server::logging::{SensitiveUri, QueryMarker};
     /// # use http::Uri;
     /// # let uri = Uri::from_static("http://a/");
-    /// // Query string pair with key "name" is sensitive
-    /// let uri = SensitiveUri::new(&uri).query_key(|x| x == "name");
+    /// // Query string value with key "name" is sensitive
+    /// let uri = SensitiveUri::new(&uri).query(|x| QueryMarker { key: false, value: x == "name" });
     /// println!("{uri}");
     /// ```
     ///
     /// [httpQuery trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait
-    pub fn query_key<F>(self, marker: F) -> SensitiveUri<'a, P, F> {
-        SensitiveUri {
-            uri: self.uri,
-            path_marker: self.path_marker,
-            query_marker: Some(QueryMarker::Keyed(marker)),
-        }
-    }
-
-    /// Marks the entire query string as sensitive.
-    ///
-    /// This will override the [`query_key`](SensitiveUri::query_key).
-    ///
-    /// This accommodates the [httpQueryParams trait].
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use aws_smithy_http_server::logging::SensitiveUri;
-    /// # use http::Uri;
-    /// # let uri = Uri::from_static("http://a/");
-    /// // All of the query string is sensitive
-    /// let uri = SensitiveUri::new(&uri).query();
-    /// println!("{uri}");
-    /// ```
-    ///
     /// [httpQueryParams trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpqueryparams-trait
-    pub fn query(self) -> SensitiveUri<'a, P, Q> {
+    pub fn query<F>(self, marker: F) -> SensitiveUri<'a, P, F> {
         SensitiveUri {
             uri: self.uri,
             path_marker: self.path_marker,
-            query_marker: Some(QueryMarker::All),
+            query_marker: marker,
         }
     }
 }
@@ -143,7 +99,7 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
 impl<'a, P, Q> Display for SensitiveUri<'a, P, Q>
 where
     P: Fn(usize) -> bool,
-    Q: Fn(&'a str) -> bool,
+    Q: Fn(&'a str) -> QueryMarker,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         if let Some(scheme) = self.uri.scheme() {
@@ -155,25 +111,12 @@ where
         }
 
         let path = self.uri.path();
-        if let Some(path_marker) = &self.path_marker {
-            let path = SensitivePath::new(path).mark(path_marker);
-            write!(f, "{path}")?;
-        } else {
-            write!(f, "{path}")?;
-        }
+        let path = SensitivePath::new(path).mark(&self.path_marker);
+        write!(f, "{path}")?;
 
         if let Some(query) = self.uri.query() {
-            match &self.query_marker {
-                Some(QueryMarker::All) => {
-                    let query = Sensitive(query);
-                    write!(f, "?{query}")
-                }
-                Some(QueryMarker::Keyed(query_marker)) => {
-                    let query = SensitiveQuery::new(query).mark(query_marker);
-                    write!(f, "?{query}")
-                }
-                None => write!(f, "?{query}"),
-            }?
+            let query = SensitiveQuery::new(query).mark(&self.query_marker);
+            write!(f, "?{query}")?;
         }
 
         Ok(())
@@ -184,7 +127,7 @@ where
 mod tests {
     use http::Uri;
 
-    use super::SensitiveUri;
+    use super::{QueryMarker, SensitiveUri};
 
     // https://www.w3.org/2004/04/uri-rel-test.html
     // NOTE: http::Uri's `Display` implementation trims the fragment, we mirror this behavior
@@ -314,7 +257,39 @@ mod tests {
     }
 
     #[cfg(not(feature = "debug-logging"))]
-    pub const ALL_QUERY_STRING_EXAMPLES: [&str; 11] = [
+    pub const ALL_KEYS_QUERY_STRING_EXAMPLES: [&str; 11] = [
+        "http://a/b/c/g?&",
+        "http://a/b/c/g?x",
+        "http://a/b/c/g?x&y",
+        "http://a/b/c/g?x&y&",
+        "http://a/b/c/g?x&y&z",
+        "http://a/b/c/g?{redacted}=y&{redacted}=z",
+        "http://a/b/c/g?{redacted}=y&z",
+        "http://a/b/c/g?{redacted}=y&",
+        "http://a/b/c/g?{redacted}=y&{redacted}=z",
+        "http://a/b/c/g?&{redacted}=z",
+        "http://a/b/c/g?x&{redacted}=y",
+    ];
+    #[cfg(feature = "debug-logging")]
+    pub const ALL_KEYS_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
+
+    #[test]
+    fn query_mark_all_keys() {
+        let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_KEYS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        for (original, expected) in originals.zip(expecteds) {
+            let output = SensitiveUri::new(&original)
+                .query(|_| QueryMarker {
+                    key: true,
+                    value: false,
+                })
+                .to_string();
+            assert_eq!(output, expected.to_string(), "original = {original}");
+        }
+    }
+
+    #[cfg(not(feature = "debug-logging"))]
+    pub const ALL_VALUES_QUERY_STRING_EXAMPLES: [&str; 11] = [
         "http://a/b/c/g?&",
         "http://a/b/c/g?x",
         "http://a/b/c/g?x&y",
@@ -328,14 +303,48 @@ mod tests {
         "http://a/b/c/g?x&x={redacted}",
     ];
     #[cfg(feature = "debug-logging")]
-    pub const ALL_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
+    pub const ALL_VALUES_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]
-    fn query_mark_all() {
+    fn query_mark_all_values() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_VALUES_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveUri::new(&original).query_key(|_| true).to_string();
+            let output = SensitiveUri::new(&original)
+                .query(|_| QueryMarker {
+                    key: false,
+                    value: true,
+                })
+                .to_string();
+            assert_eq!(output, expected.to_string(), "original = {original}");
+        }
+    }
+
+    #[cfg(not(feature = "debug-logging"))]
+    pub const ALL_PAIRS_QUERY_STRING_EXAMPLES: [&str; 11] = [
+        "http://a/b/c/g?&",
+        "http://a/b/c/g?x",
+        "http://a/b/c/g?x&y",
+        "http://a/b/c/g?x&y&",
+        "http://a/b/c/g?x&y&z",
+        "http://a/b/c/g?{redacted}={redacted}&{redacted}={redacted}",
+        "http://a/b/c/g?{redacted}={redacted}&z",
+        "http://a/b/c/g?{redacted}={redacted}&",
+        "http://a/b/c/g?{redacted}={redacted}&{redacted}={redacted}",
+        "http://a/b/c/g?&{redacted}={redacted}",
+        "http://a/b/c/g?x&{redacted}={redacted}",
+    ];
+    #[cfg(feature = "debug-logging")]
+    pub const ALL_PAIRS_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
+
+    #[test]
+    fn query_mark_all_pairs() {
+        let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_PAIRS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        for (original, expected) in originals.zip(expecteds) {
+            let output = SensitiveUri::new(&original)
+                .query(|_| QueryMarker { key: true, value: true })
+                .to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }
@@ -362,7 +371,12 @@ mod tests {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = X_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveUri::new(&original).query_key(|key| key == "x").to_string();
+            let output = SensitiveUri::new(&original)
+                .query(|key| QueryMarker {
+                    key: false,
+                    value: key == "x",
+                })
+                .to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }

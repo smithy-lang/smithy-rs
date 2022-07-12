@@ -6,8 +6,17 @@ use std::fmt::{self, Display, Error, Formatter};
 
 use crate::logging::Sensitive;
 
-pub(crate) fn noop_query_marker(_: &str) -> bool {
-    false
+/// Marks the sensitive data of a query string pair.
+#[derive(Debug, Default)]
+pub struct QueryMarker {
+    /// Set to `true` to mark the key as sensitive.
+    pub key: bool,
+    /// Set to `true` to mark the value as sensitive.
+    pub value: bool,
+}
+
+pub(crate) fn noop_query_marker(_: &str) -> QueryMarker {
+    QueryMarker::default()
 }
 
 /// A wrapper around a query [`&str`](str) which modifies the behavior of [`Display`]. Closures are used to mark
@@ -27,7 +36,7 @@ impl<'a, F> fmt::Debug for SensitiveQuery<'a, F> {
     }
 }
 
-impl<'a> SensitiveQuery<'a, fn(&str) -> bool> {
+impl<'a> SensitiveQuery<'a, fn(&str) -> QueryMarker> {
     /// Constructs a new [`SensitiveQuery`] with nothing marked as sensitive.
     pub fn new(query: &'a str) -> Self {
         Self {
@@ -54,13 +63,23 @@ impl<'a, F> SensitiveQuery<'a, F> {
 #[inline]
 fn write_key<'a, F>(section: &'a str, marker: F, f: &mut Formatter<'_>) -> Result<(), Error>
 where
-    F: Fn(&'a str) -> bool,
+    F: Fn(&'a str) -> QueryMarker,
 {
     if let Some((key, value)) = section.split_once('=') {
-        if (marker)(key) {
-            write!(f, "{key}={}", Sensitive(value))
-        } else {
-            write!(f, "{key}={value}")
+        match (marker)(key) {
+            QueryMarker { key: true, value: true } => write!(f, "{}={}", Sensitive(key), Sensitive(value)),
+            QueryMarker {
+                key: true,
+                value: false,
+            } => write!(f, "{}={value}", Sensitive(key)),
+            QueryMarker {
+                key: false,
+                value: true,
+            } => write!(f, "{key}={}", Sensitive(value)),
+            QueryMarker {
+                key: false,
+                value: false,
+            } => write!(f, "{key}={value}"),
         }
     } else {
         write!(f, "{section}")
@@ -69,7 +88,7 @@ where
 
 impl<'a, F> Display for SensitiveQuery<'a, F>
 where
-    F: Fn(&'a str) -> bool,
+    F: Fn(&'a str) -> QueryMarker,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut it = self.query.split('&');
@@ -92,10 +111,11 @@ mod tests {
     use http::Uri;
 
     use crate::logging::uri::tests::{
-        ALL_QUERY_STRING_EXAMPLES, EXAMPLES, QUERY_STRING_EXAMPLES, X_QUERY_STRING_EXAMPLES,
+        ALL_KEYS_QUERY_STRING_EXAMPLES, ALL_PAIRS_QUERY_STRING_EXAMPLES, ALL_VALUES_QUERY_STRING_EXAMPLES, EXAMPLES,
+        QUERY_STRING_EXAMPLES, X_QUERY_STRING_EXAMPLES,
     };
 
-    use super::SensitiveQuery;
+    use super::*;
 
     #[test]
     fn mark_none() {
@@ -109,12 +129,42 @@ mod tests {
     }
 
     #[test]
-    fn mark_all() {
+    fn mark_all_keys() {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
-        let expecteds = ALL_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_KEYS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = SensitiveQuery::new(&original.query().unwrap())
-                .mark(|_| true)
+                .mark(|_| QueryMarker {
+                    key: true,
+                    value: false,
+                })
+                .to_string();
+            assert_eq!(output, expected.query().unwrap(), "original = {original}");
+        }
+    }
+
+    #[test]
+    fn mark_all_values() {
+        let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_VALUES_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        for (original, expected) in originals.zip(expecteds) {
+            let output = SensitiveQuery::new(&original.query().unwrap())
+                .mark(|_| QueryMarker {
+                    key: false,
+                    value: true,
+                })
+                .to_string();
+            assert_eq!(output, expected.query().unwrap(), "original = {original}");
+        }
+    }
+
+    #[test]
+    fn mark_all_pairs() {
+        let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = ALL_PAIRS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
+        for (original, expected) in originals.zip(expecteds) {
+            let output = SensitiveQuery::new(&original.query().unwrap())
+                .mark(|_| QueryMarker { key: true, value: true })
                 .to_string();
             assert_eq!(output, expected.query().unwrap(), "original = {original}");
         }
@@ -126,7 +176,10 @@ mod tests {
         let expecteds = X_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = SensitiveQuery::new(&original.query().unwrap())
-                .mark(|key| key == "x")
+                .mark(|key| QueryMarker {
+                    key: false,
+                    value: key == "x",
+                })
                 .to_string();
             assert_eq!(output, expected.query().unwrap(), "original = {original}");
         }

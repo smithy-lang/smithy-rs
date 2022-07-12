@@ -19,7 +19,7 @@ use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
 use super::{
     headers::{HeaderMarker, SensitiveHeaders},
     uri::SensitiveUri,
-    OrFmt, Sensitive,
+    OrFmt, QueryMarker, Sensitive,
 };
 
 pub use sensitivity::*;
@@ -78,7 +78,7 @@ where
 /// let sensitivity = Sensitivity::new().path(|index| index == 1).status_code();
 /// let mut svc = InstrumentOperation::new(svc, "foo-operation").sensitivity(sensitivity);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InstrumentOperation<Svc, Sensitivity = DefaultSensitivity> {
     inner: Svc,
 
@@ -109,13 +109,13 @@ impl<Svc, Sensitivity> InstrumentOperation<Svc, Sensitivity> {
     }
 }
 
-impl<Svc, U, V, RequestHeader, Path, QueryKey, ResponseHeader> Service<Request<U>>
-    for InstrumentOperation<Svc, Sensitivity<RequestHeader, Path, QueryKey, ResponseHeader>>
+impl<Svc, U, V, RequestHeader, Path, Query, ResponseHeader> Service<Request<U>>
+    for InstrumentOperation<Svc, Sensitivity<RequestHeader, Path, Query, ResponseHeader>>
 where
     Svc: Service<Request<U>, Response = Response<V>, Error = Infallible>,
     RequestHeader: Fn(&HeaderName) -> HeaderMarker,
     Path: Fn(usize) -> bool,
-    QueryKey: Fn(&str) -> bool,
+    Query: Fn(&str) -> QueryMarker,
     ResponseHeader: Fn(&HeaderName) -> HeaderMarker + Clone,
 {
     type Response = Svc::Response;
@@ -132,14 +132,12 @@ where
         let Sensitivity {
             req_header,
             path,
-            query_key,
             query,
             status_code,
             resp_header,
         } = &self.sensitivity;
         let headers = SensitiveHeaders::new(request.headers()).mark(&req_header);
-        let uri = SensitiveUri::new(request.uri()).path(&path).query_key(&query_key);
-        let uri = if *query { uri.query() } else { uri };
+        let uri = SensitiveUri::new(request.uri()).path(&path).query(&query);
         let span = debug_span!("request", operation = %self.operation_name, %uri, ?headers);
 
         LoggingFuture {
