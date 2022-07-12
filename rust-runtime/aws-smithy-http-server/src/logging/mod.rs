@@ -7,6 +7,50 @@
 
 //! Provides [`InstrumentOperation`] and a variety of helpers structures for dealing with sensitive
 //! data.
+//!
+//! # Example
+//!
+//! ```
+//! # use std::convert::Infallible;
+//! # use aws_smithy_http_server::logging::*;
+//! # use http::{Request, Response};
+//! # use tower::{util::service_fn, Service};
+//! # async fn service(request: Request<()>) -> Result<Response<()>, Infallible> {
+//! #   Ok(Response::new(()))
+//! # }
+//! # async fn example() {
+//! # let svc = service_fn(service);
+//! let request = Request::get("http://localhost/a/b/c/d?bar=hidden")
+//!     .header("header-name-a", "hidden")
+//!     .body(())
+//!     .unwrap();
+//!
+//! let sensitivity = Sensitivity::new()
+//!     .request_header(|name| HeaderMarker {
+//!        value: name == "header-name-a",
+//!        key_suffix: None,
+//!     })
+//!     .path(|index| index % 2 == 0)
+//!     .query(|name| QueryMarker { key: false, value: name == "bar" })
+//!     .response_header(|name| {
+//!         if name.as_str().starts_with("prefix-") {
+//!             HeaderMarker {
+//!                 value: true,
+//!                 key_suffix: Some("prefix-".len()),
+//!             }
+//!         } else {
+//!             HeaderMarker {
+//!                 value: name == "header-name-b",
+//!                 key_suffix: None,
+//!             }
+//!         }
+//!     })
+//!     .status_code();
+//! let mut svc = InstrumentOperation::new(svc, "foo-operation").sensitivity(sensitivity);
+//!
+//! let _ = svc.call(request).await.unwrap();
+//! # }
+//! ```
 
 mod headers;
 mod sensitive;
