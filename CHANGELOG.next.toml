@@ -25,3 +25,9 @@ message = "Re-export aws_types::SdkConfig in aws_config"
 references = ["smithy-rs#1457"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "calavera"
+
+[[aws-sdk-rust]]
+message = "Add `From<aws_smithy_client::erase::DynConnector>` impl for `aws_smithy_client::http_connector::HttpConnector`"
+references = ["aws-sdk-rust#581"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
