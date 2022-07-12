@@ -24,7 +24,6 @@ use std::time::Duration;
 use crate::{SdkError, SdkSuccess};
 
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_http::operation;
 use aws_smithy_http::operation::Operation;
 use aws_smithy_http::retry::ClassifyResponse;
 use aws_smithy_types::retry::{ErrorKind, RetryKind};
@@ -284,15 +283,7 @@ impl RetryHandler {
 /// - the second retry will occur after 0 to 60 milliseconds
 /// - the third retry will occur after 0 to 120 milliseconds
 fn calculate_exponential_backoff(base: f64, initial_backoff: f64, attempts: u32) -> f64 {
-    if attempts == 0 {
-        panic!(
-            "calculate_exponential_backoff is only intended to calculate the backoff of retries."
-        )
-    } else if attempts == 1 {
-        base * initial_backoff
-    } else {
-        base * initial_backoff * 2_u32.pow(attempts) as f64 / 2.0
-    }
+    base * initial_backoff * 2_u32.pow(attempts) as f64 / 2.0
 }
 
 impl RetryHandler {
@@ -373,8 +364,7 @@ impl RetryHandler {
     }
 }
 
-impl<Handler, R, T, E>
-    tower::retry::Policy<operation::Operation<Handler, R>, SdkSuccess<T>, SdkError<E>>
+impl<Handler, R, T, E> tower::retry::Policy<Operation<Handler, R>, SdkSuccess<T>, SdkError<E>>
     for RetryHandler
 where
     Handler: Clone,
