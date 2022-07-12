@@ -134,6 +134,7 @@ impl FromStr for RetryMode {
 pub struct RetryConfigBuilder {
     mode: Option<RetryMode>,
     max_attempts: Option<u32>,
+    backoff_multiplier: Option<Duration>,
 }
 
 impl RetryConfigBuilder {
@@ -148,12 +149,6 @@ impl RetryConfigBuilder {
         self
     }
 
-    /// Sets the max attempts. This value must be greater than zero.
-    pub fn set_max_attempts(&mut self, max_attempts: Option<u32>) -> &mut Self {
-        self.max_attempts = max_attempts;
-        self
-    }
-
     /// Sets the retry mode.
     pub fn mode(mut self, mode: RetryMode) -> Self {
         self.set_mode(Some(mode));
@@ -161,8 +156,26 @@ impl RetryConfigBuilder {
     }
 
     /// Sets the max attempts. This value must be greater than zero.
+    pub fn set_max_attempts(&mut self, max_attempts: Option<u32>) -> &mut Self {
+        self.max_attempts = max_attempts;
+        self
+    }
+
+    /// Sets the max attempts. This value must be greater than zero.
     pub fn max_attempts(mut self, max_attempts: u32) -> Self {
         self.set_max_attempts(Some(max_attempts));
+        self
+    }
+
+    /// Set the backoff_multiplier duration. This duration should be non-zero.
+    pub fn set_backoff_multiplier(&mut self, backoff_multiplier: Option<Duration>) -> &mut Self {
+        self.backoff_multiplier = backoff_multiplier;
+        self
+    }
+
+    /// Set the backoff_multiplier duration. This duration should be non-zero.
+    pub fn backoff_multiplier(mut self, backoff_multiplier: Duration) -> Self {
+        self.set_backoff_multiplier(Some(backoff_multiplier));
         self
     }
 
@@ -186,6 +199,7 @@ impl RetryConfigBuilder {
         Self {
             mode: self.mode.or(other.mode),
             max_attempts: self.max_attempts.or(other.max_attempts),
+            backoff_multiplier: self.backoff_multiplier.or(other.backoff_multiplier),
         }
     }
 
@@ -194,6 +208,9 @@ impl RetryConfigBuilder {
         RetryConfig {
             mode: self.mode.unwrap_or(RetryMode::Standard),
             max_attempts: self.max_attempts.unwrap_or(3),
+            backoff_multiplier: self
+                .backoff_multiplier
+                .unwrap_or_else(|| Duration::from_secs(2)),
         }
     }
 }
@@ -204,6 +221,7 @@ impl RetryConfigBuilder {
 pub struct RetryConfig {
     mode: RetryMode,
     max_attempts: u32,
+    backoff_multiplier: Duration,
 }
 
 impl RetryConfig {
@@ -217,15 +235,38 @@ impl RetryConfig {
         Self::default().with_max_attempts(1)
     }
 
-    /// Changes the retry mode.
+    /// Set this config's [retry mode](RetryMode).
     pub fn with_retry_mode(mut self, retry_mode: RetryMode) -> Self {
         self.mode = retry_mode;
         self
     }
 
-    /// Changes the max attempts. This value must be greater than zero.
+    /// Set the maximum number of times a request should be tried, including the initial attempt.
+    /// This value must be greater than zero.
     pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
         self.max_attempts = max_attempts;
+        self
+    }
+
+    /// Set the multiplier used when calculating backoff times as part of an
+    /// [exponential backoff with jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/)
+    /// strategy. Most services should work fine with the default duration of 2 seconds, but if you
+    /// find that your requests are taking too long due to excessive retry backoff, try lowering
+    /// this value.
+    ///
+    /// ## Example
+    ///
+    /// *For a request that gets retried 3 times, when backoff_multiplier is 2 seconds:*
+    /// - the first retry will occur after 0 to 2 seconds
+    /// - the second retry will occur after 0 to 4 seconds
+    /// - the third retry will occur after 0 to 8 seconds
+    ///
+    /// *For a request that gets retried 3 times, when backoff_multiplier is 30 milliseconds:*
+    /// - the first retry will occur after 0 to 30 milliseconds
+    /// - the second retry will occur after 0 to 60 milliseconds
+    /// - the third retry will occur after 0 to 120 milliseconds
+    pub fn with_backoff_multiplier(mut self, backoff_multiplier: Duration) -> Self {
+        self.backoff_multiplier = backoff_multiplier;
         self
     }
 
@@ -238,6 +279,11 @@ impl RetryConfig {
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
+
+    /// Returns the backoff multiplier duration.
+    pub fn backoff_multiplier(&self) -> Duration {
+        self.backoff_multiplier
+    }
 }
 
 impl Default for RetryConfig {
@@ -245,6 +291,7 @@ impl Default for RetryConfig {
         Self {
             mode: RetryMode::Standard,
             max_attempts: 3,
+            backoff_multiplier: Duration::from_secs(2),
         }
     }
 }
