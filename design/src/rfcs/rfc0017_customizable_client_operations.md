@@ -11,7 +11,7 @@ client has to be used to create an operation, and then the HTTP request augmente
 that operation type. For example:
 
 ```rust
-let input = SomeOperation::builder().some_value(5).build()?;
+let input = SomeOperationInput::builder().some_value(5).build()?;
 
 let operation = {
     let op = input.make_operation(&service_config).await?;
