@@ -55,19 +55,19 @@ follows:
 ```rust
 let response = client.some_operation()
     .some_value(5)
-    .customize()?
-    .map_request(|mut req| {
+    .customize()
+    .await?
+    .mutate_request(|mut req| {
         req.headers_mut().insert(
             HeaderName::from_static("x-some-header"),
             HeaderValue::from_static("some-value")
         );
-        Result::<_, Infallible>::Ok(req)
-    })?
+    })
     .send()
     .await?;
 ```
 
-This new `customize` method would return the following:
+This new async `customize` method would return the following:
 
 ```rust
 pub struct CustomizableOperation<O, R> {
@@ -84,6 +84,18 @@ impl<O, R> CustomizableOperation<O, R> {
         let (request, response) = self.operation.into_request_response();
         let request = request.augment(|req, _props| f(req))?;
         self.operation = Operation::from_parts(request, response);
+        Ok(self)
+    }
+
+    // Convenience for `map_request` where infallible direct mutation of request is acceptable
+    fn mutate_request<E>(
+        mut self,
+        f: impl FnOnce(&mut Request<SdkBody>) -> (),
+    ) -> Self {
+        self.map_request(|mut req| {
+            f(&mut req);
+            Result::<_, Infallible>::Ok(req)
+        }).expect("infallible");
         Ok(self)
     }
 
@@ -128,7 +140,8 @@ can look as follows:
 ```rust
 let mut operation = client.some_operation()
     .some_value(5)
-    .customize()?;
+    .customize()
+    .await?;
 operation.request_mut()
     .headers_mut()
     .insert(
@@ -138,13 +151,15 @@ operation.request_mut()
 let response = operation.send().await?;
 ```
 
-### Eliminating `async` from `make_operation`
+### Why not remove `async` from `customize` to make this more ergonomic?
 
-To avoid requiring an `await` after the call to `customize`, the `make_operation` function
-generated on input structs needs to be made synchronous. The `make_operation` function
-originally was synchronous, but was made async during the implementation of the Glacier
-customizations (#797, #801, #1474). It should be possible to move this use case into
-middleware to make it sync again.
+In the proposal above, customers must `await` the result of `customize` in order
+to get the `CustomizableOperation`. This is a result of the underlying `map_operation`
+function that `customize` needs to call being async, which was made async during
+the implementation of customizations for Glacier (see #797, #801, and #1474). It
+is possible to move these Glacier customizations into middleware to make `map_operation`
+sync, but keeping it async is much more future-proof since if a future customization
+or feature requires it to be async, it won't be a breaking change in the future.
 
 ### Why the name `customize`?
 
@@ -175,8 +190,6 @@ that would conflict with the new function, so adding it would not be a breaking 
 Changes Checklist
 -----------------
 
-- [ ] Refactor `make_operation` to no longer be `async` so that the `customize` function doesn't need to be followed by `await`.
-      The asynchronous parts of `make_operation` will need to become middleware.
 - [ ] Create `CustomizableOperation` as an inlinable, and code generate it into `client` so that it has access to `Handle`
 - [ ] Code generate the `customize` method on fluent builders
 - [ ] Update the `RustReservedWords` class to include `customize`
