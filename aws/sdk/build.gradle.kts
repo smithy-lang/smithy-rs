@@ -107,6 +107,8 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "license": "Apache-2.0",
                         "customizationConfig": {
                             "awsSdk": {
+                                "defaultConfigPath": "${services.defaultConfigPath}",
+                                "endpointsConfigPath": "${services.endpointsConfigPath}",
                                 "integrationTestPath": "${project.projectDir.resolve("integration-tests")}"
                             }
                         }
