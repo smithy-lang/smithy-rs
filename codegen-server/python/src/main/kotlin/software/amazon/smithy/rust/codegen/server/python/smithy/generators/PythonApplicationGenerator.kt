@@ -198,7 +198,7 @@ class PythonApplicationGenerator(
 ///
 /// Operations can be registrered using the application object as a decorator (`@app.operation_name`).
 ///
-/// Here's a full example to get you started using coroutines:
+/// Here's a full example to get you started:
 ///
 /// ```python
 ${ if (operations.any { it.errors.isNotEmpty() }) {
@@ -224,7 +224,7 @@ ${operationImplementationStubs(operations)}
 /// ```
 ///
 /// Any of operations above can be written as well prepending the `async` keyword and
-/// the Python application will automatically handle it and schedule it on the even loop for you.
+/// the Python application will automatically handle it and schedule it on the event loop for you.
             """
         )
     }
