@@ -25,6 +25,17 @@ author = "Velf"
 
 [[aws-sdk-rust]]
 message = """
+Fix compilation of `aws-config` with `rustls` and `native-tls` disabled. The
+`ProviderConfig::with_tcp_connector` method uses
+`aws_smithy_client::hyper_ext`, which only exists with the `client-hyper`
+feature enabled. Add a feature enabling that, and enable it by default.
+"""
+references = ["smithy-rs#1541"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "joshtriplett"
+
+[[aws-sdk-rust]]
+message = """
 Add support for aws-chunked content encoding. Only single-chunk encoding is supported. Multiple chunks and
 chunk signing are not supported at this time.
 """
