@@ -210,7 +210,7 @@ impl RetryConfigBuilder {
             max_attempts: self.max_attempts.unwrap_or(3),
             backoff_multiplier: self
                 .backoff_multiplier
-                .unwrap_or_else(|| Duration::from_secs(2)),
+                .unwrap_or_else(|| Duration::from_secs(1)),
         }
     }
 }
