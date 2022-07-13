@@ -250,16 +250,16 @@ impl RetryConfig {
 
     /// Set the multiplier used when calculating backoff times as part of an
     /// [exponential backoff with jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/)
-    /// strategy. Most services should work fine with the default duration of 2 seconds, but if you
+    /// strategy. Most services should work fine with the default duration of 1 second, but if you
     /// find that your requests are taking too long due to excessive retry backoff, try lowering
     /// this value.
     ///
     /// ## Example
     ///
-    /// *For a request that gets retried 3 times, when backoff_multiplier is 2 seconds:*
-    /// - the first retry will occur after 0 to 2 seconds
-    /// - the second retry will occur after 0 to 4 seconds
-    /// - the third retry will occur after 0 to 8 seconds
+    /// *For a request that gets retried 3 times, when backoff_multiplier is 1 seconds:*
+    /// - the first retry will occur after 0 to 1 seconds
+    /// - the second retry will occur after 0 to 2 seconds
+    /// - the third retry will occur after 0 to 4 seconds
     ///
     /// *For a request that gets retried 3 times, when backoff_multiplier is 30 milliseconds:*
     /// - the first retry will occur after 0 to 30 milliseconds
@@ -291,7 +291,7 @@ impl Default for RetryConfig {
         Self {
             mode: RetryMode::Standard,
             max_attempts: 3,
-            backoff_multiplier: Duration::from_secs(2),
+            backoff_multiplier: Duration::from_secs(1),
         }
     }
 }

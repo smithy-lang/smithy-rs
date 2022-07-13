@@ -85,14 +85,14 @@ impl Config {
         self
     }
 
-    /// Override the default backoff multiplier of 2 seconds.
+    /// Override the default backoff multiplier of 1 second.
     ///
     /// ## Example
     ///
-    /// For a request that gets retried 3 times, when backoff_multiplier is 2 seconds:
-    /// - the first retry will occur after 0 to 2 seconds
-    /// - the second retry will occur after 0 to 4 seconds
-    /// - the third retry will occur after 0 to 8 seconds
+    /// For a request that gets retried 3 times, when backoff_multiplier is 1 second:
+    /// - the first retry will occur after 0 to 1 seconds
+    /// - the second retry will occur after 0 to 2 seconds
+    /// - the third retry will occur after 0 to 4 seconds
     ///
     /// For a request that gets retried 3 times, when backoff_multiplier is 30 milliseconds:
     /// - the first retry will occur after 0 to 30 milliseconds
@@ -115,7 +115,7 @@ impl Default for Config {
             max_backoff: Duration::from_secs(20),
             // by default, use a random base for exponential backoff
             base: fastrand::f64,
-            backoff_multiplier: Duration::from_secs(2),
+            backoff_multiplier: Duration::from_secs(1),
         }
     }
 }
@@ -282,8 +282,8 @@ impl RetryHandler {
 /// - the first retry will occur after 0 to 30 milliseconds
 /// - the second retry will occur after 0 to 60 milliseconds
 /// - the third retry will occur after 0 to 120 milliseconds
-fn calculate_exponential_backoff(base: f64, initial_backoff: f64, attempts: u32) -> f64 {
-    base * initial_backoff * 2_u32.pow(attempts) as f64 / 2.0
+fn calculate_exponential_backoff(base: f64, initial_backoff: f64, retry_attempts: u32) -> f64 {
+    base * initial_backoff * 2_u32.pow(retry_attempts) as f64
 }
 
 impl RetryHandler {
@@ -534,6 +534,7 @@ mod test {
     fn max_backoff_time() {
         let mut conf = test_config();
         conf.max_attempts = 5;
+        conf.backoff_multiplier = Duration::from_secs(1);
         conf.max_backoff = Duration::from_secs(3);
         let policy = Standard::new(conf).new_request_policy(None);
         let (policy, dur) = policy
@@ -569,7 +570,7 @@ mod test {
     fn calculate_exponential_backoff_n_is_one() {
         let n = 1.0;
 
-        for (expected, iter) in [(n, 1u32), (2.0, 2), (4.0, 3)] {
+        for (expected, iter) in [(n, 0u32), (2.0, 1), (4.0, 2)] {
             let actual = calculate_exponential_backoff(1.0, n, iter);
             assert_eq!(expected, actual);
         }
@@ -579,7 +580,7 @@ mod test {
     fn calculate_exponential_backoff_n_greater_than_one() {
         let n = 3.0;
 
-        for (expected, iter) in [(n, 1u32), (6.0, 2), (12.0, 3)] {
+        for (expected, iter) in [(n, 0u32), (6.0, 1), (12.0, 2)] {
             let actual = calculate_exponential_backoff(1.0, n, iter);
             assert_eq!(expected, actual);
         }
@@ -589,7 +590,7 @@ mod test {
     fn calculate_exponential_backoff_n_less_than_one() {
         let n = 0.03;
 
-        for (expected, iter) in [(n, 1u32), (0.06, 2), (0.12, 3)] {
+        for (expected, iter) in [(n, 0u32), (0.06, 1), (0.12, 2)] {
             let actual = calculate_exponential_backoff(1.0, n, iter);
             assert_eq!(expected, actual);
         }
