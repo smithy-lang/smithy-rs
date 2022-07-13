@@ -9,6 +9,7 @@ use changelogger::split::{subcommand_split, SplitArgs};
 use smithy_rs_tool_common::git::{CommitHash, Git, GitCLI};
 use smithy_rs_tool_common::shell::handle_failure;
 use std::fs;
+use std::ops::Index;
 use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
@@ -130,7 +131,8 @@ fn split_aws_sdk_test() {
       "meta": {
         "bug": false,
         "breaking": false,
-        "tada": false
+        "tada": false,
+        "target": "all"
       },
       "author": "another-dev",
       "references": [
@@ -357,9 +359,11 @@ Old entry contents
     );
 }
 
+/// entries with target set to each of the possible ones, and one entry with no target
+/// set, which should result in the default
 #[test]
-fn render_server_entries() {
-    const NEXT_CHANGELOG : &'static str = r#"
+fn render_smithy_entries() {
+    const NEXT_CHANGELOG: &'static str = r#"
 # Example changelog entries
 # [[aws-sdk-rust]]
 # message = "Fix typos in module documentation for generated crates"
@@ -436,7 +440,7 @@ author = "rcoh"
 
     let source = fs::read_to_string(&source_path).unwrap();
     let dest = fs::read_to_string(&dest_path).unwrap();
-    
+
     // source file should be empty
     pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), source);
     pretty_assertions::assert_str_eq!(
@@ -463,4 +467,94 @@ Old entry contents
 "#,
         dest
     );
+}
+
+/// aws_sdk_rust should not be allowed to have target entries
+#[test]
+fn aws_sdk_cannot_have_target() {
+    const NEXT_CHANGELOG: &'static str = r#"
+# Example changelog entries
+# [[aws-sdk-rust]]
+# message = "Fix typos in module documentation for generated crates"
+# references = ["smithy-rs#920"]
+# meta = { "breaking" = false, "tada" = false, "bug" = false }
+# author = "rcoh"
+#
+# [[smithy-rs]]
+# message = "Fix typos in module documentation for generated crates"
+# references = ["smithy-rs#920"]
+# meta = { "breaking" = false, "tada" = false, "bug" = false }
+# author = "rcoh"
+[[aws-sdk-rust]]
+message = "Some change"
+references = ["aws-sdk-rust#123", "smithy-rs#456"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+since-commit = "REPLACE_SINCE_COMMIT_1"
+author = "test-dev"
+
+[[smithy-rs]]
+message = "First change - server"
+references = ["smithy-rs#1"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, target = "server" }
+author = "server-dev"
+
+[[smithy-rs]]
+message = "Second change - should be all"
+references = ["smithy-rs#2"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, target = "all" }
+author = "another-dev"
+
+[[smithy-rs]]
+message = "Third change - empty"
+references = ["smithy-rs#3"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Fourth change - client"
+references = ["smithy-rs#4"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+"#;
+    let tmp_dir = TempDir::new().unwrap();
+    let source_path = tmp_dir.path().join("source.toml");
+    let dest_path = tmp_dir.path().join("dest.md");
+    let release_manifest_path = tmp_dir.path().join("smithy-rs-release-manifest.json");
+
+    create_fake_repo_root(tmp_dir.path(), "0.42.0", "0.12.0");
+
+    fs::write(&source_path, NEXT_CHANGELOG).unwrap();
+    fs::write(
+        &dest_path,
+        format!(
+            "{}\nv0.41.0 (Some date in the past)\n=========\n\nOld entry contents\n",
+            USE_UPDATE_CHANGELOGS
+        ),
+    )
+    .unwrap();
+    fs::write(&release_manifest_path, "overwrite-me").unwrap();
+
+    let result = subcommand_render(&RenderArgs {
+        change_set: ChangeSet::SmithyRs,
+        independent_versioning: false,
+        source: vec![source_path.clone()],
+        source_to_truncate: source_path.clone(),
+        changelog_output: dest_path.clone(),
+        release_manifest_output: Some(tmp_dir.path().into()),
+        date_override: Some(OffsetDateTime::UNIX_EPOCH),
+        previous_release_versions_manifest: None,
+        smithy_rs_location: Some(tmp_dir.path().into()),
+    });
+
+    if let Err(e) = result {
+        let index = e
+            .to_string()
+            .find("cannot have target SDK affected as metadata for key");
+        assert!(index.is_some());
+    } else {
+        assert!(
+            false,
+            "This should have been error that aws-sdk-rust has a target entry"
+        );
+    }
 }

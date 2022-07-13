@@ -229,13 +229,11 @@ fn render_entry(entry: &HandAuthoredEntry, mut out: &mut String) {
         meta.push(' ');
     }
     let mut references = entry
-        .meta.target
+        .meta
+        .target
         .iter()
         .map(|t| t.to_string())
-        .chain(entry.references
-            .iter()
-            .map(to_md_link)
-        )
+        .chain(entry.references.iter().map(to_md_link))
         .collect::<Vec<_>>();
     if !maintainers().contains(&entry.author.to_ascii_lowercase().as_str()) {
         references.push(format!("@{}", entry.author.to_ascii_lowercase()));
@@ -440,7 +438,7 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
 mod test {
     use super::{
         date_based_release_metadata, render, version_based_release_metadata, Changelog,
-        ChangelogEntries, ChangelogEntry
+        ChangelogEntries, ChangelogEntry,
     };
     use smithy_rs_tool_common::changelog::SdkAffected;
     use time::OffsetDateTime;
@@ -621,11 +619,17 @@ author = "rcoh"
 "#;
         let changelog: Changelog = toml::from_str(sample).expect("valid changelog");
         let ChangelogEntries {
-            aws_sdk_rust : _,
+            aws_sdk_rust: _,
             smithy_rs,
         } = changelog.into();
-        let affected = vec![SdkAffected::Server, SdkAffected::Client, SdkAffected::All, SdkAffected::All];
-        let entries = smithy_rs.iter()
+        let affected = vec![
+            SdkAffected::Server,
+            SdkAffected::Client,
+            SdkAffected::All,
+            SdkAffected::All,
+        ];
+        let entries = smithy_rs
+            .iter()
             .filter_map(ChangelogEntry::hand_authored)
             .zip(affected)
             .collect::<Vec<_>>();
