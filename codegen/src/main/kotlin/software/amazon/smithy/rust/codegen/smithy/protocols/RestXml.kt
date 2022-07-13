@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -34,8 +33,6 @@ class RestXmlFactory(
 
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
-
-    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

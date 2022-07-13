@@ -23,7 +23,6 @@ import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
@@ -98,8 +97,6 @@ typealias ProtocolMap<C> = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerat
 interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C : CoreCodegenContext> {
     fun protocol(codegenContext: C): Protocol
     fun buildProtocolGenerator(codegenContext: C): T
-    fun transformModel(model: Model): Model
-    fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
     fun support(): ProtocolSupport
 }
 

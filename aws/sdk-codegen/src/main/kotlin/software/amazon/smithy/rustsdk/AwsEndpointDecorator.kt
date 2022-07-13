@@ -36,21 +36,27 @@ import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfi
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.orNull
+import kotlin.io.path.readText
 
 class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "AwsEndpoint"
     override val order: Byte = 0
 
-    private val endpoints by lazy {
-        val endpointsJson = javaClass.getResource("endpoints.json")!!.readText()
-        Node.parse(endpointsJson).expectObjectNode()
+    private var endpointsCache: ObjectNode? = null
+
+    private fun endpoints(sdkSettings: SdkSettings): ObjectNode {
+        if (endpointsCache == null) {
+            val endpointsJson = sdkSettings.endpointsConfigPath.readText()
+            endpointsCache = Node.parse(endpointsJson).expectObjectNode()
+        }
+        return endpointsCache!!
     }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        return baseCustomizations + EndpointConfigCustomization(codegenContext, endpoints)
+        return baseCustomizations + EndpointConfigCustomization(codegenContext, endpoints(SdkSettings.from(codegenContext.settings)))
     }
 
     override fun operationCustomizations(
