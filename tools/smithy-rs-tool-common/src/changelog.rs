@@ -6,6 +6,7 @@
 //! This module holds deserializable structs for the hand-authored changelog TOML files used in smithy-rs.
 
 use anyhow::{bail, Context, Result};
+use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::fmt::{self, Display};
 use std::path::Path;
@@ -13,9 +14,12 @@ use std::str::FromStr;
 
 #[derive(Copy, Clone, Debug, Serialize, PartialEq, Eq)]
 pub enum SdkAffected {
+    #[serde(rename = "client")]
     Client,
+    #[serde(rename = "server")]
     Server,
-    All
+    #[serde(rename = "all")]
+    All,
 }
 
 impl Default for SdkAffected {
@@ -42,7 +46,7 @@ impl FromStr for SdkAffected {
             "client" => Ok(SdkAffected::Client),
             "server" => Ok(SdkAffected::Server),
             "all" => Ok(SdkAffected::All),
-            _ => bail!("An invalid type of SDK type {sdk} has been mentioned in the meta tags")
+            _ => bail!("An invalid type of SDK type {sdk} has been mentioned in the meta tags"),
         }
     }
 }
@@ -65,7 +69,7 @@ pub struct Meta {
     pub breaking: bool,
     pub tada: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub target: Option<SdkAffected>
+    pub target: Option<SdkAffected>,
 }
 
 #[derive(Clone, Debug)]
@@ -122,7 +126,6 @@ impl FromStr for Reference {
     }
 }
 
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HandAuthoredEntry {
     pub message: String,
@@ -173,14 +176,89 @@ pub struct SdkModelEntry {
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct Changelog {
     #[serde(rename = "smithy-rs")]
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_smithy_handauthored")]
     pub smithy_rs: Vec<HandAuthoredEntry>,
     #[serde(rename = "aws-sdk-rust")]
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_rust_sdk_handauthored")]
     pub aws_sdk_rust: Vec<HandAuthoredEntry>,
     #[serde(rename = "aws-sdk-model")]
     #[serde(default)]
     pub sdk_models: Vec<SdkModelEntry>,
+}
+
+fn deserialize_smithy_handauthored<'de, D>(
+    deserializer: D,
+) -> Result<Vec<HandAuthoredEntry>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_handauthored(
+        deserializer,
+        |entry: &mut HandAuthoredEntry| -> Result<(), anyhow::Error> {
+            // a change that does not have an affected SDK written against it, shall be
+            // considered a change in ALL sdks
+            if entry.meta.target.is_none() {
+                entry.meta.target = Some(SdkAffected::All);
+            }
+            Ok(())
+        },
+    )
+}
+fn deserialize_rust_sdk_handauthored<'de, D>(
+    deserializer: D,
+) -> Result<Vec<HandAuthoredEntry>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_handauthored(
+        deserializer,
+        |entry: &mut HandAuthoredEntry| -> Result<(), anyhow::Error> {
+            if entry.meta.target.is_some() {
+                bail!("cannot have target SDK affected as metadata")
+            }
+            Ok(())
+        },
+    )
+}
+
+fn deserialize_handauthored<'de, D, F>(
+    deserializer: D,
+    parser: F,
+) -> Result<Vec<HandAuthoredEntry>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    F: Fn(&mut HandAuthoredEntry) -> Result<(), anyhow::Error>,
+{
+    struct EntryVisitor<F>
+    where
+        F: Fn(&mut HandAuthoredEntry) -> Result<(), anyhow::Error>,
+    {
+        parser: F,
+    }
+
+    impl<'de, F> Visitor<'de> for EntryVisitor<F>
+    where
+        F: Fn(&mut HandAuthoredEntry) -> Result<(), anyhow::Error>,
+    {
+        type Value = Vec<HandAuthoredEntry>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a sequence of hand authored entries")
+        }
+        fn visit_seq<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
+        where
+            V: de::SeqAccess<'de>,
+        {
+            let mut entries: Vec<HandAuthoredEntry> = vec![];
+            while let Some(mut entry) = visitor.next_element::<HandAuthoredEntry>()? {
+                (self.parser)(&mut entry).map_err(de::Error::custom)?;
+                entries.push(entry);
+            }
+            Ok(entries)
+        }
+    }
+
+    deserializer.deserialize_seq(EntryVisitor { parser })
 }
 
 impl Changelog {
@@ -245,7 +323,7 @@ impl Changelog {
 #[cfg(test)]
 mod tests {
     use super::{Changelog, HandAuthoredEntry, SdkAffected};
-    use anyhow::{Context};
+    use anyhow::Context;
 
     #[test]
     fn parse_json() {
@@ -294,6 +372,70 @@ mod tests {
     }
 
     #[test]
+    fn parse_smithy_ok() {
+        // by default smithy-rs meta data should say change is for both
+        let toml = r#"
+            [[aws-sdk-rust]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = "rcoh"
+
+            [[smithy-rs]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+            author = "rcoh"
+            [[smithy-rs]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
+            author = "rcoh"
+            [[smithy-rs]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+            author = "rcoh"
+            [[smithy-rs]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = "rcoh"
+        "#;
+        let changelog = Changelog::parse_str(toml).unwrap();
+        assert_eq!(changelog.smithy_rs.len(), 4);
+        assert_eq!(
+            changelog.smithy_rs[0].meta.target,
+            Some(SdkAffected::Client)
+        );
+        assert_eq!(
+            changelog.smithy_rs[1].meta.target,
+            Some(SdkAffected::Server)
+        );
+        assert_eq!(changelog.smithy_rs[2].meta.target, Some(SdkAffected::All));
+        assert_eq!(changelog.smithy_rs[3].meta.target, Some(SdkAffected::All));
+    }
+
+    #[test]
+    fn parse_rust_sdk_bad() {
+        // by default smithy-rs meta data should say change is for both
+        let toml = r#"
+            [[aws-sdk-rust]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+            author = "rcoh"
+
+            [[smithy-rs]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = "rcoh"
+        "#;
+        assert!(Changelog::parse_str(toml).is_err());
+    }
+
+    #[test]
     fn test_hand_authored_sdk() {
         // server target
         let value = r#"
@@ -303,7 +445,9 @@ mod tests {
             author = "rcoh"
         "#;
         {
-           let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed").unwrap();
+            let value: HandAuthoredEntry = toml::from_str(value)
+                .context("String should have parsed")
+                .unwrap();
             assert_eq!(value.meta.target, Some(SdkAffected::Server));
         }
 
@@ -315,7 +459,9 @@ mod tests {
             author = "rcoh"
         "#;
         {
-           let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed").unwrap();
+            let value: HandAuthoredEntry = toml::from_str(value)
+                .context("String should have parsed")
+                .unwrap();
             assert_eq!(value.meta.target, Some(SdkAffected::Client));
         }
         // Both target
@@ -326,7 +472,9 @@ mod tests {
             author = "rcoh"
         "#;
         {
-           let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed").unwrap();
+            let value: HandAuthoredEntry = toml::from_str(value)
+                .context("String should have parsed")
+                .unwrap();
             assert_eq!(value.meta.target, Some(SdkAffected::All));
         }
         // an invalid sdk value
@@ -337,7 +485,8 @@ mod tests {
             author = "rcoh"
         "#;
         {
-           let value : Result<HandAuthoredEntry, _> = toml::from_str(value).context("String should not have parsed");
+            let value: Result<HandAuthoredEntry, _> =
+                toml::from_str(value).context("String should not have parsed");
             assert!(value.is_err());
         }
         // missing sdk in the meta tag
@@ -348,7 +497,9 @@ mod tests {
             author = "rcoh"
         "#;
         {
-            let value : HandAuthoredEntry = toml::from_str(value).context("String should have parsed as it has none meta.sdk").unwrap();
+            let value: HandAuthoredEntry = toml::from_str(value)
+                .context("String should have parsed as it has none meta.sdk")
+                .unwrap();
             assert_eq!(value.meta.target, None);
         }
     }
