@@ -383,3 +383,8 @@ Code generation would be need to be used in order to produce the filtering crite
 - Complex implementation.
 - Not necessarily fast.
 - `tracing::Layer`s seem to only support filtering entire `Event`s, rather than more fine grained removal of fields.
+
+## Changes Checklist
+
+[ ] Implement and integrate code generated logging middleware
+[ ] Refactor `Router` to allow for better positioning described in [Middleware Position](#middleware-position)
