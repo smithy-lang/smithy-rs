@@ -76,7 +76,7 @@ The crates existing in `rust-runtime` are not code generated - their source code
 
 This proposal serves to honor the sensitivity specification via code generation of a logging `Layer`s which is aware of the sensitivity, together with a developer contract disallowing logging potentially sensitive data in the runtime crates. An internal and external guideline should be provided in addition to the `Layer`s.
 
-All data known to be sensitive should be replaced with `"_redacted_"` when logged. Implementation wise this means that [tracing::Event](https://docs.rs/tracing/latest/tracing/struct.Event.html)s and [tracing::Span](https://docs.rs/tracing/latest/tracing/struct.Span.html)s of the form `debug!(field = "sensitive data")` and `span!(..., field = "sensitive data")` must become `debug!(field = "_redacted_")` and `span!(..., field = "_redacted_")`.
+All data known to be sensitive should be replaced with `"{redacted}"` when logged. Implementation wise this means that [tracing::Event](https://docs.rs/tracing/latest/tracing/struct.Event.html)s and [tracing::Span](https://docs.rs/tracing/latest/tracing/struct.Span.html)s of the form `debug!(field = "sensitive data")` and `span!(..., field = "sensitive data")` must become `debug!(field = "{redacted}")` and `span!(..., field = "{redacted}")`.
 
 ### Debug Logging
 
@@ -88,7 +88,7 @@ To prevent excessive branches such as
 if cfg!(feature = "unredacted-logging") {
     debug!(%data, "logging here");
 } else {
-    debug!(data = "_redacted_", "logging here");
+    debug!(data = "{redacted}", "logging here");
 }
 ```
 
@@ -105,7 +105,7 @@ where
         if cfg!(feature = "unredacted-logging") {
             self.0.fmt(f)
         } else {
-            "_redacted_".fmt(f)
+            "{redacted}".fmt(f)
         }
     }
 }
@@ -118,7 +118,7 @@ where
         if cfg!(feature = "unredacted-logging") {
             self.0.fmt(f)
         } else {
-            "_redacted_".fmt(f)
+            "{redacted}".fmt(f)
         }
     }
 }
@@ -183,7 +183,7 @@ should generate the following
 ```rust
 // NOTE: This code is intended to show behavior - it does not compile
 
-const SENSITIVE_MARKER: &str = "_redacted_";
+const SENSITIVE_MARKER: &str = "{redacted}";
 
 pub struct InventoryLogging<S> {
     inner: S
