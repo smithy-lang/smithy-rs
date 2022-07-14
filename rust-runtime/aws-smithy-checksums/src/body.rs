@@ -112,16 +112,16 @@ impl ChecksumValidatedBody<SdkBody> {
     /// Given an `SdkBody`, the name of a checksum algorithm as a `&str`, and a precalculated
     /// checksum represented as `Bytes`, create a new `ChecksumValidatedBody<SdkBody>`.
     /// Valid checksum algorithm names are defined in this crate's [root module](super).
-    ///
-    /// # Panics
-    ///
-    /// This will panic if the given checksum algorithm is not supported.
-    pub fn new(body: SdkBody, checksum_algorithm: &str, precalculated_checksum: Bytes) -> Self {
-        Self {
-            checksum: Some(new_from_algorithm(checksum_algorithm)),
+    pub fn new(
+        body: SdkBody,
+        checksum_algorithm: &str,
+        precalculated_checksum: Bytes,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self {
+            checksum: Some(new_from_algorithm(checksum_algorithm)?),
             inner: body,
             precalculated_checksum,
-        }
+        })
     }
 
     fn poll_inner(
@@ -261,7 +261,7 @@ mod tests {
     async fn test_checksum_body() {
         let input_text = "This is some test text for an SdkBody";
         let body = SdkBody::from(input_text);
-        let checksum = new_from_algorithm(CRC_32_NAME);
+        let checksum = new_from_algorithm(CRC_32_NAME).unwrap();
         let mut body = ChecksumBody::new(body, checksum);
 
         let mut output = SegmentedBuf::new();
@@ -302,7 +302,8 @@ mod tests {
         let actual_checksum = calculate_crc32_checksum(input_text);
         let body = SdkBody::from(input_text);
         let non_matching_checksum = Bytes::copy_from_slice(&[0x00, 0x00, 0x00, 0x00]);
-        let mut body = ChecksumValidatedBody::new(body, "crc32", non_matching_checksum.clone());
+        let mut body =
+            ChecksumValidatedBody::new(body, "crc32", non_matching_checksum.clone()).unwrap();
 
         while let Some(data) = body.data().await {
             match data {
@@ -328,7 +329,7 @@ mod tests {
         let input_text = "This is some test text for an SdkBody";
         let actual_checksum = calculate_crc32_checksum(input_text);
         let body = SdkBody::from(input_text);
-        let mut body = ChecksumValidatedBody::new(body, "crc32", actual_checksum);
+        let mut body = ChecksumValidatedBody::new(body, "crc32", actual_checksum).unwrap();
 
         let mut output = SegmentedBuf::new();
         while let Some(buf) = body.data().await {
