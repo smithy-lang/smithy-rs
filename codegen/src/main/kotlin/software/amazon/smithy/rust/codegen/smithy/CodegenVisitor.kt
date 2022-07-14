@@ -69,9 +69,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             codegenDecorator.protocols(service.id, ProtocolLoader.DefaultProtocols)
         ).protocolFor(context.model, service)
         protocolGeneratorFactory = generator
-        model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
-        val baseProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
-        symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
+        model = codegenDecorator.transformModel(service, baseModel)
+        symbolProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings)
         rustCrate = RustCrate(
