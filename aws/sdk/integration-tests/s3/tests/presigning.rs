@@ -128,19 +128,3 @@ async fn test_presigned_upload_part() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
-
-pub async fn send(
-    self,
-) -> std::result::Result<
-    crate::output::ListBucketsOutput,
-    aws_smithy_http::result::SdkError<crate::error::ListBucketsError>,
-> {
-    let op = self
-        .inner
-        .build()
-        .map_err(|err| aws_smithy_http::result::SdkError::ConstructionFailure(err.into()))?
-        .make_operation(&self.handle.conf)
-        .await
-        .map_err(|err| aws_smithy_http::result::SdkError::ConstructionFailure(err.into()))?;
-    self.handle.client.call(op).await
-}
