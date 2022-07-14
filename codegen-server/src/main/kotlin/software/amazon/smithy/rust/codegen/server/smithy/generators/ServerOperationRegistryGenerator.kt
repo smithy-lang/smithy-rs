@@ -46,7 +46,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  * [`tower::Service`]: https://docs.rs/tower/latest/tower/trait.Service.html
  */
 class ServerOperationRegistryGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val protocol: Protocol,
     private val operations: List<OperationShape>,
 ) {
