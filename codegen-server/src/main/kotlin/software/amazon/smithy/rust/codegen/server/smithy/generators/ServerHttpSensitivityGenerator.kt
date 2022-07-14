@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.Model
@@ -29,7 +34,6 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
-import java.util.logging.Logger
 
 class ServerHttpSensitivityGenerator(
     private val model: Model,
@@ -41,7 +45,6 @@ class ServerHttpSensitivityGenerator(
     private val codegenScope = arrayOf(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
     )
-    private val logger: Logger = Logger.getLogger(javaClass.name)
 
     private fun renderHeaderClosure(writer: RustWriter, headers: List<HttpHeaderTrait>, prefixHeaders: List<HttpPrefixHeadersTrait>) {
         writer.rustBlock("|name|") {
@@ -97,6 +100,37 @@ class ServerHttpSensitivityGenerator(
         }
     }
 
+    // Find member shapes which are sensitive and enjoy a trait `T`.
+    private inline fun <reified T : Trait> findSensitiveBound(rootShape: Shape): List<MemberShape> {
+        return Walker(model)
+            .walkShapes(rootShape, {
+                // Do not traverse upwards or beyond a sensitive trait
+                it.getDirection() == RelationshipDirection.DIRECTED && it.getShape().getTrait<SensitiveTrait>() == null
+            })
+            .filter {
+                it.getTrait<SensitiveTrait>() != null
+            }
+            .flatMap {
+                Walker(model)
+                    .walkShapes(it, {
+                        // Do not traverse upwards
+                        it.getDirection() == RelationshipDirection.DIRECTED
+                    })
+                    .filter {
+                        it.getTrait<T>() != null
+                    }
+                    .map {
+                        it as? MemberShape
+                    }
+                    .filterNotNull()
+            }
+    }
+
+    // Find traits (applied to member shapes) which are sensitive.
+    private inline fun <reified T : Trait> findSensitiveBoundTrait(rootShape: Shape): List<T> {
+        return findSensitiveBound<T>(rootShape).map { it.getTrait<T>() }.filterNotNull()
+    }
+
     fun render(writer: RustWriter) {
         writer.withBlockTemplate("#{SmithyHttpServer}::logging::Sensitivity::new()", ";", *codegenScope) {
             // Sensitivity only applies when HTTP trait is applied to the operation
@@ -114,10 +148,7 @@ class ServerHttpSensitivityGenerator(
                 .map { (index, segment) -> Pair(segment.getContent(), index) }
                 .toMap()
             val labeledUriIndexes: List<Int> = findSensitiveBound<HttpLabelTrait>(inputShape)
-                .map {
-                    logger.warning("Labels: ${it.getMemberName()}")
-                    uriLabels.get(it.getMemberName())
-                }
+                .map { uriLabels.get(it.getMemberName()) }
                 .filterNotNull()
             if (labeledUriIndexes.isNotEmpty()) {
                 withBlock(".path(", ")") {
@@ -166,36 +197,5 @@ class ServerHttpSensitivityGenerator(
                 rust(".status_code()")
             }
         }
-    }
-
-    // Find member shapes which are sensitive and enjoy a trait `T`.
-    private inline fun <reified T : Trait> findSensitiveBound(rootShape: Shape): List<MemberShape> {
-        return Walker(model)
-            .walkShapes(rootShape, {
-                // Do not traverse upwards or beyond a sensitive trait
-                it.getDirection() == RelationshipDirection.DIRECTED && it.getShape().getTrait<SensitiveTrait>() == null
-            })
-            .filter {
-                it.getTrait<SensitiveTrait>() != null
-            }
-            .flatMap {
-                Walker(model)
-                    .walkShapes(it, {
-                        // Do not traverse upwards
-                        it.getDirection() == RelationshipDirection.DIRECTED
-                    })
-                    .filter {
-                        it.getTrait<T>() != null
-                    }
-                    .map {
-                        it as? MemberShape
-                    }
-                    .filterNotNull()
-            }
-    }
-
-    // Find traits (applied to member shapes) which are sensitive.
-    private inline fun <reified T : Trait> findSensitiveBoundTrait(rootShape: Shape): List<T> {
-        return findSensitiveBound<T>(rootShape).map { it.getTrait<T>() }.filterNotNull()
     }
 }
