@@ -58,7 +58,7 @@ pub struct Config {
     no_retry_increment: usize,
     timeout_retry_cost: usize,
     max_attempts: u32,
-    backoff_multiplier: Duration,
+    initial_backoff: Duration,
     max_backoff: Duration,
     base: fn() -> f64,
 }
@@ -89,17 +89,17 @@ impl Config {
     ///
     /// ## Example
     ///
-    /// For a request that gets retried 3 times, when backoff_multiplier is 1 second:
+    /// For a request that gets retried 3 times, when initial_backoff is 1 second:
     /// - the first retry will occur after 0 to 1 seconds
     /// - the second retry will occur after 0 to 2 seconds
     /// - the third retry will occur after 0 to 4 seconds
     ///
-    /// For a request that gets retried 3 times, when backoff_multiplier is 30 milliseconds:
+    /// For a request that gets retried 3 times, when initial_backoff is 30 milliseconds:
     /// - the first retry will occur after 0 to 30 milliseconds
     /// - the second retry will occur after 0 to 60 milliseconds
     /// - the third retry will occur after 0 to 120 milliseconds
-    pub fn with_backoff_multiplier(mut self, backoff_multiplier: Duration) -> Self {
-        self.backoff_multiplier = backoff_multiplier;
+    pub fn with_initial_backoff(mut self, initial_backoff: Duration) -> Self {
+        self.initial_backoff = initial_backoff;
         self
     }
 }
@@ -115,7 +115,7 @@ impl Default for Config {
             max_backoff: Duration::from_secs(20),
             // by default, use a random base for exponential backoff
             base: fastrand::f64,
-            backoff_multiplier: Duration::from_secs(1),
+            initial_backoff: Duration::from_secs(1),
         }
     }
 }
@@ -124,7 +124,7 @@ impl From<aws_smithy_types::retry::RetryConfig> for Config {
     fn from(conf: aws_smithy_types::retry::RetryConfig) -> Self {
         Self::default()
             .with_max_attempts(conf.max_attempts())
-            .with_backoff_multiplier(conf.backoff_multiplier())
+            .with_initial_backoff(conf.initial_backoff())
     }
 }
 
@@ -302,7 +302,7 @@ impl RetryHandler {
             // Generate a random base multiplier to create jitter
             (self.config.base)(),
             // Get the backoff time multiplier in seconds (with fractional seconds)
-            self.config.backoff_multiplier.as_secs_f64(),
+            self.config.initial_backoff.as_secs_f64(),
             // `self.local.attempts` tracks number of requests made including the initial request
             // The initial attempt shouldn't count towards backoff calculations so we subtract it
             self.local.attempts - 1,
@@ -534,7 +534,7 @@ mod test {
     fn max_backoff_time() {
         let mut conf = test_config();
         conf.max_attempts = 5;
-        conf.backoff_multiplier = Duration::from_secs(1);
+        conf.initial_backoff = Duration::from_secs(1);
         conf.max_backoff = Duration::from_secs(3);
         let policy = Standard::new(conf).new_request_policy(None);
         let (policy, dur) = policy
@@ -567,32 +567,35 @@ mod test {
     }
 
     #[test]
-    fn calculate_exponential_backoff_n_is_one() {
-        let n = 1.0;
+    fn calculate_exponential_backoff_where_initial_backoff_is_one() {
+        let initial_backoff = 1.0;
 
-        for (expected, iter) in [(n, 0u32), (2.0, 1), (4.0, 2)] {
-            let actual = calculate_exponential_backoff(1.0, n, iter);
-            assert_eq!(expected, actual);
+        for (attempt, expected_backoff) in [initial_backoff, 2.0, 4.0].into_iter().enumerate() {
+            let actual_backoff =
+                calculate_exponential_backoff(1.0, initial_backoff, attempt as u32);
+            assert_eq!(expected_backoff, actual_backoff);
         }
     }
 
     #[test]
-    fn calculate_exponential_backoff_n_greater_than_one() {
-        let n = 3.0;
+    fn calculate_exponential_backoff_where_initial_backoff_is_greater_than_one() {
+        let initial_backoff = 3.0;
 
-        for (expected, iter) in [(n, 0u32), (6.0, 1), (12.0, 2)] {
-            let actual = calculate_exponential_backoff(1.0, n, iter);
-            assert_eq!(expected, actual);
+        for (attempt, expected_backoff) in [initial_backoff, 6.0, 12.0].into_iter().enumerate() {
+            let actual_backoff =
+                calculate_exponential_backoff(1.0, initial_backoff, attempt as u32);
+            assert_eq!(expected_backoff, actual_backoff);
         }
     }
 
     #[test]
-    fn calculate_exponential_backoff_n_less_than_one() {
-        let n = 0.03;
+    fn calculate_exponential_backoff_where_initial_backoff_is_less_than_one() {
+        let initial_backoff = 0.03;
 
-        for (expected, iter) in [(n, 0u32), (0.06, 1), (0.12, 2)] {
-            let actual = calculate_exponential_backoff(1.0, n, iter);
-            assert_eq!(expected, actual);
+        for (attempt, expected_backoff) in [initial_backoff, 0.06, 0.12].into_iter().enumerate() {
+            let actual_backoff =
+                calculate_exponential_backoff(1.0, initial_backoff, attempt as u32);
+            assert_eq!(expected_backoff, actual_backoff);
         }
     }
 }

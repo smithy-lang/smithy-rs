@@ -138,7 +138,7 @@ async fn end_to_end_retry_test() {
     let retry_config = aws_smithy_client::retry::Config::default()
         .with_max_attempts(4)
         // This is the default, just setting it to be explicit
-        .with_backoff_multiplier(Duration::from_secs(1))
+        .with_initial_backoff(Duration::from_secs(1))
         .with_base(|| 1_f64);
     let client = Client::<TestConnection<_>, Identity>::new(conn.clone())
         .with_retry_config(retry_config)
