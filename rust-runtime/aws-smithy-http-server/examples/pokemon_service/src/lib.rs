@@ -209,7 +209,6 @@ pub async fn capture_pokemon(
                 Ok(maybe_event) => match maybe_event {
                     Some(event) => {
                         let capturing_event = event.as_event();
-                        // TODO: verify the events from the Pokémon trainer
                         if let Ok(attempt) = capturing_event {
                             let payload = attempt.payload.clone().unwrap_or(CapturingPayload::builder().build());
                             let pokeball = payload.pokeball.as_ref().map(|ball| ball.as_str()).unwrap_or("");
