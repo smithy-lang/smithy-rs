@@ -361,9 +361,9 @@ ${operationImplementationStubs(operations)}
             } else ""
             ret +
                 """
-                /// ${it.signature()} {
-                ///     todo!()
-                /// }
+                    /// ${it.signature()} {
+                    ///     todo!()
+                    /// }
                 """.trimIndent()
         }
 
