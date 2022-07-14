@@ -18,6 +18,8 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerCombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
@@ -335,12 +337,18 @@ object EventStreamTestTools {
         val operationShape = model.expectShape(ShapeId.from("test#TestStreamOp")) as OperationShape
         val unionShape = model.expectShape(ShapeId.from("test#TestStream")) as UnionShape
 
-        val symbolProvider = testSymbolProvider(model)
+        val symbolProvider = when (testCase.target) {
+            CodegenTarget.CLIENT -> testSymbolProvider(model)
+            CodegenTarget.SERVER -> serverTestSymbolProvider(model)
+        }
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(RustModule.public("error")) {
-            CombinedErrorGenerator(model, symbolProvider, operationShape).render(it)
+            when (testCase.target) {
+                CodegenTarget.CLIENT -> CombinedErrorGenerator(model, symbolProvider, operationShape).render(it)
+                CodegenTarget.SERVER -> ServerCombinedErrorGenerator(model, symbolProvider, operationShape).render(it)
+            }
             for (shape in model.shapes().filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }) {
-                StructureGenerator(model, symbolProvider, it, shape as StructureShape).render()
+                StructureGenerator(model, symbolProvider, it, shape as StructureShape).render(testCase.target)
                 val builderGen = BuilderGenerator(model, symbolProvider, shape)
                 builderGen.render(it)
                 it.implBlock(shape, symbolProvider) {

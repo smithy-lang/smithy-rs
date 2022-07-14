@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.smithy.protocols.parse
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.parse
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
+import software.amazon.smithy.rust.codegen.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.testRustSettings
@@ -238,6 +239,10 @@ class EventStreamUnmarshallerGeneratorTest {
                 """,
             )
 
+            val (someError, kindSuffix) = when (testCase.target) {
+                CodegenTarget.CLIENT -> listOf("TestStreamErrorKind::SomeError", ".kind")
+                CodegenTarget.SERVER -> listOf("TestStreamError::SomeError", "")
+            }
             writer.unitTest(
                 "some_error",
                 """
@@ -249,32 +254,34 @@ class EventStreamUnmarshallerGeneratorTest {
                 );
                 let result = ${writer.format(generator.render())}().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                match expect_error(result.unwrap()).kind {
-                    TestStreamOpErrorKind::SomeError(err) => assert_eq!(Some("some error"), err.message()),
+                match expect_error(result.unwrap())$kindSuffix {
+                    $someError(err) => assert_eq!(Some("some error"), err.message()),
                     kind => panic!("expected SomeError, but got {:?}", kind),
                 }
                 """,
             )
 
-            writer.unitTest(
-                "generic_error",
-                """
-                let message = msg(
-                    "exception",
-                    "UnmodeledError",
-                    "${testCase.responseContentType}",
-                    br#"${testCase.validUnmodeledError}"#
-                );
-                let result = ${writer.format(generator.render())}().unmarshall(&message);
-                assert!(result.is_ok(), "expected ok, got: {:?}", result);
-                match expect_error(result.unwrap()).kind {
-                    TestStreamOpErrorKind::Unhandled(err) => {
-                        assert!(format!("{}", err).contains("message: \"unmodeled error\""));
+            if (testCase.target == CodegenTarget.CLIENT) {
+                writer.unitTest(
+                    "generic_error",
+                    """
+                    let message = msg(
+                        "exception",
+                        "UnmodeledError",
+                        "${testCase.responseContentType}",
+                        br#"${testCase.validUnmodeledError}"#
+                    );
+                    let result = ${writer.format(generator.render())}().unmarshall(&message);
+                    assert!(result.is_ok(), "expected ok, got: {:?}", result);
+                    match expect_error(result.unwrap())$kindSuffix {
+                        TestStreamErrorKind::Unhandled(err) => {
+                            assert!(format!("{}", err).contains("message: \"unmodeled error\""));
+                        }
+                        kind => panic!("expected generic error, but got {:?}", kind),
                     }
-                    kind => panic!("expected generic error, but got {:?}", kind),
-                }
-                """,
-            )
+                    """,
+                )
+            }
 
             writer.unitTest(
                 "bad_content_type",
