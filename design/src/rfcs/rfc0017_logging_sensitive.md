@@ -12,14 +12,14 @@ Progress has been made towards this goal in the form of the [Sensitive Trait PR]
 
 The problem remains open due to the existence of HTTP binding traits and a lack of clearly defined user guidelines which customers may follow to honour the specification.
 
-This RFC proposes a new logging `Layer` to be generated and applied to each `OperationHandler` `Service`, and internal and external developer guidelines on how to avoid violating the specification.
+This RFC proposes that a new logging middleware is generated and applied to each `OperationHandler` `Service`, and internal and external developer guidelines on how to avoid violating the specification.
 
 ## Terminology
 
 - **Model**: A [Smithy Model](https://awslabs.github.io/smithy/1.0/spec/core/model.html), usually pertaining to the one in use by the customer.
 - **Runtime crate**: A crate existing within the `rust-runtime/` folder, used to implement shared functionalities that do not have to be code-generated.
 - **Service**: The [tower::Service](https://docs.rs/tower-service/latest/tower_service/trait.Service.html) trait. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.
-- **Layer**: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services within services, but Layers allow us to do it in a flexible and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service. Layers can be thought of as middleware. *NOTE: The use of [Layers can produce compiler errors] that are difficult to interpret and defining a layer requires a large amount of boilerplate code.*
+- **Middleware**: Broadly speaking, middleware modify requests and responses. Concretely, these are represented as [tower](https://github.com/tower-rs/tower) by a [Layer](https://docs.rs/tower/latest/tower/layer/trait.Layer.html)/`Service` wrapping an inner `Service`.
 - **Potentially sensitive**: Data that _could_ be bound to a sensitive field of a structure, for example [HTTP Binding Traits](#http-binding-traits).
 
 ## Background
@@ -59,7 +59,7 @@ These two cases illustrate that `smithy-rs` can only prevent violation of the sp
 
 ### Routing
 
-The sensitivity and HTTP bindings are declared within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any `Layer` applied _before_ routing has taken place cannot log anything sensitive without performing routing logic itself.
+The sensitivity and HTTP bindings are declared within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any middleware applied _before_ routing has taken place cannot log anything sensitive without performing routing logic itself.
 
 Note that:
 - We are not required to deserialize the entire request before we can make judgments on what data is sensitive or not - only which operation it has been routed to.
@@ -73,7 +73,7 @@ The crates existing in `rust-runtime` are not code generated - their source code
 
 ## Proposal
 
-This proposal serves to honor the sensitivity specification via code generation of a logging `Layer`s which is aware of the sensitivity, together with a developer contract disallowing logging potentially sensitive data in the runtime crates. An internal and external guideline should be provided in addition to the `Layer`s.
+This proposal serves to honor the sensitivity specification via code generation of a logging middleware which is aware of the sensitivity, together with a developer contract disallowing logging potentially sensitive data in the runtime crates. An internal and external guideline should be provided in addition to the middleware.
 
 All data known to be sensitive should be replaced with `"{redacted}"` when logged. Implementation wise this means that [tracing::Event](https://docs.rs/tracing/latest/tracing/struct.Event.html)s and [tracing::Span](https://docs.rs/tracing/latest/tracing/struct.Span.html)s of the form `debug!(field = "sensitive data")` and `span!(..., field = "sensitive data")` must become `debug!(field = "{redacted}")` and `span!(..., field = "{redacted}")`.
 
@@ -129,11 +129,11 @@ In which case the branch above becomes
 debug!(sensitive_data = %Sensitive(data));
 ```
 
-### Code Generated Logging Layer
+### Code Generated Logging Middleware
 
-Using the smithy model, for each operation, a logging `Layer` should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging `Layer` can be careful crafted to avoid leaking sensitive data.
+Using the smithy model, for each operation, a logging middleware should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging middleware can be careful crafted to avoid leaking sensitive data.
 
-This `Layer` should be applied to the [OperationHandler](https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) directly after its construction in the generated `operation_registry.rs`. The `Layer` should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) so cause minimal breakage.
+This middleware should be applied to the [OperationHandler](https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) directly after its construction in the generated `operation_registry.rs`. The middleware should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) so cause minimal breakage.
 
 This is illustrated before as the introduction of `Logging{Operation}::new`.
 
@@ -149,7 +149,7 @@ let routes = vec![
 let router = aws_smithy_http_server::routing::Router::new_rest_json_router(routes);
 ```
 
-As a request enters this layer it should record the method, HTTP headers, status code, and URI. As a response leaves this layer it should record the HTTP headers and status code.
+As a request enters this middleware it should record the method, HTTP headers, status code, and URI in a `tracing::span`. As a response leaves this middleware it should record the HTTP headers and status code.
 
 The following model
 
@@ -247,11 +247,11 @@ A guideline should be made available to customers to outline the following:
 
 All of the following proposals are compatible with, and benefit from, [Debug Logging](#unredacted-logging), [Internal Guideline](#internal-guideline)/[External Guideline](#external-guideline) portions of the main proposal.
 
-The main proposal disallows the logging of potentially sensitive data in the runtime crates, instead opting for a dedicated code generated logging layer. In contrast, the following proposals all seek ways to accommodate logging of potentially sensitive data in the runtime crates.
+The main proposal disallows the logging of potentially sensitive data in the runtime crates, instead opting for a dedicated code generated logging middleware. In contrast, the following proposals all seek ways to accommodate logging of potentially sensitive data in the runtime crates.
 
 ### Use Request Extensions
 
-Request extensions can be used to adjoin data to a Request as it passes through the middleware layers. Concretely, they exist as the type map [http::Extensions](https://docs.rs/http/latest/http/struct.Extensions.html) accessed via [http::extensions](https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions) and [http::extensions_mut](https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions_mut).
+Request extensions can be used to adjoin data to a Request as it passes through the middleware. Concretely, they exist as the type map [http::Extensions](https://docs.rs/http/latest/http/struct.Extensions.html) accessed via [http::extensions](https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions) and [http::extensions_mut](https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions_mut).
 
 These can be used to provide data to middleware interested in logging potentially sensitive data.
 
@@ -281,7 +281,7 @@ impl<B, S> Service<Request<B>> for Middleware<S> {
 }
 ```
 
-A middleware layer must be code generated (much in the same way as the logging layer) which is dedicated to inserting the `Sensitivity` struct into the extensions of each incoming request.
+A middleware layer must be code generated (much in the same way as the logging middleware) which is dedicated to inserting the `Sensitivity` struct into the extensions of each incoming request.
 
 ```rust
 impl<B, S> Service<Request<B>> for SensitivityInserter<S>
