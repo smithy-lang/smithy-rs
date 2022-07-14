@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Checksum support for HTTP requests and responses.
+
 use crate::{Checksum, Crc32, Crc32c, Md5, Sha1, Sha256};
 use std::fmt::{Display, Formatter};
 

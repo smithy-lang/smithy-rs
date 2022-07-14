@@ -3,28 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Checksum calculation and verification callbacks
+//! Checksum calculation and verification callbacks.
 
 use bytes::Bytes;
 
 pub mod body;
 pub mod http;
 
-/// Checksum algorithms are use to validate the integrity of data. Structs that implement this trait
+/// Types implementing this trait can calculate checksums.
+///
+/// Checksum algorithms are used to validate the integrity of data. Structs that implement this trait
 /// can be used as checksum calculators. This trait requires Send + Sync because these checksums are
 /// often used in a threaded context.
 pub trait Checksum: Send + Sync {
     /// Given a slice of bytes, update this checksum's internal state.
     fn update(&mut self, bytes: &[u8]);
     /// "Finalize" this checksum, returning the calculated value as `Bytes` or an error that
-    /// occurred during checksum calculation. To print this value in a human-readable hexadecimal
-    /// format, you can print it using Rust's builtin [formatter].
+    /// occurred during checksum calculation.
+    ///
+    /// _HINT: To print this value in a human-readable hexadecimal format, you can use Rust's
+    /// builtin [formatter]._
     ///
     /// [formatter]: https://doc.rust-lang.org/std/fmt/trait.UpperHex.html
     fn finalize(self: Box<Self>) -> Bytes;
-    /// Return the size of this checksum algorithms resulting checksum, in bytes. For example, the
-    /// CRC32 checksum algorithm calculates a 32 bit checksum, so a CRC32 checksum struct
-    /// implementing this trait method would return 4.
+    /// Return the size of this checksum algorithms resulting checksum, in bytes.
+    ///
+    /// For example, the CRC32 checksum algorithm calculates a 32 bit checksum, so a CRC32 checksum
+    /// struct implementing this trait method would return `4`.
     fn size(&self) -> u64;
 }
 
