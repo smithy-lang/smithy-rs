@@ -138,7 +138,7 @@ where
         } = &self.sensitivity;
         let headers = SensitiveHeaders::new(request.headers()).mark(&req_header);
         let uri = SensitiveUri::new(request.uri()).path(&path).query(&query);
-        let span = debug_span!("request", operation = %self.operation_name, %uri, ?headers);
+        let span = debug_span!("request", operation = %self.operation_name, method = %request.method(), %uri, ?headers);
 
         LoggingFuture {
             inner: self.inner.call(request),
