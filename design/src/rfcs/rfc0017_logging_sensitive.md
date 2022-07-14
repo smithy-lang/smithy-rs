@@ -133,23 +133,7 @@ debug!(sensitive_data = %Sensitive(data));
 
 Using the smithy model, for each operation, a logging middleware should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging middleware can be careful crafted to avoid leaking sensitive data.
 
-This middleware should be applied to the [OperationHandler](https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) directly after its construction in the generated `operation_registry.rs`. The middleware should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) so cause minimal breakage.
-
-This is illustrated before as the introduction of `Logging{Operation}::new`.
-
-```rust
-let empty_operation = LoggingEmptyOperation::new(operation(registry.empty_operation));
-let get_pokemon_species = LoggingPokemonSpecies::new(operation(registry.get_pokemon_species));
-let get_server_statistics = LoggingServerStatistics::new(operation(registry.get_server_statistics));
-let routes = vec![
-    (BoxCloneService::new(empty_operation), empty_operation_request_spec),
-    (BoxCloneService::new(get_pokemon_species), get_pokemon_species_request_spec),
-    (BoxCloneService::new(get_server_statistics), get_server_statistics_request_spec),
-];
-let router = aws_smithy_http_server::routing::Router::new_rest_json_router(routes);
-```
-
-As a request enters this middleware it should record the method, HTTP headers, status code, and URI in a `tracing::span`. As a response leaves this middleware it should record the HTTP headers and status code.
+As a request enters this middleware it should record the method, HTTP headers, status code, and URI in a `tracing::span`. As a response leaves this middleware it should record the HTTP headers and status code in a `tracing::debug`.
 
 The following model
 
@@ -182,10 +166,9 @@ should generate the following
 ```rust
 // NOTE: This code is intended to show behavior - it does not compile
 
-const SENSITIVE_MARKER: &str = "{redacted}";
-
 pub struct InventoryLogging<S> {
-    inner: S
+    inner: S,
+    operation_name: &'static str
 }
 
 impl<S> InventoryLogging<S> {
@@ -205,25 +188,52 @@ where
     type Future = /* Implementation detail */;
 
     fn call(&mut self, request: Request<B>) -> Self::Future {
-        // Remove sensitive data from path
-        let mut uri = redact(request.uri());
+        // Remove sensitive data from parts of the HTTP
+        let uri = /* redact {name} from URI */;
+        let headers = /* no redactions */;
 
         let fut = async {
             let response = self.inner.call(request).await;
+            let status_code = /* redact status code */;
+            let headers = /* no redactions */;
 
-            debug!(status_code = %Sensitive(request.status()), "sending response");
+            debug!(%status_code, ?headers, "response");
 
             response
         };
 
         // Instrument the future with a span
-        let span = span!(%method, %uri, headers = request.headers(), "received request");
+        let span = debug_span!("request", operation = %self.operation_name, method = %request.method(), %uri, ?headers);
         fut.instrument(span)
     }
 }
 ```
 
 As this path is latency-sensitive, careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping `Uri` and `HeaderMap` then providing a new `Display` implementation which skips over the sensitive data is preferable over allocating a new `String`/`HeaderMap` and mutating it.
+
+### Middleware Position
+
+This logging middleware middleware should be applied outside of the [OperationHandler](https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) after its construction in the generated `operation_registry.rs`. The middleware should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) to cause minimal breakage.
+
+An easy position to apply the logging middleware is illustrated below in the form of `Logging{Operation}::new`.
+
+```rust
+let empty_operation = LoggingEmptyOperation::new(operation(registry.empty_operation));
+let get_pokemon_species = LoggingPokemonSpecies::new(operation(registry.get_pokemon_species));
+let get_server_statistics = LoggingServerStatistics::new(operation(registry.get_server_statistics));
+let routes = vec![
+    (BoxCloneService::new(empty_operation), empty_operation_request_spec),
+    (BoxCloneService::new(get_pokemon_species), get_pokemon_species_request_spec),
+    (BoxCloneService::new(get_server_statistics), get_server_statistics_request_spec),
+];
+let router = aws_smithy_http_server::routing::Router::new_rest_json_router(routes);
+```
+
+Although an acceptable first step putting logging middleware here is suboptimal - the `Router` allows a `tower::Layer` to be applied to the operation by using the [Router::layer](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146) method. This middleware will be applied _outside_ of the logging middleware and, as a result, will not be subject the span of any middleware. Therefore the `Router` must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.
+
+This is a general problem, not specific to this proposal. For example, [Use Request Extensions](#use-request-extensions) must also solve this problem.
+
+Fortunately, this problem is separable from the actual implementation of the logging middleware and we can get immediate benefit by application of it in the suboptimal position described above.
 
 ### Internal Guideline
 
