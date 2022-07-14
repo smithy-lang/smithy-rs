@@ -139,7 +139,6 @@ class ServerHttpSensitivityGenerator(
             val inputShape = operation.inputShape(model)
 
             // URI bindings
-            // TODO: Support greedy labels
             val uriLabels: Map<String, Int> = httpTrait
                 .uri
                 .getSegments()
