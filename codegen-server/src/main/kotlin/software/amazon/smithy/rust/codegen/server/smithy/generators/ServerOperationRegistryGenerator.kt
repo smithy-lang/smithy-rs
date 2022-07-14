@@ -46,7 +46,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  * [`tower::Service`]: https://docs.rs/tower/latest/tower/trait.Service.html
  */
 class ServerOperationRegistryGenerator(
-    private val coreCodegenContext: CoreCodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     private val protocol: Protocol,
     private val operations: List<OperationShape>,
 ) {
@@ -92,68 +92,68 @@ class ServerOperationRegistryGenerator(
 
         writer.rustTemplate(
             """
-            ##[allow(clippy::tabs_in_doc_comments)]
-            /// The `$operationRegistryName` is the place where you can register
-            /// your service's operation implementations.
-            ///
-            /// Use [`$operationRegistryBuilderName`] to construct the
-            /// `$operationRegistryName`. For each of the [operations] modeled in
-            /// your Smithy service, you need to provide an implementation in the
-            /// form of a Rust async function or closure that takes in the
-            /// operation's input as their first parameter, and returns the
-            /// operation's output. If your operation is fallible (i.e. it
-            /// contains the `errors` member in your Smithy model), the function
-            /// implementing the operation has to be fallible (i.e. return a
-            /// [`Result`]). **You must register an implementation for all
-            /// operations with the correct signature**, or your application
-            /// will fail to compile.
-            ///
-            /// The operation registry can be converted into an [`#{Router}`] for
-            /// your service. This router will take care of routing HTTP
-            /// requests to the matching operation implementation, adhering to
-            /// your service's protocol and the [HTTP binding traits] that you
-            /// used in your Smithy model. This router can be converted into a
-            /// type implementing [`tower::make::MakeService`], a _service
-            /// factory_. You can feed this value to a [Hyper server], and the
-            /// server will instantiate and [`serve`] your service.
-            ///
-            /// Here's a full example to get you started:
-            ///
-            /// ```rust
-            /// use std::net::SocketAddr;
-            $inputOutputErrorsImport
-            /// use $crateName::operation_registry::$operationRegistryBuilderName;
-            /// use #{Router};
-            ///
-            /// ##[#{Tokio}::main]
-            /// pub async fn main() {
-            ///    let app: Router = $operationRegistryBuilderName::default()
-            ${operationNames.map { ".$it($it)" }.joinToString("\n") { it.prependIndent("///        ") }}
-            ///        .build()
-            ///        .expect("unable to build operation registry")
-            ///        .into();
-            ///
-            ///    let bind: SocketAddr = format!("{}:{}", "127.0.0.1", "6969")
-            ///        .parse()
-            ///        .expect("unable to parse the server bind address and port");
-            ///
-            ///    let server = #{Hyper}::Server::bind(&bind).serve(app.into_make_service());
-            ///
-            ///    // Run your service!
-            ///    // if let Err(err) = server.await {
-            ///    //   eprintln!("server error: {}", err);
-            ///    // }
-            /// }
-            ///
-            ${operationImplementationStubs(operations)}
-            /// ```
-            ///
-            /// [`serve`]: https://docs.rs/hyper/0.14.16/hyper/server/struct.Builder.html##method.serve
-            /// [`tower::make::MakeService`]: https://docs.rs/tower/latest/tower/make/trait.MakeService.html
-            /// [HTTP binding traits]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
-            /// [operations]: https://awslabs.github.io/smithy/1.0/spec/core/model.html##operation
-            /// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
-            """.trimIndent(),
+##[allow(clippy::tabs_in_doc_comments)]
+/// The `$operationRegistryName` is the place where you can register
+/// your service's operation implementations.
+/// 
+/// Use [`$operationRegistryBuilderName`] to construct the
+/// `$operationRegistryName`. For each of the [operations] modeled in
+/// your Smithy service, you need to provide an implementation in the
+/// form of a Rust async function or closure that takes in the
+/// operation's input as their first parameter, and returns the
+/// operation's output. If your operation is fallible (i.e. it
+/// contains the `errors` member in your Smithy model), the function
+/// implementing the operation has to be fallible (i.e. return a
+/// [`Result`]). **You must register an implementation for all
+/// operations with the correct signature**, or your application
+/// will fail to compile.
+///
+/// The operation registry can be converted into an [`#{Router}`] for
+/// your service. This router will take care of routing HTTP
+/// requests to the matching operation implementation, adhering to
+/// your service's protocol and the [HTTP binding traits] that you
+/// used in your Smithy model. This router can be converted into a
+/// type implementing [`tower::make::MakeService`], a _service
+/// factory_. You can feed this value to a [Hyper server], and the
+/// server will instantiate and [`serve`] your service.
+/// 
+/// Here's a full example to get you started:
+/// 
+/// ```rust
+/// use std::net::SocketAddr;
+$inputOutputErrorsImport
+/// use $crateName::operation_registry::$operationRegistryBuilderName;
+/// use #{Router};
+///
+/// ##[#{Tokio}::main]
+/// pub async fn main() {
+///    let app: Router = $operationRegistryBuilderName::default()
+${operationNames.map { ".$it($it)" }.joinToString("\n") { it.prependIndent("///        ") }}
+///        .build()
+///        .expect("unable to build operation registry")
+///        .into();
+///
+///    let bind: SocketAddr = format!("{}:{}", "127.0.0.1", "6969")
+///        .parse()
+///        .expect("unable to parse the server bind address and port");
+///
+///    let server = #{Hyper}::Server::bind(&bind).serve(app.into_make_service());
+///
+///    // Run your service!
+///    // if let Err(err) = server.await {
+///    //   eprintln!("server error: {}", err);
+///    // }
+/// }
+///
+${operationImplementationStubs(operations)}
+/// ```
+///
+/// [`serve`]: https://docs.rs/hyper/0.14.16/hyper/server/struct.Builder.html##method.serve
+/// [`tower::make::MakeService`]: https://docs.rs/tower/latest/tower/make/trait.MakeService.html
+/// [HTTP binding traits]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
+/// [operations]: https://awslabs.github.io/smithy/1.0/spec/core/model.html##operation
+/// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
+""",
             "Router" to ServerRuntimeType.Router(runtimeConfig),
             // These should be dev-dependencies. Not all sSDKs depend on `Hyper` (only those that convert the body
             // `to_bytes`), and none depend on `tokio`.
