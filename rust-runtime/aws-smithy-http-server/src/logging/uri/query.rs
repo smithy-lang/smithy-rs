@@ -22,7 +22,7 @@ pub(crate) fn noop_query_marker(_: &str) -> QueryMarker {
 /// A wrapper around a query [`&str`](str) which modifies the behavior of [`Display`]. Closures are used to mark
 /// query parameter values as sensitive based on their key.
 ///
-/// The [`Display`] implementation will respect the `debug-logging` flag.
+/// The [`Display`] implementation will respect the `unredacted-logging` flag.
 pub struct SensitiveQuery<'a, F> {
     query: &'a str,
     marker: F,

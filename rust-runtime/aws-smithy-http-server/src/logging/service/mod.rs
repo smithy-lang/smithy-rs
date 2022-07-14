@@ -65,7 +65,7 @@ where
 ///     - A [`tracing::debug`] during response, which includes the response status code and headers.
 ///
 /// Data is marked as sensitive using the [`Sensitivity`] API and then passed to this via the
-/// [`sensitivity`](InstrumentOperation::sensitivity) method. Using the `debug-logging` feature flag will ignore these
+/// [`sensitivity`](InstrumentOperation::sensitivity) method. Using the `unredacted-logging` feature flag will ignore these
 /// markings.
 ///
 /// Data marked as sensitive will be replaced with [{redacted}](crate::logging::REDACTED).

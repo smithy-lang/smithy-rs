@@ -8,7 +8,7 @@ use std::fmt::{Debug, Display, Error, Formatter};
 use super::REDACTED;
 
 /// A wrapper used to modify the [`Display`] and [`Debug`] implementation of the inner structure
-/// based on the feature flag `debug-logging`. When the `debug-logging` feature is enabled, the
+/// based on the feature flag `unredacted-logging`. When the `unredacted-logging` feature is enabled, the
 /// implementations will defer to those on `T`, when disabled they will defer to [`REDACTED`].
 ///
 /// Note that there are [`Display`] and [`Debug`] implementations for `&T` where `T: Display`
@@ -33,7 +33,7 @@ where
     T: Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        if cfg!(feature = "debug-logging") {
+        if cfg!(feature = "unredacted-logging") {
             self.0.fmt(f)
         } else {
             Debug::fmt(&REDACTED, f)
@@ -46,7 +46,7 @@ where
     T: Display,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        if cfg!(feature = "debug-logging") {
+        if cfg!(feature = "unredacted-logging") {
             self.0.fmt(f)
         } else {
             Display::fmt(&REDACTED, f)
@@ -65,7 +65,7 @@ mod tests {
         let inner = "hello world";
         let sensitive = Sensitive(inner);
         let actual = format!("{:?}", sensitive);
-        let expected = if cfg!(feature = "debug-logging") {
+        let expected = if cfg!(feature = "unredacted-logging") {
             format!("{:?}", inner)
         } else {
             format!("{:?}", REDACTED)
@@ -78,7 +78,7 @@ mod tests {
         let inner = "hello world";
         let sensitive = Sensitive(inner);
         let actual = format!("{}", sensitive);
-        let expected = if cfg!(feature = "debug-logging") {
+        let expected = if cfg!(feature = "unredacted-logging") {
             format!("{}", inner)
         } else {
             format!("{}", REDACTED)

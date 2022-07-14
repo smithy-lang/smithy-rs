@@ -13,7 +13,7 @@ pub(crate) fn noop_path_marker(_: usize) -> bool {
 /// A wrapper around a path [`&str`](str) which modifies the behavior of [`Display`]. Closures are used to mark
 /// specific parts of the path as sensitive.
 ///
-/// The [`Display`] implementation will respect the `debug-logging` flag.
+/// The [`Display`] implementation will respect the `unredacted-logging` flag.
 pub struct SensitivePath<'a, F> {
     path: &'a str,
     marker: F,
@@ -82,7 +82,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "debug-logging"))]
+    #[cfg(not(feature = "unredacted-logging"))]
     const ALL_EXAMPLES: [&str; 22] = [
         "g:h",
         "http://a/{redacted}/{redacted}/{redacted}",
@@ -108,7 +108,7 @@ mod tests {
         "http://a/{redacted}",
     ];
 
-    #[cfg(feature = "debug-logging")]
+    #[cfg(feature = "unredacted-logging")]
     pub const ALL_EXAMPLES: [&str; 22] = EXAMPLES;
 
     #[test]

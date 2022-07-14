@@ -15,7 +15,7 @@ pub use query::*;
 /// A wrapper around [`&Uri`](Uri) which modifies the behavior of [`Display`]. Closures are used to mark specific parts
 /// of the [`Uri`] as sensitive.
 ///
-/// The [`Display`] implementation will respect the `debug-logging` flag.
+/// The [`Display`] implementation will respect the `unredacted-logging` flag.
 pub struct SensitiveUri<'a, P, Q> {
     uri: &'a Uri,
     path_marker: P,
@@ -179,7 +179,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "debug-logging"))]
+    #[cfg(not(feature = "unredacted-logging"))]
     const FIRST_PATH_EXAMPLES: [&str; 22] = [
         "g:h",
         "http://a/{redacted}/c/g",
@@ -204,7 +204,7 @@ mod tests {
         "http://a/{redacted}",
         "http://a/{redacted}",
     ];
-    #[cfg(feature = "debug-logging")]
+    #[cfg(feature = "unredacted-logging")]
     const FIRST_PATH_EXAMPLES: [&str; 22] = EXAMPLES;
 
     #[test]
@@ -217,7 +217,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "debug-logging"))]
+    #[cfg(not(feature = "unredacted-logging"))]
     const LAST_PATH_EXAMPLES: [&str; 22] = [
         "g:h",
         "http://a/b/c/{redacted}",
@@ -242,7 +242,7 @@ mod tests {
         "http://a/{redacted}",
         "http://a/{redacted}",
     ];
-    #[cfg(feature = "debug-logging")]
+    #[cfg(feature = "unredacted-logging")]
     const LAST_PATH_EXAMPLES: [&str; 22] = EXAMPLES;
 
     #[test]
@@ -256,7 +256,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "debug-logging"))]
+    #[cfg(not(feature = "unredacted-logging"))]
     pub const ALL_KEYS_QUERY_STRING_EXAMPLES: [&str; 11] = [
         "http://a/b/c/g?&",
         "http://a/b/c/g?x",
@@ -270,7 +270,7 @@ mod tests {
         "http://a/b/c/g?&{redacted}=z",
         "http://a/b/c/g?x&{redacted}=y",
     ];
-    #[cfg(feature = "debug-logging")]
+    #[cfg(feature = "unredacted-logging")]
     pub const ALL_KEYS_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]
@@ -288,7 +288,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "debug-logging"))]
+    #[cfg(not(feature = "unredacted-logging"))]
     pub const ALL_VALUES_QUERY_STRING_EXAMPLES: [&str; 11] = [
         "http://a/b/c/g?&",
         "http://a/b/c/g?x",
@@ -302,7 +302,7 @@ mod tests {
         "http://a/b/c/g?&x={redacted}",
         "http://a/b/c/g?x&x={redacted}",
     ];
-    #[cfg(feature = "debug-logging")]
+    #[cfg(feature = "unredacted-logging")]
     pub const ALL_VALUES_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]
@@ -320,7 +320,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "debug-logging"))]
+    #[cfg(not(feature = "unredacted-logging"))]
     pub const ALL_PAIRS_QUERY_STRING_EXAMPLES: [&str; 11] = [
         "http://a/b/c/g?&",
         "http://a/b/c/g?x",
@@ -334,7 +334,7 @@ mod tests {
         "http://a/b/c/g?&{redacted}={redacted}",
         "http://a/b/c/g?x&{redacted}={redacted}",
     ];
-    #[cfg(feature = "debug-logging")]
+    #[cfg(feature = "unredacted-logging")]
     pub const ALL_PAIRS_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]
@@ -349,7 +349,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "debug-logging"))]
+    #[cfg(not(feature = "unredacted-logging"))]
     pub const X_QUERY_STRING_EXAMPLES: [&str; 11] = [
         "http://a/b/c/g?&",
         "http://a/b/c/g?x",
@@ -363,7 +363,7 @@ mod tests {
         "http://a/b/c/g?&x={redacted}",
         "http://a/b/c/g?x&x={redacted}",
     ];
-    #[cfg(feature = "debug-logging")]
+    #[cfg(feature = "unredacted-logging")]
     pub const X_QUERY_STRING_EXAMPLES: [&str; 11] = QUERY_STRING_EXAMPLES;
 
     #[test]

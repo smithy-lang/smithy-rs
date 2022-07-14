@@ -24,7 +24,7 @@ pub(crate) fn noop_header_marker(_: &HeaderName) -> HeaderMarker {
 /// A wrapper around [`&HeaderMap`](HeaderMap) which modifies the behavior of [`Debug`]. Closures are used to mark
 /// mark specific parts of the `Uri`.
 ///
-/// The [`Debug`] implementation will respect the `debug-logging` flag.
+/// The [`Debug`] implementation will respect the `unredacted-logging` flag.
 pub struct SensitiveHeaders<'a, F> {
     headers: &'a HeaderMap,
     marker: F,
@@ -155,14 +155,14 @@ mod tests {
         assert_eq!(format!("{:?}", output), format!("{:?}", original));
     }
 
-    #[cfg(not(feature = "debug-logging"))]
+    #[cfg(not(feature = "unredacted-logging"))]
     const ALL_VALUES_HEADER_MAP: [(&str, &str); 4] = [
         ("name-a", "{redacted}"),
         ("name-b", "{redacted}"),
         ("prefix-a-x", "{redacted}"),
         ("prefix-b-y", "{redacted}"),
     ];
-    #[cfg(feature = "debug-logging")]
+    #[cfg(feature = "unredacted-logging")]
     const ALL_VALUES_HEADER_MAP: [(&str, &str); 4] = HEADER_MAP;
 
     #[test]
@@ -177,14 +177,14 @@ mod tests {
         assert_eq!(format!("{:?}", output), format!("{:?}", expected));
     }
 
-    #[cfg(not(feature = "debug-logging"))]
+    #[cfg(not(feature = "unredacted-logging"))]
     const NAME_A_HEADER_MAP: [(&str, &str); 4] = [
         ("name-a", "{redacted}"),
         ("name-b", "value-b"),
         ("prefix-a-x", "value-c"),
         ("prefix-b-y", "value-d"),
     ];
-    #[cfg(feature = "debug-logging")]
+    #[cfg(feature = "unredacted-logging")]
     const NAME_A_HEADER_MAP: [(&str, &str); 4] = HEADER_MAP;
 
     #[test]
@@ -199,14 +199,14 @@ mod tests {
         assert_eq!(format!("{:?}", output), format!("{:?}", expected));
     }
 
-    #[cfg(not(feature = "debug-logging"))]
+    #[cfg(not(feature = "unredacted-logging"))]
     const PREFIX_A_HEADER_MAP: [(&str, &str); 4] = [
         ("name-a", "value-a"),
         ("name-b", "value-b"),
         ("prefix-a{redacted}", "value-c"),
         ("prefix-b-y", "value-d"),
     ];
-    #[cfg(feature = "debug-logging")]
+    #[cfg(feature = "unredacted-logging")]
     const PREFIX_A_HEADER_MAP: [(&str, &str); 4] = HEADER_MAP;
 
     #[test]

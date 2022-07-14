@@ -14,7 +14,7 @@ Server runtime for Smithy Rust Server Framework.
 publish = false
 
 [features]
-debug-logging = []
+unredacted-logging = []
 
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
