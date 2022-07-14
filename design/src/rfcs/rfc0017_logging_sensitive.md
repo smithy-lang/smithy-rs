@@ -28,14 +28,13 @@ This RFC proposes a new logging `Layer` to be generated and applied to each `Ope
 
 Smithy provides various [HTTP binding traits](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html). These allow protocols to configure a HTTP request by way of binding fields to parts of the request. For this reason sensitive data might be unintentionally leaked through logging of a bound request.
 
-| Trait                                                                                                        | Configurable        |
-|--------------------------------------------------------------------------------------------------------------|---------------------|
-| [http](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#http-trait)                           | URI and Status Code |
-| [httpHeader](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpheader-trait)               | Headers             |
-| [httpPrefixHeaders](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpprefixheaders-trait) | Headers             |
-| [httpLabel](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait)                 | URI                 |
-| [httpQuery](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait)                 | Query Parameters    |
-| [httpResponseCode](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpresponsecode-trait)   | Status Code
+| Trait                                                                                                        | Configurable     |
+| ------------------------------------------------------------------------------------------------------------ | ---------------- |
+| [httpHeader](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpheader-trait)               | Headers          |
+| [httpPrefixHeaders](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpprefixheaders-trait) | Headers          |
+| [httpLabel](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait)                 | URI              |
+| [httpQuery](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait)                 | Query Parameters |
+| [httpResponseCode](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpresponsecode-trait)   | Status Code      |
 
 Each of these configurable parts must therefore be logged cautiously.
 
