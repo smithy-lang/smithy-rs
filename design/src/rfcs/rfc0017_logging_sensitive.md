@@ -149,7 +149,7 @@ let routes = vec![
 let router = aws_smithy_http_server::routing::Router::new_rest_json_router(routes);
 ```
 
-As a request enters this layer it should record the HTTP headers, status code, and URI.
+As a request enters this layer it should record the method, HTTP headers, status code, and URI. As a response leaves this layer it should record the HTTP headers and status code.
 
 The following model
 
