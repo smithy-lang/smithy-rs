@@ -80,12 +80,12 @@ All data known to be sensitive should be replaced with `"_redacted_"` when logge
 
 ### Debug Logging
 
-Developers might want to observe sensitive data for debugging purposes. It should be possible to opt-out of the redactions by enabling a feature flag `debug-logging` (which is disabled by default).
+Developers might want to observe sensitive data for debugging purposes. It should be possible to opt-out of the redactions by enabling a feature flag `unredacted-logging` (which is disabled by default).
 
 To prevent excessive branches such as
 
 ```rust
-if cfg!(feature = "debug-logging") {
+if cfg!(feature = "unredacted-logging") {
     debug!(%data, "logging here");
 } else {
     debug!(data = "_redacted_", "logging here");
@@ -102,7 +102,7 @@ where
     T: Debug
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        if cfg!(feature = "debug-logging") {
+        if cfg!(feature = "unredacted-logging") {
             self.0.fmt(f)
         } else {
             "_redacted_".fmt(f)
@@ -115,7 +115,7 @@ where
     T: Display
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        if cfg!(feature = "debug-logging") {
+        if cfg!(feature = "unredacted-logging") {
             self.0.fmt(f)
         } else {
             "_redacted_".fmt(f)
@@ -232,7 +232,7 @@ A guideline should be made available to internal smithy developers to outline th
 
 - The [HTTP bindings traits](#http-binding-traits) and why they are of concern.
 - The [Debug implementation](https://github.com/awslabs/smithy-rs/pull/229) on structures.
-- How to use the `Sensitive` struct and the `debug-logging` feature flag described in [Debug Logging](#debug-logging).
+- How to use the `Sensitive` struct and the `unredacted-logging` feature flag described in [Debug Logging](#unredacted-logging).
 
 ### Public Guideline
 
@@ -242,11 +242,11 @@ A guideline should be made available to customers to outline the following:
 - Warn against the two potential leaks described in [Scope and Guidelines](#scope-and-guidelines):
   - Sensitive data leaking from third-party dependencies.
   - Sensitive data leaking from middleware applied to the `Router`.
-- How to use the `Sensitive` struct and the `debug-logging` feature flag described in [Debug Logging](#debug-logging).
+- How to use the `Sensitive` struct and the `unredacted-logging` feature flag described in [Debug Logging](#unredacted-logging).
 
 ## Alternative Proposals
 
-All of the following proposals are compatible with, and benefit from, [Debug Logging](#debug-logging), [Internal Guideline](#internal-guideline)/[External Guideline](#external-guideline) portions of the main proposal.
+All of the following proposals are compatible with, and benefit from, [Debug Logging](#unredacted-logging), [Internal Guideline](#internal-guideline)/[External Guideline](#external-guideline) portions of the main proposal.
 
 The main proposal disallows the logging of potentially sensitive data in the runtime crates, instead opting for a dedicated code generated logging layer. In contrast, the following proposals all seek ways to accommodate logging of potentially sensitive data in the runtime crates.
 
