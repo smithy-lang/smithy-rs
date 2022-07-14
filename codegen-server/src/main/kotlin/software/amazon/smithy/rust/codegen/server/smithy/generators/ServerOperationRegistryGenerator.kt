@@ -153,7 +153,7 @@ class ServerOperationRegistryGenerator(
             /// [HTTP binding traits]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
             /// [operations]: https://awslabs.github.io/smithy/1.0/spec/core/model.html##operation
             /// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
-            """.trimIdent(),
+            """.trimIndent(),
             "Router" to ServerRuntimeType.Router(runtimeConfig),
             // These should be dev-dependencies. Not all sSDKs depend on `Hyper` (only those that convert the body
             // `to_bytes`), and none depend on `tokio`.
