@@ -7,7 +7,7 @@ use std::fmt::{self, Display, Error, Formatter};
 use crate::logging::Sensitive;
 
 /// Marks the sensitive data of a query string pair.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct QueryMarker {
     /// Set to `true` to mark the key as sensitive.
     pub key: bool,

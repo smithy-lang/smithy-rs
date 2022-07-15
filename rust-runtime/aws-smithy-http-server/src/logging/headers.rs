@@ -9,7 +9,7 @@ use http::{header::HeaderName, HeaderMap};
 use super::{OrFmt, Sensitive};
 
 /// Marks the sensitive data of a header pair.
-#[derive(Default, Debug)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct HeaderMarker {
     /// Set to `true` to mark the value as sensitive.
     pub value: bool,
