@@ -634,8 +634,7 @@ mod tests {
     #[test]
     fn parse_rfc3339_timezone_forbidden() {
         let dt = rfc3339::parse("1985-04-12T23:20:50-02:00");
-        assert_eq!(
-            true,
+        assert!(
             matches!(dt.unwrap_err(), DateTimeParseError::Invalid(_))
         );
     }
