@@ -53,8 +53,7 @@ class ServerHttpSensitivityGenerator(
             if (prefixHeaders.isNotEmpty()) {
                 withBlock("let (value, key_suffix) = ", ";") {
                     prefixHeaders.map { it.value }.distinct().forEach {
-                        rustTemplate("if name.starts_with(\"$it\") { (true, Some(${it.length})) }")
-                        rust("else")
+                        rustTemplate("if name.starts_with(\"$it\") { (true, Some(${it.length})) } else")
                     }
                     rust("{ (false, None) }")
                 }
