@@ -151,6 +151,7 @@ impl http_body::Body for ChecksumValidatedBody<SdkBody> {
 #[cfg(test)]
 mod tests {
     use crate::body::{validate::Error, ChecksumValidatedBody};
+    use crate::http::new_from_algorithm;
     use aws_smithy_http::body::SdkBody;
     use bytes::{Buf, Bytes};
     use bytes_utils::SegmentedBuf;
@@ -168,8 +169,12 @@ mod tests {
         let actual_checksum = calculate_crc32_checksum(input_text);
         let body = SdkBody::from(input_text);
         let non_matching_checksum = Bytes::copy_from_slice(&[0x00, 0x00, 0x00, 0x00]);
-        let mut body =
-            ChecksumValidatedBody::new(body, "crc32", non_matching_checksum.clone()).unwrap();
+        let mut body = ChecksumValidatedBody::new(
+            body,
+            new_from_algorithm("crc32").unwrap(),
+            non_matching_checksum.clone(),
+        )
+        .unwrap();
 
         while let Some(data) = body.data().await {
             match data {
@@ -195,7 +200,9 @@ mod tests {
         let input_text = "This is some test text for an SdkBody";
         let actual_checksum = calculate_crc32_checksum(input_text);
         let body = SdkBody::from(input_text);
-        let mut body = ChecksumValidatedBody::new(body, "crc32", actual_checksum).unwrap();
+        let mut body =
+            ChecksumValidatedBody::new(body, new_from_algorithm("crc32").unwrap(), actual_checksum)
+                .unwrap();
 
         let mut output = SegmentedBuf::new();
         while let Some(buf) = body.data().await {
