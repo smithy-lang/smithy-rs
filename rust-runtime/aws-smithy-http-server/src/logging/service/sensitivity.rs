@@ -128,14 +128,7 @@ impl Default for DefaultSensitivity {
     }
 }
 
-impl
-    Sensitivity<
-        fn(&HeaderName) -> HeaderMarker,
-        fn(usize) -> bool,
-        fn(&str) -> QueryMarker,
-        fn(&HeaderName) -> HeaderMarker,
-    >
-{
+impl DefaultSensitivity {
     /// Constructs a new [`Sensitivity`] with nothing marked as sensitive.
     pub fn new() -> Self {
         Self::default()
