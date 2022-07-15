@@ -71,7 +71,7 @@ where
             QueryMarker {
                 key: true,
                 value: false,
-            } => write!(f, "{}={value}", key),
+            } => write!(f, "{}={value}", Sensitive(key)),
             QueryMarker {
                 key: false,
                 value: true,
