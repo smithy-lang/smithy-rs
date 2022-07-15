@@ -39,9 +39,9 @@ author = "calavera"
 
 [[smithy-rs]]
 message = """
-Updated the smithy client's retry behavior to allow for a configurable initial_backoff. Previously, the backoff multiplier
+Updated the smithy client's retry behavior to allow for a configurable initial backoff. Previously, the initial backoff
 (named `r` in the code) was set to 2 seconds. This is not an ideal default for services that expect clients to quickly
-retry failed request attempts. Now, users can set quicker (or slower) multipliers according to their needs.
+retry failed request attempts. Now, users can set quicker (or slower) backoffs according to their needs.
 """
 references = ["aws-sdk-rust#567"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
@@ -49,9 +49,9 @@ author = "Velfi"
 
 [[aws-sdk-rust]]
 message = """
-Updated SDK Client retry behavior to allow for a configurable backoff multiplier. Previously, the backoff multiplier
+Updated SDK Client retry behavior to allow for a configurable initial backoff. Previously, the initial backoff
 (named `r` in the code) was set to 2 seconds. This is not an ideal default for services like DynamoDB that expect
-clients to quickly retry failed request attempts. Now, users can set quicker (or slower) multipliers according to their
+clients to quickly retry failed request attempts. Now, users can set quicker (or slower) backoffs according to their
 needs.
 
 ```rust
