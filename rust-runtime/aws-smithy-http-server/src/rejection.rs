@@ -262,3 +262,6 @@ convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
 // tests use `[crate::body::Body]` as their body type when constructing requests (and almost
 // everyone will run a Hyper-based server in their services).
 convert_to_request_rejection!(hyper::Error, HttpBody);
+
+// In order to use `Router<lambda_http::Body>` this line works around [Simplify conversion from HTTP body error type to RequestRejection](https://github.com/awslabs/smithy-rs/issues/1364)
+convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync>, HttpBody);
