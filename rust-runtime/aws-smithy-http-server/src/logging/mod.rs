@@ -64,6 +64,7 @@ pub use sensitive::*;
 pub use service::*;
 pub use uri::*;
 
+/// Allows for formatting of `Left` or `Right` variants.
 enum OrFmt<Left, Right> {
     Left(Left),
     Right(Right),

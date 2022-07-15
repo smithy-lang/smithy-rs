@@ -9,6 +9,19 @@ use http::header::HeaderName;
 use crate::logging::{noop_header_marker, noop_path_marker, noop_query_marker, HeaderMarker, QueryMarker};
 
 /// A representation of the data marked as sensitive.
+///
+/// # Example
+///
+/// ```
+/// # use aws_smithy_http_server::logging::{Sensitivity, HeaderMarker};
+/// let sensitivity = Sensitivity::new()
+///     .path(|index| index == 2)
+///     .request_header(|name| HeaderMarker {
+///         value: name == "header",
+///         key_suffix: None,
+///     })
+///     .status_code();
+/// ```
 #[derive(Clone)]
 pub struct Sensitivity<RequestHeader, Path, Query, ResponseHeader> {
     // Request sensitivity markers
