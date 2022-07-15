@@ -29,24 +29,21 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
 class ServerHttpSensitivityGenerator(
     private val model: Model,
-    private val symbolProvider: RustSymbolProvider,
     private val operation: OperationShape,
-    coreCodegenContext: CoreCodegenContext
+    runtimeConfig: RuntimeConfig
 ) {
-    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
     )
 
-    private fun renderHeaderClosure(writer: RustWriter, headers: List<HttpHeaderTrait>, prefixHeaders: List<HttpPrefixHeadersTrait>) {
+    internal fun renderHeaderClosure(writer: RustWriter, headers: List<HttpHeaderTrait>, prefixHeaders: List<HttpPrefixHeadersTrait>) {
         writer.rustBlock("|name|") {
             rust("let name = name.as_str();")
 
@@ -75,14 +72,14 @@ class ServerHttpSensitivityGenerator(
         }
     }
 
-    private fun renderQueryClosure(writer: RustWriter, queries: List<HttpQueryTrait>) {
+    internal fun renderQueryClosure(writer: RustWriter, queries: List<HttpQueryTrait>) {
         writer.withBlockTemplate("|name| #{SmithyHttpServer}::logging::QueryMarker { key: false, value: matches!(name,", ") }", *codegenScope) {
             val matches = queries.map { it.value }.distinct().map { "\"$it\"" }.joinToString("|")
             rust(matches)
         }
     }
 
-    private fun renderQueryParamsClosure(writer: RustWriter) {
+    internal fun renderQueryParamsClosure(writer: RustWriter) {
         writer.rustBlock("|_|") {
             rustTemplate(
                 "#{SmithyHttpServer}::logging::QueryMarker { key: true, value: true }", *codegenScope
@@ -90,7 +87,7 @@ class ServerHttpSensitivityGenerator(
         }
     }
 
-    fun renderPathClosure(writer: RustWriter, indexes: List<Int>) {
+    internal fun renderPathClosure(writer: RustWriter, indexes: List<Int>) {
         writer.rustBlock("|index|") {
             withBlock("matches!(index,", ")") {
                 val matches = indexes.map { "$it" }.joinToString("|")
@@ -100,7 +97,7 @@ class ServerHttpSensitivityGenerator(
     }
 
     // Find member shapes which are sensitive and enjoy a trait `T`.
-    private inline fun <reified T : Trait> findSensitiveBound(rootShape: Shape): List<MemberShape> {
+    internal inline fun <reified T : Trait> findSensitiveBound(rootShape: Shape): List<MemberShape> {
         return Walker(model)
             .walkShapes(rootShape, {
                 // Do not traverse upwards or beyond a sensitive trait

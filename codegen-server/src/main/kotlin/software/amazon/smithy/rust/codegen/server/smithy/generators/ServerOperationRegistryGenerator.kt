@@ -318,7 +318,7 @@ ${operationImplementationStubs(operations)}
                 }
 
                 val sensitivityGens = operations.map {
-                    ServerHttpSensitivityGenerator(model, symbolProvider, it, coreCodegenContext)
+                    ServerHttpSensitivityGenerator(model, it, coreCodegenContext.runtimeConfig)
                 }
 
                 withBlockTemplate(
