@@ -6,7 +6,6 @@
 //! This module holds deserializable structs for the hand-authored changelog TOML files used in smithy-rs.
 
 use anyhow::{bail, Context, Result};
-use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::fmt::{self, Display};
 use std::path::Path;
@@ -176,89 +175,14 @@ pub struct SdkModelEntry {
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct Changelog {
     #[serde(rename = "smithy-rs")]
-    #[serde(default, deserialize_with = "deserialize_smithy_handauthored")]
+    #[serde(default)]
     pub smithy_rs: Vec<HandAuthoredEntry>,
     #[serde(rename = "aws-sdk-rust")]
-    #[serde(default, deserialize_with = "deserialize_rust_sdk_handauthored")]
+    #[serde(default)]
     pub aws_sdk_rust: Vec<HandAuthoredEntry>,
     #[serde(rename = "aws-sdk-model")]
     #[serde(default)]
     pub sdk_models: Vec<SdkModelEntry>,
-}
-
-fn deserialize_smithy_handauthored<'de, D>(
-    deserializer: D,
-) -> Result<Vec<HandAuthoredEntry>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    deserialize_handauthored(
-        deserializer,
-        |entry: &mut HandAuthoredEntry| -> Result<(), anyhow::Error> {
-            // a change that does not have an affected SDK written against it, shall be
-            // considered a change in ALL sdks
-            if entry.meta.target.is_none() {
-                entry.meta.target = Some(SdkAffected::All);
-            }
-            Ok(())
-        },
-    )
-}
-fn deserialize_rust_sdk_handauthored<'de, D>(
-    deserializer: D,
-) -> Result<Vec<HandAuthoredEntry>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    deserialize_handauthored(
-        deserializer,
-        |entry: &mut HandAuthoredEntry| -> Result<(), anyhow::Error> {
-            if entry.meta.target.is_some() {
-                bail!("cannot have target SDK affected as metadata")
-            }
-            Ok(())
-        },
-    )
-}
-
-fn deserialize_handauthored<'de, D, F>(
-    deserializer: D,
-    parser: F,
-) -> Result<Vec<HandAuthoredEntry>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    F: Fn(&mut HandAuthoredEntry) -> Result<(), anyhow::Error>,
-{
-    struct EntryVisitor<F>
-    where
-        F: Fn(&mut HandAuthoredEntry) -> Result<(), anyhow::Error>,
-    {
-        parser: F,
-    }
-
-    impl<'de, F> Visitor<'de> for EntryVisitor<F>
-    where
-        F: Fn(&mut HandAuthoredEntry) -> Result<(), anyhow::Error>,
-    {
-        type Value = Vec<HandAuthoredEntry>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a sequence of hand authored entries")
-        }
-        fn visit_seq<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
-        where
-            V: de::SeqAccess<'de>,
-        {
-            let mut entries: Vec<HandAuthoredEntry> = vec![];
-            while let Some(mut entry) = visitor.next_element::<HandAuthoredEntry>()? {
-                (self.parser)(&mut entry).map_err(de::Error::custom)?;
-                entries.push(entry);
-            }
-            Ok(entries)
-        }
-    }
-
-    deserializer.deserialize_seq(EntryVisitor { parser })
 }
 
 impl Changelog {
@@ -272,8 +196,8 @@ impl Changelog {
         self.sdk_models.extend(other.sdk_models.into_iter());
     }
 
-    fn parse_str(value: &str) -> Result<Changelog> {
-        match toml::from_str(value).context("Invalid TOML changelog format") {
+    pub fn parse_str(value: &str) -> Result<Changelog> {
+        let mut changelog = (match toml::from_str(value).context("Invalid TOML changelog format") {
             Ok(parsed) => Ok(parsed),
             Err(toml_err) => {
                 // Remove comments from the top
@@ -292,6 +216,18 @@ impl Changelog {
                     ),
                 }
             }
+        } as Result<Changelog>)?;
+        // all smithry-rs entries should have meta.target set to the default value instead of None
+        for entry in &mut changelog.smithy_rs {
+            if entry.meta.target.is_none() {
+                entry.meta.target = Some(SdkAffected::default());
+            }
+        }
+        // ensure no aws-sdk-entry has meta.target set
+        if let Err(errors) = changelog.validate() {
+            bail!(errors.join(", "))
+        } else {
+            Ok(changelog)
         }
     }
 
@@ -306,16 +242,32 @@ impl Changelog {
     }
 
     pub fn validate(&self) -> Result<(), Vec<String>> {
-        let mut errors = vec![];
-        for entry in self.aws_sdk_rust.iter().chain(self.smithy_rs.iter()) {
-            if let Err(e) = entry.validate() {
-                errors.push(format!("{}", e));
-            }
-        }
-        if errors.is_empty() {
-            Ok(())
-        } else {
+        let errors: Vec<_> = self
+            .aws_sdk_rust
+            .iter()
+            .map(|entry| {
+                entry.validate().and_then(|_| {
+                    entry.meta.target.map_or(Ok(()), |sdk| {
+                        bail!("AWS SDK entry cannot have affected sdk set to '{sdk}'")
+                    })
+                })
+            })
+            .chain(self.smithy_rs.iter().map(|entry| {
+                entry.validate().and_then(|_| {
+                    entry
+                        .meta
+                        .target
+                        .context("smithy-rs entry must have sdk affected set")
+                        .map(|_| ())
+                })
+            }))
+            .filter_map(|res| res.err())
+            .map(|error| error.to_string())
+            .collect();
+        if errors.len() > 0 {
             Err(errors)
+        } else {
+            Ok(())
         }
     }
 }
@@ -372,6 +324,94 @@ mod tests {
     }
 
     #[test]
+    fn empty_author_raised_atload() {
+        // by default smithy-rs meta data should say change is for both
+        let toml = r#"
+            [[aws-sdk-rust]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = ""
+            [[smithy-rs]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = ""
+        "#;
+        let changelog = Changelog::parse_str(toml);
+        assert!(changelog.is_err());
+    }
+
+    #[test]
+    fn errors_are_combined() {
+        let buffer = r#"
+            [[aws-sdk-rust]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = ""
+            [[smithy-rs]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = ""
+            [[smithy-rs]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = "fz"
+        "#;
+        // three errors should be produced, missing authors x 2 and a SdkAffected is not set to default
+        let changelog: Changelog = toml::from_str(buffer).expect("valid changelog");
+        let res = changelog.validate();
+        assert!(res.is_err());
+        if let Err(e) = res {
+            assert_eq!(e.len(), 3);
+            assert!(e.contains(&"smithy-rs entry must have sdk affected set".to_string()))
+        }
+    }
+
+    #[test]
+    fn confirm_smithy_rs_defaults_set() {
+        let buffer = r#"
+            [[aws-sdk-rust]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = "rcoh"
+            [[smithy-rs]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = "rcoh"
+            [[smithy-rs]]
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = "fz"
+        "#;
+        {
+            // loading directly from toml::from_str won't set the default target field
+            let changelog: Changelog = toml::from_str(buffer).expect("valid changelog");
+            let res = changelog.validate();
+            assert!(res.is_err());
+            if let Err(e) = res {
+                assert!(e.contains(&"smithy-rs entry must have sdk affected set".to_string()))
+            }
+        }
+        {
+            // loading through Chanelog will result in no error
+            let changelog: Changelog = Changelog::parse_str(buffer).expect("valid changelog");
+            let res = changelog.validate();
+            assert!(res.is_ok());
+            if let Err(e) = res {
+                assert!(false, "some error has been produced");
+            }
+            assert_eq!(changelog.smithy_rs[1].meta.target, Some(SdkAffected::All));
+        }
+    }
+
+    #[test]
     fn parse_smithy_ok() {
         // by default smithy-rs meta data should say change is for both
         let toml = r#"
@@ -380,7 +420,6 @@ mod tests {
             references = ["smithy-rs#920"]
             meta = { "breaking" = false, "tada" = false, "bug" = false }
             author = "rcoh"
-
             [[smithy-rs]]
             message = "Fix typos in module documentation for generated crates"
             references = ["smithy-rs#920"]

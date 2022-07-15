@@ -29,7 +29,7 @@ pub const EXAMPLE_ENTRY: &str = r#"
 # [[smithy-rs]]
 # message = "Fix typos in module documentation for generated crates"
 # references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
+# meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "client | server | all"}
 # author = "rcoh"
 "#;
 
@@ -617,7 +617,7 @@ meta = { breaking = false, tada = true, bug = false }
 references = ["smithy-rs#446"]
 author = "rcoh"
 "#;
-        let changelog: Changelog = toml::from_str(sample).expect("valid changelog");
+        let changelog: Changelog = Changelog::parse_str(sample).expect("valid changelog");
         let ChangelogEntries {
             aws_sdk_rust: _,
             smithy_rs,

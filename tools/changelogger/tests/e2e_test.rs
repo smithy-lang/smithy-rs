@@ -9,7 +9,6 @@ use changelogger::split::{subcommand_split, SplitArgs};
 use smithy_rs_tool_common::git::{CommitHash, Git, GitCLI};
 use smithy_rs_tool_common::shell::handle_failure;
 use std::fs;
-use std::ops::Index;
 use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
