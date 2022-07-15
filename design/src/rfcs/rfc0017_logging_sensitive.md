@@ -19,14 +19,14 @@ This RFC proposes that a new logging middleware is generated and applied to each
 - **Model**: A [Smithy Model](https://awslabs.github.io/smithy/1.0/spec/core/model.html), usually pertaining to the one in use by the customer.
 - **Runtime crate**: A crate existing within the `rust-runtime/` folder, used to implement shared functionalities that do not have to be code-generated.
 - **Service**: The [tower::Service](https://docs.rs/tower-service/latest/tower_service/trait.Service.html) trait. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.
-- **Middleware**: Broadly speaking, middleware modify requests and responses. Concretely, these are represented as [tower](https://github.com/tower-rs/tower) by a [Layer](https://docs.rs/tower/latest/tower/layer/trait.Layer.html)/`Service` wrapping an inner `Service`.
+- **Middleware**: Broadly speaking, middleware modify requests and responses. Concretely, these are represented as a [tower](https://github.com/tower-rs/tower) [Layer](https://docs.rs/tower/latest/tower/layer/trait.Layer.html)/`Service` wrapping an inner `Service`.
 - **Potentially sensitive**: Data that _could_ be bound to a sensitive field of a structure, for example [HTTP Binding Traits](#http-binding-traits).
 
 ## Background
 
 ### HTTP Binding Traits
 
-Smithy provides various [HTTP binding traits](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html). These allow protocols to configure a HTTP request by way of binding fields to parts of the request. For this reason sensitive data might be unintentionally leaked through logging of a bound request.
+Smithy provides various HTTP binding traits. These allow protocols to configure a HTTP request by way of binding fields to parts of the request. For this reason sensitive data might be unintentionally leaked through logging of a bound request.
 
 | Trait                                                                                                        | Configurable     |
 | ------------------------------------------------------------------------------------------------------------ | ---------------- |
@@ -209,13 +209,13 @@ where
 }
 ```
 
-As this path is latency-sensitive, careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping `Uri` and `HeaderMap` then providing a new `Display` implementation which skips over the sensitive data is preferable over allocating a new `String`/`HeaderMap` and mutating it.
+As this path is latency-sensitive, careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping [Uri](https://docs.rs/http/latest/http/uri/struct.Uri.html) and [HeaderMap](https://docs.rs/http/latest/http/header/struct.HeaderMap.html) then providing a new [Display](https://doc.rust-lang.org/std/fmt/trait.Display.html)/[Debug](https://doc.rust-lang.org/std/fmt/trait.Debug.html) implementation which skips over the sensitive data is preferable over allocating a new `String`/`HeaderMap` and mutating it.
 
 ### Middleware Position
 
-This logging middleware middleware should be applied outside of the [OperationHandler](https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) after its construction in the generated `operation_registry.rs`. The middleware should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) to cause minimal breakage.
+This logging middleware middleware should be applied outside of the [OperationHandler](https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) after its construction in the (generated) `operation_registry.rs` file. The middleware should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) to cause minimal disruption.
 
-An easy position to apply the logging middleware is illustrated below in the form of `Logging{Operation}::new`.
+An easy position to apply the logging middleware is illustrated below in the form of `Logging{Operation}::new`:
 
 ```rust
 let empty_operation = LoggingEmptyOperation::new(operation(registry.empty_operation));
@@ -229,7 +229,7 @@ let routes = vec![
 let router = aws_smithy_http_server::routing::Router::new_rest_json_router(routes);
 ```
 
-Although an acceptable first step putting logging middleware here is suboptimal - the `Router` allows a `tower::Layer` to be applied to the operation by using the [Router::layer](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146) method. This middleware will be applied _outside_ of the logging middleware and, as a result, will not be subject the span of any middleware. Therefore the `Router` must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.
+Although an acceptable first step, putting logging middleware here is suboptimal - the `Router` allows a `tower::Layer` to be applied to the operation by using the [Router::layer](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146) method. This middleware will be applied _outside_ of the logging middleware and, as a result, will not be subject the span of any middleware. Therefore the `Router` must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.
 
 This is a general problem, not specific to this proposal. For example, [Use Request Extensions](#use-request-extensions) must also solve this problem.
 
@@ -239,7 +239,7 @@ Fortunately, this problem is separable from the actual implementation of the log
 
 A guideline should be made available to internal smithy developers to outline the following:
 
-- The [HTTP bindings traits](#http-binding-traits) and why they are of concern.
+- The [HTTP bindings traits](#http-binding-traits) and why they are of concern in the presence of `@sensitive`.
 - The [Debug implementation](https://github.com/awslabs/smithy-rs/pull/229) on structures.
 - How to use the `Sensitive` struct and the `unredacted-logging` feature flag described in [Debug Logging](#unredacted-logging).
 
@@ -247,7 +247,7 @@ A guideline should be made available to internal smithy developers to outline th
 
 A guideline should be made available to customers to outline the following:
 
-- The [HTTP bindings traits](#http-binding-traits) and why they are of concern.
+- The [HTTP bindings traits](#http-binding-traits) and why they are of concern in the presence of `@sensitive`.
 - Warn against the two potential leaks described in [Scope and Guidelines](#scope-and-guidelines):
   - Sensitive data leaking from third-party dependencies.
   - Sensitive data leaking from middleware applied to the `Router`.
@@ -367,7 +367,7 @@ It would then be required that the code generation responsible constructing a `S
 
 Distinct from `tower::Layer`, a [tracing::Layer](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html) is a "composable handler for `tracing` events". It would be possible to write an implementation which would filter out events which contain sensitive data.
 
-Examples of filtering `tracing::Layer`s already exist in the form of the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) and [Targets](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html). It is unlikely that we'll be able to leverage them for our use, but the underlying principle remains the same - the `tracing::Layer` inspects `tracing::Event`s/`tracing::Span`s filtering them based on some criteria.
+Examples of filtering `tracing::Layer`s already exist in the form of the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) and [Targets](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html). It is unlikely that we'll be able to leverage them for our use, but the underlying principle remains the same - the `tracing::Layer` inspects `tracing::Event`s/`tracing::Span`s, filtering them based on some criteria.
 
 Code generation would be need to be used in order to produce the filtering criteria from the models. Internal developers would need to adhere to a common set of field names in order for them to be subject to the filtering. Spans would need to be opened after routing occurs in order for the `tracing::Layer` to know which operation `Event`s are being produced within and hence which filtering rules to apply.
 
