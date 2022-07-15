@@ -289,11 +289,11 @@ class ServerHttpSensitivityGeneratorTest {
                 rustTemplate(
                     """
                     let name = #{Http}::header::HeaderName::from_static("header-a");
-                    assert_eq!(closure(name), #{SmithyHttpServer}::logging::HeaderMarker { value: false, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::HeaderMarker { value: false, key_suffix: None });
                     let name = #{Http}::header::HeaderName::from_static("header-b");
-                    assert_eq!(closure(name), #{SmithyHttpServer}::logging::HeaderMarker { value: true, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::HeaderMarker { value: true, key_suffix: None });
                     let name = #{Http}::header::HeaderName::from_static("header-c");
-                    assert_eq!(closure(name), #{SmithyHttpServer}::logging::HeaderMarker { value: true, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::HeaderMarker { value: true, key_suffix: None });
                     """,
                     *codegenScope
                 )
@@ -339,11 +339,11 @@ class ServerHttpSensitivityGeneratorTest {
                 rustTemplate(
                     """
                     let name = #{Http}::header::HeaderName::from_static("prefix-a");
-                    assert_eq!(closure(name), #{SmithyHttpServer}::logging::HeaderMarker { value: true, key_suffix: Some(7) });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::HeaderMarker { value: true, key_suffix: Some(7) });
                     let name = #{Http}::header::HeaderName::from_static("prefix-b");
-                    assert_eq!(closure(name), #{SmithyHttpServer}::logging::HeaderMarker { value: true, key_suffix: Some(7) });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::HeaderMarker { value: true, key_suffix: Some(7) });
                     let name = #{Http}::header::HeaderName::from_static("other");
-                    assert_eq!(closure(name), #{SmithyHttpServer}::logging::HeaderMarker { value: false, key_suffix: None });
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::HeaderMarker { value: false, key_suffix: None });
                     """,
                     *codegenScope
                 )
