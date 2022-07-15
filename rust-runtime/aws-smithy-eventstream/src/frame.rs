@@ -27,6 +27,10 @@ pub type SignMessageError = Box<dyn StdError + Send + Sync + 'static>;
 pub trait SignMessage: fmt::Debug {
     fn sign(&mut self, message: Message) -> Result<Message, SignMessageError>;
 
+    /// SigV4 requires an empty last signed message to be sent.
+    /// Other protocols do not require one.
+    /// Return `Some(_)` to send a signed last empty message, before completing the stream.
+    /// Return `None` to not send one and terminate the stream immediately.
     fn sign_empty(&mut self) -> Option<Result<Message, SignMessageError>>;
 }
 
