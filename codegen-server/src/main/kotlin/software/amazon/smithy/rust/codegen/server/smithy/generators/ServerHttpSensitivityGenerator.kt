@@ -20,6 +20,7 @@ import software.amazon.smithy.model.traits.HttpResponseCodeTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.Trait
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -41,10 +42,11 @@ class ServerHttpSensitivityGenerator(
 ) {
     private val codegenScope = arrayOf(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
+        "Http" to CargoDependency.Http.asType(),
     )
 
     internal fun renderHeaderClosure(writer: RustWriter, headers: List<HttpHeaderTrait>, prefixHeaders: List<HttpPrefixHeadersTrait>) {
-        writer.rustBlock("|name|") {
+        writer.rustBlockTemplate("|name: &#{Http}::header::HeaderName|", *codegenScope) {
             rust("let name = name.as_str();")
 
             if (prefixHeaders.isNotEmpty()) {
@@ -73,14 +75,14 @@ class ServerHttpSensitivityGenerator(
     }
 
     internal fun renderQueryClosure(writer: RustWriter, queries: List<HttpQueryTrait>) {
-        writer.withBlockTemplate("|name| #{SmithyHttpServer}::logging::QueryMarker { key: false, value: matches!(name,", ") }", *codegenScope) {
+        writer.withBlockTemplate("|name: &str| #{SmithyHttpServer}::logging::QueryMarker { key: false, value: matches!(name,", ") }", *codegenScope) {
             val matches = queries.map { it.value }.distinct().map { "\"$it\"" }.joinToString("|")
             rust(matches)
         }
     }
 
     internal fun renderQueryParamsClosure(writer: RustWriter) {
-        writer.rustBlock("|_|") {
+        writer.rustBlock("|_: &str|") {
             rustTemplate(
                 "#{SmithyHttpServer}::logging::QueryMarker { key: true, value: true }", *codegenScope
             )
@@ -88,7 +90,7 @@ class ServerHttpSensitivityGenerator(
     }
 
     internal fun renderPathClosure(writer: RustWriter, indexes: List<Int>) {
-        writer.rustBlock("|index|") {
+        writer.rustBlock("|index: usize|") {
             withBlock("matches!(index,", ")") {
                 val matches = indexes.map { "$it" }.joinToString("|")
                 rust(matches)
@@ -123,8 +125,21 @@ class ServerHttpSensitivityGenerator(
     }
 
     // Find traits (applied to member shapes) which are sensitive.
-    private inline fun <reified T : Trait> findSensitiveBoundTrait(rootShape: Shape): List<T> {
+    internal inline fun <reified T : Trait> findSensitiveBoundTrait(rootShape: Shape): List<T> {
         return findSensitiveBound<T>(rootShape).map { it.getTrait<T>() }.filterNotNull()
+    }
+
+    internal fun findUriLabelIndexes(httpTrait: HttpTrait, inputShape: Shape): List<Int> {
+        val uriLabels: Map<String, Int> = httpTrait
+            .uri
+            .getSegments()
+            .withIndex()
+            .filter { (_, segment) -> segment.isLabel() }
+            .map { (index, segment) -> Pair(segment.getContent(), index) }
+            .toMap()
+        return findSensitiveBound<HttpLabelTrait>(inputShape)
+            .map { uriLabels.get(it.getMemberName()) }
+            .filterNotNull()
     }
 
     fun render(writer: RustWriter) {
@@ -135,16 +150,7 @@ class ServerHttpSensitivityGenerator(
             val inputShape = operation.inputShape(model)
 
             // URI bindings
-            val uriLabels: Map<String, Int> = httpTrait
-                .uri
-                .getSegments()
-                .withIndex()
-                .filter { (_, segment) -> segment.isLabel() }
-                .map { (index, segment) -> Pair(segment.getContent(), index) }
-                .toMap()
-            val labeledUriIndexes: List<Int> = findSensitiveBound<HttpLabelTrait>(inputShape)
-                .map { uriLabels.get(it.getMemberName()) }
-                .filterNotNull()
+            val labeledUriIndexes = findUriLabelIndexes(httpTrait, inputShape)
             if (labeledUriIndexes.isNotEmpty()) {
                 withBlock(".path(", ")") {
                     renderPathClosure(writer, labeledUriIndexes)
@@ -152,10 +158,10 @@ class ServerHttpSensitivityGenerator(
             }
 
             // Query string bindings
-            val requestQuery = findSensitiveBoundTrait<HttpQueryTrait>(inputShape)
-            if (requestQuery.isNotEmpty()) {
+            val requestQueries = findSensitiveBoundTrait<HttpQueryTrait>(inputShape)
+            if (requestQueries.isNotEmpty()) {
                 withBlock(".query(", ")") {
-                    renderQueryClosure(writer, requestQuery)
+                    renderQueryClosure(writer, requestQueries)
                 }
             }
             val requestQueryParams = findSensitiveBoundTrait<HttpQueryParamsTrait>(inputShape)
