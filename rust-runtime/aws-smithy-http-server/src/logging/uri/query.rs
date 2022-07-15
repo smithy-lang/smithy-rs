@@ -61,7 +61,7 @@ impl<'a, F> SensitiveQuery<'a, F> {
 }
 
 #[inline]
-fn write_key<'a, F>(section: &'a str, marker: F, f: &mut Formatter<'_>) -> Result<(), Error>
+fn write_pair<'a, F>(section: &'a str, marker: F, f: &mut Formatter<'_>) -> Result<(), Error>
 where
     F: Fn(&'a str) -> QueryMarker,
 {
@@ -71,7 +71,7 @@ where
             QueryMarker {
                 key: true,
                 value: false,
-            } => write!(f, "{}={value}", Sensitive(key)),
+            } => write!(f, "{}={value}", key),
             QueryMarker {
                 key: false,
                 value: true,
@@ -94,12 +94,12 @@ where
         let mut it = self.query.split('&');
 
         if let Some(section) = it.next() {
-            write_key(section, &self.marker, f)?;
+            write_pair(section, &self.marker, f)?;
         }
 
         for section in it {
             write!(f, "&")?;
-            write_key(section, &self.marker, f)?;
+            write_pair(section, &self.marker, f)?;
         }
 
         Ok(())
