@@ -185,6 +185,22 @@ pub struct Changelog {
     pub sdk_models: Vec<SdkModelEntry>,
 }
 
+fn validate_aws_handauthored(entry: &HandAuthoredEntry) -> Result<()> {
+    entry.validate()?;
+    if entry.meta.target.is_some() {
+        bail!("aws-sdk-rust changelog entry cannot have an affected sdk");
+    }
+    Ok(())
+}
+
+fn validate_smithyrs_handauthored(entry: &HandAuthoredEntry) -> Result<()> {
+    entry.validate()?;
+    if entry.meta.target.is_none() {
+        bail!("smithy-rs entry must have an affected sdk");
+    }
+    Ok(())
+}
+
 impl Changelog {
     pub fn new() -> Changelog {
         Default::default()
@@ -245,23 +261,9 @@ impl Changelog {
         let errors: Vec<_> = self
             .aws_sdk_rust
             .iter()
-            .map(|entry| {
-                entry.validate().and_then(|_| {
-                    entry.meta.target.map_or(Ok(()), |sdk| {
-                        bail!("AWS SDK entry cannot have affected sdk set to '{sdk}'")
-                    })
-                })
-            })
-            .chain(self.smithy_rs.iter().map(|entry| {
-                entry.validate().and_then(|_| {
-                    entry
-                        .meta
-                        .target
-                        .context("smithy-rs entry must have sdk affected set")
-                        .map(|_| ())
-                })
-            }))
-            .filter_map(|res| res.err())
+            .map(validate_aws_handauthored)
+            .chain(self.smithy_rs.iter().map(validate_smithyrs_handauthored))
+            .filter_map(Result::err)
             .map(|error| error.to_string())
             .collect();
         if errors.len() > 0 {
@@ -367,7 +369,7 @@ mod tests {
         assert!(res.is_err());
         if let Err(e) = res {
             assert_eq!(e.len(), 3);
-            assert!(e.contains(&"smithy-rs entry must have sdk affected set".to_string()))
+            assert!(e.contains(&"smithy-rs entry must have an affected sdk".to_string()))
         }
     }
 
@@ -396,7 +398,7 @@ mod tests {
             let res = changelog.validate();
             assert!(res.is_err());
             if let Err(e) = res {
-                assert!(e.contains(&"smithy-rs entry must have sdk affected set".to_string()))
+                assert!(e.contains(&"smithy-rs entry must have an affected sdk".to_string()))
             }
         }
         {
@@ -405,7 +407,7 @@ mod tests {
             let res = changelog.validate();
             assert!(res.is_ok());
             if let Err(e) = res {
-                assert!(false, "some error has been produced");
+                assert!(false, "some error has been produced {e:?}");
             }
             assert_eq!(changelog.smithy_rs[1].meta.target, Some(SdkAffected::All));
         }

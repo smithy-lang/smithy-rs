@@ -548,7 +548,7 @@ author = "rcoh"
     if let Err(e) = result {
         let index = e
             .to_string()
-            .find("cannot have target SDK affected as metadata for key");
+            .find("aws-sdk-rust changelog entry cannot have an affected sdk");
         assert!(index.is_some());
     } else {
         assert!(
