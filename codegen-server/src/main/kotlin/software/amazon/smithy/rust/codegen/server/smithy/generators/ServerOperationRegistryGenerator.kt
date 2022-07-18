@@ -332,10 +332,11 @@ ${operationImplementationStubs(operations)}
 
                         rustBlock("") {
                             rustTemplate("let svc = #{ServerOperationHandler}::operation(registry.$operationName);", *codegenScope)
-                            withBlock("let sensitivity =", ";") {
-                                sensitivityGen.render(writer)
-                            }
-                            rustTemplate("let svc = #{SmithyHttpServer}::logging::InstrumentOperation::new(svc, \"$operationName\").sensitivity(sensitivity);", *codegenScope)
+                            // TODO(https://github.com/awslabs/smithy-rs/pull/1550): Re-enable when remaining work is complete
+                            // withBlock("let sensitivity =", ";") {
+                            //     sensitivityGen.render(writer)
+                            // }
+                            // rustTemplate("let svc = #{SmithyHttpServer}::logging::InstrumentOperation::new(svc, \"$operationName\").sensitivity(sensitivity);", *codegenScope)
                             rustTemplate(
                                 "(#{Tower}::util::BoxCloneService::new(svc), $requestSpecVarName)",
                                 *codegenScope
