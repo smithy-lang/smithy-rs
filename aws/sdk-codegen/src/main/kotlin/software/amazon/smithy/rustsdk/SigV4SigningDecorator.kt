@@ -90,8 +90,8 @@ class SigV4SigningConfig(
         ),
     )
 
-    override fun configImplSection() = renderEventStreamSignerFn { propertiesName ->
-        writable {
+    override fun configImplSection(): Writable {
+        return writable {
             rustTemplate(
                 """
                 /// The signature version 4 service signing name to use in the credential scope when signing requests.
@@ -105,12 +105,16 @@ class SigV4SigningConfig(
                 *codegenScope
             )
             if (serviceHasEventStream) {
-                rustTemplate(
-                    """
-                    #{SigV4Signer}::new($propertiesName)
-                    """,
-                    *codegenScope
-                )
+                renderEventStreamSignerFn { propertiesName ->
+                    writable {
+                        rustTemplate(
+                            """
+                            #{SigV4Signer}::new($propertiesName)
+                            """,
+                            *codegenScope
+                        )
+                    }
+                }
             }
         }
     }
