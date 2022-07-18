@@ -1,0 +1,389 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0017: Customizable Client Operations - AWS Rust SDK Design</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">6.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">6.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">6.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">6.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">6.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">6.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">6.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">6.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">6.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">6.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">6.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">6.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">6.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">6.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">6.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">6.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">6.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html" class="active"><strong aria-hidden="true">6.17.</strong> RFC-0017: Customizable Client Operations</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">7.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">AWS Rust SDK Design</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-customizable-client-operations"><a class="header" href="#rfc-customizable-client-operations">RFC: Customizable Client Operations</a></h1>
+<blockquote>
+<p>Status: Accepted</p>
+</blockquote>
+<p>For a summarized list of proposed changes, see the <a href="#changes-checklist">Changes Checklist</a> section.</p>
+<p>SDK customers occasionally need to add additional HTTP headers to requests, and currently,
+the SDK has no easy way to accomplish this. At time of writing, the lower level Smithy
+client has to be used to create an operation, and then the HTTP request augmented on
+that operation type. For example:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let input = SomeOperationInput::builder().some_value(5).build()?;
+
+let operation = {
+    let op = input.make_operation(&amp;service_config).await?;
+    let (request, response) = op.into_request_response();
+
+    let request = request.augment(|req, _props| {
+        req.headers_mut().insert(
+            HeaderName::from_static(&quot;x-some-header&quot;),
+            HeaderValue::from_static(&quot;some-value&quot;)
+        );
+        Result::&lt;_, Infallible&gt;::Ok(req)
+    })?;
+
+    Operation::from_parts(request, response)
+};
+
+let response = smithy_client.call(operation).await?;
+<span class="boring">}
+</span></code></pre></pre>
+<p>This approach is both difficult to discover and implement since it requires acquiring
+a Smithy client rather than the generated fluent client, and it's anything but ergonomic.</p>
+<p>This RFC proposes an easier way to augment requests that is compatible with the fluent
+client.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<ul>
+<li><strong>Smithy Client</strong>: A <code>aws_smithy_client::Client&lt;C, M, R&gt;</code> struct that is responsible for gluing together
+the connector, middleware, and retry policy.</li>
+<li><strong>Fluent Client</strong>: A code generated <code>Client</code> that has methods for each service operation on it.
+A fluent builder is generated alongside it to make construction easier.</li>
+</ul>
+<h2 id="proposal"><a class="header" href="#proposal">Proposal</a></h2>
+<p>The code generated fluent builders returned by the fluent client should have a method added to them,
+similar to <code>send</code>, but that returns a customizable request. The customer experience should look as
+follows:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let response = client.some_operation()
+    .some_value(5)
+    .customize()
+    .await?
+    .mutate_request(|mut req| {
+        req.headers_mut().insert(
+            HeaderName::from_static(&quot;x-some-header&quot;),
+            HeaderValue::from_static(&quot;some-value&quot;)
+        );
+    })
+    .send()
+    .await?;
+<span class="boring">}
+</span></code></pre></pre>
+<p>This new async <code>customize</code> method would return the following:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct CustomizableOperation&lt;O, R&gt; {
+    handle: Arc&lt;Handle&gt;,
+    operation: Operation&lt;O, R&gt;,
+}
+
+impl&lt;O, R&gt; CustomizableOperation&lt;O, R&gt; {
+    // Allows for customizing the operation's request
+    fn map_request&lt;E&gt;(
+        mut self,
+        f: impl FnOnce(Request&lt;SdkBody&gt;) -&gt; Result&lt;Request&lt;SdkBody&gt;, E&gt;,
+    ) -&gt; Result&lt;Self, E&gt; {
+        let (request, response) = self.operation.into_request_response();
+        let request = request.augment(|req, _props| f(req))?;
+        self.operation = Operation::from_parts(request, response);
+        Ok(self)
+    }
+
+    // Convenience for `map_request` where infallible direct mutation of request is acceptable
+    fn mutate_request&lt;E&gt;(
+        mut self,
+        f: impl FnOnce(&amp;mut Request&lt;SdkBody&gt;) -&gt; (),
+    ) -&gt; Self {
+        self.map_request(|mut req| {
+            f(&amp;mut req);
+            Result::&lt;_, Infallible&gt;::Ok(req)
+        }).expect(&quot;infallible&quot;);
+        Ok(self)
+    }
+
+    // Allows for customizing the entire operation
+    fn map_operation&lt;E&gt;(
+        mut self,
+        f: impl FnOnce(Operation&lt;O, R&gt;) -&gt; Result&lt;Operation&lt;O, R&gt;, E&gt;,
+    ) -&gt; Result&lt;Self, E&gt; {
+        self.operation = f(self.operation)?;
+        Ok(self)
+    }
+
+    // Direct access to read the request
+    fn request(&amp;self) -&gt; &amp;Request&lt;SdkBody&gt; {
+        self.operation.request()
+    }
+
+    // Direct access to mutate the request
+    fn request_mut(&amp;mut self) -&gt; &amp;mut Request&lt;SdkBody&gt; {
+        self.operation.request_mut()
+    }
+
+    // Sends the operation's request
+    async fn send&lt;T, E&gt;(self) -&gt; Result&lt;T, SdkError&lt;E&gt;&gt;
+    where
+        O: ParseHttpResponse&lt;Output = Result&lt;T, E&gt;&gt; + Send + Sync + Clone + 'static,
+        E: std::error::Error,
+        R: ClassifyResponse&lt;SdkSuccess&lt;T&gt;, SdkError&lt;E&gt;&gt; + Send + Sync,
+    {
+        self.handle.client.call(self.operation).await
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Additionally, for those who want to avoid closures, the <code>Operation</code> type will have
+<code>request</code> and <code>request_mut</code> methods added to it to get direct access to its underlying
+HTTP request.</p>
+<p>The <code>CustomizableOperation</code> type will then mirror these functions so that the experience
+can look as follows:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut operation = client.some_operation()
+    .some_value(5)
+    .customize()
+    .await?;
+operation.request_mut()
+    .headers_mut()
+    .insert(
+        HeaderName::from_static(&quot;x-some-header&quot;),
+        HeaderValue::from_static(&quot;some-value&quot;)
+    );
+let response = operation.send().await?;
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="why-not-remove-async-from-customize-to-make-this-more-ergonomic"><a class="header" href="#why-not-remove-async-from-customize-to-make-this-more-ergonomic">Why not remove <code>async</code> from <code>customize</code> to make this more ergonomic?</a></h3>
+<p>In the proposal above, customers must <code>await</code> the result of <code>customize</code> in order
+to get the <code>CustomizableOperation</code>. This is a result of the underlying <code>map_operation</code>
+function that <code>customize</code> needs to call being async, which was made async during
+the implementation of customizations for Glacier (see #797, #801, and #1474). It
+is possible to move these Glacier customizations into middleware to make <code>map_operation</code>
+sync, but keeping it async is much more future-proof since if a future customization
+or feature requires it to be async, it won't be a breaking change in the future.</p>
+<h3 id="why-the-name-customize"><a class="header" href="#why-the-name-customize">Why the name <code>customize</code>?</a></h3>
+<p>Alternatively, the name <code>build</code> could be used, but this increases the odds that
+customers won't realize that they can call <code>send</code> directly, and then call a longer
+<code>build</code>/<code>send</code> chain when customization isn't needed:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>client.some_operation()
+    .some_value()
+    .build() // Oops, didn't need to do this
+    .send()
+    .await?;
+<span class="boring">}
+</span></code></pre></pre>
+<p>vs.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>client.some_operation()
+    .some_value()
+    .send()
+    .await?;
+<span class="boring">}
+</span></code></pre></pre>
+<p>Additionally, no AWS services at time of writing have a member named <code>customize</code>
+that would conflict with the new function, so adding it would not be a breaking change.</p>
+<h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Create <code>CustomizableOperation</code> as an inlinable, and code generate it into <code>client</code> so that it has access to <code>Handle</code></li>
+<li><input disabled="" type="checkbox"/>
+Code generate the <code>customize</code> method on fluent builders</li>
+<li><input disabled="" type="checkbox"/>
+Update the <code>RustReservedWords</code> class to include <code>customize</code></li>
+<li><input disabled="" type="checkbox"/>
+Add ability to mutate the HTTP request on <code>Operation</code></li>
+<li><input disabled="" type="checkbox"/>
+Add examples for both approaches</li>
+<li><input disabled="" type="checkbox"/>
+Comment on older discussions asking about how to do this with this improved approach</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0016_flexible_checksum_support.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../contributing/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0016_flexible_checksum_support.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../contributing/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        <script type="text/javascript" src="../static/mermaid.min.js"></script>
+        <script type="text/javascript" src="../static/mermaid-init.js"></script>
+
+
+    </body>
+</html>
