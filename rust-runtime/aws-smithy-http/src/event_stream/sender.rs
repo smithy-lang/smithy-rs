@@ -254,7 +254,7 @@ mod tests {
             TestServiceError,
         >::new(
             Marshaller,
-            Some(Marshaller),
+            Marshaller,
             TestSigner,
             Box::pin(stream),
         ));
@@ -283,7 +283,7 @@ mod tests {
             TestServiceError,
         >::new(
             Marshaller,
-            Some(Marshaller),
+            Marshaller,
             TestSigner,
             Box::pin(stream),
         ));
