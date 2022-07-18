@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.smithy.transformers.shouldRenderEventStreamError
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.isEventStream
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
@@ -71,12 +72,15 @@ class CombinedErrorGenerator(
         if (operation.isEventStream(model)) {
             operation.eventStreamErrors(model)
                 .forEach { (unionShape, unionErrors) ->
-                    renderErrors(
-                        writer,
-                        unionErrors,
-                        unionShape.eventStreamErrorSymbol(symbolProvider),
-                        symbolProvider.toSymbol(unionShape)
-                    )
+                    // Do not render the same errors multiple times if the union is used in different operations
+                    if (operation.shouldRenderEventStreamError(model, unionShape)) {
+                        renderErrors(
+                            writer,
+                            unionErrors,
+                            unionShape.eventStreamErrorSymbol(symbolProvider),
+                            symbolProvider.toSymbol(unionShape)
+                        )
+                    }
                 }
         }
     }

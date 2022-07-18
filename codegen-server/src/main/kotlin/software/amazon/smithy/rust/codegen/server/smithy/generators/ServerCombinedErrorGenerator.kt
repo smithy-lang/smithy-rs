@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.eventStreamErrorSymbol
 import software.amazon.smithy.rust.codegen.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.smithy.transformers.shouldRenderEventStreamError
 import software.amazon.smithy.rust.codegen.util.isEventStream
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -35,7 +36,7 @@ open class ServerCombinedErrorGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val operation: OperationShape
 ) {
-    fun render(writer: RustWriter) {
+    open fun render(writer: RustWriter) {
         val errors = operation.operationErrors(model)
         val symbol = operation.errorSymbol(symbolProvider)
         val operationSymbol = symbolProvider.toSymbol(operation)
@@ -46,7 +47,8 @@ open class ServerCombinedErrorGenerator(
         if (operation.isEventStream(model)) {
             operation.eventStreamErrors(model)
                 .forEach { (unionShape, unionErrors) ->
-                    if (unionErrors.isNotEmpty()) {
+                    // Do not render the same errors multiple times if the union is used in different operations
+                    if (unionErrors.isNotEmpty() && operation.shouldRenderEventStreamError(model, unionShape)) {
                         renderErrors(
                             writer,
                             unionErrors,

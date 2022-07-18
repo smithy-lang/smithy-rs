@@ -83,6 +83,15 @@ fun eventStreamErrors(model: Model, shape: Shape): Map<UnionShape, List<Structur
         }
 }
 
+// Choose one operation for rendering the event stream errors used in `union`
+fun OperationShape.shouldRenderEventStreamError(model: Model, union: UnionShape): Boolean {
+    return model.operationShapes
+        .associateWith { it.eventStreamErrors(model).filter { it.key == union } }
+        .filter { it.value.isNotEmpty() }
+        .keys
+        .first() == this
+}
+
 fun UnionShape.eventStreamErrors(): List<Shape> {
     if (!this.isEventStream()) {
         return listOf()
