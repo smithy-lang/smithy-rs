@@ -213,38 +213,34 @@ impl Changelog {
     }
 
     pub fn parse_str(value: &str) -> Result<Changelog> {
-        let mut changelog = (match toml::from_str(value).context("Invalid TOML changelog format") {
-            Ok(parsed) => Ok(parsed),
-            Err(toml_err) => {
-                // Remove comments from the top
-                let value = value
-                    .split('\n')
-                    .into_iter()
-                    .filter(|line| !line.trim().starts_with('#'))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                match serde_json::from_str(&value).context("Invalid JSON changelog format") {
-                    Ok(parsed) => Ok(parsed),
-                    Err(json_err) => bail!(
-                        "Invalid JSON or TOML changelog format:\n{:?}\n{:?}",
-                        toml_err,
-                        json_err
-                    ),
+        let mut changelog: Changelog =
+            (match toml::from_str(value).context("Invalid TOML changelog format") {
+                Ok(parsed) => Ok(parsed),
+                Err(toml_err) => {
+                    // Remove comments from the top
+                    let value = value
+                        .split('\n')
+                        .into_iter()
+                        .filter(|line| !line.trim().starts_with('#'))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    match serde_json::from_str(&value).context("Invalid JSON changelog format") {
+                        Ok(parsed) => Ok(parsed),
+                        Err(json_err) => bail!(
+                            "Invalid JSON or TOML changelog format:\n{:?}\n{:?}",
+                            toml_err,
+                            json_err
+                        ),
+                    }
                 }
-            }
-        } as Result<Changelog>)?;
+            } as Result<Changelog>)?;
         // all smithry-rs entries should have meta.target set to the default value instead of None
         for entry in &mut changelog.smithy_rs {
             if entry.meta.target.is_none() {
                 entry.meta.target = Some(SdkAffected::default());
             }
         }
-        // ensure no aws-sdk-entry has meta.target set
-        if let Err(errors) = changelog.validate() {
-            bail!(errors.join(", "))
-        } else {
-            Ok(changelog)
-        }
+        Ok(changelog)
     }
 
     pub fn load_from_file(path: impl AsRef<Path>) -> Result<Changelog> {
@@ -264,12 +260,12 @@ impl Changelog {
             .map(validate_aws_handauthored)
             .chain(self.smithy_rs.iter().map(validate_smithyrs_handauthored))
             .filter_map(Result::err)
-            .map(|error| error.to_string())
+            .map(|e| format!("{}", e))
             .collect();
-        if !errors.is_empty() {
-            Err(errors)
-        } else {
+        if errors.is_empty() {
             Ok(())
+        } else {
+            Err(errors)
         }
     }
 }
@@ -323,25 +319,6 @@ mod tests {
         assert_eq!("Some change", changelog.aws_sdk_rust[0].message);
         assert_eq!(1, changelog.sdk_models.len());
         assert_eq!("Some API change", changelog.sdk_models[0].message);
-    }
-
-    #[test]
-    fn empty_author_raised_atload() {
-        // by default smithy-rs meta data should say change is for both
-        let toml = r#"
-            [[aws-sdk-rust]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = ""
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = ""
-        "#;
-        let changelog = Changelog::parse_str(toml);
-        assert!(changelog.is_err());
     }
 
     #[test]
@@ -455,25 +432,6 @@ mod tests {
         );
         assert_eq!(changelog.smithy_rs[2].meta.target, Some(SdkAffected::All));
         assert_eq!(changelog.smithy_rs[3].meta.target, Some(SdkAffected::All));
-    }
-
-    #[test]
-    fn parse_rust_sdk_bad() {
-        // by default smithy-rs meta data should say change is for both
-        let toml = r#"
-            [[aws-sdk-rust]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-            author = "rcoh"
-
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "rcoh"
-        "#;
-        assert!(Changelog::parse_str(toml).is_err());
     }
 
     #[test]

@@ -269,6 +269,12 @@ fn load_changelogs(args: &RenderArgs) -> Result<Changelog> {
     for source in &args.source {
         let changelog = Changelog::load_from_file(source)
             .map_err(|errs| anyhow::Error::msg(format!("failed to load {source:?}: {errs:#?}")))?;
+        changelog.validate().map_err(|errs| {
+            anyhow::Error::msg(format!(
+                "failed to load {source:?}: {errors}",
+                errors = errs.join("\n")
+            ))
+        })?;
         combined.merge(changelog);
     }
     Ok(combined)
