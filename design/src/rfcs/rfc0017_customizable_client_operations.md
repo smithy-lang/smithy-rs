@@ -1,7 +1,7 @@
 RFC: Customizable Client Operations
 ===================================
 
-> Status: RFC
+> Status: Accepted
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
