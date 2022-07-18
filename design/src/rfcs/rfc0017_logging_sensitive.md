@@ -6,21 +6,24 @@ Smithy provides a [sensitive trait](https://awslabs.github.io/smithy/1.0/spec/co
 
 > Sensitive data MUST NOT be exposed in things like exception messages or log output. Application of this trait SHOULD NOT affect wire logging (i.e., logging of all data transmitted to and from servers or clients).
 
-This RFC is concerned with solving the problem of honouring this specification.
+This RFC is concerned with solving the problem of honouring this specification in the context of logging.
 
 Progress has been made towards this goal in the form of the [Sensitive Trait PR](https://github.com/awslabs/smithy-rs/pull/229), which uses code generation to remove sensitive fields from `Debug` implementations.
 
 The problem remains open due to the existence of HTTP binding traits and a lack of clearly defined user guidelines which customers may follow to honour the specification.
 
-This RFC proposes that a new logging middleware is generated and applied to each `OperationHandler` `Service`, and internal and external developer guidelines on how to avoid violating the specification.
+This RFC proposes:
+
+- A new logging middleware is generated and applied to each `OperationHandler` `Service`.
+- Internal and external developer guidelines are provided on how to avoid violating the specification.
 
 ## Terminology
 
 - **Model**: A [Smithy Model](https://awslabs.github.io/smithy/1.0/spec/core/model.html), usually pertaining to the one in use by the customer.
-- **Runtime crate**: A crate existing within the `rust-runtime/` folder, used to implement shared functionalities that do not have to be code-generated.
+- **Runtime crate**: A crate existing within the `rust-runtime` folder, used to implement shared functionalities that do not have to be code-generated.
 - **Service**: The [tower::Service](https://docs.rs/tower-service/latest/tower_service/trait.Service.html) trait. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.
-- **Middleware**: Broadly speaking, middleware modify requests and responses. Concretely, these are represented as a [tower](https://github.com/tower-rs/tower) [Layer](https://docs.rs/tower/latest/tower/layer/trait.Layer.html)/`Service` wrapping an inner `Service`.
-- **Potentially sensitive**: Data that _could_ be bound to a sensitive field of a structure, for example [HTTP Binding Traits](#http-binding-traits).
+- **Middleware**: Broadly speaking, middleware modify requests and responses. Concretely, these are exist as implementations of [Layer](https://docs.rs/tower/latest/tower/layer/trait.Layer.html)/a `Service` wrapping an inner `Service`.
+- **Potentially sensitive**: Data that _could_ be bound to a sensitive field of a structure, for example via the [HTTP Binding Traits](#http-binding-traits).
 
 ## Background
 
@@ -33,6 +36,7 @@ Smithy provides various HTTP binding traits. These allow protocols to configure 
 | [httpHeader](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpheader-trait)               | Headers          |
 | [httpPrefixHeaders](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpprefixheaders-trait) | Headers          |
 | [httpLabel](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait)                 | URI              |
+| [httpPayload](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httppayload-trait)             | Payload          |
 | [httpQuery](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait)                 | Query Parameters |
 | [httpResponseCode](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpresponsecode-trait)   | Status Code      |
 
@@ -62,6 +66,7 @@ These two cases illustrate that `smithy-rs` can only prevent violation of the sp
 The sensitivity and HTTP bindings are declared within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any middleware applied _before_ routing has taken place cannot log anything sensitive without performing routing logic itself.
 
 Note that:
+
 - We are not required to deserialize the entire request before we can make judgments on what data is sensitive or not - only which operation it has been routed to.
 - We are permitted to emit logs prior to routing when:
   - they contain no potentially sensitive data, or
@@ -235,6 +240,12 @@ This is a general problem, not specific to this proposal. For example, [Use Requ
 
 Fortunately, this problem is separable from the actual implementation of the logging middleware and we can get immediate benefit by application of it in the suboptimal position described above.
 
+### Logging within the Router
+
+There is need for logging within the `Router` implementation - this is a crucial area of business logic. As mentioned in the [Routing](#routing) section, we are permitted to log potentially sensitive data in cases where requests fail to get routed to an operation.
+
+In the case of AWS JSON 1.0 and 1.1 protocols, the request URI is always `/` putting it outside of the reach of the `@sensitive` trait and hence we have the option to log it before routing occurs. We make a choice not to do this in order to remove the special case - relying on the logging layer to log URIs when appropriate.
+
 ### Internal Guideline
 
 A guideline should be made available to internal smithy developers to outline the following:
@@ -386,5 +397,7 @@ Code generation would be need to be used in order to produce the filtering crite
 
 ## Changes Checklist
 
-[ ] Implement and integrate code generated logging middleware
-[ ] Refactor `Router` to allow for better positioning described in [Middleware Position](#middleware-position)
+- [ ] Implement and integrate code generated logging middleware.
+- [ ] Add logging to `Router` implementation.
+- [ ] Write public and internal developer guidelines.
+- [ ] Refactor `Router` to allow for better positioning described in [Middleware Position](#middleware-position).
