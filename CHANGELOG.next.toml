@@ -48,3 +48,53 @@ message = "Re-export aws_types::SdkConfig in aws_config"
 references = ["smithy-rs#1457"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "calavera"
+
+[[smithy-rs]]
+message = """
+Updated the smithy client's retry behavior to allow for a configurable initial backoff. Previously, the initial backoff
+(named `r` in the code) was set to 2 seconds. This is not an ideal default for services that expect clients to quickly
+retry failed request attempts. Now, users can set quicker (or slower) backoffs according to their needs.
+"""
+references = ["aws-sdk-rust#567"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+Updated SDK Client retry behavior to allow for a configurable initial backoff. Previously, the initial backoff
+(named `r` in the code) was set to 2 seconds. This is not an ideal default for services like DynamoDB that expect
+clients to quickly retry failed request attempts. Now, users can set quicker (or slower) backoffs according to their
+needs.
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), aws_sdk_dynamodb::Error> {
+    let retry_config = aws_smithy_types::retry::RetryConfigBuilder::new()
+        .max_attempts(4)
+        .initial_backoff(Duration::from_millis(20));
+
+    let shared_config = aws_config::from_env()
+        .retry_config(retry_config)
+        .load()
+        .await;
+
+    let client = aws_sdk_dynamodb::Client::new(&shared_config);
+
+    // Given the 20ms backoff multiplier, and assuming this request fails 3 times before succeeding,
+    // the first retry would take place between 0-20ms after the initial request,
+    // the second retry would take place between 0-40ms after the first retry,
+    // and the third retry would take place between 0-80ms after the second retry.
+    let request = client
+        .put_item()
+        .table_name("users")
+        .item("username", "Velfi")
+        .item("account_type", "Developer")
+        .send().await?;
+
+    Ok(())
+}
+```
+"""
+references = ["aws-sdk-rust#567"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
