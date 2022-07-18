@@ -185,22 +185,6 @@ pub struct Changelog {
     pub sdk_models: Vec<SdkModelEntry>,
 }
 
-fn validate_aws_handauthored(entry: &HandAuthoredEntry) -> Result<()> {
-    entry.validate()?;
-    if entry.meta.target.is_some() {
-        bail!("aws-sdk-rust changelog entry cannot have an affected sdk");
-    }
-    Ok(())
-}
-
-fn validate_smithyrs_handauthored(entry: &HandAuthoredEntry) -> Result<()> {
-    entry.validate()?;
-    if entry.meta.target.is_none() {
-        bail!("smithy-rs entry must have an affected sdk");
-    }
-    Ok(())
-}
-
 impl Changelog {
     pub fn new() -> Changelog {
         Default::default()
@@ -254,6 +238,22 @@ impl Changelog {
     }
 
     pub fn validate(&self) -> Result<(), Vec<String>> {
+        let validate_aws_handauthored = |entry: &HandAuthoredEntry| -> Result<()> {
+            entry.validate()?;
+            if entry.meta.target.is_some() {
+                bail!("aws-sdk-rust changelog entry cannot have an affected sdk");
+            }
+            Ok(())
+        };
+
+        let validate_smithyrs_handauthored = |entry: &HandAuthoredEntry| -> Result<()> {
+            entry.validate()?;
+            if entry.meta.target.is_none() {
+                bail!("smithy-rs entry must have an affected sdk");
+            }
+            Ok(())
+        };
+
         let errors: Vec<_> = self
             .aws_sdk_rust
             .iter()
