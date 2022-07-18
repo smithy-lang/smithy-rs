@@ -78,7 +78,7 @@ jobs:
         RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
         cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
-        cargo install --path ../smithy-rs/tools/publisher
+        cargo install --path "$(realpath ../smithy-rs/tools/publisher)"
         # Verify the publisher tool installed successfully
         publisher --version
 
@@ -91,5 +91,5 @@ jobs:
           echo "Checking cargo auth token..."
           cargo owner --list aws-smithy-types
         else
-          publisher publish --location .
+          publisher publish -y --location .
         fi

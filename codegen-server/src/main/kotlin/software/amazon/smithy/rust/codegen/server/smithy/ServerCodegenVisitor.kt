@@ -82,10 +82,8 @@ open class ServerCodegenVisitor(
             )
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
-        model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
-        val baseProvider = RustCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
-        symbolProvider =
-            codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
+        model = codegenDecorator.transformModel(service, baseModel)
+        symbolProvider = RustCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         codegenContext = ServerCodegenContext(
             model,
@@ -223,8 +221,8 @@ open class ServerCodegenVisitor(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext).httpBindingResolver,
-            codegenContext,
+            protocolGeneratorFactory.protocol(codegenContext),
+            codegenContext
         )
             .render()
     }

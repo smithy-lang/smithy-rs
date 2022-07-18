@@ -143,7 +143,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     /*
-     * Generation of `FromRequest` and `IntoResponse`.
+     * Generation of `from_request` and `into_response`.
      * For non-streaming request bodies, that is, models without streaming traits
      * (https://awslabs.github.io/smithy/1.0/spec/core/stream-traits.html)
      * we require the HTTP body to be fully read in memory before parsing or deserialization.
@@ -166,7 +166,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     if let Some(headers) = req.headers() {
                         if let Some(accept) = headers.get(#{http}::header::ACCEPT) {
                             if accept != "$contentType" {
-                                return Err(Self::Rejection {
+                                return Err(#{RuntimeError} {
                                     protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
                                     kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
                                 })
@@ -179,20 +179,19 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             }
         }
 
-        // Implement `FromRequest` trait for input types.
+        // Implement `from_request` trait for input types.
         rustTemplate(
             """
             ##[derive(Debug)]
             pub(crate) struct $inputName(#{I});
-            ##[#{AsyncTrait}::async_trait]
-            impl<B> #{SmithyHttpServer}::request::FromRequest<B> for $inputName
-            where
-                B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
-                B::Data: Send,
-                #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+            impl $inputName
             {
-                type Rejection = #{RuntimeError};
-                async fn from_request(req: &mut #{SmithyHttpServer}::request::RequestParts<B>) -> Result<Self, Self::Rejection> {
+                pub async fn from_request<B>(req: &mut #{SmithyHttpServer}::request::RequestParts<B>) -> Result<Self, #{RuntimeError}>
+                where
+                    B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
+                    B::Data: Send,
+                    #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                {
                     #{verify_response_content_type:W}
                     #{parse_request}(req)
                         .await
@@ -212,7 +211,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             "verify_response_content_type" to verifyResponseContentType,
         )
 
-        // Implement `IntoResponse` for output types.
+        // Implement `into_response` for output types.
 
         val outputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
         val errorSymbol = operationShape.errorSymbol(symbolProvider)
@@ -257,9 +256,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     Output(#{O}),
                     Error(#{E})
                 }
-                ##[#{AsyncTrait}::async_trait]
-                impl #{SmithyHttpServer}::response::IntoResponse for $outputName {
-                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+
+                impl $outputName {
+                    pub fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         $intoResponseImpl
                     }
                 }
@@ -289,9 +288,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             rustTemplate(
                 """
                 pub(crate) struct $outputName(#{O});
-                ##[#{AsyncTrait}::async_trait]
-                impl #{SmithyHttpServer}::response::IntoResponse for $outputName {
-                    fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+
+                impl $outputName {
+                    pub fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         $intoResponseImpl
                     }
                 }
@@ -473,6 +472,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     val status =
                         variantShape.getTrait<HttpErrorTrait>()?.let { trait -> trait.code }
                             ?: errorTrait.defaultHttpStatusCode
+
+                    serverRenderContentLengthHeader()
+
                     rustTemplate(
                         """
                         builder.status($status).body(#{SmithyHttpServer}::body::to_boxed(payload))?
@@ -508,19 +510,22 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             val memberName = symbolProvider.toMemberName(it)
             rustTemplate(
                 """
-                let body = #{SmithyHttpServer}::body::to_boxed(#{SmithyHttpServer}::body::Body::wrap_stream(output.$memberName));
+                let payload = #{SmithyHttpServer}::body::Body::wrap_stream(output.$memberName);
                 """,
                 *codegenScope,
             )
         } ?: run {
             val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
-            withBlockTemplate("let body = #{SmithyHttpServer}::body::to_boxed(", ");", *codegenScope) {
+            withBlockTemplate("let payload = ", ";") {
                 payloadGenerator.generatePayload(this, "output", operationShape)
             }
+
+            serverRenderContentLengthHeader()
         }
 
         rustTemplate(
             """
+            let body = #{SmithyHttpServer}::body::to_boxed(payload);
             builder.body(body)?
             """,
             *codegenScope,
@@ -583,6 +588,22 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 )
             }
         }
+    }
+
+    /**
+     * Adds the `Content-Length` header.
+     *
+     * Unlike the headers added in `serverRenderResponseHeaders` the `Content-Length` depends on
+     * the payload post-serialization.
+     */
+    private fun RustWriter.serverRenderContentLengthHeader() {
+        rustTemplate(
+            """
+            let content_length = payload.len();
+            builder = #{header_util}::set_response_header_if_absent(builder, #{http}::header::CONTENT_LENGTH, content_length);
+            """,
+            *codegenScope
+        )
     }
 
     private fun serverRenderHttpResponseCode(

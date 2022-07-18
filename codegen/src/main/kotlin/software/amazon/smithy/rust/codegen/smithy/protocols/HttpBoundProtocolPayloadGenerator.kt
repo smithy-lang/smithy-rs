@@ -58,7 +58,7 @@ class HttpBoundProtocolPayloadGenerator(
 
     private val codegenScope = arrayOf(
         "hyper" to CargoDependency.HyperWithStream.asType(),
-        "ByteStream" to RuntimeType.byteStream(runtimeConfig),
+        "ByteStream" to RuntimeType.ByteStream(runtimeConfig),
         "ByteSlab" to RuntimeType.ByteSlab,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "BuildError" to runtimeConfig.operationBuildError(),

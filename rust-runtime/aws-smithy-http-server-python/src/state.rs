@@ -11,6 +11,7 @@ use pyo3::prelude::*;
 /// The Python business logic implementation needs to carry some information
 /// to be executed properly like the size of its arguments and if it is
 /// a coroutine.
+#[pyclass]
 #[derive(Debug, Clone)]
 pub struct PyHandler {
     pub func: PyObject,
@@ -27,7 +28,19 @@ impl Deref for PyHandler {
 }
 
 /// Mapping holding the Python business logic handlers.
-pub type PyHandlers = HashMap<String, Arc<PyHandler>>;
+#[pyclass]
+#[derive(Debug, Clone, Default)]
+pub struct PyHandlers {
+    pub inner: HashMap<String, Arc<PyHandler>>,
+}
+
+impl Deref for PyHandlers {
+    type Target = HashMap<String, Arc<PyHandler>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
 
 /// [PyState] structure holding the Python context.
 ///
