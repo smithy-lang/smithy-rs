@@ -503,21 +503,18 @@ module = "aws-sdk-s3"
 version = "0.14.0"
 kind = "Feature"
 message = "Some new API to do X"
-references = ["smithy-rs#199"]
 
 [[aws-sdk-model]]
 module = "aws-sdk-ec2"
 version = "0.12.0"
 kind = "Documentation"
 message = "Updated some docs"
-references = ["smithy-rs#400"]
 
 [[aws-sdk-model]]
 module = "aws-sdk-ec2"
 version = "0.12.0"
 kind = "Feature"
 message = "Some API change"
-references = ["smithy-rs#401"]
         "#;
         let changelog: Changelog = Changelog::parse_str(changelog_toml).expect("valid changelog");
         let ChangelogEntries {
@@ -608,7 +605,6 @@ module = "aws-sdk-s3"
 version = "0.14.0"
 kind = "Feature"
 message = "Some new API to do X"
-references = ["smithy-rs#400"]
 
 [[smithy-rs]]
 author = "external-contrib"

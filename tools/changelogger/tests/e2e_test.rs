@@ -193,7 +193,6 @@ fn render_smithy_rs_test() {
     let tmp_dir = TempDir::new().unwrap();
     let source_path = tmp_dir.path().join("source.toml");
     let dest_path = tmp_dir.path().join("dest.md");
-    let server_dest_path = tmp_dir.path().join("server_dest.md");
     let release_manifest_path = tmp_dir.path().join("smithy-rs-release-manifest.json");
 
     create_fake_repo_root(tmp_dir.path(), "0.42.0", "0.12.0");
@@ -201,14 +200,6 @@ fn render_smithy_rs_test() {
     fs::write(&source_path, SOURCE_TOML).unwrap();
     fs::write(
         &dest_path,
-        format!(
-            "{}\nv0.41.0 (Some date in the past)\n=========\n\nOld entry contents\n",
-            USE_UPDATE_CHANGELOGS
-        ),
-    )
-    .unwrap();
-    fs::write(
-        &server_dest_path,
         format!(
             "{}\nv0.41.0 (Some date in the past)\n=========\n\nOld entry contents\n",
             USE_UPDATE_CHANGELOGS
@@ -548,7 +539,7 @@ author = "rcoh"
     if let Err(e) = result {
         let index = e
             .to_string()
-            .find("aws-sdk-rust changelog entry cannot have an affected sdk");
+            .find("aws-sdk-rust changelog entry cannot have an affected target");
         assert!(index.is_some());
     } else {
         assert!(

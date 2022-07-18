@@ -241,7 +241,7 @@ impl Changelog {
         let validate_aws_handauthored = |entry: &HandAuthoredEntry| -> Result<()> {
             entry.validate()?;
             if entry.meta.target.is_some() {
-                bail!("aws-sdk-rust changelog entry cannot have an affected sdk");
+                bail!("aws-sdk-rust changelog entry cannot have an affected target");
             }
             Ok(())
         };
@@ -249,7 +249,7 @@ impl Changelog {
         let validate_smithyrs_handauthored = |entry: &HandAuthoredEntry| -> Result<()> {
             entry.validate()?;
             if entry.meta.target.is_none() {
-                bail!("smithy-rs entry must have an affected sdk");
+                bail!("smithy-rs entry must have an affected target");
             }
             Ok(())
         };
@@ -346,7 +346,7 @@ mod tests {
         assert!(res.is_err());
         if let Err(e) = res {
             assert_eq!(e.len(), 3);
-            assert!(e.contains(&"smithy-rs entry must have an affected sdk".to_string()))
+            assert!(e.contains(&"smithy-rs entry must have an affected target".to_string()))
         }
     }
 
@@ -375,7 +375,7 @@ mod tests {
             let res = changelog.validate();
             assert!(res.is_err());
             if let Err(e) = res {
-                assert!(e.contains(&"smithy-rs entry must have an affected sdk".to_string()))
+                assert!(e.contains(&"smithy-rs entry must have an affected target".to_string()))
             }
         }
         {
