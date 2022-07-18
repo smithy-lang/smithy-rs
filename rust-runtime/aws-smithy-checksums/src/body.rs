@@ -5,8 +5,5 @@
 
 //! HTTP body-wrappers that calculate and validate checksums.
 
-mod calculate;
-pub use calculate::ChecksumBody;
-
-mod validate;
-pub use validate::ChecksumValidatedBody;
+pub mod calculate;
+pub mod validate;

@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Functionality for validating an HTTP body against a given precalculated checksum and emitting an
+//! error if it doesn't match.
+
 use crate::http::HttpChecksum;
 
 use aws_smithy_http::body::SdkBody;
@@ -19,7 +22,7 @@ use std::task::{Context, Poll};
 pin_project! {
     /// A body-wrapper that will calculate the `InnerBody`'s checksum and emit an error if it
     /// doesn't match the precalculated checksum.
-    pub struct ChecksumValidatedBody<InnerBody> {
+    pub struct ChecksumBody<InnerBody> {
         #[pin]
         inner: InnerBody,
         checksum: Option<Box<dyn HttpChecksum>>,
@@ -27,9 +30,9 @@ pin_project! {
     }
 }
 
-impl ChecksumValidatedBody<SdkBody> {
+impl ChecksumBody<SdkBody> {
     /// Given an `SdkBody`, a `Box<dyn HttpChecksum>`, and a precalculated checksum represented
-    /// as `Bytes`, create a new `ChecksumValidatedBody<SdkBody>`.
+    /// as `Bytes`, create a new `ChecksumBody<SdkBody>`.
     pub fn new(
         body: SdkBody,
         checksum: Box<dyn HttpChecksum>,
@@ -121,7 +124,7 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
-impl http_body::Body for ChecksumValidatedBody<SdkBody> {
+impl http_body::Body for ChecksumBody<SdkBody> {
     type Data = Bytes;
     type Error = aws_smithy_http::body::Error;
 
@@ -150,7 +153,7 @@ impl http_body::Body for ChecksumValidatedBody<SdkBody> {
 
 #[cfg(test)]
 mod tests {
-    use crate::body::{validate::Error, ChecksumValidatedBody};
+    use crate::body::validate::{ChecksumBody, Error};
     use crate::http::new_from_algorithm;
     use aws_smithy_http::body::SdkBody;
     use bytes::{Buf, Bytes};
@@ -169,7 +172,7 @@ mod tests {
         let actual_checksum = calculate_crc32_checksum(input_text);
         let body = SdkBody::from(input_text);
         let non_matching_checksum = Bytes::copy_from_slice(&[0x00, 0x00, 0x00, 0x00]);
-        let mut body = ChecksumValidatedBody::new(
+        let mut body = ChecksumBody::new(
             body,
             new_from_algorithm("crc32").unwrap(),
             non_matching_checksum.clone(),
@@ -201,8 +204,7 @@ mod tests {
         let actual_checksum = calculate_crc32_checksum(input_text);
         let body = SdkBody::from(input_text);
         let mut body =
-            ChecksumValidatedBody::new(body, new_from_algorithm("crc32").unwrap(), actual_checksum)
-                .unwrap();
+            ChecksumBody::new(body, new_from_algorithm("crc32").unwrap(), actual_checksum).unwrap();
 
         let mut output = SegmentedBuf::new();
         while let Some(buf) = body.data().await {

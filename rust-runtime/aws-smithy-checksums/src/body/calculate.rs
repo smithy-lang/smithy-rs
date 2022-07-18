@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Functionality for calculating the checksum of an HTTP body and emitting it as trailers.
+
 use crate::http::HttpChecksum;
 
 use aws_smithy_http::body::SdkBody;
