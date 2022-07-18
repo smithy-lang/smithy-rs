@@ -185,7 +185,6 @@ class HttpBoundProtocolPayloadGenerator(
             runtimeConfig,
             symbolProvider,
             unionShape,
-            operationShape,
             serializerGenerator,
             contentType ?: throw CodegenException("event streams must set a content type"),
         ).render()

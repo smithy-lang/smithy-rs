@@ -42,9 +42,8 @@ class EventStreamErrorMarshallerGenerator(
     runtimeConfig: RuntimeConfig,
     private val symbolProvider: RustSymbolProvider,
     private val unionShape: UnionShape,
-    private val operationShape: OperationShape,
     private val serializerGenerator: StructuredDataSerializerGenerator,
-    private val payloadContentType: String,
+    payloadContentType: String,
 ) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType) {
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val operationErrorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
@@ -53,7 +52,7 @@ class EventStreamErrorMarshallerGenerator(
         unionShape.eventStreamErrorSymbol(symbolProvider).toSymbol()
     }
     private val eventStreamSerdeModule = RustModule.private("event_stream_serde")
-    val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
+    private val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
     private val codegenScope = arrayOf(
         "MarshallMessage" to RuntimeType("MarshallMessage", smithyEventStream, "aws_smithy_eventstream::frame"),
         "Message" to RuntimeType("Message", smithyEventStream, "aws_smithy_eventstream::frame"),
@@ -63,7 +62,7 @@ class EventStreamErrorMarshallerGenerator(
     )
 
     override fun render(): RuntimeType {
-        val marshallerType = operationShape.eventStreamMarshallerType()
+        val marshallerType = unionShape.eventStreamMarshallerType()
         val unionSymbol = symbolProvider.toSymbol(unionShape)
 
         return RuntimeType.forInlineFun("${marshallerType.name}::new", eventStreamSerdeModule) { inlineWriter ->
@@ -93,7 +92,7 @@ class EventStreamErrorMarshallerGenerator(
             rust("type Input = ${operationErrorSymbol.rustType().render(fullyQualified = true)};")
 
             rustBlockTemplate(
-                "fn marshall(&self, input: Self::Input) -> std::result::Result<#{Message}, #{Error}>",
+                "fn marshall(&self, _input: Self::Input) -> std::result::Result<#{Message}, #{Error}>",
                 *codegenScope
             ) {
                 rust("let mut headers = Vec::new();")
@@ -103,11 +102,9 @@ class EventStreamErrorMarshallerGenerator(
                     CodegenTarget.SERVER -> ""
                 }
                 if (errorsShape.errorMembers.isEmpty()) {
-                    rustBlock("let payload = match input$kind") {
-                        rust("_ => Vec::new()")
-                    }
+                    rust("let payload = Vec::new();")
                 } else {
-                    rustBlock("let payload = match input$kind") {
+                    rustBlock("let payload = match _input$kind") {
                         val symbol = operationErrorSymbol
                         val errorName = when (target) {
                             CodegenTarget.CLIENT -> "${symbol}Kind"
@@ -159,6 +156,11 @@ class EventStreamErrorMarshallerGenerator(
         } else {
             rust("Vec::new()")
         }
+    }
+
+    private fun UnionShape.eventStreamMarshallerType(): RuntimeType {
+        val symbol = symbolProvider.toSymbol(this)
+        return RuntimeType("${symbol.name.toPascalCase()}ErrorMarshaller", null, "crate::event_stream_serde")
     }
 
     private fun OperationShape.eventStreamMarshallerType(): RuntimeType {
