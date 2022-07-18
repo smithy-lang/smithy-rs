@@ -6,11 +6,14 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerCombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -27,21 +30,48 @@ class PythonServerCombinedErrorGenerator(
     private val operation: OperationShape
 ) : ServerCombinedErrorGenerator(model, symbolProvider, operation) {
 
+    private val operationIndex = OperationIndex.of(model)
+    private val errors = operationIndex.getErrors(operation)
+
     override fun render(writer: RustWriter) {
         super.render(writer)
+        renderFromPyErr(writer)
+    }
+
+    private fun renderFromPyErr(writer: RustWriter) {
         writer.rustTemplate(
             """
             impl #{From}<#{pyo3}::PyErr> for #{Error} {
                 fn from(variant: #{pyo3}::PyErr) -> #{Error} {
-                    crate::error::InternalServerError {
-                        message: variant.to_string()
-                    }.into()
+                    #{pyo3}::Python::with_gil(|py|{
+                        let error = variant.value(py);
+                        #{CastPyErrToRustError:W}
+                        crate::error::InternalServerError { message: error.to_string() }.into()
+                    })
                 }
             }
+
             """,
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
             "Error" to operation.errorSymbol(symbolProvider),
-            "From" to RuntimeType.From
+            "From" to RuntimeType.From,
+            "CastPyErrToRustError" to castPyErrToRustError()
         )
     }
+
+    private fun castPyErrToRustError(): Writable =
+        writable {
+            errors.forEach { error ->
+                val errorSymbol = symbolProvider.toSymbol(error)
+                if (errorSymbol.toString() != "crate::error::InternalServerError") {
+                    rust(
+                        """
+                        if let Ok(error) = error.extract::<$errorSymbol>() {
+                            return error.into()
+                        }
+                        """
+                    )
+                }
+            }
+        }
 }

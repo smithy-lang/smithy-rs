@@ -67,6 +67,7 @@ jobs:
         - action: check-server-codegen-integration-tests-python
         - action: check-server-codegen-unit-tests-python
         - action: check-server-e2e-test
+        - action: check-server-python-e2e-test
         - action: check-style-and-lints
     steps:
     - uses: actions/checkout@v3
@@ -129,8 +130,10 @@ jobs:
       run: |
         for runtime_path in "rust-runtime" "aws/rust-runtime"; do
           pushd "${runtime_path}" &>/dev/null
-          cargo test --all-features
-          cargo doc --no-deps --document-private-items --all-features
+          # aws-smithy-http-server-python cannot be compiled on Windows since it uses the `signal-hook` crate
+          # which is not really yet fully supported on the platform.
+          cargo test --all-features --workspace --exclude aws-smithy-http-server-python
+          cargo doc --no-deps --document-private-items --all-features --workspace --exclude aws-smithy-http-server-python
           popd &>/dev/null
         done
 
