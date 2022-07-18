@@ -11,6 +11,18 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false }
 # author = "rcoh"
 
+[[smithy-rs]]
+message = "Add checksum calculation and validation wrappers for HTTP bodies."
+references = ["smithy-rs#1263"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velf"
+
+[[smithy-rs]]
+message = "`aws_smithy_http::header::append_merge_header_maps`, a function for merging two `HeaderMap`s, is now public."
+references = ["smithy-rs#1263"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velf"
+
 [[aws-sdk-rust]]
 message = """
 Fix compilation of `aws-config` with `rustls` and `native-tls` disabled. The
