@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
         }
     } else {
         // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove V1 args
-        println!("Failed to match new arg format. Trying to parse the old arg format.");
+        eprintln!("Failed to match new arg format. Trying to parse the old arg format.");
         let working_dir = std::env::current_dir()?;
         match ArgsV1::parse() {
             ArgsV1::Publish(args) => subcommand_publish(&args).await?,
