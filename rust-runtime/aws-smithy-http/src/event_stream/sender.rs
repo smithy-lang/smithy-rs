@@ -181,7 +181,7 @@ mod tests {
     use async_stream::stream;
     use aws_smithy_eventstream::error::Error as EventStreamError;
     use aws_smithy_eventstream::frame::{
-        Header, HeaderValue, Message, SignMessage, SignMessageError,
+        Header, HeaderValue, Message, NoOpSigner, SignMessage, SignMessageError,
     };
     use bytes::Bytes;
     use futures_core::Stream;
@@ -207,6 +207,15 @@ mod tests {
 
         fn marshall(&self, input: Self::Input) -> Result<Message, EventStreamError> {
             Ok(Message::new(input.0.as_bytes().to_vec()))
+        }
+    }
+    #[derive(Debug)]
+    struct ErrorMarshaller;
+    impl MarshallMessage for ErrorMarshaller {
+        type Input = TestServiceError;
+
+        fn marshall(&self, _input: Self::Input) -> Result<Message, EventStreamError> {
+            Err(EventStreamError::InvalidMessageLength)
         }
     }
 
@@ -254,7 +263,7 @@ mod tests {
             TestServiceError,
         >::new(
             Marshaller,
-            Marshaller,
+            ErrorMarshaller,
             TestSigner,
             Box::pin(stream),
         ));
@@ -276,15 +285,15 @@ mod tests {
     #[tokio::test]
     async fn message_stream_adapter_construction_failure() {
         let stream = stream! {
-            yield Err(EventStreamError::InvalidMessageLength.into());
+            yield Err(TestServiceError);
         };
         let mut adapter = check_compatible_with_hyper_wrap_stream(MessageStreamAdapter::<
             TestMessage,
             TestServiceError,
         >::new(
             Marshaller,
-            Marshaller,
-            TestSigner,
+            ErrorMarshaller,
+            NoOpSigner {},
             Box::pin(stream),
         ));
 
@@ -306,7 +315,7 @@ mod tests {
             yield Ok(TestMessage("test".into()));
         });
         check(stream! {
-            yield Err(EventStreamError::InvalidMessageLength.into());
+            yield Err(TestServiceError);
         });
     }
 }
