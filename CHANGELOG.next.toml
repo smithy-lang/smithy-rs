@@ -15,13 +15,13 @@
 message = "Add checksum calculation and validation wrappers for HTTP bodies."
 references = ["smithy-rs#1263"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "Velf"
+author = "Velfi"
 
 [[smithy-rs]]
 message = "`aws_smithy_http::header::append_merge_header_maps`, a function for merging two `HeaderMap`s, is now public."
 references = ["smithy-rs#1263"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "Velf"
+author = "Velfi"
 
 [[aws-sdk-rust]]
 message = """
