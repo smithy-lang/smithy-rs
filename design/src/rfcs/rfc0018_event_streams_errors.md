@@ -9,13 +9,7 @@ RFC: Errors for event streams
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
 <!-- Insert a short paragraph explaining, at a high level, what this RFC is for -->
-This RFC defines how customers will use errors defined in `@streaming` unions (event streams).
-
-<!-- The "Terminology" section is optional but is really useful for defining the technical terms you're using in the RFC -->
-Terminology
------------
-
-- **Some Term**: A definition for that term
+This RFC defines how client and server will use errors defined in `@streaming` unions (event streams).
 
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 The user experience if this RFC is implemented

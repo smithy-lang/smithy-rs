@@ -21,16 +21,18 @@ import software.amazon.smithy.rust.codegen.util.hasEventStreamOperations
  */
 open class NoOpEventStreamSigningDecorator<C : CoreCodegenContext> : RustCodegenDecorator<C> {
     override val name: String = "NoOpEventStreamSigning"
-    override val order: Byte = 0
+    override val order: Byte = Byte.MIN_VALUE
 
-    private fun applies(codegenContext: CoreCodegenContext): Boolean =
-        codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
+    private fun applies(codegenContext: CoreCodegenContext, baseCustomizations: List<ConfigCustomization>): Boolean =
+        codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model) &&
+            // and if there is no other `EventStreamSigningConfig`, apply this one
+            !baseCustomizations.any { it is EventStreamSigningConfig }
 
     override fun configCustomizations(
         codegenContext: C,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        if (!applies(codegenContext))
+        if (!applies(codegenContext, baseCustomizations))
             return baseCustomizations
         return baseCustomizations + NoOpEventStreamSigningConfig(
             codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model),

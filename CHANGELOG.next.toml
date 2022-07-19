@@ -116,3 +116,27 @@ async fn main() -> Result<(), aws_sdk_dynamodb::Error> {
 references = ["aws-sdk-rust#567"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Generate event stream specific error types"
+references = ["smithy-rs#1157"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "82marbag"
+
+[[aws-sdk-rust]]
+message = "EventStreamSender and Receiver use event stream specific error types"
+references = ["smithy-rs#1157"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "82marbag"
+
+[[smithy-rs]]
+message = "Generate event stream specific error types"
+references = ["smithy-rs#1157"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "82marbag"
+
+[[smithy-rs]]
+message = "EventStreamSender and Receiver use event stream specific error types"
+references = ["smithy-rs#1157"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "82marbag"

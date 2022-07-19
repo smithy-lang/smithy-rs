@@ -252,7 +252,7 @@ Similarly, the [Receiver](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84
 The `Receiver` has more logic to handle buffering data and possibly errors.
 
 Server and client serialize similarly. Serializing for `CapturePokemonOperation` on the server, with `serialize_capture_pokemon_operation_response`:
-1. Sets the `content-type` header to `application/vnd.amazon.eventstream`
+1. Sets the `content-type` HTTP header to `application/vnd.amazon.eventstream`
 2. Converts the `EventStreamSender` in the event stream structure into a `MessageStreamAdapter` with a marshaller for the error and data types
    1. [This](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L511) is where it is generated
 3. Gives the body back to hyper
@@ -278,9 +278,9 @@ At the end of the marshalling and signing processes, `MessageStreamAdapter` take
 and [writes](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-eventstream/src/frame.rs#L224) it as bytes into a `Vec<u8>`,
 in a format of a sequence of bytes: `<type, data>` where `type` indicates if the `data` is a bool, integer and so on for all types.
 
-Headers that are always sent are:
+Headers that are sent are:
 * `:message-type` (`event` or `exception`) to signal the kind of message being sent
-* `:content-type`, currently always set to `application/octet-stream`
+* `:content-type`, set to `application/octet-stream` for blobs; the protocol-specific type otherwise
 * `:event-type` to communicate the non-error variant (if `:message-type` is `event`); or
 * `:exception-type` to communicate the error variant (if `:message-type` is `exception`)
 
