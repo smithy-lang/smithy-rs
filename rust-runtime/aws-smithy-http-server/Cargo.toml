@@ -26,7 +26,7 @@ futures-util = { version = "0.3", default-features = false }
 http = "0.2"
 http-body = "0.4"
 hyper = { version = "0.14.12", features = ["server", "http1", "http2", "tcp", "stream"] }
-lambda_http = { git = "https://github.com/awslabs/aws-lambda-rust-runtime" }
+lambda_http = "0.6.0"
 mime = "0.3"
 nom = "7"
 pin-project-lite = "0.2"
