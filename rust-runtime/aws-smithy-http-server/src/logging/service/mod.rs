@@ -5,13 +5,12 @@
 mod sensitivity;
 
 use std::{
-    convert::Infallible,
     future::Future,
     pin::Pin,
     task::{Context, Poll},
 };
 
-use futures_util::ready;
+use futures_util::{ready, TryFuture};
 use http::{header::HeaderName, Request, Response};
 use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
@@ -19,7 +18,7 @@ use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
 use super::{
     headers::{HeaderMarker, SensitiveHeaders},
     uri::SensitiveUri,
-    OrFmt, QueryMarker, Sensitive,
+    MakePath, OrFmt, QueryMarker, Sensitive,
 };
 
 pub use sensitivity::*;
@@ -38,7 +37,8 @@ pin_project_lite::pin_project! {
 
 impl<Fut, Header, T> Future for LoggingFuture<Fut, Header>
 where
-    Fut: Future<Output = Result<Response<T>, Infallible>>,
+    Fut: TryFuture<Ok = Response<T>>,
+    Fut: Future<Output = Result<Fut::Ok, Fut::Error>>,
     Header: Fn(&HeaderName) -> HeaderMarker + Clone,
 {
     type Output = Fut::Output;
@@ -74,16 +74,18 @@ where
 ///
 /// ```
 /// # use aws_smithy_http_server::logging::{Sensitivity, InstrumentOperation};
-/// # let svc = ();
-/// let sensitivity = Sensitivity::new().path(|index| index == 1).status_code();
+/// # use tower::{Service, service_fn};
+/// # use http::{Request, Response};
+/// # async fn f(request: Request<()>) -> Result<Response<()>, ()> { Ok(Response::new(())) }
+/// # let mut svc = service_fn(f);
+/// let sensitivity = Sensitivity::new().path(|index| index == 1).greedy_path(3).status_code();
 /// let mut svc = InstrumentOperation::new(svc, "foo-operation").sensitivity(sensitivity);
+/// # svc.call(Request::new(()));
 /// ```
 #[derive(Debug, Clone)]
 pub struct InstrumentOperation<Svc, Sensitivity = DefaultSensitivity> {
     inner: Svc,
-
     operation_name: &'static str,
-
     sensitivity: Sensitivity,
 }
 
@@ -112,9 +114,9 @@ impl<Svc, Sensitivity> InstrumentOperation<Svc, Sensitivity> {
 impl<Svc, U, V, RequestHeader, Path, Query, ResponseHeader> Service<Request<U>>
     for InstrumentOperation<Svc, Sensitivity<RequestHeader, Path, Query, ResponseHeader>>
 where
-    Svc: Service<Request<U>, Response = Response<V>, Error = Infallible>,
+    Svc: Service<Request<U>, Response = Response<V>>,
     RequestHeader: Fn(&HeaderName) -> HeaderMarker,
-    Path: Fn(usize) -> bool,
+    for<'a> Path: MakePath<'a>,
     Query: Fn(&str) -> QueryMarker,
     ResponseHeader: Fn(&HeaderName) -> HeaderMarker + Clone,
 {
@@ -137,7 +139,7 @@ where
             resp_header,
         } = &self.sensitivity;
         let headers = SensitiveHeaders::new(request.headers()).mark(&req_header);
-        let uri = SensitiveUri::new(request.uri()).path(&path).query(&query);
+        let uri = SensitiveUri::new(request.uri()).make_path(&path).query(&query);
         let span = debug_span!("request", operation = %self.operation_name, method = %request.method(), %uri, ?headers);
 
         LoggingFuture {

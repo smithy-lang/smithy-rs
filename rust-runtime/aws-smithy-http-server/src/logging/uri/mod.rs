@@ -94,6 +94,15 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
         }
     }
 
+    /// Marks the path using [`MakePath`].
+    pub(crate) fn make_path<NewPath>(self, path_marker: NewPath) -> SensitiveUri<'a, NewPath, Q> {
+        SensitiveUri {
+            uri: self.uri,
+            path_marker,
+            query_marker: self.query_marker,
+        }
+    }
+
     /// Marks specific query string values as sensitive by supplying a closure over the query string
     /// keys. The closure takes the form `Fn(&str) -> Option<QueryMarker>` where `&str` represents the key of the
     /// query string pair and the `Option<QueryMarker>` marks the key, value, or entire pair as sensitive.

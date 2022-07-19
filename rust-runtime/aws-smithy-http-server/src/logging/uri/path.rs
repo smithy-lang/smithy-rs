@@ -144,6 +144,17 @@ impl<'a> MakePath<'a> for GreedyLabel {
     }
 }
 
+impl<'a, 'b, T> MakePath<'a> for &'b T
+where
+    T: MakePath<'a>,
+{
+    type Target = T::Target;
+
+    fn make(&self, path: &'a str) -> Self::Target {
+        T::make(self, path)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use http::Uri;

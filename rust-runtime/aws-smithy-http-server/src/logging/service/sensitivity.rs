@@ -6,7 +6,9 @@ use std::fmt;
 
 use http::header::HeaderName;
 
-use crate::logging::{noop_header_marker, noop_path_marker, noop_query_marker, HeaderMarker, QueryMarker};
+use crate::logging::{
+    noop_header_marker, noop_path_marker, noop_query_marker, GreedyLabel, HeaderMarker, Labels, QueryMarker,
+};
 
 /// A representation of the data marked as sensitive.
 ///
@@ -64,13 +66,26 @@ impl<RequestHeader, Path, Query, ResponseHeader> Sensitivity<RequestHeader, Path
     /// Marks path segments as sensitive using a closure.
     ///
     /// See [`SensitiveUri::path`](crate::logging::SensitiveUri::path) for more info.
-    pub fn path<F>(self, marker: F) -> Sensitivity<RequestHeader, F, Query, ResponseHeader>
+    pub fn path<F>(self, marker: F) -> Sensitivity<RequestHeader, Labels<F>, Query, ResponseHeader>
     where
         F: Fn(usize) -> bool,
     {
         Sensitivity {
             req_header: self.req_header,
-            path: marker,
+            path: Labels(marker),
+            query: self.query,
+            status_code: self.status_code,
+            resp_header: self.resp_header,
+        }
+    }
+
+    /// Marks path the suffix of a path as sensitive.
+    ///
+    /// See [`SensitiveUri::greedy_path`](crate::logging::SensitiveUri::greedy_path) for more info.
+    pub fn greedy_path(self, position: usize) -> Sensitivity<RequestHeader, GreedyLabel, Query, ResponseHeader> {
+        Sensitivity {
+            req_header: self.req_header,
+            path: GreedyLabel(position),
             query: self.query,
             status_code: self.status_code,
             resp_header: self.resp_header,
@@ -123,7 +138,7 @@ impl<RequestHeader, Path, Query, ResponseHeader> Sensitivity<RequestHeader, Path
 
 pub(crate) type DefaultSensitivity = Sensitivity<
     fn(&HeaderName) -> HeaderMarker,
-    fn(usize) -> bool,
+    Labels<fn(usize) -> bool>,
     fn(&str) -> QueryMarker,
     fn(&HeaderName) -> HeaderMarker,
 >;
@@ -132,7 +147,7 @@ impl Default for DefaultSensitivity {
     fn default() -> Self {
         Self {
             req_header: noop_header_marker,
-            path: noop_path_marker,
+            path: Labels(noop_path_marker),
             query: noop_query_marker,
 
             status_code: false,
