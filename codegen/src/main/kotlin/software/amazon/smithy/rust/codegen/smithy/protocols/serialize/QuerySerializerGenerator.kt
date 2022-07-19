@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
@@ -31,7 +31,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
@@ -46,7 +46,7 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 
-abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
+abstract class QuerySerializerGenerator(coreCodegenContext: CoreCodegenContext) : StructuredDataSerializerGenerator {
     protected data class Context<T : Shape>(
         /** Expression that yields a QueryValueWriter */
         val writerExpression: String,
@@ -87,11 +87,11 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         }
     }
 
-    protected val model = codegenContext.model
-    protected val symbolProvider = codegenContext.symbolProvider
-    protected val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
-    private val serviceShape = codegenContext.serviceShape
+    protected val model = coreCodegenContext.model
+    protected val symbolProvider = coreCodegenContext.symbolProvider
+    protected val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val target = coreCodegenContext.target
+    private val serviceShape = coreCodegenContext.serviceShape
     private val serializerError = runtimeConfig.serializationError()
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()
@@ -323,7 +323,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                             )
                         }
                     }
-                    if (mode.renderUnknownVariant()) {
+                    if (target.renderUnknownVariant()) {
                         rustTemplate(
                             "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                             "Union" to unionSymbol,

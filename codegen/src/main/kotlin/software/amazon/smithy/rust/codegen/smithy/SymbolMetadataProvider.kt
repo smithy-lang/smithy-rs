@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy
@@ -16,7 +16,7 @@ import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.PartialEq
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
 /**
@@ -78,11 +78,11 @@ class BaseSymbolMetadataProvider(
     private val containerDefault = RustMetadata(
         Attribute.Derives(defaultDerives.toSet()),
         additionalAttributes = additionalAttributes,
-        public = true
+        visibility = Visibility.PUBLIC
     )
 
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
-        return RustMetadata(public = true)
+        return RustMetadata(visibility = Visibility.PUBLIC)
     }
 
     override fun structureMeta(structureShape: StructureShape): RustMetadata {

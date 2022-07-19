@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.customizations
@@ -15,8 +15,8 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
  */
 class CrateVersionGenerator : LibRsCustomization() {
     override fun section(section: LibRsSection) = writable {
-        when (section) {
-            is LibRsSection.Body -> rust(
+        if (section is LibRsSection.Body) {
+            rust(
                 """
                 /// Crate version number.
                 pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");

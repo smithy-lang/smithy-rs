@@ -1,6 +1,6 @@
 [package]
 name = "publisher"
-version = "0.2.0"
+version = "0.4.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Tool used to publish the AWS SDK to crates.io"
 edition = "2021"
@@ -9,20 +9,27 @@ publish = false
 
 [workspace]
 
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
 [dependencies]
 anyhow = "1.0"
 async-recursion = "0.3.2"
 async-trait = "0.1.51"
 cargo_toml = "0.10.1"
-clap = { version = "3", features = ["derive"] }
+clap = { version = "~3.1.18", features = ["derive"] }
 crates_io_api = "0.7.3"
 dialoguer = "0.8"
 handlebars = "4.2"
 lazy_static = "1"
 num_cpus = "1.13"
 regex = "1.5.4"
+reqwest = "0.11.10"
 semver = "1.0"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha256 = "1"
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common", features = ["async-shell"] }
 thiserror = "1.0"
 tokio = { version = "1.12", features = ["full"] }

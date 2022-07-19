@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 #
 
 # This script can be run and tested locally. To do so, you should check out
@@ -43,8 +43,8 @@ COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
 CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
 
-def running_in_github_actions():
-    return os.environ.get("GITHUB_ACTIONS") == "true"
+def running_in_docker_build():
+    return os.environ.get("SMITHY_RS_DOCKER_BUILD_IMAGE") == "1"
 
 
 def main():
@@ -62,7 +62,7 @@ def main():
         eprint("working tree is not clean. aborting")
         sys.exit(1)
 
-    if running_in_github_actions():
+    if running_in_docker_build():
         eprint(f"Fetching base revision {base_commit_sha} from GitHub...")
         run(f"git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin {base_commit_sha}")
 
@@ -80,7 +80,7 @@ def main():
     write_to_file(f"{OUTPUT_PATH}/bot-message", bot_message)
 
     # Clean-up that's only really useful when testing the script in local-dev
-    if not running_in_github_actions():
+    if not running_in_docker_build():
         run("git checkout main")
         run(f"git branch -D {BASE_BRANCH_NAME}")
         run(f"git branch -D {HEAD_BRANCH_NAME}")
@@ -94,16 +94,22 @@ def generate_and_commit_generated_code(revision_sha):
     # Generate code
     run("./gradlew --rerun-tasks :aws:sdk:assemble")
     run("./gradlew --rerun-tasks :codegen-server-test:assemble")
+    run("./gradlew --rerun-tasks :codegen-server-test:python:assemble")
 
     # Move generated code into codegen-diff/ directory
     run(f"rm -rf {OUTPUT_PATH}")
     run(f"mkdir {OUTPUT_PATH}")
     run(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}")
     run(f"mv codegen-server-test/build/smithyprojections/codegen-server-test {OUTPUT_PATH}")
+    run(f"mv codegen-server-test/python/build/smithyprojections/codegen-server-test-python {OUTPUT_PATH}")
 
     # Clean up the server-test folder
     run(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
+    run(f"rm -rf {OUTPUT_PATH}/codegen-server-test-python/source")
     run(f"find {OUTPUT_PATH}/codegen-server-test | "
+        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
+        f"xargs rm -f", shell=True)
+    run(f"find {OUTPUT_PATH}/codegen-server-test-python | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
 
@@ -187,15 +193,22 @@ def make_diffs(base_commit_sha, head_commit_sha):
                           head_commit_sha, "server-test", whitespace=True)
     server_nows = make_diff("Server Test", f"{OUTPUT_PATH}/codegen-server-test", base_commit_sha,
                             head_commit_sha, "server-test-ignore-whitespace", whitespace=False)
+    server_ws_python = make_diff("Server Test Python", f"{OUTPUT_PATH}/codegen-server-test-python", base_commit_sha,
+                                 head_commit_sha, "server-test-python", whitespace=True)
+    server_nows_python = make_diff("Server Test Python", f"{OUTPUT_PATH}/codegen-server-test-python", base_commit_sha,
+                                   head_commit_sha, "server-test-python-ignore-whitespace", whitespace=False)
 
     sdk_links = diff_link('AWS SDK', 'No codegen difference in the AWS SDK',
                           sdk_ws, 'ignoring whitespace', sdk_nows)
     server_links = diff_link('Server Test', 'No codegen difference in the Server Test',
                              server_ws, 'ignoring whitespace', server_nows)
+    server_links_python = diff_link('Server Test Python', 'No codegen difference in the Server Test Python',
+                                    server_ws_python, 'ignoring whitespace', server_nows_python)
     # Save escaped newlines so that the GitHub Action script gets the whole message
     return "A new generated diff is ready to view.\\n"\
         f"- {sdk_links}\\n"\
-        f"- {server_links}\\n"
+        f"- {server_links}\\n"\
+        f"- {server_links_python}\\n"
 
 
 def write_to_file(path, text):

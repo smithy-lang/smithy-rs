@@ -1,11 +1,12 @@
-name: PR Bot
 # This job will generate a codegen diff, upload it to S3, and link to it in a comment on the PR.
+name: PR Bot
 on:
-  pull_request:
-    types:
-    - opened
-    - reopened
-    - synchronize
+  workflow_call:
+    secrets:
+      SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME:
+        required: true
+      SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN:
+        required: true
 
 # Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
 concurrency:
@@ -14,7 +15,7 @@ concurrency:
 
 env:
   java_version: 11
-  rust_version: 1.56.1
+  rust_version: 1.58.1
   rust_toolchain_components: clippy,rustfmt
   apt_dependencies: libssl-dev gnuplot jq
 
@@ -33,32 +34,13 @@ jobs:
       bot-message: ${{ steps.generate-diff.outputs.bot-message }}
     steps:
     - uses: actions/checkout@v2
-    - uses: actions/cache@v2
-      name: Gradle Cache
       with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-    # JDK is needed to generate code
-    - name: Set up JDK
-      uses: actions/setup-java@v1
-      with:
-        java-version: ${{ env.java_version }}
-    # Node is needed to run diff2html
-    - name: Set up NodeJS
-      uses: actions/setup-node@v2
-      with:
-        node-version: '16'
-    - name: Install diff2html-cli
-      run: npm install -g diff2html-cli@5.1.11
+        path: smithy-rs
     - name: Generate diff
-      id: generate-diff
-      run: |
-        ./tools/codegen-diff-revisions.py . ${{ github.event.pull_request.base.sha }}
-        echo "::set-output name=bot-message::$(cat tmp-codegen-diff/bot-message)"
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: generate-codegen-diff
+        action-arguments: ${{ github.event.pull_request.base.sha }}
     - uses: aws-actions/configure-aws-credentials@v1
       name: Acquire credentials for uploading to S3
       with:
@@ -67,8 +49,8 @@ jobs:
         aws-region: us-west-2
     - name: Upload diff to S3
       run: |
-        if [[ -d tmp-codegen-diff/${{ github.event.pull_request.base.sha }} ]]; then
-            aws s3 cp tmp-codegen-diff/${{ github.event.pull_request.base.sha }} \
+        if [[ -d artifacts/codegen-diff/${{ github.event.pull_request.base.sha }} ]]; then
+            aws s3 cp artifacts/codegen-diff/${{ github.event.pull_request.base.sha }} \
                 "s3://${S3_BUCKET_NAME}/codegen-diff/${{ github.event.pull_request.base.sha }}" --recursive
         fi
 
@@ -113,7 +95,7 @@ jobs:
         ./gradlew -Paws.services=+sts,+sso,+transcribestreaming,+dynamodb :aws:sdk:assemble
 
         # Copy the Server runtime crate(s) in
-        cp -r rust-runtime/aws-smithy-http-server aws/sdk/build/aws-sdk/sdk
+        cp -r rust-runtime/aws-smithy-http-server rust-runtime/aws-smithy-http-server-python aws/sdk/build/aws-sdk/sdk
 
         pushd aws/sdk/build/aws-sdk
 
@@ -121,7 +103,7 @@ jobs:
         sed -i '/examples/d' Cargo.toml
 
         # Add server runtime crates to the workspace
-        sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server",/' Cargo.toml
+        sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server","sdk\/aws-smithy-http-server-python",/' Cargo.toml
 
         cargo doc --no-deps --all-features
         popd
@@ -138,85 +120,10 @@ jobs:
       run: |
         aws s3 cp target/doc "s3://${S3_BUCKET_NAME}/docs/${{ github.event.pull_request.head.sha }}" --recursive
 
-  generate-server-benchmark:
-    name: Generate server benchmark
-    runs-on: ubuntu-latest
-    outputs:
-      bot-message: ${{ steps.run-benchmark.outputs.bot-message }}
-    steps:
-    - name: Checkout PR
-      uses: actions/checkout@v3
-      with:
-        path: pull-request
-    - name: Checkout origin/main
-      uses: actions/checkout@v3
-      with:
-        repository: awslabs/smithy-rs
-        path: origin-main
-        ref: main
-    - name: Checkout wrk
-      uses: actions/checkout@v3
-      with:
-        repository: wg/wrk
-        path: wrk-build
-        ref: 4.2.0
-    - uses: actions/cache@v2
-      name: Gradle Cache
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-        # Pinned to the commit hash of v1.3.0
-    - name: Rust Cache
-      uses: Swatinem/rust-cache@842ef286fff290e445b90b4002cc9807c3669641
-      with:
-        sharedKey: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
-        target-dir: ./target
-    - name: Set up JDK
-      uses: actions/setup-java@v1
-      with:
-        java-version: ${{ env.java_version }}
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: ${{ env.rust_version }}
-        components: ${{ env.rust_toolchain_components }}
-        default: true
-    - name: Install benchmarks dependencies
-      run: sudo apt-get update && sudo apt-get install -y ${{ env.apt_dependencies }}
-      # Ubuntu 20.04 doesn't have wrk packaged, hence we need to build it 🤦
-      # This will go away as soon as GitHub supports Ubuntu 21.10.
-    - name: Install wrk
-      run: cd wrk-build && make -j8 wrk && sudo cp wrk /usr/local/bin
-    - name: Run benchmark
-      id: run-benchmark
-      run: |
-        mkdir -p ~/.wrk-api-bench
-        # run the benchmark on origin/main
-        pushd origin-main/rust-runtime/aws-smithy-http-server/examples
-        make && RUN_BENCHMARKS=1 cargo test --release
-        popd
-
-        # run the benchmark on current ref
-        pushd pull-request/rust-runtime/aws-smithy-http-server/examples
-        make && RUN_BENCHMARKS=1 cargo test --release
-        popd
-        # Uncomment this for debugging purposes. It will print out the
-        # content of all the benchmarks found in the cache + the last one
-        # produced by the current run.
-        # for x in ~/.wrk-api-bench/*; do echo "Benchmark $x content:"; jq . "$x"; echo; done
-
-        # Ensure the output is available for the PR bot.
-        echo "::set-output name=bot-message::$(cat /tmp/smithy_rs_benchmark_deviation.txt)"
-
   post-bot-comment:
     needs:
     - generate-diff
     - generate-doc-preview
-    - generate-server-benchmark
     runs-on: ubuntu-latest
     name: Post bot comment
     permissions:
@@ -224,6 +131,16 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+    - uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
+    - name: Set bot message outputs
+      id: bot-messages
+      run: |
+        set -eux
+        echo ::set-output name=codegen-diff::"$(cat ./bot-message-codegen-diff)"
     - name: Post bot comment
       uses: actions/github-script@v5
       if: ${{ github.head_ref != null }}
@@ -233,7 +150,6 @@ jobs:
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '${{ needs.generate-diff.outputs.bot-message }}\n\n' +
-              '${{ needs.generate-doc-preview.outputs.bot-message }}\n\n' +
-              '${{ needs.generate-server-benchmark.outputs.bot-message }}\n\n'
+            body: '${{ steps.bot-messages.outputs.codegen-diff }}\n\n' +
+              '${{ needs.generate-doc-preview.outputs.bot-message }}\n\n'
           })

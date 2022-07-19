@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use std::borrow::Cow;
@@ -467,7 +467,9 @@ mod tests {
     struct TestCase {
         canonical_seconds: String,
         canonical_nanos: u32,
+        #[allow(dead_code)]
         iso8601: String,
+        #[allow(dead_code)]
         error: bool,
         smithy_format_value: Option<String>,
     }

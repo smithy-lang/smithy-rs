@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Assume credentials for a role through the AWS Security Token Service (STS).
@@ -69,6 +69,7 @@ impl AssumeRoleProvider {
 /// A builder for [`AssumeRoleProvider`].
 ///
 /// Construct one through [`AssumeRoleProvider::builder`].
+#[derive(Debug)]
 pub struct AssumeRoleProviderBuilder {
     role_arn: String,
     external_id: Option<String>,
@@ -248,7 +249,7 @@ impl Inner {
 }
 
 impl ProvideCredentials for Inner {
-    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'_>
     where
         Self: 'a,
     {

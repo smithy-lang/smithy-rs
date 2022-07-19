@@ -1,5 +1,5 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 
 # Use this action to execute the action scripts in tools/ci-build/scripts within the Docker build image.
 name: smithy-rs Docker Build
@@ -9,6 +9,9 @@ inputs:
   action:
     description: What action to run in the Docker build
     required: true
+  action-arguments:
+    description: Arguments to pass to the action
+    required: false
 runs:
   using: composite
   steps:
@@ -53,7 +56,7 @@ runs:
   - name: Run ${{ inputs.action }}
     shell: bash
     run: |
-      ./smithy-rs/tools/ci-build/ci-action ${{ inputs.action }}
+      ./smithy-rs/tools/ci-build/ci-action ${{ inputs.action }} ${{ inputs.action-arguments}}
       tar cfz artifacts-${{ inputs.action }}.tar.gz -C artifacts .
   - name: Upload artifacts
     uses: actions/upload-artifact@v3

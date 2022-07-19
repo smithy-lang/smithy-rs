@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators.error
@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.StdError
-import software.amazon.smithy.rust.codegen.smithy.RuntimeType.Companion.stdfmt
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.isOptional
@@ -70,13 +69,6 @@ class ErrorGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val messageShape = shape.errorMessageMember()
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
-        val (returnType, message) = messageShape?.let {
-            if (symbolProvider.toSymbol(messageShape).isOptional()) {
-                "Option<&str>" to "self.${symbolProvider.toMemberName(it)}.as_deref()"
-            } else {
-                "&str" to "self.${symbolProvider.toMemberName(it)}.as_ref()"
-            }
-        } ?: "Option<&str>" to "None"
         writer.rustBlock("impl ${symbol.name}") {
             val retryKindWriteable = shape.modeledRetryKind(error)?.writable(symbolProvider.config().runtimeConfig)
             if (retryKindWriteable != null) {
@@ -85,12 +77,20 @@ class ErrorGenerator(
                     retryKindWriteable(this)
                 }
             }
-            rust(
-                """
-                /// Returns the error message.
-                pub fn message(&self) -> $returnType { $message }
-                """
-            )
+            if (messageShape != null) {
+                val (returnType, message) = if (symbolProvider.toSymbol(messageShape).isOptional()) {
+                    "Option<&str>" to "self.${symbolProvider.toMemberName(messageShape)}.as_deref()"
+                } else {
+                    "&str" to "self.${symbolProvider.toMemberName(messageShape)}.as_ref()"
+                }
+
+                rust(
+                    """
+                    /// Returns the error message.
+                    pub fn message(&self) -> $returnType { $message }
+                    """
+                )
+            }
 
             /*
              * If we're generating for a server, the `name` method is added to enable
@@ -109,7 +109,7 @@ class ErrorGenerator(
             }
         }
 
-        writer.rustBlock("impl #T for ${symbol.name}", stdfmt.member("Display")) {
+        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 // If the error id and the Rust name don't match, print the actual error id for easy debugging
                 // Note: Exceptions cannot be renamed so it is OK to not call `getName(service)` here

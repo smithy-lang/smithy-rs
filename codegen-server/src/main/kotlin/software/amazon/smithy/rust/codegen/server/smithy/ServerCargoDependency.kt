@@ -1,11 +1,12 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 
@@ -16,12 +17,12 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
  */
 object ServerCargoDependency {
     val AsyncTrait: CargoDependency = CargoDependency("async-trait", CratesIo("0.1"))
-    val AxumCore: CargoDependency = CargoDependency("axum-core", CratesIo("0.1"))
+    val FormUrlEncoded: CargoDependency = CargoDependency("form_urlencoded", CratesIo("1"))
     val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3"))
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
-    val SerdeUrlEncoded: CargoDependency = CargoDependency("serde_urlencoded", CratesIo("0.7"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
+    val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.0"), scope = DependencyScope.Dev)
 
     fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")
 }

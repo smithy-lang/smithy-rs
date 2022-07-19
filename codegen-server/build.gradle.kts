@@ -1,15 +1,12 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     kotlin("jvm")
-    id("org.jetbrains.dokka")
-    jacoco
-    maven
     `maven-publish`
 }
 
@@ -27,22 +24,14 @@ val smithyVersion: String by project
 val kotestVersion: String by project
 
 dependencies {
-    implementation(kotlin("stdlib-jdk8"))
-    api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
-    api("com.moandjiezana.toml:toml4j:0.7.2")
     implementation(project(":codegen"))
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
-    runtimeOnly(project(":rust-runtime"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
-// unlike the client-runtime, software.amazon.smithy.rust.codegen.smithy-kotlin codegen package is
-// not expected to run on Android...we can target 1.8
 tasks.compileKotlin { kotlinOptions.jvmTarget = "1.8" }
-
 tasks.compileTestKotlin { kotlinOptions.jvmTarget = "1.8" }
 
 // Reusable license copySpec
@@ -76,26 +65,6 @@ tasks.test {
         showStandardStreams = true
     }
 }
-
-tasks.dokka {
-    outputFormat = "html"
-    outputDirectory = "$buildDir/javadoc"
-}
-
-// Always build documentation
-tasks["build"].finalizedBy(tasks["dokka"])
-
-// Configure jacoco (code coverage) to generate an HTML report
-tasks.jacocoTestReport {
-    reports {
-        xml.isEnabled = false
-        csv.isEnabled = false
-        html.destination = file("$buildDir/reports/jacoco")
-    }
-}
-
-// Always run the jacoco test report after testing.
-tasks["test"].finalizedBy(tasks["jacocoTestReport"])
 
 publishing {
     publications {

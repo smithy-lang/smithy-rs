@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
@@ -18,10 +18,10 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
@@ -125,8 +125,8 @@ object EventStreamTestModels {
         val validTestUnion: String,
         val validSomeError: String,
         val validUnmodeledError: String,
-        val mode: CodegenMode = CodegenMode.Client,
-        val protocolBuilder: (CodegenContext) -> Protocol,
+        val target: CodegenTarget = CodegenTarget.CLIENT,
+        val protocolBuilder: (CoreCodegenContext) -> Protocol,
     ) {
         override fun toString(): String = protocolShapeId
     }
@@ -303,7 +303,7 @@ object EventStreamTestModels {
                 </Response>
             """.trimIndent(),
         ) { Ec2QueryProtocol(it) },
-    ).flatMap { listOf(it, it.copy(mode = CodegenMode.Server)) }
+    ).flatMap { listOf(it, it.copy(target = CodegenTarget.SERVER)) }
 
     class UnmarshallTestCasesProvider : ArgumentsProvider {
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
@@ -350,7 +350,7 @@ object EventStreamTestTools {
         }
         project.withModule(RustModule.public("model")) {
             val inputOutput = model.lookup<StructureShape>("test#TestStreamInputOutput")
-            recursivelyGenerateModels(model, symbolProvider, inputOutput, it, testCase.mode)
+            recursivelyGenerateModels(model, symbolProvider, inputOutput, it, testCase.target)
         }
         project.withModule(RustModule.public("output")) {
             operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, it)
@@ -363,7 +363,7 @@ object EventStreamTestTools {
         symbolProvider: RustSymbolProvider,
         shape: Shape,
         writer: RustWriter,
-        mode: CodegenMode
+        mode: CodegenTarget
     ) {
         for (member in shape.members()) {
             val target = model.expectShape(member.target)

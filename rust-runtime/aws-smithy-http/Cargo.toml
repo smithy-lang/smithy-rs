@@ -1,14 +1,17 @@
 [package]
 name = "aws-smithy-http"
 version = "0.0.0-smithy-rs-head"
-authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
+authors = [
+  "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
+  "Russell Cohen <rcoh@amazon.com>",
+]
 description = "Smithy HTTP logic for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-rt-tokio = ["tokio/rt", "tokio/fs", "tokio-util/io"]
+rt-tokio = ["tokio/rt", "tokio/fs", "tokio/io-util", "tokio-util/io"]
 event-stream = ["aws-smithy-eventstream"]
 
 [dependencies]
@@ -20,7 +23,7 @@ http = "0.2.3"
 http-body = "0.4.4"
 once_cell = "1.10"
 percent-encoding = "2.1.0"
-pin-project = "1"
+pin-project-lite = "0.2.9"
 tracing = "0.1"
 
 # We are using hyper for our streaming body implementation, but this is an internal detail.
@@ -29,16 +32,24 @@ hyper = "0.14"
 # ByteStream internals
 futures-core = "0.3.14"
 tokio = { version = "1.6", optional = true }
-tokio-util = { version = "0.6", optional = true}
+tokio-util = { version = "0.7", optional = true }
 
 [dev-dependencies]
 async-stream = "0.3"
 futures-util = "0.3"
 hyper = { version = "0.14", features = ["stream"] }
+pretty_assertions = "1.2"
 proptest = "1"
-tokio = {version = "1.6", features = ["macros", "rt", "rt-multi-thread", "fs", "io-util"]}
+tokio = { version = "1.6", features = [
+  "macros",
+  "rt",
+  "rt-multi-thread",
+  "fs",
+  "io-util",
+] }
 tokio-stream = "0.1.5"
 tempfile = "3.2.0"
+tracing-test = "0.2.1"
 
 [package.metadata.docs.rs]
 all-features = true

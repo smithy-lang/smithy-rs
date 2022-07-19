@@ -12,52 +12,93 @@
 # author = "rcoh"
 
 [[smithy-rs]]
-message = "Fix link to Developer Guide in crate's README.md"
-references = ["smithy-rs#1262"]
+message = "Add checksum calculation and validation wrappers for HTTP bodies."
+references = ["smithy-rs#1263"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "liubin"
-
-[[aws-sdk-rust]]
-message = "Fix link to Developer Guide in crate's README.md"
-references = ["smithy-rs#1262"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "liubin"
+author = "Velfi"
 
 [[smithy-rs]]
-message = "Update all runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)"
-references = ["aws-sdk-rust#490"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+message = "`aws_smithy_http::header::append_merge_header_maps`, a function for merging two `HeaderMap`s, is now public."
+references = ["smithy-rs#1263"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "Velfi"
 
 [[aws-sdk-rust]]
-message = "Update all SDK and runtime crates to [edition 2021](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)"
-references = ["aws-sdk-rust#490"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "Velfi"
-
-[[aws-sdk-rust]]
-message = "Treat blank environment variable credentials (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`) as missing instead of attempting to use them to sign requests."
-references = ["aws-sdk-rust#1271"]
+message = """
+Fix compilation of `aws-config` with `rustls` and `native-tls` disabled. The
+`ProviderConfig::with_tcp_connector` method uses
+`aws_smithy_client::hyper_ext`, which only exists with the `client-hyper`
+feature enabled. Add a feature enabling that, and enable it by default.
+"""
+references = ["smithy-rs#1541"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "elrob"
+author = "joshtriplett"
 
 [[aws-sdk-rust]]
-message = "Add support for configuring the session length in [AssumeRoleProvider](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html)"
-references = ["aws-sdk-rust#479", "smithy-rs#1296"]
+message = """
+Add support for aws-chunked content encoding. Only single-chunk encoding is supported. Multiple chunks and
+chunk signing are not supported at this time.
+"""
+references = ["smithy-rs#1263"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "rcoh"
+author = "Velfi"
 
 [[aws-sdk-rust]]
-message = "Add caching to [AssumeRoleProvider](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html)"
-references = ["smithy-rs#1296"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "rcoh"
+message = "Re-export aws_types::SdkConfig in aws_config"
+references = ["smithy-rs#1457"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "calavera"
+
+[[aws-sdk-rust]]
+message = "Add `From<aws_smithy_client::erase::DynConnector>` impl for `aws_smithy_client::http_connector::HttpConnector`"
+references = ["aws-sdk-rust#581"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
 
 [[smithy-rs]]
-message = "Update urlencoding crate to v2.1.0"
-references = ["smithy-rs#1301"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "benesch"
+message = """
+Updated the smithy client's retry behavior to allow for a configurable initial backoff. Previously, the initial backoff
+(named `r` in the code) was set to 2 seconds. This is not an ideal default for services that expect clients to quickly
+retry failed request attempts. Now, users can set quicker (or slower) backoffs according to their needs.
+"""
+references = ["aws-sdk-rust#567"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+Updated SDK Client retry behavior to allow for a configurable initial backoff. Previously, the initial backoff
+(named `r` in the code) was set to 2 seconds. This is not an ideal default for services like DynamoDB that expect
+clients to quickly retry failed request attempts. Now, users can set quicker (or slower) backoffs according to their
+needs.
+```rust
+#[tokio::main]
+async fn main() -> Result<(), aws_sdk_dynamodb::Error> {
+    let retry_config = aws_smithy_types::retry::RetryConfigBuilder::new()
+        .max_attempts(4)
+        .initial_backoff(Duration::from_millis(20));
+    let shared_config = aws_config::from_env()
+        .retry_config(retry_config)
+        .load()
+        .await;
+    let client = aws_sdk_dynamodb::Client::new(&shared_config);
+    // Given the 20ms backoff multiplier, and assuming this request fails 3 times before succeeding,
+    // the first retry would take place between 0-20ms after the initial request,
+    // the second retry would take place between 0-40ms after the first retry,
+    // and the third retry would take place between 0-80ms after the second retry.
+    let request = client
+        .put_item()
+        .table_name("users")
+        .item("username", "Velfi")
+        .item("account_type", "Developer")
+        .send().await?;
+    Ok(())
+}
+```
+"""
+references = ["aws-sdk-rust#567"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
 
 [[smithy-rs]]
 message = """
@@ -66,28 +107,50 @@ removed. Lossy converters into floating point types for
 `aws_smithy_types::Number` have been suffixed with `_lossy`. If you were
 directly using the integer lossy converters, we recommend you use the safe
 converters.
-
 _Before:_
-
 ```rust
 fn f1(n: aws_smithy_types::Number) {
     let foo: f32 = n.to_f32(); // Lossy conversion!
-
     let bar: u32 = n.to_u32(); // Lossy conversion!
 }
 ```
-
 _After:_
-
 ```rust
 fn f1(n: aws_smithy_types::Number) {
     use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.
-
     let foo: f32 = n.try_into().expect("lossy conversion detected"); // Or handle the error instead of panicking.
-
     // You can still do lossy conversions, but only into floating point types.
     let foo: f32 = n.to_f32_lossy();
+    // To lossily convert into integer types, use an `as` cast directly.
+    let bar: u32 = n as u32; // Lossy conversion!
+}
+```
+"""
+references = ["smithy-rs#1274"]
+meta = { "breaking" = true, "tada" = false, "bug" = true }
+author = "david-perez"
 
+[[aws-sdk-rust]]
+message = """
+Lossy converters into integer types for `aws_smithy_types::Number` have been
+removed. Lossy converters into floating point types for
+`aws_smithy_types::Number` have been suffixed with `_lossy`. If you were
+directly using the integer lossy converters, we recommend you use the safe
+converters.
+_Before:_
+```rust
+fn f1(n: aws_smithy_types::Number) {
+    let foo: f32 = n.to_f32(); // Lossy conversion!
+    let bar: u32 = n.to_u32(); // Lossy conversion!
+}
+```
+_After:_
+```rust
+fn f1(n: aws_smithy_types::Number) {
+    use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.
+    let foo: f32 = n.try_into().expect("lossy conversion detected"); // Or handle the error instead of panicking.
+    // You can still do lossy conversions, but only into floating point types.
+    let foo: f32 = n.to_f32_lossy();
     // To lossily convert into integer types, use an `as` cast directly.
     let bar: u32 = n as u32; // Lossy conversion!
 }

@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.customizations
@@ -36,7 +36,7 @@ internal class TimeoutConfigDecoratorTest {
     fun `generates a valid config`() {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val project = TestWorkspace.testProject()
-        val codegenContext = testCodegenContext(model, settings = project.rustSettings(model))
+        val codegenContext = testCodegenContext(model, settings = project.rustSettings())
 
         validateConfigCustomizations(TimeoutConfigProviderConfig(codegenContext), project)
     }

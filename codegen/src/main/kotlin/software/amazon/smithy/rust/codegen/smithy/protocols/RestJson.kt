@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
@@ -9,28 +9,34 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.JsonNameTrait
+import software.amazon.smithy.model.traits.MediaTypeTrait
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
+import software.amazon.smithy.rust.codegen.util.outputShape
 
-class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
-    override fun protocol(codegenContext: CodegenContext): Protocol = RestJson(codegenContext)
+class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
+    override fun protocol(codegenContext: ClientCodegenContext): Protocol = RestJson(codegenContext)
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): HttpBoundProtocolGenerator =
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, RestJson(codegenContext))
-
-    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
@@ -56,19 +62,33 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
  * `application/json` if not overridden.
  */
 class RestJsonHttpBindingResolver(
-    model: Model,
+    private val model: Model,
     contentTypes: ProtocolContentTypes,
 ) : HttpTraitHttpBindingResolver(model, contentTypes) {
     /**
      * In the RestJson1 protocol, HTTP responses have a default `Content-Type: application/json` header if it is not
      * overridden by a specific mechanism e.g. an output shape member is targeted with `httpPayload` or `mediaType` traits.
      */
-    override fun responseContentType(operationShape: OperationShape): String =
-        super.responseContentType(operationShape) ?: "application/json"
+    override fun responseContentType(operationShape: OperationShape): String? {
+        val members = operationShape
+            .outputShape(model)
+            .members()
+        // TODO(https://github.com/awslabs/smithy/issues/1259)
+        //  Temporary fix for https://github.com/awslabs/smithy/blob/df456a514f72f4e35f0fb07c7e26006ff03b2071/smithy-model/src/main/java/software/amazon/smithy/model/knowledge/HttpBindingIndex.java#L352
+        for (member in members) {
+            if (member.hasTrait<HttpPayloadTrait>()) {
+                val target = model.expectShape(member.target)
+                if (!target.hasTrait<StreamingTrait>() && !target.hasTrait<MediaTypeTrait>() && target.isBlobShape) {
+                    return null
+                }
+            }
+        }
+        return super.responseContentType(operationShape) ?: "application/json"
+    }
 }
 
-class RestJson(private val codegenContext: CodegenContext) : Protocol {
-    private val runtimeConfig = codegenContext.runtimeConfig
+class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
@@ -80,7 +100,7 @@ class RestJson(private val codegenContext: CodegenContext) : Protocol {
     private val jsonDeserModule = RustModule.private("json_deser")
 
     override val httpBindingResolver: HttpBindingResolver =
-        RestJsonHttpBindingResolver(codegenContext.model, ProtocolContentTypes.consistent("application/json"))
+        RestJsonHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes.consistent("application/json"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
@@ -92,10 +112,10 @@ class RestJson(private val codegenContext: CodegenContext) : Protocol {
         listOf("x-amzn-errortype" to errorShape.id.name)
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
+        JsonParserGenerator(coreCodegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
+        JsonSerializerGenerator(coreCodegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
@@ -121,6 +141,15 @@ class RestJson(private val codegenContext: CodegenContext) : Protocol {
                 *errorScope
             )
         }
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType
+    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+
+    override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
 }
 
 fun restJsonFieldName(member: MemberShape): String {

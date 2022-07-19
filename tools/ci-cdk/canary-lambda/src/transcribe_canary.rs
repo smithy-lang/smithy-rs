@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::canary::CanaryError;
@@ -48,7 +48,7 @@ pub async fn transcribe_canary(
         match event {
             TranscriptResultStream::TranscriptEvent(transcript_event) => {
                 let transcript = transcript_event.transcript.unwrap();
-                for result in transcript.results.unwrap_or_else(|| Vec::new()) {
+                for result in transcript.results.unwrap_or_else(Vec::new) {
                     if !result.is_partial {
                         let first_alternative = &result.alternatives.as_ref().unwrap()[0];
                         full_message += first_alternative.transcript.as_ref().unwrap();

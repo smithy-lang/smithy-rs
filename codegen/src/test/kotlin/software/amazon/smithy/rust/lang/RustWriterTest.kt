@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.lang
@@ -15,12 +15,16 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.isEmpty
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -110,5 +114,39 @@ class RustWriterTest {
     fun `empty writable`() {
         val w = writable {}
         w.isEmpty() shouldBe true
+    }
+
+    @Test
+    fun `attributes with comments when using rust`() {
+        val sut = RustWriter.forModule("lib")
+        Attribute.Custom("foo").render(sut)
+        sut.rust("// heres an attribute")
+        sut.toString().shouldContain("#[foo]// heres an attribute")
+    }
+
+    @Test
+    fun `attributes with comments when using docs`() {
+        val sut = RustWriter.forModule("lib")
+        Attribute.Custom("foo").render(sut)
+        sut.docs("heres an attribute")
+        sut.toString().shouldContain("#[foo]\n/// heres an attribute")
+    }
+
+    @Test
+    fun `template writables with upper case names`() {
+        val inner = writable { rust("hello") }
+        val sut = RustWriter.forModule("lib")
+        sut.rustTemplate(
+            "inner: #{Inner:W}, regular: #{http}",
+            "Inner" to inner,
+            "http" to CargoDependency.Http.asType().member("foo")
+        )
+        sut.toString().shouldContain("inner: hello, regular: http::foo")
+    }
+
+    @Test
+    fun `can handle file paths properly when determining module`() {
+        val sut = RustWriter.forModule("src/module_name")
+        sut.module().shouldBe("module_name")
     }
 }

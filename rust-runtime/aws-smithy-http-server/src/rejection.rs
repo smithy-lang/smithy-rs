@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Rejection types.
@@ -134,8 +134,10 @@ pub enum RequestRejection {
     HttpBody(crate::Error),
 
     // These are used when checking the `Content-Type` header.
-    MissingJsonContentType,
-    MissingXmlContentType,
+    MissingRestJson1ContentType,
+    MissingAwsJson10ContentType,
+    MissingAwsJson11ContentType,
+    MissingRestXmlContentType,
     MimeParse,
 
     /// Used when failing to deserialize the HTTP body's bytes into a JSON document conforming to
@@ -183,9 +185,33 @@ pub enum RequestRejection {
     // error, but it would be a lot of effort for comparatively low benefit.
     /// Used when consuming the input struct builder.
     Build(crate::Error),
+
+    /// Used by the server when the enum variant sent by a client is not known.
+    /// Unlike the rejections above, the inner type is code generated,
+    /// with each enum having its own generated error type.
+    EnumVariantNotFound(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl std::error::Error for RequestRejection {}
+
+// Consider a conversion between `T` and `U` followed by a bubbling up of the conversion error
+// through `Result<_, RequestRejection>`. This [`From`] implementation accomodates the special case
+// where `T` and `U` are equal, in such cases `T`/`U` a enjoy `TryFrom<T>` with
+// `Err = std::convert::Infallible`.
+//
+// Note that when `!` stabilizes `std::convert::Infallible` will become an alias for `!` and there
+// will be a blanket `impl From<!> for T`. This will remove the need for this implementation.
+//
+// More details on this can be found in the following links:
+// - https://doc.rust-lang.org/std/primitive.never.html
+// - https://doc.rust-lang.org/std/convert/enum.Infallible.html#future-compatibility
+impl From<std::convert::Infallible> for RequestRejection {
+    fn from(_err: std::convert::Infallible) -> Self {
+        // We opt for this `match` here rather than [`unreachable`] to assure the reader that this
+        // code path is dead.
+        match _err {}
+    }
+}
 
 // These converters are solely to make code-generation simpler. They convert from a specific error
 // type (from a runtime/third-party crate or the standard library) into a variant of the

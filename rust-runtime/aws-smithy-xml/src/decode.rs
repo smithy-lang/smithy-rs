@@ -1,12 +1,13 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::unescape::unescape;
 use std::borrow::Cow;
 use std::convert::TryFrom;
-use thiserror::Error;
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 use xmlparser::{ElementEnd, Token, Tokenizer};
 
 pub type Depth = usize;
@@ -14,23 +15,39 @@ pub type Depth = usize;
 // in general, these errors are just for reporting what happened, there isn't
 // much value in lots of different match variants
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum XmlError {
-    #[error("XML Parse Error")]
-    InvalidXml(#[from] xmlparser::Error),
-
-    #[error("Invalid XML Escape: {esc}")]
+    InvalidXml(xmlparser::Error),
     InvalidEscape { esc: String },
-
-    #[error("Error parsing XML: {0}")]
     Custom(Cow<'static, str>),
-    #[error("Encountered another error parsing XML: {0}")]
-    Unhandled(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+    Unhandled(Box<dyn std::error::Error + Send + Sync + 'static>),
 }
+
+impl From<xmlparser::Error> for XmlError {
+    fn from(error: xmlparser::Error) -> Self {
+        Self::InvalidXml(error)
+    }
+}
+
+impl Display for XmlError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            XmlError::InvalidXml(err) => write!(f, "XML parse error: {}", err),
+            XmlError::InvalidEscape { esc } => write!(f, "Invalid XML escape: {}", esc),
+            XmlError::Custom(msg) => write!(f, "Error parsing XML: {}", msg),
+            XmlError::Unhandled(err) => write!(f, "Error parsing XML: {}", err),
+        }
+    }
+}
+
+impl Error for XmlError {}
 
 impl XmlError {
     pub fn custom(msg: impl Into<Cow<'static, str>>) -> Self {
         XmlError::Custom(msg.into())
+    }
+    pub fn unhandled(error: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        Self::Unhandled(error.into())
     }
 }
 
@@ -300,7 +317,7 @@ impl<'inp> ScopedDecoder<'inp, '_> {
 
     fn nested_decoder<'a>(&'a mut self, start_el: StartEl<'inp>) -> ScopedDecoder<'inp, 'a> {
         ScopedDecoder {
-            doc: &mut self.doc,
+            doc: self.doc,
             start_el,
             terminated: false,
         }

@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.serialize
@@ -11,7 +11,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestModels
 import software.amazon.smithy.rust.codegen.smithy.protocols.EventStreamTestTools
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
@@ -26,19 +26,18 @@ class EventStreamMarshallerGeneratorTest {
     fun test(testCase: EventStreamTestModels.TestCase) {
         val test = EventStreamTestTools.generateTestProject(testCase)
 
-        val codegenContext = CodegenContext(
+        val codegenContext = CoreCodegenContext(
             test.model,
             test.symbolProvider,
-            TestRuntimeConfig,
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
-            testRustSettings(test.model),
-            mode = testCase.mode
+            testRustSettings(),
+            target = testCase.target
         )
         val protocol = testCase.protocolBuilder(codegenContext)
         val generator = EventStreamMarshallerGenerator(
             test.model,
-            testCase.mode,
+            testCase.target,
             TestRuntimeConfig,
             test.symbolProvider,
             test.streamShape,

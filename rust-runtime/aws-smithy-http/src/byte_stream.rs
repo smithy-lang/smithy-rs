@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 //! ByteStream Abstractions
 //!
@@ -80,7 +80,7 @@
 //!
 //! ```no_run
 //! # #[cfg(feature = "rt-tokio")]
-//! {
+//! # {
 //! use aws_smithy_http::byte_stream::ByteStream;
 //! use std::path::Path;
 //! struct GetObjectInput {
@@ -93,15 +93,40 @@
 //!         .expect("valid path");
 //!     GetObjectInput { body: bytestream }
 //! }
+//! # }
+//! ```
+//!
+//! If you want more control over how the file is read, such as specifying the size of the buffer used to read the file
+//! or the length of the file, use an [`FsBuilder`](crate::byte_stream::FsBuilder).
+//!
+//! ```no_run
+//! # #[cfg(feature = "rt-tokio")]
+//! # {
+//! use aws_smithy_http::byte_stream::{ByteStream, Length};
+//! use std::path::Path;
+//! struct GetObjectInput {
+//!     body: ByteStream
 //! }
+//!
+//! async fn bytestream_from_file() -> GetObjectInput {
+//!     let bytestream = ByteStream::read_from().path("docs/some-large-file.csv")
+//!         .buffer_size(32_784)
+//!         .length(Length::Exact(123_456))
+//!         .build()
+//!         .await
+//!         .expect("valid path");
+//!     GetObjectInput { body: bytestream }
+//! }
+//! # }
 //! ```
 
 use crate::body::SdkBody;
+use crate::callback::BodyCallback;
 use bytes::Buf;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
 use http_body::Body;
-use pin_project::pin_project;
+use pin_project_lite::pin_project;
 use std::error::Error as StdError;
 use std::fmt::{Debug, Formatter};
 use std::io::IoSlice;
@@ -110,105 +135,142 @@ use std::task::{Context, Poll};
 
 #[cfg(feature = "rt-tokio")]
 mod bytestream_util;
+#[cfg(feature = "rt-tokio")]
+pub use bytestream_util::Length;
 
-/// Stream of binary data
-///
-/// `ByteStream` wraps a stream of binary data for ease of use.
-///
-/// ## Getting data out of a `ByteStream`
-///
-/// `ByteStream` provides two primary mechanisms for accessing the data:
-/// 1. With `.collect()`:
-/// [`.collect()`](crate::byte_stream::ByteStream::collect) reads the complete ByteStream into memory and stores it in `AggregatedBytes`,
-/// a non-contiguous ByteBuffer.
-///     ```no_run
-///     use aws_smithy_http::byte_stream::{ByteStream, AggregatedBytes};
-///     use aws_smithy_http::body::SdkBody;
-///     use bytes::Buf;
-///     async fn example() {
-///        let stream = ByteStream::new(SdkBody::from("hello! This is some data"));
-///        // Load data from the stream into memory:
-///        let data = stream.collect().await.expect("error reading data");
-///        // collect returns a `bytes::Buf`:
-///        println!("first chunk: {:?}", data.chunk());
-///     }
-///     ```
-/// 2. Via [`impl Stream`](futures_core::Stream):
-///
-///     _Note: An import of `StreamExt` is required to use `try_next()`._
-///
-///     For use-cases where holding the entire ByteStream in memory is unnecessary, use the
-///     `Stream` implementation:
-///     ```no_run
-///     # mod crc32 {
-///     #   pub struct Digest { }
-///     #   impl Digest {
-///     #       pub fn new() -> Self { Digest {} }
-///     #       pub fn write(&mut self, b: &[u8]) { }
-///     #       pub fn finish(&self) -> u64 { 6 }
-///     #   }
-///     # }
-///     use aws_smithy_http::byte_stream::{ByteStream, AggregatedBytes, Error};
-///     use aws_smithy_http::body::SdkBody;
-///     use tokio_stream::StreamExt;
-///
-///     async fn example() -> Result<(), Error> {
-///        let mut stream = ByteStream::from(vec![1, 2, 3, 4, 5, 99]);
-///        let mut digest = crc32::Digest::new();
-///        while let Some(bytes) = stream.try_next().await? {
-///            digest.write(&bytes);
-///        }
-///        println!("digest: {}", digest.finish());
-///        Ok(())
-///     }
-///     ```
-///
-/// ## Getting data into a ByteStream
-/// ByteStreams can be created in one of three ways:
-/// 1. **From in-memory binary data**: ByteStreams created from in-memory data are always retryable. Data
-/// will be converted into `Bytes` enabling a cheap clone during retries.
-///     ```no_run
-///     use bytes::Bytes;
-///     use aws_smithy_http::byte_stream::ByteStream;
-///     let stream = ByteStream::from(vec![1,2,3]);
-///     let stream = ByteStream::from(Bytes::from_static(b"hello!"));
-///     ```
-///
-/// 2. **From a file**: ByteStreams created from a path can be retried. A new file descriptor will be opened if a retry occurs.
-///     ```no_run
-///     #[cfg(feature = "tokio-rt")]
-///     # {
-///     use aws_smithy_http::byte_stream::ByteStream;
-///     let stream = ByteStream::from_path("big_file.csv");
-///     # }
-///     ```
-///
-/// 3. **From an `SdkBody` directly**: For more advanced / custom use cases, a ByteStream can be created directly
-/// from an SdkBody. **When created from an SdkBody, care must be taken to ensure retriability.** An SdkBody is retryable
-/// when constructed from in-memory data or when using [`SdkBody::retryable`](crate::body::SdkBody::retryable).
-///     ```no_run
-///     use aws_smithy_http::byte_stream::ByteStream;
-///     use aws_smithy_http::body::SdkBody;
-///     use bytes::Bytes;
-///     let (mut tx, channel_body) = hyper::Body::channel();
-///     // this will not be retryable because the SDK has no way to replay this stream
-///     let stream = ByteStream::new(SdkBody::from(channel_body));
-///     tx.send_data(Bytes::from_static(b"hello world!"));
-///     tx.send_data(Bytes::from_static(b"hello again!"));
-///     // NOTE! You must ensure that `tx` is dropped to ensure that EOF is sent
-///     ```
-///
-#[pin_project]
-#[derive(Debug)]
-pub struct ByteStream(#[pin] Inner<SdkBody>);
+#[cfg(feature = "rt-tokio")]
+pub use self::bytestream_util::FsBuilder;
+
+pin_project! {
+    /// Stream of binary data
+    ///
+    /// `ByteStream` wraps a stream of binary data for ease of use.
+    ///
+    /// ## Getting data out of a `ByteStream`
+    ///
+    /// `ByteStream` provides two primary mechanisms for accessing the data:
+    /// 1. With `.collect()`:
+    ///
+    ///     [`.collect()`](crate::byte_stream::ByteStream::collect) reads the complete ByteStream into memory and stores it in `AggregatedBytes`,
+    ///     a non-contiguous ByteBuffer.
+    ///     ```no_run
+    ///     use aws_smithy_http::byte_stream::{ByteStream, AggregatedBytes};
+    ///     use aws_smithy_http::body::SdkBody;
+    ///     use bytes::Buf;
+    ///     async fn example() {
+    ///        let stream = ByteStream::new(SdkBody::from("hello! This is some data"));
+    ///        // Load data from the stream into memory:
+    ///        let data = stream.collect().await.expect("error reading data");
+    ///        // collect returns a `bytes::Buf`:
+    ///        println!("first chunk: {:?}", data.chunk());
+    ///     }
+    ///     ```
+    /// 2. Via [`impl Stream`](futures_core::Stream):
+    ///
+    ///     _Note: An import of `StreamExt` is required to use `.try_next()`._
+    ///
+    ///     For use-cases where holding the entire ByteStream in memory is unnecessary, use the
+    ///     `Stream` implementation:
+    ///     ```no_run
+    ///     # mod crc32 {
+    ///     #   pub struct Digest { }
+    ///     #   impl Digest {
+    ///     #       pub fn new() -> Self { Digest {} }
+    ///     #       pub fn write(&mut self, b: &[u8]) { }
+    ///     #       pub fn finish(&self) -> u64 { 6 }
+    ///     #   }
+    ///     # }
+    ///     use aws_smithy_http::byte_stream::{ByteStream, AggregatedBytes, Error};
+    ///     use aws_smithy_http::body::SdkBody;
+    ///     use tokio_stream::StreamExt;
+    ///
+    ///     async fn example() -> Result<(), Error> {
+    ///        let mut stream = ByteStream::from(vec![1, 2, 3, 4, 5, 99]);
+    ///        let mut digest = crc32::Digest::new();
+    ///        while let Some(bytes) = stream.try_next().await? {
+    ///            digest.write(&bytes);
+    ///        }
+    ///        println!("digest: {}", digest.finish());
+    ///        Ok(())
+    ///     }
+    ///     ```
+    ///
+    /// 3. Via [`.into_async_read()`](crate::byte_stream::ByteStream::into_async_read):
+    ///
+    ///     _Note: The `rt-tokio` feature must be active to use `.into_async_read()`._
+    ///
+    ///     It's possible to convert a `ByteStream` into a struct that implements [`tokio::io::AsyncRead`](tokio::io::AsyncRead).
+    ///     Then, you can use pre-existing tools like [`tokio::io::BufReader`](tokio::io::BufReader):
+    ///     ```no_run
+    ///     use aws_smithy_http::byte_stream::ByteStream;
+    ///     use aws_smithy_http::body::SdkBody;
+    ///     use tokio::io::{AsyncBufReadExt, BufReader};
+    ///     #[cfg(feature = "rt-tokio")]
+    ///     async fn example() -> std::io::Result<()> {
+    ///        let stream = ByteStream::new(SdkBody::from("hello!\nThis is some data"));
+    ///        // Wrap the stream in a BufReader
+    ///        let buf_reader = BufReader::new(stream.into_async_read());
+    ///        let mut lines = buf_reader.lines();
+    ///        assert_eq!(lines.next_line().await?, Some("hello!".to_owned()));
+    ///        assert_eq!(lines.next_line().await?, Some("This is some data".to_owned()));
+    ///        assert_eq!(lines.next_line().await?, None);
+    ///        Ok(())
+    ///     }
+    ///     ```
+    ///
+    /// ## Getting data into a ByteStream
+    /// ByteStreams can be created in one of three ways:
+    /// 1. **From in-memory binary data**: ByteStreams created from in-memory data are always retryable. Data
+    /// will be converted into `Bytes` enabling a cheap clone during retries.
+    ///     ```no_run
+    ///     use bytes::Bytes;
+    ///     use aws_smithy_http::byte_stream::ByteStream;
+    ///     let stream = ByteStream::from(vec![1,2,3]);
+    ///     let stream = ByteStream::from(Bytes::from_static(b"hello!"));
+    ///     ```
+    ///
+    /// 2. **From a file**: ByteStreams created from a path can be retried. A new file descriptor will be opened if a retry occurs.
+    ///     ```no_run
+    ///     #[cfg(feature = "tokio-rt")]
+    ///     # {
+    ///     use aws_smithy_http::byte_stream::ByteStream;
+    ///     let stream = ByteStream::from_path("big_file.csv");
+    ///     # }
+    ///     ```
+    ///
+    /// 3. **From an `SdkBody` directly**: For more advanced / custom use cases, a ByteStream can be created directly
+    /// from an SdkBody. **When created from an SdkBody, care must be taken to ensure retriability.** An SdkBody is retryable
+    /// when constructed from in-memory data or when using [`SdkBody::retryable`](crate::body::SdkBody::retryable).
+    ///     ```no_run
+    ///     use aws_smithy_http::byte_stream::ByteStream;
+    ///     use aws_smithy_http::body::SdkBody;
+    ///     use bytes::Bytes;
+    ///     let (mut tx, channel_body) = hyper::Body::channel();
+    ///     // this will not be retryable because the SDK has no way to replay this stream
+    ///     let stream = ByteStream::new(SdkBody::from(channel_body));
+    ///     tx.send_data(Bytes::from_static(b"hello world!"));
+    ///     tx.send_data(Bytes::from_static(b"hello again!"));
+    ///     // NOTE! You must ensure that `tx` is dropped to ensure that EOF is sent
+    ///     ```
+    ///
+    #[derive(Debug)]
+    pub struct ByteStream {
+        #[pin]
+        inner: Inner<SdkBody>
+    }
+}
 
 impl ByteStream {
     pub fn new(body: SdkBody) -> Self {
-        Self(Inner::new(body))
+        Self {
+            inner: Inner::new(body),
+        }
     }
 
     pub fn from_static(bytes: &'static [u8]) -> Self {
-        Self(Inner::new(SdkBody::from(Bytes::from_static(bytes))))
+        Self {
+            inner: Inner::new(SdkBody::from(Bytes::from_static(bytes))),
+        }
     }
 
     /// Consumes the ByteStream, returning the wrapped SdkBody
@@ -216,7 +278,7 @@ impl ByteStream {
     // we will always be able to implement this method, even if we stop using
     // SdkBody as the internal representation
     pub fn into_inner(self) -> SdkBody {
-        self.0.body
+        self.inner.body
     }
 
     /// Read all the data from this `ByteStream` into memory
@@ -236,7 +298,34 @@ impl ByteStream {
     /// }
     /// ```
     pub async fn collect(self) -> Result<AggregatedBytes, Error> {
-        self.0.collect().await.map_err(|err| Error(err))
+        self.inner.collect().await.map_err(|err| Error(err))
+    }
+
+    /// Returns a [`FsBuilder`](crate::byte_stream::FsBuilder), allowing you to build a `ByteStream` with
+    /// full control over how the file is read (eg. specifying the length of the file or the size of the buffer used to read the file).
+    /// ```no_run
+    /// # #[cfg(feature = "rt-tokio")]
+    /// # {
+    /// use aws_smithy_http::byte_stream::{ByteStream, Length};
+    ///
+    /// async fn bytestream_from_file() -> ByteStream {
+    ///     let bytestream = ByteStream::read_from()
+    ///         .path("docs/some-large-file.csv")
+    ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
+    ///         .buffer_size(32_784)
+    ///         // Specify the length of the file used (skips an additional call to retrieve the size)
+    ///         .length(Length::Exact(123_456))
+    ///         .build()
+    ///         .await
+    ///         .expect("valid path");
+    ///     bytestream
+    /// }
+    /// # }
+    /// ```
+    #[cfg(feature = "rt-tokio")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
+    pub fn read_from() -> FsBuilder {
+        FsBuilder::new()
     }
 
     /// Create a ByteStream that streams data from the filesystem
@@ -251,6 +340,10 @@ impl ByteStream {
     ///
     /// Furthermore, a partial write MAY seek in the file and resume from the previous location.
     ///
+    /// Note: If you want more control, such as specifying the size of the buffer used to read the file
+    /// or the length of the file, use a [`FsBuilder`](crate::byte_stream::FsBuilder) as returned
+    /// from `ByteStream::read_from`
+    ///
     /// # Examples
     /// ```no_run
     /// use aws_smithy_http::byte_stream::ByteStream;
@@ -262,44 +355,64 @@ impl ByteStream {
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_path(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
-        let path = path.as_ref();
-        let path_buf = path.to_path_buf();
-        let sz = tokio::fs::metadata(path)
-            .await
-            .map_err(|err| Error(err.into()))?
-            .len();
-        let body_loader = move || {
-            SdkBody::from_dyn(http_body::combinators::BoxBody::new(
-                bytestream_util::PathBody::from_path(path_buf.as_path(), sz),
-            ))
-        };
-        Ok(ByteStream::new(SdkBody::retryable(body_loader)))
+        FsBuilder::new().path(path).build().await
     }
 
     /// Create a ByteStream from a file
     ///
     /// NOTE: This will NOT result in a retryable ByteStream. For a ByteStream that can be retried in the case of
     /// upstream failures, use [`ByteStream::from_path`](ByteStream::from_path)
+    #[deprecated(
+        since = "0.40.0",
+        note = "Prefer the more extensible ByteStream::read_from() API"
+    )]
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_file(file: tokio::fs::File) -> Result<Self, Error> {
-        let sz = file
-            .metadata()
-            .await
-            .map_err(|err| Error(err.into()))?
-            .len();
-        let body = SdkBody::from_dyn(http_body::combinators::BoxBody::new(
-            bytestream_util::PathBody::from_file(file, sz),
-        ));
-        Ok(ByteStream::new(body))
+        FsBuilder::new().file(file).build().await
+    }
+
+    /// Set a callback on this `ByteStream`. The callback's methods will be called at various points
+    /// throughout this `ByteStream`'s life cycle. See the [`BodyCallback`](BodyCallback) trait for
+    /// more information.
+    pub fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
+        self.inner.with_body_callback(body_callback);
+        self
+    }
+
+    #[cfg(feature = "rt-tokio")]
+    /// Convert this `ByteStream` into a struct that implements [`AsyncRead`](tokio::io::AsyncRead).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use tokio::io::{BufReader, AsyncBufReadExt};
+    /// use aws_smithy_http::byte_stream::ByteStream;
+    ///
+    /// # async fn dox(my_bytestream: ByteStream) -> std::io::Result<()> {
+    /// let mut lines =  BufReader::new(my_bytestream.into_async_read()).lines();
+    /// while let Some(line) = lines.next_line().await? {
+    ///   // Do something line by line
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn into_async_read(self) -> impl tokio::io::AsyncRead {
+        tokio_util::io::StreamReader::new(self)
+    }
+
+    pub fn map(self, f: impl Fn(SdkBody) -> SdkBody + Send + Sync + 'static) -> ByteStream {
+        ByteStream::new(self.into_inner().map(f))
     }
 }
 
 impl Default for ByteStream {
     fn default() -> Self {
-        Self(Inner {
-            body: SdkBody::from(""),
-        })
+        Self {
+            inner: Inner {
+                body: SdkBody::from(""),
+            },
+        }
     }
 }
 
@@ -349,15 +462,21 @@ impl StdError for Error {
     }
 }
 
+impl From<Error> for std::io::Error {
+    fn from(err: Error) -> Self {
+        std::io::Error::new(std::io::ErrorKind::Other, err)
+    }
+}
+
 impl futures_core::stream::Stream for ByteStream {
     type Item = Result<Bytes, Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.project().0.poll_next(cx).map_err(|e| Error(e))
+        self.project().inner.poll_next(cx).map_err(|e| Error(e))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
+        self.inner.size_hint()
     }
 }
 
@@ -408,18 +527,20 @@ impl Buf for AggregatedBytes {
     }
 }
 
-#[pin_project]
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Inner<B> {
-    #[pin]
-    body: B,
+pin_project! {
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Inner<B> {
+        #[pin]
+        body: B,
+    }
 }
 
 impl<B> Inner<B> {
-    pub fn new(body: B) -> Self {
+    fn new(body: B) -> Self {
         Self { body }
     }
-    pub async fn collect(self) -> Result<AggregatedBytes, B::Error>
+
+    async fn collect(self) -> Result<AggregatedBytes, B::Error>
     where
         B: http_body::Body<Data = Bytes>,
     {
@@ -433,31 +554,39 @@ impl<B> Inner<B> {
     }
 }
 
+impl Inner<SdkBody> {
+    fn with_body_callback(&mut self, body_callback: Box<dyn BodyCallback>) -> &mut Self {
+        self.body.with_callback(body_callback);
+        self
+    }
+}
+
+const SIZE_HINT_32_BIT_PANIC_MESSAGE: &str = r#"
+You're running a 32-bit system and this stream's length is too large to be represented with a usize.
+Please limit stream length to less than 4.294Gb or run this program on a 64-bit computer architecture.
+"#;
+
 impl<B> futures_core::stream::Stream for Inner<B>
 where
-    B: http_body::Body,
+    B: http_body::Body<Data = Bytes>,
 {
     type Item = Result<Bytes, B::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.project().body.poll_data(cx) {
-            Poll::Ready(Some(Ok(mut data))) => {
-                let len = data.chunk().len();
-                let bytes = data.copy_to_bytes(len);
-                Poll::Ready(Some(Ok(bytes)))
-            }
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-            Poll::Pending => Poll::Pending,
-        }
+        self.project().body.poll_data(cx)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let size_hint = http_body::Body::size_hint(&self.body);
-        (
-            size_hint.lower() as usize,
-            size_hint.upper().map(|u| u as usize),
-        )
+        let lower = size_hint.lower().try_into();
+        let upper = size_hint.upper().map(|u| u.try_into()).transpose();
+
+        match (lower, upper) {
+            (Ok(lower), Ok(upper)) => (lower, upper),
+            (Err(_), _) | (_, Err(_)) => {
+                panic!("{}", SIZE_HINT_32_BIT_PANIC_MESSAGE)
+            }
+        }
     }
 }
 
@@ -534,5 +663,22 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[cfg(feature = "rt-tokio")]
+    #[tokio::test]
+    async fn bytestream_into_async_read() {
+        use super::ByteStream;
+        use tokio::io::AsyncBufReadExt;
+
+        let byte_stream = ByteStream::from_static(b"data 1\ndata 2\ndata 3");
+        let async_buf_read = tokio::io::BufReader::new(byte_stream.into_async_read());
+
+        let mut lines = async_buf_read.lines();
+
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 1".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 2".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), Some("data 3".to_owned()));
+        assert_eq!(lines.next_line().await.unwrap(), None);
     }
 }

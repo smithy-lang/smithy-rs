@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols.parse
@@ -33,9 +33,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -53,15 +54,15 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
 class JsonParserGenerator(
-    codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
 ) : StructuredDataParserGenerator {
-    private val model = codegenContext.model
-    private val symbolProvider = codegenContext.symbolProvider
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
+    private val model = coreCodegenContext.model
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val target = coreCodegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
     private val codegenScope = arrayOf(
@@ -238,14 +239,24 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeStringInner(target: StringShape, escapedStrName: String) {
         withBlock("$escapedStrName.to_unescaped().map(|u|", ")") {
             when (target.hasTrait<EnumTrait>()) {
-                true -> rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
+                true -> {
+                    if (convertsToEnumInServer(target)) {
+                        rust("#T::try_from(u.as_ref())", symbolProvider.toSymbol(target))
+                    } else {
+                        rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
+                    }
+                }
                 else -> rust("u.into_owned()")
             }
         }
     }
 
+    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
+
     private fun RustWriter.deserializeString(target: StringShape) {
-        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ").transpose()?", *codegenScope) {
+        // additional .transpose()? because Rust does not allow ? up from closures
+        val additionalTranspose = if (convertsToEnumInServer(target)) { ".transpose()?".repeat(2) } else { ".transpose()?" }
+        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ")$additionalTranspose", *codegenScope) {
             deserializeStringInner(target, "s")
         }
     }
@@ -350,6 +361,9 @@ class JsonParserGenerator(
                         withBlock("let value =", ";") {
                             deserializeMember(shape.value)
                         }
+                        if (convertsToEnumInServer(keyTarget)) {
+                            rust("let key = key?;")
+                        }
                         if (isSparse) {
                             rust("map.insert(key, value);")
                         } else {
@@ -437,7 +451,7 @@ class JsonParserGenerator(
                                         }
                                     }
                                 }
-                                when (mode.renderUnknownVariant()) {
+                                when (target.renderUnknownVariant()) {
                                     // in client mode, resolve an unknown union variant to the unknown variant
                                     true -> rustTemplate(
                                         """

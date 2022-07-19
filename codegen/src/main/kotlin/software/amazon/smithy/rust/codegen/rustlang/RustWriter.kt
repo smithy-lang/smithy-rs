@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.rustlang
@@ -10,8 +10,8 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.codegen.core.writer.CodegenWriter
-import software.amazon.smithy.codegen.core.writer.CodegenWriterFactory
+import software.amazon.smithy.codegen.core.SymbolWriter
+import software.amazon.smithy.codegen.core.SymbolWriter.Factory
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -23,7 +23,8 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.orNull
-import software.amazon.smithy.utils.CodeWriter
+import software.amazon.smithy.utils.AbstractCodeWriter
+import java.io.File
 import java.util.function.BiFunction
 
 /**
@@ -54,7 +55,7 @@ import java.util.function.BiFunction
  * are the recommended approach.
  */
 
-fun <T : CodeWriter> T.withBlock(
+fun <T : AbstractCodeWriter<T>> T.withBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
     vararg args: Any,
@@ -63,13 +64,13 @@ fun <T : CodeWriter> T.withBlock(
     return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block, args = args)
 }
 
-fun <T : CodeWriter> T.assignment(variableName: String, vararg ctx: Pair<String, Any>, block: T.() -> Unit) {
+fun <T : AbstractCodeWriter<T>> T.assignment(variableName: String, vararg ctx: Pair<String, Any>, block: T.() -> Unit) {
     withBlockTemplate("let $variableName =", ";", *ctx) {
         block()
     }
 }
 
-fun <T : CodeWriter> T.withBlockTemplate(
+fun <T : AbstractCodeWriter<T>> T.withBlockTemplate(
     textBeforeNewLine: String,
     textAfterNewLine: String,
     vararg ctx: Pair<String, Any>,
@@ -80,14 +81,14 @@ fun <T : CodeWriter> T.withBlockTemplate(
     }
 }
 
-private fun <T : CodeWriter, U> T.withTemplate(
+private fun <T : AbstractCodeWriter<T>, U> T.withTemplate(
     template: String,
     scope: Array<out Pair<String, Any>>,
     f: T.(String) -> U
 ): U {
     val contents = transformTemplate(template, scope)
     pushState()
-    this.putContext(scope.toMap().mapKeys { (k, _) -> k.toLowerCase() })
+    this.putContext(scope.toMap().mapKeys { (k, _) -> k.lowercase() })
     val out = f(contents)
     this.popState()
     return out
@@ -105,7 +106,7 @@ private fun <T : CodeWriter, U> T.withTemplate(
  * }
  * ```
  */
-fun <T : CodeWriter> T.conditionalBlock(
+fun <T : AbstractCodeWriter<T>> T.conditionalBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
     conditional: Boolean = true,
@@ -126,7 +127,7 @@ fun <T : CodeWriter> T.conditionalBlock(
 /**
  * Convenience wrapper that tells Intellij that the contents of this block are Rust
  */
-fun <T : CodeWriter> T.rust(
+fun <T : AbstractCodeWriter<T>> T.rust(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}") contents: String,
     vararg args: Any
 ) {
@@ -135,9 +136,10 @@ fun <T : CodeWriter> T.rust(
 
 /* rewrite #{foo} to #{foo:T} (the smithy template format) */
 private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>): String {
-    check(scope.distinctBy { it.first.toLowerCase() }.size == scope.size) { "Duplicate cased keys not supported" }
-    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)\}""")) { matchResult ->
+    check(scope.distinctBy { it.first.lowercase() }.size == scope.size) { "Duplicate cased keys not supported" }
+    return template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
         val keyName = matchResult.groupValues[1]
+        val templateType = matchResult.groupValues[2].ifEmpty { ":T" }
         if (!scope.toMap().keys.contains(keyName)) {
             throw CodegenException(
                 "Rust block template expected `$keyName` but was not present in template.\n  hint: Template contains: ${
@@ -145,14 +147,14 @@ private fun transformTemplate(template: String, scope: Array<out Pair<String, An
                 }"
             )
         }
-        "#{${keyName.toLowerCase()}:T}"
+        "#{${keyName.lowercase()}$templateType}"
     }.trim()
 }
 
 /**
  * Sibling method to [rustBlock] that enables `#{variablename}` style templating
  */
-fun <T : CodeWriter> T.rustBlockTemplate(
+fun <T : AbstractCodeWriter<T>> T.rustBlockTemplate(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
     vararg ctx: Pair<String, Any>,
     block: T.() -> Unit
@@ -181,7 +183,7 @@ fun <T : CodeWriter> T.rustBlockTemplate(
  *
  * Variables are lower cased so that they become valid identifiers for named Smithy parameters.
  */
-fun <T : CodeWriter> T.rustTemplate(
+fun RustWriter.rustTemplate(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
     vararg ctx: Pair<String, Any>
 ) {
@@ -193,7 +195,7 @@ fun <T : CodeWriter> T.rustTemplate(
 /*
  * Writes a Rust-style block, demarcated by curly braces
  */
-fun <T : CodeWriter> T.rustBlock(
+fun <T : AbstractCodeWriter<T>> T.rustBlock(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}")
     header: String,
     vararg args: Any,
@@ -208,7 +210,12 @@ fun <T : CodeWriter> T.rustBlock(
 /**
  * Generate a RustDoc comment for [shape]
  */
-fun <T : CodeWriter> T.documentShape(shape: Shape, model: Model, autoSuppressMissingDocs: Boolean = true, note: String? = null): T {
+fun <T : AbstractCodeWriter<T>> T.documentShape(
+    shape: Shape,
+    model: Model,
+    autoSuppressMissingDocs: Boolean = true,
+    note: String? = null
+): T {
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
     when (docTrait?.value?.isNotBlank()) {
@@ -246,7 +253,10 @@ fun RustWriter.containerDocs(text: String, vararg args: Any): RustWriter {
  *    - Tabs are replaced with spaces
  *    - Empty newlines are removed
  */
-fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: String = "/// "): T {
+fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePrefix: String = "/// "): T {
+    // Because writing docs relies on the newline prefix, ensure that there was a new line written
+    // before we write the docs
+    this.ensureNewline()
     pushState()
     setNewlinePrefix(newlinePrefix)
     val cleaned = text.lines()
@@ -260,7 +270,8 @@ fun <T : CodeWriter> T.docs(text: String, vararg args: Any, newlinePrefix: Strin
 }
 
 /** Escape the [expressionStart] character to avoid problems during formatting */
-fun CodeWriter.escape(text: String): String = text.replace("$expressionStart", "$expressionStart$expressionStart")
+fun <T : AbstractCodeWriter<T>> T.escape(text: String): String =
+    text.replace("$expressionStart", "$expressionStart$expressionStart")
 
 /** Parse input as HTML and normalize it */
 fun normalizeHtml(input: String): String {
@@ -288,7 +299,7 @@ private fun Element.changeInto(tagName: String) {
 /**
  * Write _exactly_ the text as written into the code writer without newlines or formatting
  */
-fun CodeWriter.raw(text: String) = writeInline(escape(text))
+fun RustWriter.raw(text: String) = writeInline(escape(text))
 
 typealias Writable = RustWriter.() -> Unit
 
@@ -315,9 +326,11 @@ class RustWriter private constructor(
     private val filename: String,
     val namespace: String,
     private val commentCharacter: String = "//",
-    private val printWarning: Boolean = true
+    private val printWarning: Boolean = true,
+    /** Insert comments indicating where code was generated */
+    private val debugMode: Boolean = false,
 ) :
-    CodegenWriter<RustWriter, UseDeclarations>(null, UseDeclarations(namespace)) {
+    SymbolWriter<RustWriter, UseDeclarations>(UseDeclarations(namespace)) {
     companion object {
         fun root() = forModule(null)
         fun forModule(module: String?): RustWriter = if (module == null) {
@@ -326,18 +339,46 @@ class RustWriter private constructor(
             RustWriter("$module.rs", "crate::$module")
         }
 
-        val Factory: CodegenWriterFactory<RustWriter> =
-            CodegenWriterFactory<RustWriter> { fileName, namespace ->
-                when {
-                    fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#")
-                    fileName.endsWith(".md") -> rawWriter(fileName)
-                    fileName == "LICENSE" -> rawWriter(fileName)
-                    else -> RustWriter(fileName, namespace)
-                }
+        fun factory(debugMode: Boolean): Factory<RustWriter> = Factory { fileName: String, namespace: String ->
+            when {
+                fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
+                fileName.endsWith(".md") -> rawWriter(fileName, debugMode = debugMode)
+                fileName == "LICENSE" -> rawWriter(fileName, debugMode = debugMode)
+                else -> RustWriter(fileName, namespace, debugMode = debugMode)
             }
+        }
 
-        private fun rawWriter(fileName: String): RustWriter =
-            RustWriter(fileName, namespace = "ignore", commentCharacter = "ignore", printWarning = false)
+        private fun rawWriter(fileName: String, debugMode: Boolean): RustWriter =
+            RustWriter(
+                fileName,
+                namespace = "ignore",
+                commentCharacter = "ignore",
+                printWarning = false,
+                debugMode = debugMode
+            )
+    }
+
+    override fun write(content: Any?, vararg args: Any?): RustWriter {
+        // TODO(https://github.com/rust-lang/rustfmt/issues/5425): The second condition introduced here is to prevent
+        // this rustfmt bug
+        if (debugMode && (content as? String?)?.let { it.trim() != "," } ?: false) {
+            val location = Thread.currentThread().stackTrace
+            location.first { it.isRelevant() }?.let { "/* ${it.fileName}:${it.lineNumber} */" }
+                ?.also { super.writeInline(it) }
+        }
+
+        return super.write(content, *args)
+    }
+
+    /** Helper function to determine if a stack frame is relevant for debug purposes */
+    private fun StackTraceElement.isRelevant(): Boolean {
+        if (this.className.contains("AbstractCodeWriter") || this.className.startsWith("java.lang")) {
+            return false
+        }
+        if (this.fileName == "RustWriter.kt") {
+            return false
+        }
+        return true
     }
 
     private val preamble = mutableListOf<Writable>()
@@ -355,7 +396,7 @@ class RustWriter private constructor(
     }
 
     fun module(): String? = if (filename.startsWith("src") && filename.endsWith(".rs")) {
-        filename.removeSuffix(".rs").split('/').last()
+        filename.removeSuffix(".rs").substringAfterLast(File.separatorChar)
     } else null
 
     fun safeName(prefix: String = "var"): String {
@@ -383,7 +424,7 @@ class RustWriter private constructor(
      */
     fun withModule(
         moduleName: String,
-        rustMetadata: RustMetadata = RustMetadata(public = true),
+        rustMetadata: RustMetadata = RustMetadata(visibility = Visibility.PUBLIC),
         moduleWriter: RustWriter.() -> Unit
     ): RustWriter {
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
@@ -457,10 +498,7 @@ class RustWriter private constructor(
         return listOfNotNull(preheader, header, useDecls, contents).joinToString(separator = "\n", postfix = "\n")
     }
 
-    fun format(r: Any):
-        String {
-            return formatter.apply(r, "")
-        }
+    fun format(r: Any) = formatter.apply(r, "")
 
     fun addDepsRecursively(symbol: Symbol) {
         addDependency(symbol)

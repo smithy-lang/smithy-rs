@@ -1,46 +1,22 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# This is the shared CI workflow that is run by both `ci-pr.yml` and `ci-main.yml` depending
+# on if a pull request is being checked, or if the `main` branch is being checked after merge.
+
+name: Test
 on:
   workflow_call:
-  workflow_dispatch:
-  pull_request:
-
-name: CI
-
-# Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
-concurrency:
-  group: ci-yaml-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
-  rust_version: 1.56.1
+  rust_version: 1.58.1
   rust_toolchain_components: clippy,rustfmt
 
 jobs:
-  # This job detects if the PR made changes to build tools. If it did, then it builds a new
-  # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
-  # it uploads the image as a build artifact for other jobs to download and use.
-  acquire-base-image:
-    name: Acquire Base Image
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        path: smithy-rs
-        fetch-depth: 0
-    - name: Acquire base image
-      id: acquire
-      run: ./smithy-rs/tools/ci-build/acquire-build-image
-    - name: Upload base image
-      uses: actions/upload-artifact@v3
-      with:
-        name: smithy-rs-base-image
-        path: smithy-rs-base-image
-        retention-days: 1
-
   # The `generate` job runs scripts that produce artifacts that are required by the `test` job,
   # and also runs some checks/lints so that those are run sooner rather than later.
   generate:
     name: Generate
-    needs: acquire-base-image
     runs-on: ubuntu-latest
     # To avoid repeating setup boilerplate, we have the actual commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
@@ -51,11 +27,17 @@ jobs:
         actions:
         - action: generate-aws-sdk
         - action: generate-aws-sdk-smoketest
-        - action: generate-smithy-rs-runtime-bundle
+        - action: generate-smithy-rs-release
     steps:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+    # The models from aws-sdk-rust are needed to generate the full SDK for CI
+    - uses: actions/checkout@v3
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+    # The examples from aws-doc-sdk-examples are needed to see if smithy-rs changes break examples
     - uses: actions/checkout@v3
       with:
         repository: awsdocs/aws-doc-sdk-examples
@@ -69,8 +51,6 @@ jobs:
   # code to have already been generated in order to run.
   test-codegen:
     name: Test Codegen
-    needs:
-    - acquire-base-image
     runs-on: ubuntu-latest
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
@@ -84,7 +64,10 @@ jobs:
         - action: check-sdk-codegen-unit-tests
         - action: check-server-codegen-integration-tests
         - action: check-server-codegen-unit-tests
+        - action: check-server-codegen-integration-tests-python
+        - action: check-server-codegen-unit-tests-python
         - action: check-server-e2e-test
+        - action: check-server-python-e2e-test
         - action: check-style-and-lints
     steps:
     - uses: actions/checkout@v3
@@ -99,9 +82,7 @@ jobs:
   # to be checked since `aws-config` depends on the generated STS client.
   test-runtimes-tools-and-sdk:
     name: Test Rust Runtimes, Tools, and SDK
-    needs:
-    - acquire-base-image
-    - generate
+    needs: generate
     runs-on: ubuntu-latest
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
@@ -149,17 +130,17 @@ jobs:
       run: |
         for runtime_path in "rust-runtime" "aws/rust-runtime"; do
           pushd "${runtime_path}" &>/dev/null
-          cargo test --all-features
-          cargo doc --no-deps --document-private-items --all-features
+          # aws-smithy-http-server-python cannot be compiled on Windows since it uses the `signal-hook` crate
+          # which is not really yet fully supported on the platform.
+          cargo test --all-features --workspace --exclude aws-smithy-http-server-python
+          cargo doc --no-deps --document-private-items --all-features --workspace --exclude aws-smithy-http-server-python
           popd &>/dev/null
         done
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
     name: Check SDK Examples
-    needs:
-    - acquire-base-image
-    - generate
+    needs: generate
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3

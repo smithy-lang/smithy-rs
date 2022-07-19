@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use crate::fs_util::{home_dir, Os};
@@ -11,27 +11,27 @@ use std::path::{Component, Path, PathBuf};
 use tracing::Instrument;
 
 /// In-memory source of profile data
-pub struct Source {
+pub(super) struct Source {
     /// Contents and path of ~/.aws/config
-    pub config_file: File,
+    pub(super) config_file: File,
 
     /// Contents and path of ~/.aws/credentials
-    pub credentials_file: File,
+    pub(super) credentials_file: File,
 
     /// Profile to use
     ///
     /// Overridden via `$AWS_PROFILE`, defaults to `default`
-    pub profile: Cow<'static, str>,
+    pub(super) profile: Cow<'static, str>,
 }
 
 /// In-memory configuration file
-pub struct File {
-    pub path: String,
-    pub contents: String,
+pub(super) struct File {
+    pub(super) path: String,
+    pub(super) contents: String,
 }
 
 #[derive(Clone, Copy)]
-pub enum FileKind {
+pub(super) enum FileKind {
     Config,
     Credentials,
 }
@@ -53,7 +53,7 @@ impl FileKind {
 }
 
 /// Load a [Source](Source) from a given environment and filesystem.
-pub async fn load(proc_env: &os_shim_internal::Env, fs: &os_shim_internal::Fs) -> Source {
+pub(super) async fn load(proc_env: &os_shim_internal::Env, fs: &os_shim_internal::Fs) -> Source {
     let home = home_dir(proc_env, Os::real());
     let config = load_config_file(FileKind::Config, &home, fs, proc_env)
         .instrument(tracing::debug_span!("load_config_file"))
@@ -183,8 +183,8 @@ fn expand_home(
 /// [Lambdas set many environment variables](https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html#configuration-envvars-runtime)
 /// that we can check.
 fn check_is_likely_running_on_a_lambda(environment: &aws_types::os_shim_internal::Env) -> bool {
-    // LAMBDA_TASK_ROOT – The path to your Lambda function code.
-    environment.get("LAMBDA_TASK_ROOT").is_ok()
+    // AWS_LAMBDA_FUNCTION_NAME – The name of the running Lambda function. Available both in Functions and Extensions
+    environment.get("AWS_LAMBDA_FUNCTION_NAME").is_ok()
 }
 
 #[cfg(test)]
@@ -261,7 +261,7 @@ mod tests {
     #[traced_test]
     #[test]
     fn load_config_file_should_not_emit_warning_on_lambda() {
-        let env = Env::from_slice(&[("LAMBDA_TASK_ROOT", "/")]);
+        let env = Env::from_slice(&[("AWS_LAMBDA_FUNCTION_NAME", "someName")]);
         let fs = Fs::from_slice(&[]);
 
         let _src = load_config_file(FileKind::Config, &None, &fs, &env).now_or_never();

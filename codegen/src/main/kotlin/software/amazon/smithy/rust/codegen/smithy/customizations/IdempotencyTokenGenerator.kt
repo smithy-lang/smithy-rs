@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.customizations
@@ -10,16 +10,16 @@ import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 
-class IdempotencyTokenGenerator(codegenContext: CodegenContext, private val operationShape: OperationShape) :
+class IdempotencyTokenGenerator(coreCodegenContext: CoreCodegenContext, private val operationShape: OperationShape) :
     OperationCustomization() {
-    private val model = codegenContext.model
-    private val symbolProvider = codegenContext.symbolProvider
+    private val model = coreCodegenContext.model
+    private val symbolProvider = coreCodegenContext.symbolProvider
     private val idempotencyTokenMember = operationShape.inputShape(model).findMemberWithTrait<IdempotencyTokenTrait>(model)
     override fun section(section: OperationSection): Writable {
         if (idempotencyTokenMember == null) {

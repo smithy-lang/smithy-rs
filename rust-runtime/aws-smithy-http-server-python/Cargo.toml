@@ -1,0 +1,42 @@
+[package]
+name = "aws-smithy-http-server-python"
+version = "0.0.0-smithy-rs-head"
+authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+keywords = ["smithy", "framework", "web", "api", "aws"]
+categories = ["asynchronous", "web-programming", "api-bindings"]
+description = """
+Python server runtime for Smithy Rust Server Framework.
+"""
+# until this is not stable, it is not publishable.
+publish = false
+
+# [lib]
+# name = "aws_smithy_http_server_python"
+# crate-type = ["cdylib"]
+
+[dependencies]
+aws-smithy-http-server = { path = "../aws-smithy-http-server" }
+aws-smithy-types = { path = "../aws-smithy-types" }
+hyper = { version = "0.14.19", features = ["server", "http1", "http2", "tcp", "stream"] }
+num_cpus = "1.13.1"
+parking_lot = "0.12.1"
+pyo3 = "0.16.5"
+signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
+socket2 = { version = "0.4.4", features = ["all"] }
+thiserror = "1.0.31"
+tokio = { version = "1.19.2", features = ["full"] }
+tower = "0.4.13"
+tracing = "0.1.35"
+tracing-subscriber = { version = "0.3.11", features = ["env-filter"] }
+
+[dev-dependencies]
+pretty_assertions = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

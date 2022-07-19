@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.testutil
@@ -15,13 +15,12 @@ import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RustCodegenPlugin
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.generators.BuilderGenerator
@@ -36,23 +35,23 @@ val TestRuntimeConfig =
     RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Path(File("../rust-runtime/").absolutePath))
 val TestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
-    codegenConfig = CodegenConfig(),
-    handleRustBoxing = true
+    renameExceptions = true,
+    handleRustBoxing = true,
+    handleRequired = false,
 )
 
 fun testRustSettings(
-    model: Model,
     service: ShapeId = ShapeId.from("notrelevant#notrelevant"),
     moduleName: String = "test-module",
-    moduleVersion: String = "notrelevant",
+    moduleVersion: String = "0.0.1",
     moduleAuthors: List<String> = listOf("notrelevant"),
     moduleDescription: String = "not relevant",
     moduleRepository: String? = null,
-    runtimeConfig: RuntimeConfig = RuntimeConfig(),
-    codegenConfig: CodegenConfig = CodegenConfig(),
+    runtimeConfig: RuntimeConfig = TestRuntimeConfig,
+    codegenConfig: CoreCodegenConfig = CoreCodegenConfig(),
     license: String? = null,
     examplesUri: String? = null,
-) = RustSettings(
+) = CoreRustSettings(
     service,
     moduleName,
     moduleVersion,
@@ -62,8 +61,7 @@ fun testRustSettings(
     runtimeConfig,
     codegenConfig,
     license,
-    examplesUri,
-    model
+    examplesUri
 )
 
 fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
@@ -76,15 +74,17 @@ fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSy
 fun testCodegenContext(
     model: Model,
     serviceShape: ServiceShape? = null,
-    settings: RustSettings = testRustSettings(model),
-    mode: CodegenMode = CodegenMode.Client
-): CodegenContext = CodegenContext(
+    settings: CoreRustSettings = testRustSettings(),
+    codegenTarget: CodegenTarget = CodegenTarget.CLIENT
+): CoreCodegenContext = CoreCodegenContext(
     model,
     testSymbolProvider(model),
-    TestRuntimeConfig,
-    serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
+    serviceShape
+        ?: model.serviceShapes.firstOrNull()
+        ?: ServiceShape.builder().version("test").id("test#Service").build(),
     ShapeId.from("test#Protocol"),
-    settings, mode
+    settings,
+    codegenTarget
 )
 
 private const val SmithyVersion = "1.0"
@@ -95,7 +95,7 @@ fun String.asSmithyModel(sourceLocation: String? = null): Model {
 }
 
 /**
- * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder
+ * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
 fun StructureShape.renderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter, forWhom: CodegenTarget = CodegenTarget.CLIENT) {
     StructureGenerator(model, symbolProvider, writer, this).render(forWhom)

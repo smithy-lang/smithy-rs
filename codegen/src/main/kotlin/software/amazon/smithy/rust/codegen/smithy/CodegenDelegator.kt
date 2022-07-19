@@ -1,13 +1,13 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.codegen.core.SymbolProvider
-import software.amazon.smithy.codegen.core.writer.CodegenWriterDelegator
+import software.amazon.smithy.codegen.core.WriterDelegator
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
@@ -45,9 +46,10 @@ open class RustCrate(
      * For core modules like `input`, `output`, and `error`, we need to specify whether these modules should be public or
      * private as well as any other metadata. [baseModules] enables configuring this. See [DefaultPublicModules].
      */
-    baseModules: Map<String, RustModule>
+    baseModules: Map<String, RustModule>,
+    coreCodegenConfig: CoreCodegenConfig
 ) {
-    private val inner = CodegenWriterDelegator(fileManifest, symbolProvider, RustWriter.Factory)
+    private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(coreCodegenConfig.debugMode))
     private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
     private val features: MutableSet<Feature> = mutableSetOf()
 
@@ -85,7 +87,7 @@ open class RustCrate(
      * This is also where inline dependencies are actually reified and written, potentially recursively.
      */
     fun finalize(
-        settings: RustSettings,
+        settings: CoreRustSettings,
         model: Model,
         manifestCustomizations: ManifestCustomizations,
         libRsCustomizations: List<LibRsCustomization>,
@@ -93,7 +95,7 @@ open class RustCrate(
     ) {
         injectInlineDependencies()
         val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
-            .map { modules[it] ?: RustModule.default(it, false) }
+            .map { modules[it] ?: RustModule.default(it, visibility = Visibility.PRIVATE) }
         inner.finalize(
             settings,
             model,
@@ -164,8 +166,8 @@ val DefaultPublicModules = setOf(
  * - inlining inline dependencies that have been used
  * - generating (and writing) a Cargo.toml based on the settings & the required dependencies
  */
-fun CodegenWriterDelegator<RustWriter>.finalize(
-    settings: RustSettings,
+fun WriterDelegator<RustWriter>.finalize(
+    settings: CoreRustSettings,
     model: Model,
     manifestCustomizations: ManifestCustomizations,
     libRsCustomizations: List<LibRsCustomization>,

@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators.protocol
@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docLink
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -77,7 +77,7 @@ interface ProtocolTraitImplGenerator {
  * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
  */
 open class ProtocolGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     /**
      * `Protocol` contains all protocol specific information. Each smithy protocol, e.g. RestJson, RestXml, etc. will
      * have their own implementation of the protocol interface which defines how an input shape becomes and http::Request
@@ -95,8 +95,8 @@ open class ProtocolGenerator(
      */
     private val traitGenerator: ProtocolTraitImplGenerator,
 ) {
-    private val symbolProvider = codegenContext.symbolProvider
-    private val model = codegenContext.model
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = coreCodegenContext.model
 
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
@@ -162,7 +162,7 @@ open class ProtocolGenerator(
     }
 
     /**
-     * The server implementation uses this method to generate implementations of the `FromRequest` and `IntoResponse`
+     * The server implementation uses this method to generate implementations of the `from_request` and `into_response`
      * traits for operation input and output shapes, respectively.
      */
     fun serverRenderOperation(

@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 object CrateSet {
@@ -17,6 +17,7 @@ object CrateSet {
     private val SMITHY_RUNTIME_COMMON = listOf(
         "aws-smithy-async",
         "aws-smithy-client",
+        "aws-smithy-checksums",
         "aws-smithy-eventstream",
         "aws-smithy-http",
         "aws-smithy-http-tower",

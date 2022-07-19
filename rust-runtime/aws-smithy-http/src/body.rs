@@ -1,37 +1,44 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use bytes::Bytes;
 use http::{HeaderMap, HeaderValue};
 use http_body::{Body, SizeHint};
-use pin_project::pin_project;
+use pin_project_lite::pin_project;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use crate::callback::BodyCallback;
+use crate::header::append_merge_header_maps;
+
 pub type Error = Box<dyn StdError + Send + Sync>;
 
-/// SdkBody type
-///
-/// This is the Body used for dispatching all HTTP Requests.
-/// For handling responses, the type of the body will be controlled
-/// by the HTTP stack.
-///
-/// TODO(naming): Consider renaming to simply `Body`, although I'm concerned about naming headaches
-/// between hyper::Body and our Body
-#[pin_project]
-pub struct SdkBody {
-    #[pin]
-    inner: Inner,
-    /// An optional function to recreate the inner body
+pin_project! {
+    /// SdkBody type
     ///
-    /// In the event of retry, this function will be called to generate a new body. See
-    /// [`try_clone()`](SdkBody::try_clone)
-    rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
+    /// This is the Body used for dispatching all HTTP Requests.
+    /// For handling responses, the type of the body will be controlled
+    /// by the HTTP stack.
+    ///
+    /// TODO(naming): Consider renaming to simply `Body`, although I'm concerned about naming headaches
+    /// between hyper::Body and our Body
+    pub struct SdkBody {
+        #[pin]
+        inner: Inner,
+        // An optional function to recreate the inner body
+        //
+        // In the event of retry, this function will be called to generate a new body. See
+        // [`try_clone()`](SdkBody::try_clone)
+        rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
+        // A list of callbacks that will be called at various points of this `SdkBody`'s lifecycle
+        #[pin]
+        callbacks: Vec<Box<dyn BodyCallback>>,
+    }
 }
 
 impl Debug for SdkBody {
@@ -43,27 +50,39 @@ impl Debug for SdkBody {
     }
 }
 
-type BoxBody = http_body::combinators::BoxBody<Bytes, Error>;
+pub type BoxBody = http_body::combinators::BoxBody<Bytes, Error>;
 
-#[pin_project(project = InnerProj)]
-enum Inner {
-    Once(#[pin] Option<Bytes>),
-    Streaming(#[pin] hyper::Body),
-    Dyn(#[pin] BoxBody),
+pin_project! {
+    #[project = InnerProj]
+    enum Inner {
+        Once {
+            inner: Option<Bytes>
+        },
+        Streaming {
+            #[pin]
+            inner: hyper::Body
+        },
+        Dyn {
+            #[pin]
+            inner: BoxBody
+        },
 
-    /// When a streaming body is transferred out to a stream parser, the body is replaced with
-    /// `Taken`. This will return an Error when polled. Attempting to read data out of a `Taken`
-    /// Body is a bug.
-    Taken,
+        /// When a streaming body is transferred out to a stream parser, the body is replaced with
+        /// `Taken`. This will return an Error when polled. Attempting to read data out of a `Taken`
+        /// Body is a bug.
+        Taken,
+    }
 }
 
 impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self {
-            Inner::Once(once) => f.debug_tuple("Once").field(once).finish(),
-            Inner::Streaming(streaming) => f.debug_tuple("Streaming").field(streaming).finish(),
+            Inner::Once { inner: once } => f.debug_tuple("Once").field(once).finish(),
+            Inner::Streaming { inner: streaming } => {
+                f.debug_tuple("Streaming").field(streaming).finish()
+            }
             Inner::Taken => f.debug_tuple("Taken").finish(),
-            Inner::Dyn(_) => write!(f, "BoxBody"),
+            Inner::Dyn { .. } => write!(f, "BoxBody"),
         }
     }
 }
@@ -72,8 +91,9 @@ impl SdkBody {
     /// Construct an SdkBody from a Boxed implementation of http::Body
     pub fn from_dyn(body: BoxBody) -> Self {
         Self {
-            inner: Inner::Dyn(body),
+            inner: Inner::Dyn { inner: body },
             rebuild: None,
+            callbacks: Vec::new(),
         }
     }
 
@@ -90,6 +110,7 @@ impl SdkBody {
         SdkBody {
             inner: initial.inner,
             rebuild: Some(Arc::new(move || f().inner)),
+            callbacks: Vec::new(),
         }
     }
 
@@ -97,13 +118,15 @@ impl SdkBody {
         Self {
             inner: Inner::Taken,
             rebuild: None,
+            callbacks: Vec::new(),
         }
     }
 
     pub fn empty() -> Self {
         Self {
-            inner: Inner::Once(None),
-            rebuild: Some(Arc::new(|| Inner::Once(None))),
+            inner: Inner::Once { inner: None },
+            rebuild: Some(Arc::new(|| Inner::Once { inner: None })),
+            callbacks: Vec::new(),
         }
     }
 
@@ -111,21 +134,44 @@ impl SdkBody {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Bytes, Error>>> {
-        match self.project().inner.project() {
-            InnerProj::Once(ref mut opt) => {
-                let data = opt.take();
+        let mut this = self.project();
+        let polling_result = match this.inner.project() {
+            InnerProj::Once { ref mut inner } => {
+                let data = inner.take();
                 match data {
                     Some(bytes) if bytes.is_empty() => Poll::Ready(None),
                     Some(bytes) => Poll::Ready(Some(Ok(bytes))),
                     None => Poll::Ready(None),
                 }
             }
-            InnerProj::Streaming(body) => body.poll_data(cx).map_err(|e| e.into()),
-            InnerProj::Dyn(box_body) => box_body.poll_data(cx),
+            InnerProj::Streaming { inner: body } => body.poll_data(cx).map_err(|e| e.into()),
+            InnerProj::Dyn { inner: box_body } => box_body.poll_data(cx),
             InnerProj::Taken => {
                 Poll::Ready(Some(Err("A `Taken` body should never be polled".into())))
             }
+        };
+
+        match &polling_result {
+            // When we get some bytes back from polling, pass those bytes to each callback in turn
+            Poll::Ready(Some(Ok(bytes))) => {
+                for callback in this.callbacks.iter_mut() {
+                    // Callbacks can run into errors when reading bytes. They'll be surfaced here
+                    callback.update(bytes)?;
+                }
+            }
+            // When we're done polling for bytes, run each callback's `trailers()` method. If any calls to
+            // `trailers()` return an error, propagate that error up. Otherwise, continue.
+            Poll::Ready(None) => {
+                for callback_result in this.callbacks.iter().map(BodyCallback::trailers) {
+                    if let Err(e) = callback_result {
+                        return Poll::Ready(Some(Err(e)));
+                    }
+                }
+            }
+            _ => (),
         }
+
+        polling_result
     }
 
     /// If possible, return a reference to this body as `&[u8]`
@@ -134,8 +180,8 @@ impl SdkBody {
     /// If this SdkBody is streaming, this will return `None`
     pub fn bytes(&self) -> Option<&[u8]> {
         match &self.inner {
-            Inner::Once(Some(b)) => Some(b),
-            Inner::Once(None) => Some(&[]),
+            Inner::Once { inner: Some(b) } => Some(b),
+            Inner::Once { inner: None } => Some(&[]),
             _ => None,
         }
     }
@@ -143,15 +189,31 @@ impl SdkBody {
     pub fn try_clone(&self) -> Option<Self> {
         self.rebuild.as_ref().map(|rebuild| {
             let next = rebuild();
-            SdkBody {
+            let callbacks = self.callbacks.iter().map(BodyCallback::make_new).collect();
+
+            Self {
                 inner: next,
                 rebuild: self.rebuild.clone(),
+                callbacks,
             }
         })
     }
 
     pub fn content_length(&self) -> Option<u64> {
-        self.size_hint().exact()
+        http_body::Body::size_hint(self).exact()
+    }
+
+    pub fn with_callback(&mut self, callback: Box<dyn BodyCallback>) -> &mut Self {
+        self.callbacks.push(callback);
+        self
+    }
+
+    pub fn map(self, f: impl Fn(SdkBody) -> SdkBody + Sync + Send + 'static) -> SdkBody {
+        if self.rebuild.is_some() {
+            SdkBody::retryable(move || f(self.try_clone().unwrap()))
+        } else {
+            f(self)
+        }
     }
 }
 
@@ -164,8 +226,13 @@ impl From<&str> for SdkBody {
 impl From<Bytes> for SdkBody {
     fn from(bytes: Bytes) -> Self {
         SdkBody {
-            inner: Inner::Once(Some(bytes.clone())),
-            rebuild: Some(Arc::new(move || Inner::Once(Some(bytes.clone())))),
+            inner: Inner::Once {
+                inner: Some(bytes.clone()),
+            },
+            rebuild: Some(Arc::new(move || Inner::Once {
+                inner: Some(bytes.clone()),
+            })),
+            callbacks: Vec::new(),
         }
     }
 }
@@ -173,8 +240,9 @@ impl From<Bytes> for SdkBody {
 impl From<hyper::Body> for SdkBody {
     fn from(body: hyper::Body) -> Self {
         SdkBody {
-            inner: Inner::Streaming(body),
+            inner: Inner::Streaming { inner: body },
             rebuild: None,
+            callbacks: Vec::new(),
         }
     }
 }
@@ -212,25 +280,48 @@ impl http_body::Body for SdkBody {
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
     ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        Poll::Ready(Ok(None))
+        let mut header_map = None;
+        // Iterate over all callbacks, checking each for any `HeaderMap`s
+        for callback in &self.callbacks {
+            match callback.trailers() {
+                // If this is the first `HeaderMap` we've encountered, save it
+                Ok(Some(right_header_map)) if header_map.is_none() => {
+                    header_map = Some(right_header_map);
+                }
+                // If this is **not** the first `HeaderMap` we've encountered, merge it
+                Ok(Some(right_header_map)) if header_map.is_some() => {
+                    header_map = Some(append_merge_header_maps(
+                        header_map.unwrap(),
+                        right_header_map,
+                    ));
+                }
+                // Early return if a callback encountered an error.
+                Err(e) => {
+                    return Poll::Ready(Err(e));
+                }
+                // Otherwise, continue on to the next iteration of the loop.
+                _ => continue,
+            }
+        }
+        Poll::Ready(Ok(header_map))
     }
 
     fn is_end_stream(&self) -> bool {
         match &self.inner {
-            Inner::Once(None) => true,
-            Inner::Once(Some(bytes)) => bytes.is_empty(),
-            Inner::Streaming(hyper_body) => hyper_body.is_end_stream(),
-            Inner::Dyn(box_body) => box_body.is_end_stream(),
+            Inner::Once { inner: None } => true,
+            Inner::Once { inner: Some(bytes) } => bytes.is_empty(),
+            Inner::Streaming { inner: hyper_body } => hyper_body.is_end_stream(),
+            Inner::Dyn { inner: box_body } => box_body.is_end_stream(),
             Inner::Taken => true,
         }
     }
 
     fn size_hint(&self) -> SizeHint {
         match &self.inner {
-            Inner::Once(None) => SizeHint::with_exact(0),
-            Inner::Once(Some(bytes)) => SizeHint::with_exact(bytes.len() as u64),
-            Inner::Streaming(hyper_body) => hyper_body.size_hint(),
-            Inner::Dyn(box_body) => box_body.size_hint(),
+            Inner::Once { inner: None } => SizeHint::with_exact(0),
+            Inner::Once { inner: Some(bytes) } => SizeHint::with_exact(bytes.len() as u64),
+            Inner::Streaming { inner: hyper_body } => hyper_body.size_hint(),
+            Inner::Dyn { inner: box_body } => box_body.size_hint(),
             Inner::Taken => SizeHint::new(),
         }
     }
@@ -296,10 +387,9 @@ mod test {
         let _ = format!("{:?}", body);
     }
 
-    fn is_send<T: Send + Sync>() {}
-
     #[test]
     fn sdk_body_is_send() {
+        fn is_send<T: Send>() {}
         is_send::<SdkBody>()
     }
 }

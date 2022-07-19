@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Provides user agent and credentials middleware for the AWS SDK.
@@ -24,3 +24,6 @@ pub mod retry;
 
 /// User agent middleware
 pub mod user_agent;
+
+/// AWS-specific content-encoding tools
+pub mod content_encoding;

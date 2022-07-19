@@ -1,8 +1,15 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
-#![warn(missing_docs)]
+
+#![warn(
+    missing_debug_implementations,
+    missing_docs,
+    rust_2018_idioms,
+    rustdoc::missing_crate_level_docs,
+    unreachable_pub
+)]
 
 //! `aws-config` provides implementations of region, credential resolution.
 //!
@@ -123,6 +130,8 @@ pub mod sso;
 
 pub mod connector;
 
+pub mod credential_process;
+
 pub(crate) mod parsing;
 
 // Re-export types from smithy-types
@@ -130,7 +139,10 @@ pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout;
 
 // Re-export types from aws-types
-pub use aws_types::app_name::{AppName, InvalidAppName};
+pub use aws_types::{
+    app_name::{AppName, InvalidAppName},
+    SdkConfig,
+};
 
 /// Create an environment loader for AWS Configuration
 ///
@@ -165,6 +177,7 @@ mod loader {
     use aws_smithy_types::timeout;
     use aws_types::app_name::AppName;
     use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    use aws_types::endpoint::ResolveAwsEndpoint;
     use aws_types::SdkConfig;
 
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
@@ -181,6 +194,7 @@ mod loader {
     pub struct ConfigLoader {
         app_name: Option<AppName>,
         credentials_provider: Option<SharedCredentialsProvider>,
+        endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
         region: Option<Box<dyn ProvideRegion>>,
         retry_config: Option<RetryConfig>,
         sleep: Option<Arc<dyn AsyncSleep>>,
@@ -285,6 +299,30 @@ mod loader {
             self
         }
 
+        /// Override the endpoint resolver used for **all** AWS Services
+        ///
+        /// This method will override the endpoint resolver used for **all** AWS services. This mainly
+        /// exists to set a static endpoint for tools like `LocalStack`. For live traffic, AWS services
+        /// require the service-specific endpoint resolver they load by default.
+        ///
+        /// # Examples
+        ///
+        /// Use a static endpoint for all services
+        /// ```no_run
+        /// # async fn doc() {
+        /// use aws_smithy_http::endpoint::Endpoint;
+        /// let sdk_config = aws_config::from_env()
+        ///   .endpoint_resolver(Endpoint::immutable("http://localhost:1234".parse().expect("valid URI")))
+        ///   .load().await;
+        /// # }
+        pub fn endpoint_resolver(
+            mut self,
+            endpoint_resolver: impl ResolveAwsEndpoint + 'static,
+        ) -> Self {
+            self.endpoint_resolver = Some(Arc::new(endpoint_resolver));
+            self
+        }
+
         /// Set configuration for all sub-loaders (credentials, region etc.)
         ///
         /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
@@ -292,6 +330,7 @@ mod loader {
         ///
         /// # Examples
         /// ```no_run
+        /// # #[cfg(feature = "hyper-client")]
         /// # async fn docs() {
         /// use aws_config::provider_config::ProviderConfig;
         /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new().
@@ -390,6 +429,8 @@ mod loader {
                 SharedCredentialsProvider::new(builder.build().await)
             };
 
+            let endpoint_resolver = self.endpoint_resolver;
+
             let mut builder = SdkConfig::builder()
                 .region(region)
                 .retry_config(retry_config)
@@ -397,6 +438,7 @@ mod loader {
                 .credentials_provider(credentials_provider)
                 .http_connector(http_connector);
 
+            builder.set_endpoint_resolver(endpoint_resolver);
             builder.set_app_name(app_name);
             builder.set_sleep_impl(sleep_impl);
             builder.build()

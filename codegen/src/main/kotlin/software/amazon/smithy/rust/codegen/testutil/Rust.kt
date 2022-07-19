@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.testutil
@@ -21,13 +21,14 @@ import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.util.CommandFailed
 import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.dq
@@ -90,7 +91,7 @@ object TestWorkspace {
     }
 
     @Suppress("NAME_SHADOWING")
-    fun testProject(symbolProvider: RustSymbolProvider? = null): TestWriterDelegator {
+    fun testProject(symbolProvider: RustSymbolProvider? = null, debugMode: Boolean = false): TestWriterDelegator {
         val subprojectDir = subproject()
         val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
             override fun config(): SymbolVisitorConfig {
@@ -107,7 +108,8 @@ object TestWorkspace {
         }
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
-            symbolProvider
+            symbolProvider,
+            CoreCodegenConfig(debugMode = debugMode)
         )
     }
 }
@@ -122,7 +124,7 @@ object TestWorkspace {
  * "cargo test".runCommand(path)
  * ```
  */
-fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectNode.builder().build(), addModuleToEventStreamAllowList: Boolean = false): Pair<PluginContext, Path> {
+fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectNode.builder().build(), addModuleToEventStreamAllowList: Boolean = false, service: String? = null, runtimeConfig: RuntimeConfig? = null): Pair<PluginContext, Path> {
     val testDir = TestWorkspace.subproject()
     val moduleName = "test_${testDir.nameWithoutExtension}"
     val testPath = testDir.toPath()
@@ -132,11 +134,12 @@ fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectN
         .withMember("moduleVersion", Node.from("1.0.0"))
         .withMember("moduleDescription", Node.from("test"))
         .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
+        .letIf(service != null) { it.withMember("service", service) }
         .withMember(
             "runtimeConfig",
             Node.objectNodeBuilder().withMember(
                 "relativePath",
-                Node.from((TestRuntimeConfig.runtimeCrateLocation).path)
+                Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path)
             ).build()
         )
 
@@ -167,16 +170,37 @@ fun RustWriter.unitTest(
     }
 }
 
+/*
+ * Writes a Rust-style unit test
+ */
+fun RustWriter.unitTest(
+    name: String,
+    vararg args: Any,
+    block: RustWriter.() -> Unit
+): RustWriter {
+    raw("#[test]")
+    return rustBlock("fn $name()", *args, block = block)
+}
+
 /**
  * WriterDelegator used for test purposes
  *
  * This exposes both the base directory and a list of [generatedFiles] for test purposes
  */
-class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider: RustSymbolProvider) :
-    RustCrate(fileManifest, symbolProvider, DefaultPublicModules) {
+class TestWriterDelegator(
+    private val fileManifest: FileManifest,
+    symbolProvider: RustSymbolProvider,
+    val codegenConfig: CoreCodegenConfig
+) :
+    RustCrate(fileManifest, symbolProvider, DefaultPublicModules, codegenConfig) {
     val baseDir: Path = fileManifest.baseDir
 
     fun generatedFiles(): List<Path> = fileManifest.files.toList().sorted()
+    fun printGeneratedFiles() {
+        generatedFiles().forEach { path ->
+            println("file:///$path")
+        }
+    }
 }
 
 /**
@@ -192,15 +216,13 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
         }
     """.asSmithyModel()
     this.finalize(
-        rustSettings(stubModel),
+        rustSettings(),
         stubModel,
         manifestCustomizations = emptyMap(),
         libRsCustomizations = listOf(),
     )
     println("Generated files:")
-    generatedFiles().forEach { path ->
-        println("file:///$path")
-    }
+    printGeneratedFiles()
     try {
         "cargo fmt".runCommand(baseDir)
     } catch (e: Exception) {
@@ -213,18 +235,11 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     }
 }
 
-fun TestWriterDelegator.rustSettings(stubModel: Model = "namespace test".asSmithyModel()) =
-    RustSettings(
-        ShapeId.from("fake#Fake"),
-        "test_${baseDir.toFile().nameWithoutExtension}",
-        "0.0.1",
-        moduleAuthors = listOf("test@module.com"),
-        moduleDescription = "test",
-        moduleRepository = null,
-        runtimeConfig = TestRuntimeConfig,
-        codegenConfig = CodegenConfig(),
-        license = null,
-        model = stubModel
+fun TestWriterDelegator.rustSettings() =
+    testRustSettings(
+        service = ShapeId.from("fake#Fake"),
+        moduleName = "test_${baseDir.toFile().nameWithoutExtension}",
+        codegenConfig = this.codegenConfig
     )
 
 fun String.shouldParseAsRust() {

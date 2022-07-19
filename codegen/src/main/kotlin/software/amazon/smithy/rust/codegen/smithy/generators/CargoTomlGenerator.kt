@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators
@@ -9,9 +9,9 @@ import com.moandjiezana.toml.TomlWriter
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
-import software.amazon.smithy.utils.CodeWriter
 
 /**
  * Customizations to apply to the generated Cargo.toml file.
@@ -42,8 +42,8 @@ typealias ManifestCustomizations = Map<String, Any?>
  * Generates the crate manifest Cargo.toml file.
  */
 class CargoTomlGenerator(
-    private val settings: RustSettings,
-    private val writer: CodeWriter,
+    private val settings: CoreRustSettings,
+    private val writer: RustWriter,
     private val manifestCustomizations: ManifestCustomizations,
     private val dependencies: List<CargoDependency>,
     private val features: List<Feature>
@@ -60,7 +60,7 @@ class CargoTomlGenerator(
                 "version" to settings.moduleVersion,
                 "authors" to settings.moduleAuthors,
                 settings.moduleDescription?.let { "description" to it },
-                "edition" to "2018",
+                "edition" to "2021",
                 "license" to settings.license,
                 "repository" to settings.moduleRepository,
             ).toMap(),

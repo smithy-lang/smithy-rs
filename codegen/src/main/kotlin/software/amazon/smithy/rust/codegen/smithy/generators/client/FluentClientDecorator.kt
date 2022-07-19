@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators.client
@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
@@ -36,7 +37,8 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -58,14 +60,14 @@ import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-class FluentClientDecorator : RustCodegenDecorator {
+class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "FluentClient"
     override val order: Byte = 0
 
-    private fun applies(codegenContext: CodegenContext): Boolean =
-        codegenContext.symbolProvider.config().codegenConfig.includeFluentClient
+    private fun applies(codegenContext: ClientCodegenContext): Boolean =
+        codegenContext.settings.codegenConfig.includeFluentClient
 
-    override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (!applies(codegenContext)) {
             return
         }
@@ -79,7 +81,7 @@ class FluentClientDecorator : RustCodegenDecorator {
     }
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         if (!applies(codegenContext)) {
@@ -110,9 +112,9 @@ sealed class FluentClientSection(name: String) : Section(name) {
 
 abstract class FluentClientCustomization : NamedSectionGenerator<FluentClientSection>()
 
-class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomization() {
-    private val moduleUseName = codegenContext.moduleUseName()
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
+class GenericFluentClient(coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
+    private val moduleUseName = coreCodegenContext.moduleUseName()
+    private val clientDep = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig)
     private val codegenScope = arrayOf("client" to clientDep.asType())
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
@@ -184,37 +186,77 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
                     // Ignored as otherwise we'd need to pull in all these dev-dependencies.
                     /// ```rust,ignore
                     /// use aws_endpoint::AwsEndpointStage;
+                    /// use aws_http::auth::CredentialsStage;
+                    /// use aws_http::recursion_detection::RecursionDetectionStage;
                     /// use aws_http::user_agent::UserAgentStage;
                     /// use aws_sig_auth::middleware::SigV4SigningStage;
                     /// use aws_sig_auth::signer::SigV4Signer;
-                    /// use aws_smithy_http_tower::map_request::MapRequestLayer;
-                    /// use tower::layer::util::Stack;
+                    /// use aws_smithy_client::retry::Config as RetryConfig;
+                    /// use aws_smithy_http_tower::map_request::{AsyncMapRequestLayer, MapRequestLayer};
+                    /// use std::fmt::Debug;
+                    /// use tower::layer::util::{Identity, Stack};
                     /// use tower::ServiceBuilder;
                     ///
-                    /// type AwsMiddlewareStack =
-                    ///     Stack<MapRequestLayer<SigV4SigningStage>,
-                    ///         Stack<MapRequestLayer<UserAgentStage>,
-                    ///             MapRequestLayer<AwsEndpointStage>>>,
+                    /// type AwsMiddlewareStack = Stack<
+                    ///     MapRequestLayer<RecursionDetectionStage>,
+                    ///     Stack<
+                    ///         MapRequestLayer<SigV4SigningStage>,
+                    ///         Stack<
+                    ///             AsyncMapRequestLayer<CredentialsStage>,
+                    ///             Stack<
+                    ///                 MapRequestLayer<UserAgentStage>,
+                    ///                 Stack<MapRequestLayer<AwsEndpointStage>, Identity>,
+                    ///             >,
+                    ///         >,
+                    ///     >,
+                    /// >;
                     ///
-                    /// ##[derive(Debug, Default)]
+                    /// /// AWS Middleware Stack
+                    /// ///
+                    /// /// This implements the middleware stack for this service. It will:
+                    /// /// 1. Load credentials asynchronously into the property bag
+                    /// /// 2. Sign the request with SigV4
+                    /// /// 3. Resolve an Endpoint for the request
+                    /// /// 4. Add a user agent to the request
+                    /// ##[derive(Debug, Default, Clone)]
+                    /// ##[non_exhaustive]
                     /// pub struct AwsMiddleware;
+                    ///
+                    /// impl AwsMiddleware {
+                    ///     /// Create a new `AwsMiddleware` stack
+                    ///     ///
+                    ///     /// Note: `AwsMiddleware` holds no state.
+                    ///     pub fn new() -> Self {
+                    ///         AwsMiddleware::default()
+                    ///     }
+                    /// }
+                    ///
+                    /// // define the middleware stack in a non-generic location to reduce code bloat.
+                    /// fn base() -> ServiceBuilder<AwsMiddlewareStack> {
+                    ///     let credential_provider = AsyncMapRequestLayer::for_mapper(CredentialsStage::new());
+                    ///     let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
+                    ///     let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
+                    ///     let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
+                    ///     let recursion_detection = MapRequestLayer::for_mapper(RecursionDetectionStage::new());
+                    ///     // These layers can be considered as occurring in order, that is:
+                    ///     // 1. Resolve an endpoint
+                    ///     // 2. Add a user agent
+                    ///     // 3. Acquire credentials
+                    ///     // 4. Sign with credentials
+                    ///     // (5. Dispatch over the wire)
+                    ///     ServiceBuilder::new()
+                    ///         .layer(endpoint_resolver)
+                    ///         .layer(user_agent)
+                    ///         .layer(credential_provider)
+                    ///         .layer(signer)
+                    ///         .layer(recursion_detection)
+                    /// }
+                    ///
                     /// impl<S> tower::Layer<S> for AwsMiddleware {
                     ///     type Service = <AwsMiddlewareStack as tower::Layer<S>>::Service;
                     ///
                     ///     fn layer(&self, inner: S) -> Self::Service {
-                    ///         let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new())); _signer: MapRequestLaye
-                    ///         let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage); _endpoint_resolver: MapRequestLayer<Aw
-                    ///         let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new()); _user_agent: MapRequestLayer<UserAgentSt
-                    ///         // These layers can be considered as occurring in order, that is:
-                    ///         // 1. Resolve an endpoint
-                    ///         // 2. Add a user agent
-                    ///         // 3. Sign
-                    ///         // (4. Dispatch over the wire)
-                    ///         ServiceBuilder::new() _ServiceBuilder<Identity>
-                    ///             .layer(endpoint_resolver) _ServiceBuilder<Stack<MapRequestLayer<_>, _>>
-                    ///             .layer(user_agent) _ServiceBuilder<Stack<MapRequestLayer<_>, _>>
-                    ///             .layer(signer) _ServiceBuilder<Stack<MapRequestLayer<_>, _>>
-                    ///             .service(inner)
+                    ///         base().service(inner)
                     ///     }
                     /// }
                     /// ```
@@ -242,12 +284,12 @@ class GenericFluentClient(codegenContext: CodegenContext) : FluentClientCustomiz
 }
 
 class FluentClientGenerator(
-    private val codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val generics: FluentClientGenerics = FlexibleClientGenerics(
         connectorDefault = null,
         middlewareDefault = null,
-        retryDefault = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType().member("retry::Standard"),
-        client = CargoDependency.SmithyClient(codegenContext.runtimeConfig).asType()
+        retryDefault = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig).asType().member("retry::Standard"),
+        client = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig).asType()
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
@@ -257,18 +299,18 @@ class FluentClientGenerator(
 
         val clientModule = RustModule(
             "client",
-            RustMetadata(public = true),
+            RustMetadata(visibility = Visibility.PUBLIC),
             documentation = "Client and fluent builders for calling the service."
         )
     }
 
-    private val serviceShape = codegenContext.serviceShape
+    private val serviceShape = coreCodegenContext.serviceShape
     private val operations =
-        TopDownIndex.of(codegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
-    private val symbolProvider = codegenContext.symbolProvider
-    private val model = codegenContext.model
-    private val clientDep = CargoDependency.SmithyClient(codegenContext.runtimeConfig)
-    private val runtimeConfig = codegenContext.runtimeConfig
+        TopDownIndex.of(coreCodegenContext.model).getContainedOperations(serviceShape).sortedBy { it.id }
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = coreCodegenContext.model
+    private val clientDep = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig)
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
     fun render(crate: RustCrate) {
@@ -407,7 +449,7 @@ class FluentClientGenerator(
                 Fluent builders are created through the [`Client`](crate::client::Client) by calling
                 one if its operation methods. After parameters are set using the builder methods,
                 the `send` method can be called to initiate the request.
-                """,
+                """.trim(),
                 newlinePrefix = "//! "
             )
             operations.forEach { operation ->
@@ -475,7 +517,7 @@ class FluentClientGenerator(
                             .copy(name = "result::SdkError"),
                         "send_bounds" to generics.sendBounds(inputType, outputType, errorType)
                     )
-                    PaginatorGenerator.paginatorType(codegenContext, generics, operation)?.also { paginatorType ->
+                    PaginatorGenerator.paginatorType(coreCodegenContext, generics, operation)?.also { paginatorType ->
                         rustTemplate(
                             """
                             /// Create a paginator for this request

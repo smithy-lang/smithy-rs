@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 // This code was copied and then modified from Tokio's Axum.
@@ -48,8 +48,9 @@
 //!
 //! [extensions]: https://docs.rs/http/latest/http/struct.Extensions.html
 
-use axum_core::extract::RequestParts;
 use std::ops::Deref;
+
+use crate::request::RequestParts;
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
 /// This extension type is set when it has been correctly determined that the request should be
@@ -70,6 +71,16 @@ impl OperationExtension {
             namespace,
             operation_name,
         }
+    }
+
+    /// Returns the Smithy model namespace.
+    pub fn namespace(&self) -> &'static str {
+        self.namespace
+    }
+
+    /// Returns the Smithy operation name.
+    pub fn operation_name(&self) -> &'static str {
+        self.operation_name
     }
 
     /// Returns the current operation formatted as `<namespace>#<operation_name>`.

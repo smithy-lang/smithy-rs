@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Ecs Credentials Provider
@@ -131,6 +131,7 @@ impl ProvideCredentials for EcsCredentialsProvider {
 
 /// Inner Provider that can record failed configuration state
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 enum Provider {
     Configured(HttpCredentialProvider),
     NotConfigured,
@@ -153,7 +154,7 @@ impl Provider {
         }
     }
 
-    pub async fn make(builder: Builder) -> Self {
+    async fn make(builder: Builder) -> Self {
         let provider_config = builder.provider_config.unwrap_or_default();
         let env = provider_config.env();
         let uri = match Self::uri(env, builder.dns).await {

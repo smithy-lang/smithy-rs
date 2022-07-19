@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use aws_types::region::Region;
@@ -37,7 +37,7 @@ impl DefaultRegionChain {
 }
 
 /// Builder for [DefaultRegionChain]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Builder {
     env_provider: EnvironmentVariableRegionProvider,
     profile_file: profile::region::Builder,
@@ -73,7 +73,7 @@ impl Builder {
 }
 
 impl ProvideRegion for DefaultRegionChain {
-    fn region(&self) -> crate::meta::region::future::ProvideRegion {
+    fn region(&self) -> crate::meta::region::future::ProvideRegion<'_> {
         ProvideRegion::region(&self.0)
     }
 }

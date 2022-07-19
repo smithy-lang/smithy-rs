@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use super::{PayloadChecksumKind, SignatureLocation};
@@ -287,7 +287,7 @@ fn build_authorization_header(
         "{} Credential={}/{}, SignedHeaders={}, Signature={}",
         HMAC_256,
         access_key,
-        sts.scope.to_string(),
+        sts.scope,
         creq.values.signed_headers().as_str(),
         signature
     ))

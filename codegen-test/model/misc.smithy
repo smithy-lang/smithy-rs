@@ -3,6 +3,8 @@ $version: "1.0"
 namespace aws.protocoltests.misc
 
 use aws.protocols#restJson1
+use smithy.test#httpRequestTests
+use smithy.test#httpResponseTests
 
 /// A service to test miscellaneous aspects of code generation where protocol
 /// selection is not relevant. If you want to test something protocol-specific,
@@ -11,23 +13,52 @@ use aws.protocols#restJson1
 @title("MiscService")
 service MiscService {
     operations: [
-        OperationWithInnerRequiredShape,
+        TypeComplexityOperation,
+        InnerRequiredShapeOperation,
+        ResponseCodeRequiredOperation,
+        ResponseCodeHttpFallbackOperation,
+        ResponseCodeDefaultOperation,
     ],
+}
+
+/// An operation whose shapes generate complex Rust types.
+/// See https://rust-lang.github.io/rust-clippy/master/index.html#type_complexity.
+@http(uri: "/typeComplexityOperation", method: "GET")
+operation TypeComplexityOperation {
+    input: TypeComplexityOperationInputOutput,
+    output: TypeComplexityOperationInputOutput,
+}
+
+structure TypeComplexityOperationInputOutput {
+    list: ListA
+}
+
+list ListA {
+    member: ListB
+}
+
+list ListB {
+    member: ListC
+}
+
+list ListC {
+    member: MapA
+}
+
+map MapA {
+    key: String,
+    value: EmptyStructure
 }
 
 /// This operation tests that (de)serializing required values from a nested
 /// shape works correctly.
-@http(uri: "/operation", method: "GET")
-operation OperationWithInnerRequiredShape {
-    input: OperationWithInnerRequiredShapeInput,
-    output: OperationWithInnerRequiredShapeOutput,
+@http(uri: "/innerRequiredShapeOperation", method: "GET")
+operation InnerRequiredShapeOperation {
+    input: InnerRequiredShapeOperationInputOutput,
+    output: InnerRequiredShapeOperationInputOutput,
 }
 
-structure OperationWithInnerRequiredShapeInput {
-    inner: InnerShape
-}
-
-structure OperationWithInnerRequiredShapeOutput {
+structure InnerRequiredShapeOperationInputOutput {
     inner: InnerShape
 }
 
@@ -107,4 +138,64 @@ union AUnion {
     i32: Integer,
     string: String,
     time: Timestamp,
+}
+
+/// This operation tests that the response code defaults to 200 when no other
+/// code is set.
+@httpResponseTests([
+    {
+        id: "ResponseCodeDefaultOperation",
+        protocol: "aws.protocols#restJson1",
+        code: 200,
+    }
+])
+@http(method: "GET", uri: "/responseCodeDefaultOperation")
+operation ResponseCodeDefaultOperation {
+    input: EmptyStructure,
+    output: EmptyStructure,
+}
+
+/// This operation tests that the response code defaults to `@http`'s code.
+@httpResponseTests([
+    {
+        id: "ResponseCodeHttpFallbackOperation",
+        protocol: "aws.protocols#restJson1",
+        code: 418,
+        headers: {
+            "Content-Length": "2"
+        }
+    }
+])
+@http(method: "GET", uri: "/responseCodeHttpFallbackOperation", code: 418)
+operation ResponseCodeHttpFallbackOperation {
+    input: EmptyStructure,
+    output: EmptyStructure,
+}
+
+structure EmptyStructure {}
+
+/// This operation tests that `@httpResponseCode` is `@required`
+/// and is used over `@http's` code.
+@httpResponseTests([
+    {
+        id: "ResponseCodeRequiredOperation",
+        protocol: "aws.protocols#restJson1",
+        code: 201,
+        params: {"responseCode": 201},
+        headers: {
+            "Content-Length": "2"
+        }
+    }
+])
+@http(method: "GET", uri: "/responseCodeRequiredOperation", code: 200)
+operation ResponseCodeRequiredOperation {
+    input: EmptyStructure,
+    output: ResponseCodeRequiredOutput,
+}
+
+@output
+structure ResponseCodeRequiredOutput {
+    @required
+    @httpResponseCode
+    responseCode: Integer,
 }

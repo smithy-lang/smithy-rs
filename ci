@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -e
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: ci <action> [args...]"
+    echo
+    echo "Runs a CI action from tools/ci-build/scripts within the Docker build image."
+    echo "Requires Docker and docker-compose to both be installed."
+    echo
+    echo "Note: Some actions may require 'aws-sdk-rust' and/or 'aws-doc-sdk-examples'"
+    echo "to be checked out in the same directory as 'smithy-rs'."
+    exit 1
+fi
+
+ACTION_NAME=$1
+shift
+ACTION_ARGS=("$@")
+
+cd ..
+make -f ./smithy-rs/ci.mk "${ACTION_NAME}" ARGS="${ACTION_ARGS[*]}"

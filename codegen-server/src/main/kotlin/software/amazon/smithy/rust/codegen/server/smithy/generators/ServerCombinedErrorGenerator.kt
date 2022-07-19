@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -24,20 +25,20 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  * Generates a unified error enum for [operation]. [ErrorGenerator] handles generating the individual variants,
  * but we must still combine those variants into an enum covering all possible errors for a given operation.
  */
-class ServerCombinedErrorGenerator(
+open class ServerCombinedErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val operation: OperationShape
 ) {
     private val operationIndex = OperationIndex.of(model)
 
-    fun render(writer: RustWriter) {
+    open fun render(writer: RustWriter) {
         val errors = operationIndex.getErrors(operation)
         val operationSymbol = symbolProvider.toSymbol(operation)
         val symbol = operation.errorSymbol(symbolProvider)
         val meta = RustMetadata(
             derives = Attribute.Derives(setOf(RuntimeType.Debug)),
-            public = true
+            visibility = Visibility.PUBLIC
         )
 
         writer.rust("/// Error type for the `${operationSymbol.name}` operation.")
@@ -51,7 +52,7 @@ class ServerCombinedErrorGenerator(
             }
         }
 
-        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.stdfmt.member("Display")) {
+        writer.rustBlock("impl #T for ${symbol.name}", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 delegateToVariants {
                     rust("_inner.fmt(f)")
@@ -86,7 +87,7 @@ class ServerCombinedErrorGenerator(
 
         for (error in errors) {
             val errorSymbol = symbolProvider.toSymbol(error)
-            writer.rustBlock("impl From<#T> for #T", errorSymbol, symbol) {
+            writer.rustBlock("impl #T<#T> for #T", RuntimeType.From, errorSymbol, symbol) {
                 rustBlock("fn from(variant: #T) -> #T", errorSymbol, symbol) {
                     rust("Self::${errorSymbol.name}(variant)")
                 }

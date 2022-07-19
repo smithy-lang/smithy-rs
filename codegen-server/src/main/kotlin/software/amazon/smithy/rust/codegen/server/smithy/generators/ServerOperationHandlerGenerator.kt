@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
@@ -25,36 +25,33 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 /**
  * ServerOperationHandlerGenerator
  */
-class ServerOperationHandlerGenerator(
-    codegenContext: CodegenContext,
+open class ServerOperationHandlerGenerator(
+    coreCodegenContext: CoreCodegenContext,
     private val operations: List<OperationShape>,
 ) {
     private val serverCrate = "aws_smithy_http_server"
-    private val service = codegenContext.serviceShape
-    private val model = codegenContext.model
-    private val protocol = codegenContext.protocol
-    private val symbolProvider = codegenContext.symbolProvider
-    private val operationNames = operations.map { symbolProvider.toSymbol(it).name }
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val service = coreCodegenContext.serviceShape
+    private val model = coreCodegenContext.model
+    private val protocol = coreCodegenContext.protocol
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
-        "AxumCore" to ServerCargoDependency.AxumCore.asType(),
-        "PinProjectLite" to ServerCargoDependency.PinProjectLite.asType(),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "Phantom" to ServerRuntimeType.Phantom,
-        "ServerOperationHandler" to ServerRuntimeType.serverOperationHandler(runtimeConfig),
+        "ServerOperationHandler" to ServerRuntimeType.OperationHandler(runtimeConfig),
         "http" to RuntimeType.http,
     )
 
-    fun render(writer: RustWriter) {
+    open fun render(writer: RustWriter) {
         renderHandlerImplementations(writer, false)
         renderHandlerImplementations(writer, true)
     }
 
-    /*
+    /**
      * Renders the implementation of the `Handler` trait for all operations.
      * Handlers are implemented for `FnOnce` function types whose signatures take in state or not.
      */
@@ -106,9 +103,7 @@ class ServerOperationHandlerGenerator(
                     """
                     type Sealed = #{ServerOperationHandler}::sealed::Hidden;
                     async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::body::BoxBody> {
-                        let mut req = #{AxumCore}::extract::RequestParts::new(req);
-                        use #{AxumCore}::extract::FromRequest;
-                        use #{AxumCore}::response::IntoResponse;
+                        let mut req = #{SmithyHttpServer}::request::RequestParts::new(req);
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
                             Err(runtime_error) => {
@@ -130,7 +125,7 @@ class ServerOperationHandlerGenerator(
         }
     }
 
-    /*
+    /**
      * Generates the trait bounds of the `Handler` trait implementation, depending on:
      *     - the presence of state; and
      *     - whether the operation is fallible or not.

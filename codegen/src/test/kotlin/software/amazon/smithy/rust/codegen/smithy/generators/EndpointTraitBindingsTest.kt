@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators
@@ -10,12 +10,14 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -61,7 +63,7 @@ internal class EndpointTraitBindingsTest {
             operationShape.expectTrait(EndpointTrait::class.java)
         )
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.default("test", false)) {
+        project.withModule(RustModule.default("test", visibility = Visibility.PRIVATE)) {
             it.rust(
                 """
                 struct GetStatusInput {
@@ -141,10 +143,11 @@ internal class EndpointTraitBindingsTest {
         """.asSmithyModel()
         val (ctx, testDir) = generatePluginContext(model)
         val moduleName = ctx.settings.expectStringMember("module").value.replace('-', '_')
-        val codegenDecorator = object : RustCodegenDecorator {
+        val codegenDecorator = object : RustCodegenDecorator<ClientCodegenContext> {
             override val name: String = "add tests"
             override val order: Byte = 0
-            override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+
+            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
                 rustCrate.withFile("tests/validate_errors.rs") {
                     TokioTest.render(it)
                     it.rust(
@@ -169,7 +172,9 @@ internal class EndpointTraitBindingsTest {
                 }
             }
         }
-        val visitor = CodegenVisitor(ctx, CombinedCodegenDecorator.fromClasspath(ctx).withDecorator(codegenDecorator))
+        val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
+            CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(codegenDecorator)
+        val visitor = CodegenVisitor(ctx, combinedCodegenDecorator)
         visitor.execute()
         "cargo test".runCommand(testDir)
     }

@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
@@ -44,21 +44,21 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class HttpBoundProtocolPayloadGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     private val protocol: Protocol,
     private val httpMessageType: HttpMessageType = HttpMessageType.REQUEST
 ) : ProtocolPayloadGenerator {
-    private val symbolProvider = codegenContext.symbolProvider
-    private val model = codegenContext.model
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = coreCodegenContext.model
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val target = coreCodegenContext.target
     private val httpBindingResolver = protocol.httpBindingResolver
 
     private val operationSerModule = RustModule.private("operation_ser")
 
     private val codegenScope = arrayOf(
         "hyper" to CargoDependency.HyperWithStream.asType(),
-        "ByteStream" to RuntimeType.byteStream(runtimeConfig),
+        "ByteStream" to RuntimeType.ByteStream(runtimeConfig),
         "ByteSlab" to RuntimeType.ByteSlab,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "BuildError" to runtimeConfig.operationBuildError(),
@@ -163,7 +163,7 @@ class HttpBoundProtocolPayloadGenerator(
 
         val marshallerConstructorFn = EventStreamMarshallerGenerator(
             model,
-            mode,
+            target,
             runtimeConfig,
             symbolProvider,
             unionShape,
@@ -211,10 +211,10 @@ class HttpBoundProtocolPayloadGenerator(
                 if (symbolProvider.toSymbol(member).isOptional()) {
                     withBlockTemplate(
                         """
-                            let payload = match payload$asRef {
-                                Some(t) => t,
-                                None => return Ok(
-                            """,
+                        let payload = match payload$asRef {
+                            Some(t) => t,
+                            None => return Ok(
+                        """,
                         ")};",
                         *codegenScope
                     ) {

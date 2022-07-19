@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Region type for determining the endpoint to send requests to.
@@ -62,6 +62,12 @@ impl AsRef<str> for SigningRegion {
 impl From<Region> for SigningRegion {
     fn from(inp: Region) -> Self {
         SigningRegion(inp.0)
+    }
+}
+
+impl From<&'static str> for SigningRegion {
+    fn from(region: &'static str) -> Self {
+        Self::from_static(region)
     }
 }
 

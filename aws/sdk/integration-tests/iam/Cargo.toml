@@ -8,7 +8,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-aws-endpoint = { path = "../../build/aws-sdk/sdk/aws-endpoint" }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-sdk-iam = { path = "../../build/aws-sdk/sdk/iam" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }

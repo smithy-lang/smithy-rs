@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.generators
@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustType
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -23,7 +24,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.lensName
 
 /** Generator for accessing nested fields through optional values **/
 class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
-    private val module = RustModule("lens", RustMetadata(public = false), "Generated accessors for nested fields")
+    private val module = RustModule("lens", RustMetadata(visibility = Visibility.PUBLIC), "Generated accessors for nested fields")
     /**
      * Generate an accessor on [root] that consumes [root] and returns an `Option<T>` for the nested item
      */

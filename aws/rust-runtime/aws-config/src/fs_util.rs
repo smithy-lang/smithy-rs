@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use aws_types::os_shim_internal;
@@ -12,7 +12,7 @@ pub(crate) enum Os {
 }
 
 impl Os {
-    pub fn real() -> Self {
+    pub(crate) fn real() -> Self {
         match std::env::consts::OS {
             "windows" => Os::Windows,
             _ => Os::NotWindows,

@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+cd smithy-rs
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: generate-codegen-diff <base-revision>"
+    exit 1
+fi
+
+base_revision="$1"
+./tools/codegen-diff-revisions.py . "${base_revision}"
+
+mv tmp-codegen-diff/bot-message ../artifacts/bot-message-codegen-diff
+mv tmp-codegen-diff ../artifacts/codegen-diff

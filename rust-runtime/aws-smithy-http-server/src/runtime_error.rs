@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Runtime error type.
@@ -9,7 +9,7 @@
 //!
 //! As opposed to rejection types (see [`crate::rejection`]), which are an internal detail about
 //! the framework, `RuntimeError` is surfaced to clients in HTTP responses: indeed, it implements
-//! [`axum_core::response::IntoResponse`]. Rejections can be "grouped" and converted into a
+//! [`RuntimeError::into_response`]. Rejections can be "grouped" and converted into a
 //! specific `RuntimeError` kind: for example, all request rejections due to serialization issues
 //! can be conflated under the [`RuntimeErrorKind::Serialization`] enum variant.
 //!
@@ -19,20 +19,21 @@
 //! Generated code works always works with [`crate::rejection`] types when deserializing requests
 //! and serializing response. Just before a response needs to be sent, the generated code looks up
 //! and converts into the corresponding `RuntimeError`, and then it uses the its
-//! [`axum_core::response::IntoResponse`] implementation to render and send a response.
+//! [`RuntimeError::into_response`] method to render and send a response.
 
-use crate::protocols::Protocol;
+use crate::{protocols::Protocol, response::Response};
 
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
-    // UnknownOperation,
+    /// The requested operation does not exist.
+    UnknownOperation,
     /// Request failed to deserialize or response failed to serialize.
     Serialization(crate::Error),
     /// As of writing, this variant can only occur upon failure to extract an
     /// [`crate::extension::Extension`] from the request.
     InternalFailure(crate::Error),
     // UnsupportedMediaType,
-    // NotAcceptable,
+    NotAcceptable,
 }
 
 /// String representation of the runtime error type.
@@ -43,6 +44,8 @@ impl RuntimeErrorKind {
         match self {
             RuntimeErrorKind::Serialization(_) => "SerializationException",
             RuntimeErrorKind::InternalFailure(_) => "InternalFailureException",
+            RuntimeErrorKind::UnknownOperation => "UnknownOperationException",
+            RuntimeErrorKind::NotAcceptable => "NotAcceptableException",
         }
     }
 }
@@ -53,16 +56,22 @@ pub struct RuntimeError {
     pub kind: RuntimeErrorKind,
 }
 
-impl axum_core::response::IntoResponse for RuntimeError {
-    fn into_response(self) -> axum_core::response::Response {
+impl RuntimeError {
+    pub fn into_response(self) -> Response {
         let status_code = match self.kind {
             RuntimeErrorKind::Serialization(_) => http::StatusCode::BAD_REQUEST,
             RuntimeErrorKind::InternalFailure(_) => http::StatusCode::INTERNAL_SERVER_ERROR,
+            RuntimeErrorKind::UnknownOperation => http::StatusCode::NOT_FOUND,
+            RuntimeErrorKind::NotAcceptable => http::StatusCode::NOT_ACCEPTABLE,
         };
 
         let body = crate::body::to_boxed(match self.protocol {
             Protocol::RestJson1 => "{}",
             Protocol::RestXml => "",
+            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#empty-body-serialization
+            Protocol::AwsJson10 => "",
+            // See https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#empty-body-serialization
+            Protocol::AwsJson11 => "",
         });
 
         let mut builder = http::Response::builder();
@@ -74,9 +83,9 @@ impl axum_core::response::IntoResponse for RuntimeError {
                     .header("Content-Type", "application/json")
                     .header("X-Amzn-Errortype", self.kind.name());
             }
-            Protocol::RestXml => {
-                builder = builder.header("Content-Type", "application/xml");
-            }
+            Protocol::RestXml => builder = builder.header("Content-Type", "application/xml"),
+            Protocol::AwsJson10 => builder = builder.header("Content-Type", "application/x-amz-json-1.0"),
+            Protocol::AwsJson11 => builder = builder.header("Content-Type", "application/x-amz-json-1.1"),
         }
 
         builder = builder.extension(crate::extension::RuntimeErrorExtension::new(String::from(

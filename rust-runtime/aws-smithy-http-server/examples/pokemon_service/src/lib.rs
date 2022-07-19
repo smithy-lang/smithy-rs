@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Pokémon Service
@@ -23,6 +23,8 @@ const PIKACHU_SPANISH_FLAVOR_TEXT: &str =
     "Cuando varios de estos Pokémon se juntan, su energía puede causar fuertes tormentas.";
 const PIKACHU_ITALIAN_FLAVOR_TEXT: &str =
     "Quando vari Pokémon di questo tipo si radunano, la loro energia può causare forti tempeste.";
+const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
+    "ほっぺたの りょうがわに ちいさい でんきぶくろを もつ。ピンチのときに ほうでんする。";
 
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
@@ -42,6 +44,7 @@ struct PokemonTranslations {
     en: String,
     es: String,
     it: String,
+    jp: String,
 }
 
 /// PokémonService shared state.
@@ -115,6 +118,7 @@ impl Default for State {
                 en: String::from(PIKACHU_ENGLISH_FLAVOR_TEXT),
                 es: String::from(PIKACHU_SPANISH_FLAVOR_TEXT),
                 it: String::from(PIKACHU_ITALIAN_FLAVOR_TEXT),
+                jp: String::from(PIKACHU_JAPANESE_FLAVOR_TEXT),
             },
         );
         Self {
@@ -147,6 +151,10 @@ pub async fn get_pokemon_species(
                 model::FlavorText {
                     flavor_text: pokemon.it.to_owned(),
                     language: model::Language::Italian,
+                },
+                model::FlavorText {
+                    flavor_text: pokemon.jp.to_owned(),
+                    language: model::Language::Japanese,
                 },
             ];
             let output = output::GetPokemonSpeciesOutput {

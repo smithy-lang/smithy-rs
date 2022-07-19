@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.rustlang
@@ -91,11 +91,11 @@ sealed class RustType {
     }
 
     data class Reference(val lifetime: kotlin.String?, override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = member.name
+        override val name = member.name
     }
 
     data class Option(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = "Option"
+        override val name = "Option"
         override val namespace = "std::option"
 
         /** Convert `Option<T>` to `Option<&T>` **/
@@ -105,7 +105,7 @@ sealed class RustType {
     }
 
     data class Box(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = "Box"
+        override val name = "Box"
         override val namespace = "std::boxed"
     }
 
@@ -115,7 +115,7 @@ sealed class RustType {
     }
 
     data class Vec(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = "Vec"
+        override val name = "Vec"
         override val namespace = "std::vec"
     }
 
@@ -148,25 +148,21 @@ fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
 }
 
 /** Format this Rust type so that it may be used as an argument type in a function definition */
-fun RustType.asArgumentValue(name: String): String {
-    return when (this) {
-        is RustType.String,
-        is RustType.Box -> "$name.into()"
+fun RustType.asArgumentValue(name: String) =
+    when (this) {
+        is RustType.String, is RustType.Box -> "$name.into()"
         else -> name
     }
-}
 
 /**
  * For a given name, generate an `Argument` data class containing pre-formatted strings for using this type when
- * writing a Rust function
+ * writing a Rust function.
  */
-fun RustType.asArgument(name: String): Argument {
-    return Argument(
-        "$name: ${this.asArgumentType()}",
-        this.asArgumentValue(name),
-        this.render(),
-    )
-}
+fun RustType.asArgument(name: String) = Argument(
+    "$name: ${this.asArgumentType()}",
+    this.asArgumentValue(name),
+    this.render(),
+)
 
 /**
  * Render this type, including references and generic parameters.
@@ -269,13 +265,19 @@ fun RustType.isCopy(): Boolean = when (this) {
     else -> false
 }
 
+enum class Visibility {
+    PRIVATE,
+    PUBCRATE,
+    PUBLIC
+}
+
 /**
- * Meta information about a Rust construction (field, struct, or enum)
+ * Meta information about a Rust construction (field, struct, or enum).
  */
 data class RustMetadata(
     val derives: Attribute.Derives = Attribute.Derives.Empty,
     val additionalAttributes: List<Attribute> = listOf(),
-    val public: Boolean
+    val visibility: Visibility = Visibility.PRIVATE
 ) {
     fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
@@ -292,10 +294,14 @@ data class RustMetadata(
         return this
     }
 
-    fun renderVisibility(writer: RustWriter): RustMetadata {
-        if (public) {
-            writer.writeInline("pub ")
-        }
+    private fun renderVisibility(writer: RustWriter): RustMetadata {
+        writer.writeInline(
+            when (visibility) {
+                Visibility.PRIVATE -> ""
+                Visibility.PUBCRATE -> "pub(crate) "
+                Visibility.PUBLIC -> "pub "
+            }
+        )
         return this
     }
 

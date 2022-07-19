@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # This workflow differs from PR CI in that it uploads a Docker build image to public ECR.
 # This should be done only on push to main so that PRs from forks can successfully run CI
 # since GitHub secrets cannot be shared with a PR from a fork.
@@ -9,7 +12,7 @@ on:
 
 # Allow only one Docker build image build to run at a time for the entire smithy-rs repo
 concurrency:
-  group: ci-docker-build-yml
+  group: ci-main-yml
   cancel-in-progress: true
 
 env:
@@ -47,7 +50,7 @@ jobs:
         docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
         docker push "${{ env.ecr_repository }}:main"
 
-  # Run normal CI, which should pick up the updated build image
+  # Run the shared CI after a Docker build image has been uploaded to ECR
   ci:
     needs: rebuild-docker-build-image
     uses: ./.github/workflows/ci.yml

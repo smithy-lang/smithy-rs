@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rustsdk
@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -28,19 +28,19 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 /**
  * Inserts a UserAgent configuration into the operation
  */
-class UserAgentDecorator : RustCodegenDecorator {
+class UserAgentDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "UserAgent"
     override val order: Byte = 10
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
         return baseCustomizations + AppNameCustomization(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
         // We are generating an AWS SDK, the service needs to have the AWS service trait
@@ -49,7 +49,7 @@ class UserAgentDecorator : RustCodegenDecorator {
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>
     ): List<OperationCustomization> {
@@ -62,7 +62,7 @@ class UserAgentDecorator : RustCodegenDecorator {
  */
 private class ApiVersionAndPubUse(private val runtimeConfig: RuntimeConfig, serviceTrait: ServiceTrait) :
     LibRsCustomization() {
-    private val serviceId = serviceTrait.sdkId.toLowerCase().replace(" ", "")
+    private val serviceId = serviceTrait.sdkId.lowercase().replace(" ", "")
     override fun section(section: LibRsSection): Writable = when (section) {
         is LibRsSection.Body -> writable {
             // PKG_VERSION comes from CrateVersionGenerator

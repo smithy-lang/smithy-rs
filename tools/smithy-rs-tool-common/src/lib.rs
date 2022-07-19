@@ -1,11 +1,13 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
+pub mod changelog;
+pub mod ci;
 pub mod git;
-pub mod github_actions;
 #[macro_use]
 pub mod macros;
 pub mod package;
 pub mod shell;
+pub mod versions_manifest;

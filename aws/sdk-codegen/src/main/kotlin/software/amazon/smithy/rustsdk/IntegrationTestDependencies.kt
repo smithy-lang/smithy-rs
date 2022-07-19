@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rustsdk
@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -18,17 +18,18 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import java.nio.file.Files
 import java.nio.file.Paths
 
-class IntegrationTestDecorator : RustCodegenDecorator {
+class IntegrationTestDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "IntegrationTest"
     override val order: Byte = 0
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>
     ): List<LibRsCustomization> {
-        val integrationTestPath = Paths.get("aws/sdk/integration-tests")
+        val integrationTestPath = Paths.get(SdkSettings.from(codegenContext.settings).integrationTestPath)
         check(Files.exists(integrationTestPath)) {
-            "IntegrationTestDecorator expects to be run from the smithy-rs package root"
+            "Failed to find the AWS SDK integration tests. Make sure the integration test path is configured " +
+                "correctly in the smithy-build.json."
         }
 
         val moduleName = codegenContext.moduleName.substring("aws-sdk-".length)

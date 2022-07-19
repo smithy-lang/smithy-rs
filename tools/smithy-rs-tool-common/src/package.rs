@@ -1,12 +1,14 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
+
+use serde::{Deserialize, Serialize};
 
 pub const SMITHY_PREFIX: &str = "aws-smithy-";
 pub const SDK_PREFIX: &str = "aws-sdk-";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
 pub enum PackageCategory {
     SmithyRuntime,
     AwsRuntime,

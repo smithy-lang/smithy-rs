@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -u
 #
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import Enum
 from unittest.mock import call, MagicMock
@@ -27,8 +27,16 @@ def announce(message):
 
 class DockerPullResult(Enum):
     SUCCESS = 1
-    ERROR_THROTTLED = 2
-    NOT_FOUND = 3
+    REMOTE_ARCHITECTURE_MISMATCH = 2
+    ERROR_THROTTLED = 3
+    RETRYABLE_ERROR = 4
+    NOT_FOUND = 5
+    UNKNOWN_ERROR = 6
+
+
+class Platform(Enum):
+    X86_64 = 0
+    ARM_64 = 1
 
 
 # Script context
@@ -63,24 +71,42 @@ class Context:
 
 # Mockable shell commands
 class Shell:
+    # Returns the platform that this script is running on
+    def platform(self):
+        (_, stdout, _) = get_cmd_output("uname -m")
+        if stdout == "arm64":
+            return Platform.ARM_64
+        return Platform.X86_64
+
     # Returns True if the given `image_name` and `image_tag` exist locally
     def docker_image_exists_locally(self, image_name, image_tag):
-        (status, _) = get_cmd_output(f"docker inspect \"{image_name}:{image_tag}\"", check=False)
+        (status, _, _) = get_cmd_output(f"docker inspect \"{image_name}:{image_tag}\"", check=False)
         return status == 0
 
     # Pulls the requested `image_name` with `image_tag`. Returns `DockerPullResult`.
     def docker_pull(self, image_name, image_tag):
-        (status, output) = get_cmd_output(f"docker pull \"{image_name}:{image_tag}\"", check=False)
+        (status, stdout, stderr) = get_cmd_output(f"docker pull \"{image_name}:{image_tag}\"", check=False)
         print("Docker pull output:")
         print("-------------------")
-        print(output)
+        print(stdout)
         print("-------------------")
+        print(stderr)
+        print("-------------------")
+
+        not_found_message = "not found: manifest unknown"
+        throttle_message = "toomanyrequests: Rate exceeded"
+        retryable_messages = ["net/http: TLS handshake timeout"]
         if status == 0:
             return DockerPullResult.SUCCESS
-        elif "toomanyrequests: Rate exceeded" in output:
+        elif throttle_message in stdout or throttle_message in stderr:
             return DockerPullResult.ERROR_THROTTLED
-        else:
+        elif not_found_message in stdout or not_found_message in stderr:
             return DockerPullResult.NOT_FOUND
+        else:
+            for message in retryable_messages:
+                if message in stdout or message in stderr:
+                    return DockerPullResult.RETRYABLE_ERROR
+        return DockerPullResult.UNKNOWN_ERROR
 
     # Builds the base image with the Dockerfile in `path` and tags with with `image_tag`
     def docker_build_base_image(self, image_tag, path):
@@ -103,13 +129,18 @@ class Shell:
 
 
 # Pulls a Docker image and retries if it gets throttled
-def docker_pull_with_retry(shell, image_name, image_tag, sleep_time=30):
+def docker_pull_with_retry(shell, image_name, image_tag, throttle_sleep_time=45, retryable_error_sleep_time=1):
+    if shell.platform() == Platform.ARM_64:
+        return DockerPullResult.REMOTE_ARCHITECTURE_MISMATCH
     for attempt in range(1, 5):
         announce(f"Attempting to pull remote image {image_name}:{image_tag} (attempt {attempt})...")
         result = shell.docker_pull(image_name, image_tag)
         if result == DockerPullResult.ERROR_THROTTLED:
             announce("Docker pull failed due to throttling. Waiting and trying again...")
-            time.sleep(sleep_time)
+            time.sleep(throttle_sleep_time)
+        elif result == DockerPullResult.RETRYABLE_ERROR:
+            announce("A retryable error occurred. Trying again...")
+            time.sleep(retryable_error_sleep_time)
         else:
             return result
     # Hit max retries; the image probably exists, but we are getting throttled hard. Fail.
@@ -130,19 +161,28 @@ def get_cmd_output(command, cwd=None, check=True):
         check=check,
         cwd=cwd
     )
-    return (result.returncode, result.stdout.decode("utf-8").strip())
+    return (result.returncode, result.stdout.decode("utf-8").strip(), result.stderr.decode("utf-8").strip())
 
 
 def acquire_build_image(context=Context.default(), shell=Shell()):
     # If the image doesn't already exist locally, then look remotely
     if not shell.docker_image_exists_locally(LOCAL_BASE_IMAGE_NAME, context.image_tag):
         announce("Base image not found locally.")
-        if docker_pull_with_retry(shell, REMOTE_BASE_IMAGE_NAME, context.image_tag) != DockerPullResult.SUCCESS:
+        pull_result = docker_pull_with_retry(shell, REMOTE_BASE_IMAGE_NAME, context.image_tag)
+        if pull_result != DockerPullResult.SUCCESS:
+            if pull_result == DockerPullResult.REMOTE_ARCHITECTURE_MISMATCH:
+                announce("Remote architecture is not the same as the local architecture. A local build is required.")
+            elif pull_result == DockerPullResult.UNKNOWN_ERROR:
+                announce("An unknown failure happened during Docker pull. This needs to be examined.")
+                return 1
+            else:
+                announce("Failed to pull remote image, which can happen if it doesn't exist.")
+
             if not context.allow_local_build:
                 announce("Local build turned off by ALLOW_LOCAL_BUILD env var. Aborting.")
                 return 1
 
-            announce("Failed to pull remote image, which can happen if it doesn't exist. Building a new image locally.")
+            announce("Building a new image locally.")
             shell.docker_build_base_image(context.image_tag, context.tools_path)
 
             if context.github_actions:
@@ -178,6 +218,7 @@ class SelfTest(unittest.TestCase):
 
     def mock_shell(self):
         shell = Shell()
+        shell.platform = MagicMock()
         shell.docker_build_base_image = MagicMock()
         shell.docker_build_build_image = MagicMock()
         shell.docker_image_exists_locally = MagicMock()
@@ -186,12 +227,32 @@ class SelfTest(unittest.TestCase):
         shell.docker_tag = MagicMock()
         return shell
 
+    def test_retry_architecture_mismatch(self):
+        shell = self.mock_shell()
+        shell.platform.side_effect = [Platform.ARM_64]
+        self.assertEqual(
+            DockerPullResult.REMOTE_ARCHITECTURE_MISMATCH,
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
+        )
+
     def test_retry_immediate_success(self):
         shell = self.mock_shell()
         shell.docker_pull.side_effect = [DockerPullResult.SUCCESS]
         self.assertEqual(
             DockerPullResult.SUCCESS,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     def test_retry_immediate_not_found(self):
@@ -199,7 +260,27 @@ class SelfTest(unittest.TestCase):
         shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND]
         self.assertEqual(
             DockerPullResult.NOT_FOUND,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
+        )
+
+    def test_retry_immediate_unknown_error(self):
+        shell = self.mock_shell()
+        shell.docker_pull.side_effect = [DockerPullResult.UNKNOWN_ERROR]
+        self.assertEqual(
+            DockerPullResult.UNKNOWN_ERROR,
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     def test_retry_throttling_then_success(self):
@@ -211,7 +292,32 @@ class SelfTest(unittest.TestCase):
         ]
         self.assertEqual(
             DockerPullResult.SUCCESS,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
+        )
+
+    def test_retry_throttling_and_retryable_error_then_success(self):
+        shell = self.mock_shell()
+        shell.docker_pull.side_effect = [
+            DockerPullResult.ERROR_THROTTLED,
+            DockerPullResult.RETRYABLE_ERROR,
+            DockerPullResult.ERROR_THROTTLED,
+            DockerPullResult.SUCCESS
+        ]
+        self.assertEqual(
+            DockerPullResult.SUCCESS,
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     def test_retry_throttling_then_not_found(self):
@@ -222,7 +328,13 @@ class SelfTest(unittest.TestCase):
         ]
         self.assertEqual(
             DockerPullResult.NOT_FOUND,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     def test_retry_max_attempts(self):
@@ -236,13 +348,20 @@ class SelfTest(unittest.TestCase):
         ]
         self.assertEqual(
             DockerPullResult.ERROR_THROTTLED,
-            docker_pull_with_retry(shell, "test-image", "test-image-tag", sleep_time=0)
+            docker_pull_with_retry(
+                shell,
+                "test-image",
+                "test-image-tag",
+                throttle_sleep_time=0,
+                retryable_error_sleep_time=0
+            )
         )
 
     # When: the base image already exists locally with the right image tag
     # It should: build a local build image using that local base image
     def test_image_exists_locally_already(self):
         shell = self.mock_shell()
+        shell.platform.side_effect = [Platform.X86_64]
         shell.docker_image_exists_locally.side_effect = [True]
 
         self.assertEqual(0, acquire_build_image(self.test_context(), shell))
@@ -260,8 +379,29 @@ class SelfTest(unittest.TestCase):
     def test_image_local_build(self):
         context = self.test_context(allow_local_build=True)
         shell = self.mock_shell()
+        shell.platform.side_effect = [Platform.X86_64]
         shell.docker_image_exists_locally.side_effect = [False]
         shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND]
+
+        self.assertEqual(0, acquire_build_image(context, shell))
+        shell.docker_image_exists_locally.assert_called_once()
+        shell.docker_build_base_image.assert_called_with("someimagetag", "/tmp/test/tools-path")
+        shell.docker_save.assert_not_called()
+        shell.docker_tag.assert_called_with(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/script-path")
+
+    # When:
+    #  - the base image doesn't exist locally
+    #  - the base image exists remotely
+    #  - local builds are allowed
+    #  - there is a difference in platform between local and remote
+    #  - NOT running in GitHub Actions
+    # It should: build a local image from scratch and NOT save it to file
+    def test_image_local_build_architecture_mismatch(self):
+        context = self.test_context(allow_local_build=True)
+        shell = self.mock_shell()
+        shell.platform.side_effect = [Platform.ARM_64]
+        shell.docker_image_exists_locally.side_effect = [False]
 
         self.assertEqual(0, acquire_build_image(context, shell))
         shell.docker_image_exists_locally.assert_called_once()
@@ -279,6 +419,7 @@ class SelfTest(unittest.TestCase):
     def test_image_local_build_github_actions(self):
         context = self.test_context(allow_local_build=True, github_actions=True)
         shell = self.mock_shell()
+        shell.platform.side_effect = [Platform.X86_64]
         shell.docker_image_exists_locally.side_effect = [False]
         shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND]
 
@@ -301,6 +442,7 @@ class SelfTest(unittest.TestCase):
     def test_image_fail_local_build_disabled(self):
         context = self.test_context(allow_local_build=False)
         shell = self.mock_shell()
+        shell.platform.side_effect = [Platform.X86_64]
         shell.docker_image_exists_locally.side_effect = [False]
         shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND]
 
@@ -318,6 +460,7 @@ class SelfTest(unittest.TestCase):
     def test_pull_remote_image(self):
         context = self.test_context(allow_local_build=False)
         shell = self.mock_shell()
+        shell.platform.side_effect = [Platform.X86_64]
         shell.docker_image_exists_locally.side_effect = [False]
         shell.docker_pull.side_effect = [DockerPullResult.SUCCESS]
 

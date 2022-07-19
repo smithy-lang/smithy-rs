@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.transformers
@@ -10,7 +10,7 @@ import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenConfig
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.testRustSettings
 import java.util.Optional
@@ -50,8 +50,7 @@ internal class RemoveEventStreamOperationsTest {
         val transformed = RemoveEventStreamOperations.transform(
             model,
             testRustSettings(
-                model,
-                codegenConfig = CodegenConfig(eventStreamAllowList = setOf("not-test-module")),
+                codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("not-test-module")),
             )
         )
         transformed.expectShape(ShapeId.from("test#BlobStream"))
@@ -63,8 +62,7 @@ internal class RemoveEventStreamOperationsTest {
         val transformed = RemoveEventStreamOperations.transform(
             model,
             testRustSettings(
-                model,
-                codegenConfig = CodegenConfig(eventStreamAllowList = setOf("test-module")),
+                codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("test-module")),
             )
         )
         transformed.expectShape(ShapeId.from("test#BlobStream"))

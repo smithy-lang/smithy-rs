@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy
@@ -36,8 +36,8 @@ internal class StreamingShapeSymbolProviderTest {
         // "doing the right thing"
         val modelWithOperationTraits = OperationNormalizer.transform(model)
         val symbolProvider = testSymbolProvider(modelWithOperationTraits)
-        symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechOutput\$data")).name shouldBe ("byte_stream::ByteStream")
-        symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechInput\$data")).name shouldBe ("byte_stream::ByteStream")
+        symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechOutput\$data")).name shouldBe ("ByteStream")
+        symbolProvider.toSymbol(modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechInput\$data")).name shouldBe ("ByteStream")
     }
 
     @Test

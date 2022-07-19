@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0.
+# SPDX-License-Identifier: Apache-2.0
 #
 
 set -e
@@ -27,14 +27,32 @@ mkdir -p "${ACTION_PATH}/workspace/artifacts"
 cp -r "${SCRIPT_PATH}/scripts" "${ACTION_PATH}/workspace/"
 
 # Copy inputs into workspace
-for input_path in \
-    "${START_PATH}/aws-doc-sdk-examples" \
-    "${START_PATH}/aws-sdk" \
-    "${START_PATH}/aws-sdk-smoketest" \
-    "${START_PATH}/smithy-rs";
+for input_name in \
+    "aws-doc-sdk-examples" \
+    "aws-sdk-rust" \
+    "aws-sdk" \
+    "aws-sdk-smoketest" \
+    "smithy-rs";
 do
+    input_path="${START_PATH}/${input_name}"
+    if [[ ! -d "${input_path}" ]]; then
+        # In local dev, the artifacts aren't extracted into the workspace path, but rather,
+        # remain in the `artifacts/` path. So look there too.
+        input_path="${START_PATH}/artifacts/${input_name}"
+    fi
     if [[ -d "${input_path}" ]]; then
-        cp -r "${input_path}" "${ACTION_PATH}/workspace/$(basename "${input_path}")"
+        if [[ -d "${input_path}/.git" ]]; then
+            # Copy the inputs across while excluding .gitignore'd files
+            EXCLUDES_FILE="${ACTION_PATH}/.excludes"
+            git -C "${input_path}" ls-files --exclude-standard -oi --directory >"${EXCLUDES_FILE}"
+            rsync -ra \
+                "${input_path}/" \
+                "${ACTION_PATH}/workspace/$(basename "${input_path}")" \
+                --exclude-from="${EXCLUDES_FILE}"
+            rm "${EXCLUDES_FILE}"
+        else
+            cp -r "${input_path}" "${ACTION_PATH}/workspace/$(basename "${input_path}")"
+        fi
     fi
 done
 

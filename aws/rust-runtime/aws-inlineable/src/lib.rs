@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! Collection of modules that get conditionally included directly into the code generated
@@ -33,5 +33,5 @@ pub mod glacier_checksums;
 /// Default middleware stack for AWS services
 pub mod middleware;
 
-/// Strip `hostedzone/` from hosted zone ids
-pub mod hosted_zone_preprocessor;
+/// Strip prefixes from IDs returned by Route53 operations when those IDs are used to construct requests
+pub mod route53_resource_id_preprocessor;

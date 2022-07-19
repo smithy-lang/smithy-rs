@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
@@ -20,9 +20,9 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
@@ -74,23 +74,37 @@ interface Protocol {
      * there are no response headers or statuses available to further inform the error parsing.
      */
     fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType
+
+    /**
+     * Returns a writable for the `RequestSpec` for an operation.
+     */
+    fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType
+    ): Writable
+
+    /**
+     * Returns the name of the constructor to be used on the `Router` type, to instantiate a `Router` using this
+     * protocol.
+     */
+    fun serverRouterRuntimeConstructor(): String
 }
 
-typealias ProtocolMap = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>>
+typealias ProtocolMap<C> = Map<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator, C>>
 
-interface ProtocolGeneratorFactory<out T : ProtocolGenerator> {
-    fun protocol(codegenContext: CodegenContext): Protocol
-    fun buildProtocolGenerator(codegenContext: CodegenContext): T
-    fun transformModel(model: Model): Model
-    fun symbolProvider(model: Model, base: RustSymbolProvider): RustSymbolProvider = base
+interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C : CoreCodegenContext> {
+    fun protocol(codegenContext: C): Protocol
+    fun buildProtocolGenerator(codegenContext: C): T
     fun support(): ProtocolSupport
 }
 
-class ProtocolLoader(private val supportedProtocols: ProtocolMap) {
+class ProtocolLoader<C : CoreCodegenContext>(private val supportedProtocols: ProtocolMap<C>) {
     fun protocolFor(
         model: Model,
         serviceShape: ServiceShape
-    ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator>> {
+    ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator, C>> {
         val protocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
         val matchingProtocols =
             protocols.keys.mapNotNull { protocolId -> supportedProtocols[protocolId]?.let { protocolId to it } }

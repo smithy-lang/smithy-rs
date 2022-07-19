@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+import os
+import sys
+
+expected = [os.path.realpath("/tmp"), ["diff", "--name-only"]]
+actual = [os.getcwd(), sys.argv[1:]]
+if expected != actual:
+    print(f"ERROR\nExpect: {expected}\nActual: {actual}")
+    sys.exit(127)
+
+print("some/file")
+print("some-other-file")
+print("some/file with spaces.txt")

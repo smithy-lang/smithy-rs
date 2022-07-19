@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy
@@ -41,7 +41,7 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
 
         // We are only targeting streaming blobs
         return if (target is BlobShape && shape.isStreaming(model)) {
-            RuntimeType.byteStream(config().runtimeConfig).toSymbol().toBuilder().setDefault(Default.RustDefault).build()
+            RuntimeType.ByteStream(config().runtimeConfig).toSymbol().toBuilder().setDefault(Default.RustDefault).build()
         } else {
             base.toSymbol(shape)
         }

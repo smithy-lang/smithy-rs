@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 //! IMDSv2 Credentials Provider
@@ -10,7 +10,7 @@
 
 use crate::imds;
 use crate::imds::client::{ImdsError, LazyClient};
-use crate::json_credentials::{parse_json_credentials, JsonCredentials};
+use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_smithy_client::SdkError;
 use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
@@ -46,7 +46,7 @@ impl Builder {
     /// Override the [instance profile](instance-profile) used for this provider.
     ///
     /// When retrieving IMDS credentials, a call must first be made to
-    /// `<IMDS_BASE_URL>/latest/meta-data/iam/security-credentials`. This returns the instance
+    /// `<IMDS_BASE_URL>/latest/meta-data/iam/security-credentials/`. This returns the instance
     /// profile used. By setting this parameter, retrieving the profile is skipped
     /// and the provided value is used instead.
     ///
@@ -129,7 +129,7 @@ impl ImdsCredentialsProvider {
         match self
             .client()
             .await?
-            .get("/latest/meta-data/iam/security-credentials")
+            .get("/latest/meta-data/iam/security-credentials/")
             .await
         {
             Ok(profile) => Ok(profile),
@@ -155,7 +155,7 @@ impl ImdsCredentialsProvider {
             ));
         }
         tracing::debug!("loading credentials from IMDS");
-        let profile: Cow<str> = match &self.profile {
+        let profile: Cow<'_, str> = match &self.profile {
             Some(profile) => profile.into(),
             None => self.get_profile_uncached().await?.into(),
         };
@@ -170,13 +170,13 @@ impl ImdsCredentialsProvider {
             .await
             .map_err(CredentialsError::provider_error)?;
         match parse_json_credentials(&credentials) {
-            Ok(JsonCredentials::RefreshableCredentials {
+            Ok(JsonCredentials::RefreshableCredentials(RefreshableCredentials {
                 access_key_id,
                 secret_access_key,
                 session_token,
                 expiration,
                 ..
-            }) => Ok(Credentials::new(
+            })) => Ok(Credentials::new(
                 access_key_id,
                 secret_access_key,
                 Some(session_token.to_string()),
@@ -223,7 +223,7 @@ mod test {
                     token_response(21600, TOKEN_A),
                 ),
                 (
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials", TOKEN_A),
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
                     imds_response(r#"profile-name"#),
                 ),
                 (
@@ -231,7 +231,7 @@ mod test {
                     imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
                 ),
                 (
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials", TOKEN_A),
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
                     imds_response(r#"different-profile"#),
                 ),
                 (

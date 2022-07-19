@@ -3,12 +3,15 @@ name = "pokemon_service"
 version = "0.1.0"
 edition = "2021"
 publish = false
+authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
+description = "A smithy Rust service to retrieve information about Pokémon."
 
 [dependencies]
+clap = { version = "~3.2.1", features = ["derive"] }
 hyper = {version = "0.14", features = ["server"] }
 tokio = "1"
 tower = "0.4"
-tower-http = { version = "0.2", features = ["trace"] }
+tower-http = { version = "0.3", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

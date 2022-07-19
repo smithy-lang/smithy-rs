@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
@@ -15,9 +15,12 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.rustlang.writable
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.generators.serializationError
@@ -39,14 +42,11 @@ sealed class AwsJsonVersion {
     }
 }
 
-class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<HttpBoundProtocolGenerator> {
-    override fun protocol(codegenContext: CodegenContext): Protocol = AwsJson(codegenContext, version)
+class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
+    override fun protocol(codegenContext: ClientCodegenContext): Protocol = AwsJson(codegenContext, version)
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): HttpBoundProtocolGenerator {
-        return HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
-    }
-
-    override fun transformModel(model: Model): Model = model
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
+        HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
 
     override fun support(): ProtocolSupport = ProtocolSupport(
         /* Client support */
@@ -99,12 +99,12 @@ class AwsJsonHttpBindingResolver(
  * customizes wraps [JsonSerializerGenerator] to add this functionality.
  */
 class AwsJsonSerializerGenerator(
-    private val codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     httpBindingResolver: HttpBindingResolver,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
-        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
+        JsonSerializerGenerator(coreCodegenContext, httpBindingResolver, ::awsJsonFieldName)
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "Error" to runtimeConfig.serializationError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
@@ -113,12 +113,12 @@ class AwsJsonSerializerGenerator(
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType {
         var serializer = jsonSerializerGenerator.operationInputSerializer(operationShape)
         if (serializer == null) {
-            val inputShape = operationShape.inputShape(codegenContext.model)
-            val fnName = codegenContext.symbolProvider.serializeFunctionName(operationShape)
+            val inputShape = operationShape.inputShape(coreCodegenContext.model)
+            val fnName = coreCodegenContext.symbolProvider.serializeFunctionName(operationShape)
             serializer = RuntimeType.forInlineFun(fnName, RustModule.private("operation_ser")) {
                 it.rustBlockTemplate(
                     "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
-                    *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape)
+                    *codegenScope, "target" to coreCodegenContext.symbolProvider.toSymbol(inputShape)
                 ) {
                     rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
                 }
@@ -128,11 +128,11 @@ class AwsJsonSerializerGenerator(
     }
 }
 
-class AwsJson(
-    private val codegenContext: CodegenContext,
-    awsJsonVersion: AwsJsonVersion
+open class AwsJson(
+    private val coreCodegenContext: CoreCodegenContext,
+    private val awsJsonVersion: AwsJsonVersion
 ) : Protocol {
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "Error" to RuntimeType.GenericError(runtimeConfig),
@@ -144,18 +144,18 @@ class AwsJson(
     private val jsonDeserModule = RustModule.private("json_deser")
 
     override val httpBindingResolver: HttpBindingResolver =
-        AwsJsonHttpBindingResolver(codegenContext.model, awsJsonVersion)
+        AwsJsonHttpBindingResolver(coreCodegenContext.model, awsJsonVersion)
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
-        listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
+        listOf("x-amz-target" to "${coreCodegenContext.serviceShape.id.name}.${operationShape.id.name}")
 
     override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        JsonParserGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName)
+        JsonParserGenerator(coreCodegenContext, httpBindingResolver, ::awsJsonFieldName)
 
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
+        AwsJsonSerializerGenerator(coreCodegenContext, httpBindingResolver)
 
     override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
         RuntimeType.forInlineFun("parse_http_generic_error", jsonDeserModule) { writer ->
@@ -181,8 +181,23 @@ class AwsJson(
                 *errorScope
             )
         }
+
+    /**
+     * Returns the operation name as required by the awsJson1.x protocols.
+     */
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType
+    ) = writable {
+        rust("""String::from("$serviceName.$operationName")""")
+    }
+
+    override fun serverRouterRuntimeConstructor() = when (awsJsonVersion) {
+        AwsJsonVersion.Json10 -> "new_aws_json_10_router"
+        AwsJsonVersion.Json11 -> "new_aws_json_11_router"
+    }
 }
 
-private fun awsJsonFieldName(member: MemberShape): String {
-    return member.memberName
-}
+fun awsJsonFieldName(member: MemberShape): String = member.memberName
