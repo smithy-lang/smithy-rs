@@ -26,4 +26,5 @@
 - [RFC-0014: Fine-grained timeout configuration](./rfcs/rfc0014_timeout_config.md)
 - [RFC-0015: How Cargo "features" should be used in the SDK and runtime crates](./rfcs/rfc0015_using_features_responsibly.md)
 - [RFC-0016: Supporting Flexible Checksums](./rfcs/rfc0016_flexible_checksum_support.md)
-- [RFC-0017: Event Streams](./rfc0017_event_streams_errors.md)
+- [RFC-0017: Customizable Client Operations](./rfcs/rfc0017_customizable_client_operations.md)
+- [RFC-0018: Event Streams](./rfc0018_event_streams_errors.md)
