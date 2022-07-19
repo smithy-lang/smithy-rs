@@ -47,7 +47,7 @@ impl<RequestHeader, Path, QueryKey, ResponseHeader> fmt::Debug
 impl<RequestHeader, Path, Query, ResponseHeader> Sensitivity<RequestHeader, Path, Query, ResponseHeader> {
     /// Marks request headers as sensitive using a closure.
     ///
-    /// See [`SensitiveHeaders::mark`](crate::SensitiveHeaders::mark) for more info.
+    /// See [`SensitiveHeaders::mark`](crate::logging::SensitiveHeaders::mark) for more info.
     pub fn request_header<F>(self, marker: F) -> Sensitivity<F, Path, Query, ResponseHeader>
     where
         F: Fn(&HeaderName) -> HeaderMarker,
@@ -63,7 +63,7 @@ impl<RequestHeader, Path, Query, ResponseHeader> Sensitivity<RequestHeader, Path
 
     /// Marks path segments as sensitive using a closure.
     ///
-    /// See [`SensitiveUri::path`](crate::SensitiveUri::path) for more info.
+    /// See [`SensitiveUri::path`](crate::logging::SensitiveUri::path) for more info.
     pub fn path<F>(self, marker: F) -> Sensitivity<RequestHeader, F, Query, ResponseHeader>
     where
         F: Fn(usize) -> bool,
@@ -79,7 +79,7 @@ impl<RequestHeader, Path, Query, ResponseHeader> Sensitivity<RequestHeader, Path
 
     /// Marks parts of the request query parameters as sensitive using a closure.
     ///
-    /// See [`SensitiveUri::query`](crate::SensitiveUri::query) for more info.
+    /// See [`SensitiveUri::query`](crate::logging::SensitiveUri::query) for more info.
     pub fn query<F>(self, marker: F) -> Sensitivity<RequestHeader, Path, F, ResponseHeader>
     where
         F: Fn(&str) -> QueryMarker,
@@ -106,7 +106,7 @@ impl<RequestHeader, Path, Query, ResponseHeader> Sensitivity<RequestHeader, Path
 
     /// Marks response headers as sensitive using a closure.
     ///
-    /// See [`SensitiveHeaders::mark`](crate::SensitiveHeaders::mark) for more info.
+    /// See [`SensitiveHeaders::mark`](crate::logging::SensitiveHeaders::mark) for more info.
     pub fn response_header<F>(self, marker: F) -> Sensitivity<RequestHeader, Path, Query, F>
     where
         F: Fn(&HeaderName) -> HeaderMarker,
