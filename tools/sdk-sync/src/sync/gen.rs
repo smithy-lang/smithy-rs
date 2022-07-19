@@ -19,6 +19,7 @@ pub struct CodeGenSettings {
     pub max_gradle_heap_megabytes: usize,
     pub max_gradle_metaspace_megabytes: usize,
     pub aws_models_path: Option<PathBuf>,
+    pub model_metadata_path: Option<PathBuf>,
 }
 
 impl Default for CodeGenSettings {
@@ -28,6 +29,7 @@ impl Default for CodeGenSettings {
             max_gradle_heap_megabytes: 512,
             max_gradle_metaspace_megabytes: 512,
             aws_models_path: None,
+            model_metadata_path: None,
         }
     }
 }
@@ -172,6 +174,14 @@ impl DefaultSdkGenerator {
                     .expect("aws models path is a valid str")
             ));
         }
+        if let Some(model_metadata_path) = &self.settings.model_metadata_path {
+            command.arg(format!(
+                "-Paws.sdk.model.metadata={}",
+                model_metadata_path
+                    .to_str()
+                    .expect("model metadata path is a valid str")
+            ));
+        }
         command.arg(format!(
             "-Paws.sdk.previous.release.versions.manifest={}",
             self.previous_versions_manifest
@@ -194,7 +204,7 @@ impl DefaultSdkGenerator {
         Ok(())
     }
 
-    /// Runs `aws:sdk:assemble` target with property `aws.fullsdk=true` set
+    /// Runs `aws:sdk:assemble` target
     #[instrument(skip(self))]
     fn aws_sdk_assemble(&self) -> Result<()> {
         // Retry gradle daemon startup failures up to 3 times
