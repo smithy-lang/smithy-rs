@@ -218,7 +218,7 @@ where
 
 The `Service::call` path, seen in [Code Generated Logging Middleware](#code-generated-logging-middleware), is latency-sensitive. Careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping [Uri](https://docs.rs/http/latest/http/uri/struct.Uri.html) and [HeaderMap](https://docs.rs/http/latest/http/header/struct.HeaderMap.html) then providing a new [Display](https://doc.rust-lang.org/std/fmt/trait.Display.html)/[Debug](https://doc.rust-lang.org/std/fmt/trait.Debug.html) implementation which skips over the sensitive data is preferable over allocating a new `String`/`HeaderMap` and then mutating it.
 
-These wrappers should be provided alongside the `Sensitive` struct described in [Debug Logging](#debug-logging). If they are implemented on top of `Sensitive`, they will inherit the same behavior - allowing redactions to be toggled using `undredacted-logging` feature flag.
+These wrappers should be provided alongside the `Sensitive` struct described in [Debug Logging](#debug-logging). If they are implemented on top of `Sensitive`, they will inherit the same behavior - allowing redactions to be toggled using `unredacted-logging` feature flag.
 
 ### Middleware Position
 
