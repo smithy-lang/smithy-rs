@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-use std::fmt::{self, Display, Error, Formatter};
+use std::fmt::{Debug, Display, Error, Formatter};
 
 use crate::logging::Sensitive;
 
@@ -19,8 +19,8 @@ pub struct SensitivePath<'a, F> {
     marker: F,
 }
 
-impl<'a, F> fmt::Debug for SensitivePath<'a, F> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl<'a, F> Debug for SensitivePath<'a, F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_struct("SensitiveQuery")
             .field("path", &self.path)
             .finish_non_exhaustive()
@@ -86,13 +86,61 @@ impl<'a> SensitiveGreedyPath<'a> {
 impl<'a> Display for SensitiveGreedyPath<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         if self.path.len() < self.position {
-            self.path.fmt(f)?;
+            Display::fmt(self.path, f)?;
         } else {
             write!(f, "{}", &self.path[..self.position])?;
             write!(f, "{}", Sensitive(&self.path[self.position..]))?;
         }
 
         Ok(())
+    }
+}
+
+/// A closure `Fn(usize) -> bool` marking sensitive [URI labels].
+///
+/// [URI labels]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#labels
+pub struct Labels<F>(pub(crate) F);
+
+impl<F> Debug for Labels<F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        f.debug_tuple("Labels").field(&"...").finish()
+    }
+}
+
+/// A [`usize`] marking the (byte) position of the [greedy URI label] within a string.
+///
+/// [greedy URI label]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#greedy-labels
+pub struct GreedyLabel(pub(crate) usize);
+
+impl Debug for GreedyLabel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        f.debug_tuple("GreedyLabel").field(&self.0).finish()
+    }
+}
+
+/// Allows for polymorphism over different redaction schemes.
+pub(crate) trait MakePath<'a> {
+    type Target: Display;
+
+    fn make(&self, path: &'a str) -> Self::Target;
+}
+
+impl<'a, F> MakePath<'a> for Labels<F>
+where
+    F: Fn(usize) -> bool + Clone,
+{
+    type Target = SensitivePath<'a, F>;
+
+    fn make(&self, path: &'a str) -> Self::Target {
+        SensitivePath::new(path).mark(self.0.clone())
+    }
+}
+
+impl<'a> MakePath<'a> for GreedyLabel {
+    type Target = SensitiveGreedyPath<'a>;
+
+    fn make(&self, path: &'a str) -> Self::Target {
+        SensitiveGreedyPath::new(path, self.0)
     }
 }
 

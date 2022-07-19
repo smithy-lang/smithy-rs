@@ -5,7 +5,7 @@
 mod path;
 mod query;
 
-use std::fmt::{self, Display, Error, Formatter};
+use std::fmt::{Debug, Display, Error, Formatter};
 
 use http::Uri;
 
@@ -22,20 +22,20 @@ pub struct SensitiveUri<'a, P, Q> {
     query_marker: Q,
 }
 
-impl<'a, P, Q> fmt::Debug for SensitiveUri<'a, P, Q> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl<'a, P, Q> Debug for SensitiveUri<'a, P, Q> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_struct("SensitiveUri")
             .field("uri", &self.uri)
             .finish_non_exhaustive()
     }
 }
 
-impl<'a> SensitiveUri<'a, fn(usize) -> bool, fn(&str) -> QueryMarker> {
+impl<'a> SensitiveUri<'a, Labels<fn(usize) -> bool>, fn(&str) -> QueryMarker> {
     /// Constructs a new [`SensitiveUri`] with nothing marked as sensitive.
     pub fn new(uri: &'a Uri) -> Self {
         Self {
             uri,
-            path_marker: noop_path_marker,
+            path_marker: Labels(noop_path_marker),
             query_marker: noop_query_marker,
         }
     }
@@ -60,10 +60,36 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     /// ```
     ///
     /// [httpLabel trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait
-    pub fn path<F>(self, marker: F) -> SensitiveUri<'a, F, Q> {
+    pub fn path<F>(self, marker: F) -> SensitiveUri<'a, Labels<F>, Q> {
         SensitiveUri {
             uri: self.uri,
-            path_marker: marker,
+            path_marker: Labels(marker),
+            query_marker: self.query_marker,
+        }
+    }
+
+    /// Marks path segments as sensitive by supplying a closure over the path index.
+    /// The closure takes the form `Fn(usize) -> bool` where `usize` represents the index of the
+    /// segment and the `bool` marks that segment as sensitive.
+    ///
+    /// This accommodates the [httpLabel trait].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use aws_smithy_http_server::logging::SensitiveUri;
+    /// # use http::Uri;
+    /// # let uri = Uri::from_static("http://a/b/c");
+    /// // First path segment is sensitive
+    /// let uri = SensitiveUri::new(&uri).greedy_path(3);
+    /// println!("{uri}");
+    /// ```
+    ///
+    /// [httpLabel trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait
+    pub fn greedy_path(self, position: usize) -> SensitiveUri<'a, GreedyLabel, Q> {
+        SensitiveUri {
+            uri: self.uri,
+            path_marker: GreedyLabel(position),
             query_marker: self.query_marker,
         }
     }
@@ -98,7 +124,7 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
 
 impl<'a, P, Q> Display for SensitiveUri<'a, P, Q>
 where
-    P: Fn(usize) -> bool,
+    P: MakePath<'a>,
     Q: Fn(&'a str) -> QueryMarker,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
@@ -111,7 +137,7 @@ where
         }
 
         let path = self.uri.path();
-        let path = SensitivePath::new(path).mark(&self.path_marker);
+        let path = self.path_marker.make(path);
         write!(f, "{path}")?;
 
         if let Some(query) = self.uri.query() {
