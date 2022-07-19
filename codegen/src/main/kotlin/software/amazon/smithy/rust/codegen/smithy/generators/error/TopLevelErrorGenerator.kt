@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
@@ -41,7 +42,7 @@ import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
  * }
  * ```
  */
-class TopLevelErrorGenerator(coreCodegenContext: CoreCodegenContext, private val operations: List<OperationShape>) {
+class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext, private val operations: List<OperationShape>) {
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val model = coreCodegenContext.model
 
@@ -77,13 +78,12 @@ class TopLevelErrorGenerator(coreCodegenContext: CoreCodegenContext, private val
     }
 
     private fun RustWriter.renderImplFrom(operationShape: OperationShape) {
-        val nonEventStreamErrors = operationShape.operationErrors(model).map { it.id }
         val allErrors: List<Pair<RuntimeType, List<ShapeId>>> = listOf(
-            Pair(operationShape.errorSymbol(symbolProvider), nonEventStreamErrors),
+            Pair(operationShape.errorSymbol(symbolProvider), operationShape.errors),
         ) + operationShape.eventStreamErrors(model)
             .map { Pair(it.key.eventStreamErrorSymbol(symbolProvider), it.value.map { it.id }) }
         allErrors.forEach { (symbol, errors) ->
-            if (errors.isNotEmpty()) {
+            if (errors.isNotEmpty() || CodegenTarget.CLIENT == coreCodegenContext.target) {
                 rustBlock(
                     "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
                     sdkError,
