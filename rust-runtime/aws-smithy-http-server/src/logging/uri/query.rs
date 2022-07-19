@@ -51,7 +51,7 @@ impl<'a, F> SensitiveQuery<'a, F> {
     /// keys. The closure takes the form `Fn(&str) -> bool` where `&str` represents the key of the
     /// query string pair and the `bool` marks that value as sensitive.
     ///
-    /// See [SensitiveUri::query_key](crate::SensitiveUri::query_key).
+    /// See [SensitiveUri::query_key](crate::logging::SensitiveUri::query).
     pub fn mark<G>(self, marker: G) -> SensitiveQuery<'a, G> {
         SensitiveQuery {
             query: self.query,
