@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators.error
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -26,6 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.smithy.transformers.shouldRenderEventStreamError
 
 /**
  * Each service defines its own "top-level" error combining all possible errors that a service can emit.
@@ -78,12 +80,12 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
     }
 
     private fun RustWriter.renderImplFrom(operationShape: OperationShape) {
-        val allErrors: List<Pair<RuntimeType, List<ShapeId>>> = listOf(
-            Pair(operationShape.errorSymbol(symbolProvider), operationShape.errors),
+        val allErrors: List<Triple<UnionShape?, RuntimeType, List<ShapeId>>> = listOf(
+            Triple(null, operationShape.errorSymbol(symbolProvider), operationShape.errors),
         ) + operationShape.eventStreamErrors(model)
-            .map { Pair(it.key.eventStreamErrorSymbol(symbolProvider), it.value.map { it.id }) }
-        allErrors.forEach { (symbol, errors) ->
-            if (errors.isNotEmpty() || CodegenTarget.CLIENT == coreCodegenContext.target) {
+            .map { Triple(it.key, it.key.eventStreamErrorSymbol(symbolProvider), it.value.map { it.id }) }
+        allErrors.forEach { (union, symbol, errors) ->
+            if ((errors.isNotEmpty() || CodegenTarget.CLIENT == coreCodegenContext.target) && (union == null || operationShape.shouldRenderEventStreamError(model, union))) {
                 rustBlock(
                     "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
                     sdkError,
