@@ -66,11 +66,43 @@ where
     }
 }
 
+/// A wrapper around a path [`&str`](str) which modifies the behavior of [`Display`]. A position is used to redact the
+/// suffix of the path.
+///
+/// The [`Display`] implementation will respect the `unredacted-logging` flag.
+#[derive(Debug)]
+pub struct SensitiveGreedyPath<'a> {
+    path: &'a str,
+    position: usize,
+}
+
+impl<'a> SensitiveGreedyPath<'a> {
+    /// Constructs a new [`SensitiveGreedyPath`] with position marking the redacted suffix.
+    pub fn new(path: &'a str, position: usize) -> Self {
+        Self { path, position }
+    }
+}
+
+impl<'a> Display for SensitiveGreedyPath<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        if self.path.len() < self.position {
+            self.path.fmt(f)?;
+        } else {
+            write!(f, "{}", &self.path[..self.position])?;
+            write!(f, "{}", Sensitive(&self.path[self.position..]))?;
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use http::Uri;
 
-    use crate::logging::{uri::tests::EXAMPLES, SensitivePath};
+    use crate::logging::uri::tests::EXAMPLES;
+
+    use super::{SensitiveGreedyPath, SensitivePath};
 
     #[test]
     fn mark_none() {
@@ -117,6 +149,45 @@ mod tests {
         let expecteds = ALL_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let output = SensitivePath::new(&original.path()).mark(|_| true).to_string();
+            assert_eq!(output, expected.path(), "original = {original}");
+        }
+    }
+
+    #[cfg(not(feature = "unredacted-logging"))]
+    pub const GREEDY_EXAMPLES: [&str; 22] = [
+        "g:h",
+        "http://a/b/{redacted}",
+        "http://a/b/{redacted}",
+        "http://a/g",
+        "http://g",
+        "http://a/b/{redacted}?y",
+        "http://a/b/{redacted}?y",
+        "http://a/b/{redacted}?q#s",
+        "http://a/b/{redacted}",
+        "http://a/b/{redacted}?y#s",
+        "http://a/b/{redacted}",
+        "http://a/b/{redacted}",
+        "http://a/b/{redacted}?y#s",
+        "http://a/b/{redacted}?q",
+        "http://a/b/{redacted}",
+        "http://a/b/{redacted}",
+        "http://a/b/{redacted}",
+        "http://a/b/{redacted}",
+        "http://a/b/{redacted}",
+        "http://a/",
+        "http://a/",
+        "http://a/g",
+    ];
+
+    #[cfg(feature = "unredacted-logging")]
+    pub const GREEDY_EXAMPLES: [&str; 22] = EXAMPLES;
+
+    #[test]
+    fn greedy() {
+        let originals = EXAMPLES.into_iter().map(Uri::from_static);
+        let expecteds = GREEDY_EXAMPLES.into_iter().map(Uri::from_static);
+        for (original, expected) in originals.zip(expecteds) {
+            let output = SensitiveGreedyPath::new(&original.path(), 3).to_string();
             assert_eq!(output, expected.path(), "original = {original}");
         }
     }
