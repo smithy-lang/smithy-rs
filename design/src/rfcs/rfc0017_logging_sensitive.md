@@ -96,7 +96,7 @@ if cfg!(feature = "unredacted-logging") {
 }
 ```
 
-the following wrapper should be provided
+the following wrapper should be provided from a runtime crate:
 
 ```rust
 pub struct Sensitive<T>(T);
@@ -214,7 +214,11 @@ where
 }
 ```
 
-As this path is latency-sensitive, careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping [Uri](https://docs.rs/http/latest/http/uri/struct.Uri.html) and [HeaderMap](https://docs.rs/http/latest/http/header/struct.HeaderMap.html) then providing a new [Display](https://doc.rust-lang.org/std/fmt/trait.Display.html)/[Debug](https://doc.rust-lang.org/std/fmt/trait.Debug.html) implementation which skips over the sensitive data is preferable over allocating a new `String`/`HeaderMap` and mutating it.
+### HTTP Debug/Display Wrappers
+
+The `Service::call` path, seen in [Code Generated Logging Middleware](#code-generated-logging-middleware), is latency-sensitive. Careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping [Uri](https://docs.rs/http/latest/http/uri/struct.Uri.html) and [HeaderMap](https://docs.rs/http/latest/http/header/struct.HeaderMap.html) then providing a new [Display](https://doc.rust-lang.org/std/fmt/trait.Display.html)/[Debug](https://doc.rust-lang.org/std/fmt/trait.Debug.html) implementation which skips over the sensitive data is preferable over allocating a new `String`/`HeaderMap` and then mutating it.
+
+These wrappers should be provided alongside the `Sensitive` struct described in [Debug Logging](#debug-logging). If they are implemented on top of `Sensitive`, they will inherit the same behavior - allowing redactions to be toggled using `undredacted-logging` feature flag.
 
 ### Middleware Position
 
@@ -252,7 +256,7 @@ A guideline should be made available to internal smithy developers to outline th
 
 - The [HTTP bindings traits](#http-binding-traits) and why they are of concern in the presence of `@sensitive`.
 - The [Debug implementation](https://github.com/awslabs/smithy-rs/pull/229) on structures.
-- How to use the `Sensitive` struct and the `unredacted-logging` feature flag described in [Debug Logging](#unredacted-logging).
+- How to use the `Sensitive` struct, HTTP wrappers, and the `unredacted-logging` feature flag described in [Debug Logging](#unredacted-logging) and [HTTP Debug/Display Wrappers](#http-debugdisplay-wrappers).
 
 ### Public Guideline
 
@@ -262,7 +266,7 @@ A guideline should be made available to customers to outline the following:
 - Warn against the two potential leaks described in [Scope and Guidelines](#scope-and-guidelines):
   - Sensitive data leaking from third-party dependencies.
   - Sensitive data leaking from middleware applied to the `Router`.
-- How to use the `Sensitive` struct and the `unredacted-logging` feature flag described in [Debug Logging](#unredacted-logging).
+- How to use the `Sensitive` struct, HTTP wrappers, and the `unredacted-logging` feature flag described in [Debug Logging](#unredacted-logging) and [HTTP Debug/Display Wrappers](#http-debugdisplay-wrappers).
 
 ## Alternative Proposals
 
