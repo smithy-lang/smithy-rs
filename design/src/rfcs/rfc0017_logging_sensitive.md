@@ -44,7 +44,7 @@ Each of these configurable parts must therefore be logged cautiously.
 
 ### Scope and Guidelines
 
-It is unfeasible to make the logging of sensitive data forbidden a type theoretic invariant. With the current API, the customer will always have an opportunity to log a request containing sensitive data before it enters the `Service<Request<B>>` that we provide to them.
+It would be unfeasible to forbid the logging of sensitive data all together using the type system. With the current API, the customer will always have an opportunity to log a request containing sensitive data before it enters the `Service<Request<B>>` that we provide to them.
 
 ```rust
 // The API provides us with a `Service<Request<B>>`
