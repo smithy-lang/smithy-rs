@@ -248,7 +248,7 @@ Fortunately, this problem is separable from the actual implementation of the log
 
 There is need for logging within the `Router` implementation - this is a crucial area of business logic. As mentioned in the [Routing](#routing) section, we are permitted to log potentially sensitive data in cases where requests fail to get routed to an operation.
 
-In the case of AWS JSON 1.0 and 1.1 protocols, the request URI is always `/` putting it outside of the reach of the `@sensitive` trait and hence we have the option to log it before routing occurs. We make a choice not to do this in order to remove the special case - relying on the logging layer to log URIs when appropriate.
+In the case of AWS JSON 1.0 and 1.1 protocols, the request URI is always `/`, putting it outside of the reach of the `@sensitive` trait. We therefore have the option to log it before routing occurs. We make a choice not to do this in order to remove the special case - relying on the logging layer to log URIs when appropriate.
 
 ### Internal Guideline
 
