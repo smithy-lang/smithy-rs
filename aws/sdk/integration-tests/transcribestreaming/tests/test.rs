@@ -5,7 +5,7 @@
 
 use async_stream::stream;
 use aws_sdk_transcribestreaming::error::{
-    StartStreamTranscriptionError, StartStreamTranscriptionErrorKind,
+    AudioStreamError, TranscriptResultStreamError, TranscriptResultStreamErrorKind,
 };
 use aws_sdk_transcribestreaming::model::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
@@ -78,8 +78,8 @@ async fn test_error() {
     match output.transcript_result_stream.recv().await {
         Err(SdkError::ServiceError {
             err:
-                StartStreamTranscriptionError {
-                    kind: StartStreamTranscriptionErrorKind::BadRequestException(err),
+                TranscriptResultStreamError {
+                    kind: TranscriptResultStreamErrorKind::BadRequestException(err),
                     ..
                 },
             ..
@@ -102,7 +102,7 @@ async fn test_error() {
 async fn start_request(
     region: &'static str,
     events_json: &str,
-    input_stream: impl Stream<Item = Result<AudioStream, BoxError>> + Send + Sync + 'static,
+    input_stream: impl Stream<Item = Result<AudioStream, AudioStreamError>> + Send + Sync + 'static,
 ) -> (ReplayingConnection, StartStreamTranscriptionOutput) {
     let events: Vec<Event> = serde_json::from_str(events_json).unwrap();
     let replayer = ReplayingConnection::new(events);

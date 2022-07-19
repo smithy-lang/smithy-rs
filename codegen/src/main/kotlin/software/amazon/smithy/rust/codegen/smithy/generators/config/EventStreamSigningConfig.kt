@@ -15,9 +15,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 open class EventStreamSigningConfig(
     runtimeConfig: RuntimeConfig,
 ) : ConfigCustomization() {
-    private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
-        "NoOpSigner" to RuntimeType("NoOpSigner", smithyEventStream, "aws_smithy_eventstream::frame"),
         "SharedPropertyBag" to RuntimeType(
             "SharedPropertyBag",
             CargoDependency.SmithyHttp(runtimeConfig),
@@ -29,7 +27,6 @@ open class EventStreamSigningConfig(
             "aws_smithy_eventstream::frame"
         ),
     )
-    open fun signer(): Writable = emptySection
 
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
@@ -40,21 +37,19 @@ open class EventStreamSigningConfig(
 
     open fun configImplSection(): Writable = emptySection
 
-    fun renderEventStreamSignerFn(signerInstantiator: (String) -> Writable): Writable {
-        return writable {
-            rustTemplate(
-                """
-                /// Creates a new Event Stream `SignMessage` implementor.
-                pub fn new_event_stream_signer(
-                    &self,
-                    _properties: #{SharedPropertyBag}
-                ) -> impl #{SignMessage} {
-                    #{signer:W}
-                }
-                """,
-                *codegenScope,
-                "signer" to signerInstantiator("_properties"),
-            )
-        }
+    fun renderEventStreamSignerFn(signerInstantiator: (String) -> Writable): Writable = writable {
+        rustTemplate(
+            """
+            /// Creates a new Event Stream `SignMessage` implementor.
+            pub fn new_event_stream_signer(
+                &self,
+                _properties: #{SharedPropertyBag}
+            ) -> impl #{SignMessage} {
+                #{signer:W}
+            }
+            """,
+            *codegenScope,
+            "signer" to signerInstantiator("_properties"),
+        )
     }
 }

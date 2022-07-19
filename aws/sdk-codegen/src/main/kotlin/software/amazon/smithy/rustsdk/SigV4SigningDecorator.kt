@@ -105,16 +105,20 @@ class SigV4SigningConfig(
                 *codegenScope
             )
             if (serviceHasEventStream) {
-                renderEventStreamSignerFn { propertiesName ->
-                    writable {
-                        rustTemplate(
-                            """
-                            #{SigV4Signer}::new($propertiesName)
-                            """,
-                            *codegenScope
-                        )
-                    }
-                }
+                rustTemplate(
+                    "#{signerFn:W}",
+                    "signerFn" to
+                        renderEventStreamSignerFn { propertiesName ->
+                            writable {
+                                rustTemplate(
+                                    """
+                                    #{SigV4Signer}::new($propertiesName)
+                                    """,
+                                    *codegenScope
+                                )
+                            }
+                        }
+                )
             }
         }
     }
