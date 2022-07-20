@@ -138,3 +138,9 @@ message = "The `imds::Client` in `aws-config` now implements `Clone`"
 references = ["smithy-rs#1557", "aws-sdk-rust#580"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The `sleep_impl` methods on the `SdkConfig` builder are now exposed and documented."
+references = ["smithy-rs#1556"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
