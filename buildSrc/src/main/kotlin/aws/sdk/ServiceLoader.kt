@@ -13,7 +13,12 @@ import software.amazon.smithy.model.traits.TitleTrait
 import java.io.File
 import kotlin.streams.toList
 
-class AwsServices(private val project: Project, services: List<AwsService>) {
+class AwsServices(
+    private val project: Project,
+    services: List<AwsService>,
+    val endpointsConfigPath: File,
+    val defaultConfigPath: File,
+) {
     val services: List<AwsService>
     val moduleNames: Set<String> by lazy { services.map { it.module }.toSortedSet() }
 
@@ -91,7 +96,8 @@ fun Project.discoverServices(awsModelsPath: String?, serviceMembership: Membersh
                     module = sdkId,
                     moduleDescription = "AWS SDK for $title",
                     modelFile = file,
-                    extraFiles = extras,
+                    // Order is important for the versions.toml model hash calculation
+                    extraFiles = extras.sorted(),
                     humanName = title
                 )
             }
@@ -123,7 +129,9 @@ fun Project.discoverServices(awsModelsPath: String?, serviceMembership: Membersh
         }.also { services ->
             val moduleNames = services.map { it.module }
             logger.info("Final service module list: $moduleNames")
-        }
+        },
+        models.resolve("sdk-endpoints.json"),
+        models.resolve("sdk-default-configuration.json"),
     )
 }
 
@@ -138,7 +146,7 @@ data class AwsService(
     val extraFiles: List<File>,
     val humanName: String
 ) {
-    fun files(): List<File> = listOf(modelFile) + extraFiles
+    fun modelFiles(): List<File> = listOf(modelFile) + extraFiles
     fun Project.examples(): File = projectDir.resolve("examples").resolve(module)
     /**
      * Generate a link to the examples for a given service

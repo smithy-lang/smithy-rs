@@ -5,13 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -29,8 +29,6 @@ class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, Cli
 
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
-
-    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
@@ -98,4 +96,17 @@ class Ec2QueryProtocol(private val coreCodegenContext: CoreCodegenContext) : Pro
                 rust("#T::parse_generic_error(payload.as_ref())", ec2QueryErrors)
             }
         }
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType
+    ): Writable {
+        TODO("Not yet implemented")
+    }
+
+    override fun serverRouterRuntimeConstructor(): String {
+        TODO("Not yet implemented")
+    }
 }
