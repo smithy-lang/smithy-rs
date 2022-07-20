@@ -132,3 +132,9 @@ set (don't emit it for the default paths)
 references = ["smithy-rs#1558", "aws-sdk-rust#583"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The `imds::Client` in `aws-config` now implements `Clone`"
+references = ["smithy-rs#1557", "aws-sdk-rust#580"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
