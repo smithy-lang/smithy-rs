@@ -116,3 +116,9 @@ a version bump in all of them, but this should not be relied upon.
 references = ["smithy-rs#1540"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Remove warning for valid IMDS provider use-case"
+references = ["smithy-rs#1559", "aws-sdk-rust#582"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
