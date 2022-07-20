@@ -120,6 +120,8 @@ impl<Svc> InstrumentOperation<Svc> {
 
 impl<Svc, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<Svc, RequestMakeFmt, ResponseMakeFmt> {
     /// Configures the request format.
+    ///
+    /// The argument is typically [`RequestFmt`](super::sensitivity::RequestFmt).
     pub fn request_fmt<R>(self, make_request: R) -> InstrumentOperation<Svc, R, ResponseMakeFmt> {
         InstrumentOperation {
             inner: self.inner,
@@ -129,7 +131,9 @@ impl<Svc, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<Svc, RequestMakeF
         }
     }
 
-    /// Configures the request format.
+    /// Configures the response format.
+    ///
+    /// The argument is typically [`ResponseFmt`](super::sensitivity::ResponseFmt).
     pub fn response_fmt<R>(self, make_response: R) -> InstrumentOperation<Svc, RequestMakeFmt, R> {
         InstrumentOperation {
             inner: self.inner,

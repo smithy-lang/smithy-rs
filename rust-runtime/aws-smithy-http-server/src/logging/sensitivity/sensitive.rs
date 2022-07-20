@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! A general wrapper to allow for feature flagged redactions.
+
 use std::fmt::{Debug, Display, Error, Formatter};
 
 use crate::logging::MakeFmt;
@@ -56,6 +58,7 @@ where
     }
 }
 
+/// A [`MakeFmt`] producing [`Sensitive`].
 #[derive(Debug, Clone)]
 pub struct MakeSensitive;
 

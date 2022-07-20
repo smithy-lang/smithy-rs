@@ -14,6 +14,8 @@ use super::{
     MakeSensitive,
 };
 
+/// Allows the modification the responses status code [`Display`](std::fmt::Display) and headers
+/// [`Debug`](std::fmt::Debug) to accommodate sensitivity.
 #[derive(Clone)]
 pub struct ResponseFmt<Headers, StatusCode> {
     headers: Headers,

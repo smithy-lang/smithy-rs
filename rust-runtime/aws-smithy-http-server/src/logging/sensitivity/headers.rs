@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! A wrapper around [`HeaderMap`] to allow for sensitivity.
+
 use std::fmt::{Debug, Display, Error, Formatter};
 
 use http::{header::HeaderName, HeaderMap};
@@ -44,7 +46,6 @@ pub struct HeaderMarker {
 ///
 /// [httpPrefixHeaders trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpprefixheaders-trait
 /// [httpHeader trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpheader-trait
-
 pub struct SensitiveHeaders<'a, F> {
     headers: &'a HeaderMap,
     marker: F,
@@ -132,6 +133,7 @@ where
     }
 }
 
+/// A [`MakeFmt`] producing [`SensitiveHeaders`].
 #[derive(Clone)]
 pub struct MakeHeaders<F>(pub(crate) F);
 

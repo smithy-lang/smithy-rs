@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Wrappers around [`Uri`] and it's constituents to allow for sensitivity.
+
 mod greedy_label;
 mod label;
 mod query;
@@ -105,6 +107,7 @@ where
     }
 }
 
+/// A [`MakeFmt`] producing [`SensitiveUri`].
 #[derive(Clone)]
 pub struct MakeUri<P, Q> {
     pub(crate) make_path: P,
@@ -112,7 +115,7 @@ pub struct MakeUri<P, Q> {
 }
 
 impl<P, Q> Debug for MakeUri<P, Q> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_struct("MakeUri").finish_non_exhaustive()
     }
 }

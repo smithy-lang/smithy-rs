@@ -14,6 +14,8 @@ use super::{
     uri::{MakeGreedyLabel, MakeLabel, MakeQuery, MakeUri, QueryMarker},
 };
 
+/// Allows the modification the requests URIs [`Display`](std::fmt::Display) and headers
+/// [`Debug`](std::fmt::Debug) to accommodate sensitivity.
 #[derive(Clone)]
 pub struct RequestFmt<Headers, Uri> {
     headers: Headers,
