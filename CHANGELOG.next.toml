@@ -118,6 +118,12 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = "Remove warning for valid IMDS provider use-case"
+references = ["smithy-rs#1559", "aws-sdk-rust#582"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = """
 Only emit a warning about failing to expand a `~` to the home
 directory in a profile file's path if that path was explicitly
