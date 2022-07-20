@@ -75,7 +75,7 @@ pub fn header_name_to_algorithm(
 /// as `static`s in [this module](crate::http).
 pub fn new_from_algorithm(
     checksum_algorithm: &str,
-) -> Result<Box<dyn HttpChecksum>, Box<dyn std::error::Error>> {
+) -> Result<Box<dyn HttpChecksum>, Box<(dyn std::error::Error + Send + Sync + 'static)>> {
     if checksum_algorithm.eq_ignore_ascii_case(CRC_32_NAME) {
         Ok(Box::new(Crc32::default()))
     } else if checksum_algorithm.eq_ignore_ascii_case(CRC_32_C_NAME) {
@@ -160,7 +160,10 @@ pub trait HttpChecksum: Checksum + Send + Sync {
             .expect("base64 encoded bytes are always valid header values")
     }
 
-    /// Return the size of the base64-encoded `HeaderValue` for this checksum
+    /// Return the total size of
+    /// - The `HeaderName`
+    /// - The header name/value separator
+    /// - The base64-encoded `HeaderValue`
     fn size(&self) -> u64 {
         let trailer_name_size_in_bytes = self.header_name().as_str().len() as u64;
         let base64_encoded_checksum_size_in_bytes = base64::encoded_length(Checksum::size(self));

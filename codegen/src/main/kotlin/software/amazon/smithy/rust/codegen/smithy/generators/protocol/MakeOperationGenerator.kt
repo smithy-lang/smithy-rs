@@ -151,7 +151,7 @@ open class MakeOperationGenerator(
         writer.format(symbolProvider.toSymbol(shape))
 
     private fun buildOperationTypeRetry(writer: RustWriter, customizations: List<OperationCustomization>): String =
-        customizations.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
+        customizations.firstNotNullOfOrNull { it.retryType() }?.let { writer.format(it) } ?: "()"
 
     private fun needsContentLength(operationShape: OperationShape): Boolean {
         return protocol.httpBindingResolver.requestBindings(operationShape)

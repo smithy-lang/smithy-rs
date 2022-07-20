@@ -37,12 +37,12 @@ impl ChecksumBody<SdkBody> {
         body: SdkBody,
         checksum: Box<dyn HttpChecksum>,
         precalculated_checksum: Bytes,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             inner: body,
             checksum: Some(checksum),
             precalculated_checksum,
-        })
+        }
     }
 
     fn poll_inner(

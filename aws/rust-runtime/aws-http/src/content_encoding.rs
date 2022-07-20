@@ -44,7 +44,9 @@ impl AwsChunkedBodyOptions {
     }
 
     fn total_trailer_length(&self) -> u64 {
-        self.trailer_lengths.iter().sum()
+        self.trailer_lengths.iter().sum::<u64>()
+            // We need to account for a CRLF after each trailer name/value pair
+            + (self.trailer_lengths.len() * CRLF.len()) as u64
     }
 
     /// Set a trailer len
@@ -259,6 +261,7 @@ where
                         let actual_length = this.options.total_trailer_length();
 
                         if expected_length != actual_length {
+                            println!("{:#?}", trailers);
                             let err =
                                 Box::new(AwsChunkedBodyError::ReportedTrailerLengthMismatch {
                                     actual: actual_length,
