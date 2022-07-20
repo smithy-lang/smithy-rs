@@ -2,139 +2,86 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-mod path;
+
+mod greedy_label;
+mod label;
 mod query;
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
 use http::Uri;
 
-pub use path::*;
+pub use greedy_label::*;
+pub use label::*;
 pub use query::*;
+
+use crate::logging::{MakeDisplay, MakeFmt, MakeIdentity};
 
 /// A wrapper around [`&Uri`](Uri) which modifies the behavior of [`Display`]. Closures are used to mark specific parts
 /// of the [`Uri`] as sensitive.
 ///
 /// The [`Display`] implementation will respect the `unredacted-logging` flag.
+#[allow(missing_debug_implementations)]
 pub struct SensitiveUri<'a, P, Q> {
     uri: &'a Uri,
-    path_marker: P,
-    query_marker: Q,
+    make_path: P,
+    make_query: Q,
 }
 
-impl<'a, P, Q> Debug for SensitiveUri<'a, P, Q> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        f.debug_struct("SensitiveUri")
-            .field("uri", &self.uri)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<'a> SensitiveUri<'a, Labels<fn(usize) -> bool>, fn(&str) -> QueryMarker> {
+impl<'a> SensitiveUri<'a, MakeIdentity, MakeIdentity> {
     /// Constructs a new [`SensitiveUri`] with nothing marked as sensitive.
     pub fn new(uri: &'a Uri) -> Self {
         Self {
             uri,
-            path_marker: Labels(noop_path_marker),
-            query_marker: noop_query_marker,
+            make_path: MakeIdentity,
+            make_query: MakeIdentity,
         }
     }
 }
 
 impl<'a, P, Q> SensitiveUri<'a, P, Q> {
-    /// Marks specific path segments as sensitive by supplying a closure over the path index.
-    /// The closure takes the form `Fn(usize) -> bool` where `usize` represents the index of the
-    /// segment and the `bool` marks that segment as sensitive.
-    ///
-    /// This accommodates the [httpLabel trait].
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use aws_smithy_http_server::logging::SensitiveUri;
-    /// # use http::Uri;
-    /// # let uri = Uri::from_static("http://a/");
-    /// // First path segment is sensitive
-    /// let uri = SensitiveUri::new(&uri).path(|x| x == 0);
-    /// println!("{uri}");
-    /// ```
-    ///
-    /// [httpLabel trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait
-    pub fn path<F>(self, marker: F) -> SensitiveUri<'a, Labels<F>, Q> {
+    pub(crate) fn make_path<M>(self, make_path: M) -> SensitiveUri<'a, M, Q> {
         SensitiveUri {
             uri: self.uri,
-            path_marker: Labels(marker),
-            query_marker: self.query_marker,
+            make_path,
+            make_query: self.make_query,
         }
     }
 
-    /// Marks path segments as sensitive by supplying a closure over the path index.
-    /// The closure takes the form `Fn(usize) -> bool` where `usize` represents the index of the
-    /// segment and the `bool` marks that segment as sensitive.
-    ///
-    /// This accommodates the [httpLabel trait].
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use aws_smithy_http_server::logging::SensitiveUri;
-    /// # use http::Uri;
-    /// # let uri = Uri::from_static("http://a/b/c");
-    /// // First path segment is sensitive
-    /// let uri = SensitiveUri::new(&uri).greedy_path(3);
-    /// println!("{uri}");
-    /// ```
-    ///
-    /// [httpLabel trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait
-    pub fn greedy_path(self, position: usize) -> SensitiveUri<'a, GreedyLabel, Q> {
+    pub(crate) fn make_query<M>(self, make_query: M) -> SensitiveUri<'a, P, M> {
         SensitiveUri {
             uri: self.uri,
-            path_marker: GreedyLabel(position),
-            query_marker: self.query_marker,
+            make_path: self.make_path,
+            make_query,
         }
     }
 
-    /// Marks the path using [`MakePath`].
-    pub(crate) fn make_path<NewPath>(self, path_marker: NewPath) -> SensitiveUri<'a, NewPath, Q> {
-        SensitiveUri {
-            uri: self.uri,
-            path_marker,
-            query_marker: self.query_marker,
-        }
+    ///  Marks path segments as sensitive by providing predicate over the segment index.
+    ///
+    /// See [`Label`] for more info.
+    pub fn label<F>(self, marker: F) -> SensitiveUri<'a, MakeLabel<F>, Q> {
+        self.make_path(MakeLabel(marker))
     }
 
-    /// Marks specific query string values as sensitive by supplying a closure over the query string
-    /// keys. The closure takes the form `Fn(&str) -> Option<QueryMarker>` where `&str` represents the key of the
-    /// query string pair and the `Option<QueryMarker>` marks the key, value, or entire pair as sensitive.
+    /// Marks the suffix of the path as sensitive by providing a byte position.
     ///
-    /// This accommodates the [httpQuery trait] and [httpQueryParams trait].
+    /// See [`GreedyLabel`] for more info.
+    pub fn greedy_label(self, position: usize) -> SensitiveUri<'a, MakeGreedyLabel, Q> {
+        self.make_path(MakeGreedyLabel(position))
+    }
+
+    /// Marks specific query string values as sensitive by supplying a predicate over the query string keys.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// # use aws_smithy_http_server::logging::{SensitiveUri, QueryMarker};
-    /// # use http::Uri;
-    /// # let uri = Uri::from_static("http://a/");
-    /// // Query string value with key "name" is sensitive
-    /// let uri = SensitiveUri::new(&uri).query(|x| QueryMarker { key: false, value: x == "name" });
-    /// println!("{uri}");
-    /// ```
-    ///
-    /// [httpQuery trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait
-    /// [httpQueryParams trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpqueryparams-trait
-    pub fn query<F>(self, marker: F) -> SensitiveUri<'a, P, F> {
-        SensitiveUri {
-            uri: self.uri,
-            path_marker: self.path_marker,
-            query_marker: marker,
-        }
+    /// See [`Query`] for more info.
+    pub fn query<F>(self, marker: F) -> SensitiveUri<'a, P, MakeQuery<F>> {
+        self.make_query(MakeQuery(marker))
     }
 }
 
 impl<'a, P, Q> Display for SensitiveUri<'a, P, Q>
 where
-    P: MakePath<'a>,
-    Q: Fn(&'a str) -> QueryMarker,
+    P: MakeDisplay<&'a str>,
+    Q: MakeDisplay<&'a str>,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         if let Some(scheme) = self.uri.scheme() {
@@ -146,15 +93,50 @@ where
         }
 
         let path = self.uri.path();
-        let path = self.path_marker.make(path);
+        let path = self.make_path.make_display(path);
         write!(f, "{path}")?;
 
         if let Some(query) = self.uri.query() {
-            let query = SensitiveQuery::new(query).mark(&self.query_marker);
+            let query = self.make_query.make_display(query);
             write!(f, "?{query}")?;
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct MakeUri<P, Q> {
+    pub(crate) make_path: P,
+    pub(crate) make_query: Q,
+}
+
+impl<P, Q> Debug for MakeUri<P, Q> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MakeUri").finish_non_exhaustive()
+    }
+}
+
+impl<'a, P, Q> MakeFmt<&'a http::Uri> for MakeUri<P, Q>
+where
+    Q: Clone,
+    P: Clone,
+{
+    type Target = SensitiveUri<'a, P, Q>;
+
+    fn make(&self, source: &'a http::Uri) -> Self::Target {
+        SensitiveUri::new(source)
+            .make_query(self.make_query.clone())
+            .make_path(self.make_path.clone())
+    }
+}
+
+impl Default for MakeUri<MakeIdentity, MakeIdentity> {
+    fn default() -> Self {
+        Self {
+            make_path: MakeIdentity,
+            make_query: MakeIdentity,
+        }
     }
 }
 
@@ -247,7 +229,7 @@ mod tests {
         let originals = EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = FIRST_PATH_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveUri::new(&original).path(|x| x == 0).to_string();
+            let output = SensitiveUri::new(&original).label(|x| x == 0).to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }
@@ -286,7 +268,7 @@ mod tests {
         let expecteds = LAST_PATH_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
             let path_len = original.path().split('/').skip(1).count();
-            let output = SensitiveUri::new(&original).path(|x| x + 1 == path_len).to_string();
+            let output = SensitiveUri::new(&original).label(|x| x + 1 == path_len).to_string();
             assert_eq!(output, expected.to_string(), "original = {original}");
         }
     }

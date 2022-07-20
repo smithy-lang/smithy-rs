@@ -2,9 +2,10 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-use std::fmt::{self, Display, Error, Formatter};
 
-use crate::logging::Sensitive;
+use std::fmt::{Debug, Display, Error, Formatter};
+
+use crate::logging::{sensitivity::Sensitive, MakeFmt};
 
 /// Marks the sensitive data of a query string pair.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -15,48 +16,34 @@ pub struct QueryMarker {
     pub value: bool,
 }
 
-pub(crate) fn noop_query_marker(_: &str) -> QueryMarker {
-    QueryMarker::default()
-}
-
-/// A wrapper around a query [`&str`](str) which modifies the behavior of [`Display`]. Closures are used to mark
-/// query parameter values as sensitive based on their key.
+/// A wrapper around a query string [`&str`](str) which modifies the behavior of [`Display`]. Specific query string
+/// values are marked as sensitive by providing predicate over the keys. This accommodates the [httpQuery trait] and
+/// the [httpQueryParams trait].
 ///
 /// The [`Display`] implementation will respect the `unredacted-logging` flag.
-pub struct SensitiveQuery<'a, F> {
+///
+/// # Example
+///
+/// ```
+/// # use aws_smithy_http_server::logging::sensitivity::uri::{Query, QueryMarker};
+/// # let uri = "";
+/// // Query string value with key "name" is redacted
+/// let uri = Query::new(&uri, |x| QueryMarker { key: false, value: x == "name" } );
+/// println!("{uri}");
+/// ```
+///
+/// [httpQuery trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpquery-trait
+/// [httpQueryParams trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpqueryparams-trait
+#[allow(missing_debug_implementations)]
+pub struct Query<'a, F> {
     query: &'a str,
     marker: F,
 }
 
-impl<'a, F> fmt::Debug for SensitiveQuery<'a, F> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SensitiveQuery")
-            .field("query", &self.query)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<'a> SensitiveQuery<'a, fn(&str) -> QueryMarker> {
-    /// Constructs a new [`SensitiveQuery`] with nothing marked as sensitive.
-    pub fn new(query: &'a str) -> Self {
-        Self {
-            query,
-            marker: noop_query_marker,
-        }
-    }
-}
-
-impl<'a, F> SensitiveQuery<'a, F> {
-    /// Marks specific query string values as sensitive by supplying a closure over the query string
-    /// keys. The closure takes the form `Fn(&str) -> bool` where `&str` represents the key of the
-    /// query string pair and the `bool` marks that value as sensitive.
-    ///
-    /// See [SensitiveUri::query_key](crate::logging::SensitiveUri::query).
-    pub fn mark<G>(self, marker: G) -> SensitiveQuery<'a, G> {
-        SensitiveQuery {
-            query: self.query,
-            marker,
-        }
+impl<'a, F> Query<'a, F> {
+    /// Constructs a new [`Query`].
+    pub fn new(query: &'a str, marker: F) -> Self {
+        Self { query, marker }
     }
 }
 
@@ -86,7 +73,7 @@ where
     }
 }
 
-impl<'a, F> Display for SensitiveQuery<'a, F>
+impl<'a, F> Display for Query<'a, F>
 where
     F: Fn(&'a str) -> QueryMarker,
 {
@@ -106,11 +93,31 @@ where
     }
 }
 
+/// A [`MakeFmt`] producing [`Query`].
+#[derive(Clone)]
+pub struct MakeQuery<F>(pub(crate) F);
+
+impl<F> Debug for MakeQuery<F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        f.debug_tuple("MakeQuery").field(&"...").finish()
+    }
+}
+impl<'a, F> MakeFmt<&'a str> for MakeQuery<F>
+where
+    F: Clone,
+{
+    type Target = Query<'a, F>;
+
+    fn make(&self, path: &'a str) -> Self::Target {
+        Query::new(path, self.0.clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use http::Uri;
 
-    use crate::logging::uri::tests::{
+    use crate::logging::sensitivity::uri::tests::{
         ALL_KEYS_QUERY_STRING_EXAMPLES, ALL_PAIRS_QUERY_STRING_EXAMPLES, ALL_VALUES_QUERY_STRING_EXAMPLES, EXAMPLES,
         QUERY_STRING_EXAMPLES, X_QUERY_STRING_EXAMPLES,
     };
@@ -122,7 +129,7 @@ mod tests {
         let originals = EXAMPLES.into_iter().chain(QUERY_STRING_EXAMPLES).map(Uri::from_static);
         for original in originals {
             if let Some(query) = original.query() {
-                let output = SensitiveQuery::new(&query).to_string();
+                let output = Query::new(&query, |_| QueryMarker::default()).to_string();
                 assert_eq!(output, query, "original = {original}");
             }
         }
@@ -133,12 +140,11 @@ mod tests {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = ALL_KEYS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveQuery::new(&original.query().unwrap())
-                .mark(|_| QueryMarker {
-                    key: true,
-                    value: false,
-                })
-                .to_string();
+            let output = Query::new(&original.query().unwrap(), |_| QueryMarker {
+                key: true,
+                value: false,
+            })
+            .to_string();
             assert_eq!(output, expected.query().unwrap(), "original = {original}");
         }
     }
@@ -148,12 +154,11 @@ mod tests {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = ALL_VALUES_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveQuery::new(&original.query().unwrap())
-                .mark(|_| QueryMarker {
-                    key: false,
-                    value: true,
-                })
-                .to_string();
+            let output = Query::new(&original.query().unwrap(), |_| QueryMarker {
+                key: false,
+                value: true,
+            })
+            .to_string();
             assert_eq!(output, expected.query().unwrap(), "original = {original}");
         }
     }
@@ -163,9 +168,7 @@ mod tests {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = ALL_PAIRS_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveQuery::new(&original.query().unwrap())
-                .mark(|_| QueryMarker { key: true, value: true })
-                .to_string();
+            let output = Query::new(&original.query().unwrap(), |_| QueryMarker { key: true, value: true }).to_string();
             assert_eq!(output, expected.query().unwrap(), "original = {original}");
         }
     }
@@ -175,12 +178,11 @@ mod tests {
         let originals = QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         let expecteds = X_QUERY_STRING_EXAMPLES.into_iter().map(Uri::from_static);
         for (original, expected) in originals.zip(expecteds) {
-            let output = SensitiveQuery::new(&original.query().unwrap())
-                .mark(|key| QueryMarker {
-                    key: false,
-                    value: key == "x",
-                })
-                .to_string();
+            let output = Query::new(&original.query().unwrap(), |key| QueryMarker {
+                key: false,
+                value: key == "x",
+            })
+            .to_string();
             assert_eq!(output, expected.query().unwrap(), "original = {original}");
         }
     }

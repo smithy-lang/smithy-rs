@@ -5,6 +5,8 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
+use crate::logging::MakeFmt;
+
 use super::REDACTED;
 
 /// A wrapper used to modify the [`Display`] and [`Debug`] implementation of the inner structure
@@ -18,7 +20,7 @@ use super::REDACTED;
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::logging::Sensitive;
+/// # use aws_smithy_http_server::logging::sensitivity::Sensitive;
 /// # let address = "";
 /// tracing::debug!(
 ///     name = %Sensitive("Alice"),
@@ -54,11 +56,20 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct MakeSensitive;
+
+impl<T> MakeFmt<T> for MakeSensitive {
+    type Target = Sensitive<T>;
+
+    fn make(&self, source: T) -> Self::Target {
+        Sensitive(source)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::logging::REDACTED;
-
-    use super::Sensitive;
+    use super::*;
 
     #[test]
     fn debug() {
