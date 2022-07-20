@@ -261,7 +261,6 @@ where
                         let actual_length = this.options.total_trailer_length();
 
                         if expected_length != actual_length {
-                            println!("{:#?}", trailers);
                             let err =
                                 Box::new(AwsChunkedBodyError::ReportedTrailerLengthMismatch {
                                     actual: actual_length,
