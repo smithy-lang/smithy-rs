@@ -141,7 +141,7 @@ COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
-    JAVA_HOME=/usr/lib/jvm/jre-11-openjdk \
+    JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto.x86_64 \
     GRADLE_USER_HOME=/home/build/.gradle \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
