@@ -48,9 +48,8 @@ impl std::fmt::Display for Error {
             ),
             Self::ChecksumHeadersAreUnsupportedForStreamingBody => write!(
                 f,
-                "Checksum header insertion is only supported for non-streaming HTTP bodies.\
-To checksum validate a streaming body, the checksums must be sent as trailers.
-"
+                "Checksum header insertion is only supported for non-streaming HTTP bodies. \
+                 To checksum validate a streaming body, the checksums must be sent as trailers."
             ),
         }
     }
