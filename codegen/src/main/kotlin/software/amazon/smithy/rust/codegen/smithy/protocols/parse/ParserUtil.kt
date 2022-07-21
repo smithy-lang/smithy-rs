@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.rustType
  * by explicitly calling `from()`.
  *
  * For example we use this in the server Python implementation, where we override types like [Blob] and [DateTime]
- * with wrappers compatibile with Python, without touching the original implementation coming from `aws-smithy-types`.
+ * with wrappers compatible with Python, without touching the original implementation coming from `aws-smithy-types`.
  */
 class ParserUtil(private val symbolProvider: RustSymbolProvider, private val runtimeConfig: RuntimeConfig) {
     fun convertViaFrom(shape: Shape): Writable =
