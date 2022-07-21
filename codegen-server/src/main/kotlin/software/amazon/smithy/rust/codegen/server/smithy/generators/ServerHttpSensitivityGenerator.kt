@@ -38,7 +38,7 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 
 internal fun findUriGreedyLabelPosition(uriPattern: UriPattern): Int? {
     return uriPattern
-        .getGreedyLabel()
+        .greedyLabel
         .orElse(null)
         ?.let { uriPattern.toString().indexOf("$it") }
 }
@@ -55,26 +55,110 @@ class ServerHttpSensitivityGenerator(
     private val inputShape = operation.inputShape(model)
     private val outputShape = operation.outputShape(model)
 
-    internal fun renderHeaderClosure(writer: RustWriter, headers: List<HttpHeaderTrait>, prefixHeaders: List<HttpPrefixHeadersTrait>) {
+    sealed class HeaderData(
+        // Sensitive suffix of header key
+        val prefixHeader: String?,
+    ) {
+        // List of keys whose values are sensitive
+        class SpecificHeaderValues(val headerKeys: List<String>, prefixHeader: String?) : HeaderData(prefixHeader)
+
+        // All values are sensitive
+        class AllHeaderValues(prefixHeader: String?) : HeaderData(prefixHeader)
+
+        fun isIdentity(): Boolean {
+            return when (this) {
+                is SpecificHeaderValues -> {
+                    prefixHeader == null && headerKeys.isEmpty()
+                }
+                is AllHeaderValues -> {
+                    false
+                }
+            }
+        }
+    }
+
+    internal fun findHeaderData(rootShape: Shape): HeaderData {
+        // httpPrefixHeaders bindings
+        // [trait|sensitive] ~> [trait|httpPrefixHeaders]
+        // All prefix keys and values are sensitive
+        val prefixSuffixA = findSensitiveBoundTrait<HttpPrefixHeadersTrait>(rootShape).map { it.value }.singleOrNull()
+        if (prefixSuffixA != null) {
+            return HeaderData.AllHeaderValues(prefixSuffixA)
+        }
+
+        // Find httpPrefixHeaders trait
+        // member[trait|httpPrefixHeaders]
+        val httpPrefixMember: MemberShape? = Walker(model)
+            .walkShapes(rootShape) {
+                // Do not traverse upwards or beyond a httpPrefixHeaders trait
+                it.direction == RelationshipDirection.DIRECTED && it.shape.getTrait<HttpPrefixHeadersTrait>() == null
+            }
+            .filter {
+                it.getTrait<HttpPrefixHeadersTrait>() != null
+            }
+            .map { it as? MemberShape }
+            .singleOrNull()
+
+        // httpHeader bindings
+        // [trait|sensitive] ~> [trait|httpHeader]
+        // Specific values are sensitive from keys...
+        val headerKeys = findSensitiveBoundTrait<HttpHeaderTrait>(rootShape).map { it.value }.distinct()
+
+        // ...and if there are no sensitive keys...
+        if (httpPrefixMember == null) {
+            return HeaderData.SpecificHeaderValues(headerKeys, null)
+        }
+
+        // Find map > members of member httpPrefixHeaders trait
+        val mapMembers: List<MemberShape> =
+            Walker(model)
+                .walkShapes(httpPrefixMember!!) {
+                    // Do not traverse upwards
+                    it.direction == RelationshipDirection.DIRECTED
+                }
+                .filter {
+                    it.getTrait<SensitiveTrait>() != null
+                }.mapNotNull {
+                    it as? MemberShape
+                }
+
+        val init: Pair<String?, Boolean> = Pair(null, false)
+        val (prefixSuffixB, valuesSensitive) = mapMembers.fold(init) { (key, value), it ->
+            // httpPrefixHeaders name
+            val httpPrefixName = httpPrefixMember.getTrait<HttpPrefixHeadersTrait>()!!.value
+            Pair(
+                key ?: if (it.memberName == "key") { httpPrefixName } else { null },
+                value || it.memberName == "value"
+            )
+        }
+
+        return if (valuesSensitive) {
+            // All values are sensitive
+            HeaderData.AllHeaderValues(prefixSuffixB)
+        } else {
+            HeaderData.SpecificHeaderValues(headerKeys, prefixSuffixB)
+        }
+    }
+
+    internal fun renderHeaderClosure(writer: RustWriter, headerData: HeaderData) {
         writer.rustBlockTemplate("|name: &#{Http}::header::HeaderName|", *codegenScope) {
             rust("let name = name.as_str();")
 
-            if (prefixHeaders.isNotEmpty()) {
-                withBlock("let (value, key_suffix) = ", ";") {
-                    prefixHeaders.map { it.value }.distinct().forEach {
-                        rustTemplate("if name.starts_with(\"$it\") { (true, Some(${it.length})) } else")
-                    }
-                    rust("{ (false, None) }")
-                }
-            } else {
-                rust("let value = false;")
-                rust("let key_suffix = None;")
-            }
+            headerData.prefixHeader?.let {
+                rust("let key_suffix = name.starts_with(\"$it\").then_some(${it.length});")
+            } ?: rust("let key_suffix = None;")
 
-            if (headers.isNotEmpty()) {
-                withBlock("let value = value || matches!(name,", ");") {
-                    val matches = headers.map { it.value }.distinct().map { "\"$it\"" }.joinToString("|")
-                    rust(matches)
+            when (headerData) {
+                is HeaderData.AllHeaderValues -> {
+                    rust("let value = true;")
+                }
+                is HeaderData.SpecificHeaderValues -> {
+                    if (headerData.headerKeys.isEmpty()) {
+                        rust("let value = false;")
+                    } else {
+                        val matches = headerData.headerKeys.map { "\"$it\"" }.joinToString("|")
+                        rust("let value = matches!(name, $matches);")
+                    }
                 }
             }
 
@@ -84,71 +168,132 @@ class ServerHttpSensitivityGenerator(
         }
     }
 
-    internal fun renderQueryClosure(writer: RustWriter, queries: List<HttpQueryTrait>) {
-        writer.withBlockTemplate("|name: &str| #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: matches!(name,", ") }", *codegenScope) {
-            val matches = queries.map { it.value }.distinct().map { "\"$it\"" }.joinToString("|")
-            rust(matches)
+    sealed class QueryData(
+        // Are all keys sensitive?
+        val allKeysSensitive: Boolean
+    ) {
+        // List of keys marking which values are sensitive
+        class SpecificValues(val queryKeys: List<String>, allKeysSensitive: Boolean) : QueryData(allKeysSensitive)
+
+        // All values are sensitive
+        class AllValues(allKeysSensitive: Boolean) : QueryData(allKeysSensitive)
+
+        fun isIdentity(): Boolean {
+            return when (this) {
+                is SpecificValues -> {
+                    !allKeysSensitive && queryKeys.isEmpty()
+                }
+                is AllValues -> {
+                    false
+                }
+            }
         }
     }
 
-    internal fun renderQueryParamsClosure(writer: RustWriter) {
-        writer.rustBlock("|_: &str|") {
-            rustTemplate(
-                "#{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: true, value: true }", *codegenScope
+    internal fun findQueryData(): QueryData {
+        // httpQueryParams bindings
+        // [trait|sensitive] ~> [trait|httpQueryParams]
+        // Both keys/values are sensitive
+        val allSensitive = findSensitiveBoundTrait<HttpQueryParamsTrait>(inputShape).isNotEmpty()
+
+        if (allSensitive) {
+            return QueryData.AllValues(true)
+        }
+
+        // Sensitive trait can exist within the httpQueryParams map
+        // [trait|httpQueryParams] ~> map > member [trait|sensitive]
+        // Keys/values may be sensitive
+        val mapMembers = findTraitInterval<HttpQueryParamsTrait, SensitiveTrait>(inputShape)
+        val (keysSensitive, valuesSensitive) = mapMembers.fold(Pair(false, false)) { (key, value), it ->
+            Pair(
+                key || it.memberName == "key",
+                value || it.memberName == "value"
             )
+        }
+
+        if (valuesSensitive) {
+            return QueryData.AllValues(keysSensitive)
+        }
+
+        // httpQuery bindings
+        // [trait|sensitive] ~> [trait|httpQuery]
+        val queries = findSensitiveBoundTrait<HttpQueryTrait>(inputShape).map { it.value }.distinct()
+
+        return QueryData.SpecificValues(queries, keysSensitive)
+    }
+
+    internal fun renderQueryClosure(writer: RustWriter, queryData: QueryData) {
+        writer.rustBlockTemplate("|name: &str|", *codegenScope) {
+            rust("let keys = ${queryData.allKeysSensitive};")
+
+            when (queryData) {
+                is QueryData.AllValues -> {
+                    rust("let value = true;")
+                }
+                is QueryData.SpecificValues -> {
+                    if (queryData.queryKeys.isEmpty()) {
+                        rust("let value = false;")
+                    } else {
+                        val matches = queryData.queryKeys.map { "\"$it\"" }.joinToString("|")
+                        rust("let value = matches!(name, $matches);")
+                    }
+                }
+            }
+            rustTemplate("#{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key, value }", *codegenScope)
         }
     }
 
     internal fun renderLabelClosure(writer: RustWriter, indexes: List<Int>) {
         writer.rustBlock("|index: usize|") {
             withBlock("matches!(index,", ")") {
-                val matches = indexes.map { "$it" }.joinToString("|")
+                val matches = indexes.joinToString("|") { "$it" }
                 rust(matches)
             }
         }
     }
 
-    // Find member shapes which are sensitive and enjoy a trait `T`.
-    internal inline fun <reified T : Trait> findSensitiveBound(rootShape: Shape): List<MemberShape> {
+    // Find member shapes with trait `B` contained in a shape enjoying `A`.
+    // [trait|A] ~> [trait|B]
+    internal inline fun <reified A : Trait, reified B : Trait> findTraitInterval(rootShape: Shape): List<MemberShape> {
         return Walker(model)
-            .walkShapes(rootShape, {
-                // Do not traverse upwards or beyond a sensitive trait
-                it.getDirection() == RelationshipDirection.DIRECTED && it.getShape().getTrait<SensitiveTrait>() == null
-            })
+            .walkShapes(rootShape) {
+                // Do not traverse upwards or beyond a A trait
+                it.direction == RelationshipDirection.DIRECTED && it.shape.getTrait<A>() == null
+            }
             .filter {
-                it.getTrait<SensitiveTrait>() != null
+                it.getTrait<A>() != null
             }
             .flatMap {
                 Walker(model)
-                    .walkShapes(it, {
+                    .walkShapes(it) {
                         // Do not traverse upwards
-                        it.getDirection() == RelationshipDirection.DIRECTED
-                    })
-                    .filter {
-                        it.getTrait<T>() != null
+                        it.direction == RelationshipDirection.DIRECTED
                     }
-                    .map {
+                    .filter {
+                        it.getTrait<B>() != null
+                    }.mapNotNull {
                         it as? MemberShape
                     }
-                    .filterNotNull()
             }
     }
 
-    // Find traits (applied to member shapes) which are sensitive.
+    // Find member shapes with trait `T` contained in a shape enjoying `SensitiveTrait`.
+    // [trait|sensitive] ~> [trait|T]
+    internal inline fun <reified T : Trait> findSensitiveBound(rootShape: Shape): List<MemberShape> {
+        return findTraitInterval<SensitiveTrait, T>(rootShape)
+    }
+
+    // Find trait `T` contained in a shape enjoying `SensitiveTrait`.
     internal inline fun <reified T : Trait> findSensitiveBoundTrait(rootShape: Shape): List<T> {
-        return findSensitiveBound<T>(rootShape).map { it.getTrait<T>() }.filterNotNull()
+        return findSensitiveBound<T>(rootShape).mapNotNull { it.getTrait<T>() }
     }
 
     internal fun findUriLabelIndexes(uriPattern: UriPattern): List<Int> {
         val uriLabels: Map<String, Int> = uriPattern
-            .getSegments()
+            .segments
             .withIndex()
-            .filter { (_, segment) -> segment.isLabel() }
-            .map { (index, segment) -> Pair(segment.getContent(), index) }
-            .toMap()
-        return findSensitiveBound<HttpLabelTrait>(inputShape)
-            .map { uriLabels.get(it.getMemberName()) }
-            .filterNotNull()
+            .filter { (_, segment) -> segment.isLabel }.associate { (index, segment) -> Pair(segment.content, index) }
+        return findSensitiveBound<HttpLabelTrait>(inputShape).mapNotNull { uriLabels[it.memberName] }
     }
 
     sealed class Label {
@@ -156,40 +301,25 @@ class ServerHttpSensitivityGenerator(
         class Greedy(val suffixPosition: Int) : Label()
     }
 
-    internal fun findLabel(uriPattern: UriPattern): Label {
+    private fun findLabel(uriPattern: UriPattern): Label {
         return findUriGreedyLabelPosition(uriPattern)?.let { Label.Greedy(it) } ?: findUriLabelIndexes(uriPattern).let { Label.Normal(it) }
-    }
-
-    fun renderResponseFmt(writer: RustWriter) {
-        writer.withBlockTemplate("#{SmithyHttpServer}::logging::sensitivity::ResponseFmt::new()", ";", *codegenScope) {
-            // Sensitivity only applies when HTTP trait is applied to the operation
-            val httpTrait = operation.getTrait<HttpTrait>() ?: return@withBlockTemplate
-
-            // Response header bindings
-            val responseHttpHeaders = findSensitiveBoundTrait<HttpHeaderTrait>(outputShape)
-            val responsePrefixHttpHeaders = findSensitiveBoundTrait<HttpPrefixHeadersTrait>(outputShape)
-            if (responseHttpHeaders.isNotEmpty() || responsePrefixHttpHeaders.isNotEmpty()) {
-                withBlock(".header(", ")") {
-                    renderHeaderClosure(writer, responseHttpHeaders, responsePrefixHttpHeaders)
-                }
-            }
-
-            // Status code bindings
-            val hasResponseStatusCode = findSensitiveBoundTrait<HttpResponseCodeTrait>(outputShape).isNotEmpty()
-            if (hasResponseStatusCode) {
-                rust(".status_code()")
-            }
-        }
     }
 
     fun renderRequestFmt(writer: RustWriter) {
         writer.withBlockTemplate("#{SmithyHttpServer}::logging::sensitivity::RequestFmt::new()", ";", *codegenScope) {
-            // Sensitivity only applies when HTTP trait is applied to the operation
+            // Sensitivity only applies when http trait is applied to the operation
             val httpTrait = operation.getTrait<HttpTrait>() ?: return@withBlockTemplate
 
-            // URI bindings
-            val label = findLabel(httpTrait.uri)
-            when (label) {
+            // httpHeader/httpPrefixHeaders bindings
+            val headerData = findHeaderData(inputShape)
+            if (!headerData.isIdentity()) {
+                withBlock(".header(", ")") {
+                    renderHeaderClosure(writer, headerData)
+                }
+            }
+
+            // httpLabel bindings
+            when (val label = findLabel(httpTrait.uri)) {
                 is Label.Normal -> {
                     if (label.indexes.isNotEmpty()) {
                         withBlock(".label(", ")") {
@@ -202,28 +332,33 @@ class ServerHttpSensitivityGenerator(
                 }
             }
 
-            // Query string bindings
-            val requestQueries = findSensitiveBoundTrait<HttpQueryTrait>(inputShape)
-            if (requestQueries.isNotEmpty()) {
+            // httpQuery/httpQueryParams bindings
+            val queryData = findQueryData()
+            if (!queryData.isIdentity()) {
                 withBlock(".query(", ")") {
-                    renderQueryClosure(writer, requestQueries)
+                    renderQueryClosure(writer, queryData)
                 }
             }
-            val requestQueryParams = findSensitiveBoundTrait<HttpQueryParamsTrait>(inputShape)
-                .isNotEmpty()
-            if (requestQueryParams) {
-                withBlock(".query(", ")") {
-                    renderQueryParamsClosure(writer)
+        }
+    }
+
+    fun renderResponseFmt(writer: RustWriter) {
+        writer.withBlockTemplate("#{SmithyHttpServer}::logging::sensitivity::ResponseFmt::new()", ";", *codegenScope) {
+            // Sensitivity only applies when HTTP trait is applied to the operation
+            operation.getTrait<HttpTrait>() ?: return@withBlockTemplate
+
+            // httpHeader/httpPrefixHeaders bindings
+            val headerData = findHeaderData(outputShape)
+            if (!headerData.isIdentity()) {
+                withBlock(".header(", ")") {
+                    renderHeaderClosure(writer, headerData)
                 }
             }
 
-            // Request header bindings
-            val requestHttpHeaders = findSensitiveBoundTrait<HttpHeaderTrait>(inputShape)
-            val requestPrefixHttpHeaders = findSensitiveBoundTrait<HttpPrefixHeadersTrait>(inputShape)
-            if (requestHttpHeaders.isNotEmpty() || requestPrefixHttpHeaders.isNotEmpty()) {
-                withBlock(".header(", ")") {
-                    renderHeaderClosure(writer, requestHttpHeaders, requestPrefixHttpHeaders)
-                }
+            // Status code bindings
+            val hasResponseStatusCode = findSensitiveBoundTrait<HttpResponseCodeTrait>(outputShape).isNotEmpty()
+            if (hasResponseStatusCode) {
+                rust(".status_code()")
             }
         }
     }
