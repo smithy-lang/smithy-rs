@@ -68,14 +68,14 @@ class ServerHttpSensitivityGenerator(
                 }
             }
 
-            rustBlockTemplate("#{SmithyHttpServer}::logging::HeaderMarker", *codegenScope) {
+            rustBlockTemplate("#{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker", *codegenScope) {
                 rust("value, key_suffix")
             }
         }
     }
 
     internal fun renderQueryClosure(writer: RustWriter, queries: List<HttpQueryTrait>) {
-        writer.withBlockTemplate("|name: &str| #{SmithyHttpServer}::logging::QueryMarker { key: false, value: matches!(name,", ") }", *codegenScope) {
+        writer.withBlockTemplate("|name: &str| #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: matches!(name,", ") }", *codegenScope) {
             val matches = queries.map { it.value }.distinct().map { "\"$it\"" }.joinToString("|")
             rust(matches)
         }
@@ -84,7 +84,7 @@ class ServerHttpSensitivityGenerator(
     internal fun renderQueryParamsClosure(writer: RustWriter) {
         writer.rustBlock("|_: &str|") {
             rustTemplate(
-                "#{SmithyHttpServer}::logging::QueryMarker { key: true, value: true }", *codegenScope
+                "#{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: true, value: true }", *codegenScope
             )
         }
     }
@@ -129,6 +129,23 @@ class ServerHttpSensitivityGenerator(
         return findSensitiveBound<T>(rootShape).map { it.getTrait<T>() }.filterNotNull()
     }
 
+    sealed class Label {
+        class Normal(val indexes: List<Int>) : Label()
+        class Greedy(val suffixPos: Int) : Label()
+    }
+
+    internal fun findLabel(httpTrait: HttpTrait, inputShape: Shape): Label {
+        return findUriGreedyLabelPosition(httpTrait)?.let { Label.Greedy(it) } ?: findUriLabelIndexes(httpTrait, inputShape).let { Label.Normal(it) }
+    }
+
+    internal fun findUriGreedyLabelPosition(httpTrait: HttpTrait): Int? {
+        return httpTrait
+            .uri
+            .getGreedyLabel()
+            .orElse(null)
+            .let { httpTrait.uri.toString().indexOf("{${it.getContent()}+}") }
+    }
+
     internal fun findUriLabelIndexes(httpTrait: HttpTrait, inputShape: Shape): List<Int> {
         val uriLabels: Map<String, Int> = httpTrait
             .uri
@@ -142,8 +159,32 @@ class ServerHttpSensitivityGenerator(
             .filterNotNull()
     }
 
-    fun render(writer: RustWriter) {
-        writer.withBlockTemplate("#{SmithyHttpServer}::logging::Sensitivity::new()", ";", *codegenScope) {
+    fun renderResponseFmt(writer: RustWriter) {
+        writer.withBlockTemplate("#{SmithyHttpServer}::logging::sensitivity::ResponseFmt::new()", ";", *codegenScope) {
+            // Sensitivity only applies when HTTP trait is applied to the operation
+            val httpTrait = operation.getTrait<HttpTrait>() ?: return@withBlockTemplate
+
+            val outputShape = operation.outputShape(model)
+
+            // Response header bindings
+            val responseHttpHeaders = findSensitiveBoundTrait<HttpHeaderTrait>(outputShape)
+            val responsePrefixHttpHeaders = findSensitiveBoundTrait<HttpPrefixHeadersTrait>(outputShape)
+            if (responseHttpHeaders.isNotEmpty() || responsePrefixHttpHeaders.isNotEmpty()) {
+                withBlock(".header(", ")") {
+                    renderHeaderClosure(writer, responseHttpHeaders, responsePrefixHttpHeaders)
+                }
+            }
+
+            // Status code bindings
+            val hasResponseStatusCode = findSensitiveBoundTrait<HttpResponseCodeTrait>(outputShape).isNotEmpty()
+            if (hasResponseStatusCode) {
+                rust(".status_code()")
+            }
+        }
+    }
+
+    fun renderRequestFmt(writer: RustWriter) {
+        writer.withBlockTemplate("#{SmithyHttpServer}::logging::sensitivity::RequestFmt::new()", ";", *codegenScope) {
             // Sensitivity only applies when HTTP trait is applied to the operation
             val httpTrait = operation.getTrait<HttpTrait>() ?: return@withBlockTemplate
 
@@ -152,7 +193,7 @@ class ServerHttpSensitivityGenerator(
             // URI bindings
             val labeledUriIndexes = findUriLabelIndexes(httpTrait, inputShape)
             if (labeledUriIndexes.isNotEmpty()) {
-                withBlock(".path(", ")") {
+                withBlock(".label(", ")") {
                     renderPathClosure(writer, labeledUriIndexes)
                 }
             }
@@ -176,26 +217,9 @@ class ServerHttpSensitivityGenerator(
             val requestHttpHeaders = findSensitiveBoundTrait<HttpHeaderTrait>(inputShape)
             val requestPrefixHttpHeaders = findSensitiveBoundTrait<HttpPrefixHeadersTrait>(inputShape)
             if (requestHttpHeaders.isNotEmpty() || requestPrefixHttpHeaders.isNotEmpty()) {
-                withBlock(".request_header(", ")") {
+                withBlock(".header(", ")") {
                     renderHeaderClosure(writer, requestHttpHeaders, requestPrefixHttpHeaders)
                 }
-            }
-
-            val outputShape = operation.outputShape(model)
-
-            // Response header bindings
-            val responseHttpHeaders = findSensitiveBoundTrait<HttpHeaderTrait>(outputShape)
-            val responsePrefixHttpHeaders = findSensitiveBoundTrait<HttpPrefixHeadersTrait>(outputShape)
-            if (responseHttpHeaders.isNotEmpty() || responsePrefixHttpHeaders.isNotEmpty()) {
-                withBlock(".response_header(", ")") {
-                    renderHeaderClosure(writer, responseHttpHeaders, responsePrefixHttpHeaders)
-                }
-            }
-
-            // Status code bindings
-            val hasResponseStatusCode = findSensitiveBoundTrait<HttpResponseCodeTrait>(outputShape).isNotEmpty()
-            if (hasResponseStatusCode) {
-                rust(".status_code()")
             }
         }
     }
