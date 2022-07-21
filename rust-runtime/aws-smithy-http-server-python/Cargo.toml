@@ -10,8 +10,7 @@ categories = ["asynchronous", "web-programming", "api-bindings"]
 description = """
 Python server runtime for Smithy Rust Server Framework.
 """
-# until this is not stable, it is not publishable.
-publish = false
+publish = true
 
 # [lib]
 # name = "aws_smithy_http_server_python"
