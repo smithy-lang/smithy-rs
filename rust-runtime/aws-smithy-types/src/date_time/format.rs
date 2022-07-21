@@ -379,7 +379,7 @@ pub(crate) mod rfc3339 {
     pub(crate) fn parse(s: &str) -> Result<DateTime, DateTimeParseError> {
         if !matches!(s.chars().last(), Some('Z')) {
             return Err(DateTimeParseError::Invalid(
-                "invalid RFC-3339 date-time: timezone offset not supported".into(),
+                "Smithy does not support timezone offsets in RFC-3339 date times".into(),
             ));
         }
         let date_time = OffsetDateTime::parse(s, &Rfc3339).map_err(|err| {
