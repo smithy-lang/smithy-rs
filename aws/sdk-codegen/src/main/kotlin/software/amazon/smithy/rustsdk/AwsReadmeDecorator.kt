@@ -35,6 +35,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
         mapOf("package" to mapOf("readme" to "README.md"))
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        val awsConfigVersion = SdkSettings.from(codegenContext.settings).awsConfigVersion
         rustCrate.withFile("README.md") { writer ->
             val description = normalizeDescription(
                 codegenContext.moduleName,
@@ -62,7 +63,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
                     ```toml
                     [dependencies]
-                    aws-config = "${codegenContext.settings.moduleVersion}"
+                    aws-config = "$awsConfigVersion"
                     $moduleName = "${codegenContext.settings.moduleVersion}"
                     tokio = { version = "1", features = ["full"] }
                     ```

@@ -28,6 +28,9 @@ struct Args {
     /// Path to the aws-doc-sdk-examples repository.
     #[clap(long, parse(from_os_str))]
     aws_doc_sdk_examples: PathBuf,
+    /// Path to model metadata file.
+    #[clap(long)]
+    model_metadata: Option<PathBuf>,
 
     /// Number of threads that `sdk-sync` will use. Defaults to the physical number of CPUs,
     /// or the available RAM divided by the RAM required for codegen. Whichever is smaller.
@@ -59,6 +62,7 @@ impl Args {
                 .max_gradle_metaspace_megabytes
                 .unwrap_or(defaults.max_gradle_metaspace_megabytes),
             aws_models_path: Some(self.aws_sdk_rust.join("aws-models")),
+            model_metadata_path: self.model_metadata.clone(),
         }
     }
 }

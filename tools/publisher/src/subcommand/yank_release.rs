@@ -4,7 +4,7 @@
  */
 
 use crate::cargo;
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use dialoguer::Confirm;
 use regex::Regex;
@@ -120,10 +120,11 @@ fn release_metadata(manifest: VersionsManifest) -> Result<Release> {
 }
 
 fn confirm_plan(release: &Release) -> Result<()> {
-    info!(
-        "This will yank aws-sdk-rust's `{}` release from crates.io.",
-        release.tag
-    );
+    let tag = release.tag.as_ref().ok_or_else(|| {
+        anyhow!("Versions manifest doesn't have a release tag. Can only yank tagged releases.")
+    })?;
+
+    info!("This will yank aws-sdk-rust's `{tag}` release from crates.io.");
     info!("Crates to yank:");
     for (crate_name, crate_version) in &release.crates {
         info!("   {}-{}", crate_name, crate_version);

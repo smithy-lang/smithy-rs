@@ -3,37 +3,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::subcommand::fix_manifests::subcommand_fix_manifests;
-use crate::subcommand::publish::subcommand_publish;
-use crate::subcommand::yank_release::{subcommand_yank_release, YankReleaseArgs};
 use anyhow::Result;
 use clap::Parser;
-use subcommand::fix_manifests::FixManifestsArgs;
-use subcommand::generate_version_manifest::{
+use publisher::subcommand::fix_manifests::subcommand_fix_manifests;
+use publisher::subcommand::fix_manifests::FixManifestsArgs;
+use publisher::subcommand::generate_version_manifest::{
     subcommand_generate_version_manifest, GenerateVersionManifestArgs,
 };
-use subcommand::hydrate_readme::{subcommand_hydrate_readme, HydrateReadmeArgs};
-use subcommand::publish::PublishArgs;
+use publisher::subcommand::hydrate_readme::subcommand_hydrate_readme_v1;
+use publisher::subcommand::hydrate_readme::{
+    subcommand_hydrate_readme, HydrateReadmeArgs, HydrateReadmeArgsV1,
+};
+use publisher::subcommand::publish::subcommand_publish;
+use publisher::subcommand::publish::PublishArgs;
+use publisher::subcommand::tag_versions_manifest::subcommand_tag_versions_manifest;
+use publisher::subcommand::tag_versions_manifest::TagVersionsManifestArgs;
+use publisher::subcommand::yank_release::{subcommand_yank_release, YankReleaseArgs};
 
-mod cargo;
-mod fs;
-mod package;
-mod retry;
-mod sort;
-mod subcommand;
-
-pub const SDK_REPO_CRATE_PATH: &str = "sdk";
-pub const SDK_REPO_NAME: &str = "aws-sdk-rust";
-pub const SMITHYRS_REPO_NAME: &str = "smithy-rs";
-
-// Crate ownership for SDK crates. Crates.io requires that at least one owner
-// is an individual rather than a team, so we use the automation user for that.
-pub const CRATE_OWNERS: &[&str] = &[
-    // https://github.com/orgs/awslabs/teams/rust-sdk-owners
-    "github:awslabs:rust-sdk-owners",
-    // https://github.com/aws-sdk-rust-ci
-    "aws-sdk-rust-ci",
-];
+// TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove V1 args
+#[derive(Parser, Debug)]
+#[clap(author, version, about)]
+enum ArgsV1 {
+    /// Fixes path dependencies in manifests to also have version numbers
+    FixManifests(FixManifestsArgs),
+    /// Publishes crates to crates.io
+    Publish(PublishArgs),
+    /// Yanks an entire SDK release. For individual packages, use `cargo yank` instead.
+    /// Only one of the `--github-release-tag` or `--versions-toml` options are required.
+    YankRelease(YankReleaseArgs),
+    /// Hydrates the SDK README template file
+    HydrateReadme(HydrateReadmeArgsV1),
+    /// Generates a version manifest file for a generated SDK
+    GenerateVersionManifest(GenerateVersionManifestArgs),
+}
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -49,6 +51,8 @@ enum Args {
     HydrateReadme(HydrateReadmeArgs),
     /// Generates a version manifest file for a generated SDK
     GenerateVersionManifest(GenerateVersionManifestArgs),
+    /// Adds a release tag to an existing version manifest
+    TagVersionsManifest(TagVersionsManifestArgs),
 }
 
 #[tokio::main]
@@ -59,12 +63,31 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    match Args::parse() {
-        Args::Publish(args) => subcommand_publish(&args).await?,
-        Args::FixManifests(args) => subcommand_fix_manifests(&args).await?,
-        Args::YankRelease(args) => subcommand_yank_release(&args).await?,
-        Args::HydrateReadme(args) => subcommand_hydrate_readme(&args).await?,
-        Args::GenerateVersionManifest(args) => subcommand_generate_version_manifest(&args).await?,
+    if let Ok(args) = Args::try_parse() {
+        match args {
+            Args::Publish(args) => subcommand_publish(&args).await?,
+            Args::FixManifests(args) => subcommand_fix_manifests(&args).await?,
+            Args::YankRelease(args) => subcommand_yank_release(&args).await?,
+            Args::HydrateReadme(args) => subcommand_hydrate_readme(&args)?,
+            Args::GenerateVersionManifest(args) => {
+                subcommand_generate_version_manifest(&args).await?
+            }
+            Args::TagVersionsManifest(args) => subcommand_tag_versions_manifest(&args)?,
+        }
+    } else {
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove V1 args
+        eprintln!("Failed to match new arg format. Trying to parse the old arg format.");
+        let working_dir = std::env::current_dir()?;
+        match ArgsV1::parse() {
+            ArgsV1::Publish(args) => subcommand_publish(&args).await?,
+            ArgsV1::FixManifests(args) => subcommand_fix_manifests(&args).await?,
+            ArgsV1::YankRelease(args) => subcommand_yank_release(&args).await?,
+            ArgsV1::HydrateReadme(args) => subcommand_hydrate_readme_v1(&args, &working_dir)?,
+            ArgsV1::GenerateVersionManifest(args) => {
+                subcommand_generate_version_manifest(&args).await?
+            }
+        }
     }
+
     Ok(())
 }
