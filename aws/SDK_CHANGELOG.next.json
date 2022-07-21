@@ -6,44 +6,137 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Add a trailing slash to the URI `/latest/meta-data/iam/security-credentials/ when loading credentials from IMDS",
+      "message": "Fix compilation of `aws-config` with `rustls` and `native-tls` disabled. The\n`ProviderConfig::with_tcp_connector` method uses\n`aws_smithy_client::hyper_ext`, which only exists with the `client-hyper`\nfeature enabled. Add a feature enabling that, and enable it by default.\n",
       "meta": {
         "bug": true,
         "breaking": false,
         "tada": false
       },
-      "author": "rcoh",
+      "author": "joshtriplett",
       "references": [
-        "aws-sdk-rust#560",
-        "smithy-rs#1487"
+        "smithy-rs#1541"
       ],
-      "since-commit": "5fc23464f67f356b8ba0c815fed739cd8997a650"
+      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
     },
     {
-      "message": "Replaced use of `pin-project` with equivalent `pin-project-lite`. For pinned enum tuple variants and tuple structs, this\nchange requires that we switch to using enum struct variants and regular structs. Most of the structs and enums that\nwere updated had only private fields/variants and so have the same public API. However, this change does affect the\npublic API of `aws_smithy_http_tower::map_request::MapRequestFuture<F, E>`. The `Inner` and `Ready` variants contained a\nsingle value. Each have been converted to struct variants and the inner value is now accessible by the `inner` field\ninstead of the `0` field.\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#932"
-      ],
-      "since-commit": "5fc23464f67f356b8ba0c815fed739cd8997a650"
-    },
-    {
-      "message": "Add comments for docker settings needed when using this sdk",
+      "message": "Add support for aws-chunked content encoding. Only single-chunk encoding is supported. Multiple chunks and\nchunk signing are not supported at this time.\n",
       "meta": {
         "bug": false,
         "breaking": false,
         "tada": false
       },
-      "author": "jmklix",
+      "author": "Velfi",
       "references": [
-        "aws-sdk-rust#540"
+        "smithy-rs#1263"
       ],
-      "since-commit": "5fc23464f67f356b8ba0c815fed739cd8997a650"
+      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+    },
+    {
+      "message": "Re-export aws_types::SdkConfig in aws_config",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "calavera",
+      "references": [
+        "smithy-rs#1457"
+      ],
+      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+    },
+    {
+      "message": "Add `From<aws_smithy_client::erase::DynConnector>` impl for `aws_smithy_client::http_connector::HttpConnector`",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "Velfi",
+      "references": [
+        "aws-sdk-rust#581"
+      ],
+      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+    },
+    {
+      "message": "Updated SDK Client retry behavior to allow for a configurable initial backoff. Previously, the initial backoff\n(named `r` in the code) was set to 2 seconds. This is not an ideal default for services like DynamoDB that expect\nclients to quickly retry failed request attempts. Now, users can set quicker (or slower) backoffs according to their\nneeds.\n\n```rust\n#[tokio::main]\nasync fn main() -> Result<(), aws_sdk_dynamodb::Error> {\n    let retry_config = aws_smithy_types::retry::RetryConfigBuilder::new()\n        .max_attempts(4)\n        .initial_backoff(Duration::from_millis(20));\n\n    let shared_config = aws_config::from_env()\n        .retry_config(retry_config)\n        .load()\n        .await;\n\n    let client = aws_sdk_dynamodb::Client::new(&shared_config);\n\n    // Given the 20ms backoff multiplier, and assuming this request fails 3 times before succeeding,\n    // the first retry would take place between 0-20ms after the initial request,\n    // the second retry would take place between 0-40ms after the first retry,\n    // and the third retry would take place between 0-80ms after the second retry.\n    let request = client\n        .put_item()\n        .table_name(\"users\")\n        .item(\"username\", \"Velfi\")\n        .item(\"account_type\", \"Developer\")\n        .send().await?;\n\n    Ok(())\n}\n```\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "Velfi",
+      "references": [
+        "aws-sdk-rust#567"
+      ],
+      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+    },
+    {
+      "message": "Until now, SDK crates have all shared the exact same version numbers.\nThis changes with this release. From now on, SDK crates will only version\nbump if they have changes. Coincidentally, they may share the same version\nnumber for some releases since changes to the code generator will cause\na version bump in all of them, but this should not be relied upon.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1540"
+      ],
+      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+    },
+    {
+      "message": "Remove warning for valid IMDS provider use-case",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1559",
+        "aws-sdk-rust#582"
+      ],
+      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+    },
+    {
+      "message": "Only emit a warning about failing to expand a `~` to the home\ndirectory in a profile file's path if that path was explicitly\nset (don't emit it for the default paths)\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1558",
+        "aws-sdk-rust#583"
+      ],
+      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+    },
+    {
+      "message": "The `imds::Client` in `aws-config` now implements `Clone`",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1557",
+        "aws-sdk-rust#580"
+      ],
+      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+    },
+    {
+      "message": "The `sleep_impl` methods on the `SdkConfig` builder are now exposed and documented.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#1556"
+      ],
+      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
     }
   ],
   "aws-sdk-model": []
