@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.neighbor.RelationshipDirection
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -35,6 +36,13 @@ import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 
+internal fun findUriGreedyLabelPosition(uriPattern: UriPattern): Int? {
+    return uriPattern
+        .getGreedyLabel()
+        .orElse(null)
+        ?.let { uriPattern.toString().indexOf("$it") }
+}
+
 class ServerHttpSensitivityGenerator(
     private val model: Model,
     private val operation: OperationShape,
@@ -44,6 +52,8 @@ class ServerHttpSensitivityGenerator(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
     )
+    private val inputShape = operation.inputShape(model)
+    private val outputShape = operation.outputShape(model)
 
     internal fun renderHeaderClosure(writer: RustWriter, headers: List<HttpHeaderTrait>, prefixHeaders: List<HttpPrefixHeadersTrait>) {
         writer.rustBlockTemplate("|name: &#{Http}::header::HeaderName|", *codegenScope) {
@@ -89,7 +99,7 @@ class ServerHttpSensitivityGenerator(
         }
     }
 
-    internal fun renderPathClosure(writer: RustWriter, indexes: List<Int>) {
+    internal fun renderLabelClosure(writer: RustWriter, indexes: List<Int>) {
         writer.rustBlock("|index: usize|") {
             withBlock("matches!(index,", ")") {
                 val matches = indexes.map { "$it" }.joinToString("|")
@@ -129,26 +139,8 @@ class ServerHttpSensitivityGenerator(
         return findSensitiveBound<T>(rootShape).map { it.getTrait<T>() }.filterNotNull()
     }
 
-    sealed class Label {
-        class Normal(val indexes: List<Int>) : Label()
-        class Greedy(val suffixPos: Int) : Label()
-    }
-
-    internal fun findLabel(httpTrait: HttpTrait, inputShape: Shape): Label {
-        return findUriGreedyLabelPosition(httpTrait)?.let { Label.Greedy(it) } ?: findUriLabelIndexes(httpTrait, inputShape).let { Label.Normal(it) }
-    }
-
-    internal fun findUriGreedyLabelPosition(httpTrait: HttpTrait): Int? {
-        return httpTrait
-            .uri
-            .getGreedyLabel()
-            .orElse(null)
-            .let { httpTrait.uri.toString().indexOf("{${it.getContent()}+}") }
-    }
-
-    internal fun findUriLabelIndexes(httpTrait: HttpTrait, inputShape: Shape): List<Int> {
-        val uriLabels: Map<String, Int> = httpTrait
-            .uri
+    internal fun findUriLabelIndexes(uriPattern: UriPattern): List<Int> {
+        val uriLabels: Map<String, Int> = uriPattern
             .getSegments()
             .withIndex()
             .filter { (_, segment) -> segment.isLabel() }
@@ -159,12 +151,19 @@ class ServerHttpSensitivityGenerator(
             .filterNotNull()
     }
 
+    sealed class Label {
+        class Normal(val indexes: List<Int>) : Label()
+        class Greedy(val suffixPosition: Int) : Label()
+    }
+
+    internal fun findLabel(uriPattern: UriPattern): Label {
+        return findUriGreedyLabelPosition(uriPattern)?.let { Label.Greedy(it) } ?: findUriLabelIndexes(uriPattern).let { Label.Normal(it) }
+    }
+
     fun renderResponseFmt(writer: RustWriter) {
         writer.withBlockTemplate("#{SmithyHttpServer}::logging::sensitivity::ResponseFmt::new()", ";", *codegenScope) {
             // Sensitivity only applies when HTTP trait is applied to the operation
             val httpTrait = operation.getTrait<HttpTrait>() ?: return@withBlockTemplate
-
-            val outputShape = operation.outputShape(model)
 
             // Response header bindings
             val responseHttpHeaders = findSensitiveBoundTrait<HttpHeaderTrait>(outputShape)
@@ -188,13 +187,18 @@ class ServerHttpSensitivityGenerator(
             // Sensitivity only applies when HTTP trait is applied to the operation
             val httpTrait = operation.getTrait<HttpTrait>() ?: return@withBlockTemplate
 
-            val inputShape = operation.inputShape(model)
-
             // URI bindings
-            val labeledUriIndexes = findUriLabelIndexes(httpTrait, inputShape)
-            if (labeledUriIndexes.isNotEmpty()) {
-                withBlock(".label(", ")") {
-                    renderPathClosure(writer, labeledUriIndexes)
+            val label = findLabel(httpTrait.uri)
+            when (label) {
+                is Label.Normal -> {
+                    if (label.indexes.isNotEmpty()) {
+                        withBlock(".label(", ")") {
+                            renderLabelClosure(writer, label.indexes)
+                        }
+                    }
+                }
+                is Label.Greedy -> {
+                    rust(".greedy_label(${label.suffixPosition})")
                 }
             }
 

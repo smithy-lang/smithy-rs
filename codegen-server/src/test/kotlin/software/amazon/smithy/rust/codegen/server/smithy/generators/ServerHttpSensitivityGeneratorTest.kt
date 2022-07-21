@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
@@ -33,6 +34,14 @@ class ServerHttpSensitivityGeneratorTest {
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(TestRuntimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
     )
+
+    @Test
+    fun `find greedy label`() {
+        val uri = "/pokemon-species/{name+}"
+        val pattern = UriPattern.parse(uri)
+        val position = findUriGreedyLabelPosition(pattern)!!
+        assertEquals(position, 17)
+    }
 
     @Test
     fun `find outer sensitive`() {
