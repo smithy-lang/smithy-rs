@@ -14,35 +14,35 @@
 [[smithy-rs]]
 message = "Rename EventStreamInput to EventStreamSender"
 references = ["smithy-rs#1157"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "sdk" = "all" }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "82marbag"
 
 [[aws-sdk-rust]]
 message = "Rename EventStreamInput to EventStreamSender"
 references = ["smithy-rs#1157"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "sdk" = "client" }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "82marbag"
 
 [[aws-sdk-rust]]
 message = "Generate event stream specific error types"
 references = ["smithy-rs#1157"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "sdk" = "client" }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "82marbag"
 
 [[aws-sdk-rust]]
 message = "EventStreamSender and Receiver use event stream specific error types"
 references = ["smithy-rs#1157"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "sdk" = "client" }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "82marbag"
 
 [[smithy-rs]]
 message = "Generate event stream specific error types"
 references = ["smithy-rs#1157"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "sdk" = "all" }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "82marbag"
 
 [[smithy-rs]]
 message = "EventStreamSender and Receiver use event stream specific error types"
 references = ["smithy-rs#1157"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "sdk" = "all" }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "82marbag"
