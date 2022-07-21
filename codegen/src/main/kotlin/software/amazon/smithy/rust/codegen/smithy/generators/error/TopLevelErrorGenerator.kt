@@ -56,8 +56,23 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
             writer.renderImplDisplay()
             // Every operation error can be converted into service::Error
             operations.forEach { operationShape ->
-                writer.renderImplFrom(operationShape)
+                // operation errors
+                writer.renderImplFrom(operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target), operationShape.errors)
             }
+            // event stream errors
+            operations.map { it.eventStreamErrors(coreCodegenContext.model) }
+                .flatMap { it.entries }
+                .associate { it.key to it.value }
+                .forEach { (unionShape, errors) ->
+                    writer.renderImplFrom(
+                        unionShape.eventStreamErrorSymbol(
+                            model,
+                            symbolProvider,
+                            coreCodegenContext.target
+                        ),
+                        errors.map { it.id }
+                    )
+                }
             writer.rust("impl #T for Error {}", RuntimeType.StdError)
         }
         crate.lib { it.rust("pub use error_meta::Error;") }
@@ -76,37 +91,31 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
         }
     }
 
-    private fun RustWriter.renderImplFrom(operationShape: OperationShape) {
-
-        val allErrors: List<Pair<RuntimeType, List<ShapeId>>> =
-            operationShape.eventStreamErrors(model)
-                .map { Pair(it.key.eventStreamErrorSymbol(model, symbolProvider, coreCodegenContext.target), it.value.map { it.id }) } + Pair(operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target), operationShape.errors)
-        allErrors.forEach { (symbol, errors) ->
-            if (errors.isNotEmpty() || CodegenTarget.CLIENT == coreCodegenContext.target) {
-                rustBlock(
-                    "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
-                    sdkError,
-                    symbol
+    private fun RustWriter.renderImplFrom(symbol: RuntimeType, errors: List<ShapeId>) {
+        if (errors.isNotEmpty() || CodegenTarget.CLIENT == coreCodegenContext.target) {
+            rustBlock(
+                "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
+                sdkError,
+                symbol
+            ) {
+                rustBlockTemplate(
+                    "fn from(err: #{SdkError}<#{OpError}, R>) -> Self",
+                    "SdkError" to sdkError,
+                    "OpError" to symbol
                 ) {
-                    rustBlockTemplate(
-                        "fn from(err: #{SdkError}<#{OpError}, R>) -> Self",
-                        "SdkError" to sdkError,
-                        "OpError" to symbol
-                    ) {
-                        rustBlock("match err") {
-                            val operationErrors = errors.map { model.expectShape(it) }
-                            rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {
-                                operationErrors.forEach { errorShape ->
-                                    val errSymbol = symbolProvider.toSymbol(errorShape)
-                                    rust(
-                                        "#TKind::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),",
-                                        symbol
-                                    )
-                                }
-                                rust("#TKind::Unhandled(inner) => Error::Unhandled(inner),", symbol)
+                    rustBlock("match err") {
+                        val operationErrors = errors.map { model.expectShape(it) }
+                        rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {
+                            operationErrors.forEach { errorShape ->
+                                val errSymbol = symbolProvider.toSymbol(errorShape)
+                                rust(
+                                    "#TKind::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),",
+                                    symbol
+                                )
                             }
-                            rust("_ => Error::Unhandled(err.into()),")
+                            rust("#TKind::Unhandled(inner) => Error::Unhandled(inner),", symbol)
                         }
+                        rust("_ => Error::Unhandled(err.into()),")
                     }
                 }
             }
