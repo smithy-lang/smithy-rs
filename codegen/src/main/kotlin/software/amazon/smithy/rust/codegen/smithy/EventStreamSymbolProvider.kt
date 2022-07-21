@@ -51,7 +51,7 @@ class EventStreamSymbolProvider(
                 val error = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
                     RuntimeType("MessageStreamError", smithyEventStream, "aws_smithy_http::event_stream").toSymbol()
                 } else {
-                    unionShape.eventStreamErrorSymbol(this).toSymbol()
+                    unionShape.eventStreamErrorSymbol(model, this, target).toSymbol()
                 }
                 val errorFmt = error.rustType().render(fullyQualified = true)
                 val innerFmt = initial.rustType().stripOuter<RustType.Option>().render(fullyQualified = true)

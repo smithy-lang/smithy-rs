@@ -168,7 +168,6 @@ yield Err(AttemptCapturingPokemonEventError::new(
 ```
 
 Because unions can be used in input or output of more than one operation, errors must be generated once as they are in the `error::` namespace.
-To do this, [exactly one operation](https://github.com/awslabs/smithy-rs/blob/f1c932f2728adde250d8b5e64c0801f20e490705/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/transformers/EventStreamNormalizer.kt#L87) is responsible for generating the errors of a union.
 
 <!-- Include a checklist of all the things that need to happen for this RFC's implementation to be considered complete -->
 Changes checklist

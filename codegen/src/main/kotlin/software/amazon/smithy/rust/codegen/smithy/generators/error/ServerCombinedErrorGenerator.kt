@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.generators
+package software.amazon.smithy.rust.codegen.smithy.generators.error
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -19,12 +18,6 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.generators.error.eventStreamErrorSymbol
-import software.amazon.smithy.rust.codegen.smithy.transformers.eventStreamErrors
-import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
-import software.amazon.smithy.rust.codegen.smithy.transformers.shouldRenderEventStreamError
-import software.amazon.smithy.rust.codegen.util.isEventStream
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
@@ -34,35 +27,18 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 open class ServerCombinedErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val operation: OperationShape
+    private val operationSymbol: Symbol,
+    private val errors: List<StructureShape>
 ) {
     open fun render(writer: RustWriter) {
-        val errors = operation.operationErrors(model)
-        val symbol = operation.errorSymbol(symbolProvider)
-        val operationSymbol = symbolProvider.toSymbol(operation)
+        val symbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
         if (errors.isNotEmpty()) {
-            renderErrors(writer, errors.map { it.asStructureShape().get() }, symbol, operationSymbol)
-        }
-
-        if (operation.isEventStream(model)) {
-            operation.eventStreamErrors(model)
-                .forEach { (unionShape, unionErrors) ->
-                    // Do not render the same errors multiple times if the union is used in different operations
-                    if (unionErrors.isNotEmpty() && operation.shouldRenderEventStreamError(model, unionShape)) {
-                        renderErrors(
-                            writer,
-                            unionErrors,
-                            unionShape.eventStreamErrorSymbol(symbolProvider),
-                            symbolProvider.toSymbol(unionShape)
-                        )
-                    }
-                }
+            renderErrors(writer, symbol, operationSymbol)
         }
     }
 
-    private fun renderErrors(
+    fun renderErrors(
         writer: RustWriter,
-        errors: List<StructureShape>,
         errorSymbol: RuntimeType,
         operationSymbol: Symbol
     ) {

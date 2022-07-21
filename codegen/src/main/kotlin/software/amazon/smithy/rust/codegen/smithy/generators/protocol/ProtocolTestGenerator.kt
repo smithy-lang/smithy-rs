@@ -300,7 +300,7 @@ class ProtocolTestGenerator(
                 .member("response::ParseHttpResponse"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
-            val errorSymbol = operationShape.errorSymbol(coreCodegenContext.symbolProvider)
+            val errorSymbol = operationShape.errorSymbol(coreCodegenContext.model, coreCodegenContext.symbolProvider, coreCodegenContext.target)
             val errorVariant = coreCodegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
             rustBlock("if let #TKind::$errorVariant(actual_error) = parsed.kind", errorSymbol) {

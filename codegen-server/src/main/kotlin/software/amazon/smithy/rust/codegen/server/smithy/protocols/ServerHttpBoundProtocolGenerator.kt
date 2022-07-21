@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerR
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.extractSymbolFromOption
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -215,7 +216,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         // Implement `into_response` for output types.
 
         val outputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
 
         if (operationShape.operationErrors(model).isNotEmpty()) {
             // The output of fallible operations is a `Result` which we convert into an
@@ -417,7 +418,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun serverSerializeError(operationShape: OperationShape): RuntimeType {
         val fnName = "serialize_${operationShape.id.name.toSnakeCase()}_error"
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(

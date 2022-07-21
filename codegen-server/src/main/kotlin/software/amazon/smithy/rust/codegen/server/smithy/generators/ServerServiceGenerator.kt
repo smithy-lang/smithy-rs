@@ -74,7 +74,7 @@ open class ServerServiceGenerator(
 
     // Render combined errors.
     open fun renderCombinedErrors(writer: RustWriter, operation: OperationShape) {
-        ServerCombinedErrorGenerator(coreCodegenContext.model, coreCodegenContext.symbolProvider, operation).render(writer)
+        /* Subclasses can override */
     }
 
     // Render operations handler.

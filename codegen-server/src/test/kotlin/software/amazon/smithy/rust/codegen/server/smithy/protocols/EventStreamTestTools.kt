@@ -18,7 +18,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerCombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -27,6 +26,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.error.ServerCombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.transformers.EventStreamNormalizer
@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.lookup
 import software.amazon.smithy.rust.codegen.util.outputShape
 import java.util.stream.Stream
+import kotlin.streams.toList
 
 private fun fillInBaseModel(
     protocolName: String,
@@ -342,10 +343,15 @@ object EventStreamTestTools {
             CodegenTarget.SERVER -> serverTestSymbolProvider(model)
         }
         val project = TestWorkspace.testProject(symbolProvider)
+        val operationSymbol = symbolProvider.toSymbol(operationShape)
         project.withModule(RustModule.public("error")) {
+            val errors = model.shapes()
+                .filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }
+                .map { it.asStructureShape().get() }
+                .toList()
             when (testCase.target) {
-                CodegenTarget.CLIENT -> CombinedErrorGenerator(model, symbolProvider, operationShape).render(it)
-                CodegenTarget.SERVER -> ServerCombinedErrorGenerator(model, symbolProvider, operationShape).render(it)
+                CodegenTarget.CLIENT -> CombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(it)
+                CodegenTarget.SERVER -> ServerCombinedErrorGenerator(model, symbolProvider, operationSymbol, errors).render(it)
             }
             for (shape in model.shapes().filter { shape -> shape.isStructureShape && shape.hasTrait<ErrorTrait>() }) {
                 StructureGenerator(model, symbolProvider, it, shape as StructureShape).render(testCase.target)
