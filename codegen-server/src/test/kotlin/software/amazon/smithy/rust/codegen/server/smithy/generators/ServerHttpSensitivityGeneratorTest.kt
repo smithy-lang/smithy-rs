@@ -245,19 +245,30 @@ class ServerHttpSensitivityGeneratorTest {
             }
 
             map QueryMap {
-                @sensitive
                 key: String,
+                @sensitive
                 value: String
             }
 
         """.asSmithyModel()
-        // val operation = queryParamsModel.getOperationShapes().toList()[0]
-        // val generator = ServerHttpSensitivityGenerator(queryParamsModel, operation, TestRuntimeConfig)
+        val operation = model.getOperationShapes().toList()[0]
+        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+
+        val querySensitivity = generator.findQuerySensitivity()
+        assertEquals(querySensitivity, ServerHttpSensitivityGenerator.QuerySensitivity.AllValues(false))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
             writer.unitTest("query_params_special_closure") {
-                // TODO(special case query params): Restore this test when query params work
+                withBlock("let closure = ", ";") {
+                    generator.renderQueryClosure(writer, querySensitivity)
+                }
+                rustTemplate(
+                    """
+                    assert_eq!(closure("wildcard"), #{SmithyHttpServer}::logging::QueryMarker { key: false, value: true });
+                    """,
+                    *codegenScope
+                )
             }
         }
         testProject.compileAndTest()
@@ -352,7 +363,7 @@ class ServerHttpSensitivityGeneratorTest {
 
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
-        assertEquals(headerData, ServerHttpSensitivityGenerator.HeaderSensitivity.SpecificHeaderValues(emptyList(), null))
+        assertEquals(headerData, ServerHttpSensitivityGenerator.HeaderSensitivity.AllHeaderValues("prefix-"))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -392,19 +403,36 @@ class ServerHttpSensitivityGeneratorTest {
             }
 
             map PrefixMap {
-                @sensitive
                 key: String,
+                @sensitive
                 value: String
             }
 
         """.asSmithyModel()
-        // val operation = prefixHeadersSpecialModel.getOperationShapes().toList()[0]
-        // val generator = ServerHttpSensitivityGenerator(prefixHeadersSpecialModel, operation, TestRuntimeConfig)
+        val operation = model.getOperationShapes().toList()[0]
+        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+
+        val inputShape = operation.inputShape(model)
+        val headerData = generator.findHeaderSensitivity(inputShape)
+        assertEquals(headerData, ServerHttpSensitivityGenerator.HeaderSensitivity.AllHeaderValues(null))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
             writer.unitTest("prefix_headers_special_closure") {
-                // TODO(special case prefix headers): Restore this test when map > member sensitivity works
+                withBlock("let closure = ", ";") {
+                    generator.renderHeaderClosure(writer, headerData)
+                }
+                rustTemplate(
+                    """
+                    let name = #{Http}::header::HeaderName::from_static("prefix-a");
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::HeaderMarker { value: true, key_suffix: None });
+                    let name = #{Http}::header::HeaderName::from_static("prefix-b");
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::HeaderMarker { value: true, key_suffix: None });
+                    let name = #{Http}::header::HeaderName::from_static("other");
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::HeaderMarker { value: false, key_suffix: None });
+                    """,
+                    *codegenScope
+                )
             }
         }
         testProject.compileAndTest()
@@ -452,40 +480,6 @@ class ServerHttpSensitivityGeneratorTest {
                     """,
                     *codegenScope
                 )
-            }
-        }
-        testProject.compileAndTest()
-    }
-
-    @Test
-    fun `uri greedy label closure`() {
-        val model = """
-            namespace test
-
-            operation Secret {
-                input: Input,
-            }
-
-            structure Input {
-                @required
-                @httpQueryParams()
-                queryMap: QueryMap,
-            }
-
-            map QueryMap {
-                @sensitive
-                key: String,
-                value: String
-            }
-
-        """.asSmithyModel()
-        // val operation = queryParamsModel.getOperationShapes().toList()[0]
-        // val generator = ServerHttpSensitivityGenerator(queryParamsModel, operation, TestRuntimeConfig)
-
-        val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        testProject.lib { writer ->
-            writer.unitTest("uri_greedy_label_closure") {
-                // TODO(greedy uri labels): Restore this test when query params work
             }
         }
         testProject.compileAndTest()
