@@ -222,7 +222,7 @@ These wrappers should be provided alongside the `Sensitive` struct described in 
 
 ### Middleware Position
 
-This logging middleware middleware should be applied outside of the [OperationHandler](https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) after its construction in the (generated) `operation_registry.rs` file. The middleware should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) to cause minimal disruption.
+This logging middleware should be applied outside of the [OperationHandler](https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) after its construction in the (generated) `operation_registry.rs` file. The middleware should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) to cause minimal disruption.
 
 An easy position to apply the logging middleware is illustrated below in the form of `Logging{Operation}::new`:
 
@@ -238,7 +238,7 @@ let routes = vec![
 let router = aws_smithy_http_server::routing::Router::new_rest_json_router(routes);
 ```
 
-Although an acceptable first step, putting logging middleware here is suboptimal - the `Router` allows a `tower::Layer` to be applied to the operation by using the [Router::layer](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146) method. This middleware will be applied _outside_ of the logging middleware and, as a result, will not be subject the span of any middleware. Therefore the `Router` must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.
+Although an acceptable first step, putting logging middleware here is suboptimal - the `Router` allows a `tower::Layer` to be applied to the operation by using the [Router::layer](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146) method. This middleware will be applied _outside_ of the logging middleware and, as a result, will not be subject to the span of any middleware. Therefore, the `Router` must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.
 
 This is a general problem, not specific to this proposal. For example, [Use Request Extensions](#use-request-extensions) must also solve this problem.
 
@@ -338,7 +338,7 @@ where
 
 ### Accommodate the Sensitivity in Middleware API
 
-It is possible that sensitivity is a parameter passed to middleware during construction. This is similar in nature to [Use Request Extensions](#use-request-extensions) except that the `Sensitivity` is passed to middleware at startup.
+It is possible that sensitivity is a parameter passed to middleware during construction. This is similar in nature to [Use Request Extensions](#use-request-extensions) except that the `Sensitivity` is passed to middleware during construction.
 
 ```rust
 struct Middleware<S> {
@@ -372,7 +372,7 @@ It would then be required that the code generation responsible constructing a `S
 #### Advantages
 
 - Applicable to _all_ middleware.
-- As the `Sensitivity` struct will be known statically, the compiler will remove branches, making it potentially free.
+- As the `Sensitivity` struct will be known statically, the compiler will remove branches, making it cheap.
 
 #### Disadvantages
 
