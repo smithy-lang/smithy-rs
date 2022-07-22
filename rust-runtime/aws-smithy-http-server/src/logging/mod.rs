@@ -82,7 +82,7 @@ where
 }
 
 /// Identical to [`MakeFmt`] but with a [`Display`] bound on the associated type.
-trait MakeDisplay<T> {
+pub trait MakeDisplay<T> {
     type Target: Display;
 
     fn make_display(&self, source: T) -> Self::Target;
@@ -101,7 +101,7 @@ where
 }
 
 /// Identical to [`MakeFmt`] but with a [`Debug`] bound on the associated type.
-trait MakeDebug<T> {
+pub trait MakeDebug<T> {
     type Target: Debug;
 
     fn make_debug(&self, source: T) -> Self::Target;
