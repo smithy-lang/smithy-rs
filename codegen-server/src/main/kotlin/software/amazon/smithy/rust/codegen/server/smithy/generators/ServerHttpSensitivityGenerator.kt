@@ -34,8 +34,6 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.inputShape
-import software.amazon.smithy.rust.codegen.util.outputShape
 import java.util.*
 
 internal fun findUriGreedyLabelPosition(uriPattern: UriPattern): Int? {
@@ -54,7 +52,6 @@ class ServerHttpSensitivityGenerator(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
     )
-    private val outputShape = operation.output.orElse(null)?.let { model.getShape(it).orElse(null) }
 
     sealed class HeaderSensitivity(
         // List of keys whose values are sensitive
@@ -150,7 +147,7 @@ class ServerHttpSensitivityGenerator(
             when (headerSensitivity) {
                 is HeaderSensitivity.NotMapValue -> {
                     headerSensitivity.prefixHeader?.let {
-                        rust("let key_suffix = name.starts_with(\"$it\").then_some(${it.length});")
+                        rust("let key_suffix = if name.starts_with(\"$it\") { Some(${it.length}) } else { None };")
                     } ?: run {
                         rust("let _ = name;")
                         rust("let key_suffix = None;")
@@ -159,7 +156,7 @@ class ServerHttpSensitivityGenerator(
                 }
                 is HeaderSensitivity.MapValue -> {
                     val prefixHeader = headerSensitivity.prefixHeader
-                    rust("let key_suffix = name.starts_with(\"$prefixHeader\").then_some(${prefixHeader.length});")
+                    rust("let key_suffix = if name.starts_with(\"$prefixHeader\") { Some(${prefixHeader.length}) } else { None }")
                     rust("let value = name_match || key_suffix.is_some();")
                 }
             }
