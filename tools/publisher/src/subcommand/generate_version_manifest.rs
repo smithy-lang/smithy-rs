@@ -97,6 +97,7 @@ pub async fn subcommand_generate_version_manifest(
     let mut versions_manifest = VersionsManifest {
         smithy_rs_revision: smithy_rs_revision.to_string(),
         aws_doc_sdk_examples_revision: examples_revision.to_string(),
+        manual_interventions: Default::default(),
         crates,
         release: None,
     };
@@ -165,8 +166,11 @@ fn find_released_versions(
         }
     }
     // Sanity check: If a crate was previously included, but no longer is, we probably want to know about it
+    let crates_to_remove = &unrecent_versions.manual_interventions.crates_to_remove;
     for unrecent_crate_name in unrecent_versions.crates.keys() {
-        if !recent_versions.crates.contains_key(unrecent_crate_name) {
+        if !recent_versions.crates.contains_key(unrecent_crate_name)
+            && !crates_to_remove.contains(unrecent_crate_name)
+        {
             bail!(
                 "Crate `{}` was included in the previous release's `versions.toml`, \
                  but is not included in the upcoming release. If this is expected, update the \
@@ -234,13 +238,18 @@ struct SmithyBuildProjection {
 mod tests {
     use super::*;
     use smithy_rs_tool_common::package::PackageCategory;
+    use smithy_rs_tool_common::versions_manifest::ManualInterventions;
     use std::fs;
     use tempfile::TempDir;
 
-    fn fake_manifest(crates: &[(&str, &str)]) -> VersionsManifest {
+    fn fake_manifest(
+        crates: &[(&str, &str)],
+        manual_interventions: Option<ManualInterventions>,
+    ) -> VersionsManifest {
         VersionsManifest {
             smithy_rs_revision: "dontcare".into(),
             aws_doc_sdk_examples_revision: "dontcare".into(),
+            manual_interventions: manual_interventions.unwrap_or_default(),
             crates: crates
                 .iter()
                 .map(|(name, version)| (name.to_string(), fake_version(version)))
@@ -260,16 +269,22 @@ mod tests {
     #[test]
     fn test_find_released_versions_dropped_crate_sanity_check() {
         let result = find_released_versions(
-            &fake_manifest(&[
-                ("aws-config", "0.11.0"),
-                ("aws-sdk-s3", "0.13.0"),
-                ("aws-sdk-dynamodb", "0.12.0"),
-            ]),
-            &fake_manifest(&[
-                // oops, we lost aws-config
-                ("aws-sdk-s3", "0.13.0"),
-                ("aws-sdk-dynamodb", "0.12.0"),
-            ]),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
+            &fake_manifest(
+                &[
+                    // oops, we lost aws-config
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
         );
         assert!(result.is_err());
         let error = format!("{}", result.err().unwrap());
@@ -281,18 +296,51 @@ mod tests {
     }
 
     #[test]
+    fn test_find_released_versions_dropped_crate_sanity_check_manual_intervention() {
+        let result = find_released_versions(
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    ("aws-sdk-redshiftserverless", "0.13.0"),
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                Some(ManualInterventions {
+                    crates_to_remove: vec!["aws-sdk-redshiftserverless".to_string()],
+                }),
+            ),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    // we intentionally dropped aws-sdk-redshiftserverless
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn test_find_released_versions_decreased_version_number_sanity_check() {
         let result = find_released_versions(
-            &fake_manifest(&[
-                ("aws-config", "0.11.0"),
-                ("aws-sdk-s3", "0.13.0"),
-                ("aws-sdk-dynamodb", "0.12.0"),
-            ]),
-            &fake_manifest(&[
-                ("aws-config", "0.11.0"),
-                ("aws-sdk-s3", "0.12.0"), // oops, S3 went backwards
-                ("aws-sdk-dynamodb", "0.12.0"),
-            ]),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    ("aws-sdk-s3", "0.12.0"), // oops, S3 went backwards
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
         );
         assert!(result.is_err());
         let error = format!("{}", result.err().unwrap());
@@ -306,17 +354,23 @@ mod tests {
     #[test]
     fn test_find_released_versions() {
         let result = find_released_versions(
-            &fake_manifest(&[
-                ("aws-config", "0.11.0"),
-                ("aws-sdk-s3", "0.13.0"),
-                ("aws-sdk-dynamodb", "0.12.0"),
-            ]),
-            &fake_manifest(&[
-                ("aws-config", "0.12.0"),          // updated
-                ("aws-sdk-s3", "0.14.0"),          // updated
-                ("aws-sdk-dynamodb", "0.12.0"),    // same
-                ("aws-sdk-somethingnew", "0.1.0"), // new
-            ]),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.11.0"),
+                    ("aws-sdk-s3", "0.13.0"),
+                    ("aws-sdk-dynamodb", "0.12.0"),
+                ],
+                None,
+            ),
+            &fake_manifest(
+                &[
+                    ("aws-config", "0.12.0"),          // updated
+                    ("aws-sdk-s3", "0.14.0"),          // updated
+                    ("aws-sdk-dynamodb", "0.12.0"),    // same
+                    ("aws-sdk-somethingnew", "0.1.0"), // new
+                ],
+                None,
+            ),
         )
         .unwrap();
 
