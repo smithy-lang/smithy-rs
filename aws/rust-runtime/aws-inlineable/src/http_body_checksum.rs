@@ -5,32 +5,6 @@
 
 //! Functions for modifying requests and responses for the purposes of checksum validation
 
-/// Given a `&mut http::request::Request`, and a boxed `HttpChecksum`, calculate a checksum and
-/// modify the request to include the checksum as a header.
-///
-/// **NOTE: This function only supports non-streaming request bodies and will return an error if a
-/// streaming request body is passed.**
-pub(crate) fn calculate_body_checksum_and_insert_as_header(
-    request: &mut http::request::Request<aws_smithy_http::body::SdkBody>,
-    mut checksum: Box<dyn aws_smithy_checksums::http::HttpChecksum>,
-) -> Result<(), aws_smithy_http::operation::BuildError> {
-    match request.body().bytes() {
-        Some(data) => {
-            checksum.update(data);
-
-            request
-                .headers_mut()
-                .insert(checksum.header_name(), checksum.header_value());
-
-            Ok(())
-        }
-        None => {
-            let err = Box::new(Error::ChecksumHeadersAreUnsupportedForStreamingBody);
-            Err(aws_smithy_http::operation::BuildError::Other(err))
-        }
-    }
-}
-
 /// Errors related to constructing checksum-validated HTTP requests
 #[derive(Debug)]
 pub(crate) enum Error {
@@ -57,18 +31,39 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-pub(crate) fn build_streaming_request_body_with_checksum_trailers(
+/// Given a `&mut http::request::Request`, and a boxed `HttpChecksum`, calculate a checksum and
+/// modify the request to include the checksum as a header.
+///
+/// **NOTE: This function only supports non-streaming request bodies and will return an error if a
+/// streaming request body is passed.**
+pub(crate) fn calculate_body_checksum_and_insert_as_header(
     request: &mut http::request::Request<aws_smithy_http::body::SdkBody>,
-    checksum_algorithm: &str,
+    checksum_algorithm: aws_smithy_checksums::ChecksumAlgorithm,
+) -> Result<(), aws_smithy_http::operation::BuildError> {
+    let mut checksum = checksum_algorithm.into_impl();
+    match request.body().bytes() {
+        Some(data) => {
+            checksum.update(data);
+
+            request
+                .headers_mut()
+                .insert(checksum.header_name(), checksum.header_value());
+
+            Ok(())
+        }
+        None => Err(aws_smithy_http::operation::BuildError::Other(Box::new(
+            Error::ChecksumHeadersAreUnsupportedForStreamingBody,
+        ))),
+    }
+}
+
+pub(crate) fn wrap_streaming_request_body_in_checksum_calculating_body(
+    request: &mut http::request::Request<aws_smithy_http::body::SdkBody>,
+    checksum_algorithm: aws_smithy_checksums::ChecksumAlgorithm,
 ) -> Result<(), aws_smithy_http::operation::BuildError> {
     use aws_http::content_encoding::{AwsChunkedBody, AwsChunkedBodyOptions};
     use aws_smithy_checksums::{body::calculate, http::HttpChecksum};
     use http_body::Body;
-
-    // Ensure that a valid `checksum_algorithm` was passed, emitting an error if that's not the case
-    if let Err(err) = aws_smithy_checksums::http::new_from_algorithm(&checksum_algorithm) {
-        return Err(aws_smithy_http::operation::BuildError::Other(err));
-    }
 
     let original_body_size = request.body().size_hint().exact().ok_or_else(|| {
         aws_smithy_http::operation::BuildError::Other(Box::new(Error::UnsizedRequestBody))
@@ -77,16 +72,8 @@ pub(crate) fn build_streaming_request_body_with_checksum_trailers(
     let mut body = {
         let body = std::mem::replace(request.body_mut(), aws_smithy_http::body::SdkBody::taken());
 
-        let checksum_algorithm = checksum_algorithm.to_owned();
         body.map(move |body| {
-            // This function takes the checksum algorithm's name instead of a pre-built checksum because
-            // the map fn could be called multiple times if the `SdkBody` we're wrapping here is
-            // retryable.
-            let checksum = aws_smithy_checksums::http::new_from_algorithm(&checksum_algorithm)
-                .expect(
-                "this can't fail because we already asserted that the algorithm name was valid.",
-            );
-
+            let checksum = checksum_algorithm.into_impl();
             let trailer_len = HttpChecksum::size(checksum.as_ref());
             let body = calculate::ChecksumBody::new(body, checksum);
             let aws_chunked_body_options =
@@ -106,8 +93,8 @@ pub(crate) fn build_streaming_request_body_with_checksum_trailers(
 
     headers.insert(
         http::header::HeaderName::from_static("x-amz-trailer"),
-        aws_smithy_checksums::http::algorithm_to_header_name(checksum_algorithm)
-            .expect("build_streaming_request_body_with_checksum_trailers is only ever called with modeled algorithms").into(),
+        // Convert into a `HeaderName` and then into a `HeaderValue`
+        checksum_algorithm.into_header_name().into(),
     );
 
     headers.insert(
@@ -133,33 +120,21 @@ pub(crate) fn build_streaming_request_body_with_checksum_trailers(
 /// Given an `SdkBody`, checksum algorithm name, and pre-calculated checksum, return an
 /// `SdkBody` where the body will processed with the checksum algorithm and checked
 /// against the pre-calculated checksum.
-pub(crate) fn build_checksum_validated_sdk_body(
+pub(crate) fn wrap_body_with_checksum_validator(
     body: aws_smithy_http::body::SdkBody,
-    checksum_algorithm: &str,
+    checksum_algorithm: aws_smithy_checksums::ChecksumAlgorithm,
     precalculated_checksum: bytes::Bytes,
-) -> Result<aws_smithy_http::body::SdkBody, aws_smithy_http::operation::BuildError> {
+) -> aws_smithy_http::body::SdkBody {
     use aws_smithy_checksums::body::validate;
     use aws_smithy_http::body::{BoxBody, SdkBody};
 
-    let checksum_algorithm = checksum_algorithm.to_owned();
-    // Ensure that a valid `checksum_algorithm` was passed, emitting an error if that's not the case
-    if let Err(err) = aws_smithy_checksums::http::new_from_algorithm(&checksum_algorithm) {
-        return Err(aws_smithy_http::operation::BuildError::Other(err));
-    }
-
-    Ok(body.map(move |body| {
-        // This function takes the checksum algorithm's name instead of a pre-built checksum because
-        // the map fn could be called multiple times if the `SdkBody` we're wrapping here is
-        // retryable.
-        let checksum = aws_smithy_checksums::http::new_from_algorithm(&checksum_algorithm).expect(
-            "this can't fail because we already asserted that the algorithm name was valid.",
-        );
+    body.map(move |body| {
         SdkBody::from_dyn(BoxBody::new(validate::ChecksumBody::new(
             body,
-            checksum,
+            checksum_algorithm.into_impl(),
             precalculated_checksum.clone(),
         )))
-    }))
+    })
 }
 
 /// Given the name of a checksum algorithm and a `HeaderMap`, extract the checksum value from the
@@ -167,7 +142,7 @@ pub(crate) fn build_checksum_validated_sdk_body(
 pub(crate) fn check_headers_for_precalculated_checksum(
     headers: &http::HeaderMap<http::HeaderValue>,
     response_algorithms: &[&str],
-) -> Option<(&'static str, bytes::Bytes)> {
+) -> Option<(aws_smithy_checksums::ChecksumAlgorithm, bytes::Bytes)> {
     let checksum_algorithms_to_check =
         aws_smithy_checksums::http::CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER
             .into_iter()
@@ -185,11 +160,11 @@ pub(crate) fn check_headers_for_precalculated_checksum(
             });
 
     for checksum_algorithm in checksum_algorithms_to_check {
-        let header_name = aws_smithy_checksums::http::algorithm_to_header_name(checksum_algorithm)
+        let checksum_algorithm = aws_smithy_checksums::ChecksumAlgorithm::new(checksum_algorithm)
             .expect(
             "CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER only contains valid checksum algorithm names",
         );
-        if let Some(precalculated_checksum) = headers.get(&header_name) {
+        if let Some(precalculated_checksum) = headers.get(&checksum_algorithm.into_header_name()) {
             let base64_encoded_precalculated_checksum = precalculated_checksum
                 .to_str()
                 .expect("base64 uses ASCII characters");
@@ -208,8 +183,8 @@ pub(crate) fn check_headers_for_precalculated_checksum(
 
 #[cfg(test)]
 mod tests {
-    use super::build_checksum_validated_sdk_body;
-    use aws_smithy_checksums::http::new_from_algorithm;
+    use super::wrap_body_with_checksum_validator;
+    use aws_smithy_checksums::ChecksumAlgorithm;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::byte_stream::ByteStream;
     use bytes::{Bytes, BytesMut};
@@ -234,8 +209,12 @@ mod tests {
         assert!(body.try_clone().is_some());
 
         let body = body.map(move |sdk_body| {
-            build_checksum_validated_sdk_body(sdk_body, "crc32", precalculated_checksum.clone())
-                .unwrap()
+            let checksum_algorithm = ChecksumAlgorithm::new("crc32").unwrap();
+            wrap_body_with_checksum_validator(
+                sdk_body,
+                checksum_algorithm,
+                precalculated_checksum.clone(),
+            )
         });
 
         // ensure wrapped SdkBody is retryable
@@ -263,7 +242,8 @@ mod tests {
     async fn test_checksum_body_from_file_is_retryable() {
         use std::io::Write;
         let mut file = NamedTempFile::new().unwrap();
-        let mut crc32c_checksum = new_from_algorithm("crc32c").unwrap();
+        let checksum_algorithm = ChecksumAlgorithm::new("crc32c").unwrap();
+        let mut crc32c_checksum = checksum_algorithm.into_impl();
 
         for i in 0..10000 {
             let line = format!("This is a large file created for testing purposes {}", i);
@@ -282,8 +262,11 @@ mod tests {
         let expected_checksum = precalculated_checksum.clone();
 
         let body = body.map(move |sdk_body| {
-            build_checksum_validated_sdk_body(sdk_body, "crc32c", precalculated_checksum.clone())
-                .unwrap()
+            wrap_body_with_checksum_validator(
+                sdk_body,
+                checksum_algorithm,
+                precalculated_checksum.clone(),
+            )
         });
 
         // ensure wrapped SdkBody is retryable
@@ -293,7 +276,7 @@ mod tests {
 
         // If this loop completes, then it means the body's checksum was valid, but let's calculate
         // a checksum again just in case.
-        let mut redundant_crc32c_checksum = new_from_algorithm("crc32c").unwrap();
+        let mut redundant_crc32c_checksum = checksum_algorithm.into_impl();
         loop {
             match body.data().await {
                 Some(Ok(data)) => {
@@ -312,7 +295,7 @@ mod tests {
 
         // Ensure the file's checksum isn't the same as an empty checksum. This way, we'll know that
         // data was actually processed.
-        let unexpected_checksum = new_from_algorithm("crc32c").unwrap().finalize();
+        let unexpected_checksum = checksum_algorithm.into_impl().finalize();
         assert_ne!(unexpected_checksum, actual_checksum);
     }
 
@@ -320,13 +303,17 @@ mod tests {
     async fn test_build_checksum_validated_body_works() {
         init_logger();
 
+        let checksum_algorithm = ChecksumAlgorithm::new("crc32").unwrap();
         let input_text = "Hello world";
         let precalculated_checksum = Bytes::from_static(&[0x8b, 0xd6, 0x9e, 0x52]);
         let body = ByteStream::new(SdkBody::from(input_text));
 
         let body = body.map(move |sdk_body| {
-            build_checksum_validated_sdk_body(sdk_body, "crc32", precalculated_checksum.clone())
-                .unwrap()
+            wrap_body_with_checksum_validator(
+                sdk_body,
+                checksum_algorithm,
+                precalculated_checksum.clone(),
+            )
         });
 
         let mut validated_body = Vec::new();

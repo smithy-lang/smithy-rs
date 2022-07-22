@@ -96,11 +96,11 @@ class HttpResponseChecksumCustomization(
                             {
                                 let bytestream = output.body.take().map(|bytestream| {
                                     bytestream.map(move |sdk_body| {
-                                        #{build_checksum_validated_sdk_body}(
+                                        #{wrap_body_with_checksum_validator}(
                                             sdk_body,
                                             checksum_algorithm,
                                             precalculated_checksum.clone(),
-                                        ).expect("remind Zelda to deal with this")
+                                        )
                                     })
                                 });
                                 output = output.set_body(bytestream);
@@ -108,7 +108,7 @@ class HttpResponseChecksumCustomization(
                         }
                         """,
                         "ValidationModeShape" to codegenContext.symbolProvider.toSymbol(requestValidationModeMemberInner),
-                        "build_checksum_validated_sdk_body" to codegenContext.runtimeConfig.awsInlineableBodyWithChecksum().member("build_checksum_validated_sdk_body"),
+                        "wrap_body_with_checksum_validator" to codegenContext.runtimeConfig.awsInlineableBodyWithChecksum().member("wrap_body_with_checksum_validator"),
                         "check_headers_for_precalculated_checksum" to codegenContext.runtimeConfig.awsInlineableBodyWithChecksum().member("check_headers_for_precalculated_checksum"),
                     )
                 }

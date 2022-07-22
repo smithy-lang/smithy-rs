@@ -42,7 +42,6 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
 
 fun RuntimeConfig.smithyChecksums() = CargoDependency.SmithyChecksums(this).asType()
 
-
 class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
@@ -91,6 +90,16 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             rust("""let checksum_algorithm = Some("md5");""")
         }
 
+        rust(
+            """
+            let checksum_algorithm = match checksum_algorithm {
+                Some(algo) => Some(aws_smithy_checksums::ChecksumAlgorithm::new(algo)
+                    .map_err(|err| aws_smithy_http::operation::BuildError::Other(Box::new(err)))?),
+                None => None,
+            };
+            """
+        )
+
         // If a request checksum is not required and there's no way to set one, do nothing
         // This happens when an operation only supports response checksums
     }
@@ -135,14 +144,14 @@ class HttpRequestChecksumCustomization(
                                 #{checksum_algorithm_to_str:W}
                                 if let Some(checksum_algorithm) = checksum_algorithm {
                                     properties.insert(#{sig_auth}::signer::SignableBody::StreamingUnsignedPayloadTrailer);
-                                    #{build_streaming_request_body_with_checksum_trailers}(&mut req, checksum_algorithm)?;
+                                    #{wrap_streaming_request_body_in_checksum_calculating_body}(&mut req, checksum_algorithm)?;
                                 }
                                 Result::<_, #{BuildError}>::Ok(req)
                             })?;
                             """,
                             "sig_auth" to runtimeConfig.awsRuntimeDependency("aws-sig-auth").asType(),
-                            "build_streaming_request_body_with_checksum_trailers" to runtimeConfig.awsInlineableBodyWithChecksum()
-                                .member("build_streaming_request_body_with_checksum_trailers"),
+                            "wrap_streaming_request_body_in_checksum_calculating_body" to runtimeConfig.awsInlineableBodyWithChecksum()
+                                .member("wrap_streaming_request_body_in_checksum_calculating_body"),
                             "BuildError" to runtimeConfig.operationBuildError(),
                             "checksum_algorithm_to_str" to checksumTrait.checksumAlgorithmToStr(
                                 codegenContext,
@@ -157,9 +166,7 @@ class HttpRequestChecksumCustomization(
                             ${section.request} = ${section.request}.augment(|mut req, _| {
                                 #{checksum_algorithm_to_str:W}
                                 if let Some(checksum_algorithm) = checksum_algorithm {
-                                    let checksum = #{new_from_algorithm}(checksum_algorithm)
-                                        .map_err(|err| #{BuildError}::Other(err))?;
-                                    #{calculate_body_checksum_and_insert_as_header}(&mut req, checksum)?;
+                                    #{calculate_body_checksum_and_insert_as_header}(&mut req, checksum_algorithm)?;
                                 }
                                 Result::<_, #{BuildError}>::Ok(req)
                             })?;
