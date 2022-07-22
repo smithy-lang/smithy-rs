@@ -70,7 +70,7 @@ Note that:
 - We are not required to deserialize the entire request before we can make judgments on what data is sensitive or not - only which operation it has been routed to.
 - We are permitted to emit logs prior to routing when:
   - they contain no potentially sensitive data, or
-  - the request failed to route, in which case it's subject to the constraints of an operation.
+  - the request failed to route, in which case it's not subject to the constraints of an operation.
 
 ### Runtime Crates
 
