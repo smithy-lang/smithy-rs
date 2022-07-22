@@ -55,7 +55,7 @@ class ServerHttpSensitivityGenerator(
     )
 
     sealed class HeaderSensitivity(
-        // List of keys whose values are sensitive
+        // List of httpHeader values
         val headerKeys: List<String>,
     ) {
         // map[trait|httpQueryParams] > [id|member = value] is not sensitive
@@ -102,7 +102,7 @@ class ServerHttpSensitivityGenerator(
             .map { it as? MemberShape }
             .singleOrNull() ?: return HeaderSensitivity.NotMapValue(headerKeys, null)
 
-        // Find map > members of member httpPrefixHeaders trait
+        // Find map[trait|httpPrefixHeaders] > member[trait|sensitive]
         val mapMembers: List<MemberShape> =
             Walker(model)
                 .walkShapes(httpPrefixMember) {
@@ -136,6 +136,7 @@ class ServerHttpSensitivityGenerator(
 
     internal fun renderHeaderClosure(writer: RustWriter, headerSensitivity: HeaderSensitivity) {
         writer.rustBlockTemplate("|name: &#{Http}::header::HeaderName|", *codegenScope) {
+            rust("##[allow(unused_variables)]")
             rust("let name = name.as_str();")
 
             if (headerSensitivity.headerKeys.isEmpty()) {
@@ -148,21 +149,20 @@ class ServerHttpSensitivityGenerator(
             when (headerSensitivity) {
                 is HeaderSensitivity.NotMapValue -> {
                     headerSensitivity.prefixHeader?.let {
-                        rust("let key_suffix = if name.starts_with(\"$it\") { Some(${it.length}) } else { None };")
-                    } ?: run {
-                        rust("let _ = name;")
-                        rust("let key_suffix = None;")
-                    }
+                        rust("let startsWith = name.starts_with(\"$it\");")
+                        rust("let key_suffix = if startsWith { Some(${it.length}) } else { None };")
+                    } ?: rust("let key_suffix = None;")
                     rust("let value = name_match;")
                 }
                 is HeaderSensitivity.MapValue -> {
                     val prefixHeader = headerSensitivity.prefixHeader
+                    rust("let startsWith = name.starts_with(\"$prefixHeader\");")
                     if (headerSensitivity.keySensitive) {
-                        rust("let key_suffix = if name.starts_with(\"$prefixHeader\") { Some(${prefixHeader.length}) } else { None };")
-                        rust("let value = name_match || key_suffix.is_some();")
+                        rust("let key_suffix = if startsWith { Some(${prefixHeader.length}) } else { None };")
                     } else {
-                        rust("let value = name_match;")
+                        rust("let key_suffix = None;")
                     }
+                    rust("let value = name_match || startsWith;")
                 }
             }
 
