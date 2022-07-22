@@ -158,7 +158,7 @@ class ServerHttpSensitivityGenerator(
                 }
                 is HeaderSensitivity.MapValue -> {
                     val prefixHeader = headerSensitivity.prefixHeader
-                    rust("let key_suffix = if name.starts_with(\"$prefixHeader\") { Some(${prefixHeader.length}) } else { None }")
+                    rust("let key_suffix = if name.starts_with(\"$prefixHeader\") { Some(${prefixHeader.length}) } else { None };")
                     rust("let value = name_match || key_suffix.is_some();")
                 }
             }
