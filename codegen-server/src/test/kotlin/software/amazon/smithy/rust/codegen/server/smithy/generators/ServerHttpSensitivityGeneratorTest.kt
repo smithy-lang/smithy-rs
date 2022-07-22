@@ -10,13 +10,10 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.traits.HttpHeaderTrait
-import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
-import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpResponseCodeTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.asType
-import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -59,7 +56,7 @@ class ServerHttpSensitivityGeneratorTest {
                 code: Integer,
             }
         """.asSmithyModel()
-        val operation = model.getOperationShapes().toList()[0]
+        val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
         val inputShape = operation.inputShape(model)
@@ -89,7 +86,7 @@ class ServerHttpSensitivityGeneratorTest {
             }
         """.asSmithyModel()
 
-        val operation = model.getOperationShapes().toList()[0]
+        val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
         val inputShape = operation.inputShape(model)
@@ -122,7 +119,7 @@ class ServerHttpSensitivityGeneratorTest {
                 headerB: String
             }
         """.asSmithyModel()
-        val operation = model.getOperationShapes().toList()[0]
+        val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
         val inputShape = operation.inputShape(model)
@@ -164,17 +161,17 @@ class ServerHttpSensitivityGeneratorTest {
                 queryC: String
             }
         """.asSmithyModel()
-        val operation = model.getOperationShapes().toList()[0]
+        val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
-        val inputShape = operation.inputShape(model)
-        val requestQueries = generator.findSensitiveBoundTrait<HttpQueryTrait>(inputShape)
+        val querySensitivity = generator.findQuerySensitivity()
+        assertEquals(querySensitivity, ServerHttpSensitivityGenerator.QuerySensitivity.SpecificValues(listOf("query_a", "query_b"), false))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
             writer.unitTest("query_closure") {
                 withBlock("let closure = ", ";") {
-                    generator.renderQueryClosure(writer, requestQueries)
+                    generator.renderQueryClosure(writer, querySensitivity)
                 }
                 rustTemplate(
                     """
@@ -194,16 +191,32 @@ class ServerHttpSensitivityGeneratorTest {
         val model = """
             namespace test
 
-            operation Secret {}
+            operation Secret {
+                input: Input,
+            }
+
+            map StringMap {
+                key: String,
+                value: String
+            }
+
+            structure Input {
+                @required
+                @httpQueryParams()
+                params: StringMap,
+            }
         """.asSmithyModel()
-        val operation = model.getOperationShapes().toList()[0]
+        val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+
+        val querySensitivity = generator.findQuerySensitivity()
+        assertEquals(querySensitivity, ServerHttpSensitivityGenerator.QuerySensitivity.AllValues(true))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
             writer.unitTest("query_params_closure") {
                 withBlock("let closure = ", ";") {
-                    generator.renderQueryParamsClosure(writer)
+                    generator.renderQueryClosure(writer, querySensitivity)
                 }
                 rustTemplate(
                     """
@@ -283,17 +296,18 @@ class ServerHttpSensitivityGeneratorTest {
                 headerC: String
             }
         """.asSmithyModel()
-        val operation = model.getOperationShapes().toList()[0]
+        val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
         val inputShape = operation.inputShape(model)
-        val headers = generator.findSensitiveBoundTrait<HttpHeaderTrait>(inputShape)
+        val headerData = generator.findHeaderSensitivity(inputShape)
+        assertEquals(headerData, ServerHttpSensitivityGenerator.HeaderSensitivity.AllHeaderValues(null))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
             writer.unitTest("header_closure") {
                 withBlock("let closure = ", ";") {
-                    generator.renderHeaderClosure(writer, headers, emptyList())
+                    generator.renderHeaderClosure(writer, headerData)
                 }
                 rustTemplate(
                     """
@@ -333,17 +347,18 @@ class ServerHttpSensitivityGeneratorTest {
             }
 
         """.asSmithyModel()
-        val operation = model.getOperationShapes().toList()[0]
+        val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
         val inputShape = operation.inputShape(model)
-        val prefixHeaders = generator.findSensitiveBoundTrait<HttpPrefixHeadersTrait>(inputShape)
+        val headerData = generator.findHeaderSensitivity(inputShape)
+        assertEquals(headerData, ServerHttpSensitivityGenerator.HeaderSensitivity.SpecificHeaderValues(emptyList(), null))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
             writer.unitTest("prefix_headers_closure") {
                 withBlock("let closure = ", ";") {
-                    generator.renderHeaderClosure(writer, emptyList(), prefixHeaders)
+                    generator.renderHeaderClosure(writer, headerData)
                 }
                 rustTemplate(
                     """
@@ -416,18 +431,18 @@ class ServerHttpSensitivityGeneratorTest {
                 labelB: String,
             }
         """.asSmithyModel()
-        val operation = model.getOperationShapes().toList()[0]
+        val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
-        val httpTrait = operation.getTrait<HttpTrait>()!!
-        val inputShape = operation.inputShape(model)
-        val labeledUriIndexes = generator.findUriLabelIndexes(httpTrait, inputShape)
+        val uri = operation.getTrait<HttpTrait>()!!.uri
+        val labeledUriIndexes = generator.findUriLabelIndexes(uri)
+        assertEquals(labeledUriIndexes, listOf(1, 2))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
             writer.unitTest("uri_closure") {
                 withBlock("let closure = ", ";") {
-                    generator.renderPathClosure(writer, labeledUriIndexes)
+                    generator.renderLabelClosure(writer, labeledUriIndexes)
                 }
                 rustTemplate(
                     """
