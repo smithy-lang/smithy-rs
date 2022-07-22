@@ -7,6 +7,7 @@
 
 /// Errors related to constructing checksum-validated HTTP requests
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) enum Error {
     /// Only request bodies with a known size can be checksum validated
     UnsizedRequestBody,
@@ -31,11 +32,12 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Given a `&mut http::request::Request`, and a boxed `HttpChecksum`, calculate a checksum and
-/// modify the request to include the checksum as a header.
+/// Given a `&mut http::request::Request` and a `aws_smithy_checksums::ChecksumAlgorithm`,
+/// calculate a checksum and modify the request to include the checksum as a header.
 ///
 /// **NOTE: This function only supports non-streaming request bodies and will return an error if a
 /// streaming request body is passed.**
+#[allow(dead_code)]
 pub(crate) fn calculate_body_checksum_and_insert_as_header(
     request: &mut http::request::Request<aws_smithy_http::body::SdkBody>,
     checksum_algorithm: aws_smithy_checksums::ChecksumAlgorithm,
@@ -57,6 +59,11 @@ pub(crate) fn calculate_body_checksum_and_insert_as_header(
     }
 }
 
+/// Given a `&mut http::request::Request` and a `aws_smithy_checksums::ChecksumAlgorithm`, wrap the
+/// request's inner body with a body that will calculate a checksum during streaming and emit the
+/// checksum as a trailer. This only supports streaming bodies with a known size and will otherwise
+/// return an error.
+#[allow(dead_code)]
 pub(crate) fn wrap_streaming_request_body_in_checksum_calculating_body(
     request: &mut http::request::Request<aws_smithy_http::body::SdkBody>,
     checksum_algorithm: aws_smithy_checksums::ChecksumAlgorithm,
@@ -117,9 +124,10 @@ pub(crate) fn wrap_streaming_request_body_in_checksum_calculating_body(
     Ok(())
 }
 
-/// Given an `SdkBody`, checksum algorithm name, and pre-calculated checksum, return an
-/// `SdkBody` where the body will processed with the checksum algorithm and checked
+/// Given an `SdkBody`, a `aws_smithy_checksums::ChecksumAlgorithm`, and a pre-calculated checksum,
+/// return an `SdkBody` where the body will processed with the checksum algorithm and checked
 /// against the pre-calculated checksum.
+#[allow(dead_code)]
 pub(crate) fn wrap_body_with_checksum_validator(
     body: aws_smithy_http::body::SdkBody,
     checksum_algorithm: aws_smithy_checksums::ChecksumAlgorithm,
@@ -137,8 +145,10 @@ pub(crate) fn wrap_body_with_checksum_validator(
     })
 }
 
-/// Given the name of a checksum algorithm and a `HeaderMap`, extract the checksum value from the
-/// corresponding header as `Some(Bytes)`. If the header is unset, return `None`.
+/// Given a `HeaderMap`, extract any checksum included in the headers as `Some(Bytes)`.
+/// If no checksum header is set, return `None`. If multiple checksum headers are set, the one that
+/// is fastest to compute will be chosen.
+#[allow(dead_code)]
 pub(crate) fn check_headers_for_precalculated_checksum(
     headers: &http::HeaderMap<http::HeaderValue>,
     response_algorithms: &[&str],
