@@ -29,7 +29,7 @@ pub const EXAMPLE_ENTRY: &str = r#"
 # [[smithy-rs]]
 # message = "Fix typos in module documentation for generated crates"
 # references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
+# meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "client | server | all"}
 # author = "rcoh"
 "#;
 
@@ -47,6 +47,7 @@ pub struct RenderArgs {
     /// Which set of changes to render
     #[clap(long, action)]
     pub change_set: ChangeSet,
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Require this arg to be `true`
     /// Whether or not independent crate versions are being used (defaults to false)
     #[clap(long, action)]
     pub independent_versioning: bool,
@@ -94,6 +95,7 @@ pub fn subcommand_render(args: &RenderArgs) -> Result<()> {
         let sdk_metadata = date_based_release_metadata(now, "aws-sdk-rust-release-manifest.json");
         update_changelogs(args, &smithy_rs, &smithy_rs_metadata, &sdk_metadata)
     } else {
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove this code path entirely
         let auto = auto_changelog_meta(&smithy_rs)?;
         let smithy_rs_metadata = version_based_release_metadata(
             now,
@@ -170,6 +172,7 @@ fn date_title(now: &OffsetDateTime) -> String {
     )
 }
 
+// TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove this function
 /// Discover the new version for the changelog from gradle.properties and the date.
 fn auto_changelog_meta(smithy_rs: &dyn Git) -> Result<ChangelogMeta> {
     let gradle_props = fs::read_to_string(smithy_rs.path().join("gradle.properties"))
@@ -228,7 +231,13 @@ fn render_entry(entry: &HandAuthoredEntry, mut out: &mut String) {
     if !meta.is_empty() {
         meta.push(' ');
     }
-    let mut references = entry.references.iter().map(to_md_link).collect::<Vec<_>>();
+    let mut references = entry
+        .meta
+        .target
+        .iter()
+        .map(|t| t.to_string())
+        .chain(entry.references.iter().map(to_md_link))
+        .collect::<Vec<_>>();
     if !maintainers().contains(&entry.author.to_ascii_lowercase().as_str()) {
         references.push(format!("@{}", entry.author.to_ascii_lowercase()));
     };
@@ -263,6 +272,12 @@ fn load_changelogs(args: &RenderArgs) -> Result<Changelog> {
     for source in &args.source {
         let changelog = Changelog::load_from_file(source)
             .map_err(|errs| anyhow::Error::msg(format!("failed to load {source:?}: {errs:#?}")))?;
+        changelog.validate().map_err(|errs| {
+            anyhow::Error::msg(format!(
+                "failed to load {source:?}: {errors}",
+                errors = errs.join("\n")
+            ))
+        })?;
         combined.merge(changelog);
     }
     Ok(combined)
@@ -434,6 +449,7 @@ mod test {
         date_based_release_metadata, render, version_based_release_metadata, Changelog,
         ChangelogEntries, ChangelogEntry,
     };
+    use smithy_rs_tool_common::changelog::SdkAffected;
     use time::OffsetDateTime;
 
     fn render_full(entries: &[ChangelogEntry], release_header: &str) -> String {
@@ -460,6 +476,7 @@ references = ["smithy-rs#446"]
 author = "another-contrib"
 message = "I made a minor change"
 meta = { breaking = false, tada = false, bug = false }
+references = ["smithy-rs#200"]
 
 [[aws-sdk-rust]]
 author = "rcoh"
@@ -502,7 +519,7 @@ version = "0.12.0"
 kind = "Feature"
 message = "Some API change"
         "#;
-        let changelog: Changelog = toml::from_str(changelog_toml).expect("valid changelog");
+        let changelog: Changelog = Changelog::parse_str(changelog_toml).expect("valid changelog");
         let ChangelogEntries {
             aws_sdk_rust,
             smithy_rs,
@@ -513,19 +530,19 @@ message = "Some API change"
 v0.3.0 (January 4th, 2022)
 ==========================
 **Breaking Changes:**
-- ⚠ ([smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) I made a major change to update the code generator
+- ⚠ (all, [smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) I made a major change to update the code generator
 
 **New this release:**
-- 🎉 ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
-- 🎉 ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- 🎉 (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- 🎉 (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
 
     **Update guide:**
     blah blah
-- (@another-contrib) I made a minor change
+- (all, [smithy-rs#200](https://github.com/awslabs/smithy-rs/issues/200), @another-contrib) I made a minor change
 
 **Contributors**
 Thank you for your contributions! ❤
-- @another-contrib
+- @another-contrib ([smithy-rs#200](https://github.com/awslabs/smithy-rs/issues/200))
 - @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446))
 "#
         .trim_start();
@@ -572,5 +589,71 @@ Thank you for your contributions! ❤
         assert_eq!("v0.11.0 (March 3rd, 1973)", result.title);
         assert_eq!("v0.11.0", result.tag);
         assert_eq!("some-other-manifest.json", result.manifest_name);
+    }
+
+    #[test]
+    fn test_partition_client_server() {
+        let sample = r#"
+[[smithy-rs]]
+author = "external-contrib"
+message = """
+this is a multiline
+message
+"""
+meta = { breaking = false, tada = true, bug = false, target = "server" }
+references = ["smithy-rs#446"]
+
+[[aws-sdk-model]]
+module = "aws-sdk-s3"
+version = "0.14.0"
+kind = "Feature"
+message = "Some new API to do X"
+
+[[smithy-rs]]
+author = "external-contrib"
+message = "a client message"
+meta = { breaking = false, tada = true, bug = false, target = "client" }
+references = ["smithy-rs#446"]
+
+[[smithy-rs]]
+message = "a change for both"
+meta = { breaking = false, tada = true, bug = false, target = "all" }
+references = ["smithy-rs#446"]
+author = "rcoh"
+
+[[smithy-rs]]
+message = "a missing sdk meta"
+meta = { breaking = false, tada = true, bug = false }
+references = ["smithy-rs#446"]
+author = "rcoh"
+"#;
+        let changelog: Changelog = Changelog::parse_str(sample).expect("valid changelog");
+        let ChangelogEntries {
+            aws_sdk_rust: _,
+            smithy_rs,
+        } = changelog.into();
+        let affected = vec![
+            SdkAffected::Server,
+            SdkAffected::Client,
+            SdkAffected::All,
+            SdkAffected::All,
+        ];
+        let entries = smithy_rs
+            .iter()
+            .filter_map(ChangelogEntry::hand_authored)
+            .zip(affected)
+            .collect::<Vec<_>>();
+        for (e, a) in entries {
+            assert_eq!(e.meta.target, Some(a));
+        }
+    }
+
+    #[test]
+    fn test_empty_render() {
+        let smithy_rs = Vec::<ChangelogEntry>::new();
+        let (release_title, release_notes) = render(&smithy_rs, "some header");
+
+        assert_eq!(release_title, "some header\n===========\n");
+        assert_eq!(release_notes, "");
     }
 }

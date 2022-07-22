@@ -27,6 +27,10 @@ mv aws-doc-sdk-examples/rust_dev_preview smithy-rs/aws/sdk/examples
 rm -rf smithy-rs/aws/sdk/examples/.cargo
 rm smithy-rs/aws/sdk/examples/Cargo.toml
 
+echo -e "${C_YELLOW}Creating empty model metadata file since we don't have model update information...${C_RESET}"
+MODEL_METADATA_PATH="$(pwd)/model-metadata.toml"
+echo > "${MODEL_METADATA_PATH}"
+
 echo -e "${C_YELLOW}Generating services...${C_RESET}"
 cd smithy-rs
 
@@ -34,5 +38,6 @@ cd smithy-rs
     -Paws.sdk.models.path="${AWS_SDK_MODELS_PATH}" \
     -Paws.sdk.examples.revision="${examples_revision}" \
     -Paws.sdk.previous.release.versions.manifest="${PREVIOUS_RELEASE_VERSIONS_ARG}" \
+    -Paws.sdk.model.metadata="${MODEL_METADATA_PATH}" \
     aws:sdk:assemble
 mv aws/sdk/build/aws-sdk ../artifacts/

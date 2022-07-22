@@ -17,6 +17,7 @@ changelogger split \
     --destination aws/SDK_CHANGELOG.next.json
 # Render the remaining smithy-rs changelog entries
 changelogger render \
+    --independent-versioning \
     --change-set smithy-rs \
     --source CHANGELOG.next.toml \
     --source-to-truncate CHANGELOG.next.toml \

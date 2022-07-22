@@ -29,11 +29,12 @@ pub struct GenerateVersionManifestArgs {
     /// Path containing the generated SDK to generate a version manifest for
     #[clap(long)]
     location: PathBuf,
-    /// Optional tag for the release the newly generated `versions.toml` will be for
-    #[clap(long, requires("previous-release-versions"))]
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove the unused `--release-tag` arg
+    /// Unused.
+    #[clap(long)]
     release_tag: Option<String>,
     /// Optional path to the `versions.toml` manifest from the previous SDK release
-    #[clap(long, requires("release-tag"))]
+    #[clap(long)]
     previous_release_versions: Option<PathBuf>,
 }
 
@@ -42,8 +43,8 @@ pub async fn subcommand_generate_version_manifest(
         smithy_build,
         examples_revision,
         location,
-        release_tag,
         previous_release_versions,
+        ..
     }: &GenerateVersionManifestArgs,
 ) -> Result<()> {
     verify_crate_hasher_available()?;
@@ -75,7 +76,7 @@ pub async fn subcommand_generate_version_manifest(
                 .projections
                 .get(&package.handle.name["aws-sdk-".len()..])
             {
-                model_hash = Some(hash_model(projection)?);
+                model_hash = Some(hash_models(projection)?);
             }
         }
         assert!(
@@ -100,7 +101,7 @@ pub async fn subcommand_generate_version_manifest(
         release: None,
     };
     versions_manifest.release =
-        generate_release_metadata(&versions_manifest, release_tag, previous_release_versions)?;
+        generate_release_metadata(&versions_manifest, previous_release_versions)?;
     let manifest_file_name = location.join("versions.toml");
     info!("Writing {:?}...", manifest_file_name);
     versions_manifest.write_to_file(&manifest_file_name)?;
@@ -109,18 +110,16 @@ pub async fn subcommand_generate_version_manifest(
 
 fn generate_release_metadata(
     versions_manifest: &VersionsManifest,
-    maybe_release_tag: &Option<String>,
     maybe_previous_release_versions: &Option<PathBuf>,
 ) -> Result<Option<Release>> {
-    match (maybe_release_tag, maybe_previous_release_versions) {
-        (Some(release_tag), Some(previous_release_versions)) => {
-            let old_versions = VersionsManifest::from_file(previous_release_versions)?;
-            Ok(Some(Release {
-                tag: release_tag.into(),
-                crates: find_released_versions(&old_versions, versions_manifest)?,
-            }))
-        }
-        _ => Ok(None),
+    if let Some(previous_release_versions) = maybe_previous_release_versions {
+        let old_versions = VersionsManifest::from_file(previous_release_versions)?;
+        Ok(Some(Release {
+            tag: None,
+            crates: find_released_versions(&old_versions, versions_manifest)?,
+        }))
+    } else {
+        Ok(None)
     }
 }
 
@@ -204,7 +203,8 @@ fn hash_crate(path: &Path) -> Result<String> {
     Ok(stdout.trim().into())
 }
 
-fn hash_model(projection: &SmithyBuildProjection) -> Result<String> {
+fn hash_models(projection: &SmithyBuildProjection) -> Result<String> {
+    // Must match `hashModels` in `CrateVersioner.kt`
     let mut hashes = String::new();
     for import in &projection.imports {
         hashes.push_str(&sha256::digest_file(import).context("hash model")?);
@@ -232,8 +232,10 @@ struct SmithyBuildProjection {
 
 #[cfg(test)]
 mod tests {
-    use super::{find_released_versions, CrateVersion, VersionsManifest};
+    use super::*;
     use smithy_rs_tool_common::package::PackageCategory;
+    use std::fs;
+    use tempfile::TempDir;
 
     fn fake_manifest(crates: &[(&str, &str)]) -> VersionsManifest {
         VersionsManifest {
@@ -323,5 +325,28 @@ mod tests {
         assert_eq!("0.1.0", result.get("aws-sdk-somethingnew").unwrap());
         assert!(result.get("aws-sdk-dynamodb").is_none());
         assert_eq!(3, result.len());
+    }
+
+    #[test]
+    fn test_hash_models() {
+        let tmp = TempDir::new().unwrap();
+        let model1a = tmp.path().join("model1a");
+        let model1b = tmp.path().join("model1b");
+
+        fs::write(&model1a, "foo").unwrap();
+        fs::write(&model1b, "bar").unwrap();
+
+        let hash = hash_models(&SmithyBuildProjection {
+            imports: vec![
+                model1a.to_str().unwrap().to_string(),
+                model1b.to_str().unwrap().to_string(),
+            ],
+        })
+        .unwrap();
+
+        assert_eq!(
+            "964021077fb6c3d42ae162ab2e2255be64c6d96a6d77bca089569774d54ef69b",
+            hash
+        );
     }
 }
