@@ -236,7 +236,54 @@ class ServerHttpSensitivityGeneratorTest {
     }
 
     @Test
-    fun `query params special closure`() {
+    fun `query params key closure`() {
+        val model = """
+            namespace test
+
+            operation Secret {
+                input: Input,
+            }
+
+            structure Input {
+                @required
+                @httpQueryParams()
+                queryMap: QueryMap,
+            }
+
+            map QueryMap {
+                @sensitive
+                key: String,
+                value: String
+            }
+
+        """.asSmithyModel()
+        val operation = model.operationShapes.toList()[0]
+        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+
+        val input = generator.input()!!
+        val querySensitivity = generator.findQuerySensitivity(input)
+        assertEquals(querySensitivity.allKeysSensitive, true)
+        assert((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.SpecificValues).queryKeys.isEmpty())
+
+        val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
+        testProject.lib { writer ->
+            writer.unitTest("query_params_special_closure") {
+                withBlock("let closure = ", ";") {
+                    generator.renderQueryClosure(writer, querySensitivity)
+                }
+                rustTemplate(
+                    """
+                    assert_eq!(closure("wildcard"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: true, value: false });
+                    """,
+                    *codegenScope
+                )
+            }
+        }
+        testProject.compileAndTest()
+    }
+
+    @Test
+    fun `query params value closure`() {
         val model = """
             namespace test
 
@@ -397,7 +444,60 @@ class ServerHttpSensitivityGeneratorTest {
     }
 
     @Test
-    fun `prefix headers special closure`() {
+    fun `prefix headers key closure`() {
+        val model = """
+            namespace test
+
+            operation Secret {
+                input: Input,
+            }
+
+            structure Input {
+                @required
+                @httpPrefixHeaders("prefix-")
+                prefix_map: PrefixMap,
+            }
+
+            map PrefixMap {
+                @sensitive
+                key: String,
+                value: String
+            }
+
+        """.asSmithyModel()
+        val operation = model.operationShapes.toList()[0]
+        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+
+        val inputShape = operation.inputShape(model)
+        val headerData = generator.findHeaderSensitivity(inputShape)
+        assert(headerData.headerKeys.isEmpty())
+        val asMapValue = (headerData as ServerHttpSensitivityGenerator.HeaderSensitivity.NotMapValue)
+        assertEquals(asMapValue.prefixHeader, "prefix-")
+
+        val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
+        testProject.lib { writer ->
+            writer.unitTest("prefix_headers_special_closure") {
+                withBlock("let closure = ", ";") {
+                    generator.renderHeaderClosure(writer, headerData)
+                }
+                rustTemplate(
+                    """
+                    let name = #{Http}::header::HeaderName::from_static("prefix-a");
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: Some(7) });
+                    let name = #{Http}::header::HeaderName::from_static("prefix-b");
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: Some(7) });
+                    let name = #{Http}::header::HeaderName::from_static("other");
+                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
+                    """,
+                    *codegenScope
+                )
+            }
+        }
+        testProject.compileAndTest()
+    }
+
+    @Test
+    fun `prefix headers value closure`() {
         val model = """
             namespace test
 
