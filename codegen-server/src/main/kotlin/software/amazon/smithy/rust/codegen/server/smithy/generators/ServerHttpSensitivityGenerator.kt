@@ -54,16 +54,28 @@ class ServerHttpSensitivityGenerator(
         "Http" to CargoDependency.Http.asType(),
     )
 
+    // Models the ways headers can be bound and sensitive
     sealed class HeaderSensitivity(
-        // List of httpHeader values
+        // The values of [trait|sensitive] ~> [trait|httpHeader]
         val headerKeys: List<String>,
     ) {
-        // map[trait|httpQueryParams] > [id|member = value] is not sensitive
-        class NotMapValue(headerKeys: List<String>, val prefixHeader: String?) : HeaderSensitivity(headerKeys)
+        // The case where map[trait|httpPrefixHeaders] > [id|member = value] is not sensitive
+        class NotMapValue(
+            headerKeys: List<String>,
+            // The value of map[trait|httpPrefixHeaders] > [id|member = key], null if it's not sensitive
+            val prefixHeader: String?
+        ) : HeaderSensitivity(headerKeys)
 
-        // map[trait|httpQueryParams] > [id|member = value] is sensitive
-        class MapValue(headerKeys: List<String>, val keySensitive: Boolean, val prefixHeader: String) : HeaderSensitivity(headerKeys)
+        // The case where map[trait|httpPrefixHeaders] > [id|member = value] is sensitive
+        class MapValue(
+            headerKeys: List<String>,
+            // Is map[trait|httpQueryParams] > [id|member = key] sensitive?
+            val keySensitive: Boolean,
+            // What is the value of map[trait|httpQueryParams]?
+            val prefixHeader: String
+        ) : HeaderSensitivity(headerKeys)
 
+        // Is there anything to redact?
         fun isIdentity(): Boolean {
             return when (this) {
                 is NotMapValue -> {
@@ -119,6 +131,7 @@ class ServerHttpSensitivityGenerator(
         val httpPrefixTrait = httpPrefixMember.getTrait<HttpPrefixHeadersTrait>()
         val httpPrefixName = checkNotNull(httpPrefixTrait) { "httpPrefixTrait shouldn't be null as it was checked above" }.value
 
+        // Are key/value of the httpPrefixHeaders map sensitive?
         val (keySensitive, valuesSensitive) = mapMembers.fold(Pair(false, false)) { (key, value), it ->
             Pair(
                 key || it.memberName == "key",
@@ -172,22 +185,28 @@ class ServerHttpSensitivityGenerator(
         }
     }
 
+    // Models the ways query strings can be bound and sensitive
     sealed class QuerySensitivity(
         // Are all keys sensitive?
         val allKeysSensitive: Boolean
     ) {
-        // List of keys marking which values are sensitive
-        class SpecificValues(val queryKeys: List<String>, allKeysSensitive: Boolean) : QuerySensitivity(allKeysSensitive)
+        // The case where map[trait|httpQueryParams] > [id|member = value] is not sensitive
+        class NotMapValue(
+            // The values of [trait|sensitive] ~> [trait|httpQuery]
+            val queryKeys: List<String>,
+            allKeysSensitive: Boolean
+        ) : QuerySensitivity(allKeysSensitive)
 
-        // All values are sensitive
-        class AllValues(allKeysSensitive: Boolean) : QuerySensitivity(allKeysSensitive)
+        // The case where map[trait|httpQueryParams] > [id|member = value] is sensitive
+        class MapValue(allKeysSensitive: Boolean) : QuerySensitivity(allKeysSensitive)
 
+        // Is there anything to redact?
         fun isIdentity(): Boolean {
             return when (this) {
-                is SpecificValues -> {
+                is NotMapValue -> {
                     !allKeysSensitive && queryKeys.isEmpty()
                 }
-                is AllValues -> {
+                is MapValue -> {
                     false
                 }
             }
@@ -201,7 +220,7 @@ class ServerHttpSensitivityGenerator(
         val allSensitive = findSensitiveBoundTrait<HttpQueryParamsTrait>(rootShape).isNotEmpty()
 
         if (allSensitive) {
-            return QuerySensitivity.AllValues(true)
+            return QuerySensitivity.MapValue(true)
         }
 
         // Sensitive trait can exist within the httpQueryParams map
@@ -216,14 +235,14 @@ class ServerHttpSensitivityGenerator(
         }
 
         if (valuesSensitive) {
-            return QuerySensitivity.AllValues(keysSensitive)
+            return QuerySensitivity.MapValue(keysSensitive)
         }
 
         // httpQuery bindings
         // [trait|sensitive] ~> [trait|httpQuery]
         val queries = findSensitiveBoundTrait<HttpQueryTrait>(rootShape).map { it.value }.distinct()
 
-        return QuerySensitivity.SpecificValues(queries, keysSensitive)
+        return QuerySensitivity.NotMapValue(queries, keysSensitive)
     }
 
     internal fun renderQueryClosure(writer: RustWriter, querySensitivity: QuerySensitivity) {
@@ -231,10 +250,10 @@ class ServerHttpSensitivityGenerator(
             rust("let key = ${querySensitivity.allKeysSensitive};")
 
             when (querySensitivity) {
-                is QuerySensitivity.AllValues -> {
+                is QuerySensitivity.MapValue -> {
                     rust("let value = true;")
                 }
-                is QuerySensitivity.SpecificValues -> {
+                is QuerySensitivity.NotMapValue -> {
                     if (querySensitivity.queryKeys.isEmpty()) {
                         rust("let value = false;")
                     } else {

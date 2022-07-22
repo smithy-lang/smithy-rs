@@ -167,7 +167,7 @@ class ServerHttpSensitivityGeneratorTest {
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
         assertEquals(querySensitivity.allKeysSensitive, false)
-        assertEquals((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.SpecificValues).queryKeys, listOf("query_c", "query_b"))
+        assertEquals((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.NotMapValue).queryKeys, listOf("query_c", "query_b"))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -216,7 +216,7 @@ class ServerHttpSensitivityGeneratorTest {
         val querySensitivity = generator.findQuerySensitivity(input)
 
         assertEquals(querySensitivity.allKeysSensitive, true)
-        querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.AllValues
+        querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.MapValue
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -263,7 +263,7 @@ class ServerHttpSensitivityGeneratorTest {
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
         assertEquals(querySensitivity.allKeysSensitive, true)
-        assert((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.SpecificValues).queryKeys.isEmpty())
+        assert((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.NotMapValue).queryKeys.isEmpty())
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -310,7 +310,7 @@ class ServerHttpSensitivityGeneratorTest {
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
         assertEquals(querySensitivity.allKeysSensitive, false)
-        querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.AllValues
+        querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.MapValue
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
