@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.hasTrait
 import java.util.*
 
 internal fun findUriGreedyLabelPosition(uriPattern: UriPattern): Int? {
@@ -93,10 +94,10 @@ class ServerHttpSensitivityGenerator(
         val httpPrefixMember: MemberShape = Walker(model)
             .walkShapes(rootShape) {
                 // Do not traverse upwards or beyond a httpPrefixHeaders trait
-                it.direction == RelationshipDirection.DIRECTED && it.shape.getTrait<HttpPrefixHeadersTrait>() == null
+                it.direction == RelationshipDirection.DIRECTED && !it.shape.hasTrait<HttpPrefixHeadersTrait>()
             }
             .filter {
-                it.getTrait<HttpPrefixHeadersTrait>() != null
+                it.hasTrait<HttpPrefixHeadersTrait>()
             }
             .map { it as? MemberShape }
             .singleOrNull() ?: return HeaderSensitivity.NotMapValue(headerKeys, null)
@@ -109,13 +110,14 @@ class ServerHttpSensitivityGenerator(
                     it.direction == RelationshipDirection.DIRECTED
                 }
                 .filter {
-                    it.getTrait<SensitiveTrait>() != null
+                    it.hasTrait<SensitiveTrait>()
                 }.mapNotNull {
                     it as? MemberShape
                 }
 
         // httpPrefixHeaders name
-        val httpPrefixName = httpPrefixMember.getTrait<HttpPrefixHeadersTrait>()!!.value
+        val httpPrefixName = httpPrefixMember.getTrait<HttpPrefixHeadersTrait>()?.let { it.value }
+        checkNotNull(httpPrefixName) { "thingToCheck shouldn't be as it was checked above" }
 
         val init: Pair<String?, Boolean> = Pair(null, false)
         val (prefixSuffixB, valuesSensitive) = mapMembers.fold(init) { (key, value), it ->
@@ -256,11 +258,11 @@ class ServerHttpSensitivityGenerator(
     internal inline fun <reified A : Trait, reified B : Trait> findTraitInterval(rootShape: Shape): List<MemberShape> {
         return Walker(model)
             .walkShapes(rootShape) {
-                // Do not traverse upwards or beyond a A trait
-                it.direction == RelationshipDirection.DIRECTED && it.shape.getTrait<A>() == null
+                // Do not traverse upwards or beyond A trait
+                it.direction == RelationshipDirection.DIRECTED && !it.shape.hasTrait<A>()
             }
             .filter {
-                it.getTrait<A>() != null
+                it.hasTrait<A>()
             }
             .flatMap {
                 Walker(model)
@@ -269,7 +271,7 @@ class ServerHttpSensitivityGenerator(
                         it.direction == RelationshipDirection.DIRECTED
                     }
                     .filter {
-                        it.getTrait<B>() != null
+                        it.hasTrait<B>()
                     }.mapNotNull {
                         it as? MemberShape
                     }
@@ -283,7 +285,7 @@ class ServerHttpSensitivityGenerator(
     }
 
     // Find trait `T` contained in a shape enjoying `SensitiveTrait`.
-    internal inline fun <reified T : Trait> findSensitiveBoundTrait(rootShape: Shape): List<T> {
+    private inline fun <reified T : Trait> findSensitiveBoundTrait(rootShape: Shape): List<T> {
         return findSensitiveBound<T>(rootShape).mapNotNull { it.getTrait<T>() }
     }
 
