@@ -58,11 +58,11 @@ class ServerHttpSensitivityGenerator(
         // List of keys whose values are sensitive
         val headerKeys: List<String>,
     ) {
-        // httpQueryParams map > [id|member = value] is not sensitive?
+        // map[trait|httpQueryParams] > [id|member = value] is not sensitive
         class NotMapValue(headerKeys: List<String>, val prefixHeader: String?) : HeaderSensitivity(headerKeys)
 
-        // httpQueryParams map > [id|member = value] is sensitive?
-        class MapValue(headerKeys: List<String>, val prefixHeader: String) : HeaderSensitivity(headerKeys)
+        // map[trait|httpQueryParams] > [id|member = value] is sensitive
+        class MapValue(headerKeys: List<String>, val keySensitive: Boolean, val prefixHeader: String) : HeaderSensitivity(headerKeys)
 
         fun isIdentity(): Boolean {
             return when (this) {
@@ -86,7 +86,7 @@ class ServerHttpSensitivityGenerator(
         // All prefix keys and values are sensitive
         val prefixSuffixA = findSensitiveBoundTrait<HttpPrefixHeadersTrait>(rootShape).map { it.value }.singleOrNull()
         if (prefixSuffixA != null) {
-            return HeaderSensitivity.MapValue(headerKeys, prefixSuffixA)
+            return HeaderSensitivity.MapValue(headerKeys, true, prefixSuffixA)
         }
 
         // Find httpPrefixHeaders trait
@@ -116,22 +116,21 @@ class ServerHttpSensitivityGenerator(
                 }
 
         // httpPrefixHeaders name
-        val httpPrefixName = httpPrefixMember.getTrait<HttpPrefixHeadersTrait>()?.let { it.value }
+        val httpPrefixName = httpPrefixMember.getTrait<HttpPrefixHeadersTrait>()?.value
         checkNotNull(httpPrefixName) { "thingToCheck shouldn't be as it was checked above" }
 
-        val init: Pair<String?, Boolean> = Pair(null, false)
-        val (prefixSuffixB, valuesSensitive) = mapMembers.fold(init) { (key, value), it ->
+        val (keySensitive, valuesSensitive) = mapMembers.fold(Pair(false, false)) { (key, value), it ->
             Pair(
-                key ?: if (it.memberName == "key") { httpPrefixName } else { null },
+                key || it.memberName == "key",
                 value || it.memberName == "value"
             )
         }
 
         return if (valuesSensitive) {
             // All values are sensitive
-            HeaderSensitivity.MapValue(headerKeys, httpPrefixName)
+            HeaderSensitivity.MapValue(headerKeys, keySensitive, httpPrefixName)
         } else {
-            HeaderSensitivity.NotMapValue(headerKeys, prefixSuffixB)
+            HeaderSensitivity.NotMapValue(headerKeys, httpPrefixName)
         }
     }
 
@@ -158,8 +157,12 @@ class ServerHttpSensitivityGenerator(
                 }
                 is HeaderSensitivity.MapValue -> {
                     val prefixHeader = headerSensitivity.prefixHeader
-                    rust("let key_suffix = if name.starts_with(\"$prefixHeader\") { Some(${prefixHeader.length}) } else { None };")
-                    rust("let value = name_match || key_suffix.is_some();")
+                    if (headerSensitivity.keySensitive) {
+                        rust("let key_suffix = if name.starts_with(\"$prefixHeader\") { Some(${prefixHeader.length}) } else { None };")
+                        rust("let value = name_match || key_suffix.is_some();")
+                    } else {
+                        rust("let value = name_match;")
+                    }
                 }
             }
 
