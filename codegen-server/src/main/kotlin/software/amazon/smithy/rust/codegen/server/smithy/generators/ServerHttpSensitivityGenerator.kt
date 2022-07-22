@@ -116,8 +116,8 @@ class ServerHttpSensitivityGenerator(
                 }
 
         // httpPrefixHeaders name
-        val httpPrefixName = httpPrefixMember.getTrait<HttpPrefixHeadersTrait>()?.value
-        checkNotNull(httpPrefixName) { "thingToCheck shouldn't be as it was checked above" }
+        val httpPrefixTrait = httpPrefixMember.getTrait<HttpPrefixHeadersTrait>()
+        val httpPrefixName = checkNotNull(httpPrefixTrait) { "httpPrefixTrait shouldn't be null as it was checked above" }.value
 
         val (keySensitive, valuesSensitive) = mapMembers.fold(Pair(false, false)) { (key, value), it ->
             Pair(
@@ -289,7 +289,10 @@ class ServerHttpSensitivityGenerator(
 
     // Find trait `T` contained in a shape enjoying `SensitiveTrait`.
     private inline fun <reified T : Trait> findSensitiveBoundTrait(rootShape: Shape): List<T> {
-        return findSensitiveBound<T>(rootShape).mapNotNull { it.getTrait<T>() }
+        return findSensitiveBound<T>(rootShape).map {
+            val trait = it.getTrait<T>()
+            checkNotNull(trait) { "trait shouldn't be null because of the null checked previously" }
+        }
     }
 
     internal fun findUriLabelIndexes(uriPattern: UriPattern, rootShape: Shape): List<Int> {
