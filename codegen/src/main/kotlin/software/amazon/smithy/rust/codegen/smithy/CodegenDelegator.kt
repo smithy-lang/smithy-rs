@@ -117,14 +117,12 @@ open class RustCrate(
                 .filter { !writtenDependencies.contains(it.key()) }
         }
         while (unloadedDependencies().isNotEmpty()) {
-            unloadedDependencies()
-                .sortedBy { it.key() }
-                .forEach { dep ->
-                    writtenDependencies.add(dep.key())
-                    this.withModule(dep.module) {
-                        dep.renderer(it)
-                    }
+            unloadedDependencies().forEach { dep ->
+                writtenDependencies.add(dep.key())
+                this.withModule(dep.module) {
+                    dep.renderer(it)
                 }
+            }
         }
     }
 
