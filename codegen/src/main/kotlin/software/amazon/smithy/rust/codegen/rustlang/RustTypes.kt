@@ -375,6 +375,28 @@ sealed class Attribute {
                 writer.addDependency(it.dependency)
             }
         }
+
+        companion object {
+            /**
+             * Renders a
+             * [`#[deprecated]`](https://doc.rust-lang.org/reference/attributes/diagnostics.html#the-deprecated-attribute)
+             * attribute.
+             */
+            fun deprecated(note: String = "", since: String = ""): Custom {
+                val builder = StringBuilder()
+                builder.append("deprecated")
+                if (note.isBlank().and(since.isBlank())) {
+                    // No-op. Rustc would emit a default message.
+                } else if (note.isNotBlank().and(since.isBlank())) {
+                    builder.append("(note = \"${note}\")")
+                } else if (note.isBlank().and(since.isNotBlank())) {
+                    builder.append("(since = \"${since}\")")
+                } else {
+                    builder.append("(note = \"${note}\", since = \"${since}\")")
+                }
+                return Custom(builder.toString())
+            }
+        }
     }
 
     data class Cfg(val cond: String) : Attribute() {
