@@ -31,7 +31,7 @@ internal class TopLevelErrorGeneratorTest {
 
             @http(uri: "/", method: "POST")
             operation SayHello {
-                errors: [SorryBusy, CanYouRepeatThat]
+                errors: [SorryBusy, CanYouRepeatThat, MeDeprecated]
 
             }
 
@@ -40,6 +40,10 @@ internal class TopLevelErrorGeneratorTest {
 
             @error("client")
             structure CanYouRepeatThat { }
+
+            @error("client")
+            @deprecated
+            structure MeDeprecated { }
         """.asSmithyModel()
 
         val (pluginContext, testDir) = generatePluginContext(model)
