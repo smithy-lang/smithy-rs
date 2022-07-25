@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerR
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.extractSymbolFromOption
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -59,6 +60,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.toOptional
+import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.smithy.wrapOptional
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
@@ -214,9 +216,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         // Implement `into_response` for output types.
 
         val outputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
 
-        if (operationShape.errors.isNotEmpty()) {
+        if (operationShape.operationErrors(model).isNotEmpty()) {
             // The output of fallible operations is a `Result` which we convert into an
             // isomorphic `enum` type we control that can in turn be converted into a response.
             val intoResponseImpl =
@@ -302,7 +304,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         }
 
         // Implement conversion function to "wrap" from the model operation output types.
-        if (operationShape.errors.isNotEmpty()) {
+        if (operationShape.operationErrors(model).isNotEmpty()) {
             rustTemplate(
                 """
                 impl #{From}<Result<#{O}, #{E}>> for $outputName {
@@ -416,7 +418,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun serverSerializeError(operationShape: OperationShape): RuntimeType {
         val fnName = "serialize_${operationShape.id.name.toSnakeCase()}_error"
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
@@ -441,11 +443,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val structuredDataSerializer = protocol.structuredDataSerializer(operationShape)
         withBlock("match error {", "}") {
-            operationShape.errors.forEach {
-                val variantShape = model.expectShape(it, StructureShape::class.java)
+            val errors = operationShape.operationErrors(model)
+            errors.forEach {
+                val variantShape = model.expectShape(it.id, StructureShape::class.java)
                 val errorTrait = variantShape.expectTrait<ErrorTrait>()
                 val variantSymbol = symbolProvider.toSymbol(variantShape)
-                val serializerSymbol = structuredDataSerializer.serverErrorSerializer(it)
+                val serializerSymbol = structuredDataSerializer.serverErrorSerializer(it.id)
 
                 rustBlock("#T::${variantSymbol.name}(output) =>", errorSymbol) {
                     rust(
@@ -507,13 +510,10 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         // Fallback to the default code of `http::response::Builder`, 200.
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
-            val memberName = symbolProvider.toMemberName(it)
-            rustTemplate(
-                """
-                let payload = #{SmithyHttpServer}::body::Body::wrap_stream(output.$memberName);
-                """,
-                *codegenScope,
-            )
+            val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
+            withBlockTemplate("let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream(", "));", *codegenScope) {
+                payloadGenerator.generatePayload(this, "output", operationShape)
+            }
         } ?: run {
             val payloadGenerator = HttpBoundProtocolPayloadGenerator(codegenContext, protocol, httpMessageType = HttpMessageType.RESPONSE)
             withBlockTemplate("let payload = ", ";") {
@@ -521,11 +521,17 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             }
 
             serverRenderContentLengthHeader()
+
+            rustTemplate(
+                """
+                let body = #{SmithyHttpServer}::body::to_boxed(payload);
+                """,
+                *codegenScope,
+            )
         }
 
         rustTemplate(
             """
-            let body = #{SmithyHttpServer}::body::to_boxed(payload);
             builder.body(body)?
             """,
             *codegenScope,
@@ -703,29 +709,28 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             HttpLocation.HEADER -> writable { serverRenderHeaderParser(this, binding, operationShape) }
             HttpLocation.PREFIX_HEADERS -> writable { serverRenderPrefixHeadersParser(this, binding, operationShape) }
             HttpLocation.PAYLOAD -> {
-                return if (binding.member.isStreaming(model)) {
-                    writable {
+                val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
+                    rust("#T($body)", structuredDataParser.payloadParser(binding.member))
+                }
+                val errorSymbol = getDeserializePayloadErrorSymbol(binding)
+                val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
+                    binding,
+                    errorSymbol,
+                    structuredHandler = structureShapeHandler
+                )
+                return writable {
+                    if (binding.member.isStreaming(model)) {
                         rustTemplate(
                             """
                             {
                                 let body = request.take_body().ok_or(#{RequestRejection}::BodyAlreadyExtracted)?;
-                                Some(body.into())
+                                Some(#{Deserializer}(&mut body.into().into_inner())?)
                             }
-                            """.trimIndent(),
+                            """,
+                            "Deserializer" to deserializer,
                             *codegenScope
                         )
-                    }
-                } else {
-                    val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
-                        rust("#T($body)", structuredDataParser.payloadParser(binding.member))
-                    }
-                    val errorSymbol = getDeserializePayloadErrorSymbol(binding)
-                    val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
-                        binding,
-                        errorSymbol,
-                        structuredHandler = structureShapeHandler
-                    )
-                    writable {
+                    } else {
                         rustTemplate(
                             """
                             {

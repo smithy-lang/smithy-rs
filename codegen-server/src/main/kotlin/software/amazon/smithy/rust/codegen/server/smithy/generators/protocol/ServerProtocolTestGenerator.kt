@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -282,7 +283,7 @@ class ServerProtocolTestGenerator(
         writeInline("let output =")
         instantiator.render(this, shape, testCase.params)
         write(";")
-        val operationImpl = if (operationShape.errors.isNotEmpty()) {
+        val operationImpl = if (operationShape.allErrors(model).isNotEmpty()) {
             if (shape.hasTrait<ErrorTrait>()) {
                 val variant = symbolProvider.toSymbol(shape).name
                 "$operationImplementationName::Error($operationErrorName::$variant(output))"

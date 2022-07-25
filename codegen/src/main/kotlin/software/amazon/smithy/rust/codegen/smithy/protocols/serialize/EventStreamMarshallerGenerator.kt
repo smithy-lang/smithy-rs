@@ -43,7 +43,7 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-class EventStreamMarshallerGenerator(
+open class EventStreamMarshallerGenerator(
     private val model: Model,
     private val target: CodegenTarget,
     runtimeConfig: RuntimeConfig,
@@ -62,7 +62,7 @@ class EventStreamMarshallerGenerator(
         "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
     )
 
-    fun render(): RuntimeType {
+    open fun render(): RuntimeType {
         val marshallerType = unionShape.eventStreamMarshallerType()
         val unionSymbol = symbolProvider.toSymbol(unionShape)
 
@@ -134,15 +134,17 @@ class EventStreamMarshallerGenerator(
         if (payloadMember != null) {
             val memberName = symbolProvider.toMemberName(payloadMember)
             val target = model.expectShape(payloadMember.target)
-            renderMarshallEventPayload("inner.$memberName", payloadMember, target)
+            val serializerFn = serializerGenerator.payloadSerializer(payloadMember)
+            renderMarshallEventPayload("inner.$memberName", payloadMember, target, serializerFn)
         } else if (headerMembers.isEmpty()) {
-            renderMarshallEventPayload("inner", unionMember, eventStruct)
+            val serializerFn = serializerGenerator.payloadSerializer(unionMember)
+            renderMarshallEventPayload("inner", unionMember, eventStruct, serializerFn)
         } else {
             rust("Vec::new()")
         }
     }
 
-    private fun RustWriter.renderMarshallEventHeader(memberName: String, member: MemberShape, target: Shape) {
+    protected fun RustWriter.renderMarshallEventHeader(memberName: String, member: MemberShape, target: Shape) {
         val headerName = member.memberName
         handleOptional(
             symbolProvider.toSymbol(member).isOptional(),
@@ -175,7 +177,12 @@ class EventStreamMarshallerGenerator(
         else -> throw IllegalStateException("unsupported event stream header shape type: $target")
     }
 
-    private fun RustWriter.renderMarshallEventPayload(inputExpr: String, member: MemberShape, target: Shape) {
+    protected fun RustWriter.renderMarshallEventPayload(
+        inputExpr: String,
+        member: Shape,
+        target: Shape,
+        serializerFn: RuntimeType
+    ) {
         val optional = symbolProvider.toSymbol(member).isOptional()
         if (target is BlobShape || target is StringShape) {
             data class PayloadContext(val conversionFn: String, val contentType: String)
@@ -196,7 +203,6 @@ class EventStreamMarshallerGenerator(
         } else {
             addStringHeader(":content-type", "${payloadContentType.dq()}.into()")
 
-            val serializerFn = serializerGenerator.payloadSerializer(member)
             handleOptional(
                 optional,
                 inputExpr,
@@ -237,7 +243,7 @@ class EventStreamMarshallerGenerator(
         }
     }
 
-    private fun RustWriter.addStringHeader(name: String, valueExpr: String) {
+    protected fun RustWriter.addStringHeader(name: String, valueExpr: String) {
         rustTemplate("headers.push(#{Header}::new(${name.dq()}, #{HeaderValue}::String($valueExpr)));", *codegenScope)
     }
 

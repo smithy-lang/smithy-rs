@@ -47,6 +47,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.PaginatorGenerator
@@ -394,7 +395,7 @@ class FluentClientGenerator(
 
                 val output = operation.outputShape(model)
                 val operationOk = symbolProvider.toSymbol(output)
-                val operationErr = operation.errorSymbol(symbolProvider).toSymbol()
+                val operationErr = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT).toSymbol()
 
                 val inputFieldsBody = generateOperationShapeDocs(writer, symbolProvider, operation, model).joinToString("\n") {
                     "///   - $it"
@@ -486,7 +487,7 @@ class FluentClientGenerator(
                 ) {
                     val inputType = symbolProvider.toSymbol(operation.inputShape(model))
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-                    val errorType = operation.errorSymbol(symbolProvider)
+                    val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
                     rustTemplate(
                         """
                         /// Creates a new `${operationSymbol.name}`.
@@ -534,7 +535,7 @@ class FluentClientGenerator(
                         customizations,
                         FluentClientSection.FluentBuilderImpl(
                             operation,
-                            operation.errorSymbol(symbolProvider)
+                            operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
                         )
                     )
                     input.members().forEach { member ->

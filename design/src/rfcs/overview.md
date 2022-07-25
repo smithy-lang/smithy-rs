@@ -28,3 +28,4 @@
 - [RFC-0016: Supporting Flexible Checksums](./rfcs/rfc0016_flexible_checksum_support.md)
 - [RFC-0017: Customizable Client Operations](./rfcs/rfc0017_customizable_client_operations.md)
 - [RFC-0018: Logging in the Presence of Sensitive Data](./rfcs/rfc0018_logging_sensitive.md)
+- [RFC-0018: Event Streams Errors](./rfc0019_event_streams_errors.md)
