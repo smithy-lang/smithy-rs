@@ -43,7 +43,11 @@ dependencies {
 }
 
 val lintPaths = listOf(
-    "codegen/src/**/*.kt"
+    "**/*.kt",
+    // Exclude build output directories
+    "!**/build/**",
+    "!**/node_modules/**",
+    "!**/target/**"
 )
 
 tasks.register<JavaExec>("ktlint") {
