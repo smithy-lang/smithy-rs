@@ -70,6 +70,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
     codegenContext: ClientCodegenContext,
     operationShape: OperationShape
 ): Writable {
+    val runtimeConfig = codegenContext.runtimeConfig
     val requestAlgorithmMember = this.requestAlgorithmMember(codegenContext, operationShape)
     val isRequestChecksumRequired = this.isRequestChecksumRequired
 
@@ -90,14 +91,18 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             rust("""let checksum_algorithm = Some("md5");""")
         }
 
-        rust(
+        rustTemplate(
             """
             let checksum_algorithm = match checksum_algorithm {
-                Some(algo) => Some(aws_smithy_checksums::ChecksumAlgorithm::new(algo)
-                    .map_err(|err| aws_smithy_http::operation::BuildError::Other(Box::new(err)))?),
+                Some(algo) => Some(
+                    algo.parse::<#{ChecksumAlgorithm}>()
+                    .map_err(|err| #{BuildError}::Other(Box::new(err)))?
+                ),
                 None => None,
             };
-            """
+            """,
+            "BuildError" to runtimeConfig.operationBuildError(),
+            "ChecksumAlgorithm" to runtimeConfig.smithyChecksums().member("ChecksumAlgorithm"),
         )
 
         // If a request checksum is not required and there's no way to set one, do nothing
@@ -178,7 +183,6 @@ class HttpRequestChecksumCustomization(
                                 codegenContext,
                                 operationShape
                             ),
-                            "new_from_algorithm" to runtimeConfig.smithyChecksums().member("http::new_from_algorithm"),
                         )
                     }
                 }

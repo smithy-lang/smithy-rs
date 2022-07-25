@@ -372,7 +372,7 @@ impl Response {
     }
 
     /// Return mutable references to the response and property bag contained within this `operation::Response`
-    pub fn get_parts_mut(
+    pub fn parts_mut(
         &mut self,
     ) -> (
         &mut http::Response<SdkBody>,

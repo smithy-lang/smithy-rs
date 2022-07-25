@@ -174,7 +174,7 @@ mod tests {
         let non_matching_checksum = Bytes::copy_from_slice(&[0x00, 0x00, 0x00, 0x00]);
         let mut body = ChecksumBody::new(
             body,
-            ChecksumAlgorithm::new("crc32").unwrap().into_impl(),
+            "crc32".parse::<ChecksumAlgorithm>().unwrap().into_impl(),
             non_matching_checksum.clone(),
         );
 
@@ -202,7 +202,7 @@ mod tests {
         let input_text = "This is some test text for an SdkBody";
         let actual_checksum = calculate_crc32_checksum(input_text);
         let body = SdkBody::from(input_text);
-        let http_checksum = ChecksumAlgorithm::new("crc32").unwrap().into_impl();
+        let http_checksum = "crc32".parse::<ChecksumAlgorithm>().unwrap().into_impl();
         let mut body = ChecksumBody::new(body, http_checksum, actual_checksum);
 
         let mut output = SegmentedBuf::new();

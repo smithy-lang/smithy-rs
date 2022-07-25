@@ -120,7 +120,10 @@ mod tests {
     async fn test_checksum_body() {
         let input_text = "This is some test text for an SdkBody";
         let body = SdkBody::from(input_text);
-        let checksum = ChecksumAlgorithm::new(CRC_32_NAME).unwrap().into_impl();
+        let checksum = CRC_32_NAME
+            .parse::<ChecksumAlgorithm>()
+            .unwrap()
+            .into_impl();
         let mut body = ChecksumBody::new(body, checksum);
 
         let mut output = SegmentedBuf::new();

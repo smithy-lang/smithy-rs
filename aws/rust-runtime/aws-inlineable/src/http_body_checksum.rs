@@ -5,6 +5,8 @@
 
 //! Functions for modifying requests and responses for the purposes of checksum validation
 
+use aws_smithy_checksums::ChecksumAlgorithm;
+
 /// Errors related to constructing checksum-validated HTTP requests
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -170,8 +172,7 @@ pub(crate) fn check_headers_for_precalculated_checksum(
             });
 
     for checksum_algorithm in checksum_algorithms_to_check {
-        let checksum_algorithm = aws_smithy_checksums::ChecksumAlgorithm::new(checksum_algorithm)
-            .expect(
+        let checksum_algorithm: ChecksumAlgorithm = checksum_algorithm.parse().expect(
             "CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER only contains valid checksum algorithm names",
         );
         if let Some(precalculated_checksum) = headers.get(&checksum_algorithm.into_header_name()) {
@@ -219,7 +220,7 @@ mod tests {
         assert!(body.try_clone().is_some());
 
         let body = body.map(move |sdk_body| {
-            let checksum_algorithm = ChecksumAlgorithm::new("crc32").unwrap();
+            let checksum_algorithm: ChecksumAlgorithm = "crc32".parse().unwrap();
             wrap_body_with_checksum_validator(
                 sdk_body,
                 checksum_algorithm,
@@ -252,7 +253,7 @@ mod tests {
     async fn test_checksum_body_from_file_is_retryable() {
         use std::io::Write;
         let mut file = NamedTempFile::new().unwrap();
-        let checksum_algorithm = ChecksumAlgorithm::new("crc32c").unwrap();
+        let checksum_algorithm: ChecksumAlgorithm = "crc32c".parse().unwrap();
         let mut crc32c_checksum = checksum_algorithm.into_impl();
 
         for i in 0..10000 {
@@ -313,7 +314,7 @@ mod tests {
     async fn test_build_checksum_validated_body_works() {
         init_logger();
 
-        let checksum_algorithm = ChecksumAlgorithm::new("crc32").unwrap();
+        let checksum_algorithm = "crc32".parse().unwrap();
         let input_text = "Hello world";
         let precalculated_checksum = Bytes::from_static(&[0x8b, 0xd6, 0x9e, 0x52]);
         let body = ByteStream::new(SdkBody::from(input_text));

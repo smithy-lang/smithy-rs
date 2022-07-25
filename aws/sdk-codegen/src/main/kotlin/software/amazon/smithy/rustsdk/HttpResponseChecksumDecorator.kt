@@ -64,7 +64,8 @@ class HttpResponseChecksumCustomization(
                 return {
                     rustTemplate(
                         """
-                        if let Some($validationModeName) = self.$validationModeName.clone() {
+                        if let Some($validationModeName) = self.$validationModeName.as_ref() {
+                            let $validationModeName = $validationModeName.clone();
                             // Place #{ValidationModeShape} in the property bag so we can check
                             // it during response deserialization to see if we need to checksum validate
                             // the response body.

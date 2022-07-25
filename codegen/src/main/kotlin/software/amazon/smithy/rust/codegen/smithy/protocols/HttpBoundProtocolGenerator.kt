@@ -246,7 +246,7 @@ class HttpBoundProtocolTraitImplGenerator(
             ) {
                 // Not all implementations will use the property bag, but some will
                 Attribute.Custom("allow(unused_variables)").render(it)
-                rust("let (response, properties) = op_response.get_parts_mut();")
+                rust("let (response, properties) = op_response.parts_mut();")
                 withBlock("Ok({", "})") {
                     renderShapeParser(
                         operationShape,

@@ -7,6 +7,7 @@
 
 use ::http::header::HeaderName;
 use bytes::Bytes;
+use std::str::FromStr;
 
 pub mod body;
 pub mod http;
@@ -28,7 +29,9 @@ pub enum ChecksumAlgorithm {
     Sha256,
 }
 
-impl ChecksumAlgorithm {
+impl FromStr for ChecksumAlgorithm {
+    type Err = Error;
+
     /// Create a new `ChecksumAlgorithm` from an algorithm name. Valid algorithm names are:
     /// - "crc32"
     /// - "crc32c"
@@ -37,7 +40,7 @@ impl ChecksumAlgorithm {
     /// - "md5"
     ///
     /// Passing an invalid name will return an error.
-    pub fn new(checksum_algorithm: &str) -> Result<Self, Error> {
+    fn from_str(checksum_algorithm: &str) -> Result<Self, Self::Err> {
         if checksum_algorithm.eq_ignore_ascii_case(CRC_32_NAME) {
             Ok(Self::Crc32)
         } else if checksum_algorithm.eq_ignore_ascii_case(CRC_32_C_NAME) {
@@ -54,7 +57,9 @@ impl ChecksumAlgorithm {
             ))
         }
     }
+}
 
+impl ChecksumAlgorithm {
     /// Return the `HttpChecksum` implementor for this algorithm
     pub fn into_impl(self) -> Box<dyn http::HttpChecksum> {
         match self {
@@ -403,6 +408,8 @@ mod tests {
     #[test]
     #[should_panic = "called `Result::unwrap()` on an `Err` value: UnknownChecksumAlgorithm(\"some invalid checksum algorithm\")"]
     fn test_checksum_algorithm_returns_error_for_unknown() {
-        ChecksumAlgorithm::new("some invalid checksum algorithm").unwrap();
+        "some invalid checksum algorithm"
+            .parse::<ChecksumAlgorithm>()
+            .unwrap();
     }
 }
