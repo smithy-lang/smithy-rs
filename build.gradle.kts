@@ -39,6 +39,7 @@ val ktlintVersion: String by project
 
 dependencies {
     ktlint("com.pinterest:ktlint:$ktlintVersion")
+    ktlint("com.pinterest.ktlint:ktlint-ruleset-standard:$ktlintVersion")
 }
 
 val lintPaths = listOf(
@@ -50,7 +51,7 @@ tasks.register<JavaExec>("ktlint") {
     group = "Verification"
     classpath = configurations.getByName("ktlint")
     main = "com.pinterest.ktlint.Main"
-    args = lintPaths
+    args = listOf("--verbose", "--relative", "--") + lintPaths
 }
 
 tasks.register<JavaExec>("ktlintFormat") {
@@ -58,7 +59,7 @@ tasks.register<JavaExec>("ktlintFormat") {
     group = "formatting"
     classpath = configurations.getByName("ktlint")
     main = "com.pinterest.ktlint.Main"
-    args = listOf("-F") + lintPaths
+    args = listOf("--verbose", "--relative", "--format", "--") + lintPaths
 }
 
 @Suppress("UnstableApiUsage")
