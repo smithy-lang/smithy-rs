@@ -13,8 +13,10 @@ use std::{
     sync::{atomic::AtomicU64, Arc},
 };
 
+use async_stream::stream;
 use aws_smithy_http_server::Extension;
-use pokemon_service_sdk::{error, input, model, output};
+use pokemon_service_sdk::{error, input, model, model::CapturingPayload, output, types::Blob};
+use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
@@ -189,6 +191,73 @@ pub async fn get_server_statistics(
         .unwrap_or(0);
     tracing::debug!("This instance served {} requests", counter);
     output::GetServerStatisticsOutput { calls_count }
+}
+
+/// Attempts to capture a Pokémon
+pub async fn capture_pokemon(
+    mut input: input::CapturePokemonOperationInput,
+) -> Result<output::CapturePokemonOperationOutput, error::CapturePokemonOperationError> {
+    if input.region != "Kanto" {
+        return Err(error::CapturePokemonOperationError::UnsupportedRegionError(
+            error::UnsupportedRegionError::builder().build(),
+        ));
+    }
+    let output_stream = stream! {
+        loop {
+            use std::time::Duration;
+            match input.events.recv().await {
+                Ok(maybe_event) => match maybe_event {
+                    Some(event) => {
+                        let capturing_event = event.as_event();
+                        if let Ok(attempt) = capturing_event {
+                            let payload = attempt.payload.clone().unwrap_or(CapturingPayload::builder().build());
+                            let pokeball = payload.pokeball.as_ref().map(|ball| ball.as_str()).unwrap_or("");
+                            if ! matches!(pokeball, "Master Ball" | "Great Ball" | "Fast Ball") {
+                                yield Err(
+                                    crate::error::CapturePokemonEventsError::InvalidPokeballError(
+                                        crate::error::InvalidPokeballError::builder().pokeball(pokeball).build()
+                                    )
+                                );
+                            } else {
+                                let captured = match pokeball {
+                                    "Master Ball" => true,
+                                    "Great Ball" => rand::thread_rng().gen_range(0..100) > 33,
+                                    "Fast Ball" => rand::thread_rng().gen_range(0..100) > 66,
+                                    _ => unreachable!("invalid pokeball"),
+                                };
+                                // Only support Kanto
+                                tokio::time::sleep(Duration::from_millis(1000)).await;
+                                // Will it capture the Pokémon?
+                                if captured {
+                                    let shiny = rand::thread_rng().gen_range(0..4096) == 0;
+                                    let pokemon = payload
+                                        .name
+                                        .as_ref()
+                                        .map(|name| name.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    let pokedex: Vec<u8> = (0..255).collect();
+                                    yield Ok(crate::model::CapturePokemonEvents::Event(
+                                        crate::model::CaptureEvent::builder()
+                                        .name(pokemon)
+                                        .shiny(shiny)
+                                        .pokedex_update(Blob::new(pokedex))
+                                        .build(),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    None => break,
+                },
+                Err(e) => println!("{:?}", e),
+            }
+        }
+    };
+    Ok(output::CapturePokemonOperationOutput::builder()
+        .events(output_stream.into())
+        .build()
+        .unwrap())
 }
 
 /// Empty operation used to benchmark the service.

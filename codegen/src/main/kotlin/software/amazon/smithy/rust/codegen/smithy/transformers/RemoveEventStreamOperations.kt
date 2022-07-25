@@ -21,7 +21,8 @@ object RemoveEventStreamOperations {
 
     fun transform(model: Model, settings: CoreRustSettings): Model {
         // If Event Stream is allowed in build config, then don't remove the operations
-        if (settings.codegenConfig.eventStreamAllowList.contains(settings.moduleName)) {
+        val allowList = settings.codegenConfig.eventStreamAllowList
+        if (allowList.isEmpty() || allowList.contains(settings.moduleName)) {
             return model
         }
 

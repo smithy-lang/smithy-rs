@@ -68,7 +68,7 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
     }
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes.consistent("application/xml"))
+        HttpTraitHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes("application/xml", "application/xml", "application/vnd.amazon.eventstream"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME
