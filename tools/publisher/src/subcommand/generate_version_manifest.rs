@@ -29,10 +29,6 @@ pub struct GenerateVersionManifestArgs {
     /// Path containing the generated SDK to generate a version manifest for
     #[clap(long)]
     location: PathBuf,
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1531): Remove the unused `--release-tag` arg
-    /// Unused.
-    #[clap(long)]
-    release_tag: Option<String>,
     /// Optional path to the `versions.toml` manifest from the previous SDK release
     #[clap(long)]
     previous_release_versions: Option<PathBuf>,

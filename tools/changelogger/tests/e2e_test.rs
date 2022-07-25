@@ -210,7 +210,7 @@ fn render_smithy_rs_test() {
 
     subcommand_render(&RenderArgs {
         change_set: ChangeSet::SmithyRs,
-        independent_versioning: false,
+        independent_versioning: true,
         source: vec![source_path.clone()],
         source_to_truncate: source_path.clone(),
         changelog_output: dest_path.clone(),
@@ -228,8 +228,8 @@ fn render_smithy_rs_test() {
     pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), source);
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
-v0.42.0 (January 1st, 1970)
-===========================
+January 1st, 1970
+=================
 **New this release:**
 - (all, [smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234), @another-dev) Another change
 
@@ -246,8 +246,8 @@ Old entry contents
     );
     pretty_assertions::assert_str_eq!(
         r#"{
-  "tagName": "v0.42.0",
-  "name": "v0.42.0 (January 1st, 1970)",
+  "tagName": "release-1970-01-01",
+  "name": "January 1st, 1970",
   "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234))\n",
   "prerelease": true
 }"#,
@@ -296,7 +296,7 @@ fn render_aws_sdk_test() {
 
     subcommand_render(&RenderArgs {
         change_set: ChangeSet::AwsSdk,
-        independent_versioning: false,
+        independent_versioning: true,
         source: vec![source1_path.clone(), source2_path.clone()],
         source_to_truncate: source1_path.clone(),
         changelog_output: dest_path.clone(),
@@ -319,8 +319,8 @@ fn render_aws_sdk_test() {
     // the other should be filtered out by the `since_commit` attribute
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
-v0.12.0 (January 1st, 1970)
-===========================
+January 1st, 1970
+=================
 **New this release:**
 - 🐛 ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567), @test-dev) Some other change
 
@@ -340,8 +340,8 @@ Old entry contents
     );
     pretty_assertions::assert_str_eq!(
         r#"{
-  "tagName": "v0.12.0",
-  "name": "v0.12.0 (January 1st, 1970)",
+  "tagName": "release-1970-01-01",
+  "name": "January 1st, 1970",
   "body": "**New this release:**\n- 🐛 ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567), @test-dev) Some other change\n\n**Service Features:**\n- `aws-sdk-ec2` (0.12.0): Some API change\n\n**Contributors**\nThank you for your contributions! ❤\n- @test-dev ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567))\n",
   "prerelease": true
 }"#,
@@ -417,7 +417,7 @@ author = "rcoh"
 
     subcommand_render(&RenderArgs {
         change_set: ChangeSet::SmithyRs,
-        independent_versioning: false,
+        independent_versioning: true,
         source: vec![source_path.clone()],
         source_to_truncate: source_path.clone(),
         changelog_output: dest_path.clone(),
@@ -435,8 +435,8 @@ author = "rcoh"
     pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), source);
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
-v0.42.0 (January 1st, 1970)
-===========================
+January 1st, 1970
+=================
 **Breaking Changes:**
 - ⚠ (all, [smithy-rs#3](https://github.com/awslabs/smithy-rs/issues/3)) Third change - empty
 
@@ -526,7 +526,7 @@ author = "rcoh"
 
     let result = subcommand_render(&RenderArgs {
         change_set: ChangeSet::SmithyRs,
-        independent_versioning: false,
+        independent_versioning: true,
         source: vec![source_path.clone()],
         source_to_truncate: source_path.clone(),
         changelog_output: dest_path.clone(),
