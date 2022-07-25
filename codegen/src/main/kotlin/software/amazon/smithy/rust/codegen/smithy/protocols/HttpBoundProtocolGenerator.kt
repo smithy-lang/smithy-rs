@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTr
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
+import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
@@ -120,7 +121,7 @@ class HttpBoundProtocolTraitImplGenerator(
             }""",
             *codegenScope,
             "O" to outputSymbol,
-            "E" to operationShape.errorSymbol(symbolProvider),
+            "E" to operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target),
             "parse_error" to parseError(operationShape),
             "parse_response" to parseResponse(operationShape, customizations)
         )
@@ -151,7 +152,7 @@ class HttpBoundProtocolTraitImplGenerator(
             }
             """,
             "O" to outputSymbol,
-            "E" to operationShape.errorSymbol(symbolProvider),
+            "E" to operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target),
             "parse_streaming_response" to parseStreamingResponse(operationShape, customizations),
             "parse_error" to parseError(operationShape),
             *codegenScope
@@ -162,7 +163,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_error"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
@@ -176,7 +177,7 @@ class HttpBoundProtocolTraitImplGenerator(
                     protocol.parseHttpGenericError(operationShape),
                     errorSymbol
                 )
-                if (operationShape.errors.isNotEmpty()) {
+                if (operationShape.operationErrors(model).isNotEmpty()) {
                     rustTemplate(
                         """
                         let error_code = match generic.code() {
@@ -189,9 +190,10 @@ class HttpBoundProtocolTraitImplGenerator(
                         "error_symbol" to errorSymbol,
                     )
                     withBlock("Err(match error_code {", "})") {
-                        operationShape.errors.forEach { error ->
-                            val errorShape = model.expectShape(error, StructureShape::class.java)
-                            val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
+                        val errors = operationShape.operationErrors(model)
+                        errors.forEach { error ->
+                            val errorShape = model.expectShape(error.id, StructureShape::class.java)
+                            val variantName = symbolProvider.toSymbol(model.expectShape(error.id)).name
                             val errorCode = httpBindingResolver.errorCode(errorShape).dq()
                             withBlock(
                                 "$errorCode => #1T { meta: generic, kind: #1TKind::$variantName({",
@@ -235,7 +237,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
@@ -264,7 +266,7 @@ class HttpBoundProtocolTraitImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_response"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
@@ -346,7 +348,7 @@ class HttpBoundProtocolTraitImplGenerator(
         httpBindingGenerator: ResponseBindingGenerator,
         structuredDataParser: StructuredDataParserGenerator,
     ): Writable? {
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
         val member = binding.member
         return when (binding.location) {
             HttpLocation.HEADER -> writable {

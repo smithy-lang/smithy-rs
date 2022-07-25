@@ -60,7 +60,7 @@ private class TestProtocolTraitImplGenerator(
                     }""",
             "parse_strict" to RuntimeType.parseStrictResponse(coreCodegenContext.runtimeConfig),
             "output" to symbolProvider.toSymbol(operationShape.outputShape(coreCodegenContext.model)),
-            "error" to operationShape.errorSymbol(symbolProvider),
+            "error" to operationShape.errorSymbol(coreCodegenContext.model, symbolProvider, coreCodegenContext.target),
             "response" to RuntimeType.Http("Response"),
             "bytes" to RuntimeType.Bytes
         )
