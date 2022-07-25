@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asDeref
 import software.amazon.smithy.rust.codegen.rustlang.asRef
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.isCopy
 import software.amazon.smithy.rust.codegen.rustlang.isDeref
@@ -133,6 +134,7 @@ open class StructureGenerator(
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
                 renderMemberDoc(member, memberSymbol)
+                writer.deprecatedShape(member)
                 val memberType = memberSymbol.rustType()
                 val returnType = when {
                     memberType.isCopy() -> memberType
@@ -155,6 +157,7 @@ open class StructureGenerator(
 
     open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
         writer.renderMemberDoc(member, memberSymbol)
+        writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
         writer.write("$memberName: #T,", symbolProvider.toSymbol(member))
     }
@@ -163,6 +166,7 @@ open class StructureGenerator(
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
+        writer.deprecatedShape(shape)
         val withoutDebug = containerMeta.derives.copy(derives = containerMeta.derives.derives - RuntimeType.Debug)
         containerMeta.copy(derives = withoutDebug).render(writer)
 

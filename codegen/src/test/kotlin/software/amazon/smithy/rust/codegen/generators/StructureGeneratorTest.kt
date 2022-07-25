@@ -5,7 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.generators
 
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldContainInOrder
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -35,6 +37,8 @@ class StructureGeneratorTest {
                foo: String,
                @documentation("This *is* documentation about the member.")
                bar: PrimitiveInteger,
+               // Intentionally deprecated.
+               @deprecated
                baz: Integer,
                ts: Timestamp,
                inner: Inner,
@@ -207,6 +211,72 @@ class StructureGeneratorTest {
             };
             """
         )
+    }
+
+    @Test
+    fun `deprecated trait with message and since`() {
+        val model = """
+            namespace test
+
+            @deprecated
+            structure Foo {}
+
+            @deprecated(message: "Fly, you fools!")
+            structure Bar {}
+
+            @deprecated(since: "1.2.3")
+            structure Baz {}
+
+            @deprecated(message: "Fly, you fools!", since: "1.2.3")
+            structure Qux {}
+        """.asSmithyModel()
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.root()
+        writer.withModule("model") {
+            StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Baz")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Qux")).render()
+        }
+
+        // turn on clippy to check the semver-compliant version of `since`.
+        writer.compileAndTest(clippy = true)
+    }
+    @Test
+    fun `nested deprecated trait`() {
+        val model = """
+            namespace test
+
+            structure Nested {
+                foo: Foo,
+                @deprecated
+                foo2: Foo,
+            }
+
+            @deprecated
+            structure Foo {
+                bar: Bar,
+            }
+
+            @deprecated
+            structure Bar {}
+        """.asSmithyModel()
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.root()
+        writer.withModule("model") {
+            StructureGenerator(model, provider, this, model.lookup("test#Nested")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
+        }
+
+        val output = writer.compileAndTest()
+        output shouldNotContain "use of deprecated struct `model::Nested`"
+        output shouldContain "use of deprecated struct `model::Foo`"
+        output shouldContain "use of deprecated struct `model::Bar`"
+
+        output shouldNotContain "use of deprecated field `model::Nested::foo`"
+        output shouldContain "use of deprecated field `model::Nested::foo2`"
+        output shouldContain "use of deprecated field `model::Foo::bar`"
     }
 
     @Test
