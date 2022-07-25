@@ -23,7 +23,7 @@ repos:
   rev: v1.6.1
   hooks:
   - id: pretty-format-kotlin
-    args: [--autofix, --ktlint-version, 0.45.2]
+    args: [--autofix, --ktlint-version, 0.46.1]
   - id: pretty-format-yaml
     args: [--autofix, --indent, '2']
   - id: pretty-format-rust
