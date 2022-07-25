@@ -23,7 +23,7 @@ class CombinedErrorGeneratorTest {
         namespace error
 
         operation Greeting {
-            errors: [InvalidGreeting, ComplexError, FooException]
+            errors: [InvalidGreeting, ComplexError, FooException, Deprecated]
         }
 
         @error("client")
@@ -40,6 +40,10 @@ class CombinedErrorGeneratorTest {
             abc: String,
             other: Integer
         }
+
+        @error("server")
+        @deprecated
+        structure Deprecated { }
     """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val symbolProvider = testSymbolProvider(model)
@@ -48,7 +52,7 @@ class CombinedErrorGeneratorTest {
     fun `generates combined error enums`() {
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(RustModule.public("error")) { writer ->
-            listOf("FooException", "ComplexError", "InvalidGreeting").forEach {
+            listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
                 model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, writer)
             }
             val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
@@ -80,7 +84,10 @@ class CombinedErrorGeneratorTest {
 
                     // Indicate the original name in the display output.
                     let error = FooError::builder().build();
-                    assert_eq!(format!("{}", error), "FooError [FooException]")
+                    assert_eq!(format!("{}", error), "FooError [FooException]");
+
+                    let error = Deprecated::builder().build();
+                    assert_eq!(error.to_string(), "Deprecated");
                 """
             )
 
