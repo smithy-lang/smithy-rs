@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.generators
 
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -93,6 +94,40 @@ class UnionGeneratorTest {
 
             """
         )
+    }
+
+    @Test
+    fun `generate deprecated unions`() {
+        val model = """namespace test
+            union Nested {
+                foo: Foo,
+                @deprecated
+                foo2: Foo,
+            }
+            @deprecated
+            union Foo {
+                bar: Bar,
+            }
+
+            @deprecated
+            union Bar {}
+        """.asSmithyModel()
+        val provider: SymbolProvider = testSymbolProvider(model)
+        val writer = RustWriter.root()
+        writer.withModule("model") {
+            UnionGenerator(model, provider, this, model.lookup("test#Nested")).render()
+            UnionGenerator(model, provider, this, model.lookup("test#Foo")).render()
+            UnionGenerator(model, provider, this, model.lookup("test#Bar")).render()
+        }
+
+        val output = writer.compileAndTest()
+        output shouldNotContain "use of deprecated enum `model::Nested`"
+        output shouldContain "use of deprecated enum `model::Foo`"
+        output shouldContain "use of deprecated enum `model::Bar`"
+
+        output shouldNotContain "use of deprecated tuple variant `model::Nested::Foo`"
+        output shouldContain "use of deprecated tuple variant `model::Nested::Foo2`"
+        output shouldContain "use of deprecated tuple variant `model::Foo::Bar`"
     }
 
     private fun generateUnion(modelSmithy: String, unionName: String = "MyUnion", unknownVariant: Boolean = true): RustWriter {
