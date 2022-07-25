@@ -142,3 +142,9 @@ An example from the SDK is in [transcribe streaming](https://github.com/awslabs/
 references = ["smithy-rs#1157"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "82marbag"
+
+[[aws-sdk-rust]]
+message = "SDK crate READMEs now include an example of creating a client"
+references = ["smithy-rs#1571", "smithy-rs#1385"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
