@@ -100,9 +100,11 @@ class EnumGeneratorTest {
                         value: "t2.micro",
                         name: "T2_MICRO",
                         documentation: "T2 instances are Burstable Performance Instances.",
+                        deprecated: true,
                         tags: ["ebsOnly"]
                     },
                 ])
+                @deprecated(since: "1.2.3")
                 string InstanceType
             """.asSmithyModel()
             val provider = testSymbolProvider(model)
@@ -120,8 +122,12 @@ class EnumGeneratorTest {
                 assert_eq!(InstanceType::from("other").as_str(), "other");
                 """
             )
-
-            writer.toString() shouldContain "#[non_exhaustive]"
+            val output = writer.toString()
+            output shouldContain "#[non_exhaustive]"
+            // on enum variant `T2Micro`
+            output shouldContain "#[deprecated]"
+            // on enum itself
+            output shouldContain "#[deprecated(since = \"1.2.3\")]"
         }
 
         @Test
@@ -165,6 +171,7 @@ class EnumGeneratorTest {
                 {
                     value: "Bar",
                 }])
+                @deprecated
                 string FooEnum
             """.asSmithyModel()
             val shape = model.lookup<StringShape>("test#FooEnum")
