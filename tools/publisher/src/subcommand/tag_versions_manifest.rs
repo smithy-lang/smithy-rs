@@ -46,6 +46,7 @@ mod tests {
         let original = VersionsManifest {
             smithy_rs_revision: "some-revision-smithy-rs".into(),
             aws_doc_sdk_examples_revision: "some-revision-docs".into(),
+            manual_interventions: Default::default(),
             crates: [
                 (
                     "aws-config".to_string(),
