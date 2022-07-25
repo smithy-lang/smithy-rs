@@ -5,7 +5,6 @@
 
 //! Checksum calculation and verification callbacks.
 
-use ::http::header::HeaderName;
 use bytes::Bytes;
 use std::str::FromStr;
 
@@ -71,19 +70,8 @@ impl ChecksumAlgorithm {
         }
     }
 
-    /// Return the `HeaderName` used to represent this checksum algorithm
-    pub fn into_header_name(self) -> HeaderName {
-        match self {
-            Self::Crc32 => http::CRC_32_HEADER_NAME.clone(),
-            Self::Crc32c => http::CRC_32_C_HEADER_NAME.clone(),
-            Self::Md5 => http::MD5_HEADER_NAME.clone(),
-            Self::Sha1 => http::SHA_1_HEADER_NAME.clone(),
-            Self::Sha256 => http::SHA_256_HEADER_NAME.clone(),
-        }
-    }
-
     /// Return the name of this algorithm in string form
-    pub fn into_name(self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             Self::Crc32 => CRC_32_NAME,
             Self::Crc32c => CRC_32_C_NAME,

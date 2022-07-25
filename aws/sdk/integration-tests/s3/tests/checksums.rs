@@ -156,13 +156,13 @@ async fn test_sha256_checksum_on_streaming_response() {
 }
 
 // The test structure is identical for all supported checksum algorithms
-async fn test_checksum_on_streaming_request(
+async fn test_checksum_on_streaming_request<'a>(
     body: &'static [u8],
     checksum_algorithm: ChecksumAlgorithm,
     checksum_header_name: &'static str,
-    expected_decoded_content_length: &str,
-    expected_encoded_content_length: &str,
-    expected_aws_chunked_encoded_body: &str,
+    expected_decoded_content_length: &'a str,
+    expected_encoded_content_length: &'a str,
+    expected_aws_chunked_encoded_body: &'a str,
 ) {
     let creds = aws_sdk_s3::Credentials::new(
         "ANOTREAL",
@@ -180,10 +180,22 @@ async fn test_checksum_on_streaming_request(
     let client: aws_smithy_client::Client<_, aws_sdk_s3::middleware::DefaultMiddleware> =
         aws_smithy_client::Client::new(conn.clone());
 
+    // ByteStreams created from a file are streaming and have a known size
+    let mut file = tempfile::NamedTempFile::new().unwrap();
+    use std::io::Write;
+    file.write_all(body).unwrap();
+
+    let body = aws_sdk_s3::types::ByteStream::read_from()
+        .path(file.path())
+        .buffer_size(1024)
+        .build()
+        .await
+        .unwrap();
+
     let mut op = PutObject::builder()
         .bucket("test-bucket")
         .key("test.txt")
-        .body(aws_sdk_s3::types::ByteStream::from_static(body))
+        .body(body)
         .checksum_algorithm(checksum_algorithm)
         .build()
         .unwrap()

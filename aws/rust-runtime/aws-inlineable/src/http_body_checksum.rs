@@ -5,7 +5,7 @@
 
 //! Functions for modifying requests and responses for the purposes of checksum validation
 
-use aws_smithy_checksums::ChecksumAlgorithm;
+use http::header::HeaderName;
 
 /// Errors related to constructing checksum-validated HTTP requests
 #[derive(Debug)]
@@ -35,39 +35,42 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 /// Given a `&mut http::request::Request` and a `aws_smithy_checksums::ChecksumAlgorithm`,
-/// calculate a checksum and modify the request to include the checksum as a header.
-///
-/// **NOTE: This function only supports non-streaming request bodies and will return an error if a
-/// streaming request body is passed.**
+/// calculate a checksum and modify the request to include the checksum as a header
+/// (for in-memory request bodies) or a trailer (for streaming request bodies.) Streaming bodies
+/// must be sized or this will return an error.
 #[allow(dead_code)]
-pub(crate) fn calculate_body_checksum_and_insert_as_header(
+pub(crate) fn add_checksum_calculation_to_request(
     request: &mut http::request::Request<aws_smithy_http::body::SdkBody>,
+    property_bag: &mut aws_smithy_http::property_bag::PropertyBag,
     checksum_algorithm: aws_smithy_checksums::ChecksumAlgorithm,
 ) -> Result<(), aws_smithy_http::operation::BuildError> {
-    let mut checksum = checksum_algorithm.into_impl();
     match request.body().bytes() {
+        // Body is in-memory: read it and insert the checksum as a header.
         Some(data) => {
+            let mut checksum = checksum_algorithm.into_impl();
             checksum.update(data);
 
             request
                 .headers_mut()
                 .insert(checksum.header_name(), checksum.header_value());
-
-            Ok(())
         }
-        None => Err(aws_smithy_http::operation::BuildError::Other(Box::new(
-            Error::ChecksumHeadersAreUnsupportedForStreamingBody,
-        ))),
+        // Body is streaming: wrap the body so it will emit a checksum as a trailer.
+        None => {
+            wrap_streaming_request_body_in_checksum_calculating_body(
+                request,
+                property_bag,
+                checksum_algorithm,
+            )?;
+        }
     }
+
+    Ok(())
 }
 
-/// Given a `&mut http::request::Request` and a `aws_smithy_checksums::ChecksumAlgorithm`, wrap the
-/// request's inner body with a body that will calculate a checksum during streaming and emit the
-/// checksum as a trailer. This only supports streaming bodies with a known size and will otherwise
-/// return an error.
 #[allow(dead_code)]
-pub(crate) fn wrap_streaming_request_body_in_checksum_calculating_body(
+fn wrap_streaming_request_body_in_checksum_calculating_body(
     request: &mut http::request::Request<aws_smithy_http::body::SdkBody>,
+    property_bag: &mut aws_smithy_http::property_bag::PropertyBag,
     checksum_algorithm: aws_smithy_checksums::ChecksumAlgorithm,
 ) -> Result<(), aws_smithy_http::operation::BuildError> {
     use aws_http::content_encoding::{AwsChunkedBody, AwsChunkedBodyOptions};
@@ -77,6 +80,9 @@ pub(crate) fn wrap_streaming_request_body_in_checksum_calculating_body(
     let original_body_size = request.body().size_hint().exact().ok_or_else(|| {
         aws_smithy_http::operation::BuildError::Other(Box::new(Error::UnsizedRequestBody))
     })?;
+
+    // Streaming request bodies with trailers require special signing
+    property_bag.insert(aws_sig_auth::signer::SignableBody::StreamingUnsignedPayloadTrailer);
 
     let mut body = {
         let body = std::mem::replace(request.body_mut(), aws_smithy_http::body::SdkBody::taken());
@@ -103,7 +109,7 @@ pub(crate) fn wrap_streaming_request_body_in_checksum_calculating_body(
     headers.insert(
         http::header::HeaderName::from_static("x-amz-trailer"),
         // Convert into a `HeaderName` and then into a `HeaderValue`
-        checksum_algorithm.into_header_name().into(),
+        http::header::HeaderName::from(checksum_algorithm).into(),
     );
 
     headers.insert(
@@ -172,10 +178,10 @@ pub(crate) fn check_headers_for_precalculated_checksum(
             });
 
     for checksum_algorithm in checksum_algorithms_to_check {
-        let checksum_algorithm: ChecksumAlgorithm = checksum_algorithm.parse().expect(
+        let checksum_algorithm: aws_smithy_checksums::ChecksumAlgorithm = checksum_algorithm.parse().expect(
             "CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER only contains valid checksum algorithm names",
         );
-        if let Some(precalculated_checksum) = headers.get(&checksum_algorithm.into_header_name()) {
+        if let Some(precalculated_checksum) = headers.get(HeaderName::from(checksum_algorithm)) {
             let base64_encoded_precalculated_checksum = precalculated_checksum
                 .to_str()
                 .expect("base64 uses ASCII characters");

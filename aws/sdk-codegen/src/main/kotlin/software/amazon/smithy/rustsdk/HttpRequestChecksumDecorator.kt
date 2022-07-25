@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.util.expectMember
 import software.amazon.smithy.rust.codegen.util.getTrait
-import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 
@@ -36,11 +35,10 @@ fun RuntimeConfig.awsInlineableBodyWithChecksum() = RuntimeType.forInlineDepende
         CargoDependency.SmithyTypes(this),
         CargoDependency.Bytes,
         CargoDependency.Tracing,
-        this.awsRuntimeDependency("aws-http")
+        this.sigAuth(),
+        this.awsHttp(),
     )
 )
-
-fun RuntimeConfig.smithyChecksums() = CargoDependency.SmithyChecksums(this).asType()
 
 class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "HttpRequestChecksum"
@@ -102,7 +100,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             };
             """,
             "BuildError" to runtimeConfig.operationBuildError(),
-            "ChecksumAlgorithm" to runtimeConfig.smithyChecksums().member("ChecksumAlgorithm"),
+            "ChecksumAlgorithm" to CargoDependency.SmithyChecksums(runtimeConfig).asType().member("ChecksumAlgorithm"),
         )
 
         // If a request checksum is not required and there's no way to set one, do nothing
@@ -140,49 +138,26 @@ class HttpRequestChecksumCustomization(
                 // Return early if no request checksum can be set nor is it required
                 if (!checksumTrait.isRequestChecksumRequired && checksumAlgorithm == null) {
                     return emptySection
-                }
-                if (operationShape.inputShape(codegenContext.model).hasStreamingMember(codegenContext.model)) {
+                } else {
+                    // `add_checksum_calculation_to_request` handles both streaming and in-memory request bodies.
                     return {
                         rustTemplate(
                             """
                             ${section.request} = ${section.request}.augment(|mut req, properties| {
                                 #{checksum_algorithm_to_str:W}
                                 if let Some(checksum_algorithm) = checksum_algorithm {
-                                    properties.insert(#{sig_auth}::signer::SignableBody::StreamingUnsignedPayloadTrailer);
-                                    #{wrap_streaming_request_body_in_checksum_calculating_body}(&mut req, checksum_algorithm)?;
+                                    #{add_checksum_calculation_to_request}(&mut req, properties, checksum_algorithm)?;
                                 }
                                 Result::<_, #{BuildError}>::Ok(req)
                             })?;
                             """,
-                            "sig_auth" to runtimeConfig.awsRuntimeDependency("aws-sig-auth").asType(),
-                            "wrap_streaming_request_body_in_checksum_calculating_body" to runtimeConfig.awsInlineableBodyWithChecksum()
-                                .member("wrap_streaming_request_body_in_checksum_calculating_body"),
-                            "BuildError" to runtimeConfig.operationBuildError(),
                             "checksum_algorithm_to_str" to checksumTrait.checksumAlgorithmToStr(
                                 codegenContext,
                                 operationShape
                             ),
-                        )
-                    }
-                } else {
-                    return {
-                        rustTemplate(
-                            """
-                            ${section.request} = ${section.request}.augment(|mut req, _| {
-                                #{checksum_algorithm_to_str:W}
-                                if let Some(checksum_algorithm) = checksum_algorithm {
-                                    #{calculate_body_checksum_and_insert_as_header}(&mut req, checksum_algorithm)?;
-                                }
-                                Result::<_, #{BuildError}>::Ok(req)
-                            })?;
-                            """,
-                            "calculate_body_checksum_and_insert_as_header" to runtimeConfig.awsInlineableBodyWithChecksum()
-                                .member("calculate_body_checksum_and_insert_as_header"),
+                            "add_checksum_calculation_to_request" to runtimeConfig.awsInlineableBodyWithChecksum()
+                                .member("add_checksum_calculation_to_request"),
                             "BuildError" to runtimeConfig.operationBuildError(),
-                            "checksum_algorithm_to_str" to checksumTrait.checksumAlgorithmToStr(
-                                codegenContext,
-                                operationShape
-                            ),
                         )
                     }
                 }
