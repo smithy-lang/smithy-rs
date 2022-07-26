@@ -31,3 +31,5 @@ pub trait AssociatedGenericTrait {
 
     fn something_result(&self, input: Self::Input) -> Result<Self::Output, Self::Error>;
 }
+
+pub struct SimpleNewType(pub u32);

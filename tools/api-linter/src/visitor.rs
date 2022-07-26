@@ -59,7 +59,7 @@ impl Visitor {
 
         for id in &root_module.items {
             let item = self.item(id).context(here!())?;
-            self.visit_item(&root_path, item)?;
+            self.visit_item(&root_path, item, false)?;
         }
         Ok(self.errors.take())
     }
@@ -85,14 +85,18 @@ impl Visitor {
     }
 
     #[instrument(level = "debug", skip(self, path, item), fields(path = %path, name = ?item.name, id = %item.id.0))]
-    fn visit_item(&self, path: &Path, item: &Item) -> Result<()> {
-        if !Self::is_public(path, item) {
+    fn visit_item(&self, path: &Path, item: &Item, override_visibility: bool) -> Result<()> {
+        if !override_visibility && !Self::is_public(path, item) {
             return Ok(());
         }
 
         let mut path = path.clone();
         match &item.inner {
-            ItemEnum::AssocConst { .. } => unimplemented!("visit_item ItemEnum::AssocConst"),
+            ItemEnum::AssocConst { type_, .. } => {
+                path.push(ComponentType::AssocConst, item);
+                self.visit_type(&path, &ErrorLocation::StructField, type_)
+                    .context(here!())?;
+            }
             ItemEnum::AssocType {
                 bounds,
                 default,
@@ -116,7 +120,7 @@ impl Visitor {
                     self.visit_impl(&path, self.item(id)?)?;
                 }
                 for id in &enm.variants {
-                    self.visit_item(&path, self.item(id)?)?;
+                    self.visit_item(&path, self.item(id)?, false)?;
                 }
             }
             ItemEnum::ForeignType => unimplemented!("visit_item ItemEnum::ForeignType"),
@@ -126,9 +130,13 @@ impl Visitor {
                 self.visit_generics(&path, &function.generics)?;
             }
             ItemEnum::Import(import) => {
-                if let Some(id) = &import.id {
+                if let Some(target_id) = &import.id {
+                    if let Ok(target_item) = self.item(target_id) {
+                        // Override the visibility check for re-exported items
+                        self.visit_item(&path, target_item, true).context(here!())?;
+                    }
                     path.push_raw(ComponentType::ReExport, &import.name, item.span.as_ref());
-                    self.check_external(&path, &ErrorLocation::ReExport, id)
+                    self.check_external(&path, &ErrorLocation::ReExport, target_id)
                         .context(here!())?;
                 }
             }
@@ -149,7 +157,7 @@ impl Visitor {
                     // for re-exports since it includes the correct span where the re-export occurs,
                     // and we don't want to examine the innards of the re-export.
                     if module_item.crate_id == self.root_crate_id {
-                        self.visit_item(&path, module_item)?;
+                        self.visit_item(&path, module_item, false)?;
                     }
                 }
             }
@@ -199,7 +207,7 @@ impl Visitor {
         self.visit_generics(path, &strct.generics)?;
         for id in &strct.fields {
             let field = self.item(id)?;
-            self.visit_item(path, field)?;
+            self.visit_item(path, field, false)?;
         }
         for id in &strct.impls {
             self.visit_impl(path, self.item(id)?)?;
@@ -213,7 +221,7 @@ impl Visitor {
         self.visit_generic_bounds(path, &trt.bounds)?;
         for id in &trt.items {
             let item = self.item(id)?;
-            self.visit_item(path, item)?;
+            self.visit_item(path, item, false)?;
         }
         Ok(())
     }
@@ -227,7 +235,7 @@ impl Visitor {
             }
             self.visit_generics(path, &imp.generics)?;
             for id in &imp.items {
-                self.visit_item(path, self.item(id)?)?;
+                self.visit_item(path, self.item(id)?, false)?;
             }
             if let Some(trait_) = &imp.trait_ {
                 self.visit_type(path, &ErrorLocation::ImplementedTrait, trait_)
@@ -402,10 +410,15 @@ impl Visitor {
         self.visit_generic_param_defs(path, &generics.params)?;
         for where_pred in &generics.where_predicates {
             match where_pred {
-                WherePredicate::BoundPredicate { type_, bounds } => {
+                WherePredicate::BoundPredicate {
+                    type_,
+                    bounds,
+                    generic_params,
+                } => {
                     self.visit_type(path, &ErrorLocation::WhereBound, type_)
                         .context(here!())?;
                     self.visit_generic_bounds(path, bounds)?;
+                    self.visit_generic_param_defs(path, generic_params)?;
                 }
                 WherePredicate::RegionPredicate { bounds, .. } => {
                     self.visit_generic_bounds(path, bounds)?;
@@ -430,7 +443,7 @@ impl Visitor {
             }
             Variant::Struct(ids) => {
                 for id in ids {
-                    self.visit_item(path, self.item(id)?)?;
+                    self.visit_item(path, self.item(id)?, false)?;
                 }
             }
         }
