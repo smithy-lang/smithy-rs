@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumMemberModel
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -109,6 +110,7 @@ class EnumGeneratorTest {
             """.asSmithyModel()
             val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")
+            writer.rust("##![allow(deprecated)]")
             val shape = model.lookup<StringShape>("test#InstanceType")
             val generator = EnumGenerator(model, provider, writer, shape, shape.expectTrait<EnumTrait>())
             generator.render()
@@ -177,6 +179,7 @@ class EnumGeneratorTest {
             val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val writer = RustWriter.forModule("model")
+            writer.rust("##![allow(deprecated)]")
             val generator = EnumGenerator(model, testSymbolProvider(model), writer, shape, trait)
             generator.render()
             writer.compileAndTest(
@@ -216,6 +219,7 @@ class EnumGeneratorTest {
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")
+            writer.rust("##![allow(deprecated)]")
             val generator = EnumGenerator(model, provider, writer, shape, trait)
             generator.render()
             writer.compileAndTest(
