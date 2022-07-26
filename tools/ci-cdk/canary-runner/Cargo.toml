@@ -11,18 +11,19 @@ publish = false
 
 [dependencies]
 anyhow = "1"
+async-trait = "0.1.56"
 aws-config = "0.3"
 aws-sdk-cloudwatch = "0.3"
 aws-sdk-lambda = "0.3"
 aws-sdk-s3 = "0.3"
 base64 = "0.13"
 clap = { version = "~3.1.18", features = ["derive"] }
-crates_io_api = "0.7"
 lazy_static = "1"
+octorust = "0.1.37"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+smithy-rs-tool-common = { version = "0.1", path = "../../smithy-rs-tool-common", features = ["async-shell"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-smithy-rs-tool-common = { version = "0.1", path = "../../smithy-rs-tool-common", features = ["async-shell"] }
