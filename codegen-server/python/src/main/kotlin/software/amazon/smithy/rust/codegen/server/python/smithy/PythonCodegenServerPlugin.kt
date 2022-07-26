@@ -75,7 +75,7 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
                 // `aws_smithy_http_server_python::types`.
                 .let { PythonServerSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
+                .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf()) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)
                 .let { StreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
