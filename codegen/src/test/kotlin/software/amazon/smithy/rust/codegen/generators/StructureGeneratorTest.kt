@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.generators
 
 import io.kotest.matchers.string.shouldContainInOrder
+import io.kotest.matchers.string.shouldNotContain
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -292,5 +294,42 @@ class StructureGeneratorTest {
             }
         }
         project.compileAndTest()
+    }
+
+    @Test
+    fun `non-streaming fields are doc-hidden`() {
+        val model = """
+            namespace com.test
+            structure MyStruct {
+               foo: String,
+               bar: PrimitiveInteger,
+               baz: Integer,
+               ts: Timestamp,
+               byteValue: Byte,
+            }
+        """.asSmithyModel()
+        val struct = model.lookup<StructureShape>("com.test#MyStruct")
+
+        val provider = testSymbolProvider(model)
+        RustWriter.forModule("test").let { writer ->
+            StructureGenerator(model, provider, writer, struct).render()
+            assertEquals(6, writer.toString().split("#[doc(hidden)]").size, "there should be 5 doc-hiddens")
+        }
+    }
+
+    @Test
+    fun `streaming fields are NOT doc-hidden`() {
+        val model = """
+            namespace com.test
+            @streaming blob SomeStreamingThing
+            structure MyStruct { foo: SomeStreamingThing }
+        """.asSmithyModel()
+        val struct = model.lookup<StructureShape>("com.test#MyStruct")
+
+        val provider = testSymbolProvider(model)
+        RustWriter.forModule("test").let { writer ->
+            StructureGenerator(model, provider, writer, struct).render()
+            writer.toString().shouldNotContain("#[doc(hidden)]")
+        }
     }
 }
