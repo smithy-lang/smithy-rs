@@ -10,8 +10,7 @@ categories = ["asynchronous", "web-programming", "api-bindings"]
 description = """
 Server runtime for Smithy Rust Server Framework.
 """
-# until this is not stable, it is not publishable.
-publish = false
+publish = true
 
 [features]
 unredacted-logging = []

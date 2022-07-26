@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.generators.error
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -21,6 +22,9 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.smithy.transformers.allErrors
+import software.amazon.smithy.rust.codegen.smithy.transformers.eventStreamErrors
 
 /**
  * Each service defines its own "top-level" error combining all possible errors that a service can emit.
@@ -37,11 +41,11 @@ import software.amazon.smithy.rust.codegen.smithy.RustCrate
  * }
  * ```
  */
-class TopLevelErrorGenerator(coreCodegenContext: CoreCodegenContext, private val operations: List<OperationShape>) {
+class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext, private val operations: List<OperationShape>) {
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val model = coreCodegenContext.model
 
-    private val allErrors = operations.flatMap { it.errors }.distinctBy { it.getName(coreCodegenContext.serviceShape) }
+    private val allErrors = operations.flatMap { it.allErrors(model) }.map { it.id }.distinctBy { it.getName(coreCodegenContext.serviceShape) }
         .map { coreCodegenContext.model.expectShape(it, StructureShape::class.java) }
         .sortedBy { it.id.getName(coreCodegenContext.serviceShape) }
 
@@ -52,8 +56,23 @@ class TopLevelErrorGenerator(coreCodegenContext: CoreCodegenContext, private val
             writer.renderImplDisplay()
             // Every operation error can be converted into service::Error
             operations.forEach { operationShape ->
-                writer.renderImplFrom(operationShape)
+                // operation errors
+                writer.renderImplFrom(operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target), operationShape.errors)
             }
+            // event stream errors
+            operations.map { it.eventStreamErrors(coreCodegenContext.model) }
+                .flatMap { it.entries }
+                .associate { it.key to it.value }
+                .forEach { (unionShape, errors) ->
+                    writer.renderImplFrom(
+                        unionShape.eventStreamErrorSymbol(
+                            model,
+                            symbolProvider,
+                            coreCodegenContext.target
+                        ),
+                        errors.map { it.id }
+                    )
+                }
             writer.rust("impl #T for Error {}", RuntimeType.StdError)
         }
         crate.lib { it.rust("pub use error_meta::Error;") }
@@ -72,28 +91,32 @@ class TopLevelErrorGenerator(coreCodegenContext: CoreCodegenContext, private val
         }
     }
 
-    private fun RustWriter.renderImplFrom(operationShape: OperationShape) {
-        val operationError = operationShape.errorSymbol(symbolProvider)
-        rustBlock(
-            "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
-            sdkError,
-            operationError
-        ) {
-            rustBlockTemplate(
-                "fn from(err: #{SdkError}<#{OpError}, R>) -> Self",
-                "SdkError" to sdkError,
-                "OpError" to operationError
+    private fun RustWriter.renderImplFrom(symbol: RuntimeType, errors: List<ShapeId>) {
+        if (errors.isNotEmpty() || CodegenTarget.CLIENT == coreCodegenContext.target) {
+            rustBlock(
+                "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
+                sdkError,
+                symbol
             ) {
-                rustBlock("match err") {
-                    val operationErrors = operationShape.errors.map { model.expectShape(it) }
-                    rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {
-                        operationErrors.forEach { errorShape ->
-                            val errSymbol = symbolProvider.toSymbol(errorShape)
-                            rust("#TKind::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),", operationError)
+                rustBlockTemplate(
+                    "fn from(err: #{SdkError}<#{OpError}, R>) -> Self",
+                    "SdkError" to sdkError,
+                    "OpError" to symbol
+                ) {
+                    rustBlock("match err") {
+                        val operationErrors = errors.map { model.expectShape(it) }
+                        rustBlock("#T::ServiceError { err, ..} => match err.kind", sdkError) {
+                            operationErrors.forEach { errorShape ->
+                                val errSymbol = symbolProvider.toSymbol(errorShape)
+                                rust(
+                                    "#TKind::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),",
+                                    symbol
+                                )
+                            }
+                            rust("#TKind::Unhandled(inner) => Error::Unhandled(inner),", symbol)
                         }
-                        rust("#TKind::Unhandled(inner) => Error::Unhandled(inner),", operationError)
+                        rust("_ => Error::Unhandled(err.into()),")
                     }
-                    rust("_ => Error::Unhandled(err.into()),")
                 }
             }
         }

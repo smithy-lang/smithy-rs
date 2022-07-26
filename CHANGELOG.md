@@ -1,4 +1,14 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 20th, 2022
+===============
+**New this release:**
+- 🎉 (all, [aws-sdk-rust#567](https://github.com/awslabs/aws-sdk-rust/issues/567)) Updated the smithy client's retry behavior to allow for a configurable initial backoff. Previously, the initial backoff
+    (named `r` in the code) was set to 2 seconds. This is not an ideal default for services that expect clients to quickly
+    retry failed request attempts. Now, users can set quicker (or slower) backoffs according to their needs.
+- (all, [smithy-rs#1263](https://github.com/awslabs/smithy-rs/issues/1263)) Add checksum calculation and validation wrappers for HTTP bodies.
+- (all, [smithy-rs#1263](https://github.com/awslabs/smithy-rs/issues/1263)) `aws_smithy_http::header::append_merge_header_maps`, a function for merging two `HeaderMap`s, is now public.
+
+
 v0.45.0 (June 28th, 2022)
 =========================
 **Breaking Changes:**

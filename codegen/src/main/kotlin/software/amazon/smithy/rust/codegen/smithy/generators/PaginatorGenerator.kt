@@ -83,7 +83,7 @@ class PaginatorGenerator private constructor(
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputType = operation.outputShape(model)
-    private val errorType = operation.errorSymbol(symbolProvider)
+    private val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
 
     private fun paginatorType(): RuntimeType = RuntimeType.forInlineFun(
         paginatorName,

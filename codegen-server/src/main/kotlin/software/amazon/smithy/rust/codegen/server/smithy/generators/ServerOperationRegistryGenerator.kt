@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.Errors
 import software.amazon.smithy.rust.codegen.smithy.Inputs
 import software.amazon.smithy.rust.codegen.smithy.Outputs
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -91,11 +92,11 @@ class ServerOperationRegistryGenerator(
         }
 
         writer.rustTemplate(
-            """
+"""
 ##[allow(clippy::tabs_in_doc_comments)]
 /// The `$operationRegistryName` is the place where you can register
 /// your service's operation implementations.
-/// 
+///
 /// Use [`$operationRegistryBuilderName`] to construct the
 /// `$operationRegistryName`. For each of the [operations] modeled in
 /// your Smithy service, you need to provide an implementation in the
@@ -116,9 +117,9 @@ class ServerOperationRegistryGenerator(
 /// type implementing [`tower::make::MakeService`], a _service
 /// factory_. You can feed this value to a [Hyper server], and the
 /// server will instantiate and [`serve`] your service.
-/// 
+///
 /// Here's a full example to get you started:
-/// 
+///
 /// ```rust
 /// use std::net::SocketAddr;
 $inputOutputErrorsImport
@@ -364,9 +365,9 @@ ${operationImplementationStubs(operations)}
             } else ""
             ret +
                 """
-                    /// ${it.signature()} {
-                    ///     todo!()
-                    /// }
+                /// ${it.signature()} {
+                ///     todo!()
+                /// }
                 """.trimIndent()
         }
 
@@ -376,7 +377,7 @@ ${operationImplementationStubs(operations)}
     private fun OperationShape.signature(): String {
         val inputSymbol = symbolProvider.toSymbol(inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
-        val errorSymbol = errorSymbol(symbolProvider)
+        val errorSymbol = errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
 
         val inputT = "${Inputs.namespace}::${inputSymbol.name}"
         val t = "${Outputs.namespace}::${outputSymbol.name}"
