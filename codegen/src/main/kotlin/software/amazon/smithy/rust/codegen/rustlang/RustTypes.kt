@@ -382,14 +382,18 @@ sealed class Attribute {
              * [`#[deprecated]`](https://doc.rust-lang.org/reference/attributes/diagnostics.html#the-deprecated-attribute)
              * attribute.
              */
-            fun deprecated(note: String = "", since: String = ""): Custom {
+            fun deprecated(note: String? = null, since: String? = null): Custom {
                 val builder = StringBuilder()
                 builder.append("deprecated")
-                if (note.isBlank().and(since.isBlank())) {
+
+                val note = note ?: ""
+                val since = since ?: ""
+
+                if (note.isBlank() && since.isBlank()) {
                     // No-op. Rustc would emit a default message.
-                } else if (note.isNotBlank().and(since.isBlank())) {
+                } else if (note.isNotBlank() && since.isBlank()) {
                     builder.append("(note = ${note.dq()})")
-                } else if (note.isBlank().and(since.isNotBlank())) {
+                } else if (note.isBlank() && since.isNotBlank()) {
                     builder.append("(since = ${since.dq()})")
                 } else {
                     builder.append("(note = ${note.dq()}, since = ${since.dq()})")

@@ -277,8 +277,8 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
 fun RustWriter.deprecatedShape(shape: Shape): RustWriter {
     val deprecatedTrait = shape.getTrait<DeprecatedTrait>() ?: return this
 
-    val note = deprecatedTrait.message.orElse("")
-    val since = deprecatedTrait.since.orElse("")
+    val note = deprecatedTrait.message.orNull()
+    val since = deprecatedTrait.since.orNull()
 
     Attribute.Custom.deprecated(note, since).render(this)
 
