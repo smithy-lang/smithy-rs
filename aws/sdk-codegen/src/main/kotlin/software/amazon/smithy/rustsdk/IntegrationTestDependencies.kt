@@ -82,7 +82,7 @@ class IntegrationTestDependencies(
 
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> = when (moduleName) {
         "transcribestreaming" -> listOf(TranscribeTestDependencies())
-        "s3" -> listOf(S3TestDependencies())
+        "s3" -> listOf(S3TestDependencies(runtimeConfig))
         else -> emptyList()
     }
 }
@@ -95,12 +95,18 @@ class TranscribeTestDependencies : LibRsCustomization() {
     }
 }
 
-class S3TestDependencies : LibRsCustomization() {
+class S3TestDependencies(
+    private val runtimeConfig: RuntimeConfig
+) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable = writable {
-        addDependency(BytesUtils)
-        addDependency(TempFile)
-        addDependency(Smol)
         addDependency(AsyncStd)
+        addDependency(BytesUtils)
+        addDependency(Smol)
+        addDependency(TempFile)
+        runtimeConfig.runtimeCrate("async", scope = DependencyScope.Dev)
+        runtimeConfig.runtimeCrate("client", scope = DependencyScope.Dev)
+        runtimeConfig.runtimeCrate("http", scope = DependencyScope.Dev)
+        runtimeConfig.runtimeCrate("types", scope = DependencyScope.Dev)
     }
 }
 
