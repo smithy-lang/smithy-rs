@@ -20,7 +20,7 @@ use aws_sdk_lambda as lambda;
 use aws_sdk_s3 as s3;
 use clap::Parser;
 use cloudwatch::model::StandardUnit;
-use s3::ByteStream;
+use s3::types::ByteStream;
 use semver::Version;
 use serde::Deserialize;
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
@@ -188,7 +188,7 @@ pub async fn run(opt: RunOpt) -> Result<()> {
     result.map(|_| ())
 }
 
-async fn run_canary(options: &Options, config: &aws_config::Config) -> Result<Duration> {
+async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result<Duration> {
     let smithy_rs_root = find_git_repository_root("smithy-rs", ".").context(here!())?;
     let smithy_rs = GitCLI::new(&smithy_rs_root).context(here!())?;
     env::set_current_dir(smithy_rs_root.join("tools/ci-cdk/canary-lambda"))
@@ -373,7 +373,7 @@ async fn create_lambda_fn(
 
 async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Result<()> {
     use lambda::model::*;
-    use lambda::Blob;
+    use lambda::types::Blob;
 
     let response = lambda_client
         .invoke()

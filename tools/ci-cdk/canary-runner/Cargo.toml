@@ -12,10 +12,10 @@ publish = false
 [dependencies]
 anyhow = "1"
 async-trait = "0.1.56"
-aws-config = "0.3"
-aws-sdk-cloudwatch = "0.3"
-aws-sdk-lambda = "0.3"
-aws-sdk-s3 = "0.3"
+aws-config = "0.46"
+aws-sdk-cloudwatch = "0.16"
+aws-sdk-lambda = "0.16"
+aws-sdk-s3 = "0.16"
 base64 = "0.13"
 clap = { version = "~3.1.18", features = ["derive"] }
 lazy_static = "1"
