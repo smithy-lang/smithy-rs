@@ -194,8 +194,14 @@ references = ["smithy-rs#1482"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
 
- [[smithy-rs]]
- message = "Update codegen to generate support for flexible checksums."
- references = ["smithy-rs#1482"]
- meta = { "breaking" = false, "tada" = true, "bug" = false }
- author = "Velfi"
+[[smithy-rs]]
+message = "Update codegen to generate support for flexible checksums."
+references = ["smithy-rs#1482"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "SDK crate READMEs now include an example of creating a client"
+references = ["smithy-rs#1571", "smithy-rs#1385"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
