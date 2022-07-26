@@ -17,6 +17,7 @@ fn test_hydrate_readme() {
     VersionsManifest {
         smithy_rs_revision: "dontcare".into(),
         aws_doc_sdk_examples_revision: "dontcare".into(),
+        manual_interventions: Default::default(),
         crates: [
             (
                 "aws-config".to_string(),

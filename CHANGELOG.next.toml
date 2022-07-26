@@ -143,6 +143,12 @@ references = ["smithy-rs#1157"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "82marbag"
 
+[[aws-sdk-rust]]
+message = "SDK crate READMEs now include an example of creating a client"
+references = ["smithy-rs#1571", "smithy-rs#1385"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
 [[smithy-rs]]
 message = "Non-streaming struct members are now marked `#[doc(hidden)]` since they will be removed in the future"
 references = ["smithy-rs#1573", "smithy-rs#1569"]
