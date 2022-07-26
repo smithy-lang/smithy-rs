@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.util.lookup
 class ServerOperationRegistryGeneratorTest {
     private val model = """
         namespace test
-        
+
         use aws.protocols#restJson1
 
         @restJson1
