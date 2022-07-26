@@ -347,10 +347,11 @@ class MoveDocumentMembersToQueryParamsTransform(
 }
 
 private fun RustWriter.documentPresignedMethod(hasConfigArg: Boolean) {
-    val configBlurb = if (hasConfigArg)
+    val configBlurb = if (hasConfigArg) {
         "The credentials provider from the `config` will be used to generate the request's signature.\n"
-    else
+    } else {
         ""
+    }
     docs(
         """
         Creates a presigned request for this operation.

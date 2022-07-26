@@ -767,15 +767,17 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val httpTrait = httpBindingResolver.httpTrait(operationShape)
         val greedyLabelIndex = httpTrait.uri.segments.indexOfFirst { it.isGreedyLabel }
         val segments =
-            if (greedyLabelIndex >= 0)
+            if (greedyLabelIndex >= 0) {
                 httpTrait.uri.segments.slice(0 until (greedyLabelIndex + 1))
-            else
+            } else {
                 httpTrait.uri.segments
+            }
         val restAfterGreedyLabel =
-            if (greedyLabelIndex >= 0)
+            if (greedyLabelIndex >= 0) {
                 httpTrait.uri.segments.slice((greedyLabelIndex + 1) until httpTrait.uri.segments.size).joinToString(prefix = "/", separator = "/")
-            else
+            } else {
                 ""
+            }
         val labeledNames = segments
             .mapIndexed { index, segment ->
                 if (segment.isLabel) { "m$index" } else { "_" }

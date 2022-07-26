@@ -149,6 +149,7 @@ interface RustSymbolProvider : SymbolProvider {
  * Make the return [value] optional if the [member] symbol is as well optional.
  */
 fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) { "Some($value)" }
+
 /**
  * Make the return [value] optional if the [member] symbol is not optional.
  */
@@ -198,7 +199,6 @@ class SymbolVisitor(
     }
 
     override fun toMemberName(shape: MemberShape): String = when (val container = model.expectShape(shape.container)) {
-
         is StructureShape -> shape.memberName.toSnakeCase()
         is UnionShape -> shape.memberName.toPascalCase()
         else -> error("unexpected container shape: $container")

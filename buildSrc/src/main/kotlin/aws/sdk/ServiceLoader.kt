@@ -148,6 +148,7 @@ data class AwsService(
 ) {
     fun modelFiles(): List<File> = listOf(modelFile) + extraFiles
     fun Project.examples(): File = projectDir.resolve("examples").resolve(module)
+
     /**
      * Generate a link to the examples for a given service
      */

@@ -32,8 +32,9 @@ open class NoOpEventStreamSigningDecorator<C : CoreCodegenContext> : RustCodegen
         codegenContext: C,
         baseCustomizations: List<ConfigCustomization>
     ): List<ConfigCustomization> {
-        if (!applies(codegenContext, baseCustomizations))
+        if (!applies(codegenContext, baseCustomizations)) {
             return baseCustomizations
+        }
         return baseCustomizations + NoOpEventStreamSigningConfig(
             codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model),
             codegenContext.runtimeConfig,

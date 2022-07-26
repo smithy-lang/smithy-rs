@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 
 private fun String.shapeId() = ShapeId.from(this)
+
 // / STS (and possibly other services) need to have auth manually set to []
 class DisabledAuthDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "OptionalAuth"
