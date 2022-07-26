@@ -151,8 +151,8 @@ author = "jdisanti"
 
 [[smithy-rs]]
 message = """
-Codegenerate Python application example and add explicit cast during JSON deserialization.
+Add explicit cast during JSON deserialization in case of custom Symbol providers.
 """
 references = ["smithy-rs#1520"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "all" }
+meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "crisidev"

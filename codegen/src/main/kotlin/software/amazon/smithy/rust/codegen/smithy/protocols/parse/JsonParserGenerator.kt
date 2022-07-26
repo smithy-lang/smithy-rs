@@ -65,7 +65,7 @@ class JsonParserGenerator(
     private val target = coreCodegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
-    private val util = ParserUtil(symbolProvider, runtimeConfig)
+    private val typeConversionGenerator = TypeConversionGenerator(symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
         "Error" to smithyJson.member("deserialize::Error"),
         "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
@@ -240,7 +240,7 @@ class JsonParserGenerator(
     private fun RustWriter.deserializeBlob(target: BlobShape) {
         rustTemplate(
             "#{expect_blob_or_null}(tokens.next())?#{ConvertFrom:W}",
-            "ConvertFrom" to util.convertViaFrom(target),
+            "ConvertFrom" to typeConversionGenerator.convertViaFrom(target),
             *codegenScope
         )
     }
@@ -284,7 +284,7 @@ class JsonParserGenerator(
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
         rustTemplate(
             "#{expect_timestamp_or_null}(tokens.next(), #{T})?#{ConvertFrom:W}",
-            "T" to timestampFormatType, "ConvertFrom" to util.convertViaFrom(shape), *codegenScope
+            "T" to timestampFormatType, "ConvertFrom" to typeConversionGenerator.convertViaFrom(shape), *codegenScope
         )
     }
 
