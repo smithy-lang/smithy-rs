@@ -195,21 +195,21 @@ impl fmt::Display for ValidationError {
 ///
 /// This makes validation errors look similar to the compiler errors from rustc.
 pub struct ErrorPrinter {
-    crate_path: PathBuf,
+    workspace_root: PathBuf,
     file_cache: HashMap<PathBuf, String>,
 }
 
 impl ErrorPrinter {
-    pub fn new(crate_path: impl Into<PathBuf>) -> Self {
+    pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
         Self {
-            crate_path: crate_path.into(),
+            workspace_root: workspace_root.into(),
             file_cache: HashMap::new(),
         }
     }
 
     fn get_file_contents(&mut self, path: &Path) -> Result<&str> {
         if !self.file_cache.contains_key(path) {
-            let full_file_name = self.crate_path.join("..").join(path).canonicalize()?;
+            let full_file_name = self.workspace_root.join(path).canonicalize()?;
             let contents = std::fs::read_to_string(&full_file_name)
                 .context("failed to load source file for error context")
                 .context(full_file_name.to_string_lossy().to_string())?;
@@ -250,6 +250,7 @@ impl ErrorPrinter {
                     location.begin.1 + 1
                 );
                 println!("   | Failed to load {:?}", location.filename);
+                println!("   | relative to {:?}", self.workspace_root);
                 println!("   | to provide error message context.");
                 println!("   | Cause: {err:?}");
             }

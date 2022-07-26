@@ -171,7 +171,7 @@ fn run_main() -> Result<(), Error> {
     let errors = Visitor::new(config, package)?.visit_all()?;
     match args.output_format {
         OutputFormat::Errors => {
-            let mut error_printer = ErrorPrinter::new(&crate_path);
+            let mut error_printer = ErrorPrinter::new(&cargo_metadata.workspace_root);
             for error in &errors {
                 println!("{}", error);
                 if let Some(location) = error.location() {
