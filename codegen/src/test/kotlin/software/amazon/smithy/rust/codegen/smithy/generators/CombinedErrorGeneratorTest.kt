@@ -51,7 +51,8 @@ class CombinedErrorGeneratorTest {
             listOf("FooException", "ComplexError", "InvalidGreeting").forEach {
                 model.lookup<StructureShape>("error#$it").renderWithModelBuilder(model, symbolProvider, writer)
             }
-            val generator = CombinedErrorGenerator(model, symbolProvider, model.lookup("error#Greeting"))
+            val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
+            val generator = CombinedErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(model.lookup("error#Greeting")), errors)
             generator.render(writer)
 
             writer.unitTest(

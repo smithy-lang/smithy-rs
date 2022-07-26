@@ -9,19 +9,21 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
+client-hyper = ["aws-smithy-client/client-hyper"]
 rustls = ["aws-smithy-client/rustls"]
 native-tls = ["aws-smithy-client/native-tls"]
-rt-tokio = ["aws-smithy-async/rt-tokio"]
+rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
 
-default = ["rustls", "rt-tokio"]
+default = ["client-hyper", "rustls", "rt-tokio"]
 
 [dependencies]
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
 aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
-aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client" }
+aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", default-features = false }
 aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
+time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1", features = ["sync"] }
 tracing = { version = "0.1" }
 hyper = { version = "0.14", default-features = false }
