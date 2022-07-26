@@ -388,11 +388,11 @@ sealed class Attribute {
                 if (note.isBlank().and(since.isBlank())) {
                     // No-op. Rustc would emit a default message.
                 } else if (note.isNotBlank().and(since.isBlank())) {
-                    builder.append("(note = \"${note}\")")
+                    builder.append("(note = ${note.dq()})")
                 } else if (note.isBlank().and(since.isNotBlank())) {
-                    builder.append("(since = \"${since}\")")
+                    builder.append("(since = ${since.dq()})")
                 } else {
-                    builder.append("(note = \"${note}\", since = \"${since}\")")
+                    builder.append("(note = ${note.dq()}, since = ${since.dq()})")
                 }
                 return Custom(builder.toString())
             }
