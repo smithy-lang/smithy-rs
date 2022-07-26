@@ -6,6 +6,8 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency.Companion.BytesUtils
+import software.amazon.smithy.rust.codegen.rustlang.CargoDependency.Companion.TempFile
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Writable
@@ -95,6 +97,8 @@ class TranscribeTestDependencies : LibRsCustomization() {
 
 class S3TestDependencies : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable = writable {
+        addDependency(BytesUtils)
+        addDependency(TempFile)
         addDependency(Smol)
         addDependency(AsyncStd)
     }
