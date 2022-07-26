@@ -205,3 +205,11 @@ message = "SDK crate READMEs now include an example of creating a client"
 references = ["smithy-rs#1571", "smithy-rs#1385"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+Add explicit cast during JSON deserialization in case of custom Symbol providers.
+"""
+references = ["smithy-rs#1520"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "crisidev"
