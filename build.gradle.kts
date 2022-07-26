@@ -47,7 +47,7 @@ val lintPaths = listOf(
     // Exclude build output directories
     "!**/build/**",
     "!**/node_modules/**",
-    "!**/target/**"
+    "!**/target/**",
 )
 
 tasks.register<JavaExec>("ktlint") {

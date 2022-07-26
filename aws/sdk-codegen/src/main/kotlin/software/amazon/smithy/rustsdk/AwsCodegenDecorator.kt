@@ -26,6 +26,8 @@ val DECORATORS = listOf(
     AwsEndpointDecorator(),
     UserAgentDecorator(),
     SigV4SigningDecorator(),
+    HttpRequestChecksumDecorator(),
+    HttpResponseChecksumDecorator(),
     RetryPolicyDecorator(),
     IntegrationTestDecorator(),
     AwsFluentClientDecorator(),

@@ -65,6 +65,7 @@ class JsonParserGenerator(
     private val target = coreCodegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
+    private val typeConversionGenerator = TypeConversionGenerator(symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
         "Error" to smithyJson.member("deserialize::Error"),
         "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
@@ -221,8 +222,8 @@ class JsonParserGenerator(
             is StringShape -> deserializeString(target)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
             is NumberShape -> deserializeNumber(target)
-            is BlobShape -> rustTemplate("#{expect_blob_or_null}(tokens.next())?", *codegenScope)
-            is TimestampShape -> deserializeTimestamp(memberShape)
+            is BlobShape -> deserializeBlob(target)
+            is TimestampShape -> deserializeTimestamp(target, memberShape)
             is CollectionShape -> deserializeCollection(target)
             is MapShape -> deserializeMap(target)
             is StructureShape -> deserializeStruct(target)
@@ -234,6 +235,14 @@ class JsonParserGenerator(
         if (symbol.isRustBoxed()) {
             rust(".map(Box::new)")
         }
+    }
+
+    private fun RustWriter.deserializeBlob(target: BlobShape) {
+        rustTemplate(
+            "#{expect_blob_or_null}(tokens.next())?#{ConvertFrom:W}",
+            "ConvertFrom" to typeConversionGenerator.convertViaFrom(target),
+            *codegenScope,
+        )
     }
 
     private fun RustWriter.deserializeStringInner(target: StringShape, escapedStrName: String) {
@@ -266,14 +275,17 @@ class JsonParserGenerator(
         rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())", "T" to symbol, *codegenScope)
     }
 
-    private fun RustWriter.deserializeTimestamp(member: MemberShape) {
+    private fun RustWriter.deserializeTimestamp(shape: TimestampShape, member: MemberShape) {
         val timestampFormat =
             httpBindingResolver.timestampFormat(
                 member, HttpLocation.DOCUMENT,
                 TimestampFormatTrait.Format.EPOCH_SECONDS,
             )
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-        rustTemplate("#{expect_timestamp_or_null}(tokens.next(), #{T})?", "T" to timestampFormatType, *codegenScope)
+        rustTemplate(
+            "#{expect_timestamp_or_null}(tokens.next(), #{T})?#{ConvertFrom:W}",
+            "T" to timestampFormatType, "ConvertFrom" to typeConversionGenerator.convertViaFrom(shape), *codegenScope,
+        )
     }
 
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {

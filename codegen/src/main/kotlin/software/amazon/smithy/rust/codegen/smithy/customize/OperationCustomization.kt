@@ -48,6 +48,11 @@ sealed class OperationSection(name: String) : Section(name) {
         val operation: String,
         val config: String,
     ) : OperationSection("Finalize")
+
+    data class MutateOutput(
+        override val customizations: List<OperationCustomization>,
+        val operationShape: OperationShape,
+    ) : OperationSection("MutateOutput")
 }
 
 abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {
