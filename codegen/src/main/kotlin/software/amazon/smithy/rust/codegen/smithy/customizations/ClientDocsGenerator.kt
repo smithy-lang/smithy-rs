@@ -33,7 +33,7 @@ class ClientDocsGenerator : LibRsCustomization() {
         error encompassing all possible errors that can be returned by the service.
 
         The other modules within this crate are not required for normal usage.
-        """.trimEnd()
+        """.trimEnd(),
         )
     }
 }

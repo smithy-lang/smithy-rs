@@ -17,20 +17,20 @@ import software.amazon.smithy.model.shapes.ToShapeId
 fun Model.Builder.cloneOperation(
     model: Model,
     oldOperation: ToShapeId,
-    idTransform: (ShapeId) -> ShapeId
+    idTransform: (ShapeId) -> ShapeId,
 ): Model.Builder {
     val operationShape = model.expectShape(oldOperation.toShapeId(), OperationShape::class.java)
     val inputShape = model.expectShape(
         checkNotNull(operationShape.input.orNull()) {
             "cloneOperation expects OperationNormalizer to be run first to add input shapes to all operations"
         },
-        StructureShape::class.java
+        StructureShape::class.java,
     )
     val outputShape = model.expectShape(
         checkNotNull(operationShape.output.orNull()) {
             "cloneOperation expects OperationNormalizer to be run first to add output shapes to all operations"
         },
-        StructureShape::class.java
+        StructureShape::class.java,
     )
 
     val inputId = idTransform(inputShape.id)
@@ -45,7 +45,7 @@ fun Model.Builder.cloneOperation(
             .id(operationId)
             .input(inputId)
             .output(outputId)
-            .build()
+            .build(),
     )
     return this
 }

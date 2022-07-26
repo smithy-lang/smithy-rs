@@ -33,7 +33,7 @@ data class FlexibleClientGenerics(
     val connectorDefault: RuntimeType?,
     val middlewareDefault: RuntimeType?,
     val retryDefault: RuntimeType?,
-    val client: RuntimeType
+    val client: RuntimeType,
 ) : FluentClientGenerics {
     /** Declaration with defaults set */
     override val decl = writable {
@@ -41,7 +41,7 @@ data class FlexibleClientGenerics(
             "<C #{c:W}, M#{m:W}, R#{r:W}>",
             "c" to defaultType(connectorDefault),
             "m" to defaultType(middlewareDefault),
-            "r" to defaultType(retryDefault)
+            "r" to defaultType(retryDefault),
         )
     }
 
@@ -60,7 +60,7 @@ data class FlexibleClientGenerics(
                 M: #{client}::bounds::SmithyMiddleware<C>,
                 R: #{client}::retry::NewRequestPolicy,
             """,
-            "client" to client
+            "client" to client,
         )
     }
 

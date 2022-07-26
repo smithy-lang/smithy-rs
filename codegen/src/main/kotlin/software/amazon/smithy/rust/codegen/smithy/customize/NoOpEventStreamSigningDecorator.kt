@@ -30,7 +30,7 @@ open class NoOpEventStreamSigningDecorator<C : CoreCodegenContext> : RustCodegen
 
     override fun configCustomizations(
         codegenContext: C,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         if (!applies(codegenContext, baseCustomizations)) {
             return baseCustomizations
@@ -58,7 +58,7 @@ class NoOpEventStreamSigningConfig(
                     """
                     #{NoOpSigner}{}
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }

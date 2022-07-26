@@ -90,7 +90,7 @@ class ServerHttpBoundProtocolGenerator(
         protocol,
         HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
         public = true,
-        includeDefaultPayloadHeaders = true
+        includeDefaultPayloadHeaders = true,
     ),
     ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 ) {
@@ -134,7 +134,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "RuntimeError" to ServerRuntimeType.RuntimeError(runtimeConfig),
         "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
         "ResponseRejection" to ServerRuntimeType.ResponseRejection(runtimeConfig),
-        "http" to RuntimeType.http
+        "http" to RuntimeType.http,
     )
 
     override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
@@ -156,7 +156,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private fun RustWriter.renderTraits(
         inputSymbol: Symbol,
         outputSymbol: Symbol,
-        operationShape: OperationShape
+        operationShape: OperationShape,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputName = "${operationName}${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
@@ -269,7 +269,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 "O" to outputSymbol,
                 "E" to errorSymbol,
                 "serialize_response" to serverSerializeResponse(operationShape),
-                "serialize_error" to serverSerializeError(operationShape)
+                "serialize_error" to serverSerializeError(operationShape),
             )
         } else {
             // The output of non-fallible operations is a model type which we convert into
@@ -299,7 +299,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """.trimIndent(),
                 *codegenScope,
                 "O" to outputSymbol,
-                "serialize_response" to serverSerializeResponse(operationShape)
+                "serialize_response" to serverSerializeResponse(operationShape),
             )
         }
 
@@ -318,7 +318,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """.trimIndent(),
                 "O" to outputSymbol,
                 "E" to errorSymbol,
-                "From" to RuntimeType.From
+                "From" to RuntimeType.From,
             )
         } else {
             rustTemplate(
@@ -330,7 +330,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 }
                 """.trimIndent(),
                 "O" to outputSymbol,
-                "From" to RuntimeType.From
+                "From" to RuntimeType.From,
             )
         }
 
@@ -344,7 +344,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             }
             """.trimIndent(),
             "I" to inputSymbol,
-            "From" to RuntimeType.From
+            "From" to RuntimeType.From,
         )
     }
 
@@ -424,7 +424,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             it.rustBlockTemplate(
                 "pub fn $fnName(error: &#{E}) -> std::result::Result<#{SmithyHttpServer}::response::Response, #{ResponseRejection}>",
                 *codegenScope,
-                "E" to errorSymbol
+                "E" to errorSymbol,
             ) {
                 withBlock("Ok({", "})") {
                     serverRenderErrorShapeResponseSerializer(
@@ -455,7 +455,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         """
                         let payload = #T(output)?;
                         """,
-                        serializerSymbol
+                        serializerSymbol,
                     )
 
                     val bindings = httpBindingResolver.errorResponseBindings(it)
@@ -482,7 +482,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         """
                         builder.status($status).body(#{SmithyHttpServer}::body::to_boxed(payload))?
                         """,
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
             }
@@ -558,7 +558,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 """
                 builder = #{T}($outputOwnedOrBorrowed, builder)?;
                 """.trimIndent(),
-                addHeadersFn
+                addHeadersFn,
             )
         }
 
@@ -576,7 +576,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     "$contentType"
                 );
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
 
@@ -590,7 +590,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         "$headerValue"
                     );
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -608,12 +608,12 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             let content_length = payload.len();
             builder = #{header_util}::set_response_header_if_absent(builder, #{http}::header::CONTENT_LENGTH, content_length);
             """,
-            *codegenScope
+            *codegenScope,
         )
     }
 
     private fun serverRenderHttpResponseCode(
-        defaultCode: Int
+        defaultCode: Int,
     ): Writable {
         return writable {
             rustTemplate(
@@ -629,7 +629,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     private fun serverRenderResponseCodeBinding(
-        binding: HttpBindingDescriptor
+        binding: HttpBindingDescriptor,
     ): Writable {
         check(binding.location == HttpLocation.RESPONSE_CODE)
 
@@ -716,7 +716,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
                     binding,
                     errorSymbol,
-                    structuredHandler = structureShapeHandler
+                    structuredHandler = structureShapeHandler,
                 )
                 return writable {
                     if (binding.member.isStreaming(model)) {
@@ -728,7 +728,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             }
                             """,
                             "Deserializer" to deserializer,
-                            *codegenScope
+                            *codegenScope,
                         )
                     } else {
                         rustTemplate(
@@ -740,7 +740,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             }
                             """,
                             "Deserializer" to deserializer,
-                            *codegenScope
+                            *codegenScope,
                         )
                     }
                 }
@@ -801,7 +801,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     """
                     #{Nom}::sequence::preceded(#{Nom}::bytes::complete::tag("/"),  $parser)
                     """.trimIndent()
-                }
+                },
             )
         with(writer) {
             rustTemplate("let input_string = request.uri().path();")
@@ -813,7 +813,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     }
                     let input_string = &input_string[..(input_string.len() - "$restAfterGreedyLabel".len())];
                     """.trimIndent(),
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             rustTemplate(
@@ -821,7 +821,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 let (input_string, $labeledNames) = $nomParser(input_string)?;
                 debug_assert_eq!("", input_string);
                 """.trimIndent(),
-                *codegenScope
+                *codegenScope,
             )
             segments
                 .forEachIndexed { index, segment ->
@@ -870,7 +870,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 @httpQueryParams trait applied to non-supported target
                 $targetMapValue of type ${targetMapValue.type}
                 """.trimIndent(),
-                targetMapValue.sourceLocation
+                targetMapValue.sourceLocation,
             )
         }
 
@@ -901,7 +901,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 let query_string = request.uri().query().unwrap_or("");
                 let pairs = #{FormUrlEncoded}::parse(query_string.as_bytes());
                 """.trimIndent(),
-                *codegenScope
+                *codegenScope,
             )
 
             if (queryParamsBinding != null) {
@@ -933,7 +933,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             seen_$memberName = true;
                         }
                         """.trimIndent(),
-                        "deserializer" to deserializer
+                        "deserializer" to deserializer,
                     )
                 }
                 queryBindingsTargettingCollection.forEach {
@@ -975,7 +975,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                     """
                                     let v = <_ as #T>::parse_smithy_primitive(&v)?;
                                     """.trimIndent(),
-                                    CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse")
+                                    CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse"),
                                 )
                             }
                         }
@@ -992,7 +992,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 """
                                 let entry = query_params.entry(String::from(k)).or_default();
                                 entry.push(String::from(v));
-                                """.trimIndent()
+                                """.trimIndent(),
                             )
                         }
                     }
@@ -1012,7 +1012,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             Some($memberName)
                         }
                     );
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
             }
         }
@@ -1031,7 +1031,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             #{deserializer}(request.headers().ok_or(#{RequestRejection}::HeadersAlreadyExtracted)?)?
             """.trimIndent(),
             "deserializer" to deserializer,
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -1050,7 +1050,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             #{deserializer}(request.headers().ok_or(#{RequestRejection}::HeadersAlreadyExtracted)?)?
             """.trimIndent(),
             "deserializer" to deserializer,
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -1131,7 +1131,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 writer.write(
                     """
                     Ok(${symbolProvider.wrapOptional(binding.member, "value")})
-                    """
+                    """,
                 )
             }
         }

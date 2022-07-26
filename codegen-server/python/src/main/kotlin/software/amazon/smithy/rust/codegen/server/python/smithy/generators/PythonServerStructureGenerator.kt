@@ -33,7 +33,7 @@ class PythonServerStructureGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
-    private val shape: StructureShape
+    private val shape: StructureShape,
 ) : StructureGenerator(model, symbolProvider, writer, shape) {
 
     private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.asType())
@@ -74,7 +74,7 @@ class PythonServerStructureGenerator(
             }
             """,
             "BodySignature" to renderStructSignatureMembers(),
-            "BodyMembers" to renderStructBodyMembers()
+            "BodyMembers" to renderStructBodyMembers(),
         )
     }
 

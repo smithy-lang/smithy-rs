@@ -43,7 +43,7 @@ internal class BuilderGeneratorTest {
             let my_struct = MyStruct::builder().byte_value(4).foo("hello!").build();
             assert_eq!(my_struct.foo.unwrap(), "hello!");
             assert_eq!(my_struct.bar, 0);
-            """
+            """,
         )
     }
 
@@ -71,11 +71,11 @@ internal class BuilderGeneratorTest {
         val writer = RustWriter.forModule("model")
         val innerGenerator = StructureGenerator(
             StructureGeneratorTest.model, provider, writer,
-            StructureGeneratorTest.inner
+            StructureGeneratorTest.inner,
         )
         val generator = StructureGenerator(
             StructureGeneratorTest.model, provider, writer,
-            StructureGeneratorTest.struct
+            StructureGeneratorTest.struct,
         )
         generator.render()
         innerGenerator.render()
@@ -89,7 +89,7 @@ internal class BuilderGeneratorTest {
             let my_struct = MyStruct::builder().byte_value(4).foo("hello!").bar(0).build().expect("required field was not provided");
             assert_eq!(my_struct.foo.unwrap(), "hello!");
             assert_eq!(my_struct.bar, 0);
-            """
+            """,
         )
     }
 }

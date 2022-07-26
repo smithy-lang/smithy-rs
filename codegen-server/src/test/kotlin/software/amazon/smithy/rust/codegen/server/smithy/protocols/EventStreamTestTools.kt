@@ -377,7 +377,7 @@ object EventStreamTestTools {
         symbolProvider: RustSymbolProvider,
         shape: Shape,
         writer: RustWriter,
-        mode: CodegenTarget
+        mode: CodegenTarget,
     ) {
         for (member in shape.members()) {
             val target = model.expectShape(member.target)

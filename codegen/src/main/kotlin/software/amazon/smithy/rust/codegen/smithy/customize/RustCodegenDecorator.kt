@@ -40,19 +40,19 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
 
     fun configCustomizations(
         codegenContext: C,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> = baseCustomizations
 
     // This is only used by decorators for smithy-rs _clients_.
     fun operationCustomizations(
         codegenContext: C,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> = baseCustomizations
 
     fun libRsCustomizations(
         codegenContext: C,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> = baseCustomizations
 
     /**
@@ -86,7 +86,7 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
 
     override fun configCustomizations(
         codegenContext: C,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<C>, customizations ->
             decorator.configCustomizations(codegenContext, customizations)
@@ -96,7 +96,7 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
     override fun operationCustomizations(
         codegenContext: C,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator: RustCodegenDecorator<C>, customizations ->
             decorator.operationCustomizations(codegenContext, operation, customizations)
@@ -105,12 +105,12 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
 
     override fun libRsCustomizations(
         codegenContext: C,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return orderedDecorators.foldRight(baseCustomizations) { decorator, customizations ->
             decorator.libRsCustomizations(
                 codegenContext,
-                customizations
+                customizations,
             )
         }
     }
@@ -141,11 +141,11 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
         inline fun <reified T : CoreCodegenContext> fromClasspath(
             context: PluginContext,
             vararg extras: RustCodegenDecorator<T>,
-            logger: Logger = Logger.getLogger("RustCodegenSPILoader")
+            logger: Logger = Logger.getLogger("RustCodegenSPILoader"),
         ): CombinedCodegenDecorator<T> {
             val decorators = ServiceLoader.load(
                 RustCodegenDecorator::class.java,
-                context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader)
+                context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader),
             )
                 // The JVM's `ServiceLoader` is woefully underpowered in that it can not load classes with generic
                 // parameters with _fixed_ parameters (like what we're trying to do here; we only want `RustCodegenDecorator`

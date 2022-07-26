@@ -26,8 +26,8 @@ class DisabledAuthDecorator : RustCodegenDecorator<ClientCodegenContext> {
             "com.amazonaws.sts#AWSSecurityTokenServiceV20110615".shapeId() to
                 setOf(
                     "com.amazonaws.sts#AssumeRoleWithSAML".shapeId(),
-                    "com.amazonaws.sts#AssumeRoleWithWebIdentity".shapeId()
-                )
+                    "com.amazonaws.sts#AssumeRoleWithWebIdentity".shapeId(),
+                ),
         )
 
     private fun applies(service: ServiceShape) =

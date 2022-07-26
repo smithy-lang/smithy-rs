@@ -77,7 +77,7 @@ class ServerCombinedErrorGeneratorTest {
                     // Indicate the original name in the display output.
                     let error = FooException::builder().build();
                     assert_eq!(format!("{}", error), "FooException")
-                """
+                """,
             )
 
             writer.unitTest(
@@ -85,7 +85,7 @@ class ServerCombinedErrorGeneratorTest {
                 test = """
                     let variant = InvalidGreeting { message: String::from("an error") };
                     let error: GreetingError = variant.into();
-                """
+                """,
             )
 
             project.compileAndTest()

@@ -25,7 +25,7 @@ object CrateVersioner {
                     VersionsManifest.fromFile(versionsManifestPath),
                     ModelMetadata.fromFile(modelMetadataPath),
                     devPreview = true,
-                    smithyRsVersion = getSmithyRsVersion(rootProject)
+                    smithyRsVersion = getSmithyRsVersion(rootProject),
                 )
             }
         }
@@ -40,7 +40,7 @@ interface VersionCrate {
 class SynchronizedCrateVersioner(
     properties: PropertyRetriever,
     private val sdkVersion: String = properties.get("smithy.rs.runtime.crate.version")
-        ?: throw Exception("SDK runtime crate version missing")
+        ?: throw Exception("SDK runtime crate version missing"),
 ) : VersionCrate {
     init {
         LoggerFactory.getLogger(javaClass).info("Using synchronized SDK crate versioning with version `$sdkVersion`")
@@ -54,7 +54,7 @@ class SynchronizedCrateVersioner(
 private data class SemVer(
     val major: Int,
     val minor: Int,
-    val patch: Int
+    val patch: Int,
 ) {
     companion object {
         fun parse(value: String): SemVer {
@@ -67,7 +67,7 @@ private data class SemVer(
             return SemVer(
                 major = parts[0].toIntOrNull() ?: throw failure,
                 minor = parts[1].toIntOrNull() ?: throw failure,
-                patch = parts[2].toIntOrNull() ?: throw failure
+                patch = parts[2].toIntOrNull() ?: throw failure,
             )
         }
     }
@@ -91,7 +91,7 @@ fun getSmithyRsVersion(rootProject: Project): String {
                     "stdout: " +
                     String(process.inputStream.readAllBytes()) +
                     "stderr: " +
-                    String(process.errorStream.readAllBytes())
+                    String(process.errorStream.readAllBytes()),
             )
         }
         return String(process.inputStream.readAllBytes()).trim()
@@ -103,7 +103,7 @@ class IndependentCrateVersioner(
     private val modelMetadata: ModelMetadata,
     private val devPreview: Boolean,
     smithyRsVersion: String,
-    private val hashModelsFn: (AwsService) -> String = { service -> hashModels(service) }
+    private val hashModelsFn: (AwsService) -> String = { service -> hashModels(service) },
 ) : VersionCrate {
     private val smithyRsChanged = versionsManifest.smithyRsRevision != smithyRsVersion
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -113,7 +113,7 @@ class IndependentCrateVersioner(
         logger.info(
             "Current smithy-rs HEAD: `$smithyRsVersion`. " +
                 "Previous smithy-rs HEAD from versions.toml: `${versionsManifest.smithyRsRevision}`. " +
-                "Code generator changed: $smithyRsChanged"
+                "Code generator changed: $smithyRsChanged",
         )
     }
 

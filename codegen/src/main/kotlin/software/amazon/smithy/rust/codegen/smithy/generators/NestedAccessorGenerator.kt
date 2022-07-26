@@ -40,7 +40,7 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
                     #{body:W}
                 }
                 """,
-                "Input" to symbolProvider.toSymbol(root), "Output" to baseType.makeOptional(), "body" to generateBody(path, false)
+                "Input" to symbolProvider.toSymbol(root), "Output" to baseType.makeOptional(), "body" to generateBody(path, false),
             )
         }
     }
@@ -60,7 +60,7 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
                     #{body:W}
                 }
                 """,
-                "Input" to symbolProvider.toSymbol(root), "Output" to referencedType, "body" to generateBody(path, true)
+                "Input" to symbolProvider.toSymbol(root), "Output" to referencedType, "body" to generateBody(path, true),
             )
         }
     }
@@ -78,7 +78,7 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
                         None => return None,
                         Some(t) => t
                     };
-                    """
+                    """,
                 )
             } else {
                 rust("let input = input.${symbolProvider.toMemberName(head)};")

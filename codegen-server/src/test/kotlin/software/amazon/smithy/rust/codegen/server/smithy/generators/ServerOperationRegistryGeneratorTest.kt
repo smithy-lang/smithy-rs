@@ -58,13 +58,13 @@ class ServerOperationRegistryGeneratorTest {
         val serviceShape = model.lookup<ServiceShape>("test#Service")
         val (protocolShapeId, protocolGeneratorFactory) = ServerProtocolLoader(ServerProtocolLoader.DefaultProtocols).protocolFor(
             model,
-            serviceShape
+            serviceShape,
         )
         val serverCodegenContext = serverTestCodegenContext(
             model,
             serviceShape,
             settings = serverTestRustSettings(moduleName = "service"),
-            protocolShapeId = protocolShapeId
+            protocolShapeId = protocolShapeId,
         )
 
         val index = TopDownIndex.of(serverCodegenContext.model)

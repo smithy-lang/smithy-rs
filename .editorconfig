@@ -6,4 +6,4 @@ indent_style = space
 insert_final_newline = true
 max_line_length = 120
 # Ktlint-specific config
-disabled_rules = filename, max-line-length, trailing-comma, argument-list-wrapping, parameter-list-wrapping
+disabled_rules = filename, max-line-length, argument-list-wrapping, parameter-list-wrapping

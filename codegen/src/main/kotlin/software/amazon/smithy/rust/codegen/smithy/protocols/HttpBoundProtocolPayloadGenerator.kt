@@ -48,7 +48,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 class HttpBoundProtocolPayloadGenerator(
     coreCodegenContext: CoreCodegenContext,
     private val protocol: Protocol,
-    private val httpMessageType: HttpMessageType = HttpMessageType.REQUEST
+    private val httpMessageType: HttpMessageType = HttpMessageType.REQUEST,
 ) : ProtocolPayloadGenerator {
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val model = coreCodegenContext.model
@@ -90,7 +90,7 @@ class HttpBoundProtocolPayloadGenerator(
             val member = shape.expectMember(payloadMemberName)
             when (val type = model.expectShape(member.target)) {
                 is DocumentShape, is StructureShape, is UnionShape -> ProtocolPayloadGenerator.PayloadMetadata(
-                    takesOwnership = false
+                    takesOwnership = false,
                 )
                 is StringShape, is BlobShape -> ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = true)
                 else -> UNREACHABLE("Unexpected payload target type: $type")
@@ -242,7 +242,7 @@ class HttpBoundProtocolPayloadGenerator(
         payloadMetadata: ProtocolPayloadGenerator.PayloadMetadata,
         self: String,
         member: MemberShape,
-        serializerGenerator: StructuredDataSerializerGenerator
+        serializerGenerator: StructuredDataSerializerGenerator,
     ) {
         val fnName = "serialize_payload_${member.container.name.toSnakeCase()}"
         val ref = if (payloadMetadata.takesOwnership) "" else "&"
@@ -251,7 +251,7 @@ class HttpBoundProtocolPayloadGenerator(
             it.rustBlockTemplate(
                 "pub fn $fnName(payload: $ref#{Member}) -> Result<#{$outputT}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),
-                *codegenScope
+                *codegenScope,
             ) {
                 val asRef = if (payloadMetadata.takesOwnership) "" else ".as_ref()"
 
@@ -263,14 +263,14 @@ class HttpBoundProtocolPayloadGenerator(
                             None => return Ok(
                         """,
                         ")};",
-                        *codegenScope
+                        *codegenScope,
                     ) {
                         when (val targetShape = model.expectShape(member.target)) {
                             // Return an empty `Vec<u8>`.
                             is StringShape, is BlobShape, is DocumentShape -> rust(
                                 """
                                 Vec::new()
-                                """
+                                """,
                             )
                             is StructureShape -> rust("#T()", serializerGenerator.unsetStructure(targetShape))
                         }
@@ -288,7 +288,7 @@ class HttpBoundProtocolPayloadGenerator(
     private fun RustWriter.renderPayload(
         member: MemberShape,
         payloadName: String,
-        serializer: StructuredDataSerializerGenerator
+        serializer: StructuredDataSerializerGenerator,
     ) {
         when (val targetShape = model.expectShape(member.target)) {
             is StringShape -> {
@@ -314,12 +314,12 @@ class HttpBoundProtocolPayloadGenerator(
             }
             is StructureShape, is UnionShape -> {
                 check(
-                    !((targetShape as? UnionShape)?.isEventStream() ?: false)
+                    !((targetShape as? UnionShape)?.isEventStream() ?: false),
                 ) { "Event Streams should be handled further up" }
 
                 rust(
                     "#T($payloadName)?",
-                    serializer.payloadSerializer(member)
+                    serializer.payloadSerializer(member),
                 )
             }
             is DocumentShape -> {

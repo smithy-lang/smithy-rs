@@ -54,7 +54,7 @@ open class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
-    private val shape: StructureShape
+    private val shape: StructureShape,
 ) {
     private val errorTrait = shape.getTrait<ErrorTrait>()
     protected val members: List<MemberShape> = shape.allMembers.values.toList()
@@ -114,7 +114,7 @@ open class StructureGenerator(
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
                     val fieldValue = redactIfNecessary(
-                        member, model, "self.$memberName"
+                        member, model, "self.$memberName",
                     )
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
@@ -178,7 +178,7 @@ open class StructureGenerator(
 
     protected fun RustWriter.forEachMember(
         toIterate: List<MemberShape>,
-        block: RustWriter.(MemberShape, String, Symbol) -> Unit
+        block: RustWriter.(MemberShape, String, Symbol) -> Unit,
     ) {
         toIterate.forEach { member ->
             val memberName = symbolProvider.toMemberName(member)
@@ -192,7 +192,7 @@ open class StructureGenerator(
             member,
             model,
             note = memberSymbol.renamedFrom()
-                ?.let { oldName -> "This member has been renamed from `$oldName`." }
+                ?.let { oldName -> "This member has been renamed from `$oldName`." },
         )
     }
 }

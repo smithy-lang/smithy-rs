@@ -57,7 +57,7 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     ShortShape::class to RustType.Integer(16),
     IntegerShape::class to RustType.Integer(32),
     LongShape::class to RustType.Integer(64),
-    StringShape::class to RustType.String
+    StringShape::class to RustType.String,
 )
 
 data class SymbolVisitorConfig(
@@ -177,7 +177,7 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
 class SymbolVisitor(
     private val model: Model,
     private val serviceShape: ServiceShape?,
-    private val config: SymbolVisitorConfig
+    private val config: SymbolVisitorConfig,
 ) : RustSymbolProvider,
     ShapeVisitor<Symbol> {
     private val nullableIndex = NullableIndex.of(model)
@@ -293,8 +293,8 @@ class SymbolVisitor(
         return symbolBuilder(
             RustType.Opaque(
                 shape.contextName(serviceShape)
-                    .replaceFirstChar { it.uppercase() }
-            )
+                    .replaceFirstChar { it.uppercase() },
+            ),
         )
             .locatedIn(Operations)
             .build()

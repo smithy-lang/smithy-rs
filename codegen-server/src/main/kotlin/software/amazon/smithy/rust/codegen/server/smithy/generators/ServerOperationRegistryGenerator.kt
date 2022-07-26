@@ -159,7 +159,7 @@ ${operationImplementationStubs(operations)}
             // These should be dev-dependencies. Not all sSDKs depend on `Hyper` (only those that convert the body
             // `to_bytes`), and none depend on `tokio`.
             "Tokio" to ServerCargoDependency.TokioDev.asType(),
-            "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).asType()
+            "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).asType(),
         )
     }
 
@@ -173,7 +173,7 @@ ${operationImplementationStubs(operations)}
                 $members,
                 _phantom: #{Phantom}<(B, ${phantomMembers()})>,
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -191,7 +191,7 @@ ${operationImplementationStubs(operations)}
                 $members,
                 _phantom: #{Phantom}<(B, ${phantomMembers()})>,
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -238,7 +238,7 @@ ${operationImplementationStubs(operations)}
                     }
                 }
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -257,7 +257,7 @@ ${operationImplementationStubs(operations)}
                         new.$operationName = Some(value);
                         new
                     }
-                    """
+                    """,
                 )
             }
 
@@ -270,7 +270,7 @@ ${operationImplementationStubs(operations)}
                                 Some(v) => v,
                                 None => return Err($operationRegistryErrorName::UninitializedField("$operationName")),
                             },
-                            """
+                            """,
                         )
                     }
                     rustTemplate("_phantom: #{Phantom}", *codegenScope)
@@ -291,7 +291,7 @@ ${operationImplementationStubs(operations)}
                     In$i: 'static + Send,
                     """,
                     *codegenScope,
-                    "OperationInput" to symbolProvider.toSymbol(operation.inputShape(model))
+                    "OperationInput" to symbolProvider.toSymbol(operation.inputShape(model)),
                 )
             }
         }
@@ -306,7 +306,7 @@ ${operationImplementationStubs(operations)}
                 #{operationTraitBounds:W}
             """,
             *codegenScope,
-            "operationTraitBounds" to operationTraitBounds
+            "operationTraitBounds" to operationTraitBounds,
         ) {
             rustBlock("fn from(registry: $operationRegistryNameWithArguments) -> Self") {
                 val requestSpecsVarNames = operationNames.map { "${it}_request_spec" }
@@ -314,19 +314,19 @@ ${operationImplementationStubs(operations)}
                 requestSpecsVarNames.zip(operations).forEach { (requestSpecVarName, operation) ->
                     rustTemplate(
                         "let $requestSpecVarName = #{RequestSpec:W};",
-                        "RequestSpec" to operation.requestSpec()
+                        "RequestSpec" to operation.requestSpec(),
                     )
                 }
 
                 withBlockTemplate(
                     "#{Router}::${protocol.serverRouterRuntimeConstructor()}(vec![",
                     "])",
-                    *codegenScope
+                    *codegenScope,
                 ) {
                     requestSpecsVarNames.zip(operationNames).forEach { (requestSpecVarName, operationName) ->
                         rustTemplate(
                             "(#{Tower}::util::BoxCloneService::new(#{ServerOperationHandler}::operation(registry.$operationName)), $requestSpecVarName),",
-                            *codegenScope
+                            *codegenScope,
                         )
                     }
                 }
@@ -381,6 +381,6 @@ ${operationImplementationStubs(operations)}
         this,
         symbolProvider.toSymbol(this).name,
         serviceName,
-        ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec")
+        ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec"),
     )
 }

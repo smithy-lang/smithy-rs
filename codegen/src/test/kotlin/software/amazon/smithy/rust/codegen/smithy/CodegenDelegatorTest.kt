@@ -26,7 +26,7 @@ class CodegenDelegatorTest {
 
                 CargoDependency("C", CratesIo("3"), Compile, optional = true, features = setOf()),
                 CargoDependency("C", CratesIo("3"), Compile, optional = true, features = setOf()),
-            ).shuffled()
+            ).shuffled(),
         )
 
         merged shouldBe setOf(

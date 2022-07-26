@@ -24,7 +24,7 @@ class IntegrationTestDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         val integrationTestPath = Paths.get(SdkSettings.from(codegenContext.settings).integrationTestPath)
         check(Files.exists(integrationTestPath)) {
@@ -41,7 +41,7 @@ class IntegrationTestDecorator : RustCodegenDecorator<ClientCodegenContext> {
                 moduleName,
                 codegenContext.runtimeConfig,
                 hasTests,
-                hasBenches
+                hasBenches,
             )
         } else {
             baseCustomizations

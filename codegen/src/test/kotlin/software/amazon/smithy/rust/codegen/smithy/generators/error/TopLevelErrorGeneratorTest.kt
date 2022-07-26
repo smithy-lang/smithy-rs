@@ -53,7 +53,7 @@ internal class TopLevelErrorGeneratorTest {
             fn tl_errors_are_send_sync() {
                 check_send_sync::<$moduleName::Error>()
             }
-            """
+            """,
         )
         "cargo test".runCommand(testDir)
     }

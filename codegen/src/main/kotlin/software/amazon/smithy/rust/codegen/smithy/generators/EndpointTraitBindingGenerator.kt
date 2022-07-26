@@ -31,7 +31,7 @@ class EndpointTraitBindings(
     private val symbolProvider: RustSymbolProvider,
     private val runtimeConfig: RuntimeConfig,
     operationShape: OperationShape,
-    private val endpointTrait: EndpointTrait
+    private val endpointTrait: EndpointTrait,
 ) {
     private val inputShape = operationShape.inputShape(model)
     private val smithyHttp = runtimeConfig.smithyHttp()
@@ -54,7 +54,7 @@ class EndpointTraitBindings(
             // if there are no labels, we don't need string formatting
             writer.rustTemplate(
                 "#{EndpointPrefix}::new($formatLiteral)",
-                "EndpointPrefix" to endpointPrefix
+                "EndpointPrefix" to endpointPrefix,
             )
         } else {
             val operationBuildError = OperationBuildError(runtimeConfig)
@@ -68,7 +68,7 @@ class EndpointTraitBindings(
                     val invalidFieldError = operationBuildError.invalidField(
                         writer,
                         field,
-                        "$field was unset or empty but must be set as part of the endpoint prefix"
+                        "$field was unset or empty but must be set as part of the endpoint prefix",
                     )
                     if (symbolProvider.toSymbol(memberShape).isOptional()) {
                         rust("let $field = $input.$field.as_deref().unwrap_or_default();")
@@ -81,13 +81,13 @@ class EndpointTraitBindings(
                         if $field.is_empty() {
                             return Err($invalidFieldError)
                         }
-                        """
+                        """,
                     )
                     "${label.content} = $field"
                 }
                 writer.rustTemplate(
                     "#{EndpointPrefix}::new(format!($formatLiteral, ${args.joinToString()}))",
-                    "EndpointPrefix" to endpointPrefix
+                    "EndpointPrefix" to endpointPrefix,
                 )
             }
         }

@@ -52,7 +52,7 @@ class HttpBoundProtocolGenerator(
         protocol,
         HttpBoundProtocolPayloadGenerator(coreCodegenContext, protocol),
         public = true,
-        includeDefaultPayloadHeaders = true
+        includeDefaultPayloadHeaders = true,
     ),
     HttpBoundProtocolTraitImplGenerator(coreCodegenContext, protocol),
 )
@@ -96,7 +96,7 @@ class HttpBoundProtocolTraitImplGenerator(
     private fun RustWriter.renderNonStreamingTraits(
         operationName: String?,
         outputSymbol: Symbol,
-        operationShape: OperationShape
+        operationShape: OperationShape,
     ) {
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
@@ -115,14 +115,14 @@ class HttpBoundProtocolTraitImplGenerator(
             "O" to outputSymbol,
             "E" to operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target),
             "parse_error" to parseError(operationShape),
-            "parse_response" to parseResponse(operationShape)
+            "parse_response" to parseResponse(operationShape),
         )
     }
 
     private fun RustWriter.renderStreamingTraits(
         operationName: String,
         outputSymbol: Symbol,
-        operationShape: OperationShape
+        operationShape: OperationShape,
     ) {
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
@@ -146,7 +146,7 @@ class HttpBoundProtocolTraitImplGenerator(
             "E" to operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target),
             "parse_streaming_response" to parseStreamingResponse(operationShape),
             "parse_error" to parseError(operationShape),
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -161,12 +161,12 @@ class HttpBoundProtocolTraitImplGenerator(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
-                "E" to errorSymbol
+                "E" to errorSymbol,
             ) {
                 rust(
                     "let generic = #T(response).map_err(#T::unhandled)?;",
                     protocol.parseHttpGenericError(operationShape),
-                    errorSymbol
+                    errorSymbol,
                 )
                 if (operationShape.operationErrors(model).isNotEmpty()) {
                     rustTemplate(
@@ -189,7 +189,7 @@ class HttpBoundProtocolTraitImplGenerator(
                             withBlock(
                                 "$errorCode => #1T { meta: generic, kind: #1TKind::$variantName({",
                                 "})},",
-                                errorSymbol
+                                errorSymbol,
                             ) {
                                 Attribute.AllowUnusedMut.render(this)
                                 assignment("mut tmp") {
@@ -198,7 +198,7 @@ class HttpBoundProtocolTraitImplGenerator(
                                             operationShape,
                                             errorShape,
                                             httpBindingResolver.errorResponseBindings(errorShape),
-                                            errorSymbol
+                                            errorSymbol,
                                         )
                                     }
                                 }
@@ -208,7 +208,7 @@ class HttpBoundProtocolTraitImplGenerator(
                                         if (&tmp.message).is_none() {
                                             tmp.message = _error_message;
                                         }
-                                        """
+                                        """,
                                     )
                                 }
                                 rust("tmp")
@@ -234,7 +234,7 @@ class HttpBoundProtocolTraitImplGenerator(
                 "pub fn $fnName(op_response: &mut #{operation}::Response) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
-                "E" to errorSymbol
+                "E" to errorSymbol,
             ) {
                 write("let response = op_response.http_mut();")
                 withBlock("Ok({", "})") {
@@ -242,7 +242,7 @@ class HttpBoundProtocolTraitImplGenerator(
                         operationShape,
                         outputShape,
                         httpBindingResolver.responseBindings(operationShape),
-                        errorSymbol
+                        errorSymbol,
                     )
                 }
             }
@@ -260,14 +260,14 @@ class HttpBoundProtocolTraitImplGenerator(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
-                "E" to errorSymbol
+                "E" to errorSymbol,
             ) {
                 withBlock("Ok({", "})") {
                     renderShapeParser(
                         operationShape,
                         outputShape,
                         httpBindingResolver.responseBindings(operationShape),
-                        errorSymbol
+                        errorSymbol,
                     )
                 }
             }
@@ -291,7 +291,7 @@ class HttpBoundProtocolTraitImplGenerator(
                 rust(
                     "output = #T(response.body().as_ref(), output).map_err(#T::unhandled)?;",
                     parser,
-                    errorSymbol
+                    errorSymbol,
                 )
             }
         } else {
@@ -299,7 +299,7 @@ class HttpBoundProtocolTraitImplGenerator(
             structuredDataParser.errorParser(outputShape)?.also { parser ->
                 rust(
                     "output = #T(response.body().as_ref(), output).map_err(#T::unhandled)?;",
-                    parser, errorSymbol
+                    parser, errorSymbol,
                 )
             }
         }
@@ -340,7 +340,7 @@ class HttpBoundProtocolTraitImplGenerator(
                     #T(response.headers())
                         .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
                     """,
-                    fnName, errorSymbol
+                    fnName, errorSymbol,
                 )
             }
             HttpLocation.DOCUMENT -> {
@@ -354,7 +354,7 @@ class HttpBoundProtocolTraitImplGenerator(
                 val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
                     binding,
                     errorSymbol,
-                    payloadParser = payloadParser
+                    payloadParser = payloadParser,
                 )
                 return if (binding.member.isStreaming(model)) {
                     writable { rust("Some(#T(response.body_mut())?)", deserializer) }
@@ -375,7 +375,7 @@ class HttpBoundProtocolTraitImplGenerator(
                                 #{err}::unhandled("Failed to parse ${member.memberName} from prefix header `${binding.locationName}")
                              )?
                         """,
-                        "deser" to sym, "err" to errorSymbol
+                        "deser" to sym, "err" to errorSymbol,
                     )
                 }
             }

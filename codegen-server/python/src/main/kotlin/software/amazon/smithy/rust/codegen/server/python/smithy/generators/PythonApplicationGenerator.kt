@@ -83,7 +83,7 @@ class PythonApplicationGenerator(
                 inner: #{SmithyPython}::PyApp
             }
             """,
-            *codegenScope
+            *codegenScope,
         )
 
         renderPyMethods(writer)
@@ -95,7 +95,7 @@ class PythonApplicationGenerator(
             ##[#{pyo3}::pymethods]
             impl App
             """,
-            *codegenScope
+            *codegenScope,
         ) {
             rustTemplate(
                 """
@@ -123,14 +123,14 @@ class PythonApplicationGenerator(
                     self.inner.run(py, address, port, backlog, workers)
                 }
                 """,
-                *codegenScope
+                *codegenScope,
             )
             rustBlockTemplate(
                 """
                 /// Dynamically codegenerate the routes, allowing to build the Smithy [Router].
                 pub fn build_router(&mut self, py: #{pyo3}::Python) -> #{pyo3}::PyResult<()>
                 """,
-                *codegenScope
+                *codegenScope,
             ) {
                 rustTemplate(
                     """
@@ -138,7 +138,7 @@ class PythonApplicationGenerator(
                     let event_loop = asyncio.call_method0("get_event_loop")?;
                     let router = crate::operation_registry::OperationRegistryBuilder::default();
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
                 for (operation in operations) {
                     val operationName = symbolProvider.toSymbol(operation).name
@@ -151,7 +151,7 @@ class PythonApplicationGenerator(
                             #{pyo3_asyncio}::tokio::scope(${name}_locals, crate::operation_handler::$name(input, state, handler))
                         });
                         """,
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
                 rustTemplate(
@@ -160,7 +160,7 @@ class PythonApplicationGenerator(
                     self.inner.router = Some(#{SmithyPython}::PyRouter(router));
                     Ok(())
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             operations.map { operation ->
@@ -174,7 +174,7 @@ class PythonApplicationGenerator(
                         self.inner.register_operation(py, "$name", func)
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
