@@ -175,9 +175,7 @@ fn run_main() -> Result<(), Error> {
             for error in &errors {
                 println!("{}", error);
                 if let Some(location) = error.location() {
-                    error_printer
-                        .pretty_print_error_context(location, error.subtext())
-                        .context("failed to output error context")?;
+                    error_printer.pretty_print_error_context(location, error.subtext())
                 }
             }
             if !errors.is_empty() {

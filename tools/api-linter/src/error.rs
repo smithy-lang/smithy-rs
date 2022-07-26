@@ -218,26 +218,42 @@ impl ErrorPrinter {
         Ok(self.file_cache.get(path).unwrap())
     }
 
-    pub fn pretty_print_error_context(&mut self, location: &Span, subtext: String) -> Result<()> {
-        let file_contents = self.get_file_contents(&location.filename)?;
-        let begin = Self::position_from_line_col(file_contents, location.begin);
-        let end = Self::position_from_line_col(file_contents, location.end);
+    pub fn pretty_print_error_context(&mut self, location: &Span, subtext: String) {
+        match self.get_file_contents(&location.filename) {
+            Ok(file_contents) => {
+                let begin = Self::position_from_line_col(file_contents, location.begin);
+                let end = Self::position_from_line_col(file_contents, location.end);
 
-        // HACK: Using Pest to do the pretty error context formatting for lack of
-        // knowledge of a smaller library tailored to this use-case
-        let variant = pest::error::ErrorVariant::<()>::CustomError { message: subtext };
-        let err_context = match (begin, end) {
-            (Some(b), Some(e)) => Some(pest::error::Error::new_from_span(variant, b.span(&e))),
-            (Some(b), None) => Some(pest::error::Error::new_from_pos(variant, b)),
-            _ => None,
-        };
-        if let Some(err_context) = err_context {
-            println!(
-                "{}\n",
-                err_context.with_path(&location.filename.to_string_lossy())
-            );
+                // HACK: Using Pest to do the pretty error context formatting for lack of
+                // knowledge of a smaller library tailored to this use-case
+                let variant = pest::error::ErrorVariant::<()>::CustomError { message: subtext };
+                let err_context = match (begin, end) {
+                    (Some(b), Some(e)) => {
+                        Some(pest::error::Error::new_from_span(variant, b.span(&e)))
+                    }
+                    (Some(b), None) => Some(pest::error::Error::new_from_pos(variant, b)),
+                    _ => None,
+                };
+                if let Some(err_context) = err_context {
+                    println!(
+                        "{}\n",
+                        err_context.with_path(&location.filename.to_string_lossy())
+                    );
+                }
+            }
+            Err(err) => {
+                println!("error: {subtext}");
+                println!(
+                    "  --> {}:{}:{}",
+                    location.filename.to_string_lossy(),
+                    location.begin.0 + 1,
+                    location.begin.1 + 1
+                );
+                println!("   | Failed to load {:?}", location.filename);
+                println!("   | to provide error message context.");
+                println!("   | Cause: {err:?}");
+            }
         }
-        Ok(())
     }
 
     fn position_from_line_col(contents: &str, (line, col): (usize, usize)) -> Option<Position> {
