@@ -246,7 +246,7 @@ impl ErrorPrinter {
                 println!(
                     "  --> {}:{}:{}",
                     location.filename.to_string_lossy(),
-                    location.begin.0 + 1,
+                    location.begin.0,
                     location.begin.1 + 1
                 );
                 println!("   | Failed to load {:?}", location.filename);

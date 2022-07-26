@@ -17,6 +17,15 @@ use std::collections::{BTreeSet, HashMap};
 use tracing::debug;
 use tracing_attributes::instrument;
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum VisibilityCheck {
+    /// Check to make sure the item is public before visiting it
+    Default,
+    /// Assume the item is public and examine it.
+    /// This is useful for visiting private items that are publically re-exported
+    AssumePublic,
+}
+
 /// Visits all items in the Rustdoc JSON output to discover external types in public APIs
 /// and track them as validation errors if the [`Config`] doesn't allow them.
 pub struct Visitor {
@@ -59,7 +68,7 @@ impl Visitor {
 
         for id in &root_module.items {
             let item = self.item(id).context(here!())?;
-            self.visit_item(&root_path, item, false)?;
+            self.visit_item(&root_path, item, VisibilityCheck::Default)?;
         }
         Ok(self.errors.take())
     }
@@ -85,8 +94,13 @@ impl Visitor {
     }
 
     #[instrument(level = "debug", skip(self, path, item), fields(path = %path, name = ?item.name, id = %item.id.0))]
-    fn visit_item(&self, path: &Path, item: &Item, override_visibility: bool) -> Result<()> {
-        if !override_visibility && !Self::is_public(path, item) {
+    fn visit_item(
+        &self,
+        path: &Path,
+        item: &Item,
+        visibility_check: VisibilityCheck,
+    ) -> Result<()> {
+        if visibility_check == VisibilityCheck::Default && !Self::is_public(path, item) {
             return Ok(());
         }
 
@@ -120,7 +134,7 @@ impl Visitor {
                     self.visit_impl(&path, self.item(id)?)?;
                 }
                 for id in &enm.variants {
-                    self.visit_item(&path, self.item(id)?, false)?;
+                    self.visit_item(&path, self.item(id)?, VisibilityCheck::Default)?;
                 }
             }
             ItemEnum::ForeignType => unimplemented!("visit_item ItemEnum::ForeignType"),
@@ -133,7 +147,8 @@ impl Visitor {
                 if let Some(target_id) = &import.id {
                     if let Ok(target_item) = self.item(target_id) {
                         // Override the visibility check for re-exported items
-                        self.visit_item(&path, target_item, true).context(here!())?;
+                        self.visit_item(&path, target_item, VisibilityCheck::AssumePublic)
+                            .context(here!())?;
                     }
                     path.push_raw(ComponentType::ReExport, &import.name, item.span.as_ref());
                     self.check_external(&path, &ErrorLocation::ReExport, target_id)
@@ -157,7 +172,7 @@ impl Visitor {
                     // for re-exports since it includes the correct span where the re-export occurs,
                     // and we don't want to examine the innards of the re-export.
                     if module_item.crate_id == self.root_crate_id {
-                        self.visit_item(&path, module_item, false)?;
+                        self.visit_item(&path, module_item, VisibilityCheck::Default)?;
                     }
                 }
             }
@@ -207,7 +222,7 @@ impl Visitor {
         self.visit_generics(path, &strct.generics)?;
         for id in &strct.fields {
             let field = self.item(id)?;
-            self.visit_item(path, field, false)?;
+            self.visit_item(path, field, VisibilityCheck::Default)?;
         }
         for id in &strct.impls {
             self.visit_impl(path, self.item(id)?)?;
@@ -221,7 +236,7 @@ impl Visitor {
         self.visit_generic_bounds(path, &trt.bounds)?;
         for id in &trt.items {
             let item = self.item(id)?;
-            self.visit_item(path, item, false)?;
+            self.visit_item(path, item, VisibilityCheck::Default)?;
         }
         Ok(())
     }
@@ -235,7 +250,7 @@ impl Visitor {
             }
             self.visit_generics(path, &imp.generics)?;
             for id in &imp.items {
-                self.visit_item(path, self.item(id)?, false)?;
+                self.visit_item(path, self.item(id)?, VisibilityCheck::Default)?;
             }
             if let Some(trait_) = &imp.trait_ {
                 self.visit_type(path, &ErrorLocation::ImplementedTrait, trait_)
@@ -443,7 +458,7 @@ impl Visitor {
             }
             Variant::Struct(ids) => {
                 for id in ids {
-                    self.visit_item(path, self.item(id)?, false)?;
+                    self.visit_item(path, self.item(id)?, VisibilityCheck::Default)?;
                 }
             }
         }
