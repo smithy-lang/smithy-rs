@@ -386,17 +386,14 @@ sealed class Attribute {
                 val builder = StringBuilder()
                 builder.append("deprecated")
 
-                val note = note ?: ""
-                val since = since ?: ""
-
-                if (note.isBlank() && since.isBlank()) {
-                    // No-op. Rustc would emit a default message.
-                } else if (note.isNotBlank() && since.isBlank()) {
+                if (note != null && since != null) {
+                    builder.append("(note = ${note.dq()}, since = ${since.dq()})")
+                } else if (note != null) {
                     builder.append("(note = ${note.dq()})")
-                } else if (note.isBlank() && since.isNotBlank()) {
+                } else if (since != null) {
                     builder.append("(since = ${since.dq()})")
                 } else {
-                    builder.append("(note = ${note.dq()}, since = ${since.dq()})")
+                    // No-op. Rustc would emit a default message.
                 }
                 return Custom(builder.toString())
             }
