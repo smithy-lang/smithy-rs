@@ -43,6 +43,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerR
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.extractSymbolFromOption
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
@@ -137,7 +138,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "http" to RuntimeType.http
     )
 
-    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
+    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
         val inputSymbol = symbolProvider.toSymbol(operationShape.inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
 
@@ -473,7 +474,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         }
                     }
                     val status =
-                        variantShape.getTrait<HttpErrorTrait>()?.let { trait -> trait.code }
+                        variantShape.getTrait<HttpErrorTrait>()?.code
                             ?: errorTrait.defaultHttpStatusCode
 
                     serverRenderContentLengthHeader()
