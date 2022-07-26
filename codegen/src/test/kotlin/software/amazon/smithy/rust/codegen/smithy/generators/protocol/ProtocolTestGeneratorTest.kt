@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
@@ -44,11 +45,11 @@ private class TestProtocolPayloadGenerator(private val body: String) : ProtocolP
 
 private class TestProtocolTraitImplGenerator(
     private val coreCodegenContext: CoreCodegenContext,
-    private val correctResponse: String
+    private val correctResponse: String,
 ) : ProtocolTraitImplGenerator {
     private val symbolProvider = coreCodegenContext.symbolProvider
 
-    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
+    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
         operationWriter.rustTemplate(
             """
             impl #{parse_strict} for ${operationShape.id.name}{

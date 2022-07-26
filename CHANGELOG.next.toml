@@ -144,10 +144,75 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "82marbag"
 
 [[aws-sdk-rust]]
+message = """
+The AWS SDK for Rust now supports [additional checksum algorithms for Amazon S3](https://aws.amazon.com/blogs/aws/new-additional-checksum-algorithms-for-amazon-s3/).
+When getting and putting objects, you may now request that the request body be validated with a checksum. The supported
+algorithms are SHA-1, SHA-256, CRC-32, and CRC-32C.
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let sdk_config = aws_config::load_from_env().await;
+    let s3_client = aws_sdk_s3::Client::new(&sdk_config);
+    let body = aws_sdk_s3::types::ByteStream::read_from()
+        .path(std::path::Path::new("./path/to/your/file.txt"))
+        .build()
+        .await
+        .unwrap();
+
+    let _ = s3_client
+        .put_object()
+        .bucket("your-bucket")
+        .key("file.txt")
+        .body(body)
+        // When using this field, the checksum will be calculated for you
+        .checksum_algorithm(aws_sdk_s3::model::ChecksumAlgorithm::Crc32C)
+        .send()
+        .await?;
+
+    let body = aws_sdk_s3::types::ByteStream::read_from()
+        .path(std::path::Path::new("./path/to/your/other-file.txt"))
+        .build()
+        .await
+        .unwrap();
+
+    let _ = s3_client
+        .put_object()
+        .bucket("your-bucket")
+        .key("other-file.txt")
+        .body(body)
+        // Alternatively, you can pass a checksum that you've calculated yourself. It must be base64
+        // encoded. Also, make sure that you're base64 encoding the bytes of the checksum, not its
+        // string representation.
+        .checksum_crc32_c(aws_smithy_types::base64::encode(&A_PRECALCULATED_CRC_32_C_CHECKSUM[..]))
+        .send()
+        .await?;
+}
+```
+"""
+references = ["smithy-rs#1482"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Update codegen to generate support for flexible checksums."
+references = ["smithy-rs#1482"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
 message = "SDK crate READMEs now include an example of creating a client"
 references = ["smithy-rs#1571", "smithy-rs#1385"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+Add explicit cast during JSON deserialization in case of custom Symbol providers.
+"""
+references = ["smithy-rs#1520"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "crisidev"
 
 [[smithy-rs]]
 message = "Non-streaming struct members are now marked `#[doc(hidden)]` since they will be removed in the future"
