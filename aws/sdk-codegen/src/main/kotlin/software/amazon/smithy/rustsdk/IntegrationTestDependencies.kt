@@ -80,6 +80,7 @@ class IntegrationTestDependencies(
 
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> = when (moduleName) {
         "transcribestreaming" -> listOf(TranscribeTestDependencies())
+        "s3" -> listOf(S3TestDependencies())
         else -> emptyList()
     }
 }
@@ -92,12 +93,21 @@ class TranscribeTestDependencies : LibRsCustomization() {
     }
 }
 
+class S3TestDependencies : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable = writable {
+        addDependency(Smol)
+        addDependency(AsyncStd)
+    }
+}
+
+private val AsyncStd = CargoDependency("async-std", CratesIo("1.12"), scope = DependencyScope.Dev)
 private val AsyncStream = CargoDependency("async-stream", CratesIo("0.3"), DependencyScope.Dev)
 private val Criterion = CargoDependency("criterion", CratesIo("0.3"), scope = DependencyScope.Dev)
 private val FuturesCore = CargoDependency("futures-core", CratesIo("0.3"), DependencyScope.Dev)
+private val FuturesUtil = CargoDependency("futures-util", CratesIo("0.3"), scope = DependencyScope.Dev)
 private val Hound = CargoDependency("hound", CratesIo("3.4"), DependencyScope.Dev)
 private val SerdeJson = CargoDependency("serde_json", CratesIo("1"), features = emptySet(), scope = DependencyScope.Dev)
+private val Smol = CargoDependency("smol", CratesIo("1.2"), scope = DependencyScope.Dev)
 private val Tokio = CargoDependency("tokio", CratesIo("1"), features = setOf("macros", "test-util"), scope = DependencyScope.Dev)
-private val FuturesUtil = CargoDependency("futures-util", CratesIo("0.3"), scope = DependencyScope.Dev)
 private val Tracing = CargoDependency("tracing", CratesIo("0.1"), scope = DependencyScope.Dev)
 private val TracingSubscriber = CargoDependency("tracing-subscriber", CratesIo("0.2"), scope = DependencyScope.Dev)
