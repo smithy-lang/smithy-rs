@@ -95,8 +95,6 @@ class ServerCombinedErrorGeneratorTest {
                 """
             )
 
-            println("file:///${project.baseDir}/src/lib.rs")
-            println("file:///${project.baseDir}/src/error.rs")
             project.compileAndTest()
         }
     }
