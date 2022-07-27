@@ -196,7 +196,7 @@ class PythonApplicationGenerator(
 /// Main Python application, used to register operations and context and start multiple
 /// workers on the same shared socket.
 ///
-/// Operations can be registrered using the application object as a decorator (`@app.operation_name`).
+/// Operations can be registered using the application object as a decorator (`@app.operation_name`).
 ///
 /// Here's a full example to get you started:
 ///

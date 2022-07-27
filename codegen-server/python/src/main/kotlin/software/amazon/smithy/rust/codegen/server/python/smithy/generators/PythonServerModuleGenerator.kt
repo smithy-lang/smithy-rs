@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class PythonServerModuleGenerator(
     private val codegenContext: ServerCodegenContext,
@@ -29,7 +30,7 @@ class PythonServerModuleGenerator(
         "pyo3" to PythonServerCargoDependency.PyO3.asType(),
     )
     private val symbolProvider = codegenContext.symbolProvider
-    private val libName = "lib${codegenContext.settings.moduleName}"
+    private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
 
     fun render() {
         rustCrate.withModule(
