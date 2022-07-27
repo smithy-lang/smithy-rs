@@ -7,16 +7,18 @@ use anyhow::Result;
 use async_trait::async_trait;
 use clap::Parser;
 use serde::Serialize;
-use std::cmp::Ordering;
+use smithy_rs_tool_common::release_tag::ReleaseTag;
+use std::str::FromStr;
 use std::time::Duration;
 
 const KNOWN_YANKED_RELEASE_TAGS: &[&str] = &[
-    // leave this one in here for unit tests
-    "test-yanked-release",
-    // add release tags here to get the canary passing after yanking a release
+    // Test release tag for the unit tests.
+    // There wasn't a release on this date, so this is fine for testing
+    "release-2022-07-04",
+    // Add release tags here to get the canary passing after yanking a release
 ];
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Eq, PartialEq)]
 pub struct GenerateMatrixOpt {
     /// Number of previous SDK versions to run the canary against
     #[clap(short, long)]
@@ -33,32 +35,10 @@ struct Output {
     rust_version: Vec<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct Release {
-    timestamp: Option<i64>,
-    tag_name: String,
-}
-
-impl Ord for Release {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}
-
-impl PartialOrd for Release {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        // Reverse chronological order
-        match other.timestamp.partial_cmp(&self.timestamp) {
-            Some(core::cmp::Ordering::Equal) => self.tag_name.partial_cmp(&other.tag_name),
-            ord => ord,
-        }
-    }
-}
-
 // Use a trait to make unit testing the GitHub API pagination easier
 #[async_trait]
 trait RetrieveReleases {
-    async fn retrieve(&self, owner: &str, repo: &str, page_num: i64) -> Result<Vec<Release>>;
+    async fn retrieve(&self, owner: &str, repo: &str, page_num: i64) -> Result<Vec<ReleaseTag>>;
 }
 
 struct GitHubRetrieveReleases {
@@ -76,17 +56,14 @@ impl GitHubRetrieveReleases {
 
 #[async_trait]
 impl RetrieveReleases for GitHubRetrieveReleases {
-    async fn retrieve(&self, owner: &str, repo: &str, page_num: i64) -> Result<Vec<Release>> {
+    async fn retrieve(&self, owner: &str, repo: &str, page_num: i64) -> Result<Vec<ReleaseTag>> {
         let result = self
             .github
             .repos()
-            .list_releases(owner, repo, 100, page_num)
+            .list_tags(owner, repo, 100, page_num)
             .await?
             .into_iter()
-            .map(|release| Release {
-                timestamp: release.published_at.map(|d| d.timestamp()),
-                tag_name: release.tag_name,
-            })
+            .filter_map(|tag| ReleaseTag::from_str(&tag.name).ok())
             .collect();
         // Be nice to GitHub
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -97,8 +74,8 @@ impl RetrieveReleases for GitHubRetrieveReleases {
 async fn retrieve_latest_release_tags(
     retrieve_releases: &dyn RetrieveReleases,
     desired: usize,
-) -> Result<Vec<String>> {
-    // The GitHub API doesn't document the order that releases are returned in,
+) -> Result<Vec<ReleaseTag>> {
+    // The GitHub API doesn't document the order that tags are returned in,
     // so assume random order and sort them ourselves.
     let mut page_num = 1;
     let mut releases = Vec::new();
@@ -113,19 +90,12 @@ async fn retrieve_latest_release_tags(
         page_num += 1;
     }
     releases.sort();
+    releases.reverse();
 
     Ok(releases
         .into_iter()
-        .filter(
-            |Release {
-                 timestamp,
-                 tag_name,
-             }| {
-                timestamp.is_some() && !KNOWN_YANKED_RELEASE_TAGS.contains(&tag_name.as_str())
-            },
-        )
+        .filter(|release_tag| !KNOWN_YANKED_RELEASE_TAGS.contains(&release_tag.as_str()))
         .take(desired)
-        .map(|release| release.tag_name)
         .collect())
 }
 
@@ -135,7 +105,10 @@ pub async fn generate_matrix(opt: GenerateMatrixOpt) -> Result<()> {
         retrieve_latest_release_tags(&retrieve_releases, opt.sdk_versions as usize).await?;
 
     let output = Output {
-        sdk_release_tags,
+        sdk_release_tags: sdk_release_tags
+            .into_iter()
+            .map(|t| t.to_string())
+            .collect(),
         rust_version: opt.rust_versions,
     };
     println!("{}", serde_json::to_string(&output)?);
@@ -146,13 +119,22 @@ pub async fn generate_matrix(opt: GenerateMatrixOpt) -> Result<()> {
 mod tests {
     use super::*;
 
+    fn tag(value: &str) -> ReleaseTag {
+        ReleaseTag::from_str(value).unwrap()
+    }
+
     struct TestRetriever {
-        pages: Vec<Vec<Release>>,
+        pages: Vec<Vec<ReleaseTag>>,
     }
 
     #[async_trait]
     impl RetrieveReleases for TestRetriever {
-        async fn retrieve(&self, owner: &str, repo: &str, page_num: i64) -> Result<Vec<Release>> {
+        async fn retrieve(
+            &self,
+            owner: &str,
+            repo: &str,
+            page_num: i64,
+        ) -> Result<Vec<ReleaseTag>> {
             assert_eq!("awslabs", owner);
             assert_eq!("aws-sdk-rust", repo);
             Ok(self.pages[(page_num - 1) as usize].clone())
@@ -163,66 +145,24 @@ mod tests {
     async fn test_retrieve_latest_release_tags() {
         let retriever = TestRetriever {
             pages: vec![
+                vec![tag("v0.12.0"), tag("v0.15.0"), tag("release-2022-07-03")],
+                vec![tag("v0.14.0"), tag("release-2022-07-05"), tag("v0.11.0")],
                 vec![
-                    Release {
-                        timestamp: Some(200),
-                        tag_name: "release-200".into(),
-                    },
-                    Release {
-                        timestamp: None,
-                        tag_name: "draft-release-1".into(),
-                    },
-                    Release {
-                        timestamp: Some(300),
-                        tag_name: "release-300".into(),
-                    },
-                    Release {
-                        timestamp: None,
-                        tag_name: "draft-release-2".into(),
-                    },
-                ],
-                vec![
-                    Release {
-                        timestamp: None,
-                        tag_name: "draft-release-3".into(),
-                    },
-                    Release {
-                        timestamp: None,
-                        tag_name: "draft-release-4".into(),
-                    },
-                    Release {
-                        timestamp: Some(500),
-                        tag_name: "release-500".into(),
-                    },
-                    Release {
-                        timestamp: Some(600),
-                        tag_name: "test-yanked-release".into(),
-                    },
-                ],
-                vec![
-                    Release {
-                        timestamp: None,
-                        tag_name: "draft-release-5".into(),
-                    },
-                    Release {
-                        timestamp: Some(100),
-                        tag_name: "release-100".into(),
-                    },
-                    Release {
-                        timestamp: Some(400),
-                        tag_name: "release-400".into(),
-                    },
+                    tag("v0.13.0"),
+                    tag("release-2022-07-01"),
+                    tag("release-2022-07-04"),
                 ],
                 vec![],
             ],
         };
 
-        let tags = retrieve_latest_release_tags(&retriever, 3).await.unwrap();
+        let tags = retrieve_latest_release_tags(&retriever, 4).await.unwrap();
         assert_eq!(
             vec![
-                "release-500".to_string(),
-                "release-400".into(),
-                "release-300".into()
+                tag("release-2022-07-05"),
+                tag("release-2022-07-03"),
+                tag("release-2022-07-01"),
+                tag("v0.15.0"),
             ],
             tags
         );
