@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! A builder whose methods allow for configuration of [`MakeFmt`] implementations over parts of [`http::Response`].
+
 use std::fmt::{Debug, Error, Formatter};
 
 use http::{header::HeaderName, HeaderMap};
@@ -16,6 +18,8 @@ use super::{
 
 /// Allows the modification the responses status code [`Display`](std::fmt::Display) and headers
 /// [`Debug`](std::fmt::Debug) to accommodate sensitivity.
+///
+/// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`StatusCode`](http::StatusCode).
 #[derive(Clone)]
 pub struct ResponseFmt<Headers, StatusCode> {
     headers: Headers,

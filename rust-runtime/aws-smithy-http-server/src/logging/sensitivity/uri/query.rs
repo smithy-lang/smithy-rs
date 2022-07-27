@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! A wrapper around a query string [`&str`](str) to allow for sensitivity.
+
 use std::fmt::{Debug, Display, Error, Formatter};
 
 use crate::logging::{sensitivity::Sensitive, MakeFmt};

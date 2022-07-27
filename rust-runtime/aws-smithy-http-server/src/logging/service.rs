@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! A [`Service`] and it's associated [`Future`] providing sensitivity aware logging.
+
 use std::{
     future::Future,
     pin::Pin,
