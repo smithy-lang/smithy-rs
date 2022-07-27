@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class PythonServerModuleGenerator(
-    private val codegenContext: ServerCodegenContext,
+    codegenContext: ServerCodegenContext,
     private val rustCrate: RustCrate,
     private val serviceShapes: Set<Shape>
 ) {
