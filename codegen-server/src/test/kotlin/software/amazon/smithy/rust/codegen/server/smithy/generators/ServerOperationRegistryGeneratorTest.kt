@@ -12,7 +12,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.util.lookup
 
@@ -63,7 +62,6 @@ class ServerOperationRegistryGeneratorTest {
         val serverCodegenContext = serverTestCodegenContext(
             model,
             serviceShape,
-            settings = serverTestRustSettings(moduleName = "service"),
             protocolShapeId = protocolShapeId
         )
 
@@ -79,8 +77,8 @@ class ServerOperationRegistryGeneratorTest {
             """
             /// ```rust
             /// use std::net::SocketAddr;
-            /// use service::{input, output, error};
-            /// use service::operation_registry::OperationRegistryBuilder;
+            /// use test_module::{input, output, error};
+            /// use test_module::operation_registry::OperationRegistryBuilder;
             /// use aws_smithy_http_server::routing::Router;
             ///
             /// #[tokio::main]
