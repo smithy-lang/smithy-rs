@@ -1,5 +1,5 @@
 [package]
-name = "pokemon_service"
+name = "pokemon-service"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -19,7 +19,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Local paths
 aws-smithy-http-server = { path = "../../" }
-pokemon_service_sdk = { path = "../pokemon_service_sdk/" }
+pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
@@ -29,4 +29,4 @@ wrk-api-bench = "0.0.7"
 
 # Local paths
 aws-smithy-client  = { path = "../../../aws-smithy-client/", features = ["rustls"] }
-pokemon_service_client = { path = "../pokemon_service_client/" }
+pokemon-service-client = { path = "../pokemon-service-client/" }
