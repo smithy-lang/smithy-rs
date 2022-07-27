@@ -19,7 +19,7 @@ class ServiceConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> = baseCustomizations + SharedConfigDocsCustomization()
 }
 
@@ -41,7 +41,7 @@ class SharedConfigDocsCustomization : ConfigCustomization() {
                     ```
 
                     The service config can also be constructed manually using its builder.
-                    """
+                    """,
                 )
             }
         } else {

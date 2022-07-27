@@ -73,14 +73,14 @@ class RetryConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + RetryConfigProviderConfig(codegenContext)
     }
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseRetryConfig(codegenContext.runtimeConfig)
     }
@@ -94,7 +94,7 @@ class RetryConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : Config
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
                 "pub(crate) retry_config: Option<#{RetryConfig}>,",
-                *codegenScope
+                *codegenScope,
             )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
@@ -138,11 +138,11 @@ class RetryConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : Config
                         self
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             ServiceConfig.BuilderBuild -> rustTemplate(
                 """retry_config: self.retry_config,""",
-                *codegenScope
+                *codegenScope,
             )
             else -> emptySection
         }

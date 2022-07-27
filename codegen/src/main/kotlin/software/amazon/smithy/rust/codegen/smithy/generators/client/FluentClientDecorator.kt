@@ -75,7 +75,7 @@ class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
         FluentClientGenerator(
             codegenContext,
-            customizations = listOf(GenericFluentClient(codegenContext))
+            customizations = listOf(GenericFluentClient(codegenContext)),
         ).render(rustCrate)
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-client/rustls")))
         rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("aws-smithy-client/native-tls")))
@@ -83,7 +83,7 @@ class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         if (!applies(codegenContext)) {
             return baseCustomizations
@@ -104,7 +104,7 @@ sealed class FluentClientSection(name: String) : Section(name) {
     /** Write custom code into an operation fluent builder's impl block */
     data class FluentBuilderImpl(
         val operationShape: OperationShape,
-        val operationErrorType: RuntimeType
+        val operationErrorType: RuntimeType,
     ) : FluentClientSection("FluentBuilderImpl")
 
     /** Write custom code into the docs */
@@ -128,7 +128,7 @@ class GenericFluentClient(coreCodegenContext: CoreCodegenContext) : FluentClient
                     /// This client allows ergonomic access to a `$humanName`-shaped service.
                     /// Each method corresponds to an endpoint defined in the service's Smithy model,
                     /// and the request and response shapes are auto-generated from that same model.
-                    /// """
+                    /// """,
                 )
                 rustTemplate(
                     """
@@ -262,7 +262,7 @@ class GenericFluentClient(coreCodegenContext: CoreCodegenContext) : FluentClient
                     /// }
                     /// ```
                     ///""",
-                    *codegenScope
+                    *codegenScope,
                 )
                 rust(
                     """
@@ -276,7 +276,7 @@ class GenericFluentClient(coreCodegenContext: CoreCodegenContext) : FluentClient
                     /// you then have to `.await` to get the service's response.
                     ///
                     /// [builder pattern]: https://rust-lang.github.io/api-guidelines/type-safety.html##c-builder
-                    /// [SigV4-signed requests]: https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html"""
+                    /// [SigV4-signed requests]: https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html""",
                 )
             }
             else -> emptySection
@@ -290,7 +290,7 @@ class FluentClientGenerator(
         connectorDefault = null,
         middlewareDefault = null,
         retryDefault = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig).asType().member("retry::Standard"),
-        client = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig).asType()
+        client = CargoDependency.SmithyClient(coreCodegenContext.runtimeConfig).asType(),
     ),
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
@@ -301,7 +301,7 @@ class FluentClientGenerator(
         val clientModule = RustModule(
             "client",
             RustMetadata(visibility = Visibility.PUBLIC),
-            documentation = "Client and fluent builders for calling the service."
+            documentation = "Client and fluent builders for calling the service.",
         )
     }
 
@@ -375,8 +375,8 @@ class FluentClientGenerator(
                 customizations.forEach {
                     it.section(
                         FluentClientSection.FluentClientDocs(
-                            serviceShape
-                        )
+                            serviceShape,
+                        ),
                     )(this)
                 }
             },
@@ -384,7 +384,7 @@ class FluentClientGenerator(
         writer.rustBlockTemplate(
             "impl${generics.inst} Client${generics.inst} #{bounds:W}",
             "client" to clientDep.asType(),
-            "bounds" to generics.bounds
+            "bounds" to generics.bounds,
         ) {
             operations.forEach { operation ->
                 val name = symbolProvider.toSymbol(operation).name
@@ -425,7 +425,7 @@ class FluentClientGenerator(
                     /// - $outputFieldsHead
                     $outputFieldsBody
                     /// - On failure, responds with [`SdkError<${operationErr.name}>`]($operationErr)
-                    """
+                    """,
                 )
 
                 rust(
@@ -433,12 +433,12 @@ class FluentClientGenerator(
                     pub fn ${
                     clientOperationFnName(
                         operation,
-                        symbolProvider
+                        symbolProvider,
                     )
                     }(&self) -> fluent_builders::$name${generics.inst} {
                         fluent_builders::$name::new(self.handle.clone())
                     }
-                    """
+                    """,
                 )
             }
         }
@@ -451,7 +451,7 @@ class FluentClientGenerator(
                 one if its operation methods. After parameters are set using the builder methods,
                 the `send` method can be called to initiate the request.
                 """.trim(),
-                newlinePrefix = "//! "
+                newlinePrefix = "//! ",
             )
             operations.forEach { operation ->
                 val operationSymbol = symbolProvider.toSymbol(operation)
@@ -462,7 +462,7 @@ class FluentClientGenerator(
                     """
                     /// Fluent builder constructing a request to `${operationSymbol.name}`.
                     ///
-                    """
+                    """,
                 )
 
                 documentShape(operation, model, autoSuppressMissingDocs = false)
@@ -477,13 +477,13 @@ class FluentClientGenerator(
                     "Inner" to input.builderSymbol(symbolProvider),
                     "client" to clientDep.asType(),
                     "generics" to generics.decl,
-                    "operation" to operationSymbol
+                    "operation" to operationSymbol,
                 )
 
                 rustBlockTemplate(
                     "impl${generics.inst} ${operationSymbol.name}${generics.inst} #{bounds:W}",
                     "client" to clientDep.asType(),
-                    "bounds" to generics.bounds
+                    "bounds" to generics.bounds,
                 ) {
                     val inputType = symbolProvider.toSymbol(operation.inputShape(model))
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
@@ -516,7 +516,7 @@ class FluentClientGenerator(
                         "operation_err" to errorType,
                         "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType()
                             .copy(name = "result::SdkError"),
-                        "send_bounds" to generics.sendBounds(inputType, outputType, errorType)
+                        "send_bounds" to generics.sendBounds(inputType, outputType, errorType),
                     )
                     PaginatorGenerator.paginatorType(coreCodegenContext, generics, operation)?.also { paginatorType ->
                         rustTemplate(
@@ -528,15 +528,15 @@ class FluentClientGenerator(
                                 #{Paginator}::new(self.handle, self.inner)
                             }
                             """,
-                            "Paginator" to paginatorType
+                            "Paginator" to paginatorType,
                         )
                     }
                     writeCustomizations(
                         customizations,
                         FluentClientSection.FluentBuilderImpl(
                             operation,
-                            operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
-                        )
+                            operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT),
+                        ),
                     )
                     input.members().forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)

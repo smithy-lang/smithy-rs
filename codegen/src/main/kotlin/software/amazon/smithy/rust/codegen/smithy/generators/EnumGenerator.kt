@@ -43,7 +43,7 @@ class EnumMemberModel(private val definition: EnumDefinition, private val symbol
             definition.documentation.orNull(),
             name.renamedFrom?.let { renamedFrom ->
                 "`::$renamedFrom` has been renamed to `::${name.name}`."
-            }
+            },
         )
     }
 
@@ -148,7 +148,7 @@ open class EnumGenerator(
             }
         writer.docWithNote(
             shape.getTrait<DocumentationTrait>()?.value,
-            renamedWarning.ifBlank { null }
+            renamedWarning.ifBlank { null },
         )
 
         meta.render(writer)
@@ -208,7 +208,7 @@ open class EnumGenerator(
                     Ok($enumName::from(s))
                 }
             }
-            """
+            """,
         )
     }
 }

@@ -81,7 +81,7 @@ class BaseSymbolMetadataProvider(
     private val containerDefault = RustMetadata(
         Attribute.Derives(defaultDerives.toSet()),
         additionalAttributes = additionalAttributes,
-        visibility = Visibility.PUBLIC
+        visibility = Visibility.PUBLIC,
     )
 
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
@@ -96,7 +96,7 @@ class BaseSymbolMetadataProvider(
                     RustMetadata(
                         // At some point, visibility will be made PRIVATE, so make these `#[doc(hidden)]` for now
                         visibility = Visibility.PUBLIC,
-                        additionalAttributes = listOf(Attribute.DocHidden)
+                        additionalAttributes = listOf(Attribute.DocHidden),
                     )
                 }
             }
@@ -119,12 +119,12 @@ class BaseSymbolMetadataProvider(
 
     override fun enumMeta(stringShape: StringShape): RustMetadata {
         return containerDefault.withDerives(
-            RuntimeType.std.member("hash::Hash")
+            RuntimeType.std.member("hash::Hash"),
         ).withDerives( // enums can be eq because they can only contain strings
             RuntimeType.std.member("cmp::Eq"),
             // enums can be Ord because they can only contain strings
             RuntimeType.std.member("cmp::PartialOrd"),
-            RuntimeType.std.member("cmp::Ord")
+            RuntimeType.std.member("cmp::Ord"),
         )
     }
 
@@ -144,6 +144,6 @@ fun Symbol.Builder.meta(rustMetadata: RustMetadata?): Symbol.Builder {
 
 fun Symbol.expectRustMetadata(): RustMetadata = this.getProperty(MetaKey, RustMetadata::class.java).orElseThrow {
     CodegenException(
-        "Expected $this to have metadata attached but it did not. "
+        "Expected $this to have metadata attached but it did not. ",
     )
 }

@@ -94,14 +94,14 @@ class JsonParserGenerator(
     private fun structureParser(
         fnName: String,
         structureShape: StructureShape,
-        includedMembers: List<MemberShape>
+        includedMembers: List<MemberShape>,
     ): RuntimeType {
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
             it.rustBlockTemplate(
                 "pub fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
                 "Builder" to structureShape.builderSymbol(symbolProvider),
-                *codegenScope
+                *codegenScope,
             ) {
                 rustTemplate(
                     """
@@ -109,7 +109,7 @@ class JsonParserGenerator(
                     let tokens = &mut tokens_owned;
                     #{expect_start_object}(tokens.next())?;
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
                 deserializeStructInner(includedMembers)
                 expectEndOfTokenStream()
@@ -126,7 +126,7 @@ class JsonParserGenerator(
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &[u8]) -> Result<#{Shape}, #{Error}>",
                 *codegenScope,
-                "Shape" to symbolProvider.toSymbol(shape)
+                "Shape" to symbolProvider.toSymbol(shape),
             ) {
                 val input = if (shape is DocumentShape) {
                     "input"
@@ -139,7 +139,7 @@ class JsonParserGenerator(
                     let mut tokens_owned = #{json_token_iter}($input).peekable();
                     let tokens = &mut tokens_owned;
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
                 rust("let result =")
                 deserializeMember(member)
@@ -179,7 +179,7 @@ class JsonParserGenerator(
                     data
                 }
             }
-            """
+            """,
         )
     }
 
@@ -197,7 +197,7 @@ class JsonParserGenerator(
         rustBlock("if tokens.next().is_some()") {
             rustTemplate(
                 "return Err(#{Error}::custom(\"found more JSON tokens after completing parsing\"));",
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -241,7 +241,7 @@ class JsonParserGenerator(
         rustTemplate(
             "#{expect_blob_or_null}(tokens.next())?#{ConvertFrom:W}",
             "ConvertFrom" to typeConversionGenerator.convertViaFrom(target),
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -279,12 +279,12 @@ class JsonParserGenerator(
         val timestampFormat =
             httpBindingResolver.timestampFormat(
                 member, HttpLocation.DOCUMENT,
-                TimestampFormatTrait.Format.EPOCH_SECONDS
+                TimestampFormatTrait.Format.EPOCH_SECONDS,
             )
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
         rustTemplate(
             "#{expect_timestamp_or_null}(tokens.next(), #{T})?#{ConvertFrom:W}",
-            "T" to timestampFormatType, "ConvertFrom" to typeConversionGenerator.convertViaFrom(shape), *codegenScope
+            "T" to timestampFormatType, "ConvertFrom" to typeConversionGenerator.convertViaFrom(shape), *codegenScope,
         )
     }
 
@@ -398,7 +398,7 @@ class JsonParserGenerator(
                                 """.map_err(|err| #{Error}::new(
                                 #{ErrorReason}::Custom(format!("{}", err).into()), None)
                                 )?""",
-                                *codegenScope
+                                *codegenScope,
                             )
                         }
                     }
@@ -418,7 +418,7 @@ class JsonParserGenerator(
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
                 *codegenScope,
-                "Shape" to symbol
+                "Shape" to symbol,
             ) {
                 rust("let mut variant = None;")
                 rustBlock("match tokens.next().transpose()?") {
@@ -427,7 +427,7 @@ class JsonParserGenerator(
                         Some(#{Token}::ValueNull { .. }) => return Ok(None),
                         Some(#{Token}::StartObject { .. }) =>
                         """,
-                        *codegenScope
+                        *codegenScope,
                     ) {
                         objectKeyLoop(hasMembers = shape.members().isNotEmpty()) {
                             rustTemplate(
@@ -436,7 +436,7 @@ class JsonParserGenerator(
                                     return Err(#{Error}::custom("encountered mixed variants in union"));
                                 }
                                 """,
-                                *codegenScope
+                                *codegenScope,
                             )
                             withBlock("variant = match key.to_unescaped()?.as_ref() {", "};") {
                                 for (member in shape.members()) {
@@ -457,12 +457,12 @@ class JsonParserGenerator(
                                           Some(#{Union}::${UnionGenerator.UnknownVariantName})
                                         }
                                         """,
-                                        "Union" to symbol, *codegenScope
+                                        "Union" to symbol, *codegenScope,
                                     )
                                     // in server mode, use strict parsing
                                     false -> rustTemplate(
                                         """variant => return Err(#{Error}::custom(format!("unexpected union variant: {}", variant)))""",
-                                        *codegenScope
+                                        *codegenScope,
                                     )
                                 }
                             }
@@ -470,7 +470,7 @@ class JsonParserGenerator(
                     }
                     rustTemplate(
                         """_ => return Err(#{Error}::custom("expected start object or null"))""",
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
                 rust("Ok(variant)")
@@ -485,7 +485,7 @@ class JsonParserGenerator(
         } else {
             rustTemplate(
                 ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?",
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -501,13 +501,13 @@ class JsonParserGenerator(
                         Some(#{Token}::EndObject { .. }) => break,
                         Some(#{Token}::ObjectKey { key, .. }) =>
                         """,
-                        *codegenScope
+                        *codegenScope,
                     ) {
                         inner()
                     }
                     rustTemplate(
                         """other => return Err(#{Error}::custom(format!("expected object key or end object, found: {:?}", other)))""",
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
             }
@@ -523,14 +523,14 @@ class JsonParserGenerator(
                 Some(#{Token}::ValueNull { .. }) => Ok(None),
                 Some(#{Token}::Start${StringUtils.capitalize(objectOrArray)} { .. }) =>
                 """,
-                *codegenScope
+                *codegenScope,
             ) {
                 inner()
             }
             rustBlockTemplate("_ =>") {
                 rustTemplate(
                     "Err(#{Error}::custom(\"expected start $objectOrArray or null\"))",
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }

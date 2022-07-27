@@ -111,7 +111,7 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
 fun Project.registerGenerateSmithyBuildTask(
     rootProject: Project,
     pluginName: String,
-    allCodegenTests: List<CodegenTest>
+    allCodegenTests: List<CodegenTest>,
 ) {
     val properties = PropertyRetriever(rootProject, this)
     this.tasks.register("generateSmithyBuild") {
@@ -124,8 +124,8 @@ fun Project.registerGenerateSmithyBuildTask(
                     generateSmithyBuild(
                         rootProject.projectDir.absolutePath,
                         pluginName,
-                        codegenTests(properties, allCodegenTests)
-                    )
+                        codegenTests(properties, allCodegenTests),
+                    ),
                 )
 
             // If this is a rebuild, cache all the hashes of the generated Rust files. These are later used by the
@@ -144,7 +144,7 @@ fun Project.registerGenerateCargoWorkspaceTask(
     rootProject: Project,
     pluginName: String,
     allCodegenTests: List<CodegenTest>,
-    workingDirUnderBuildDir: String
+    workingDirUnderBuildDir: String,
 ) {
     val properties = PropertyRetriever(rootProject, this)
     project.tasks.register("generateCargoWorkspace") {
@@ -157,7 +157,7 @@ fun Project.registerGenerateCargoWorkspaceTask(
 }
 
 fun Project.registerGenerateCargoConfigTomlTask(
-    outputDir: File
+    outputDir: File,
 ) {
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
@@ -168,7 +168,7 @@ fun Project.registerGenerateCargoConfigTomlTask(
                     """
                     [build]
                     rustflags = ["--deny", "warnings"]
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
         }
     }
@@ -192,7 +192,8 @@ fun Project.registerModifyMtimeTask() {
             if (!project.extra.has(previousBuildHashesKey)) {
                 println("No hashes from a previous build exist because `generateSmithyBuild` is up to date, skipping `mtime` fixups")
             } else {
-                @Suppress("UNCHECKED_CAST") val previousBuildHashes: Map<String, Long> = project.extra[previousBuildHashesKey] as Map<String, Long>
+                @Suppress("UNCHECKED_CAST")
+                val previousBuildHashes: Map<String, Long> = project.extra[previousBuildHashesKey] as Map<String, Long>
 
                 project.buildDir.walk()
                     .filter { it.isFile }
@@ -212,7 +213,7 @@ fun Project.registerModifyMtimeTask() {
 
 fun Project.registerCargoCommandsTasks(
     outputDir: File,
-    defaultRustDocFlags: String
+    defaultRustDocFlags: String,
 ) {
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")

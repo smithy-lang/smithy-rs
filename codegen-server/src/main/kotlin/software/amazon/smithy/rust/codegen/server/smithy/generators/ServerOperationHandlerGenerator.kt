@@ -75,7 +75,7 @@ open class ServerOperationHandlerGenerator(
                 where
                     ${operationTraitBounds(operation, inputName, state)}
                 """.trimIndent(),
-                *codegenScope
+                *codegenScope,
             ) {
                 val callImpl = if (state) {
                     """
@@ -121,7 +121,7 @@ open class ServerOperationHandlerGenerator(
                         response.map(#{SmithyHttpServer}::body::boxed)
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }

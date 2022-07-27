@@ -59,7 +59,7 @@ fun <T : AbstractCodeWriter<T>> T.withBlock(
     textBeforeNewLine: String,
     textAfterNewLine: String,
     vararg args: Any,
-    block: T.() -> Unit
+    block: T.() -> Unit,
 ): T {
     return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block, args = args)
 }
@@ -74,7 +74,7 @@ fun <T : AbstractCodeWriter<T>> T.withBlockTemplate(
     textBeforeNewLine: String,
     textAfterNewLine: String,
     vararg ctx: Pair<String, Any>,
-    block: T.() -> Unit
+    block: T.() -> Unit,
 ): T {
     return withTemplate(textBeforeNewLine, ctx) { header ->
         conditionalBlock(header, textAfterNewLine, conditional = true, block = block)
@@ -84,7 +84,7 @@ fun <T : AbstractCodeWriter<T>> T.withBlockTemplate(
 private fun <T : AbstractCodeWriter<T>, U> T.withTemplate(
     template: String,
     scope: Array<out Pair<String, Any>>,
-    f: T.(String) -> U
+    f: T.(String) -> U,
 ): U {
     val contents = transformTemplate(template, scope)
     pushState()
@@ -111,7 +111,7 @@ fun <T : AbstractCodeWriter<T>> T.conditionalBlock(
     textAfterNewLine: String,
     conditional: Boolean = true,
     vararg args: Any,
-    block: T.() -> Unit
+    block: T.() -> Unit,
 ): T {
     if (conditional) {
         openBlock(textBeforeNewLine.trim(), *args)
@@ -129,7 +129,7 @@ fun <T : AbstractCodeWriter<T>> T.conditionalBlock(
  */
 fun <T : AbstractCodeWriter<T>> T.rust(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}") contents: String,
-    vararg args: Any
+    vararg args: Any,
 ) {
     this.write(contents.trim(), *args)
 }
@@ -144,7 +144,7 @@ private fun transformTemplate(template: String, scope: Array<out Pair<String, An
             throw CodegenException(
                 "Rust block template expected `$keyName` but was not present in template.\n  hint: Template contains: ${
                 scope.map { it.first }
-                }"
+                }",
             )
         }
         "#{${keyName.lowercase()}$templateType}"
@@ -157,7 +157,7 @@ private fun transformTemplate(template: String, scope: Array<out Pair<String, An
 fun <T : AbstractCodeWriter<T>> T.rustBlockTemplate(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
     vararg ctx: Pair<String, Any>,
-    block: T.() -> Unit
+    block: T.() -> Unit,
 ) {
     withTemplate(contents, ctx) { header ->
         this.openBlock("$header {")
@@ -185,7 +185,7 @@ fun <T : AbstractCodeWriter<T>> T.rustBlockTemplate(
  */
 fun RustWriter.rustTemplate(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}") contents: String,
-    vararg ctx: Pair<String, Any>
+    vararg ctx: Pair<String, Any>,
 ) {
     withTemplate(contents, ctx) { template ->
         write(template)
@@ -199,7 +199,7 @@ fun <T : AbstractCodeWriter<T>> T.rustBlock(
     @Language("Rust", prefix = "macro_rules! foo { () =>  {{ ", suffix = "}}}")
     header: String,
     vararg args: Any,
-    block: T.() -> Unit
+    block: T.() -> Unit,
 ): T {
     openBlock("$header {", *args)
     block(this)
@@ -214,7 +214,7 @@ fun <T : AbstractCodeWriter<T>> T.documentShape(
     shape: Shape,
     model: Model,
     autoSuppressMissingDocs: Boolean = true,
-    note: String? = null
+    note: String? = null,
 ): T {
     val docTrait = shape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
 
@@ -354,7 +354,7 @@ class RustWriter private constructor(
                 namespace = "ignore",
                 commentCharacter = "ignore",
                 printWarning = false,
-                debugMode = debugMode
+                debugMode = debugMode,
             )
     }
 
@@ -425,7 +425,7 @@ class RustWriter private constructor(
     fun withModule(
         moduleName: String,
         rustMetadata: RustMetadata = RustMetadata(visibility = Visibility.PUBLIC),
-        moduleWriter: RustWriter.() -> Unit
+        moduleWriter: RustWriter.() -> Unit,
     ): RustWriter {
         // In Rust, modules must specify their own imports—they don't have access to the parent scope.
         // To easily handle this, create a new inner writer to collect imports, then dump it
@@ -468,7 +468,7 @@ class RustWriter private constructor(
     fun listForEach(
         target: Shape,
         outerField: String,
-        block: RustWriter.(field: String, target: ShapeId) -> Unit
+        block: RustWriter.(field: String, target: ShapeId) -> Unit,
     ) {
         if (target is CollectionShape) {
             val derefName = safeName("inner")

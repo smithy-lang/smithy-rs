@@ -82,7 +82,7 @@ interface Protocol {
         operationShape: OperationShape,
         operationName: String,
         serviceName: String,
-        requestSpecModule: RuntimeType
+        requestSpecModule: RuntimeType,
     ): Writable
 
     /**
@@ -103,7 +103,7 @@ interface ProtocolGeneratorFactory<out T : ProtocolGenerator, C : CoreCodegenCon
 class ProtocolLoader<C : CoreCodegenContext>(private val supportedProtocols: ProtocolMap<C>) {
     fun protocolFor(
         model: Model,
-        serviceShape: ServiceShape
+        serviceShape: ServiceShape,
     ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator, C>> {
         val protocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
         val matchingProtocols =

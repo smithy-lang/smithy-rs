@@ -47,14 +47,14 @@ class PaginatorGenerator private constructor(
     private val symbolProvider: RustSymbolProvider,
     service: ServiceShape,
     operation: OperationShape,
-    private val generics: FluentClientGenerics
+    private val generics: FluentClientGenerics,
 ) {
 
     companion object {
         fun paginatorType(
             coreCodegenContext: CoreCodegenContext,
             generics: FluentClientGenerics,
-            operationShape: OperationShape
+            operationShape: OperationShape,
         ): RuntimeType? {
             return if (operationShape.isPaginated(coreCodegenContext.model)) {
                 PaginatorGenerator(
@@ -62,7 +62,7 @@ class PaginatorGenerator private constructor(
                     coreCodegenContext.symbolProvider,
                     coreCodegenContext.serviceShape,
                     operationShape,
-                    generics
+                    generics,
                 ).paginatorType()
             } else {
                 null
@@ -78,7 +78,7 @@ class PaginatorGenerator private constructor(
     private val module = RustModule(
         "paginator",
         RustMetadata(visibility = Visibility.PUBLIC),
-        documentation = "Paginators for the service"
+        documentation = "Paginators for the service",
     )
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
@@ -88,7 +88,7 @@ class PaginatorGenerator private constructor(
     private fun paginatorType(): RuntimeType = RuntimeType.forInlineFun(
         paginatorName,
         module,
-        generate()
+        generate(),
     )
 
     private val codegenScope = arrayOf(
@@ -111,7 +111,7 @@ class PaginatorGenerator private constructor(
         "fn_stream" to CargoDependency.SmithyAsync(runtimeConfig).asType().member("future::fn_stream"),
 
         // External Types
-        "Stream" to CargoDependency.TokioStream.asType().member("Stream")
+        "Stream" to CargoDependency.TokioStream.asType().member("Stream"),
 
     )
 
@@ -119,7 +119,7 @@ class PaginatorGenerator private constructor(
     private fun generate() = writable {
         val outputTokenLens = NestedAccessorGenerator(symbolProvider).generateBorrowingAccessor(
             outputType,
-            paginationInfo.outputTokenMemberPath
+            paginationInfo.outputTokenMemberPath,
         )
         val inputTokenMember = symbolProvider.toMemberName(paginationInfo.inputTokenMember)
         rustTemplate(
@@ -197,7 +197,7 @@ class PaginatorGenerator private constructor(
             """,
             *codegenScope,
             "items_fn" to itemsFn(),
-            "output_token" to outputTokenLens
+            "output_token" to outputTokenLens,
         )
     }
 
@@ -228,7 +228,7 @@ class PaginatorGenerator private constructor(
                     #{ItemPaginator}(self)
                 }
                 """,
-                "ItemPaginator" to itemPaginatorType
+                "ItemPaginator" to itemPaginatorType,
             )
         }
     }
@@ -260,9 +260,9 @@ class PaginatorGenerator private constructor(
                 """,
                 "extract_items" to NestedAccessorGenerator(symbolProvider).generateOwnedAccessor(
                     outputType,
-                    paginationInfo.itemsMemberPath
+                    paginationInfo.itemsMemberPath,
                 ),
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -284,7 +284,7 @@ class PaginatorGenerator private constructor(
                     self.builder.$memberName = Some(limit);
                     self
                 }
-                """
+                """,
             )
         }
     }

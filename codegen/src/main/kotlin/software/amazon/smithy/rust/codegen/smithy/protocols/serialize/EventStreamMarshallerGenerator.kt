@@ -83,18 +83,18 @@ open class EventStreamMarshallerGenerator(
                     ${marshallerType.name}
                 }
             }
-            """
+            """,
         )
 
         rustBlockTemplate(
             "impl #{MarshallMessage} for ${marshallerType.name}",
-            *codegenScope
+            *codegenScope,
         ) {
             rust("type Input = ${unionSymbol.rustType().render(fullyQualified = true)};")
 
             rustBlockTemplate(
                 "fn marshall(&self, input: Self::Input) -> std::result::Result<#{Message}, #{Error}>",
-                *codegenScope
+                *codegenScope,
             ) {
                 rust("let mut headers = Vec::new();")
                 addStringHeader(":message-type", "\"event\".into()")
@@ -114,7 +114,7 @@ open class EventStreamMarshallerGenerator(
                                 #{Error}::Marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
                             )
                             """,
-                            *codegenScope
+                            *codegenScope,
                         )
                     }
                 }
@@ -158,7 +158,7 @@ open class EventStreamMarshallerGenerator(
         withBlock("headers.push(", ");") {
             rustTemplate(
                 "#{Header}::new(${headerName.dq()}, #{HeaderValue}::${headerValue(inputName, target)})",
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -181,7 +181,7 @@ open class EventStreamMarshallerGenerator(
         inputExpr: String,
         member: Shape,
         target: Shape,
-        serializerFn: RuntimeType
+        serializerFn: RuntimeType,
     ) {
         val optional = symbolProvider.toSymbol(member).isOptional()
         if (target is BlobShape || target is StringShape) {
@@ -198,7 +198,7 @@ open class EventStreamMarshallerGenerator(
                 inputExpr,
                 "inner_payload",
                 { input -> rust("$input.${ctx.conversionFn}()") },
-                { rust("Vec::new()") }
+                { rust("Vec::new()") },
             )
         } else {
             addStringHeader(":content-type", "${payloadContentType.dq()}.into()")
@@ -214,10 +214,10 @@ open class EventStreamMarshallerGenerator(
                             .map_err(|err| #{Error}::Marshalling(format!("{}", err)))?
                         """,
                         "serializerFn" to serializerFn,
-                        *codegenScope
+                        *codegenScope,
                     )
                 },
-                { rust("unimplemented!(\"TODO(EventStream): Figure out what to do when there's no payload\")") }
+                { rust("unimplemented!(\"TODO(EventStream): Figure out what to do when there's no payload\")") },
             )
         }
     }

@@ -122,7 +122,7 @@ class SleepImplDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + SleepImplProviderConfig(codegenContext)
     }
@@ -140,7 +140,7 @@ class SleepImplProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCu
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
                 "pub(crate) sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,",
-                *codegenScope
+                *codegenScope,
             )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
@@ -206,11 +206,11 @@ class SleepImplProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCu
                         self
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             ServiceConfig.BuilderBuild -> rustTemplate(
                 """sleep_impl: self.sleep_impl,""",
-                *codegenScope
+                *codegenScope,
             )
             else -> emptySection
         }

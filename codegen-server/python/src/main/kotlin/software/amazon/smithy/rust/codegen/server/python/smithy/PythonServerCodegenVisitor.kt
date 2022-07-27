@@ -38,7 +38,7 @@ import software.amazon.smithy.rust.codegen.util.hasStreamingMember
  */
 class PythonServerCodegenVisitor(
     context: PluginContext,
-    codegenDecorator: RustCodegenDecorator<ServerCodegenContext>
+    codegenDecorator: RustCodegenDecorator<ServerCodegenContext>,
 ) : ServerCodegenVisitor(context, codegenDecorator) {
 
     init {
@@ -55,8 +55,8 @@ class PythonServerCodegenVisitor(
             ServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
-                    ServerProtocolLoader.DefaultProtocols
-                )
+                    ServerProtocolLoader.DefaultProtocols,
+                ),
             )
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
@@ -141,7 +141,7 @@ class PythonServerCodegenVisitor(
             protocolGenerator,
             protocolGeneratorFactory.support(),
             protocolGeneratorFactory.protocol(codegenContext),
-            codegenContext
+            codegenContext,
         )
             .render()
     }

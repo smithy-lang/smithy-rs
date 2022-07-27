@@ -108,7 +108,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = XmlBindingTraitSerializerGenerator(
             testCodegenContext(model),
-            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml"))
+            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml")),
         )
         val operationSerializer = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
 
@@ -128,7 +128,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
                 let serialized = ${writer.format(operationSerializer)}(&inp.payload.unwrap()).unwrap();
                 let output = std::str::from_utf8(&serialized).unwrap();
                 assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
-                """
+                """,
             )
             writer.unitTest(
                 "unknown_variants",
@@ -140,7 +140,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
                         .build()
                 ).build().unwrap();
                 ${writer.format(operationSerializer)}(&input.payload.unwrap()).expect_err("cannot serialize unknown variant");
-                """
+                """,
             )
         }
         project.withModule(RustModule.public("model")) {

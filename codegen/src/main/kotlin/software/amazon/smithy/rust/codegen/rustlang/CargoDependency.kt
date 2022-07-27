@@ -30,7 +30,7 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
                 .builder()
                 .packageName(name).version(version())
                 // We rely on retrieving the structured dependency from the symbol later
-                .putProperty(PropertyKey, this).build()
+                .putProperty(PropertyKey, this).build(),
         ) + dependencies().flatMap { it.dependencies }
     }
 
@@ -56,7 +56,7 @@ class InlineDependency(
     name: String,
     val module: RustModule,
     private val extraDependencies: List<RustDependency> = listOf(),
-    val renderer: (RustWriter) -> Unit
+    val renderer: (RustWriter) -> Unit,
 ) : RustDependency(name) {
     override fun version(): String {
         // just need a version that won't crash
@@ -73,14 +73,14 @@ class InlineDependency(
         fun forRustFile(
             name: String,
             baseDir: String,
-            vararg additionalDependencies: RustDependency
+            vararg additionalDependencies: RustDependency,
         ): InlineDependency = forRustFile(name, baseDir, visibility = Visibility.PRIVATE, *additionalDependencies)
 
         fun forRustFile(
             name: String,
             baseDir: String,
             visibility: Visibility,
-            vararg additionalDependencies: RustDependency
+            vararg additionalDependencies: RustDependency,
         ): InlineDependency {
             val module = RustModule.default(name, visibility)
             val filename = if (name.endsWith(".rs")) { name } else { "$name.rs" }
@@ -128,7 +128,7 @@ data class CargoDependency(
     val scope: DependencyScope = DependencyScope.Compile,
     val optional: Boolean = false,
     val features: Set<String> = emptySet(),
-    val rustName: String = name.replace("-", "_")
+    val rustName: String = name.replace("-", "_"),
 ) : RustDependency(name) {
     val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
 
@@ -178,7 +178,7 @@ data class CargoDependency(
                         val fullPath = "$basePath/$name"
                         """path = ${fullPath.dq()}"""
                     }
-                }
+                },
             )
         }
         with(features) {
@@ -217,7 +217,7 @@ data class CargoDependency(
         fun SmithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http")
         fun SmithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-tower")
         fun SmithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
-            runtimeConfig.runtimeCrate("protocol-test").copy(scope = DependencyScope.Dev)
+            runtimeConfig.runtimeCrate("protocol-test", scope = DependencyScope.Dev)
         fun smithyJson(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("json")
         fun smithyQuery(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("query")
         fun smithyXml(runtimeConfig: RuntimeConfig): CargoDependency = runtimeConfig.runtimeCrate("xml")

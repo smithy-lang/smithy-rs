@@ -16,7 +16,7 @@ enum class ChangeType {
 
 /** Model metadata toml file */
 data class ModelMetadata(
-    private val crates: Map<String, ChangeType>
+    private val crates: Map<String, ChangeType>,
 ) {
     companion object {
         fun fromFile(path: String): ModelMetadata {
@@ -33,7 +33,7 @@ data class ModelMetadata(
                         "Documentation" -> ChangeType.DOCUMENTATION
                         else -> throw IllegalArgumentException("Unrecognized change type: $kind")
                     }
-                }?.toMap() ?: emptyMap()
+                }?.toMap() ?: emptyMap(),
             )
         }
     }

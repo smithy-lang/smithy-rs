@@ -25,7 +25,7 @@ private fun RuntimeConfig.defaultHttpVersionList(): RuntimeType =
 
 class HttpVersionListCustomization(
     private val coreCodegenContext: CoreCodegenContext,
-    private val operationShape: OperationShape
+    private val operationShape: OperationShape,
 ) : OperationCustomization() {
     private val defaultHttpVersions = coreCodegenContext.runtimeConfig.defaultHttpVersionList().fullyQualifiedName()
 
@@ -51,7 +51,7 @@ class HttpVersionListCustomization(
                 rust(
                     """
                     ${section.request}.properties_mut().insert($supportedHttpProtocolVersions);
-                    """
+                    """,
                 )
             }
             else -> emptySection

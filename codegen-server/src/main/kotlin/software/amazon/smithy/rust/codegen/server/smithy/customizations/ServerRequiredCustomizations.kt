@@ -27,7 +27,7 @@ class ServerRequiredCustomizations : RustCodegenDecorator<ServerCodegenContext> 
 
     override fun libRsCustomizations(
         codegenContext: ServerCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
         baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) + AllowLintsGenerator()
 

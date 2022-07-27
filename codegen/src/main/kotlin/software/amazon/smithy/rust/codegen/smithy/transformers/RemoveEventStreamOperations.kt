@@ -33,7 +33,7 @@ object RemoveEventStreamOperations {
                 val ioShapes = listOfNotNull(parentShape.output.orNull(), parentShape.input.orNull()).map {
                     model.expectShape(
                         it,
-                        StructureShape::class.java
+                        StructureShape::class.java,
                     )
                 }
                 val hasEventStream = ioShapes.any { ioShape ->
