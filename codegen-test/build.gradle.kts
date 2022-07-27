@@ -82,7 +82,7 @@ val allCodegenTests = listOf(
             , "codegen": { "renameErrors": false }
         """.trimIndent()
     ),
-    CodegenTest("com.aws.example#PokemonService", "pokemon_service_client")
+    CodegenTest("com.aws.example#PokemonService", "pokemon-service-client")
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
