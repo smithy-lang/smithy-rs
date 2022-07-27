@@ -31,7 +31,7 @@ pub struct GenerateMatrixOpt {
 
 #[derive(Debug, Serialize)]
 struct Output {
-    sdk_release_tags: Vec<String>,
+    sdk_release_tag: Vec<String>,
     rust_version: Vec<String>,
 }
 
@@ -105,7 +105,7 @@ pub async fn generate_matrix(opt: GenerateMatrixOpt) -> Result<()> {
         retrieve_latest_release_tags(&retrieve_releases, opt.sdk_versions as usize).await?;
 
     let output = Output {
-        sdk_release_tags: sdk_release_tags
+        sdk_release_tag: sdk_release_tags
             .into_iter()
             .map(|t| t.to_string())
             .collect(),
