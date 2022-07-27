@@ -136,7 +136,7 @@ debug!(sensitive_data = %Sensitive(data));
 
 ### Code Generated Logging Middleware
 
-Using the smithy model, for each operation, a logging middleware should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging middleware can be careful crafted to avoid leaking sensitive data.
+Using the smithy model, for each operation, a logging middleware should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging middleware can be carefully crafted to avoid leaking sensitive data.
 
 As a request enters this middleware it should record the method, HTTP headers, status code, and URI in a `tracing::span`. As a response leaves this middleware it should record the HTTP headers and status code in a `tracing::debug`.
 
