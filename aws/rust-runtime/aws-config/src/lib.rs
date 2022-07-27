@@ -227,7 +227,7 @@ mod loader {
         /// # use aws_smithy_types::retry::RetryConfig;
         /// # async fn create_config() {
         ///     let config = aws_config::from_env()
-        ///         .retry_config(RetryConfig::new().with_max_attempts(2))
+        ///         .retry_config(RetryConfig::standard().with_max_attempts(2))
         ///         .load().await;
         /// # }
         /// ```

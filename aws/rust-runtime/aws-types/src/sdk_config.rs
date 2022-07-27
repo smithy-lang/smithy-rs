@@ -132,7 +132,7 @@ impl Builder {
     /// use aws_types::SdkConfig;
     /// use aws_smithy_types::retry::RetryConfig;
     ///
-    /// let retry_config = RetryConfig::new().with_max_attempts(5);
+    /// let retry_config = RetryConfig::standard().with_max_attempts(5);
     /// let config = SdkConfig::builder().retry_config(retry_config).build();
     /// ```
     pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
@@ -148,7 +148,7 @@ impl Builder {
     /// use aws_smithy_types::retry::RetryConfig;
     ///
     /// fn disable_retries(builder: &mut Builder) {
-    ///     let retry_config = RetryConfig::new().with_max_attempts(1);
+    ///     let retry_config = RetryConfig::standard().with_max_attempts(1);
     ///     builder.set_retry_config(Some(retry_config));
     /// }
     ///

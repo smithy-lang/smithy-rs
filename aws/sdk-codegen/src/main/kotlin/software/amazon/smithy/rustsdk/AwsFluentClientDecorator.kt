@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rustsdk.AwsRuntimeType.defaultMiddleware
 
 private class Types(runtimeConfig: RuntimeConfig) {
+    private val smithyTypesDep = CargoDependency.SmithyTypes(runtimeConfig)
     private val smithyClientDep = CargoDependency.SmithyClient(runtimeConfig)
     private val smithyHttpDep = CargoDependency.SmithyHttp(runtimeConfig)
 
@@ -46,6 +47,7 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val dynConnector = RuntimeType("DynConnector", smithyClientDep, "aws_smithy_client::erase")
     val dynMiddleware = RuntimeType("DynMiddleware", smithyClientDep, "aws_smithy_client::erase")
     val smithyConnector = RuntimeType("SmithyConnector", smithyClientDep, "aws_smithy_client::bounds")
+    val retryConfig = RuntimeType("RetryConfig", smithyTypesDep, "aws_smithy_types::retry")
 
     val connectorError = RuntimeType("ConnectorError", smithyHttpDep, "aws_smithy_http::result")
 }
@@ -115,14 +117,15 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
 private class AwsFluentClientExtensions(types: Types) {
     private val codegenScope = arrayOf(
-        "Middleware" to types.defaultMiddleware,
-        "retry" to types.smithyClientRetry,
+        "ConnectorError" to types.connectorError,
         "DynConnector" to types.dynConnector,
         "DynMiddleware" to types.dynMiddleware,
+        "Middleware" to types.defaultMiddleware,
+        "RetryConfig" to types.retryConfig,
         "SmithyConnector" to types.smithyConnector,
-        "ConnectorError" to types.connectorError,
         "aws_smithy_client" to types.awsSmithyClient,
         "aws_types" to types.awsTypes,
+        "retry" to types.smithyClientRetry,
     )
 
     fun render(writer: RustWriter) {
@@ -135,7 +138,7 @@ private class AwsFluentClientExtensions(types: Types) {
                     C: #{SmithyConnector}<Error = E> + Send + 'static,
                     E: Into<#{ConnectorError}>,
                 {
-                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
+                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_else(#{RetryConfig}::standard);
                     let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
                     let sleep_impl = conf.sleep_impl.clone();
                     let mut builder = #{aws_smithy_client}::Builder::new()
@@ -159,7 +162,7 @@ private class AwsFluentClientExtensions(types: Types) {
                 /// Creates a new client from the service [`Config`](crate::Config).
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
-                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
+                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_else(#{RetryConfig}::standard);
                     let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
                     let sleep_impl = conf.sleep_impl.clone();
                     let mut builder = #{aws_smithy_client}::Builder::dyn_https()

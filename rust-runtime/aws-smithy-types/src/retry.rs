@@ -226,13 +226,17 @@ pub struct RetryConfig {
 
 impl RetryConfig {
     /// Creates a default `RetryConfig` with `RetryMode::Standard` and max attempts of three.
-    pub fn new() -> Self {
-        Default::default()
+    pub fn standard() -> Self {
+        Self {
+            mode: RetryMode::Standard,
+            max_attempts: 3,
+            initial_backoff: Duration::from_secs(1),
+        }
     }
 
     /// Creates a `RetryConfig` that has retries disabled.
     pub fn disabled() -> Self {
-        Self::default().with_max_attempts(1)
+        Self::standard().with_max_attempts(1)
     }
 
     /// Set this config's [retry mode](RetryMode).
@@ -283,16 +287,6 @@ impl RetryConfig {
     /// Returns the backoff multiplier duration.
     pub fn initial_backoff(&self) -> Duration {
         self.initial_backoff
-    }
-}
-
-impl Default for RetryConfig {
-    fn default() -> Self {
-        Self {
-            mode: RetryMode::Standard,
-            max_attempts: 3,
-            initial_backoff: Duration::from_secs(1),
-        }
     }
 }
 
