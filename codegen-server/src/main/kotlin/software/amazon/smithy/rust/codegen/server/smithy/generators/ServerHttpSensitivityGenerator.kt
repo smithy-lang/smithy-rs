@@ -84,13 +84,13 @@ class ServerHttpSensitivityGenerator(
         ) : HeaderSensitivity(headerKeys)
 
         // Is there anything to redact?
-        fun isIdentity(): Boolean {
+        fun hasRedactions(): Boolean {
             return when (this) {
                 is NotSensitiveMapValue -> {
-                    prefixHeader == null && headerKeys.isEmpty()
+                    prefixHeader != null || !headerKeys.isNotEmpty()
                 }
                 is SensitiveMapValue -> {
-                    false
+                    true
                 }
             }
         }
@@ -209,13 +209,13 @@ class ServerHttpSensitivityGenerator(
         class SensitiveMapValue(allKeysSensitive: Boolean) : QuerySensitivity(allKeysSensitive)
 
         // Is there anything to redact?
-        fun isIdentity(): Boolean {
+        fun hasRedactions(): Boolean {
             return when (this) {
                 is NotSensitiveMapValue -> {
-                    !allKeysSensitive && queryKeys.isEmpty()
+                    allKeysSensitive || queryKeys.isNotEmpty()
                 }
                 is SensitiveMapValue -> {
-                    false
+                    true
                 }
             }
         }
@@ -359,7 +359,7 @@ class ServerHttpSensitivityGenerator(
 
             // httpHeader/httpPrefixHeaders bindings
             val headerSensitivity = findHeaderSensitivity(inputShape)
-            if (!headerSensitivity.isIdentity()) {
+            if (headerSensitivity.hasRedactions()) {
                 withBlock(".header(", ")") {
                     renderHeaderClosure(writer, headerSensitivity)
                 }
@@ -381,7 +381,7 @@ class ServerHttpSensitivityGenerator(
 
             // httpQuery/httpQueryParams bindings
             val querySensitivity = findQuerySensitivity(inputShape)
-            if (!querySensitivity.isIdentity()) {
+            if (querySensitivity.hasRedactions()) {
                 withBlock(".query(", ")") {
                     renderQueryClosure(writer, querySensitivity)
                 }
@@ -397,7 +397,7 @@ class ServerHttpSensitivityGenerator(
 
             // httpHeader/httpPrefixHeaders bindings
             val headerSensitivity = findHeaderSensitivity(outputShape)
-            if (!headerSensitivity.isIdentity()) {
+            if (headerSensitivity.hasRedactions()) {
                 withBlock(".header(", ")") {
                     renderHeaderClosure(writer, headerSensitivity)
                 }
