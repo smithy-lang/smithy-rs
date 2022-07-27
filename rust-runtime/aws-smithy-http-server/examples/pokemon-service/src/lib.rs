@@ -15,7 +15,7 @@ use std::{
 
 use async_stream::stream;
 use aws_smithy_http_server::Extension;
-use pokemon_service_sdk::{error, input, model, model::CapturingPayload, output, types::Blob};
+use pokemon_service_server_sdk::{error, input, model, model::CapturingPayload, output, types::Blob};
 use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
 

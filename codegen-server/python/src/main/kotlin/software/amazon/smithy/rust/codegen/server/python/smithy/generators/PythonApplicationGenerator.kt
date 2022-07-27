@@ -61,11 +61,12 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  * that abstracts the processes / event loops / workers lifecycles.
  */
 class PythonApplicationGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val operations: List<OperationShape>,
 ) {
     private val crateName = coreCodegenContext.settings.moduleName
     private val symbolProvider = coreCodegenContext.symbolProvider
+    private val libName = "lib${coreCodegenContext.settings.moduleName.toSnakeCase()}"
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val model = coreCodegenContext.model
     private val codegenScope =
@@ -196,20 +197,20 @@ class PythonApplicationGenerator(
 /// Main Python application, used to register operations and context and start multiple
 /// workers on the same shared socket.
 ///
-/// Operations can be registrered using the application object as a decorator (`@app.operation_name`).
+/// Operations can be registered using the application object as a decorator (`@app.operation_name`).
 ///
 /// Here's a full example to get you started:
 ///
 /// ```python
 ${ if (operations.any { it.errors.isNotEmpty() }) {
-"""/// from $crateName import ${Inputs.namespace}
-/// from $crateName import ${Outputs.namespace}
-/// from $crateName import ${Errors.namespace}"""
+"""/// from $libName import ${Inputs.namespace}
+/// from $libName import ${Outputs.namespace}
+/// from $libName import ${Errors.namespace}"""
             } else {
-"""/// from $crateName import ${Inputs.namespace}
-/// from $crateName import ${Outputs.namespace}"""
+"""/// from $libName import ${Inputs.namespace}
+/// from $libName import ${Outputs.namespace}"""
             } }
-/// from $crateName import App
+/// from $libName import App
 ///
 /// @dataclass
 /// class Context:
