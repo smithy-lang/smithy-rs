@@ -63,7 +63,7 @@ These two cases illustrate that `smithy-rs` can only prevent violation of the sp
 
 ### Routing
 
-The sensitivity and HTTP bindings are declared within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any middleware applied _before_ routing has taken place cannot log anything sensitive without performing routing logic itself.
+The sensitivity and HTTP bindings are declared within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any middleware applied _before_ routing has taken place cannot log anything potentially sensitive without performing routing logic itself.
 
 Note that:
 
