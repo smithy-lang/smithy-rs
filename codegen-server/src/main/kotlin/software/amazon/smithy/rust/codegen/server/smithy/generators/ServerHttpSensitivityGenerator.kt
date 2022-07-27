@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import java.util.*
@@ -162,21 +163,21 @@ class ServerHttpSensitivityGenerator(
             if (headerSensitivity.headerKeys.isEmpty()) {
                 rust("let name_match = false;")
             } else {
-                val matches = headerSensitivity.headerKeys.joinToString("|") { "\"$it\"" }
+                val matches = headerSensitivity.headerKeys.joinToString("|") { it.dq() }
                 rust("let name_match = matches!(name, $matches);")
             }
 
             when (headerSensitivity) {
                 is HeaderSensitivity.NotSensitiveMapValue -> {
                     headerSensitivity.prefixHeader?.let {
-                        rust("let starts_with = name.starts_with(\"$it\");")
+                        rust("let starts_with = name.starts_with(${it.dq()});")
                         rust("let key_suffix = if starts_with { Some(${it.length}) } else { None };")
                     } ?: rust("let key_suffix = None;")
                     rust("let value = name_match;")
                 }
                 is HeaderSensitivity.SensitiveMapValue -> {
                     val prefixHeader = headerSensitivity.prefixHeader
-                    rust("let starts_with = name.starts_with(\"$prefixHeader\");")
+                    rust("let starts_with = name.starts_with(${prefixHeader.dq()});")
                     if (headerSensitivity.keySensitive) {
                         rust("let key_suffix = if starts_with { Some(${prefixHeader.length}) } else { None };")
                     } else {
@@ -264,7 +265,7 @@ class ServerHttpSensitivityGenerator(
                     if (querySensitivity.queryKeys.isEmpty()) {
                         rust("let value = false;")
                     } else {
-                        val matches = querySensitivity.queryKeys.joinToString("|") { "\"$it\"" }
+                        val matches = querySensitivity.queryKeys.joinToString("|") { it.dq() }
                         rust("let value = matches!(name, $matches);")
                     }
                 }
