@@ -53,9 +53,9 @@
 //!
 //! let _ = svc.call(request).await.unwrap();
 //! # }
+//! ```
 //!
 //! [sensitive trait]: https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html?highlight=sensitive%20trait#sensitive-trait
-//! ```
 
 pub mod sensitivity;
 mod service;
