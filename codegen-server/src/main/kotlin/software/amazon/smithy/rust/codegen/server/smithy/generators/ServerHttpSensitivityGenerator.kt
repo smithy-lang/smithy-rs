@@ -44,6 +44,13 @@ internal fun findUriGreedyLabelPosition(uriPattern: UriPattern): Int? {
         ?.let { uriPattern.toString().indexOf("$it") }
 }
 
+/**
+ * A code generator responsible for using a `Model` and a chosen `OperationShape` to produce Rust closures marking
+ * parts of the request/response HTTP as sensitive.
+ *
+ * These closures are provided to `RequestFmt` and `ResponseFmt` constructors, which in turn are provided to
+ * `InstrumentedOperation` to configure logging. These structures can be found in `aws_smithy_http_server::logging`.
+ */
 class ServerHttpSensitivityGenerator(
     private val model: Model,
     private val operation: OperationShape,

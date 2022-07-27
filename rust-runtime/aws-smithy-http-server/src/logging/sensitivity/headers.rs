@@ -22,8 +22,8 @@ pub struct HeaderMarker {
     pub key_suffix: Option<usize>,
 }
 
-/// A wrapper around [`&HeaderMap`](HeaderMap) which modifies the behavior of [`Debug`]. Closures are used to mark
-/// mark specific parts of the [`HeaderMap`] as sensitive. This accommodates the [httpPrefixHeaders trait] and
+/// A wrapper around [`&HeaderMap`](HeaderMap) which modifies the behavior of [`Debug`]. Specific parts of the
+/// [`HeaderMap`] are marked as sensitive using a closure. This accommodates the [httpPrefixHeaders trait] and
 /// [httpHeader trait].
 ///
 /// The [`Debug`] implementation will respect the `unredacted-logging` flag.

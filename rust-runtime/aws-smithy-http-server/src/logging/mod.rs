@@ -5,8 +5,8 @@
 
 #![deny(missing_docs, missing_debug_implementations)]
 
-//! Provides [`InstrumentOperation`] and a variety of helpers structures for dealing with sensitive
-//! data.
+//! Provides [`InstrumentOperation`] and a variety of helpers structures for dealing with sensitive data. Together they
+//! allow compliance with the [sensitive trait].
 //!
 //! # Example
 //!
@@ -53,6 +53,8 @@
 //!
 //! let _ = svc.call(request).await.unwrap();
 //! # }
+//!
+//! [sensitive trait]: https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html?highlight=sensitive%20trait#sensitive-trait
 //! ```
 
 pub mod sensitivity;
@@ -62,11 +64,13 @@ use std::fmt::{Debug, Display};
 
 pub use service::*;
 
-/// A standard interface for taking a some component of the HTTP and making it to a new struct
+/// A standard interface for taking some component of the HTTP request/response and transforming it into new struct
 /// which enjoys [`Debug`] or [`Display`]. This allows for polymorphism over formatting approaches.
 pub trait MakeFmt<T> {
+    /// Target of the `fmt` transformation.
     type Target;
 
+    /// Transforms a source into a target, altering it's [`Display`] or [`Debug`] implementation.
     fn make(&self, source: T) -> Self::Target;
 }
 
@@ -83,8 +87,10 @@ where
 
 /// Identical to [`MakeFmt`] but with a [`Display`] bound on the associated type.
 pub trait MakeDisplay<T> {
+    /// Mirrors [`MakeFmt::Target`].
     type Target: Display;
 
+    /// Mirrors [`MakeFmt::make`].
     fn make_display(&self, source: T) -> Self::Target;
 }
 
@@ -102,8 +108,10 @@ where
 
 /// Identical to [`MakeFmt`] but with a [`Debug`] bound on the associated type.
 pub trait MakeDebug<T> {
+    /// Mirrors [`MakeFmt::Target`].
     type Target: Debug;
 
+    /// Mirrors [`MakeFmt::make`].
     fn make_debug(&self, source: T) -> Self::Target;
 }
 

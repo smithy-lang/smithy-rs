@@ -19,8 +19,8 @@ pub use query::*;
 
 use crate::logging::{MakeDisplay, MakeFmt, MakeIdentity};
 
-/// A wrapper around [`&Uri`](Uri) which modifies the behavior of [`Display`]. Closures are used to mark specific parts
-/// of the [`Uri`] as sensitive.
+/// A wrapper around [`&Uri`](Uri) which modifies the behavior of [`Display`]. Specific parts of the [`Uri`] as are
+/// marked as sensitive using the methods provided.
 ///
 /// The [`Display`] implementation will respect the `unredacted-logging` flag.
 #[allow(missing_debug_implementations)]
@@ -58,7 +58,7 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
         }
     }
 
-    ///  Marks path segments as sensitive by providing predicate over the segment index.
+    /// Marks path segments as sensitive by providing predicate over the segment index.
     ///
     /// See [`Label`] for more info.
     pub fn label<F>(self, marker: F) -> SensitiveUri<'a, MakeLabel<F>, Q> {
