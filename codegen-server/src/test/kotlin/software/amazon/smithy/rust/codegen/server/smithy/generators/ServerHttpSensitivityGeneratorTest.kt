@@ -167,7 +167,7 @@ class ServerHttpSensitivityGeneratorTest {
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
         assertEquals(querySensitivity.allKeysSensitive, false)
-        assertEquals((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.NotMapValue).queryKeys, listOf("query_c", "query_b"))
+        assertEquals((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.NotSensitiveMapValue).queryKeys, listOf("query_c", "query_b"))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -216,7 +216,7 @@ class ServerHttpSensitivityGeneratorTest {
         val querySensitivity = generator.findQuerySensitivity(input)
 
         assertEquals(querySensitivity.allKeysSensitive, true)
-        querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.MapValue
+        querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.SensitiveMapValue
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -263,7 +263,7 @@ class ServerHttpSensitivityGeneratorTest {
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
         assertEquals(querySensitivity.allKeysSensitive, true)
-        assert((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.NotMapValue).queryKeys.isEmpty())
+        assert((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.NotSensitiveMapValue).queryKeys.isEmpty())
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -310,7 +310,7 @@ class ServerHttpSensitivityGeneratorTest {
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
         assertEquals(querySensitivity.allKeysSensitive, false)
-        querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.MapValue
+        querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.SensitiveMapValue
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -368,7 +368,7 @@ class ServerHttpSensitivityGeneratorTest {
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
         assertEquals(headerData.headerKeys, listOf("header-c", "header-b"))
-        assertEquals((headerData as ServerHttpSensitivityGenerator.HeaderSensitivity.NotMapValue).prefixHeader, null)
+        assertEquals((headerData as ServerHttpSensitivityGenerator.HeaderSensitivity.NotSensitiveMapValue).prefixHeader, null)
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -419,7 +419,7 @@ class ServerHttpSensitivityGeneratorTest {
 
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
-        assertEquals((headerData as ServerHttpSensitivityGenerator.HeaderSensitivity.MapValue).prefixHeader, "prefix-")
+        assertEquals((headerData as ServerHttpSensitivityGenerator.HeaderSensitivity.SensitiveMapValue).prefixHeader, "prefix-")
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -471,7 +471,7 @@ class ServerHttpSensitivityGeneratorTest {
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
         assert(headerData.headerKeys.isEmpty())
-        val asMapValue = (headerData as ServerHttpSensitivityGenerator.HeaderSensitivity.NotMapValue)
+        val asMapValue = (headerData as ServerHttpSensitivityGenerator.HeaderSensitivity.NotSensitiveMapValue)
         assertEquals(asMapValue.prefixHeader, "prefix-")
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
@@ -524,9 +524,9 @@ class ServerHttpSensitivityGeneratorTest {
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
         assert(headerData.headerKeys.isEmpty())
-        val asMapValue = (headerData as ServerHttpSensitivityGenerator.HeaderSensitivity.MapValue)
-        assertEquals(asMapValue.prefixHeader, "prefix-")
-        assertEquals(asMapValue.keySensitive, false)
+        val asSensitiveMapValue = (headerData as ServerHttpSensitivityGenerator.HeaderSensitivity.SensitiveMapValue)
+        assertEquals(asSensitiveMapValue.prefixHeader, "prefix-")
+        assertEquals(asSensitiveMapValue.keySensitive, false)
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
