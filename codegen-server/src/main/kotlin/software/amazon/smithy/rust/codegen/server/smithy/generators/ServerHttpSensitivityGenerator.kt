@@ -51,6 +51,9 @@ internal fun findUriGreedyLabelPosition(uriPattern: UriPattern): Int? {
  *
  * These closures are provided to `RequestFmt` and `ResponseFmt` constructors, which in turn are provided to
  * `InstrumentedOperation` to configure logging. These structures can be found in `aws_smithy_http_server::logging`.
+ *
+ * See [Logging in the Presence of Sensitive Data](https://github.com/awslabs/smithy-rs/blob/main/design/src/rfcs/rfc0018_logging_sensitive.md)
+ * for more details.
  */
 class ServerHttpSensitivityGenerator(
     private val model: Model,
