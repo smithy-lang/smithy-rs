@@ -16,7 +16,7 @@ private fun runCli(
     execActionFactory: ExecActionFactory,
     objectFactory: ObjectFactory,
     commandLine: List<String>,
-    workingDirectory: File? = null
+    workingDirectory: File? = null,
 ) {
     execActionFactory.newExecAction().let { action ->
         objectFactory
@@ -65,14 +65,14 @@ abstract class ExecRustBuildTool : DefaultTask() {
                 getExecActionFactory(),
                 getObjectFactory(),
                 listOf(binaryName!!) + arguments!!,
-                workingDirectory = null
+                workingDirectory = null,
             )
         } else {
             runCli(
                 getExecActionFactory(),
                 getObjectFactory(),
                 listOf("cargo", "run", "--bin", binaryName!!, "--") + arguments!!,
-                workingDirectory = toolPath
+                workingDirectory = toolPath,
             )
         }
     }
@@ -106,7 +106,7 @@ abstract class RequireRustBuildTool : DefaultTask() {
             runCli(
                 getExecActionFactory(),
                 getObjectFactory(),
-                command
+                command,
             )
         }
     }

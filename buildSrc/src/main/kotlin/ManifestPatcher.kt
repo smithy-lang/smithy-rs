@@ -7,7 +7,7 @@ import java.io.File
 
 fun rewriteCrateVersion(line: String, version: String): String = line.replace(
     """^\s*version\s*=\s*"0.0.0-smithy-rs-head"$""".toRegex(),
-    "version = \"$version\""
+    "version = \"$version\"",
 )
 
 /**

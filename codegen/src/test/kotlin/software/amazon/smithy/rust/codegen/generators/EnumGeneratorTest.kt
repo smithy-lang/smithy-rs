@@ -118,7 +118,7 @@ class EnumGeneratorTest {
                 assert_eq!(InstanceType::from("other"), InstanceType::Unknown("other".to_owned()));
                 // round trip unknown variants:
                 assert_eq!(InstanceType::from("other").as_str(), "other");
-                """
+                """,
             )
 
             writer.toString() shouldContain "#[non_exhaustive]"
@@ -150,7 +150,7 @@ class EnumGeneratorTest {
                 assert_ne!(FooEnum::Bar, FooEnum::Foo);
                 let mut hash_of_enums = std::collections::HashSet::new();
                 hash_of_enums.insert(FooEnum::Foo);
-                """.trimIndent()
+                """.trimIndent(),
             )
         }
 
@@ -178,7 +178,7 @@ class EnumGeneratorTest {
                 assert_ne!(FooEnum::from("Bar"), FooEnum::from("Foo"));
                 let mut hash_of_enums = std::collections::HashSet::new();
                 hash_of_enums.insert(FooEnum::from("Foo"));
-                """
+                """,
             )
         }
 
@@ -215,7 +215,7 @@ class EnumGeneratorTest {
                 """
                 // Values should be sorted
                 assert_eq!(FooEnum::${EnumGenerator.Values}(), ["0", "1", "Bar", "Baz", "Foo"]);
-                """
+                """,
             )
         }
 
@@ -242,7 +242,7 @@ class EnumGeneratorTest {
                 assert_eq!(SomeEnum::from("Unknown"), SomeEnum::UnknownValue);
                 assert_eq!(SomeEnum::from("UnknownValue"), SomeEnum::UnknownValue_);
                 assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
-                """
+                """,
             )
         }
 
@@ -318,7 +318,7 @@ class EnumGeneratorTest {
             """
             assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);
             assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
-            """
+            """,
         )
     }
 }

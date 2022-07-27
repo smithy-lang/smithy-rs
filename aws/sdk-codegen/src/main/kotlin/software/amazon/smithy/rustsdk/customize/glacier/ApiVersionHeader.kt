@@ -18,7 +18,7 @@ class ApiVersionHeader(
      * ApiVersion
      * This usually comes from the `version` field of the service shape and is usually a date like "2012-06-01"
      * */
-    private val apiVersion: String
+    private val apiVersion: String,
 ) : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.FinalizeOperation -> emptySection
@@ -29,7 +29,7 @@ class ApiVersionHeader(
                 .http_mut()
                 .headers_mut()
                 .insert("x-amz-glacier-version", #T::HeaderValue::from_static(${apiVersion.dq()}));""",
-                RuntimeType.http
+                RuntimeType.http,
             )
         }
         else -> emptySection

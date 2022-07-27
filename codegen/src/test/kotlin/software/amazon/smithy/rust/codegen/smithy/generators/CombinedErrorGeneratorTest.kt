@@ -81,7 +81,7 @@ class CombinedErrorGeneratorTest {
                     // Indicate the original name in the display output.
                     let error = FooError::builder().build();
                     assert_eq!(format!("{}", error), "FooError [FooException]")
-                """
+                """,
             )
 
             println("file:///${project.baseDir}/src/lib.rs")

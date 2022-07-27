@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.util.lookup
 class ServerOperationRegistryGeneratorTest {
     private val model = """
         namespace test
-        
+
         use aws.protocols#restJson1
 
         @restJson1
@@ -57,12 +57,12 @@ class ServerOperationRegistryGeneratorTest {
         val serviceShape = model.lookup<ServiceShape>("test#Service")
         val (protocolShapeId, protocolGeneratorFactory) = ServerProtocolLoader(ServerProtocolLoader.DefaultProtocols).protocolFor(
             model,
-            serviceShape
+            serviceShape,
         )
         val serverCodegenContext = serverTestCodegenContext(
             model,
             serviceShape,
-            protocolShapeId = protocolShapeId
+            protocolShapeId = protocolShapeId,
         )
 
         val index = TopDownIndex.of(serverCodegenContext.model)

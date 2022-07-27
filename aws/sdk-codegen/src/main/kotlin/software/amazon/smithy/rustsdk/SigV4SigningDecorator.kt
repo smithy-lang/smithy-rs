@@ -50,13 +50,13 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations.letIf(applies(codegenContext)) { customizations ->
             customizations + SigV4SigningConfig(
                 codegenContext.runtimeConfig,
                 codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model),
-                codegenContext.serviceShape.expectTrait()
+                codegenContext.serviceShape.expectTrait(),
             )
         }
     }
@@ -64,7 +64,7 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations.letIf(applies(codegenContext)) {
             it + SigV4SigningFeature(
@@ -80,13 +80,13 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientCodegenContext> {
 class SigV4SigningConfig(
     runtimeConfig: RuntimeConfig,
     private val serviceHasEventStream: Boolean,
-    private val sigV4Trait: SigV4Trait
+    private val sigV4Trait: SigV4Trait,
 ) : EventStreamSigningConfig(runtimeConfig) {
     private val codegenScope = arrayOf(
         "SigV4Signer" to RuntimeType(
             "SigV4Signer",
             runtimeConfig.awsRuntimeDependency("aws-sig-auth", setOf("sign-eventstream")),
-            "aws_sig_auth::event_stream"
+            "aws_sig_auth::event_stream",
         ),
     )
 
@@ -102,7 +102,7 @@ class SigV4SigningConfig(
                     ${sigV4Trait.name.dq()}
                 }
                 """,
-                *codegenScope
+                *codegenScope,
             )
             if (serviceHasEventStream) {
                 rustTemplate(
@@ -114,10 +114,10 @@ class SigV4SigningConfig(
                                     """
                                     #{SigV4Signer}::new($propertiesName)
                                     """,
-                                    *codegenScope
+                                    *codegenScope,
                                 )
                             }
-                        }
+                        },
                 )
             }
         }
@@ -152,7 +152,7 @@ class SigV4SigningFeature(
             is OperationSection.MutateRequest -> writable {
                 rustTemplate(
                     "let mut signing_config = #{sig_auth}::signer::OperationSigningConfig::default_config();",
-                    *codegenScope
+                    *codegenScope,
                 )
                 if (needsAmzSha256(service)) {
                     rust("signing_config.signing_options.content_sha256_header = true;")
@@ -164,13 +164,13 @@ class SigV4SigningFeature(
                     rust("signing_config.signing_options.content_sha256_header = true;")
                     rustTemplate(
                         "${section.request}.properties_mut().insert(#{sig_auth}::signer::SignableBody::UnsignedPayload);",
-                        *codegenScope
+                        *codegenScope,
                     )
                 } else if (operation.isInputEventStream(model)) {
                     // TODO(EventStream): Is this actually correct for all Event Stream operations?
                     rustTemplate(
                         "${section.request}.properties_mut().insert(#{sig_auth}::signer::SignableBody::Bytes(&[]));",
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
                 // some operations are either unsigned or optionally signed:
@@ -187,7 +187,7 @@ class SigV4SigningFeature(
                     ${section.request}.properties_mut().insert(signing_config);
                     ${section.request}.properties_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             else -> emptySection

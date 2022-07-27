@@ -25,7 +25,7 @@ class AccountIdAutofill() : OperationCustomization() {
                     if ${section.input}.account_id.as_deref().unwrap_or_default().is_empty() {
                         ${section.input}.account_id = Some("-".to_owned());
                     }
-                    """
+                    """,
                 )
             }
             else -> emptySection

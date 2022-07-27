@@ -129,7 +129,7 @@ class AwsQuerySerializerGeneratorTest {
                     &top.rec.item.1.extra=55\
                     "
                 );
-                """
+                """,
             )
         }
         project.withModule(RustModule.public("model")) {

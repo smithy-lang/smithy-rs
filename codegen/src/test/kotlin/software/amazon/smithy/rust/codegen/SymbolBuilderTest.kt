@@ -122,7 +122,7 @@ class SymbolBuilderTest {
         "Double, true, f64",
         "PrimitiveDouble, false, f64",
         "Boolean, true, bool",
-        "PrimitiveBoolean, false, bool"
+        "PrimitiveBoolean, false, bool",
     )
     fun `creates primitives`(primitiveType: String, optional: Boolean, rustName: String) {
         val memberBuilder = MemberShape.builder().id("foo.bar#MyStruct\$quux").target("smithy.api#$primitiveType")
