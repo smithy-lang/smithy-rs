@@ -86,9 +86,9 @@ class ServerOperationRegistryGenerator(
 
     private fun renderOperationRegistryRustDocs(writer: RustWriter) {
         val inputOutputErrorsImport = if (operations.any { it.errors.isNotEmpty() }) {
-            "/// use $crateName::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};"
+            "/// use ${crateName.toSnakeCase()}::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};"
         } else {
-            "/// use $crateName::{${Inputs.namespace}, ${Outputs.namespace}};"
+            "/// use ${crateName.toSnakeCase()}::{${Inputs.namespace}, ${Outputs.namespace}};"
         }
 
         writer.rustTemplate(
@@ -123,7 +123,7 @@ class ServerOperationRegistryGenerator(
 /// ```rust
 /// use std::net::SocketAddr;
 $inputOutputErrorsImport
-/// use $crateName::operation_registry::$operationRegistryBuilderName;
+/// use ${crateName.toSnakeCase()}::operation_registry::$operationRegistryBuilderName;
 /// use #{Router};
 ///
 /// ##[#{Tokio}::main]

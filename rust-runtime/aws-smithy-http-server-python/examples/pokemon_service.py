@@ -9,14 +9,14 @@ from typing import List, Optional
 import itertools
 import threading
 
-from libpokemon_service_sdk.error import \
+from libpokemon_service_server_sdk.error import \
     ResourceNotFoundException
-from libpokemon_service_sdk.input import (
+from libpokemon_service_server_sdk.input import (
     EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput)
-from libpokemon_service_sdk.model import FlavorText, Language
-from libpokemon_service_sdk.output import (
+from libpokemon_service_server_sdk.model import FlavorText, Language
+from libpokemon_service_server_sdk.output import (
     EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput)
-from libpokemon_service_sdk import App
+from libpokemon_service_server_sdk import App
 
 
 # A slightly more atomic counter using a threading lock.

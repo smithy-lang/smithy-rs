@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
  * Configure the [lib] section of `Cargo.toml`.
@@ -36,7 +37,13 @@ class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override fun crateManifestCustomizations(
         codegenContext: ServerCodegenContext,
     ): ManifestCustomizations =
-        mapOf("lib" to mapOf("name" to codegenContext.settings.moduleName, "crate-type" to listOf("cdylib")))
+        mapOf(
+            "lib" to mapOf(
+                // Library target names cannot contain hyphen names.
+                "name" to codegenContext.settings.moduleName.toSnakeCase(),
+                "crate-type" to listOf("cdylib"),
+            ),
+        )
 }
 
 /**

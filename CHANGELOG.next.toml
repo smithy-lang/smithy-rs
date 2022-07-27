@@ -213,3 +213,9 @@ Add explicit cast during JSON deserialization in case of custom Symbol providers
 references = ["smithy-rs#1520"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "crisidev"
+
+[[smithy-rs]]
+message = "Change detailed logs in CredentialsProviderChain from info to debug"
+references = ["smithy-rs#1578"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "lkts"
