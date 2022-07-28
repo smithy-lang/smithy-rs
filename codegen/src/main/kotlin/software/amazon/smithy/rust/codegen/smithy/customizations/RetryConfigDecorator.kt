@@ -67,26 +67,7 @@ fn test_1() {
 }
  */
 
-class RetryConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
-    override val name: String = "RetryConfig"
-    override val order: Byte = 0
-
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> {
-        return baseCustomizations + RetryConfigProviderConfig(codegenContext)
-    }
-
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseRetryConfig(codegenContext.runtimeConfig)
-    }
-}
-
-class RetryConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
+class RetryConfigProviderCustomization(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
     private val retryConfig = smithyTypesRetry(coreCodegenContext.runtimeConfig)
     private val moduleUseName = coreCodegenContext.moduleUseName()
     private val codegenScope = arrayOf("RetryConfig" to retryConfig.member("RetryConfig"))
@@ -149,7 +130,7 @@ class RetryConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : Config
     }
 }
 
-class PubUseRetryConfig(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+class PubUseRetryConfigGenerator(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
             is LibRsSection.Body -> writable {

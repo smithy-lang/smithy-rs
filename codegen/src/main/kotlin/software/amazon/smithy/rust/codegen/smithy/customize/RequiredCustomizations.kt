@@ -15,8 +15,13 @@ import software.amazon.smithy.rust.codegen.smithy.customizations.EndpointPrefixG
 import software.amazon.smithy.rust.codegen.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.smithy.customizations.HttpVersionListCustomization
 import software.amazon.smithy.rust.codegen.smithy.customizations.IdempotencyTokenGenerator
+import software.amazon.smithy.rust.codegen.smithy.customizations.PubUseRetryConfigGenerator
+import software.amazon.smithy.rust.codegen.smithy.customizations.RetryConfigProviderCustomization
+import software.amazon.smithy.rust.codegen.smithy.customizations.SleepImplProviderCustomization
 import software.amazon.smithy.rust.codegen.smithy.customizations.SmithyTypesPubUseGenerator
+import software.amazon.smithy.rust.codegen.smithy.customizations.TimeoutConfigProviderCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 
 /**
  * A set of customizations that are included in all protocols.
@@ -33,16 +38,28 @@ class RequiredCustomizations : RustCodegenDecorator<ClientCodegenContext> {
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> =
         baseCustomizations +
-            IdempotencyTokenGenerator(codegenContext, operation) +
-            EndpointPrefixGenerator(codegenContext, operation) +
-            HttpChecksumRequiredGenerator(codegenContext, operation) +
-            HttpVersionListCustomization(codegenContext, operation)
+                IdempotencyTokenGenerator(codegenContext, operation) +
+                EndpointPrefixGenerator(codegenContext, operation) +
+                HttpChecksumRequiredGenerator(codegenContext, operation) +
+                HttpVersionListCustomization(codegenContext, operation)
+
+    override fun configCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ConfigCustomization>,
+    ): List<ConfigCustomization> =
+        baseCustomizations +
+                RetryConfigProviderCustomization(codegenContext) +
+                SleepImplProviderCustomization(codegenContext) +
+                TimeoutConfigProviderCustomization(codegenContext)
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
-        baseCustomizations + CrateVersionGenerator() + SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) + AllowLintsGenerator()
+        baseCustomizations + CrateVersionGenerator() +
+                SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) +
+                AllowLintsGenerator() +
+                PubUseRetryConfigGenerator(codegenContext.runtimeConfig)
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`

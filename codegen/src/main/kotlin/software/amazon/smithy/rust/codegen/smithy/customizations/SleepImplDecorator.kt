@@ -116,19 +116,7 @@ impl Builder {
 }
  */
 
-class SleepImplDecorator : RustCodegenDecorator<ClientCodegenContext> {
-    override val name: String = "AsyncSleep"
-    override val order: Byte = 0
-
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> {
-        return baseCustomizations + SleepImplProviderConfig(codegenContext)
-    }
-}
-
-class SleepImplProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
+class SleepImplProviderCustomization(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
     private val sleepModule = smithyAsyncRtSleep(coreCodegenContext.runtimeConfig)
     private val moduleUseName = coreCodegenContext.moduleUseName()
     private val codegenScope = arrayOf(

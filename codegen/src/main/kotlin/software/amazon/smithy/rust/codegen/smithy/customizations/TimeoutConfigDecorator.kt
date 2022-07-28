@@ -103,19 +103,7 @@ fn test_1() {
 }
  */
 
-class TimeoutConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
-    override val name: String = "TimeoutConfig"
-    override val order: Byte = 0
-
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> {
-        return baseCustomizations + TimeoutConfigProviderConfig(codegenContext)
-    }
-}
-
-class TimeoutConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
+class TimeoutConfigProviderCustomization(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
     private val smithyTypesCrate = coreCodegenContext.runtimeConfig.runtimeCrate("types")
     private val timeoutModule = RuntimeType("timeout", smithyTypesCrate, "aws_smithy_types")
     private val moduleUseName = coreCodegenContext.moduleUseName()
