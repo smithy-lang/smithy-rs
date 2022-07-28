@@ -56,4 +56,7 @@ class DocsRsMetadataDecorator(private val docsRsMetadataSettings: DocsRsMetadata
     override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations {
         return docsRsMetadataSettings.asMap()
     }
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

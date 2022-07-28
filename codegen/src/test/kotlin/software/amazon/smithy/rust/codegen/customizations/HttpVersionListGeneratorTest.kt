@@ -84,6 +84,9 @@ internal class HttpVersionListGeneratorTest {
                     )
                 }
             }
+
+            override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(testWriter)
@@ -146,6 +149,9 @@ internal class HttpVersionListGeneratorTest {
                     )
                 }
             }
+
+            override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
 
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
@@ -228,6 +234,9 @@ internal class HttpVersionListGeneratorTest {
                     )
                 }
             }
+
+            override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
 
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =

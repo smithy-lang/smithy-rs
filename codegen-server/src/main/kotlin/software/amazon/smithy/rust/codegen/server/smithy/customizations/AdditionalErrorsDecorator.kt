@@ -37,6 +37,9 @@ class AddInternalServerErrorToInfallibleOperationsDecorator : RustCodegenDecorat
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
         addErrorShapeToModelOperations(service, model) { shape -> shape.allErrors(model).isEmpty() }
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
@@ -63,6 +66,9 @@ class AddInternalServerErrorToAllOperationsDecorator : RustCodegenDecorator<Serv
 
     override fun transformModel(service: ServiceShape, model: Model): Model =
         addErrorShapeToModelOperations(service, model) { true }
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 fun addErrorShapeToModelOperations(service: ServiceShape, model: Model, opSelector: (OperationShape) -> Boolean): Model {

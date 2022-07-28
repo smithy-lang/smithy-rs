@@ -10,6 +10,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
@@ -68,6 +69,8 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
         currentProtocols
 
     fun transformModel(service: ServiceShape, model: Model): Model = model
+
+    fun supportsCodegenContext(clazz: Class<*>): Boolean
 }
 
 /**
@@ -137,6 +140,9 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
         }
     }
 
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
+
     companion object {
         inline fun <reified T : CoreCodegenContext> fromClasspath(
             context: PluginContext,
@@ -147,26 +153,29 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader),
             )
+                .asSequence()
+                .onEach {
+                    logger.info("Discovered Codegen Decorator: ${it.javaClass.name}")
+                }
                 // The JVM's `ServiceLoader` is woefully underpowered in that it can not load classes with generic
                 // parameters with _fixed_ parameters (like what we're trying to do here; we only want `RustCodegenDecorator`
                 // classes with code-generation context matching the input `T`).
                 // There are various workarounds: https://stackoverflow.com/questions/5451734/loading-generic-service-implementations-via-java-util-serviceloader
                 // All involve loading _all_ classes from the classpath (i.e. all `RustCodegenDecorator<*>`), and then
-                // filtering them. The most elegant way to filter is arguably by checking if we can cast the loaded
-                // class to what we want.
+                // filtering them.
+                // Note that attempting to downcast a generic class `C<T>` to `C<U>` where `U: T` is not possible to do
+                // in Kotlin (and presumably all JVM-based languages) _at runtime_. Not even when using reified type
+                // parameters of inline functions. See https://kotlinlang.org/docs/generics.html#type-erasure for details.
                 .filter {
-                    try {
-                        it as RustCodegenDecorator<T>
-                        true
-                    } catch (e: ClassCastException) {
-                        false
-                    }
+                    val clazz = T::class.java
+                    it.supportsCodegenContext(clazz)
                 }
                 .onEach {
                     logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                 }
                 .map {
                     // Cast is safe because of the filter above.
+                    // Not that it really has an effect at runtime, since its unchecked.
                     @Suppress("UNCHECKED_CAST")
                     it as RustCodegenDecorator<T>
                 }
