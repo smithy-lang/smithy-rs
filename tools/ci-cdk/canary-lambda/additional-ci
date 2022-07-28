@@ -17,5 +17,4 @@ pushd ../canary-runner
 cargo run -- build-bundle --manifest-only --canary-path ../canary-lambda --sdk-path "${SDK_PATH}"
 popd
 
-cargo test --all-features
 cargo clippy --all-features
