@@ -19,7 +19,8 @@ Building locally for Lambda from Amazon Linux 2
 1. Build a code bundle:
 
 ```
-$ ./build-bundle --sdk-version <version>
+$ cd smithy-rs/tools/ci-cdk/canary-runner
+$ cargo run -- build-bundle --canary-path ../canary-lambda --sdk-release-tag <release-tag> --musl
 ```
 
 This will place a zip file in `smithy-rs/target/release` that can be uploaded and tested against Lambda.
@@ -38,7 +39,8 @@ $ rustup target add x86_64-unknown-linux-musl
 3. Build a code bundle:
 
 ```
-$ ./build-bundle --sdk-version <version> --musl
+$ cd smithy-rs/tools/ci-cdk/canary-runner
+$ cargo run -- build-bundle --canary-path ../canary-lambda --sdk-release-tag <release-tag> --musl
 ```
 
 This will place a zip file in `smithy-rs/target/x86_64-unknown-linux-musl/release` that can be

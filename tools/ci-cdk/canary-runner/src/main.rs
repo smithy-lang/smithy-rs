@@ -6,12 +6,17 @@
 use clap::Parser;
 use tracing_subscriber::{filter::EnvFilter, prelude::*};
 
+mod build_bundle;
 mod generate_matrix;
 mod run;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Eq, PartialEq)]
 #[clap(version, about)]
-enum Opt {
+pub(crate) enum Opt {
+    /// Builds the canary Lambda bundle
+    #[clap(alias = "build-bundle")]
+    BuildBundle(build_bundle::BuildBundleOpt),
+
     /// Generates a GitHub Actions test matrix for the canary
     #[clap(alias = "generate-matrix")]
     GenerateMatrix(generate_matrix::GenerateMatrixOpt),
@@ -33,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
 
     let opt = Opt::parse();
     match opt {
+        Opt::BuildBundle(subopt) => build_bundle::build_bundle(subopt).await.map(|_| ()),
         Opt::GenerateMatrix(subopt) => generate_matrix::generate_matrix(subopt).await,
         Opt::Run(subopt) => run::run(subopt).await,
     }

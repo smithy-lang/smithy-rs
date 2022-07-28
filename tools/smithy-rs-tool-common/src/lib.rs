@@ -9,5 +9,6 @@ pub mod git;
 #[macro_use]
 pub mod macros;
 pub mod package;
+pub mod release_tag;
 pub mod shell;
 pub mod versions_manifest;
