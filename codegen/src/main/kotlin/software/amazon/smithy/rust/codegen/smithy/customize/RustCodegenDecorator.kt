@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
-import software.amazon.smithy.rust.codegen.util.PANIC
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
 import java.util.ServiceLoader
 import java.util.logging.Logger
@@ -141,7 +140,8 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
     }
 
     override fun supportsCodegenContext(clazz: Class<*>): Boolean =
-        PANIC("This decorator is not loaded as a service from the classpath; you should not be calling this method")
+        // `CombinedCodegenDecorator` can work with all types of codegen context.
+        clazz.isAssignableFrom(CoreCodegenContext::class.java)
 
     companion object {
         inline fun <reified T : CoreCodegenContext> fromClasspath(
