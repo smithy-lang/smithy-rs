@@ -95,6 +95,7 @@ jobs:
         - action: check-aws-sdk-smoketest-additional-checks
         - action: check-aws-sdk-smoketest-docs-clippy-udeps
         - action: check-aws-sdk-smoketest-unit-tests
+        - action: check-aws-sdk-standalone-integration-tests
         - action: check-rust-runtimes-and-tools
     steps:
     - uses: actions/checkout@v3

@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Local development of the SDK integration tests is far easier from the aws/sdk/integration-tests
+# directory, but the hand-written Cargo.toml files there can get out of sync with the generated
+# SDK Cargo.toml files, which causes them to not compile in local development. This script verifies
+# that they continue to compile for local dev.
+
+set -eux
+cd smithy-rs/aws/sdk/integration-tests
+
+# Make sure all integration tests are included in the workspace
+set +x
+for test_path in *; do
+    if [[ -d "${test_path}" ]]; then
+        grep -q "\"${test_path}\"" Cargo.toml || (echo "ERROR: '${test_path}' missing from '$(pwd)/Cargo.toml' workspace" && exit 1)
+    fi
+done
+set -x
+
+cargo test
