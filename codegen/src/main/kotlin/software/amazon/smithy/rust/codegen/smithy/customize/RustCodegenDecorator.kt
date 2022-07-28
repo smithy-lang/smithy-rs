@@ -141,7 +141,7 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
 
     override fun supportsCodegenContext(clazz: Class<*>): Boolean =
         // `CombinedCodegenDecorator` can work with all types of codegen context.
-        clazz.isAssignableFrom(CoreCodegenContext::class.java)
+        CoreCodegenContext::class.java.isAssignableFrom(clazz)
 
     companion object {
         inline fun <reified T : CoreCodegenContext> fromClasspath(
