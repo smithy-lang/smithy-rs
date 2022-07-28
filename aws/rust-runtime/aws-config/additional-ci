@@ -14,8 +14,11 @@ cargo "+${RUST_NIGHTLY_VERSION:-nightly}" api-linter --all-features --config api
 echo "### Checking for duplicate dependency versions in the normal dependency graph with all features enabled"
 cargo tree -d --edges normal --all-features
 
+# `aws-config` is not part of the `rust-runtime` workspace. As a result it is not run through
+# `check-rust-runtimes-and-tools` and does not get `cargo test --all-features` prior to this point. As a result we do
+# not apply `--exclude-all-features` here.
 echo "### Testing each feature in isolation"
-cargo hack test --feature-powerset --exclude-all-features
+cargo hack test --feature-powerset
 
 echo "### Checking that compiling with the minimal versions succeeds"
 cargo "+${RUST_NIGHTLY_VERSION:-nightly}" minimal-versions check --all-features
