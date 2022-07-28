@@ -27,7 +27,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.ProtocolMap
 class ServerProtocolLoader(private val supportedProtocols: ProtocolMap<ServerCodegenContext>) {
     fun protocolFor(
         model: Model,
-        serviceShape: ServiceShape
+        serviceShape: ServiceShape,
     ): Pair<ShapeId, ProtocolGeneratorFactory<ProtocolGenerator, ServerCodegenContext>> {
         val protocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
         val matchingProtocols =

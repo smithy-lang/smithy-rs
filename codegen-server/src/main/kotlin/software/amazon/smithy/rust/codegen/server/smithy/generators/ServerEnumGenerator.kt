@@ -35,7 +35,7 @@ open class ServerEnumGenerator(
             """
             ##[derive(Debug, PartialEq, Eq, Hash)]
             pub struct $errorStruct(String);
-            """
+            """,
         )
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.TryFrom) {
             write("type Error = $errorStruct;")
@@ -84,7 +84,7 @@ open class ServerEnumGenerator(
                     $enumName::try_from(s)
                 }
             }
-            """
+            """,
         )
     }
 }

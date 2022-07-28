@@ -45,7 +45,7 @@ class RustCodegenPlugin : SmithyBuildPlugin {
                 ClientCustomizations(),
                 RequiredCustomizations(),
                 FluentClientDecorator(),
-                NoOpEventStreamSigningDecorator()
+                NoOpEventStreamSigningDecorator(),
             )
 
         // CodegenVisitor is the main driver of code generation that traverses the model and generates code

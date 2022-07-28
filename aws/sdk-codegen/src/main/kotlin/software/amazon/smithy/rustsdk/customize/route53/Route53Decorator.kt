@@ -50,7 +50,7 @@ class Route53Decorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         val hostedZoneMember =
             operation.inputShape(codegenContext.model).members().find { it.hasTrait<TrimResourceId>() }
@@ -70,7 +70,7 @@ class TrimResourceIdCustomization(private val fieldName: String) : OperationCust
 
     private val trimResourceId =
         RuntimeType.forInlineDependency(
-            InlineAwsDependency.forRustFile("route53_resource_id_preprocessor")
+            InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
         )
             .member("trim_resource_id")
 
@@ -79,7 +79,7 @@ class TrimResourceIdCustomization(private val fieldName: String) : OperationCust
             is OperationSection.MutateInput -> writable {
                 rustTemplate(
                     "#{trim_resource_id}(&mut ${section.input}.$fieldName);",
-                    "trim_resource_id" to trimResourceId
+                    "trim_resource_id" to trimResourceId,
                 )
             }
             else -> emptySection

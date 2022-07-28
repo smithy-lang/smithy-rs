@@ -42,47 +42,47 @@ val allCodegenTests = listOf(
     CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
     CodegenTest(
         "aws.protocoltests.restxml#RestXml", "rest_xml",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
 
     CodegenTest(
         "aws.protocoltests.query#AwsQuery", "aws_query",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
     CodegenTest(
         "aws.protocoltests.ec2#AwsEc2", "ec2_query",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
     CodegenTest(
         "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
         "rest_xml_namespace",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
     CodegenTest(
         "aws.protocoltests.restxml#RestXmlExtras",
         "rest_xml_extras",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
     CodegenTest(
         "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
         "rest_xml_extras_unwrapped",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
     CodegenTest(
         "crate#Config",
         "naming_test_ops",
         """
             , "codegen": { "renameErrors": false }
-        """.trimIndent()
+        """.trimIndent(),
     ),
     CodegenTest(
         "naming_obs_structs#NamingObstacleCourseStructs",
         "naming_test_structs",
         """
             , "codegen": { "renameErrors": false }
-        """.trimIndent()
+        """.trimIndent(),
     ),
-    CodegenTest("com.aws.example#PokemonService", "pokemon-service-client")
+    CodegenTest("com.aws.example#PokemonService", "pokemon-service-client"),
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)

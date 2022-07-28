@@ -67,7 +67,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 fun OperationShape.errorSymbol(
     model: Model,
     symbolProvider: RustSymbolProvider,
-    target: CodegenTarget
+    target: CodegenTarget,
 ): RuntimeType {
     val symbol = symbolProvider.toSymbol(this)
     return RuntimeType.forInlineFun("${symbol.name}Error", RustModule.Error) { writer ->
@@ -76,13 +76,13 @@ fun OperationShape.errorSymbol(
                 model,
                 symbolProvider,
                 symbol,
-                this.operationErrors(model).map { it.asStructureShape().get() }
+                this.operationErrors(model).map { it.asStructureShape().get() },
             ).render(writer)
             CodegenTarget.SERVER -> ServerCombinedErrorGenerator(
                 model,
                 symbolProvider,
                 symbol,
-                this.operationErrors(model).map { it.asStructureShape().get() }
+                this.operationErrors(model).map { it.asStructureShape().get() },
             ).render(writer)
         }
     }
@@ -98,13 +98,13 @@ fun UnionShape.eventStreamErrorSymbol(model: Model, symbolProvider: RustSymbolPr
                 CombinedErrorGenerator(model, symbolProvider, symbol, errors).renderErrors(
                     writer,
                     errorSymbol,
-                    symbol
+                    symbol,
                 )
             CodegenTarget.SERVER ->
                 ServerCombinedErrorGenerator(model, symbolProvider, symbol, errors).renderErrors(
                     writer,
                     errorSymbol,
-                    symbol
+                    symbol,
                 )
         }
     }
@@ -118,7 +118,7 @@ class CombinedErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val operationSymbol: Symbol,
-    private val errors: List<StructureShape>
+    private val errors: List<StructureShape>,
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val genericError = RuntimeType.GenericError(symbolProvider.config().runtimeConfig)
@@ -131,12 +131,12 @@ class CombinedErrorGenerator(
     fun renderErrors(
         writer: RustWriter,
         errorSymbol: RuntimeType,
-        operationSymbol: Symbol
+        operationSymbol: Symbol,
     ) {
         val meta = RustMetadata(
             derives = Attribute.Derives(setOf(RuntimeType.Debug)),
             additionalAttributes = listOf(Attribute.NonExhaustive),
-            visibility = Visibility.PUBLIC
+            visibility = Visibility.PUBLIC,
         )
 
         writer.rust("/// Error type for the `${operationSymbol.name}` operation.")
@@ -149,7 +149,7 @@ class CombinedErrorGenerator(
                 /// Additional metadata about the error, including error code, message, and request ID.
                 pub (crate) meta: #T
                 """,
-                RuntimeType.GenericError(runtimeConfig)
+                RuntimeType.GenericError(runtimeConfig),
             )
         }
         writer.rust("/// Types of errors that can occur for the `${operationSymbol.name}` operation.")
@@ -165,7 +165,7 @@ class CombinedErrorGenerator(
                 /// An unexpected error, e.g. invalid JSON returned by the service or an unknown error code
                 Unhandled(Box<dyn #T + Send + Sync + 'static>),
                 """,
-                RuntimeType.StdError
+                RuntimeType.StdError,
             )
         }
         writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.Display) {
@@ -179,7 +179,7 @@ class CombinedErrorGenerator(
         val errorKindT = RuntimeType.errorKind(symbolProvider.config().runtimeConfig)
         writer.rustBlock(
             "impl #T for ${errorSymbol.name}",
-            RuntimeType.provideErrorKind(symbolProvider.config().runtimeConfig)
+            RuntimeType.provideErrorKind(symbolProvider.config().runtimeConfig),
         ) {
             rustBlock("fn code(&self) -> Option<&str>") {
                 rust("${errorSymbol.name}::code(self)")
@@ -246,7 +246,7 @@ class CombinedErrorGenerator(
                     self.meta.code()
                 }
                 """,
-                "generic_error" to genericError, "std_error" to RuntimeType.StdError
+                "generic_error" to genericError, "std_error" to RuntimeType.StdError,
             )
             errors.forEach { error ->
                 val errorVariantSymbol = symbolProvider.toSymbol(error)
@@ -297,7 +297,7 @@ class CombinedErrorGenerator(
     private fun RustWriter.delegateToVariants(
         errors: List<StructureShape>,
         symbol: RuntimeType,
-        handler: (VariantMatch) -> Writable
+        handler: (VariantMatch) -> Writable,
     ) {
         rustBlock("match &self.kind") {
             errors.forEach {

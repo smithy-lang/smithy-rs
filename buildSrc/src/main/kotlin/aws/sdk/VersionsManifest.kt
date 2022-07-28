@@ -12,14 +12,14 @@ data class CrateVersion(
     val category: String,
     val version: String,
     val sourceHash: String? = null,
-    val modelHash: String? = null
+    val modelHash: String? = null,
 )
 
 /** Kotlin representation of aws-sdk-rust's `versions.toml` file */
 data class VersionsManifest(
     val smithyRsRevision: String,
     val awsDocSdkExamplesRevision: String,
-    val crates: Map<String, CrateVersion>
+    val crates: Map<String, CrateVersion>,
 ) {
     companion object {
         fun fromFile(path: String): VersionsManifest {
@@ -38,9 +38,9 @@ data class VersionsManifest(
                         category = value.getString("category"),
                         version = value.getString("version"),
                         sourceHash = value.getString("source_hash"),
-                        modelHash = value.getString("model_hash")
+                        modelHash = value.getString("model_hash"),
                     )
-                }.toMap()
+                }.toMap(),
             )
         }
     }

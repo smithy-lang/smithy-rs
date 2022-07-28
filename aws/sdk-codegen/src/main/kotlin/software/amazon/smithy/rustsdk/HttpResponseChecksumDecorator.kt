@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.util.orNull
 
 private fun HttpChecksumTrait.requestValidationModeMember(
     codegenContext: ClientCodegenContext,
-    operationShape: OperationShape
+    operationShape: OperationShape,
 ): MemberShape? {
     val requestValidationModeMember = this.requestValidationModeMember.orNull() ?: return null
     return operationShape.inputShape(codegenContext.model).expectMember(requestValidationModeMember)
@@ -34,7 +34,7 @@ class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientCodegenContext>
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + HttpResponseChecksumCustomization(codegenContext, operation)
     }
@@ -44,7 +44,7 @@ class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientCodegenContext>
 // https://awslabs.github.io/smithy/1.0/spec/aws/aws-core.html#http-request-checksums
 class HttpResponseChecksumCustomization(
     private val codegenContext: ClientCodegenContext,
-    private val operationShape: OperationShape
+    private val operationShape: OperationShape,
 ) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return emptySection

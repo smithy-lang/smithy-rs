@@ -51,7 +51,7 @@ internal class RemoveEventStreamOperationsTest {
             model,
             testRustSettings(
                 codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("not-test-module")),
-            )
+            ),
         )
         transformed.expectShape(ShapeId.from("test#BlobStream"))
         transformed.getShape(ShapeId.from("test#EventStream")) shouldBe Optional.empty()
@@ -63,7 +63,7 @@ internal class RemoveEventStreamOperationsTest {
             model,
             testRustSettings(
                 codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("test-module")),
-            )
+            ),
         )
         transformed.expectShape(ShapeId.from("test#BlobStream"))
         transformed.getShape(ShapeId.from("test#EventStream")) shouldNotBe Optional.empty<Shape>()

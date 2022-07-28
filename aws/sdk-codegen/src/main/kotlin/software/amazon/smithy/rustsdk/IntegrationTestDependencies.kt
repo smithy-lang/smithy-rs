@@ -26,7 +26,7 @@ class IntegrationTestDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         val integrationTestPath = Paths.get(SdkSettings.from(codegenContext.settings).integrationTestPath)
         check(Files.exists(integrationTestPath)) {
@@ -43,7 +43,7 @@ class IntegrationTestDecorator : RustCodegenDecorator<ClientCodegenContext> {
                 moduleName,
                 codegenContext.runtimeConfig,
                 hasTests,
-                hasBenches
+                hasBenches,
             )
         } else {
             baseCustomizations
@@ -96,7 +96,7 @@ class TranscribeTestDependencies : LibRsCustomization() {
 }
 
 class S3TestDependencies(
-    private val runtimeConfig: RuntimeConfig
+    private val runtimeConfig: RuntimeConfig,
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable = writable {
         addDependency(AsyncStd)

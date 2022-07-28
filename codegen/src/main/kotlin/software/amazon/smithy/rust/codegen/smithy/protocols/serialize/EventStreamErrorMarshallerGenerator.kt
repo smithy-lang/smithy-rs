@@ -82,18 +82,18 @@ class EventStreamErrorMarshallerGenerator(
                     ${marshallerType.name}
                 }
             }
-            """
+            """,
         )
 
         rustBlockTemplate(
             "impl #{MarshallMessage} for ${marshallerType.name}",
-            *codegenScope
+            *codegenScope,
         ) {
             rust("type Input = ${operationErrorSymbol.rustType().render(fullyQualified = true)};")
 
             rustBlockTemplate(
                 "fn marshall(&self, _input: Self::Input) -> std::result::Result<#{Message}, #{Error}>",
-                *codegenScope
+                *codegenScope,
             ) {
                 rust("let mut headers = Vec::new();")
                 addStringHeader(":message-type", """"exception".into()""")
@@ -127,7 +127,7 @@ class EventStreamErrorMarshallerGenerator(
                                     #{Error}::Marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
                                 ),
                                 """,
-                                *codegenScope
+                                *codegenScope,
                             )
                         }
                     }

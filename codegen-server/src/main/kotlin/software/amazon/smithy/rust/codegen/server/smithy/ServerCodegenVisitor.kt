@@ -49,7 +49,7 @@ import java.util.logging.Logger
  */
 open class ServerCodegenVisitor(
     context: PluginContext,
-    private val codegenDecorator: RustCodegenDecorator<ServerCodegenContext>
+    private val codegenDecorator: RustCodegenDecorator<ServerCodegenContext>,
 ) : ShapeVisitor.Default<Unit>() {
 
     protected val logger = Logger.getLogger(javaClass.name)
@@ -77,8 +77,8 @@ open class ServerCodegenVisitor(
             ServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
-                    ServerProtocolLoader.DefaultProtocols
-                )
+                    ServerProtocolLoader.DefaultProtocols,
+                ),
             )
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
@@ -128,7 +128,7 @@ open class ServerCodegenVisitor(
     fun execute() {
         val service = settings.getService(model)
         logger.info(
-            "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}"
+            "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}",
         )
         val serviceShapes = Walker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
@@ -139,16 +139,16 @@ open class ServerCodegenVisitor(
             codegenDecorator.crateManifestCustomizations(codegenContext),
             codegenDecorator.libRsCustomizations(codegenContext, listOf()),
             // TODO(https://github.com/awslabs/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
-            requireDocs = false
+            requireDocs = false,
         )
         try {
             "cargo fmt".runCommand(
                 fileManifest.baseDir,
-                timeout = settings.codegenConfig.formatTimeoutSeconds.toLong()
+                timeout = settings.codegenConfig.formatTimeoutSeconds.toLong(),
             )
         } catch (err: CommandFailed) {
             logger.warning(
-                "[rust-server-codegen] Failed to run cargo fmt: [${service.id}]\n${err.output}"
+                "[rust-server-codegen] Failed to run cargo fmt: [${service.id}]\n${err.output}",
             )
         }
         logger.info("[rust-server-codegen] Rust server generation complete!")
@@ -222,7 +222,7 @@ open class ServerCodegenVisitor(
             protocolGenerator,
             protocolGeneratorFactory.support(),
             protocolGeneratorFactory.protocol(codegenContext),
-            codegenContext
+            codegenContext,
         )
             .render()
     }

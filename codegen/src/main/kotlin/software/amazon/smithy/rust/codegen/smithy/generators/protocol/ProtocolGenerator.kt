@@ -110,7 +110,7 @@ open class ProtocolGenerator(
         operationWriter: RustWriter,
         inputWriter: RustWriter,
         operationShape: OperationShape,
-        customizations: List<OperationCustomization>
+        customizations: List<OperationCustomization>,
     ) {
         val inputShape = operationShape.inputShape(model)
         val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
@@ -124,7 +124,7 @@ open class ProtocolGenerator(
         inputWriter.implBlock(inputShape, symbolProvider) {
             writeCustomizations(
                 customizations,
-                OperationSection.InputImpl(customizations, operationShape, inputShape, protocol)
+                OperationSection.InputImpl(customizations, operationShape, inputShape, protocol),
             )
             makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
 
@@ -142,7 +142,7 @@ open class ProtocolGenerator(
             /// [`$fluentBuilderName`](${docLink("crate::client::Client::$fluentBuilderName")}).
             ///
             /// See [`crate::client::fluent_builders::$operationName`] for more details about the operation.
-            """
+            """,
         )
         Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
@@ -176,7 +176,7 @@ open class ProtocolGenerator(
         inputWriter: RustWriter,
         operationShape: OperationShape,
         customizations: List<OperationCustomization>,
-        inputShape: StructureShape
+        inputShape: StructureShape,
     ) {
         // TODO(https://github.com/awslabs/smithy-rs/issues/976): Callers should be able to invoke
         //     buildOperationType* directly to get the type rather than depending on these aliases.
@@ -189,7 +189,7 @@ open class ProtocolGenerator(
             """
             ##[doc(hidden)] pub type ${inputPrefix}OperationOutputAlias = $operationTypeOutput;
             ##[doc(hidden)] pub type ${inputPrefix}OperationRetryAlias = $operationTypeRetry;
-            """
+            """,
         )
     }
 

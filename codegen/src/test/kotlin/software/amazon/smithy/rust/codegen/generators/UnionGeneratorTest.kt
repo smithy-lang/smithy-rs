@@ -25,7 +25,7 @@ class UnionGeneratorTest {
                 @documentation("This *is* documentation about the member")
                 intConfig: PrimitiveInteger
             }
-            """
+            """,
         )
 
         writer.compileAndTest(
@@ -34,7 +34,7 @@ class UnionGeneratorTest {
             let var_b = MyUnion::IntConfig(10);
             assert_ne!(var_a, var_b);
             assert_eq!(var_a, var_a);
-            """
+            """,
         )
         writer.toString() shouldContain "#[non_exhaustive]"
     }
@@ -47,7 +47,7 @@ class UnionGeneratorTest {
                 stringValue: String,
                 intValue: PrimitiveInteger
             }
-            """
+            """,
         )
 
         writer.compileAndTest(
@@ -62,7 +62,7 @@ class UnionGeneratorTest {
             assert_eq!(bar.is_int_value(), true);
             assert_eq!(bar.as_string_value(), Err(&bar));
             assert_eq!(bar.as_int_value(), Ok(&10));
-            """
+            """,
         )
     }
 
@@ -73,7 +73,7 @@ class UnionGeneratorTest {
             """
             // If the document isn't optional, this will compile
             MyUnion::Doc(aws_smithy_types::Document::Null);
-            """
+            """,
         )
     }
 
@@ -91,7 +91,7 @@ class UnionGeneratorTest {
             let union = MyUnion::Unknown;
             assert!(union.is_unknown());
 
-            """
+            """,
         )
     }
 

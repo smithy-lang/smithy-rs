@@ -96,12 +96,12 @@ class EventStreamUnmarshallerGenerator(
                     ${unmarshallerType.name}
                 }
             }
-            """
+            """,
         )
 
         rustBlockTemplate(
             "impl #{UnmarshallMessage} for ${unmarshallerType.name}",
-            *codegenScope
+            *codegenScope,
         ) {
             rust("type Output = #T;", unionSymbol)
             rust("type Error = #T;", errorSymbol)
@@ -113,7 +113,7 @@ class EventStreamUnmarshallerGenerator(
                     message: &#{Message}
                 ) -> std::result::Result<#{UnmarshalledMessage}<Self::Output, Self::Error>, #{Error}>
                 """,
-                *codegenScope
+                *codegenScope,
             ) {
                 rustTemplate("let response_headers = #{expect_fns}::parse_response_headers(message)?;", *codegenScope)
                 rustBlock("match response_headers.message_type.as_str()") {
@@ -126,7 +126,7 @@ class EventStreamUnmarshallerGenerator(
                     rustBlock("value => ") {
                         rustTemplate(
                             "return Err(#{Error}::Unmarshalling(format!(\"unrecognized :message-type: {}\", value)));",
-                            *codegenScope
+                            *codegenScope,
                         )
                     }
                 }
@@ -153,11 +153,11 @@ class EventStreamUnmarshallerGenerator(
                     true -> rustTemplate(
                         "Ok(#{UnmarshalledMessage}::Event(#{Output}::${UnionGenerator.UnknownVariantName}))",
                         "Output" to unionSymbol,
-                        *codegenScope
+                        *codegenScope,
                     )
                     false -> rustTemplate(
                         "return Err(#{Error}::Unmarshalling(format!(\"unrecognized :event-type: {}\", _unknown_variant)));",
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
             }
@@ -177,7 +177,7 @@ class EventStreamUnmarshallerGenerator(
                     "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(#{UnionStruct}::builder().build())))",
                     "Output" to unionSymbol,
                     "UnionStruct" to symbolProvider.toSymbol(unionStruct),
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             payloadOnly -> {
@@ -187,7 +187,7 @@ class EventStreamUnmarshallerGenerator(
                 rustTemplate(
                     "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(parsed)))",
                     "Output" to unionSymbol,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             else -> {
@@ -209,7 +209,7 @@ class EventStreamUnmarshallerGenerator(
                             rustBlock("name => if !name.starts_with(':')") {
                                 rustTemplate(
                                     "#{tracing}::trace!(\"Unrecognized event stream message header: {}\", name);",
-                                    *codegenScope
+                                    *codegenScope,
                                 )
                             }
                         }
@@ -218,7 +218,7 @@ class EventStreamUnmarshallerGenerator(
                 rustTemplate(
                     "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(builder.build())))",
                     "Output" to unionSymbol,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -256,7 +256,7 @@ class EventStreamUnmarshallerGenerator(
                     )))
                 }
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
         val memberName = symbolProvider.toMemberName(member)
@@ -271,7 +271,7 @@ class EventStreamUnmarshallerGenerator(
                         std::str::from_utf8(message.payload())
                             .map_err(|_| #{Error}::Unmarshalling("message payload is not valid UTF-8".into()))?
                         """,
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
                 is UnionShape, is StructureShape -> {
@@ -292,7 +292,7 @@ class EventStreamUnmarshallerGenerator(
                 })?
             """,
             "parser" to parser,
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -307,7 +307,7 @@ class EventStreamUnmarshallerGenerator(
                     };
                     """,
                     "parse_generic_error" to protocol.parseEventStreamGenericError(operationShape),
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             CodegenTarget.SERVER -> {}
@@ -346,7 +346,7 @@ class EventStreamUnmarshallerGenerator(
                                     ))
                                     """,
                                     "parser" to parser,
-                                    *codegenScope
+                                    *codegenScope,
                                 )
                             }
                         }
@@ -364,7 +364,7 @@ class EventStreamUnmarshallerGenerator(
                                         })?;
                                     """,
                                     "parser" to parser,
-                                    *codegenScope
+                                    *codegenScope,
                                 )
                             }
                             rustTemplate(
@@ -375,7 +375,7 @@ class EventStreamUnmarshallerGenerator(
                                     )
                                 ))
                                 """,
-                                *codegenScope
+                                *codegenScope,
                             )
                         }
                     }
@@ -398,7 +398,7 @@ class EventStreamUnmarshallerGenerator(
                     format!("unrecognized exception: {}", response_headers.smithy_type.as_str()),
                     ));
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }

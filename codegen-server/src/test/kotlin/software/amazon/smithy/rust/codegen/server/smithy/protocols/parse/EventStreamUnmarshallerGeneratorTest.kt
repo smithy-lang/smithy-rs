@@ -31,7 +31,7 @@ class EventStreamUnmarshallerGeneratorTest {
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
             testRustSettings(),
-            target = testCase.target
+            target = testCase.target,
         )
         val protocol = testCase.protocolBuilder(codegenContext)
         val generator = EventStreamUnmarshallerGenerator(
@@ -41,7 +41,7 @@ class EventStreamUnmarshallerGeneratorTest {
             test.symbolProvider,
             test.operationShape,
             test.streamShape,
-            target = testCase.target
+            target = testCase.target,
         )
 
         test.project.lib { writer ->
@@ -79,7 +79,7 @@ class EventStreamUnmarshallerGeneratorTest {
                         _ => panic!("expected error, got: {:?}", unmarshalled),
                     }
                 }
-                """
+                """,
             )
 
             writer.unitTest(

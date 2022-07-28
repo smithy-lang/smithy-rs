@@ -27,8 +27,8 @@ class AwsReadmeDecoratorTest {
                 <p>This is <i>another</i> paragraph
                 of information.</p>
                 <p>More information <a href="https://example.com">can be found here</a>.</p>
-                """.trimIndent()
-            )
+                """.trimIndent(),
+            ),
         )
     }
 
@@ -54,8 +54,8 @@ class AwsReadmeDecoratorTest {
                     <ol><li>nested item</li><li>another</li></ol>
                   </li>
                 </ul> More text.</p>
-                """.trimIndent()
-            )
+                """.trimIndent(),
+            ),
         )
     }
 
@@ -98,8 +98,8 @@ class AwsReadmeDecoratorTest {
                 </dl>
                 Some trailing text.
                 </p>
-                """.trimIndent()
-            )
+                """.trimIndent(),
+            ),
         )
     }
 }

@@ -82,7 +82,7 @@ class ResponseBindingGeneratorTest {
                 val runtimeType = ResponseBindingGenerator(
                     RestJson(testCoreCodegenContext),
                     testCoreCodegenContext,
-                    operationShape
+                    operationShape,
                 ).generateDeserializeHeaderFn(binding)
                 // little hack to force these functions to be generated
                 rust("// use #T;", runtimeType)
@@ -109,7 +109,7 @@ class ResponseBindingGeneratorTest {
                 assert_eq!(http_serde::deser_header_put_object_put_object_output_int_list(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
                 assert_eq!(http_serde::deser_header_put_object_put_object_output_media_type(resp.headers()).expect("valid").unwrap(), "smithy-rs");
                 assert_eq!(http_serde::deser_header_put_object_put_object_output_date_header_list(resp.headers()).unwrap().unwrap().len(), 3);
-                """
+                """,
             )
         }
         testProject.compileAndTest()

@@ -141,8 +141,7 @@ fun RustType.implInto(fullyQualified: Boolean = true): String {
 /** Format this Rust type so that it may be used as an argument type in a function definition */
 fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
     return when (this) {
-        is RustType.String,
-        is RustType.Box -> this.implInto(fullyQualified)
+        is RustType.String, is RustType.Box -> this.implInto(fullyQualified)
         else -> this.render(fullyQualified)
     }
 }
@@ -277,7 +276,7 @@ enum class Visibility {
 data class RustMetadata(
     val derives: Attribute.Derives = Attribute.Derives.Empty,
     val additionalAttributes: List<Attribute> = listOf(),
-    val visibility: Visibility = Visibility.PRIVATE
+    val visibility: Visibility = Visibility.PRIVATE,
 ) {
     fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
@@ -300,7 +299,7 @@ data class RustMetadata(
                 Visibility.PRIVATE -> ""
                 Visibility.PUBCRATE -> "pub(crate) "
                 Visibility.PUBLIC -> "pub "
-            }
+            },
         )
         return this
     }
@@ -366,7 +365,7 @@ sealed class Attribute {
     data class Custom(
         val annotation: String,
         val symbols: List<RuntimeType> = listOf(),
-        val container: Boolean = false
+        val container: Boolean = false,
     ) : Attribute() {
         override fun render(writer: RustWriter) {
             val bang = if (container) "!" else ""

@@ -24,7 +24,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 
 class HttpChecksumRequiredGenerator(
     private val coreCodegenContext: CoreCodegenContext,
-    private val operationShape: OperationShape
+    private val operationShape: OperationShape,
 ) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         if (!operationShape.hasTrait<HttpChecksumRequiredTrait>()) {
@@ -53,7 +53,7 @@ class HttpChecksumRequiredGenerator(
                     "md5" to CargoDependency.Md5.asType(),
                     "http" to CargoDependency.Http.asType(),
                     "base64_encode" to RuntimeType.Base64Encode(coreCodegenContext.runtimeConfig),
-                    "BuildError" to coreCodegenContext.runtimeConfig.operationBuildError()
+                    "BuildError" to coreCodegenContext.runtimeConfig.operationBuildError(),
                 )
             }
             else -> emptySection

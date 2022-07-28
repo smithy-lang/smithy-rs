@@ -109,7 +109,7 @@ class TimeoutConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + TimeoutConfigProviderConfig(codegenContext)
     }
@@ -126,7 +126,7 @@ class TimeoutConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : Conf
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
                 "pub(crate) timeout_config: Option<#{TimeoutConfig}>,",
-                *codegenScope
+                *codegenScope,
             )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
@@ -180,11 +180,11 @@ class TimeoutConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : Conf
                         self
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             ServiceConfig.BuilderBuild -> rustTemplate(
                 """timeout_config: self.timeout_config,""",
-                *codegenScope
+                *codegenScope,
             )
             else -> emptySection
         }

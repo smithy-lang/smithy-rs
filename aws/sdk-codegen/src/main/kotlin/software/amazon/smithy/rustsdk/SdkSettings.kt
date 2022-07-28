@@ -23,14 +23,14 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
     val defaultsConfigPath: Path get() =
         Paths.get(
             awsSdk?.getStringMember("defaultConfigPath")?.orNull()?.value
-                ?: throw IllegalStateException("missing defaultConfigPath property")
+                ?: throw IllegalStateException("missing defaultConfigPath property"),
         )
 
     /** Path to the `sdk-endpoints.json` configuration */
     val endpointsConfigPath: Path get() =
         Paths.get(
             awsSdk?.getStringMember("endpointsConfigPath")?.orNull()?.value
-                ?: throw IllegalStateException("missing endpointsConfigPath property")
+                ?: throw IllegalStateException("missing endpointsConfigPath property"),
         )
 
     /** Path to AWS SDK integration tests */
