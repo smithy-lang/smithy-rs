@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asArgumentType
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.docLink
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
@@ -469,6 +470,7 @@ class FluentClientGenerator(
                 )
 
                 documentShape(operation, model, autoSuppressMissingDocs = false)
+                deprecatedShape(operation)
                 baseDerives.copy(derives = derives).render(this)
                 rustTemplate(
                     """

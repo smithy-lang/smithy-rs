@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
@@ -124,6 +125,7 @@ class BuilderGenerator(
         val input = coreType.asArgument("input")
 
         writer.documentShape(member, model)
+        writer.deprecatedShape(member)
         writer.rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
             write("self.$memberName = Some(${input.value});")
             write("self")
@@ -146,6 +148,7 @@ class BuilderGenerator(
         val inputType = outerType.asOptional()
 
         writer.documentShape(member, model)
+        writer.deprecatedShape(member)
         writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
             rust("self.$memberName = input; self")
         }
@@ -195,6 +198,7 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
+        deprecatedShape(member)
         val input = coreType.member.asArgument("input")
 
         rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
@@ -215,6 +219,7 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
+        deprecatedShape(member)
         val k = coreType.key.asArgument("k")
         val v = coreType.member.asArgument("v")
 
