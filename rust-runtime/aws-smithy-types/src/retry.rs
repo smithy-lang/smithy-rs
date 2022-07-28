@@ -288,6 +288,11 @@ impl RetryConfig {
     pub fn initial_backoff(&self) -> Duration {
         self.initial_backoff
     }
+
+    /// Returns true if retry is enabled with this config
+    pub fn has_retry(&self) -> bool {
+        self.max_attempts > 1
+    }
 }
 
 /// Failure to parse retry config from profile file or environment variable.

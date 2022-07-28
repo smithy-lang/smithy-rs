@@ -35,6 +35,10 @@ pub struct SdkConfig {
 }
 
 /// Builder for AWS Shared Configuration
+///
+/// _Important:_ Using the `aws-config` crate to configure the SDK is preferred to invoking this
+/// builder directly. Using this builder directly won't pull in any AWS recommended default
+/// configuration values.
 #[derive(Debug, Default)]
 pub struct Builder {
     app_name: Option<AppName>,
@@ -127,6 +131,9 @@ impl Builder {
 
     /// Set the retry_config for the builder
     ///
+    /// _Note:_ Retries require a sleep implementation in order to work. When enabling retry, make
+    /// sure to set one with [Self::sleep_impl] or [Self::set_sleep_impl].
+    ///
     /// # Examples
     /// ```rust
     /// use aws_types::SdkConfig;
@@ -141,6 +148,9 @@ impl Builder {
     }
 
     /// Set the retry_config for the builder
+    ///
+    /// _Note:_ Retries require a sleep implementation in order to work. When enabling retry, make
+    /// sure to set one with [Self::sleep_impl] or [Self::set_sleep_impl].
     ///
     /// # Examples
     /// ```rust
@@ -163,6 +173,10 @@ impl Builder {
 
     /// Set the [`timeout::Config`](aws_smithy_types::timeout::Config) for the builder
     ///
+    /// _Note:_ Timeouts require a sleep implementation in order to work.
+    /// When enabling timeouts, be sure to set one with [Self::sleep_impl] or
+    /// [Self::set_sleep_impl].
+    ///
     /// # Examples
     ///
     /// ```rust
@@ -183,6 +197,10 @@ impl Builder {
     }
 
     /// Set the [`timeout::Config`](aws_smithy_types::timeout::Config) for the builder
+    ///
+    /// _Note:_ Timeouts require a sleep implementation in order to work.
+    /// When enabling timeouts, be sure to set one with [Self::sleep_impl] or
+    /// [Self::set_sleep_impl].
     ///
     /// # Examples
     /// ```rust
@@ -211,6 +229,9 @@ impl Builder {
     /// Set the sleep implementation for the builder. The sleep implementation is used to create
     /// timeout futures.
     ///
+    /// _Note:_ If you're using the Tokio runtime, a `TokioSleep` implementation is available in
+    /// the `aws-smithy-async` crate.
+    ///
     /// # Examples
     ///
     /// ```rust
@@ -237,6 +258,9 @@ impl Builder {
 
     /// Set the sleep implementation for the builder. The sleep implementation is used to create
     /// timeout futures.
+    ///
+    /// _Note:_ If you're using the Tokio runtime, a `TokioSleep` implementation is available in
+    /// the `aws-smithy-async` crate.
     ///
     /// # Examples
     /// ```rust
@@ -405,6 +429,10 @@ impl SdkConfig {
     }
 
     /// Config builder
+    ///
+    /// _Important:_ Using the `aws-config` crate to configure the SDK is preferred to invoking this
+    /// builder directly. Using this builder directly won't pull in any AWS recommended default
+    /// configuration values.
     pub fn builder() -> Builder {
         Builder::default()
     }
