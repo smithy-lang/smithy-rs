@@ -1,6 +1,6 @@
 # RFC: Logging in the Presence of Sensitive Data
 
-> Status: RFC
+> Status: Accepted
 
 Smithy provides a [sensitive trait](https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait) which exists as a `@sensitive` field annotation syntactically and has the following semantics:
 

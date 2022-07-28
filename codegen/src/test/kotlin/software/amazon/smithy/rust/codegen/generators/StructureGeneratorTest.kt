@@ -35,6 +35,8 @@ class StructureGeneratorTest {
                foo: String,
                @documentation("This *is* documentation about the member.")
                bar: PrimitiveInteger,
+               // Intentionally deprecated.
+               @deprecated
                baz: Integer,
                ts: Timestamp,
                inner: Inner,
@@ -99,6 +101,7 @@ class StructureGeneratorTest {
     fun `generate structures with public fields`() {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
+        writer.rust("##![allow(deprecated)]")
         writer.withModule("model") {
             val innerGenerator = StructureGenerator(model, provider, this, inner)
             innerGenerator.render()
@@ -207,6 +210,68 @@ class StructureGeneratorTest {
             };
             """,
         )
+    }
+
+    @Test
+    fun `deprecated trait with message and since`() {
+        val model = """
+            namespace test
+
+            @deprecated
+            structure Foo {}
+
+            @deprecated(message: "Fly, you fools!")
+            structure Bar {}
+
+            @deprecated(since: "1.2.3")
+            structure Baz {}
+
+            @deprecated(message: "Fly, you fools!", since: "1.2.3")
+            structure Qux {}
+        """.asSmithyModel()
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.root()
+        writer.rust("##![allow(deprecated)]")
+        writer.withModule("model") {
+            StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Baz")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Qux")).render()
+        }
+
+        // turn on clippy to check the semver-compliant version of `since`.
+        writer.compileAndTest(clippy = true)
+    }
+
+    @Test
+    fun `nested deprecated trait`() {
+        val model = """
+            namespace test
+
+            structure Nested {
+                foo: Foo,
+                @deprecated
+                foo2: Foo,
+            }
+
+            @deprecated
+            structure Foo {
+                bar: Bar,
+            }
+
+            @deprecated
+            structure Bar {}
+        """.asSmithyModel()
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.root()
+        writer.rust("##![allow(deprecated)]")
+        writer.withModule("model") {
+            StructureGenerator(model, provider, this, model.lookup("test#Nested")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
+        }
+
+        writer.compileAndTest()
     }
 
     @Test
