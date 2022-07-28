@@ -88,10 +88,10 @@ class StructureGeneratorTest {
                 """
                 let s: Option<MyStruct> = None;
                 s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
-                """
+                """,
             )
             writer.toString().shouldContainInOrder(
-                "this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct"
+                "this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct",
             )
         }
         project.compileAndTest()
@@ -119,7 +119,7 @@ class StructureGeneratorTest {
                     """
                     let s: Option<crate::structs::MyStruct> = None;
                     s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
-                    """
+                    """,
                 )
             }
         }
@@ -136,7 +136,7 @@ class StructureGeneratorTest {
             """
             let err = MyError { message: None };
             assert_eq!(err.retryable_error_kind(), aws_smithy_types::retry::ErrorKind::ServerError);
-            """
+            """,
         )
     }
 
@@ -155,7 +155,7 @@ class StructureGeneratorTest {
                 secret_key: Some("don't leak me".to_owned())
             };
             assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
-            """
+            """,
         )
         writer.compileAndTest()
     }
@@ -186,8 +186,8 @@ class StructureGeneratorTest {
                 RustMetadata(
                     // By attaching this lint, any missing documentation becomes a compiler error.
                     additionalAttributes = listOf(Attribute.Custom("deny(missing_docs)")),
-                    visibility = Visibility.PUBLIC
-                )
+                    visibility = Visibility.PUBLIC,
+                ),
             ) {
                 StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()
                 StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct")).render()
@@ -208,7 +208,7 @@ class StructureGeneratorTest {
                 // This will only compile if the document is optional
                 doc: None
             };
-            """
+            """,
         )
     }
 
@@ -242,6 +242,7 @@ class StructureGeneratorTest {
         // turn on clippy to check the semver-compliant version of `since`.
         writer.compileAndTest(clippy = true)
     }
+
     @Test
     fun `nested deprecated trait`() {
         val model = """
@@ -308,7 +309,7 @@ class StructureGeneratorTest {
                 structure Two {
                     one: One,
                 }
-                """.asSmithyModel()
+                """.asSmithyModel(),
             )
         val provider = testSymbolProvider(testModel)
         val project = TestWorkspace.testProject(provider)
@@ -344,14 +345,14 @@ class StructureGeneratorTest {
                     let _: Option<i32> = one.build_value();
                     let _: Option<i32> = one.builder_value();
                     let _: Option<i32> = one.default_value();
-                    """
+                    """,
                 )
             }
             writer.rustBlock("fn compile_test_two(two: &crate::model::Two)") {
                 rust(
                     """
                     let _: Option<&crate::model::One> = two.one();
-                    """
+                    """,
                 )
             }
         }

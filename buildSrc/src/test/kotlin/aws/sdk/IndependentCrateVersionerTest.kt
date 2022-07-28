@@ -16,7 +16,7 @@ private fun service(name: String): AwsService = AwsService(
     File("testmodel"),
     null,
     emptyList(),
-    name
+    name,
 )
 
 class IndependentCrateVersionerTest {
@@ -46,14 +46,14 @@ class IndependentCrateVersionerTest {
                         category = "AwsSdk",
                         version = "0.12.0",
                         modelHash = "s3-hash",
-                    )
-                )
+                    ),
+                ),
             ),
             ModelMetadata(
                 crates = mapOf(
                     "aws-sdk-dynamodb" to ChangeType.FEATURE,
-                    "aws-sdk-ec2" to ChangeType.DOCUMENTATION
-                )
+                    "aws-sdk-ec2" to ChangeType.DOCUMENTATION,
+                ),
             ),
             devPreview = true,
             smithyRsVersion = "smithy-rs-2",
@@ -64,7 +64,7 @@ class IndependentCrateVersionerTest {
                     s3 -> "s3-hash"
                     else -> throw IllegalStateException("unreachable")
                 }
-            }
+            },
         )
 
         // The code generator changed, so all minor versions should bump
@@ -106,15 +106,15 @@ class IndependentCrateVersionerTest {
                         category = "AwsSdk",
                         version = "0.12.0",
                         modelHash = "s3-hash",
-                    )
-                )
+                    ),
+                ),
             ),
             ModelMetadata(
                 crates = mapOf(
                     "aws-sdk-dynamodb" to ChangeType.FEATURE,
-                    "aws-sdk-ec2" to ChangeType.DOCUMENTATION
+                    "aws-sdk-ec2" to ChangeType.DOCUMENTATION,
                     // polly has a model change, but is absent from the model metadata file
-                )
+                ),
             ),
             devPreview = true,
             smithyRsVersion = "smithy-rs-1",
@@ -126,7 +126,7 @@ class IndependentCrateVersionerTest {
                     s3 -> "s3-hash"
                     else -> throw IllegalStateException("unreachable")
                 }
-            }
+            },
         )
 
         assertEquals("0.11.4", versioner.decideCrateVersion("aws-sdk-dynamodb", dynamoDb))
@@ -150,26 +150,26 @@ class IndependentCrateVersionerTest {
                 crates = mapOf(
                     "aws-sdk-dynamodb" to CrateVersion(
                         category = "AwsSdk",
-                        version = "1.11.3"
+                        version = "1.11.3",
                     ),
                     "aws-sdk-ec2" to CrateVersion(
                         category = "AwsSdk",
-                        version = "1.10.1"
+                        version = "1.10.1",
                     ),
                     "aws-sdk-s3" to CrateVersion(
                         category = "AwsSdk",
-                        version = "1.12.0"
-                    )
-                )
+                        version = "1.12.0",
+                    ),
+                ),
             ),
             ModelMetadata(
                 crates = mapOf(
                     "aws-sdk-dynamodb" to ChangeType.FEATURE,
-                    "aws-sdk-ec2" to ChangeType.DOCUMENTATION
-                )
+                    "aws-sdk-ec2" to ChangeType.DOCUMENTATION,
+                ),
             ),
             devPreview = false,
-            smithyRsVersion = "smithy-rs-2"
+            smithyRsVersion = "smithy-rs-2",
         )
 
         // The code generator changed, so all minor versions should bump
@@ -211,15 +211,15 @@ class IndependentCrateVersionerTest {
                         category = "AwsSdk",
                         version = "1.12.0",
                         modelHash = "s3-hash",
-                    )
-                )
+                    ),
+                ),
             ),
             ModelMetadata(
                 crates = mapOf(
                     "aws-sdk-dynamodb" to ChangeType.FEATURE,
                     "aws-sdk-ec2" to ChangeType.DOCUMENTATION,
                     // polly has a model change, but is absent from the model metadata file
-                )
+                ),
             ),
             devPreview = false,
             smithyRsVersion = "smithy-rs-1",
@@ -231,7 +231,7 @@ class IndependentCrateVersionerTest {
                     s3 -> "s3-hash"
                     else -> throw IllegalStateException("unreachable")
                 }
-            }
+            },
         )
 
         assertEquals("1.12.0", versioner.decideCrateVersion("aws-sdk-dynamodb", dynamoDb))

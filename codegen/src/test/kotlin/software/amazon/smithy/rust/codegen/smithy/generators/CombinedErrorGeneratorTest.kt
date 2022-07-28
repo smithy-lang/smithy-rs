@@ -88,7 +88,7 @@ class CombinedErrorGeneratorTest {
 
                     let error = Deprecated::builder().build();
                     assert_eq!(error.to_string(), "Deprecated");
-                """
+                """,
             )
 
             println("file:///${project.baseDir}/src/lib.rs")

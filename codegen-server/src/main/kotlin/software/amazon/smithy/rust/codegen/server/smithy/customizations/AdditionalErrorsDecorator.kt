@@ -85,5 +85,5 @@ private fun internalServerError(namespace: String): StructureShape =
                 .id("$namespace#InternalServerError\$message")
                 .target("smithy.api#String")
                 .addTrait(RequiredTrait())
-                .build()
+                .build(),
         ).build()

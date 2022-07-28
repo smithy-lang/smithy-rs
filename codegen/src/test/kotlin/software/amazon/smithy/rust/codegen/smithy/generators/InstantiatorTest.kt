@@ -85,7 +85,7 @@ class InstantiatorTest {
         val data = Node.parse(
             """{
             "stringVariant": "ok!"
-        }"""
+        }""",
         )
         val writer = RustWriter.forModule("model")
         UnionGenerator(model, symbolProvider, writer, union).render()
@@ -124,7 +124,7 @@ class InstantiatorTest {
                 "member": { }
             }, "value": 10
             }
-            """.trimIndent()
+            """.trimIndent(),
         )
         val writer = RustWriter.forModule("model")
         structure.renderWithModelBuilder(model, symbolProvider, writer)
@@ -141,7 +141,7 @@ class InstantiatorTest {
                         member: Some(Box::new(WithBox { value: None, member: None })),
                     }))
                 });
-                """
+                """,
             )
         }
         writer.compileAndTest()
@@ -154,7 +154,7 @@ class InstantiatorTest {
             "bar",
             "foo"
             ]
-            """
+            """,
         )
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
@@ -175,7 +175,7 @@ class InstantiatorTest {
             "foo",
             null
             ]
-            """
+            """,
         )
         val writer = RustWriter.forModule("lib")
         val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
@@ -196,7 +196,7 @@ class InstantiatorTest {
             "k2": { "map": { "k3": {} } },
             "k3": { }
             }
-            """
+            """,
         )
         val writer = RustWriter.forModule("model")
         val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
@@ -212,7 +212,7 @@ class InstantiatorTest {
                 assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
                 assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
                 assert_eq!(result.get("k3").unwrap().map, None);
-                """
+                """,
             )
         }
         writer.compileAndTest(clippy = true)
@@ -229,7 +229,7 @@ class InstantiatorTest {
                 sut.render(
                     this,
                     BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(),
-                    StringNode.parse("foo".dq())
+                    StringNode.parse("foo".dq()),
                 )
             }
             write("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")

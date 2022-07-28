@@ -28,7 +28,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 class PythonServerCombinedErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val operation: OperationShape
+    private val operation: OperationShape,
 ) : ServerCombinedErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(operation), listOf()) {
 
     private val operationIndex = OperationIndex.of(model)
@@ -56,7 +56,7 @@ class PythonServerCombinedErrorGenerator(
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
             "Error" to operation.errorSymbol(model, symbolProvider, CodegenTarget.SERVER),
             "From" to RuntimeType.From,
-            "CastPyErrToRustError" to castPyErrToRustError()
+            "CastPyErrToRustError" to castPyErrToRustError(),
         )
     }
 
@@ -70,7 +70,7 @@ class PythonServerCombinedErrorGenerator(
                         if let Ok(error) = error.extract::<$errorSymbol>() {
                             return error.into()
                         }
-                        """
+                        """,
                     )
                 }
             }

@@ -61,8 +61,8 @@ open class ServerServiceGenerator(
                 """
                 Contains the [`operation_registry::OperationRegistry`], a place where
                 you can register your service's operation implementations.
-                """
-            )
+                """,
+            ),
         ) { writer ->
             renderOperationRegistry(writer, operations)
         }

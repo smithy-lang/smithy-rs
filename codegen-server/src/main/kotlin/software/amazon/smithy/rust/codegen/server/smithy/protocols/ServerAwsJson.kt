@@ -48,7 +48,7 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) :
             requestDeserialization = true,
             requestBodyDeserialization = true,
             responseSerialization = true,
-            errorSerialization = true
+            errorSerialization = true,
         )
     }
 }
@@ -90,13 +90,13 @@ class ServerAwsJsonSerializerGenerator(
             coreCodegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            customizations = listOf(ServerAwsJsonError(awsJsonVersion))
-        )
+            customizations = listOf(ServerAwsJsonError(awsJsonVersion)),
+        ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator
 
 class ServerAwsJson(
     private val coreCodegenContext: CoreCodegenContext,
-    private val awsJsonVersion: AwsJsonVersion
+    private val awsJsonVersion: AwsJsonVersion,
 ) : AwsJson(coreCodegenContext, awsJsonVersion) {
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         ServerAwsJsonSerializerGenerator(coreCodegenContext, httpBindingResolver, awsJsonVersion)

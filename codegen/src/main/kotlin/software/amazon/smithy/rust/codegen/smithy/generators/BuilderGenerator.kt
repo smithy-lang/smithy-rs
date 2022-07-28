@@ -62,7 +62,7 @@ fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
 class BuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val shape: StructureShape
+    private val shape: StructureShape,
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
@@ -97,7 +97,7 @@ class BuilderGenerator(
         val detailedMessage = "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
         rust(
             """#T::MissingField { field: "$field", details: "$detailedMessage" } """,
-            runtimeConfig.operationBuildError()
+            runtimeConfig.operationBuildError(),
         )
     }
 
@@ -120,7 +120,7 @@ class BuilderGenerator(
         writer: RustWriter,
         coreType: RustType,
         member: MemberShape,
-        memberName: String
+        memberName: String,
     ) {
         val input = coreType.asArgument("input")
 
@@ -140,7 +140,7 @@ class BuilderGenerator(
         writer: RustWriter,
         outerType: RustType,
         member: MemberShape,
-        memberName: String
+        memberName: String,
     ) {
         // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
         //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
@@ -208,7 +208,7 @@ class BuilderGenerator(
                 v.push(${input.value});
                 self.$memberName = Some(v);
                 self
-                """
+                """,
             )
         }
     }
@@ -224,7 +224,7 @@ class BuilderGenerator(
         val v = coreType.member.asArgument("v")
 
         rustBlock(
-            "pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self"
+            "pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self",
         ) {
             rust(
                 """
@@ -232,7 +232,7 @@ class BuilderGenerator(
                 hash_map.insert(${k.value}, ${v.value});
                 self.$memberName = Some(hash_map);
                 self
-                """
+                """,
             )
         }
     }
@@ -260,7 +260,7 @@ class BuilderGenerator(
                         !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
                         !memberSymbol.isOptional() -> withBlock(
                             ".ok_or(",
-                            ")?"
+                            ")?",
                         ) { missingRequiredField(memberName) }
                     }
                 }

@@ -77,7 +77,7 @@ class RustWriterTest {
             let test = Test { member: ${RustType.HashSet.Namespace}::${RustType.HashSet.Type}::default(), otherMember: "hello".to_string() };
             assert_eq!(test.otherMember, "hello");
             assert_eq!(test.member.is_empty(), true);
-            """
+            """,
         )
     }
 
@@ -90,7 +90,7 @@ class RustWriterTest {
             |/* handle weird characters */
             |`a backtick`
             |[a link](asdf)
-            """.trimMargin()
+            """.trimMargin(),
         )
         sut.rustBlock("pub fn foo()") { }
         sut.compileAndTest()
@@ -167,7 +167,7 @@ class RustWriterTest {
         sut.rustTemplate(
             "inner: #{Inner:W}, regular: #{http}",
             "Inner" to inner,
-            "http" to CargoDependency.Http.asType().member("foo")
+            "http" to CargoDependency.Http.asType().member("foo"),
         )
         sut.toString().shouldContain("inner: hello, regular: http::foo")
     }

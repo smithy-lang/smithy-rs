@@ -29,7 +29,7 @@ open class ServerCombinedErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val operationSymbol: Symbol,
-    private val errors: List<StructureShape>
+    private val errors: List<StructureShape>,
 ) {
     open fun render(writer: RustWriter) {
         val symbol = RuntimeType("${operationSymbol.name}Error", null, "crate::error")
@@ -41,11 +41,11 @@ open class ServerCombinedErrorGenerator(
     fun renderErrors(
         writer: RustWriter,
         errorSymbol: RuntimeType,
-        operationSymbol: Symbol
+        operationSymbol: Symbol,
     ) {
         val meta = RustMetadata(
             derives = Attribute.Derives(setOf(RuntimeType.Debug)),
-            visibility = Visibility.PUBLIC
+            visibility = Visibility.PUBLIC,
         )
 
         writer.rust("/// Error type for the `${operationSymbol.name}` operation.")

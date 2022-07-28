@@ -24,7 +24,7 @@ class EventStreamNormalizerTest {
                 Foo: String,
                 Bar: Long,
             }
-            """.asSmithyModel()
+            """.asSmithyModel(),
         )
 
         val shape = transformed.expectShape(ShapeId.from("test#SomeNormalUnion"), UnionShape::class.java)
@@ -50,7 +50,7 @@ class EventStreamNormalizerTest {
                 SomeMember: SomeMember,
                 SomeError: SomeError,
             }
-            """.asSmithyModel()
+            """.asSmithyModel(),
         )
 
         val shape = transformed.expectShape(ShapeId.from("test#SomeEventStream"), UnionShape::class.java)

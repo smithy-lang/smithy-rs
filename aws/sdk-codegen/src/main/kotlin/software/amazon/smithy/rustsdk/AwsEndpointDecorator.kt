@@ -54,7 +54,7 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + EndpointConfigCustomization(codegenContext, endpoints(SdkSettings.from(codegenContext.settings)))
     }
@@ -62,14 +62,14 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + EndpointResolverFeature(codegenContext.runtimeConfig, operation)
     }
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseEndpoint(codegenContext.runtimeConfig)
     }
@@ -84,7 +84,7 @@ class EndpointConfigCustomization(private val coreCodegenContext: CoreCodegenCon
         when (section) {
             is ServiceConfig.ConfigStruct -> rust(
                 "pub (crate) endpoint_resolver: ::std::sync::Arc<dyn #T>,",
-                resolveAwsEndpoint
+                resolveAwsEndpoint,
             )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
@@ -120,7 +120,7 @@ class EndpointConfigCustomization(private val coreCodegenContext: CoreCodegenCon
                     }
                     """,
                     "ResolveAwsEndpoint" to resolveAwsEndpoint,
-                    "aws_types" to awsTypes(runtimeConfig).asType()
+                    "aws_types" to awsTypes(runtimeConfig).asType(),
                 )
             ServiceConfig.BuilderBuild -> {
                 val resolverGenerator = EndpointResolverGenerator(coreCodegenContext, endpointData)
@@ -148,7 +148,7 @@ class EndpointResolverFeature(private val runtimeConfig: RuntimeConfig, private 
                     """
                     #T::set_endpoint_resolver(&mut ${section.request}.properties_mut(), ${section.config}.endpoint_resolver.clone());
                     """,
-                    runtimeConfig.awsEndpoint().asType()
+                    runtimeConfig.awsEndpoint().asType(),
                 )
             }
             else -> emptySection
@@ -162,7 +162,7 @@ class PubUseEndpoint(private val runtimeConfig: RuntimeConfig) : LibRsCustomizat
             is LibRsSection.Body -> writable {
                 rust(
                     "pub use #T::endpoint::Endpoint;",
-                    CargoDependency.SmithyHttp(runtimeConfig).asType()
+                    CargoDependency.SmithyHttp(runtimeConfig).asType(),
                 )
             }
             else -> emptySection
@@ -186,7 +186,7 @@ class EndpointResolverGenerator(coreCodegenContext: CoreCodegenContext, private 
             "PartitionResolver" to awsEndpoint.member("PartitionResolver"),
             "ResolveAwsEndpoint" to awsEndpoint.member("ResolveAwsEndpoint"),
             "SigningService" to awsTypes.member("SigningService"),
-            "SigningRegion" to awsTypes.member("region::SigningRegion")
+            "SigningRegion" to awsTypes.member("region::SigningRegion"),
         )
 
     fun resolver(): RuntimeType {
@@ -243,7 +243,7 @@ class EndpointResolverGenerator(coreCodegenContext: CoreCodegenContext, private 
             #{Partition}::builder()
                 .id(${partition.id.dq()})
                 .region_regex(r##"${partition.regionRegex}"##)""",
-            *codegenScope
+            *codegenScope,
         )
         withBlock(".default_endpoint(", ")") {
             with(partition.defaults) {
@@ -367,7 +367,7 @@ class EndpointResolverGenerator(coreCodegenContext: CoreCodegenContext, private 
                 """
                 #{CredentialScope}::builder()
                 """,
-                *codegenScope
+                *codegenScope,
             )
             objectNode.getStringMember("service").map {
                 rustTemplate(

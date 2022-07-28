@@ -84,7 +84,7 @@ class ServerCombinedErrorGeneratorTest {
 
                     let error = Deprecated::builder().build();
                     assert_eq!(error.to_string(), "Deprecated");
-                """
+                """,
             )
 
             writer.unitTest(
@@ -92,7 +92,7 @@ class ServerCombinedErrorGeneratorTest {
                 test = """
                     let variant = InvalidGreeting { message: String::from("an error") };
                     let error: GreetingError = variant.into();
-                """
+                """,
             )
 
             project.compileAndTest()
