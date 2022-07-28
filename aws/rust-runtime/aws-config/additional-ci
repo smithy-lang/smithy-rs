@@ -14,9 +14,6 @@ cargo "+${RUST_NIGHTLY_VERSION:-nightly}" api-linter --all-features --config api
 echo "### Checking for duplicate dependency versions in the normal dependency graph with all features enabled"
 cargo tree -d --edges normal --all-features
 
-echo "### Testing with all features enabled"
-cargo test --all-features
-
 echo "### Testing each feature in isolation"
 cargo hack test --feature-powerset --exclude-all-features
 
