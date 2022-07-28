@@ -8,7 +8,6 @@ use aws_sdk_s3::model::{
     OutputSerialization,
 };
 use aws_sdk_s3::{Client, Config, Credentials, Region};
-use aws_smithy_async::assert_elapsed;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_client::never::NeverConnector;
 use aws_smithy_http::result::SdkError;
@@ -117,7 +116,17 @@ async fn timeout_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std
         .unwrap_err();
 
     assert_eq!(format!("{:?}", err), "TimeoutError(RequestTimeoutError { kind: \"API call (all attempts including retries)\", duration: 500ms })");
-    assert_elapsed!(now, std::time::Duration::from_secs_f32(0.5));
+
+    let actual = now.elapsed();
+    let expected = std::time::Duration::from_millis(500);
+    let margin_of_error = std::time::Duration::from_millis(10);
+    // Check time elapsed is 500ms with a 10ms margin of error
+    assert!(
+            actual >= expected && actual <= expected + margin_of_error,
+            "actual = {:?}, expected = {:?}",
+            actual,
+            expected
+        );
 
     Ok(())
 }
