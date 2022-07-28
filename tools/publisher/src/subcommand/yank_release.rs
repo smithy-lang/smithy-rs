@@ -78,7 +78,7 @@ pub async fn subcommand_yank_release(
 }
 
 async fn acquire_release_from_tag(tag: &str) -> Result<Release> {
-    let tag = ReleaseTag::from_str(tag).map_err(|err| anyhow!("invalid release tag: {}", err))?;
+    let tag = ReleaseTag::from_str(tag).context("invalid release tag")?;
     let manifest = VersionsManifest::from_github_tag(&tag)
         .await
         .context("failed to get versions.toml from GitHub")?;
