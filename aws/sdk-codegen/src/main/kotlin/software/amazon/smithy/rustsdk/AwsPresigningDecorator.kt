@@ -117,6 +117,9 @@ class AwsPresigningDecorator internal constructor(
         return presignableTransforms.fold(intermediate) { m, t -> t.transform(m) }
     }
 
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
+
     private fun addSyntheticOperations(model: Model): Model {
         val presignableOps = model.shapes()
             .filter { shape -> shape is OperationShape && presignableOperations.containsKey(shape.id) }

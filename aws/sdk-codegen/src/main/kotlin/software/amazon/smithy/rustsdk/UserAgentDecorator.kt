@@ -55,6 +55,9 @@ class UserAgentDecorator : RustCodegenDecorator<ClientCodegenContext> {
     ): List<OperationCustomization> {
         return baseCustomizations + UserAgentFeature(codegenContext.runtimeConfig)
     }
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 /**

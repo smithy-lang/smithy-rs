@@ -51,6 +51,9 @@ class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientCodegenContext> 
     ): List<OperationCustomization> {
         return baseCustomizations + HttpRequestChecksumCustomization(codegenContext, operation)
     }
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 private fun HttpChecksumTrait.requestAlgorithmMember(

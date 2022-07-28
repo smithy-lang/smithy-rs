@@ -59,6 +59,9 @@ class Route53Decorator : RustCodegenDecorator<ClientCodegenContext> {
         } else baseCustomizations
     }
 
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
+
     private fun isResourceId(shape: Shape): Boolean {
         return (shape is MemberShape && resourceShapes.contains(shape.target)) && shape.hasTrait<HttpLabelTrait>()
     }

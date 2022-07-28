@@ -110,6 +110,9 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
         }
     }
 
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
+
     /**
      * Strips HTML from the description and makes it human-readable Markdown.
      */

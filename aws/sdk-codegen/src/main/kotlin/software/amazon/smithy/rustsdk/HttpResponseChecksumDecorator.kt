@@ -38,6 +38,9 @@ class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientCodegenContext>
     ): List<OperationCustomization> {
         return baseCustomizations + HttpResponseChecksumCustomization(codegenContext, operation)
     }
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 // This generator was implemented based on this spec:

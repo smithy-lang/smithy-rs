@@ -21,6 +21,9 @@ class ServiceConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> = baseCustomizations + SharedConfigDocsCustomization()
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class SharedConfigDocsCustomization : ConfigCustomization() {

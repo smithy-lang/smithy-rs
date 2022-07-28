@@ -46,4 +46,7 @@ class DisabledAuthDecorator : RustCodegenDecorator<ClientCodegenContext> {
             }
         }
     }
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
