@@ -699,7 +699,6 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case5", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case7", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case9", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case13", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonMalformedSetDuplicateBlobs", TestType.MalformedRequest),
 
