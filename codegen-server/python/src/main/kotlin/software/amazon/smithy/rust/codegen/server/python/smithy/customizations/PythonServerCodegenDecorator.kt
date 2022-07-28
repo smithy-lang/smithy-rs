@@ -44,6 +44,9 @@ class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
                 "crate-type" to listOf("cdylib"),
             ),
         )
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
@@ -76,6 +79,9 @@ class PythonExportModuleDecorator : RustCodegenDecorator<ServerCodegenContext> {
         val serviceShapes = Walker(codegenContext.model).walkShapes(service)
         PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
     }
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
@@ -91,6 +97,9 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerCodegenContext> {
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUsePythonTypes(codegenContext)
     }
+
+    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 val DECORATORS = listOf(

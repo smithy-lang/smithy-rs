@@ -147,6 +147,9 @@ internal class EndpointConfigCustomizationTest {
                     test(rustCrate)
                 }
             }
+
+            override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val customization = CombinedCodegenDecorator(listOf(RequiredCustomizations(), codegenDecorator))
         CodegenVisitor(context, customization).execute()
