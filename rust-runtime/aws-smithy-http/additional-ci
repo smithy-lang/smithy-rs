@@ -9,4 +9,4 @@
 set -e
 
 echo "### Testing feature powerset"
-cargo hack test --feature-powerset
+cargo hack test --feature-powerset --exclude-all-features
