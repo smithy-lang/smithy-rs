@@ -340,10 +340,7 @@ ${operationImplementationStubs(operations)}
                                 sensitivityGen.renderResponseFmt(writer)
                             }
                             rustTemplate("let svc = #{SmithyHttpServer}::logging::InstrumentOperation::new(svc, \"$operationName\").request_fmt(request_fmt).response_fmt(response_fmt);", *codegenScope)
-                            rustTemplate(
-                                "(#{Tower}::util::BoxCloneService::new(svc), $requestSpecVarName)",
-                                *codegenScope,
-                            )
+                            rustTemplate("(#{Tower}::util::BoxCloneService::new(svc), $requestSpecVarName)", *codegenScope)
                         }
                         rust(",")
                     }
