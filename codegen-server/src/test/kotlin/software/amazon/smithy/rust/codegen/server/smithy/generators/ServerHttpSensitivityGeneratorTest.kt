@@ -181,7 +181,7 @@ class ServerHttpSensitivityGeneratorTest {
                     assert_eq!(closure("query_b"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: true });
                     assert_eq!(closure("query_c"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: true });
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -228,7 +228,7 @@ class ServerHttpSensitivityGeneratorTest {
                     """
                     assert_eq!(closure("wildcard"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: true, value: true });
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -275,7 +275,7 @@ class ServerHttpSensitivityGeneratorTest {
                     """
                     assert_eq!(closure("wildcard"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: true, value: false });
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -322,7 +322,7 @@ class ServerHttpSensitivityGeneratorTest {
                     """
                     assert_eq!(closure("wildcard"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: true });
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -385,7 +385,7 @@ class ServerHttpSensitivityGeneratorTest {
                     let name = #{Http}::header::HeaderName::from_static("header-c");
                     assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: true, key_suffix: None });
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -436,7 +436,7 @@ class ServerHttpSensitivityGeneratorTest {
                     let name = #{Http}::header::HeaderName::from_static("other");
                     assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -489,7 +489,7 @@ class ServerHttpSensitivityGeneratorTest {
                     let name = #{Http}::header::HeaderName::from_static("other");
                     assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -543,7 +543,7 @@ class ServerHttpSensitivityGeneratorTest {
                     let name = #{Http}::header::HeaderName::from_static("other");
                     assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -591,7 +591,7 @@ class ServerHttpSensitivityGeneratorTest {
                     assert_eq!(closure(1), true);
                     assert_eq!(closure(2), true);
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
