@@ -58,7 +58,7 @@ internal fun findUriGreedyLabelPosition(uriPattern: UriPattern): Int? {
 class ServerHttpSensitivityGenerator(
     private val model: Model,
     private val operation: OperationShape,
-    runtimeConfig: RuntimeConfig
+    runtimeConfig: RuntimeConfig,
 ) {
     private val codegenScope = arrayOf(
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType(),
@@ -74,7 +74,7 @@ class ServerHttpSensitivityGenerator(
         class NotSensitiveMapValue(
             headerKeys: List<String>,
             // The value of map[trait|httpPrefixHeaders] > [id|member = key], null if it's not sensitive
-            val prefixHeader: String?
+            val prefixHeader: String?,
         ) : HeaderSensitivity(headerKeys)
 
         // The case where map[trait|httpPrefixHeaders] > [id|member = value] is sensitive
@@ -83,14 +83,14 @@ class ServerHttpSensitivityGenerator(
             // Is map[trait|httpQueryParams] > [id|member = key] sensitive?
             val keySensitive: Boolean,
             // What is the value of map[trait|httpQueryParams]?
-            val prefixHeader: String
+            val prefixHeader: String,
         ) : HeaderSensitivity(headerKeys)
 
         // Is there anything to redact?
         fun hasRedactions(): Boolean {
             return when (this) {
                 is NotSensitiveMapValue -> {
-                    prefixHeader != null || !headerKeys.isNotEmpty()
+                    prefixHeader != null || headerKeys.isNotEmpty()
                 }
                 is SensitiveMapValue -> {
                     true
@@ -146,7 +146,7 @@ class ServerHttpSensitivityGenerator(
         val (keySensitive, valuesSensitive) = mapMembers.fold(Pair(false, false)) { (key, value), it ->
             Pair(
                 key || it.memberName == "key",
-                value || it.memberName == "value"
+                value || it.memberName == "value",
             )
         }
 
@@ -199,13 +199,13 @@ class ServerHttpSensitivityGenerator(
     // Models the ways query strings can be bound and sensitive
     sealed class QuerySensitivity(
         // Are all keys sensitive?
-        val allKeysSensitive: Boolean
+        val allKeysSensitive: Boolean,
     ) {
         // The case where map[trait|httpQueryParams] > [id|member = value] is not sensitive
         class NotSensitiveMapValue(
             // The values of [trait|sensitive] ~> [trait|httpQuery]
             val queryKeys: List<String>,
-            allKeysSensitive: Boolean
+            allKeysSensitive: Boolean,
         ) : QuerySensitivity(allKeysSensitive)
 
         // The case where map[trait|httpQueryParams] > [id|member = value] is sensitive
@@ -241,7 +241,7 @@ class ServerHttpSensitivityGenerator(
         val (keysSensitive, valuesSensitive) = mapMembers.fold(Pair(false, false)) { (key, value), it ->
             Pair(
                 key || it.memberName == "key",
-                value || it.memberName == "value"
+                value || it.memberName == "value",
             )
         }
 
