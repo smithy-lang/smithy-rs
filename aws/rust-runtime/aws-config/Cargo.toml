@@ -26,7 +26,7 @@ aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1", features = ["sync"] }
 tracing = { version = "0.1" }
-hyper = { version = "0.14", default-features = false }
+hyper = { version = "0.14.12", default-features = false }
 
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
