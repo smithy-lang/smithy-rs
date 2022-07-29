@@ -8,7 +8,7 @@
 # [[smithy-rs]]
 # message = "Fix typos in module documentation for generated crates"
 # references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "client | server | all"}
+# meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
 [[smithy-rs]]
@@ -225,3 +225,45 @@ message = "Support @deprecated trait for aggregate shapes"
 references = ["smithy-rs#1570"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "weihanglo"
+
+[[aws-sdk-rust]]
+message = "`aws_config::RetryConfig` no longer implements `Default`, and its `new` function has been replaced with `standard`."
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`aws_smithy_types::RetryConfig` no longer implements `Default`, and its `new` function has been replaced with `standard`."
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+Direct configuration of `aws_config::SdkConfig` now defaults to retries being disabled.
+If you're using `aws_config::load_from_env()` or `aws_config::from_env()` to configure
+the SDK, then you are NOT affected by this change. If you use `SdkConfig::builder()` to
+configure the SDK, then you ARE affected by this change and should set the retry config
+on that builder.
+"""
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Clients now default to retry being disabled if no `RetryConfig` is given to the `Config`"
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Client creation now panics if retries or timeouts are enabled without an async sleep implementation set on the SDK config"
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Client creation now panics if retries or timeouts are enabled without an async sleep implementation set on the service config"
+references = ["smithy-rs#1603", "aws-sdk-rust#586"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
