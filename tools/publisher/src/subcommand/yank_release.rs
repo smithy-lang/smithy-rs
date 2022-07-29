@@ -7,7 +7,7 @@ use crate::cargo;
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use dialoguer::Confirm;
-use regex::Regex;
+use smithy_rs_tool_common::release_tag::ReleaseTag;
 use smithy_rs_tool_common::shell::ShellOperation;
 use smithy_rs_tool_common::versions_manifest::{Release, VersionsManifest};
 use std::path::{Path, PathBuf};
@@ -77,33 +77,12 @@ pub async fn subcommand_yank_release(
     Ok(())
 }
 
-fn validate_tag(tag: &str) -> Result<()> {
-    if !Regex::new(r#"(v\d+.\d+.\d+)|(\d{4}-\d{2}-\d{2})"#)
-        .unwrap()
-        .is_match(tag)
-    {
-        bail!("invalid release tag");
-    }
-    Ok(())
-}
-
 async fn acquire_release_from_tag(tag: &str) -> Result<Release> {
-    validate_tag(tag)?;
-
-    let manifest_url = format!(
-        "https://raw.githubusercontent.com/awslabs/aws-sdk-rust/{}/versions.toml",
-        tag
-    );
-    info!("Downloading versions.toml from {}", manifest_url);
-    let manifest_contents = reqwest::get(manifest_url)
+    let tag = ReleaseTag::from_str(tag).context("invalid release tag")?;
+    let manifest = VersionsManifest::from_github_tag(&tag)
         .await
-        .context("failed to retrieve release manifest")?
-        .text()
-        .await
-        .context("failed to retrieve release manifest content")?;
-    let parsed = VersionsManifest::from_str(&manifest_contents)
-        .context("failed to parse versions.toml file")?;
-    release_metadata(parsed)
+        .context("failed to get versions.toml from GitHub")?;
+    release_metadata(manifest)
 }
 
 fn acquire_release_from_file(path: &Path) -> Result<Release> {
@@ -139,26 +118,5 @@ fn confirm_plan(release: &Release) -> Result<()> {
         Ok(())
     } else {
         bail!("aborted")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::validate_tag;
-
-    #[test]
-    fn test_validate_tag() {
-        assert!(validate_tag("v0.12.0").is_ok());
-        assert!(validate_tag("v0.12.1").is_ok());
-        assert!(validate_tag("v1.12.1").is_ok());
-        assert!(validate_tag("v10.12.11").is_ok());
-        assert!(validate_tag("2022-05-24").is_ok());
-
-        assert!(validate_tag("bad").is_err());
-        assert!(validate_tag("2022-5-4").is_err());
-        assert!(validate_tag("0.12.0").is_err());
-        assert!(validate_tag("v0.12").is_err());
-        assert!(validate_tag("url/injection").is_err());
-        assert!(validate_tag("..").is_err());
     }
 }
