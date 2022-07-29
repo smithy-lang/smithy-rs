@@ -15,6 +15,7 @@ use aws_smithy_http::result::SdkError;
 use aws_smithy_types::timeout;
 use aws_smithy_types::tristate::TriState;
 
+use aws_config::meta::credentials::LazyCachingCredentialsProvider;
 use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_http::body::SdkBody;
 use std::fmt::{Debug, Formatter};
@@ -230,8 +231,14 @@ async fn list_buckets_test(
 
     let conn = aws_smithy_client::erase::DynConnector::new(SurfConnector);
     let sdk_config = aws_config::from_env()
-        .sleep_impl(sleep_impl)
+        .sleep_impl(sleep_impl.clone())
         .http_connector(HttpConnector::Prebuilt(Some(conn.clone())))
+        // The credentials provider also requires us to pass a sleep impl
+        .credentials_provider(
+            LazyCachingCredentialsProvider::builder()
+                .sleep(sleep_impl)
+                .build(),
+        )
         .load()
         .await;
     let service_config = aws_sdk_s3::Config::from(&sdk_config);
