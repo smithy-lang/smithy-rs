@@ -15,8 +15,13 @@ use aws_smithy_http::result::SdkError;
 use aws_smithy_types::timeout;
 use aws_smithy_types::tristate::TriState;
 
-use std::fmt::Debug;
+use aws_smithy_client::http_connector::HttpConnector;
+use aws_smithy_http::body::SdkBody;
+use std::fmt::{Debug, Formatter};
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -46,6 +51,16 @@ fn test_smol_runtime_retry() {
     }
 }
 
+// This test is ignored because it actually sends a request to AWS
+#[ignore]
+#[test]
+fn test_smol_runtime_list_buckets() {
+    if let Err(err) = smol::block_on(async { list_buckets_test(Arc::new(SmolSleep)).await }) {
+        println!("{err}");
+        panic!();
+    }
+}
+
 #[derive(Debug)]
 struct AsyncStdSleep;
 
@@ -68,6 +83,18 @@ fn test_async_std_runtime_timeouts() {
 #[test]
 fn test_async_std_runtime_retry() {
     if let Err(err) = async_std::task::block_on(async { retry_test(Arc::new(AsyncStdSleep)).await })
+    {
+        println!("{err}");
+        panic!();
+    }
+}
+
+// This test is ignored because it actually sends a request to AWS
+// #[ignore]
+#[test]
+fn test_async_std_runtime_list_buckets() {
+    if let Err(err) =
+        async_std::task::block_on(async { list_buckets_test(Arc::new(AsyncStdSleep)).await })
     {
         println!("{err}");
         panic!();
@@ -156,4 +183,68 @@ async fn retry_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std::
     );
 
     Ok(())
+}
+
+#[derive(Clone)]
+struct SurfConnector;
+
+impl tower::Service<http::Request<SdkBody>> for SurfConnector {
+    type Response = http::Response<SdkBody>;
+    type Error = aws_smithy_http::result::ConnectorError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
+        Box::pin(async move {
+            let client = surf::Client::new();
+            client
+                .send(convert_request(req))
+                .await
+                .map(convert_response)
+                .map_err(|surf_err| {
+                    let box_err = Box::new(SurfError(surf_err.to_string()));
+                    Self::Error::other(box_err, None)
+                })
+        })
+    }
+}
+
+#[derive(Debug)]
+struct SurfError(String);
+
+impl std::fmt::Display for SurfError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for SurfError {}
+
+async fn list_buckets_test(
+    sleep_impl: Arc<dyn AsyncSleep>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt::init();
+
+    let conn = aws_smithy_client::erase::DynConnector::new(SurfConnector);
+    let sdk_config = aws_config::from_env()
+        .sleep_impl(sleep_impl)
+        .http_connector(HttpConnector::Prebuilt(Some(conn.clone())))
+        .load()
+        .await;
+    let service_config = aws_sdk_s3::Config::from(&sdk_config);
+    let client = Client::from_conf_conn(service_config, conn);
+    let _ = client.list_buckets().send().await?;
+
+    Ok(())
+}
+
+fn convert_request(_req: http::Request<SdkBody>) -> surf::Request {
+    todo!()
+}
+
+fn convert_response(_res: surf::Response) -> http::Response<SdkBody> {
+    todo!()
 }
