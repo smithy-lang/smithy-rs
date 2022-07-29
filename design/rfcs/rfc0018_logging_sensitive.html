@@ -156,7 +156,7 @@
 <p>This RFC proposes:</p>
 <ul>
 <li>A new logging middleware is generated and applied to each <code>OperationHandler</code> <code>Service</code>.</li>
-<li>Internal and external developer guidelines are provided on how to avoid violating the specification.</li>
+<li>A developer guideline is provided on how to avoid violating the specification.</li>
 </ul>
 <h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
 <ul>
@@ -196,7 +196,7 @@ let app = app.map_request(|request| {
 <p>A more subtle violation of the specification may occur when the customer enables verbose logging - a third-party dependency might simply log data marked as sensitive, for example <code>tokio</code> or <code>hyper</code>.</p>
 <p>These two cases illustrate that <code>smithy-rs</code> can only prevent violation of the specification in a restricted scope - logs emitted from generated code and the runtime crates. A <code>smithy-rs</code> specific guideline should be available to the customer which outlines how to avoid violating the specification in areas outside of our control.</p>
 <h3 id="routing"><a class="header" href="#routing">Routing</a></h3>
-<p>The sensitivity and HTTP bindings are declared within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any middleware applied <em>before</em> routing has taken place cannot log anything sensitive without performing routing logic itself.</p>
+<p>The sensitivity and HTTP bindings are declared within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any middleware applied <em>before</em> routing has taken place cannot log anything potentially sensitive without performing routing logic itself.</p>
 <p>Note that:</p>
 <ul>
 <li>We are not required to deserialize the entire request before we can make judgments on what data is sensitive or not - only which operation it has been routed to.</li>
@@ -210,7 +210,7 @@ let app = app.map_request(|request| {
 <h3 id="runtime-crates"><a class="header" href="#runtime-crates">Runtime Crates</a></h3>
 <p>The crates existing in <code>rust-runtime</code> are not code generated - their source code is agnostic to the specific model in use. For this reason, if such a crate wanted to log potentially sensitive data then there must be a way to conditionally toggle that log without manipulation of the source code. Any proposed solution must acknowledge this concern.</p>
 <h2 id="proposal"><a class="header" href="#proposal">Proposal</a></h2>
-<p>This proposal serves to honor the sensitivity specification via code generation of a logging middleware which is aware of the sensitivity, together with a developer contract disallowing logging potentially sensitive data in the runtime crates. An internal and external guideline should be provided in addition to the middleware.</p>
+<p>This proposal serves to honor the sensitivity specification via code generation of a logging middleware which is aware of the sensitivity, together with a developer contract disallowing logging potentially sensitive data in the runtime crates. A developer guideline should be provided in addition to the middleware.</p>
 <p>All data known to be sensitive should be replaced with <code>&quot;{redacted}&quot;</code> when logged. Implementation wise this means that <a href="https://docs.rs/tracing/latest/tracing/struct.Event.html">tracing::Event</a>s and <a href="https://docs.rs/tracing/latest/tracing/struct.Span.html">tracing::Span</a>s of the form <code>debug!(field = &quot;sensitive data&quot;)</code> and <code>span!(..., field = &quot;sensitive data&quot;)</code> must become <code>debug!(field = &quot;{redacted}&quot;)</code> and <code>span!(..., field = &quot;{redacted}&quot;)</code>.</p>
 <h3 id="debug-logging"><a class="header" href="#debug-logging">Debug Logging</a></h3>
 <p>Developers might want to observe sensitive data for debugging purposes. It should be possible to opt-out of the redactions by enabling a feature flag <code>unredacted-logging</code> (which is disabled by default).</p>
@@ -263,7 +263,7 @@ where
 <span class="boring">}
 </span></code></pre></pre>
 <h3 id="code-generated-logging-middleware"><a class="header" href="#code-generated-logging-middleware">Code Generated Logging Middleware</a></h3>
-<p>Using the smithy model, for each operation, a logging middleware should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging middleware can be careful crafted to avoid leaking sensitive data.</p>
+<p>Using the smithy model, for each operation, a logging middleware should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging middleware can be carefully crafted to avoid leaking sensitive data.</p>
 <p>As a request enters this middleware it should record the method, HTTP headers, status code, and URI in a <code>tracing::span</code>. As a response leaves this middleware it should record the HTTP headers and status code in a <code>tracing::debug</code>.</p>
 <p>The following model</p>
 <pre><code class="language-smithy">@readonly
@@ -361,27 +361,21 @@ let router = aws_smithy_http_server::routing::Router::new_rest_json_router(route
 <h3 id="logging-within-the-router"><a class="header" href="#logging-within-the-router">Logging within the Router</a></h3>
 <p>There is need for logging within the <code>Router</code> implementation - this is a crucial area of business logic. As mentioned in the <a href="#routing">Routing</a> section, we are permitted to log potentially sensitive data in cases where requests fail to get routed to an operation.</p>
 <p>In the case of AWS JSON 1.0 and 1.1 protocols, the request URI is always <code>/</code>, putting it outside of the reach of the <code>@sensitive</code> trait. We therefore have the option to log it before routing occurs. We make a choice not to do this in order to remove the special case - relying on the logging layer to log URIs when appropriate.</p>
-<h3 id="internal-guideline"><a class="header" href="#internal-guideline">Internal Guideline</a></h3>
-<p>A guideline should be made available to internal smithy developers to outline the following:</p>
+<h3 id="developer-guideline"><a class="header" href="#developer-guideline">Developer Guideline</a></h3>
+<p>A guideline should be made available, which includes:</p>
 <ul>
 <li>The <a href="#http-binding-traits">HTTP bindings traits</a> and why they are of concern in the presence of <code>@sensitive</code>.</li>
 <li>The <a href="https://github.com/awslabs/smithy-rs/pull/229">Debug implementation</a> on structures.</li>
 <li>How to use the <code>Sensitive</code> struct, HTTP wrappers, and the <code>unredacted-logging</code> feature flag described in <a href="#unredacted-logging">Debug Logging</a> and <a href="#http-debugdisplay-wrappers">HTTP Debug/Display Wrappers</a>.</li>
-</ul>
-<h3 id="public-guideline"><a class="header" href="#public-guideline">Public Guideline</a></h3>
-<p>A guideline should be made available to customers to outline the following:</p>
-<ul>
-<li>The <a href="#http-binding-traits">HTTP bindings traits</a> and why they are of concern in the presence of <code>@sensitive</code>.</li>
-<li>Warn against the two potential leaks described in <a href="#scope-and-guidelines">Scope and Guidelines</a>:
+<li>A warning against the two potential leaks described in <a href="#scope-and-guidelines">Scope and Guidelines</a>:
 <ul>
 <li>Sensitive data leaking from third-party dependencies.</li>
 <li>Sensitive data leaking from middleware applied to the <code>Router</code>.</li>
 </ul>
 </li>
-<li>How to use the <code>Sensitive</code> struct, HTTP wrappers, and the <code>unredacted-logging</code> feature flag described in <a href="#unredacted-logging">Debug Logging</a> and <a href="#http-debugdisplay-wrappers">HTTP Debug/Display Wrappers</a>.</li>
 </ul>
 <h2 id="alternative-proposals"><a class="header" href="#alternative-proposals">Alternative Proposals</a></h2>
-<p>All of the following proposals are compatible with, and benefit from, <a href="#unredacted-logging">Debug Logging</a>, <a href="#internal-guideline">Internal Guideline</a>/<a href="#external-guideline">External Guideline</a> portions of the main proposal.</p>
+<p>All of the following proposals are compatible with, and benefit from, <a href="#unredacted-logging">Debug Logging</a>, <a href="#http-debugdisplay-wrappers">HTTP Debug/Display Wrappers</a>, and <a href="#developer-guideline">Developer Guideline</a> portions of the main proposal.</p>
 <p>The main proposal disallows the logging of potentially sensitive data in the runtime crates, instead opting for a dedicated code generated logging middleware. In contrast, the following proposals all seek ways to accommodate logging of potentially sensitive data in the runtime crates.</p>
 <h3 id="use-request-extensions"><a class="header" href="#use-request-extensions">Use Request Extensions</a></h3>
 <p>Request extensions can be used to adjoin data to a Request as it passes through the middleware. Concretely, they exist as the type map <a href="https://docs.rs/http/latest/http/struct.Extensions.html">http::Extensions</a> accessed via <a href="https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions">http::extensions</a> and <a href="https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions_mut">http::extensions_mut</a>.</p>
@@ -513,7 +507,7 @@ Implement and integrate code generated logging middleware.</li>
 <li><input disabled="" type="checkbox"/>
 Add logging to <code>Router</code> implementation.</li>
 <li><input disabled="" type="checkbox"/>
-Write public and internal developer guidelines.</li>
+Write developer guideline.</li>
 <li><input disabled="" type="checkbox"/>
 Refactor <code>Router</code> to allow for better positioning described in <a href="#middleware-position">Middleware Position</a>.</li>
 </ul>
