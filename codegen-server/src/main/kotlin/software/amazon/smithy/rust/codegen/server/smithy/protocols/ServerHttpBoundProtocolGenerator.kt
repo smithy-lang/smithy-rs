@@ -127,7 +127,9 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
         "Hyper" to CargoDependency.Hyper.asType(),
         "LazyStatic" to CargoDependency.LazyStatic.asType(),
+        "Mime" to ServerCargoDependency.Mime.asType(),
         "Nom" to ServerCargoDependency.Nom.asType(),
+        "OnceCell" to ServerCargoDependency.OnceCell.asType(),
         "PercentEncoding" to CargoDependency.PercentEncoding.asType(),
         "Regex" to CargoDependency.Regex.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
@@ -667,14 +669,17 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
         val parser = structuredDataParser.serverInputParser(operationShape)
+        // TODO We can make it `unsync` right?
         if (parser != null) {
-            val contentTypeCheck = getContentTypeCheck()
+            val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)
             rustTemplate(
                 """
                 let body = request.take_body().ok_or(#{RequestRejection}::BodyAlreadyExtracted)?;
                 let bytes = #{Hyper}::body::to_bytes(body).await?;
                 if !bytes.is_empty() {
-                    #{SmithyHttpServer}::protocols::$contentTypeCheck(request)?;
+                    static EXPECTED_CONTENT_TYPE: #{OnceCell}::sync::Lazy<#{Mime}::Mime> =
+                        #{OnceCell}::sync::Lazy::new(|| "$expectedRequestContentType".parse::<#{Mime}::Mime>().unwrap());
+                    #{SmithyHttpServer}::protocols::check_content_type(request, &EXPECTED_CONTENT_TYPE)?;
                     input = #{parser}(bytes.as_ref(), input)?;
                 }
                 """,
@@ -1142,26 +1147,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         val containerName = binding.member.container.name.toSnakeCase()
         val memberName = binding.memberName.toSnakeCase()
         return "parse_str_${containerName}_$memberName"
-    }
-
-    private fun getContentTypeCheck(): String {
-        when (codegenContext.protocol) {
-            RestJson1Trait.ID -> {
-                return "check_rest_json_1_content_type"
-            }
-            RestXmlTrait.ID -> {
-                return "check_rest_xml_content_type"
-            }
-            AwsJson1_0Trait.ID -> {
-                return "check_aws_json_10_content_type"
-            }
-            AwsJson1_1Trait.ID -> {
-                return "check_aws_json_11_content_type"
-            }
-            else -> {
-                TODO("Protocol ${codegenContext.protocol} not supported yet")
-            }
-        }
     }
 
     /**
