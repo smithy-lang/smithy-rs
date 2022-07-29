@@ -33,7 +33,7 @@ class EventStreamMarshallerGeneratorTest {
             test.serviceShape,
             ShapeId.from(testCase.protocolShapeId),
             testRustSettings(),
-            target = testCase.target
+            target = testCase.target,
         )
         val protocol = testCase.protocolBuilder(codegenContext)
         val generator = EventStreamMarshallerGenerator(
@@ -43,7 +43,7 @@ class EventStreamMarshallerGeneratorTest {
             test.symbolProvider,
             test.streamShape,
             protocol.structuredDataSerializer(test.operationShape),
-            testCase.requestContentType
+            testCase.requestContentType,
         )
 
         test.project.lib { writer ->

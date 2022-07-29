@@ -46,7 +46,7 @@ class CargoTomlGenerator(
     private val writer: RustWriter,
     private val manifestCustomizations: ManifestCustomizations,
     private val dependencies: List<CargoDependency>,
-    private val features: List<Feature>
+    private val features: List<Feature>,
 ) {
     fun render() {
         val cargoFeatures = features.map { it.name to it.deps }.toMutableList()
@@ -68,7 +68,7 @@ class CargoTomlGenerator(
                 .associate { it.name to it.toMap() },
             "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
                 .associate { it.name to it.toMap() },
-            "features" to cargoFeatures.toMap()
+            "features" to cargoFeatures.toMap(),
         ).deepMergeWith(manifestCustomizations)
 
         writer.writeWithNoFormatting(TomlWriter().write(cargoToml))

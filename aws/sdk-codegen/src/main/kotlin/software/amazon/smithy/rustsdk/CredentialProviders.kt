@@ -28,7 +28,7 @@ class CredentialsProviderDecorator : RustCodegenDecorator<ClientCodegenContext> 
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + CredentialProviderConfig(codegenContext.runtimeConfig)
     }
@@ -36,14 +36,14 @@ class CredentialsProviderDecorator : RustCodegenDecorator<ClientCodegenContext> 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + CredentialsProviderFeature(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
     }
@@ -56,14 +56,14 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
     private val defaultProvider = defaultProvider()
     private val codegenScope = arrayOf(
         "credentials" to awsTypes(runtimeConfig).asType().member("credentials"),
-        "DefaultProvider" to defaultProvider
+        "DefaultProvider" to defaultProvider,
     )
 
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
                 """pub(crate) credentials_provider: #{credentials}::SharedCredentialsProvider,""",
-                *codegenScope
+                *codegenScope,
             )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
@@ -88,7 +88,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
             }
             ServiceConfig.BuilderBuild -> rustTemplate(
                 "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -102,7 +102,7 @@ class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : Ope
                     """
                     #T(&mut ${section.request}.properties_mut(), ${section.config}.credentials_provider.clone());
                     """,
-                    setProvider(runtimeConfig)
+                    setProvider(runtimeConfig),
                 )
             }
             else -> emptySection

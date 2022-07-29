@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
  * Configure the [lib] section of `Cargo.toml`.
@@ -34,9 +35,15 @@ class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override val order: Byte = 0
 
     override fun crateManifestCustomizations(
-        codegenContext: ServerCodegenContext
+        codegenContext: ServerCodegenContext,
     ): ManifestCustomizations =
-        mapOf("lib" to mapOf("name" to codegenContext.settings.moduleName, "crate-type" to listOf("cdylib")))
+        mapOf(
+            "lib" to mapOf(
+                // Library target names cannot contain hyphen names.
+                "name" to codegenContext.settings.moduleName.toSnakeCase(),
+                "crate-type" to listOf("cdylib"),
+            ),
+        )
 }
 
 /**
@@ -80,7 +87,7 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerCodegenContext> {
 
     override fun libRsCustomizations(
         codegenContext: ServerCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUsePythonTypes(codegenContext)
     }
@@ -97,7 +104,7 @@ val DECORATORS = listOf(
     // Add `pub use` of `aws_smithy_http_server_python::types`.
     PubUsePythonTypesDecorator(),
     // Render the Python shared library export.
-    PythonExportModuleDecorator()
+    PythonExportModuleDecorator(),
 )
 
 // Combined codegen decorator for Python services.

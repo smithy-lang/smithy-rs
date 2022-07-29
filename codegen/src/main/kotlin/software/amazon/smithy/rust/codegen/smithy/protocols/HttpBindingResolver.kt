@@ -102,7 +102,7 @@ data class ProtocolContentTypes(
     /** Response content type override for when the shape is a Document */
     val responseDocument: String? = null,
     /** EventStream content type */
-    val eventStreamContentType: String? = null
+    val eventStreamContentType: String? = null,
 ) {
     companion object {
         /** Create an instance of [ProtocolContentTypes] where all content types are the same */
@@ -133,7 +133,7 @@ open class HttpTraitHttpBindingResolver(
     override fun timestampFormat(
         memberShape: MemberShape,
         location: HttpLocation,
-        defaultTimestampFormat: TimestampFormatTrait.Format
+        defaultTimestampFormat: TimestampFormatTrait.Format,
     ): TimestampFormatTrait.Format =
         httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 

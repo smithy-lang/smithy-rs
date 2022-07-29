@@ -28,7 +28,7 @@ class Ec2QueryParserGenerator(
     private val xmlBindingTraitParserGenerator: XmlBindingTraitParserGenerator =
         XmlBindingTraitParserGenerator(
             coreCodegenContext,
-            xmlErrors
+            xmlErrors,
         ) { context, inner ->
             val operationName = coreCodegenContext.symbolProvider.toSymbol(context.shape).name
             val responseWrapperName = operationName + "Response"
@@ -38,8 +38,8 @@ class Ec2QueryParserGenerator(
                     return Err(#{XmlError}::custom(format!("invalid root, expected $responseWrapperName got {:?}", start_el)))
                 }
                 """,
-                "XmlError" to context.xmlErrorType
+                "XmlError" to context.xmlErrorType,
             )
             inner("decoder")
-        }
+        },
 ) : StructuredDataParserGenerator by xmlBindingTraitParserGenerator

@@ -105,7 +105,7 @@ class JsonSerializerGeneratorTest {
         val parserSerializer = JsonSerializerGenerator(
             testCodegenContext(model),
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
-            ::restJsonFieldName
+            ::restJsonFieldName,
         )
         val operationGenerator = parserSerializer.operationInputSerializer(model.lookup("test#Op"))
         val documentGenerator = parserSerializer.documentSerializer()
@@ -137,7 +137,7 @@ class JsonSerializerGeneratorTest {
                         .build()
                 ).build().unwrap();
                 let serialized = ${writer.format(operationGenerator)}(&input).expect_err("cannot serialize unknown variant");
-                """
+                """,
             )
         }
         project.withModule(RustModule.public("model")) {

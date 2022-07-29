@@ -28,7 +28,7 @@ import software.amazon.smithy.rust.codegen.util.runCommand
 internal class EndpointConfigCustomizationTest {
     private val codegenScope = arrayOf(
         "http" to CargoDependency.Http.asType(),
-        "aws_types" to awsTypes(AwsTestRuntimeConfig).asType()
+        "aws_types" to awsTypes(AwsTestRuntimeConfig).asType(),
     )
 
     private val model = """
@@ -129,16 +129,16 @@ internal class EndpointConfigCustomizationTest {
             override val order: Byte = 0
             override fun configCustomizations(
                 codegenContext: ClientCodegenContext,
-                baseCustomizations: List<ConfigCustomization>
+                baseCustomizations: List<ConfigCustomization>,
             ): List<ConfigCustomization> =
                 baseCustomizations + stubConfigCustomization("a") + EndpointConfigCustomization(
                     codegenContext,
-                    endpointConfig
+                    endpointConfig,
                 ) + stubConfigCustomization("b")
 
             override fun libRsCustomizations(
                 codegenContext: ClientCodegenContext,
-                baseCustomizations: List<LibRsCustomization>
+                baseCustomizations: List<LibRsCustomization>,
             ): List<LibRsCustomization> =
                 baseCustomizations + PubUseEndpoint(AwsTestRuntimeConfig) + AllowLintsGenerator(listOf("dead_code"), listOf(), listOf())
 
@@ -177,7 +177,7 @@ internal class EndpointConfigCustomizationTest {
                         endpoint.set_endpoint(&mut uri, None);
                         assert_eq!(uri, #{http}::Uri::from_static("https://access-analyzer-fips.ca-central-1.amazonaws.com/?k=v"));
                         """,
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
             }
@@ -204,7 +204,7 @@ internal class EndpointConfigCustomizationTest {
                         endpoint.set_endpoint(&mut uri, None);
                         assert_eq!(uri, #{http}::Uri::from_static("https://iam-fips.amazonaws.com/?k=v"));
                         """,
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
             }

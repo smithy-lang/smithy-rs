@@ -58,7 +58,7 @@ class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFac
         requestDeserialization = false,
         requestBodyDeserialization = false,
         responseSerialization = false,
-        errorSerialization = false
+        errorSerialization = false,
     )
 }
 
@@ -102,7 +102,7 @@ class AwsJsonSerializerGenerator(
     private val coreCodegenContext: CoreCodegenContext,
     httpBindingResolver: HttpBindingResolver,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
-        JsonSerializerGenerator(coreCodegenContext, httpBindingResolver, ::awsJsonFieldName)
+        JsonSerializerGenerator(coreCodegenContext, httpBindingResolver, ::awsJsonFieldName),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
@@ -118,7 +118,7 @@ class AwsJsonSerializerGenerator(
             serializer = RuntimeType.forInlineFun(fnName, RustModule.private("operation_ser")) {
                 it.rustBlockTemplate(
                     "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
-                    *codegenScope, "target" to coreCodegenContext.symbolProvider.toSymbol(inputShape)
+                    *codegenScope, "target" to coreCodegenContext.symbolProvider.toSymbol(inputShape),
                 ) {
                     rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
                 }
@@ -130,7 +130,7 @@ class AwsJsonSerializerGenerator(
 
 open class AwsJson(
     private val coreCodegenContext: CoreCodegenContext,
-    private val awsJsonVersion: AwsJsonVersion
+    private val awsJsonVersion: AwsJsonVersion,
 ) : Protocol {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(
@@ -165,7 +165,7 @@ open class AwsJson(
                     #{json_errors}::parse_generic_error(response.body(), response.headers())
                 }
                 """,
-                *errorScope
+                *errorScope,
             )
         }
 
@@ -178,7 +178,7 @@ open class AwsJson(
                     #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
                 }
                 """,
-                *errorScope
+                *errorScope,
             )
         }
 
@@ -189,7 +189,7 @@ open class AwsJson(
         operationShape: OperationShape,
         operationName: String,
         serviceName: String,
-        requestSpecModule: RuntimeType
+        requestSpecModule: RuntimeType,
     ) = writable {
         rust("""String::from("$serviceName.$operationName")""")
     }

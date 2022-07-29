@@ -24,7 +24,7 @@ val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = false,
     handleRustBoxing = true,
-    handleRequired = true
+    handleRequired = true,
 )
 
 fun serverTestSymbolProvider(
@@ -34,7 +34,7 @@ fun serverTestSymbolProvider(
     RustCodegenServerPlugin.baseSymbolProvider(
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
-        ServerTestSymbolVisitorConfig
+        ServerTestSymbolVisitorConfig,
     )
 
 fun serverTestRustSettings(
@@ -48,7 +48,7 @@ fun serverTestRustSettings(
     codegenConfig: ServerCodegenConfig = ServerCodegenConfig(),
     license: String? = null,
     examplesUri: String? = null,
-    customizationConfig: ObjectNode? = null
+    customizationConfig: ObjectNode? = null,
 ) = ServerRustSettings(
     service,
     moduleName,
@@ -60,14 +60,14 @@ fun serverTestRustSettings(
     codegenConfig,
     license,
     examplesUri,
-    customizationConfig
+    customizationConfig,
 )
 
 fun serverTestCodegenContext(
     model: Model,
     serviceShape: ServiceShape? = null,
     settings: ServerRustSettings = serverTestRustSettings(),
-    protocolShapeId: ShapeId? = null
+    protocolShapeId: ShapeId? = null,
 ): ServerCodegenContext = ServerCodegenContext(
     model,
     testSymbolProvider(model),

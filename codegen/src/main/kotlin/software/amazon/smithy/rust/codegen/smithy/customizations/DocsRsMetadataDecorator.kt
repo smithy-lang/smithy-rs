@@ -22,7 +22,7 @@ data class DocsRsMetadataSettings(
     val rustdocArgs: List<String>? = null,
     val cargoArgs: List<String>? = null,
     /** Any custom key-value pairs to be inserted into the docsrs metadata */
-    val custom: HashMap<String, Any> = HashMap()
+    val custom: HashMap<String, Any> = HashMap(),
 )
 
 fun DocsRsMetadataSettings.asMap(): Map<String, Any> {
@@ -34,7 +34,7 @@ fun DocsRsMetadataSettings.asMap(): Map<String, Any> {
         targets?.let { "targets" to it },
         rustcArgs?.let { "rustc-args" to it },
         rustdocArgs?.let { "rustdoc-args" to it },
-        cargoArgs?.let { "cargo-args" to it }
+        cargoArgs?.let { "cargo-args" to it },
     ).toMap() + custom
     return mapOf("package" to mapOf("metadata" to mapOf("docs" to mapOf("rs" to inner))))
 }

@@ -59,7 +59,7 @@ open class MakeOperationGenerator(
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
         "OpBuildError" to coreCodegenContext.runtimeConfig.operationBuildError(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
-        "SdkBody" to RuntimeType.sdkBody(coreCodegenContext.runtimeConfig)
+        "SdkBody" to RuntimeType.sdkBody(coreCodegenContext.runtimeConfig),
     )
 
     fun generateMakeOperation(
@@ -84,7 +84,7 @@ open class MakeOperationGenerator(
         Attribute.Custom("allow(clippy::needless_borrow)").render(implBlockWriter) // Allows builders that don’t consume the input borrow
         implBlockWriter.rustBlockTemplate(
             "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
-            *codegenScope
+            *codegenScope,
         ) {
             writeCustomizations(customizations, OperationSection.MutateInput(customizations, "self", "_config"))
 
@@ -112,7 +112,7 @@ open class MakeOperationGenerator(
                         request = #{header_util}::set_request_header_if_absent(request, #{http}::header::CONTENT_LENGTH, content_length);
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             rust("""let request = request.body(body).expect("should be valid request");""")
@@ -120,7 +120,7 @@ open class MakeOperationGenerator(
                 """
                 let mut request = #{operation}::Request::from_parts(request, properties);
                 """,
-                *codegenScope
+                *codegenScope,
             )
             writeCustomizations(customizations, OperationSection.MutateRequest(customizations, "request", "_config"))
             rustTemplate(
@@ -129,7 +129,7 @@ open class MakeOperationGenerator(
                     .with_metadata(#{operation}::Metadata::new(${operationName.dq()}, ${sdkId.dq()}));
                 """,
                 *codegenScope,
-                "OperationType" to symbolProvider.toSymbol(shape)
+                "OperationType" to symbolProvider.toSymbol(shape),
             )
             writeCustomizations(customizations, OperationSection.FinalizeOperation(customizations, "op", "_config"))
             rust("Ok(op)")
@@ -151,7 +151,7 @@ open class MakeOperationGenerator(
         writer.format(symbolProvider.toSymbol(shape))
 
     private fun buildOperationTypeRetry(writer: RustWriter, customizations: List<OperationCustomization>): String =
-        customizations.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
+        customizations.firstNotNullOfOrNull { it.retryType() }?.let { writer.format(it) } ?: "()"
 
     private fun needsContentLength(operationShape: OperationShape): Boolean {
         return protocol.httpBindingResolver.requestBindings(operationShape)
@@ -162,7 +162,7 @@ open class MakeOperationGenerator(
         val httpBindingGenerator = RequestBindingGenerator(
             coreCodegenContext,
             protocol,
-            operationShape
+            operationShape,
         )
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(writer)
@@ -171,7 +171,7 @@ open class MakeOperationGenerator(
         if (includeDefaultPayloadHeaders && contentType != null) {
             writer.rustTemplate(
                 "builder = #{header_util}::set_request_header_if_absent(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",
-                *codegenScope
+                *codegenScope,
             )
         }
         for (header in protocol.additionalRequestHeaders(operationShape)) {
@@ -183,7 +183,7 @@ open class MakeOperationGenerator(
                     ${header.second.dq()}
                 );
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
         writer.rust("builder")
