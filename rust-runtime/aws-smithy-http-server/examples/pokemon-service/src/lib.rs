@@ -176,6 +176,18 @@ pub async fn get_pokemon_species(
     }
 }
 
+/// Retrieves the users storage
+pub async fn get_storage(
+    input: input::GetStorageInput,
+    _state: Extension<Arc<State>>,
+) -> Result<output::GetStorageOutput, error::GetStorageError> {
+    // We currently only support Ash and he has nothing stored
+    if !(input.user == "ash" && input.passcode == "pikachu123") {
+        return Err(error::GetStorageError::NotAuthorized(error::NotAuthorized {}));
+    }
+    Ok(output::GetStorageOutput { collection: vec![] })
+}
+
 /// Calculates and reports metrics about this server instance.
 pub async fn get_server_statistics(
     _input: input::GetServerStatisticsInput,
