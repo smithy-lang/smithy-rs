@@ -669,7 +669,6 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
         val parser = structuredDataParser.serverInputParser(operationShape)
-        // TODO We can make it `unsync` right?
         if (parser != null) {
             val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)
             rustTemplate(
