@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerModuleGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -44,7 +45,7 @@ class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
             ),
         )
 
-    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
@@ -79,7 +80,7 @@ class PythonExportModuleDecorator : RustCodegenDecorator<ServerCodegenContext> {
         PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
     }
 
-    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
@@ -97,7 +98,7 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerCodegenContext> {
         return baseCustomizations + PubUsePythonTypes(codegenContext)
     }
 
-    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 

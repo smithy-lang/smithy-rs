@@ -41,7 +41,7 @@ open class NoOpEventStreamSigningDecorator<C : CoreCodegenContext> : RustCodegen
         )
     }
 
-    override fun supportsCodegenContext(clazz: Class<*>) = true
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>) = true
 }
 
 class NoOpEventStreamSigningConfig(

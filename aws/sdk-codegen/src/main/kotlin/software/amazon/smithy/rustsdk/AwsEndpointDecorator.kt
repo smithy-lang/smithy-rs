@@ -74,7 +74,7 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
         return baseCustomizations + PubUseEndpoint(codegenContext.runtimeConfig)
     }
 
-    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 

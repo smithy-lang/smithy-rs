@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.rustlang.Feature
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
@@ -36,6 +37,6 @@ class ServerRequiredCustomizations : RustCodegenDecorator<ServerCodegenContext> 
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
     }
 
-    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }

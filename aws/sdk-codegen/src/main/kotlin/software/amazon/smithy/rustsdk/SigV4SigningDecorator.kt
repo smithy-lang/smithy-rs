@@ -76,7 +76,7 @@ class SigV4SigningDecorator : RustCodegenDecorator<ClientCodegenContext> {
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 

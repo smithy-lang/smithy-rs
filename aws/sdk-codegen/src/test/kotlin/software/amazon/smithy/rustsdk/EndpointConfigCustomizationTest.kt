@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customizations.AllowLintsGenerator
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
@@ -148,7 +149,7 @@ internal class EndpointConfigCustomizationTest {
                 }
             }
 
-            override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
                 clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val customization = CombinedCodegenDecorator(listOf(RequiredCustomizations(), codegenDecorator))

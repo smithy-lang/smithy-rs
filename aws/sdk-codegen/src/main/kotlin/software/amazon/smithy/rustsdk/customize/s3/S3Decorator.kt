@@ -57,7 +57,7 @@ class S3Decorator : RustCodegenDecorator<ClientCodegenContext> {
         it + S3PubUse()
     }
 
-    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 

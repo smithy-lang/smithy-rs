@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 
@@ -57,6 +58,6 @@ class DocsRsMetadataDecorator(private val docsRsMetadataSettings: DocsRsMetadata
         return docsRsMetadataSettings.asMap()
     }
 
-    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

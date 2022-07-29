@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -85,7 +86,7 @@ internal class HttpVersionListGeneratorTest {
                 }
             }
 
-            override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
                 clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
@@ -150,7 +151,7 @@ internal class HttpVersionListGeneratorTest {
                 }
             }
 
-            override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
                 clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
 
@@ -235,7 +236,7 @@ internal class HttpVersionListGeneratorTest {
                 }
             }
 
-            override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
                 clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
 

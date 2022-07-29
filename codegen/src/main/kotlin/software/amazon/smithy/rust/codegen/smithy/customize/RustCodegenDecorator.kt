@@ -69,7 +69,7 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
 
     fun transformModel(service: ServiceShape, model: Model): Model = model
 
-    fun supportsCodegenContext(clazz: Class<*>): Boolean
+    fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean
 }
 
 /**
@@ -139,7 +139,7 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
         }
     }
 
-    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         // `CombinedCodegenDecorator` can work with all types of codegen context.
         CoreCodegenContext::class.java.isAssignableFrom(clazz)
 

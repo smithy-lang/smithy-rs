@@ -117,7 +117,7 @@ class AwsPresigningDecorator internal constructor(
         return presignableTransforms.fold(intermediate) { m, t -> t.transform(m) }
     }
 
-    override fun supportsCodegenContext(clazz: Class<*>): Boolean =
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
         clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     private fun addSyntheticOperations(model: Model): Model {
