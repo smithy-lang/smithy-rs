@@ -77,7 +77,8 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
  *
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
-open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<RustCodegenDecorator<C>>) : RustCodegenDecorator<C> {
+open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<RustCodegenDecorator<C>>) :
+    RustCodegenDecorator<C> {
     private val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
         get() = "MetaDecorator"
@@ -153,7 +154,22 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader),
             )
-                .asSequence()
+
+            val filteredDecorators = filterDecorators<T>(decorators, logger).toList()
+            return CombinedCodegenDecorator(filteredDecorators + extras)
+        }
+
+        /*
+         * This function has been extracted solely for the purposes of easily unit testing the important filtering logic.
+         * Unfortunately, it must be part of the public API because public API inline functions are not allowed to use
+         * non-public-API declarations.
+         * See https://kotlinlang.org/docs/inline-functions.html#restrictions-for-public-api-inline-functions.
+         */
+        inline fun <reified T : CoreCodegenContext> filterDecorators(
+            decorators: Iterable<RustCodegenDecorator<*>>,
+            logger: Logger = Logger.getLogger("RustCodegenSPILoader"),
+        ): Sequence<RustCodegenDecorator<T>> =
+            decorators.asSequence()
                 .onEach {
                     logger.info("Discovered Codegen Decorator: ${it.javaClass.name}")
                 }
@@ -179,8 +195,5 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
                     @Suppress("UNCHECKED_CAST")
                     it as RustCodegenDecorator<T>
                 }
-                .toList()
-            return CombinedCodegenDecorator(decorators + extras)
-        }
     }
 }
