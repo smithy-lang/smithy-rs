@@ -7,6 +7,7 @@
 //! in the root of the `aws-sdk-rust` repository.
 
 use crate::package::PackageCategory;
+use crate::release_tag::ReleaseTag;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -47,6 +48,20 @@ impl VersionsManifest {
                 .with_context(|| format!("Failed to read {:?}", path.as_ref()))?,
         )
         .with_context(|| format!("Failed to parse {:?}", path.as_ref()))
+    }
+
+    pub async fn from_github_tag(tag: &ReleaseTag) -> Result<VersionsManifest> {
+        let manifest_url = format!(
+            "https://raw.githubusercontent.com/awslabs/aws-sdk-rust/{}/versions.toml",
+            tag
+        );
+        let manifest_contents = reqwest::get(manifest_url)
+            .await
+            .context("failed to download release manifest")?
+            .text()
+            .await
+            .context("failed to download release manifest content")?;
+        Ok(Self::from_str(&manifest_contents).context("failed to parse versions.toml file")?)
     }
 
     pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
