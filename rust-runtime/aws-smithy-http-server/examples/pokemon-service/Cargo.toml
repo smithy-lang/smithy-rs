@@ -9,7 +9,7 @@ description = "A smithy Rust service to retrieve information about Pokémon."
 [dependencies]
 async-stream = "0.3"
 clap = { version = "~3.2.1", features = ["derive"] }
-hyper = {version = "0.14", features = ["server"] }
+hyper = {version = "0.14.12", features = ["server"] }
 rand = "0.8"
 tokio = "1"
 tower = "0.4"
