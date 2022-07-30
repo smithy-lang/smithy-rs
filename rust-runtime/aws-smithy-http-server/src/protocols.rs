@@ -26,9 +26,9 @@ pub fn check_content_type<B>(
         .get(http::header::CONTENT_TYPE)
         .ok_or(MissingContentTypeReason::NoContentTypeHeader)?
         .to_str()
-        .map_err(|e| MissingContentTypeReason::ToStrError(e))?
+        .map_err(MissingContentTypeReason::ToStrError)?
         .parse::<mime::Mime>()
-        .map_err(|e| MissingContentTypeReason::MimeParseError(e))?;
+        .map_err(MissingContentTypeReason::MimeParseError)?;
     if &found_mime == expected_mime {
         Ok(())
     } else {
