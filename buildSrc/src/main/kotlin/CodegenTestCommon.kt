@@ -215,27 +215,33 @@ fun Project.registerCargoCommandsTasks(
     outputDir: File,
     defaultRustDocFlags: String,
 ) {
+    val dependentTasks =
+        listOfNotNull(
+            "assemble",
+            "generateCargoConfigToml",
+            this.tasks.findByName("modifyMtime")?.let { "modifyMtime" }
+        )
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
-        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        dependsOn(dependentTasks)
         workingDir(outputDir)
         commandLine("cargo", "check", "--lib", "--tests", "--benches")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
-        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        dependsOn(dependentTasks)
         workingDir(outputDir)
         commandLine("cargo", "test")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
-        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        dependsOn(dependentTasks)
         workingDir(outputDir)
         environment("RUSTDOCFLAGS", defaultRustDocFlags)
         commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
-        dependsOn("assemble", "modifyMtime", "generateCargoConfigToml")
+        dependsOn(dependentTasks)
         workingDir(outputDir)
         commandLine("cargo", "clippy")
     }
