@@ -277,6 +277,11 @@ pub async fn empty_operation(_input: input::EmptyOperationInput) -> output::Empt
     output::EmptyOperationOutput {}
 }
 
+/// Operation used to show the service is running.
+pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -> output::HealthCheckOperationOutput {
+    output::HealthCheckOperationOutput {}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

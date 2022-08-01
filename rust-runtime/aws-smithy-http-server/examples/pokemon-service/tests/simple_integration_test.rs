@@ -47,6 +47,16 @@ fn get_pokemon_to_capture() -> String {
 
 #[tokio::test]
 #[serial]
+async fn test_health_check_operation() {
+    let _program = PokemonService::run();
+    // Give PokémonService some time to start up.
+    time::sleep(Duration::from_millis(500)).await;
+
+    let _health_check = client().health_check_operation().send().await.unwrap();
+}
+
+#[tokio::test]
+#[serial]
 async fn simple_integration_test() {
     let _program = PokemonService::run();
     // Give PokémonService some time to start up.

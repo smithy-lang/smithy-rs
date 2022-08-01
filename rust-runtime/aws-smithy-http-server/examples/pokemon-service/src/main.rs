@@ -9,7 +9,8 @@ use std::{net::SocketAddr, sync::Arc};
 use aws_smithy_http_server::{AddExtensionLayer, Router};
 use clap::Parser;
 use pokemon_service::{
-    capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, get_storage, setup_tracing, State,
+    capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, health_check_operation,
+    setup_tracing, State,
 };
 use pokemon_service_server_sdk::operation_registry::OperationRegistryBuilder;
 use tower::ServiceBuilder;
@@ -39,6 +40,7 @@ pub async fn main() {
         .get_server_statistics(get_server_statistics)
         .capture_pokemon_operation(capture_pokemon)
         .empty_operation(empty_operation)
+        .health_check_operation(health_check_operation)
         .build()
         .expect("Unable to build operation registry")
         // Convert it into a router that will route requests to the matching operation
