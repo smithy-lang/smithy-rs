@@ -242,18 +242,11 @@ structure EmptyOperationInput { }
 structure EmptyOperationOutput { }
 
 /// Health check operation, to check the service is up
+/// Not yet a deep check
 @readonly
 @http(uri: "/ping", method: "GET")
 operation HealthCheckOperation {
-    input: HealthCheckOperationInput,
-    output: HealthCheckOperationOutput,
 }
-
-@input
-structure HealthCheckOperationInput { }
-
-@output
-structure HealthCheckOperationOutput { }
 
 @error("client")
 @httpError(404)
