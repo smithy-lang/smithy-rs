@@ -219,7 +219,7 @@ fun Project.registerCargoCommandsTasks(
         listOfNotNull(
             "assemble",
             "generateCargoConfigToml",
-            this.tasks.findByName("modifyMtime")?.let { "modifyMtime" }
+            this.tasks.findByName("modifyMtime")?.let { "modifyMtime" },
         )
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
