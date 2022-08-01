@@ -309,6 +309,16 @@ impl PyApp {
         let mp = py.import("multiprocessing")?;
         // https://github.com/python/cpython/blob/f4c03484da59049eb62a9bf7777b963e2267d187/Lib/multiprocessing/context.py#L164
         mp.call_method0("allow_connection_pickling")?;
+
+        // Starting from Python 3.8, on macOS, the spawn start method is now the default. See bpo-33725.
+        // This forces the `PyApp` class to be pickled when it is shared between different process,
+        // which is currently not supported by PyO3 classes.
+        //
+        // Forcing the multiprocessing start method to fork is a workaround for it.
+        // https://github.com/pytest-dev/pytest-flask/issues/104#issuecomment-577908228
+        #[cfg(target_os = "macox")]
+        mp.call_method1("set_start_method", ("fork",))?;
+
         let address = address.unwrap_or_else(|| String::from("127.0.0.1"));
         let port = port.unwrap_or(13734);
         let socket = PySocket::new(address, port, backlog)?;

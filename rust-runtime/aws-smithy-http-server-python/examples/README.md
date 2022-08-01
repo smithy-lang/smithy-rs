@@ -18,6 +18,23 @@ can be used directly.
 
 `make distclean` can be used for a complete cleanup of all artefacts.
 
+### Dependencies
+
+The server has a runtime dependency on [uvloop](https://pypi.org/project/uvloop/),
+which can be installed with your favourite package manager or by using
+
+```sh
+pip instal uvloop
+```
+
+### MacOs
+
+To compile and test on MacOs, please follow the official PyO3 guidelines on how
+to [configure your linker](https://pyo3.rs/latest/building_and_distribution.html?highlight=rustflags#macos).
+
+Please note that the `.cargo/config.toml` with linkers override can be local to
+your project.
+
 ## Run
 
 `cargo run` can be used to start the Pokémon service on
