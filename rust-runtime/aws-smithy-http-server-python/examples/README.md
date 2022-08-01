@@ -18,14 +18,18 @@ can be used directly.
 
 `make distclean` can be used for a complete cleanup of all artefacts.
 
-### Dependencies
+### Uvloop
 
-The server has a runtime dependency on [uvloop](https://pypi.org/project/uvloop/),
-which can be installed with your favourite package manager or by using
+The server can depend on [uvloop](https://pypi.org/project/uvloop/) for a
+faster event loop implementation. Uvloop can be installed with your favourite
+package manager or by using pip:
 
 ```sh
 pip instal uvloop
 ```
+
+and it will be automatically used instead of the standard library event loop if
+it is found in the dependencies' closure.
 
 ### MacOs
 

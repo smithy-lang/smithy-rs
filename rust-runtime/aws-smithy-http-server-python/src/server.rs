@@ -203,19 +203,17 @@ impl PyApp {
         // If uvloop is not available as a dependency, the standard Python
         // event loop will be used instead.
         let asyncio = py.import("asyncio")?;
-        let event_loop = match py.import("uvloop") {
+        match py.import("uvloop") {
             Ok(uvloop) => {
                 uvloop.call_method0("install")?;
                 tracing::debug!("Setting up uvloop for current process");
-                let event_loop = asyncio.call_method0("new_event_loop")?;
-                asyncio.call_method1("set_event_loop", (event_loop,))?;
-                uvloop
             }
             Err(_) => {
-                tracing::warn!("Uvloop not found, using Python standard event loop, which could have worse performances than uvloop");
-                asyncio.call_method0("get_event_loop")?
+                tracing::warn!("Uvloop not found, using Python standard event loop, which could have worse performance than uvloop");
             }
-        };
+        }
+        let event_loop = asyncio.call_method0("new_event_loop")?;
+        asyncio.call_method1("set_event_loop", (event_loop,))?;
         // Create the `PyState` object from the Python context object.
         let context = self.context.clone().unwrap_or_else(|| Arc::new(py.None()));
         let state = PyState::new(context);
