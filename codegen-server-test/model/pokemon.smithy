@@ -22,7 +22,7 @@ resource PokemonSpecies {
     read: GetPokemonSpecies,
 }
 
-/// A users current storage
+/// A users current Pokémon storage.
 resource Storage {
     identifiers: {
         user: String
@@ -141,11 +141,12 @@ operation GetStorage {
     errors: [ResourceNotFoundException, NotAuthorized],
 }
 
+/// Not authorized to access Pokémon storage.
 @error("client")
 @httpError(401)
 structure NotAuthorized {}
 
-
+/// A request to access Pokémon storage.
 @input
 @sensitive
 structure GetStorageInput {
@@ -157,10 +158,12 @@ structure GetStorageInput {
     passcode: String,
 }
 
+/// A list of Pokémon species.
 list SpeciesCollection {
     member: GetPokemonSpeciesOutput
 }
 
+/// Contents of the Pokémon storage.
 @output
 structure GetStorageOutput {
     @required
