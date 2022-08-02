@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asArgument
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
@@ -26,6 +27,7 @@ class FluentClientCore(private val model: Model) {
         val input = coreType.member.asArgument("input")
 
         documentShape(member, model)
+        deprecatedShape(member)
         rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
             write("self.inner = self.inner.$memberName(${input.value});")
             write("self")
@@ -42,6 +44,7 @@ class FluentClientCore(private val model: Model) {
         val v = coreType.member.asArgument("v")
 
         documentShape(member, model)
+        deprecatedShape(member)
         rustBlock("pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self") {
             write("self.inner = self.inner.$memberName(${k.value}, ${v.value});")
             write("self")
@@ -58,6 +61,7 @@ class FluentClientCore(private val model: Model) {
         val functionInput = coreType.asArgument("input")
 
         documentShape(member, model)
+        deprecatedShape(member)
         rustBlock("pub fn $memberName(mut self, ${functionInput.argument}) -> Self") {
             write("self.inner = self.inner.$memberName(${functionInput.value});")
             write("self")

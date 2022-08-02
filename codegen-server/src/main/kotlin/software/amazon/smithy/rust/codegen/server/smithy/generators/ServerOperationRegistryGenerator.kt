@@ -5,13 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
-import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
-import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -25,9 +23,16 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.Errors
+import software.amazon.smithy.rust.codegen.smithy.Inputs
+import software.amazon.smithy.rust.codegen.smithy.Outputs
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
+import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
@@ -43,11 +48,11 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  */
 class ServerOperationRegistryGenerator(
     coreCodegenContext: CoreCodegenContext,
-    private val httpBindingResolver: HttpBindingResolver,
+    private val protocol: Protocol,
     private val operations: List<OperationShape>,
 ) {
+    private val crateName = coreCodegenContext.settings.moduleName
     private val model = coreCodegenContext.model
-    private val protocol = coreCodegenContext.protocol
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val serviceName = coreCodegenContext.serviceShape.toShapeId().name
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
@@ -70,12 +75,92 @@ class ServerOperationRegistryGenerator(
     private val operationRegistryBuilderNameWithArguments = "$operationRegistryBuilderName<$genericArguments>"
 
     fun render(writer: RustWriter) {
+        renderOperationRegistryRustDocs(writer)
         renderOperationRegistryStruct(writer)
         renderOperationRegistryBuilderStruct(writer)
         renderOperationRegistryBuilderError(writer)
         renderOperationRegistryBuilderDefault(writer)
         renderOperationRegistryBuilderImplementation(writer)
         renderRouterImplementationFromOperationRegistryBuilder(writer)
+    }
+
+    private fun renderOperationRegistryRustDocs(writer: RustWriter) {
+        val inputOutputErrorsImport = if (operations.any { it.errors.isNotEmpty() }) {
+            "/// use ${crateName.toSnakeCase()}::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};"
+        } else {
+            "/// use ${crateName.toSnakeCase()}::{${Inputs.namespace}, ${Outputs.namespace}};"
+        }
+
+        writer.rustTemplate(
+"""
+##[allow(clippy::tabs_in_doc_comments)]
+/// The `$operationRegistryName` is the place where you can register
+/// your service's operation implementations.
+///
+/// Use [`$operationRegistryBuilderName`] to construct the
+/// `$operationRegistryName`. For each of the [operations] modeled in
+/// your Smithy service, you need to provide an implementation in the
+/// form of a Rust async function or closure that takes in the
+/// operation's input as their first parameter, and returns the
+/// operation's output. If your operation is fallible (i.e. it
+/// contains the `errors` member in your Smithy model), the function
+/// implementing the operation has to be fallible (i.e. return a
+/// [`Result`]). **You must register an implementation for all
+/// operations with the correct signature**, or your application
+/// will fail to compile.
+///
+/// The operation registry can be converted into an [`#{Router}`] for
+/// your service. This router will take care of routing HTTP
+/// requests to the matching operation implementation, adhering to
+/// your service's protocol and the [HTTP binding traits] that you
+/// used in your Smithy model. This router can be converted into a
+/// type implementing [`tower::make::MakeService`], a _service
+/// factory_. You can feed this value to a [Hyper server], and the
+/// server will instantiate and [`serve`] your service.
+///
+/// Here's a full example to get you started:
+///
+/// ```rust
+/// use std::net::SocketAddr;
+$inputOutputErrorsImport
+/// use ${crateName.toSnakeCase()}::operation_registry::$operationRegistryBuilderName;
+/// use #{Router};
+///
+/// ##[#{Tokio}::main]
+/// pub async fn main() {
+///    let app: Router = $operationRegistryBuilderName::default()
+${operationNames.map { ".$it($it)" }.joinToString("\n") { it.prependIndent("///        ") }}
+///        .build()
+///        .expect("unable to build operation registry")
+///        .into();
+///
+///    let bind: SocketAddr = format!("{}:{}", "127.0.0.1", "6969")
+///        .parse()
+///        .expect("unable to parse the server bind address and port");
+///
+///    let server = #{Hyper}::Server::bind(&bind).serve(app.into_make_service());
+///
+///    // Run your service!
+///    // if let Err(err) = server.await {
+///    //   eprintln!("server error: {}", err);
+///    // }
+/// }
+///
+${operationImplementationStubs(operations)}
+/// ```
+///
+/// [`serve`]: https://docs.rs/hyper/0.14.16/hyper/server/struct.Builder.html##method.serve
+/// [`tower::make::MakeService`]: https://docs.rs/tower/latest/tower/make/trait.MakeService.html
+/// [HTTP binding traits]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
+/// [operations]: https://awslabs.github.io/smithy/1.0/spec/core/model.html##operation
+/// [Hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
+""",
+            "Router" to ServerRuntimeType.Router(runtimeConfig),
+            // These should be dev-dependencies. Not all sSDKs depend on `Hyper` (only those that convert the body
+            // `to_bytes`), and none depend on `tokio`.
+            "Tokio" to ServerCargoDependency.TokioDev.asType(),
+            "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).asType(),
+        )
     }
 
     private fun renderOperationRegistryStruct(writer: RustWriter) {
@@ -88,7 +173,7 @@ class ServerOperationRegistryGenerator(
                 $members,
                 _phantom: #{Phantom}<(B, ${phantomMembers()})>,
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -106,7 +191,7 @@ class ServerOperationRegistryGenerator(
                 $members,
                 _phantom: #{Phantom}<(B, ${phantomMembers()})>,
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -119,10 +204,10 @@ class ServerOperationRegistryGenerator(
         Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
         writer.rustTemplate(
             """
-            pub enum ${operationRegistryErrorName}{
+            pub enum $operationRegistryErrorName {
                 UninitializedField(&'static str)
             }
-            impl #{Display} for ${operationRegistryErrorName}{
+            impl #{Display} for $operationRegistryErrorName {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         Self::UninitializedField(v) => write!(f, "{}", v),
@@ -153,7 +238,7 @@ class ServerOperationRegistryGenerator(
                     }
                 }
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -172,20 +257,20 @@ class ServerOperationRegistryGenerator(
                         new.$operationName = Some(value);
                         new
                     }
-                    """
+                    """,
                 )
             }
 
-            rustBlock("pub fn build(self) -> Result<$operationRegistryNameWithArguments, ${operationRegistryErrorName}>") {
+            rustBlock("pub fn build(self) -> Result<$operationRegistryNameWithArguments, $operationRegistryErrorName>") {
                 withBlock("Ok( $operationRegistryName {", "})") {
                     for (operationName in operationNames) {
                         rust(
                             """
                             $operationName: match self.$operationName {
                                 Some(v) => v,
-                                None => return Err(${operationRegistryErrorName}::UninitializedField("$operationName")),
+                                None => return Err($operationRegistryErrorName::UninitializedField("$operationName")),
                             },
-                            """
+                            """,
                         )
                     }
                     rustTemplate("_phantom: #{Phantom}", *codegenScope)
@@ -206,7 +291,7 @@ class ServerOperationRegistryGenerator(
                     In$i: 'static + Send,
                     """,
                     *codegenScope,
-                    "OperationInput" to symbolProvider.toSymbol(operation.inputShape(model))
+                    "OperationInput" to symbolProvider.toSymbol(operation.inputShape(model)),
                 )
             }
         }
@@ -221,7 +306,7 @@ class ServerOperationRegistryGenerator(
                 #{operationTraitBounds:W}
             """,
             *codegenScope,
-            "operationTraitBounds" to operationTraitBounds
+            "operationTraitBounds" to operationTraitBounds,
         ) {
             rustBlock("fn from(registry: $operationRegistryNameWithArguments) -> Self") {
                 val requestSpecsVarNames = operationNames.map { "${it}_request_spec" }
@@ -229,15 +314,19 @@ class ServerOperationRegistryGenerator(
                 requestSpecsVarNames.zip(operations).forEach { (requestSpecVarName, operation) ->
                     rustTemplate(
                         "let $requestSpecVarName = #{RequestSpec:W};",
-                        "RequestSpec" to operation.requestSpec()
+                        "RequestSpec" to operation.requestSpec(),
                     )
                 }
 
-                withBlockTemplate("#{Router}::${runtimeRouterConstructor()}(vec![", "])", *codegenScope) {
+                withBlockTemplate(
+                    "#{Router}::${protocol.serverRouterRuntimeConstructor()}(vec![",
+                    "])",
+                    *codegenScope,
+                ) {
                     requestSpecsVarNames.zip(operationNames).forEach { (requestSpecVarName, operationName) ->
                         rustTemplate(
                             "(#{Tower}::util::BoxCloneService::new(#{ServerOperationHandler}::operation(registry.$operationName)), $requestSpecVarName),",
-                            *codegenScope
+                            *codegenScope,
                         )
                     }
                 }
@@ -250,97 +339,48 @@ class ServerOperationRegistryGenerator(
      */
     private fun phantomMembers() = operationNames.mapIndexed { i, _ -> "In$i" }.joinToString(separator = ",\n")
 
-    /**
-     * Finds the runtime function to construct a new `Router` based on the Protocol.
-     */
-    private fun runtimeRouterConstructor(): String =
-        when (protocol) {
-            RestJson1Trait.ID -> "new_rest_json_router"
-            RestXmlTrait.ID -> "new_rest_xml_router"
-            AwsJson1_0Trait.ID -> "new_aws_json_10_router"
-            AwsJson1_1Trait.ID -> "new_aws_json_11_router"
-            else -> TODO("Protocol $protocol not supported yet")
+    private fun operationImplementationStubs(operations: List<OperationShape>): String =
+        operations.joinToString("\n///\n") {
+            val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
+            val ret = if (!operationDocumentation.isNullOrBlank()) {
+                operationDocumentation.replace("#", "##").prependIndent("/// /// ") + "\n"
+            } else ""
+            ret +
+                """
+                /// ${it.signature()} {
+                ///     todo!()
+                /// }
+                """.trimIndent()
         }
+
+    /**
+     * Returns the function signature for an operation handler implementation. Used in the documentation.
+     */
+    private fun OperationShape.signature(): String {
+        val inputSymbol = symbolProvider.toSymbol(inputShape(model))
+        val outputSymbol = symbolProvider.toSymbol(outputShape(model))
+        val errorSymbol = errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
+
+        val inputT = "${Inputs.namespace}::${inputSymbol.name}"
+        val t = "${Outputs.namespace}::${outputSymbol.name}"
+        val outputT = if (errors.isEmpty()) {
+            t
+        } else {
+            val e = "${Errors.namespace}::${errorSymbol.name}"
+            "Result<$t, $e>"
+        }
+
+        val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
+        return "async fn $operationName(input: $inputT) -> $outputT"
+    }
 
     /**
      * Returns a writable for the `RequestSpec` for an operation based on the service's protocol.
      */
-    private fun OperationShape.requestSpec(): Writable =
-        when (protocol) {
-            RestJson1Trait.ID, RestXmlTrait.ID -> restRequestSpec()
-            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> awsJsonOperationName()
-            else -> TODO("Protocol $protocol not supported yet")
-        }
-
-    /**
-     * Returns the operation name as required by the awsJson1.x protocols.
-     */
-    private fun OperationShape.awsJsonOperationName(): Writable {
-        val operationName = symbolProvider.toSymbol(this).name
-        return writable {
-            rust("""String::from("$serviceName.$operationName")""")
-        }
-    }
-
-    /**
-     * Generates a restJson1 or restXml specific `RequestSpec`.
-     */
-    private fun OperationShape.restRequestSpec(): Writable {
-        val httpTrait = httpBindingResolver.httpTrait(this)
-        val extraCodegenScope =
-            arrayOf("RequestSpec", "UriSpec", "PathAndQuerySpec", "PathSpec", "QuerySpec", "PathSegment", "QuerySegment").map {
-                it to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec::$it")
-            }.toTypedArray()
-
-        // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
-        val pathSegmentsVec = writable {
-            withBlock("vec![", "]") {
-                for (segment in httpTrait.uri.segments) {
-                    val variant = when {
-                        segment.isGreedyLabel -> "Greedy"
-                        segment.isLabel -> "Label"
-                        else -> """Literal(String::from("${segment.content}"))"""
-                    }
-                    rustTemplate(
-                        "#{PathSegment}::$variant,",
-                        *extraCodegenScope
-                    )
-                }
-            }
-        }
-
-        val querySegmentsVec = writable {
-            withBlock("vec![", "]") {
-                for (queryLiteral in httpTrait.uri.queryLiterals) {
-                    val variant = if (queryLiteral.value == "") {
-                        """Key(String::from("${queryLiteral.key}"))"""
-                    } else {
-                        """KeyValue(String::from("${queryLiteral.key}"), String::from("${queryLiteral.value}"))"""
-                    }
-                    rustTemplate("#{QuerySegment}::$variant,", *extraCodegenScope)
-                }
-            }
-        }
-
-        return writable {
-            rustTemplate(
-                """
-                #{RequestSpec}::new(
-                    #{Method}::${httpTrait.method},
-                    #{UriSpec}::new(
-                        #{PathAndQuerySpec}::new(
-                            #{PathSpec}::from_vector_unchecked(#{PathSegmentsVec:W}),
-                            #{QuerySpec}::from_vector_unchecked(#{QuerySegmentsVec:W})
-                        )
-                    ),
-                )
-                """,
-                *codegenScope,
-                *extraCodegenScope,
-                "PathSegmentsVec" to pathSegmentsVec,
-                "QuerySegmentsVec" to querySegmentsVec,
-                "Method" to CargoDependency.Http.asType().member("Method"),
-            )
-        }
-    }
+    private fun OperationShape.requestSpec(): Writable = protocol.serverRouterRequestSpec(
+        this,
+        symbolProvider.toSymbol(this).name,
+        serviceName,
+        ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec"),
+    )
 }

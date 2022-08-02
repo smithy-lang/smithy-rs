@@ -15,8 +15,10 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -46,8 +48,6 @@ class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFac
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
 
-    override fun transformModel(model: Model): Model = model
-
     override fun support(): ProtocolSupport = ProtocolSupport(
         /* Client support */
         requestSerialization = true,
@@ -58,7 +58,7 @@ class AwsJsonFactory(private val version: AwsJsonVersion) : ProtocolGeneratorFac
         requestDeserialization = false,
         requestBodyDeserialization = false,
         responseSerialization = false,
-        errorSerialization = false
+        errorSerialization = false,
     )
 }
 
@@ -102,7 +102,7 @@ class AwsJsonSerializerGenerator(
     private val coreCodegenContext: CoreCodegenContext,
     httpBindingResolver: HttpBindingResolver,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
-        JsonSerializerGenerator(coreCodegenContext, httpBindingResolver, ::awsJsonFieldName)
+        JsonSerializerGenerator(coreCodegenContext, httpBindingResolver, ::awsJsonFieldName),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
@@ -118,7 +118,7 @@ class AwsJsonSerializerGenerator(
             serializer = RuntimeType.forInlineFun(fnName, RustModule.private("operation_ser")) {
                 it.rustBlockTemplate(
                     "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
-                    *codegenScope, "target" to coreCodegenContext.symbolProvider.toSymbol(inputShape)
+                    *codegenScope, "target" to coreCodegenContext.symbolProvider.toSymbol(inputShape),
                 ) {
                     rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
                 }
@@ -130,7 +130,7 @@ class AwsJsonSerializerGenerator(
 
 open class AwsJson(
     private val coreCodegenContext: CoreCodegenContext,
-    awsJsonVersion: AwsJsonVersion
+    private val awsJsonVersion: AwsJsonVersion,
 ) : Protocol {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(
@@ -165,7 +165,7 @@ open class AwsJson(
                     #{json_errors}::parse_generic_error(response.body(), response.headers())
                 }
                 """,
-                *errorScope
+                *errorScope,
             )
         }
 
@@ -178,9 +178,26 @@ open class AwsJson(
                     #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
                 }
                 """,
-                *errorScope
+                *errorScope,
             )
         }
+
+    /**
+     * Returns the operation name as required by the awsJson1.x protocols.
+     */
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ) = writable {
+        rust("""String::from("$serviceName.$operationName")""")
+    }
+
+    override fun serverRouterRuntimeConstructor() = when (awsJsonVersion) {
+        AwsJsonVersion.Json10 -> "new_aws_json_10_router"
+        AwsJsonVersion.Json11 -> "new_aws_json_11_router"
+    }
 }
 
 fun awsJsonFieldName(member: MemberShape): String = member.memberName

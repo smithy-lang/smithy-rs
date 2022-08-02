@@ -57,7 +57,7 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     ShortShape::class to RustType.Integer(16),
     IntegerShape::class to RustType.Integer(32),
     LongShape::class to RustType.Integer(64),
-    StringShape::class to RustType.String
+    StringShape::class to RustType.String,
 )
 
 data class SymbolVisitorConfig(
@@ -101,11 +101,15 @@ fun Symbol.makeOptional(): Symbol {
     }
 }
 
-/** Map the RustType of a symbol with [f] */
+/**
+ * Map the [RustType] of a symbol with [f].
+ *
+ * WARNING: This function does not set any `SymbolReference`s on the returned symbol. You will have to add those
+ * yourself if your logic relies on them.
+ **/
 fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
     val newType = f(this.rustType())
     return Symbol.builder().rustType(newType)
-        .addReference(this)
         .name(newType.name)
         .build()
 }
@@ -145,6 +149,7 @@ interface RustSymbolProvider : SymbolProvider {
  * Make the return [value] optional if the [member] symbol is as well optional.
  */
 fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) { "Some($value)" }
+
 /**
  * Make the return [value] optional if the [member] symbol is not optional.
  */
@@ -172,7 +177,7 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
 class SymbolVisitor(
     private val model: Model,
     private val serviceShape: ServiceShape?,
-    private val config: SymbolVisitorConfig
+    private val config: SymbolVisitorConfig,
 ) : RustSymbolProvider,
     ShapeVisitor<Symbol> {
     private val nullableIndex = NullableIndex.of(model)
@@ -228,7 +233,7 @@ class SymbolVisitor(
     }
 
     private fun simpleShape(shape: SimpleShape): Symbol {
-        return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).setDefault(Default.RustDefault).build()
+        return symbolBuilder(SimpleShapes.getValue(shape::class)).setDefault(Default.RustDefault).build()
     }
 
     override fun booleanShape(shape: BooleanShape): Symbol = simpleShape(shape)
@@ -241,7 +246,7 @@ class SymbolVisitor(
     override fun stringShape(shape: StringShape): Symbol {
         return if (shape.hasTrait<EnumTrait>()) {
             val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
-            symbolBuilder(shape, rustType).locatedIn(Models).build()
+            symbolBuilder(rustType).locatedIn(Models).build()
         } else {
             simpleShape(shape)
         }
@@ -249,16 +254,16 @@ class SymbolVisitor(
 
     override fun listShape(shape: ListShape): Symbol {
         val inner = this.toSymbol(shape.member)
-        return symbolBuilder(shape, RustType.Vec(inner.rustType())).addReference(inner).build()
+        return symbolBuilder(RustType.Vec(inner.rustType())).addReference(inner).build()
     }
 
     override fun setShape(shape: SetShape): Symbol {
         val inner = this.toSymbol(shape.member)
         val builder = if (model.expectShape(shape.member.target).isStringShape) {
-            symbolBuilder(shape, RustType.HashSet(inner.rustType()))
+            symbolBuilder(RustType.HashSet(inner.rustType()))
         } else {
             // only strings get put into actual sets because floats are unhashable
-            symbolBuilder(shape, RustType.Vec(inner.rustType()))
+            symbolBuilder(RustType.Vec(inner.rustType()))
         }
         return builder.addReference(inner).build()
     }
@@ -268,7 +273,7 @@ class SymbolVisitor(
         require(target.isStringShape) { "unexpected key shape: ${shape.key}: $target [keys must be strings]" }
         val key = this.toSymbol(shape.key)
         val value = this.toSymbol(shape.value)
-        return symbolBuilder(shape, RustType.HashMap(key.rustType(), value.rustType())).addReference(key)
+        return symbolBuilder(RustType.HashMap(key.rustType(), value.rustType())).addReference(key)
             .addReference(value).build()
     }
 
@@ -286,11 +291,10 @@ class SymbolVisitor(
 
     override fun operationShape(shape: OperationShape): Symbol {
         return symbolBuilder(
-            shape,
             RustType.Opaque(
                 shape.contextName(serviceShape)
-                    .replaceFirstChar { it.uppercase() }
-            )
+                    .replaceFirstChar { it.uppercase() },
+            ),
         )
             .locatedIn(Operations)
             .build()
@@ -311,7 +315,7 @@ class SymbolVisitor(
         val name = shape.contextName(serviceShape).toPascalCase().letIf(isError && config.renameExceptions) {
             it.replace("Exception", "Error")
         }
-        val builder = symbolBuilder(shape, RustType.Opaque(name))
+        val builder = symbolBuilder(RustType.Opaque(name))
         return when {
             isError -> builder.locatedIn(Errors)
             isInput -> builder.locatedIn(Inputs)
@@ -322,7 +326,7 @@ class SymbolVisitor(
 
     override fun unionShape(shape: UnionShape): Symbol {
         val name = shape.contextName(serviceShape).toPascalCase()
-        val builder = symbolBuilder(shape, RustType.Opaque(name)).locatedIn(Models)
+        val builder = symbolBuilder(RustType.Opaque(name)).locatedIn(Models)
 
         return builder.build()
     }
@@ -342,10 +346,8 @@ class SymbolVisitor(
         return RuntimeType.DateTime(config.runtimeConfig).toSymbol()
     }
 
-    private fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder {
-        val builder = Symbol.builder().putProperty(SHAPE_KEY, shape)
-        return builder.rustType(rustType)
-            .name(rustType.name)
+    private fun symbolBuilder(rustType: RustType): Symbol.Builder {
+        return Symbol.builder().rustType(rustType).name(rustType.name)
             // Every symbol that actually gets defined somewhere should set a definition file
             // If we ever generate a `thisisabug.rs`, there is a bug in our symbol generation
             .definitionFile("thisisabug.rs")

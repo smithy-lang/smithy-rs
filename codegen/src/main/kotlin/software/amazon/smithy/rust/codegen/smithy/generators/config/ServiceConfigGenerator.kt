@@ -139,7 +139,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
                     let mut config = f.debug_struct("Config");
                     config.finish()
                 }
-                """
+                """,
             )
         }
 
@@ -148,7 +148,7 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
                 """
                 /// Constructs a config builder.
                 pub fn builder() -> Builder { Builder::default() }
-                """
+                """,
             )
             customizations.forEach {
                 it.section(ServiceConfig.ConfigImpl)(this)

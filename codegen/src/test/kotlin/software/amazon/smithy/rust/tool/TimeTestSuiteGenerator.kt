@@ -34,7 +34,7 @@ private val DAYS_IN_MONTH = mapOf(
     9 to 30,
     10 to 31,
     11 to 30,
-    12 to 31
+    12 to 31,
 )
 private val MILLI_FRACTIONS = listOf(0, 1_000_000, 10_000_000, 100_000_000, 234_000_000)
 private val MICRO_FRACTIONS = listOf(0, 1_000, 10_000, 100_000, 234_000)
@@ -52,7 +52,7 @@ private data class TestCase(
                 // JSON numbers have 52 bits of precision, and canonical seconds needs 64 bits
                 "canonical_seconds" to Node.from(instant.epochSecond.toString()),
                 "canonical_nanos" to NumberNode(instant.nano, SourceLocation.NONE),
-                "error" to BooleanNode(formatted == null, SourceLocation.NONE)
+                "error" to BooleanNode(formatted == null, SourceLocation.NONE),
             )
             if (formatted != null) {
                 map["smithy_format_value"] = Node.from(formatted)
@@ -120,7 +120,7 @@ private fun generateHttpDateTests(parsing: Boolean): List<TestCase> {
             when {
                 time.year < 0 -> null
                 else -> formatter.format(time)
-            }
+            },
         )
     }
 }
@@ -139,7 +139,7 @@ private fun generateDateTimeTests(parsing: Boolean): List<TestCase> {
             when {
                 time.year < 0 -> null
                 else -> formatter.format(time)
-            }
+            },
         )
     }
 }
@@ -194,7 +194,7 @@ fun main() {
             }
             ```
             """.trimIndent().split("\n").map { Node.from(it) },
-            none
+            none,
         ),
         "format_epoch_seconds" to ArrayNode(generateEpochSecondsTests().map(TestCase::toNode), none),
         "format_http_date" to ArrayNode(generateHttpDateTests(parsing = false).map(TestCase::toNode), none),
@@ -203,19 +203,19 @@ fun main() {
             generateEpochSecondsTests()
                 .filter { it.formatted != null }
                 .map(TestCase::toNode),
-            none
+            none,
         ),
         "parse_http_date" to ArrayNode(
             generateHttpDateTests(parsing = true)
                 .filter { it.formatted != null }
                 .map(TestCase::toNode),
-            none
+            none,
         ),
         "parse_date_time" to ArrayNode(
             generateDateTimeTests(parsing = true)
                 .filter { it.formatted != null }
                 .map(TestCase::toNode),
-            none
+            none,
         ),
     ).mapKeys { Node.from(it.key) }
 

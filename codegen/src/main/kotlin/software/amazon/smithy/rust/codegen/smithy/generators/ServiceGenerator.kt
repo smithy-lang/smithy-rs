@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfigGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.error.CombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.TopLevelErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
@@ -48,16 +47,12 @@ class ServiceGenerator(
                         operationWriter,
                         inputWriter,
                         operation,
-                        decorator.operationCustomizations(clientCodegenContext, operation, listOf())
+                        decorator.operationCustomizations(clientCodegenContext, operation, listOf()),
                     )
 
                     // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
                     ProtocolTestGenerator(clientCodegenContext, protocolSupport, operation, operationWriter).render()
                 }
-            }
-            // Render a service-level error enum containing every error that the service can emit
-            rustCrate.withModule(RustModule.Error) { writer ->
-                CombinedErrorGenerator(clientCodegenContext.model, clientCodegenContext.symbolProvider, operation).render(writer)
             }
         }
 
@@ -66,7 +61,7 @@ class ServiceGenerator(
         rustCrate.withModule(RustModule.Config) { writer ->
             ServiceConfigGenerator.withBaseBehavior(
                 clientCodegenContext,
-                extraCustomizations = decorator.configCustomizations(clientCodegenContext, listOf())
+                extraCustomizations = decorator.configCustomizations(clientCodegenContext, listOf()),
             ).render(writer)
         }
 

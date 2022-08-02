@@ -21,7 +21,8 @@ object RemoveEventStreamOperations {
 
     fun transform(model: Model, settings: CoreRustSettings): Model {
         // If Event Stream is allowed in build config, then don't remove the operations
-        if (settings.codegenConfig.eventStreamAllowList.contains(settings.moduleName)) {
+        val allowList = settings.codegenConfig.eventStreamAllowList
+        if (allowList.isEmpty() || allowList.contains(settings.moduleName)) {
             return model
         }
 
@@ -32,7 +33,7 @@ object RemoveEventStreamOperations {
                 val ioShapes = listOfNotNull(parentShape.output.orNull(), parentShape.input.orNull()).map {
                     model.expectShape(
                         it,
-                        StructureShape::class.java
+                        StructureShape::class.java,
                     )
                 }
                 val hasEventStream = ioShapes.any { ioShape ->

@@ -1,7 +1,7 @@
 RFC: Supporting Flexible Checksums
 ==================================
 
-> Status: RFC
+> Status: Implemented
 
 We can't currently update the S3 SDK because we don't support the new "Flexible Checksums" feature. This RFC describes this new feature and details how we should implement it in `smithy-rs`.
 

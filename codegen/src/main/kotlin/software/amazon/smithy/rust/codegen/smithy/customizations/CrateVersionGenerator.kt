@@ -20,7 +20,7 @@ class CrateVersionGenerator : LibRsCustomization() {
                 """
                 /// Crate version number.
                 pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-                """
+                """,
             )
         }
     }

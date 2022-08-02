@@ -18,6 +18,6 @@ class ClientCustomizations : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> = baseCustomizations + ClientDocsGenerator()
 }

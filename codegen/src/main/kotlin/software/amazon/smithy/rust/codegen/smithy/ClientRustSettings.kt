@@ -31,7 +31,7 @@ data class ClientRustSettings(
     override val codegenConfig: ClientCodegenConfig,
     override val license: String?,
     override val examplesUri: String?,
-    override val customizationConfig: ObjectNode?
+    override val customizationConfig: ObjectNode?,
 ) : CoreRustSettings(
     service,
     moduleName,
@@ -43,7 +43,7 @@ data class ClientRustSettings(
     codegenConfig,
     license,
     examplesUri,
-    customizationConfig
+    customizationConfig,
 ) {
     companion object {
         fun from(model: Model, config: ObjectNode): ClientRustSettings {
@@ -61,7 +61,7 @@ data class ClientRustSettings(
                 codegenConfig = ClientCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, codegenSettingsNode),
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
-                customizationConfig = coreRustSettings.customizationConfig
+                customizationConfig = coreRustSettings.customizationConfig,
             )
         }
     }
@@ -81,7 +81,7 @@ data class ClientCodegenConfig(
     val includeFluentClient: Boolean = defaultIncludeFluentClient,
     val addMessageToErrors: Boolean = defaultAddMessageToErrors,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode, eventStreamAllowList
+    formatTimeoutSeconds, debugMode, eventStreamAllowList,
 ) {
     companion object {
         private const val defaultRenameExceptions = true

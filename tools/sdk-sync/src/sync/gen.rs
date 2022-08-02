@@ -11,7 +11,7 @@ use smithy_rs_tool_common::shell::handle_failure;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, warn};
 
 #[derive(Clone, Debug)]
 pub struct CodeGenSettings {
@@ -19,6 +19,7 @@ pub struct CodeGenSettings {
     pub max_gradle_heap_megabytes: usize,
     pub max_gradle_metaspace_megabytes: usize,
     pub aws_models_path: Option<PathBuf>,
+    pub model_metadata_path: Option<PathBuf>,
 }
 
 impl Default for CodeGenSettings {
@@ -28,6 +29,7 @@ impl Default for CodeGenSettings {
             max_gradle_heap_megabytes: 512,
             max_gradle_metaspace_megabytes: 512,
             aws_models_path: None,
+            model_metadata_path: None,
         }
     }
 }
@@ -129,7 +131,7 @@ impl DefaultSdkGenerator {
         Ok(())
     }
 
-    fn do_aws_sdk_assemble(&self) -> Result<()> {
+    fn do_aws_sdk_assemble(&self, attempt: u32) -> Result<()> {
         let mut command = Command::new("./gradlew");
         command.arg("--no-daemon"); // Don't let Gradle continue running after the build
         command.arg("--no-parallel"); // Disable Gradle parallelism
@@ -158,9 +160,6 @@ impl DefaultSdkGenerator {
             .join(" ")
         ));
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1493): Remove this argument once a release goes out with it removed from `build.gradle.kts`
-        command.arg("-Paws.fullsdk=true");
-
         // Disable Smithy's codegen parallelism in favor of sdk-sync parallelism
         command.arg(format!(
             "-Djava.util.concurrent.ForkJoinPool.common.parallelism={}",
@@ -175,6 +174,14 @@ impl DefaultSdkGenerator {
                     .expect("aws models path is a valid str")
             ));
         }
+        if let Some(model_metadata_path) = &self.settings.model_metadata_path {
+            command.arg(format!(
+                "-Paws.sdk.model.metadata={}",
+                model_metadata_path
+                    .to_str()
+                    .expect("model metadata path is a valid str")
+            ));
+        }
         command.arg(format!(
             "-Paws.sdk.previous.release.versions.manifest={}",
             self.previous_versions_manifest
@@ -185,6 +192,8 @@ impl DefaultSdkGenerator {
             "-Paws.sdk.examples.revision={}",
             &self.aws_doc_sdk_examples_revision
         ));
+        // This property doesn't affect the build at all, but allows us to reliably test retry with `fake-sdk-assemble`
+        command.arg(format!("-Paws.sdk.sync.attempt={}", attempt));
         command.arg("aws:sdk:assemble");
         command.current_dir(self.smithy_rs.path());
 
@@ -195,25 +204,32 @@ impl DefaultSdkGenerator {
         Ok(())
     }
 
-    /// Runs `aws:sdk:assemble` target with property `aws.fullsdk=true` set
+    /// Runs `aws:sdk:assemble` target
     #[instrument(skip(self))]
     fn aws_sdk_assemble(&self) -> Result<()> {
-        let result = self.do_aws_sdk_assemble();
-        if let Err(err) = &result {
-            error!("Codegen failed: {}", err);
-            // On failure, do a dump of running processes to give more insight into if there is a process leak going on
-            match Command::new("ps").arg("-ef").output() {
-                Ok(output) => info!(
-                    "Running processes shortly after failure:\n---\n{}---\n",
-                    String::from_utf8_lossy(&output.stdout)
-                ),
-                Err(err) => info!(
-                    "Failed to get running processes shortly after failure: {}",
-                    err
-                ),
+        // Retry gradle daemon startup failures up to 3 times
+        let (mut attempt, max_attempts) = (1, 3);
+        loop {
+            match self.do_aws_sdk_assemble(attempt) {
+                Ok(_) => return Ok(()),
+                Err(err) => {
+                    let error_message = format!("{}", err);
+                    let should_retry = attempt < max_attempts
+                        && error_message
+                            .contains("Timeout waiting to connect to the Gradle daemon");
+                    if !should_retry {
+                        error!("Codegen failed after {} attempt(s): {}", attempt, err);
+                        return Err(err);
+                    } else {
+                        warn!(
+                            "Gradle daemon start failed. Will retry. Full error: {}",
+                            error_message
+                        );
+                    }
+                }
             }
+            attempt += 1;
         }
-        result
     }
 }
 

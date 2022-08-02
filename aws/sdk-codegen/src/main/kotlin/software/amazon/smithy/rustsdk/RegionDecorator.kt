@@ -76,7 +76,7 @@ class RegionDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + RegionProviderConfig(codegenContext)
     }
@@ -84,14 +84,14 @@ class RegionDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + RegionConfigPlugin()
     }
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseRegion(codegenContext.runtimeConfig)
     }
@@ -126,11 +126,11 @@ class RegionProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCusto
                         self
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             ServiceConfig.BuilderBuild -> rustTemplate(
                 """region: self.region,""",
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -146,7 +146,7 @@ class RegionConfigPlugin : OperationCustomization() {
                     if let Some(region) = &${section.config}.region {
                         ${section.request}.properties_mut().insert(region.clone());
                     }
-                    """
+                    """,
                 )
             }
             else -> emptySection
