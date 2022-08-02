@@ -244,6 +244,7 @@ mod tests {
         VersionsManifest {
             smithy_rs_revision: "doesntmatter".into(),
             aws_doc_sdk_examples_revision: "doesntmatter".into(),
+            manual_interventions: Default::default(),
             crates: crates
                 .iter()
                 .map(|&(name, version)| {

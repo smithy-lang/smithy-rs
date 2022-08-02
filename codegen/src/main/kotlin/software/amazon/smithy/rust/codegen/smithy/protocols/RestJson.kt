@@ -16,11 +16,13 @@ import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
@@ -36,8 +38,6 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, Cli
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, RestJson(codegenContext))
 
-    override fun transformModel(model: Model): Model = model
-
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
             /* Client support */
@@ -49,7 +49,7 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, Cli
             requestDeserialization = false,
             requestBodyDeserialization = false,
             responseSerialization = false,
-            errorSerialization = false
+            errorSerialization = false,
         )
     }
 }
@@ -100,7 +100,7 @@ class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
     private val jsonDeserModule = RustModule.private("json_deser")
 
     override val httpBindingResolver: HttpBindingResolver =
-        RestJsonHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes.consistent("application/json"))
+        RestJsonHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes("application/json", "application/json", "application/vnd.amazon.eventstream"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
@@ -125,7 +125,7 @@ class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
                     #{json_errors}::parse_generic_error(response.body(), response.headers())
                 }
                 """,
-                *errorScope
+                *errorScope,
             )
         }
 
@@ -138,9 +138,18 @@ class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
                     #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
                 }
                 """,
-                *errorScope
+                *errorScope,
             )
         }
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+
+    override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
 }
 
 fun restJsonFieldName(member: MemberShape): String {

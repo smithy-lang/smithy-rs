@@ -21,11 +21,11 @@ val AwsTestRuntimeConfig = TestRuntimeConfig.copy(
         val path = File("../../rust-runtime")
         check(path.exists()) { "$path must exist to generate a working SDK" }
         RuntimeCrateLocation.Path(path.absolutePath)
-    }
+    },
 )
 
 fun awsTestCodegenContext(model: Model? = null, coreRustSettings: CoreRustSettings?) =
     testCodegenContext(
         model ?: "namespace test".asSmithyModel(),
-        settings = coreRustSettings ?: testRustSettings(runtimeConfig = AwsTestRuntimeConfig)
+        settings = coreRustSettings ?: testRustSettings(runtimeConfig = AwsTestRuntimeConfig),
     )

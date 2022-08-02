@@ -92,9 +92,7 @@ def generate_and_commit_generated_code(revision_sha):
     run("./gradlew codegen:clean codegen-server:clean aws:sdk-codegen:clean")
 
     # Generate code
-    # TODO(https://github.com/awslabs/smithy-rs/issues/1493): Remove the `aws.services` property once the
-    # non-smoketest models have been removed from smithy-rs
-    run("./gradlew --rerun-tasks :aws:sdk:assemble '-Paws.services=+config,+dynamodb,+ec2,+glacier,+iam,+kms,+polly,+qldbsession,+s3,+s3control,+sts,+sso,+transcribestreaming,+route53'")
+    run("./gradlew --rerun-tasks :aws:sdk:assemble")
     run("./gradlew --rerun-tasks :codegen-server-test:assemble")
     run("./gradlew --rerun-tasks :codegen-server-test:python:assemble")
 

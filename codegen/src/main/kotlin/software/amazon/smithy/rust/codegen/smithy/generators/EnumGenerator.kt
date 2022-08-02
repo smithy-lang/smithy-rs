@@ -11,6 +11,7 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.escape
@@ -43,14 +44,21 @@ class EnumMemberModel(private val definition: EnumDefinition, private val symbol
             definition.documentation.orNull(),
             name.renamedFrom?.let { renamedFrom ->
                 "`::$renamedFrom` has been renamed to `::${name.name}`."
-            }
+            },
         )
+    }
+
+    private fun renderDeprecated(writer: RustWriter) {
+        if (definition.isDeprecated) {
+            writer.rust("##[deprecated]")
+        }
     }
 
     fun derivedName() = checkNotNull(symbolProvider.toEnumVariantName(definition)).name
 
     fun render(writer: RustWriter) {
         renderDocumentation(writer)
+        renderDeprecated(writer)
         writer.write("${derivedName()},")
     }
 }
@@ -116,6 +124,7 @@ open class EnumGenerator(
 
     private fun renderUnnamedEnum() {
         writer.documentShape(shape, model)
+        writer.deprecatedShape(shape)
         meta.render(writer)
         writer.write("struct $enumName(String);")
         writer.rustBlock("impl $enumName") {
@@ -148,8 +157,9 @@ open class EnumGenerator(
             }
         writer.docWithNote(
             shape.getTrait<DocumentationTrait>()?.value,
-            renamedWarning.ifBlank { null }
+            renamedWarning.ifBlank { null },
         )
+        writer.deprecatedShape(shape)
 
         meta.render(writer)
         writer.rustBlock("enum $enumName") {
@@ -208,7 +218,7 @@ open class EnumGenerator(
                     Ok($enumName::from(s))
                 }
             }
-            """
+            """,
         )
     }
 }

@@ -5,10 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
-import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
-import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -31,8 +27,9 @@ import software.amazon.smithy.rust.codegen.smithy.Errors
 import software.amazon.smithy.rust.codegen.smithy.Inputs
 import software.amazon.smithy.rust.codegen.smithy.Outputs
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -51,12 +48,11 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  */
 class ServerOperationRegistryGenerator(
     coreCodegenContext: CoreCodegenContext,
-    private val httpBindingResolver: HttpBindingResolver,
+    private val protocol: Protocol,
     private val operations: List<OperationShape>,
 ) {
     private val crateName = coreCodegenContext.settings.moduleName
     private val model = coreCodegenContext.model
-    private val protocol = coreCodegenContext.protocol
     private val symbolProvider = coreCodegenContext.symbolProvider
     private val serviceName = coreCodegenContext.serviceShape.toShapeId().name
     private val operationNames = operations.map { symbolProvider.toSymbol(it).name.toSnakeCase() }
@@ -89,14 +85,20 @@ class ServerOperationRegistryGenerator(
     }
 
     private fun renderOperationRegistryRustDocs(writer: RustWriter) {
+        val inputOutputErrorsImport = if (operations.any { it.errors.isNotEmpty() }) {
+            "/// use ${crateName.toSnakeCase()}::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};"
+        } else {
+            "/// use ${crateName.toSnakeCase()}::{${Inputs.namespace}, ${Outputs.namespace}};"
+        }
+
         writer.rustTemplate(
-            """
+"""
 ##[allow(clippy::tabs_in_doc_comments)]
-/// The `${operationRegistryName}` is the place where you can register
+/// The `$operationRegistryName` is the place where you can register
 /// your service's operation implementations.
-/// 
-/// Use [`${operationRegistryBuilderName}`] to construct the
-/// `${operationRegistryName}`. For each of the [operations] modeled in
+///
+/// Use [`$operationRegistryBuilderName`] to construct the
+/// `$operationRegistryName`. For each of the [operations] modeled in
 /// your Smithy service, you need to provide an implementation in the
 /// form of a Rust async function or closure that takes in the
 /// operation's input as their first parameter, and returns the
@@ -115,22 +117,18 @@ class ServerOperationRegistryGenerator(
 /// type implementing [`tower::make::MakeService`], a _service
 /// factory_. You can feed this value to a [Hyper server], and the
 /// server will instantiate and [`serve`] your service.
-/// 
+///
 /// Here's a full example to get you started:
-/// 
+///
 /// ```rust
 /// use std::net::SocketAddr;
-${ if (operations.any { it.errors.isNotEmpty() }) {
-"/// use ${crateName}::{${Inputs.namespace}, ${Outputs.namespace}, ${Errors.namespace}};"
-} else {
-"/// use ${crateName}::{${Inputs.namespace}, ${Outputs.namespace}};"
-} }
-/// use ${crateName}::operation_registry::${operationRegistryBuilderName};
+$inputOutputErrorsImport
+/// use ${crateName.toSnakeCase()}::operation_registry::$operationRegistryBuilderName;
 /// use #{Router};
 ///
 /// ##[#{Tokio}::main]
 /// pub async fn main() {
-///    let app: Router = ${operationRegistryBuilderName}::default()
+///    let app: Router = $operationRegistryBuilderName::default()
 ${operationNames.map { ".$it($it)" }.joinToString("\n") { it.prependIndent("///        ") }}
 ///        .build()
 ///        .expect("unable to build operation registry")
@@ -161,7 +159,7 @@ ${operationImplementationStubs(operations)}
             // These should be dev-dependencies. Not all sSDKs depend on `Hyper` (only those that convert the body
             // `to_bytes`), and none depend on `tokio`.
             "Tokio" to ServerCargoDependency.TokioDev.asType(),
-            "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).asType()
+            "Hyper" to CargoDependency.Hyper.copy(scope = DependencyScope.Dev).asType(),
         )
     }
 
@@ -175,7 +173,7 @@ ${operationImplementationStubs(operations)}
                 $members,
                 _phantom: #{Phantom}<(B, ${phantomMembers()})>,
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -193,7 +191,7 @@ ${operationImplementationStubs(operations)}
                 $members,
                 _phantom: #{Phantom}<(B, ${phantomMembers()})>,
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -206,10 +204,10 @@ ${operationImplementationStubs(operations)}
         Attribute.Derives(setOf(RuntimeType.Debug)).render(writer)
         writer.rustTemplate(
             """
-            pub enum ${operationRegistryErrorName}{
+            pub enum $operationRegistryErrorName {
                 UninitializedField(&'static str)
             }
-            impl #{Display} for ${operationRegistryErrorName}{
+            impl #{Display} for $operationRegistryErrorName {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         Self::UninitializedField(v) => write!(f, "{}", v),
@@ -240,7 +238,7 @@ ${operationImplementationStubs(operations)}
                     }
                 }
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -259,20 +257,20 @@ ${operationImplementationStubs(operations)}
                         new.$operationName = Some(value);
                         new
                     }
-                    """
+                    """,
                 )
             }
 
-            rustBlock("pub fn build(self) -> Result<$operationRegistryNameWithArguments, ${operationRegistryErrorName}>") {
+            rustBlock("pub fn build(self) -> Result<$operationRegistryNameWithArguments, $operationRegistryErrorName>") {
                 withBlock("Ok( $operationRegistryName {", "})") {
                     for (operationName in operationNames) {
                         rust(
                             """
                             $operationName: match self.$operationName {
                                 Some(v) => v,
-                                None => return Err(${operationRegistryErrorName}::UninitializedField("$operationName")),
+                                None => return Err($operationRegistryErrorName::UninitializedField("$operationName")),
                             },
-                            """
+                            """,
                         )
                     }
                     rustTemplate("_phantom: #{Phantom}", *codegenScope)
@@ -293,7 +291,7 @@ ${operationImplementationStubs(operations)}
                     In$i: 'static + Send,
                     """,
                     *codegenScope,
-                    "OperationInput" to symbolProvider.toSymbol(operation.inputShape(model))
+                    "OperationInput" to symbolProvider.toSymbol(operation.inputShape(model)),
                 )
             }
         }
@@ -308,7 +306,7 @@ ${operationImplementationStubs(operations)}
                 #{operationTraitBounds:W}
             """,
             *codegenScope,
-            "operationTraitBounds" to operationTraitBounds
+            "operationTraitBounds" to operationTraitBounds,
         ) {
             rustBlock("fn from(registry: $operationRegistryNameWithArguments) -> Self") {
                 val requestSpecsVarNames = operationNames.map { "${it}_request_spec" }
@@ -316,15 +314,19 @@ ${operationImplementationStubs(operations)}
                 requestSpecsVarNames.zip(operations).forEach { (requestSpecVarName, operation) ->
                     rustTemplate(
                         "let $requestSpecVarName = #{RequestSpec:W};",
-                        "RequestSpec" to operation.requestSpec()
+                        "RequestSpec" to operation.requestSpec(),
                     )
                 }
 
-                withBlockTemplate("#{Router}::${runtimeRouterConstructor()}(vec![", "])", *codegenScope) {
+                withBlockTemplate(
+                    "#{Router}::${protocol.serverRouterRuntimeConstructor()}(vec![",
+                    "])",
+                    *codegenScope,
+                ) {
                     requestSpecsVarNames.zip(operationNames).forEach { (requestSpecVarName, operationName) ->
                         rustTemplate(
                             "(#{Tower}::util::BoxCloneService::new(#{ServerOperationHandler}::operation(registry.$operationName)), $requestSpecVarName),",
-                            *codegenScope
+                            *codegenScope,
                         )
                     }
                 }
@@ -337,100 +339,6 @@ ${operationImplementationStubs(operations)}
      */
     private fun phantomMembers() = operationNames.mapIndexed { i, _ -> "In$i" }.joinToString(separator = ",\n")
 
-    /**
-     * Finds the runtime function to construct a new `Router` based on the Protocol.
-     */
-    private fun runtimeRouterConstructor(): String =
-        when (protocol) {
-            RestJson1Trait.ID -> "new_rest_json_router"
-            RestXmlTrait.ID -> "new_rest_xml_router"
-            AwsJson1_0Trait.ID -> "new_aws_json_10_router"
-            AwsJson1_1Trait.ID -> "new_aws_json_11_router"
-            else -> TODO("Protocol $protocol not supported yet")
-        }
-
-    /**
-     * Returns a writable for the `RequestSpec` for an operation based on the service's protocol.
-     */
-    private fun OperationShape.requestSpec(): Writable =
-        when (protocol) {
-            RestJson1Trait.ID, RestXmlTrait.ID -> restRequestSpec()
-            AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> awsJsonOperationName()
-            else -> TODO("Protocol $protocol not supported yet")
-        }
-
-    /**
-     * Returns the operation name as required by the awsJson1.x protocols.
-     */
-    private fun OperationShape.awsJsonOperationName(): Writable {
-        val operationName = symbolProvider.toSymbol(this).name
-        return writable {
-            rust("""String::from("$serviceName.$operationName")""")
-        }
-    }
-
-    /**
-     * Generates a restJson1 or restXml specific `RequestSpec`.
-     */
-    private fun OperationShape.restRequestSpec(): Writable {
-        val httpTrait = httpBindingResolver.httpTrait(this)
-        val extraCodegenScope =
-            arrayOf("RequestSpec", "UriSpec", "PathAndQuerySpec", "PathSpec", "QuerySpec", "PathSegment", "QuerySegment").map {
-                it to ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec::$it")
-            }.toTypedArray()
-
-        // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
-        val pathSegmentsVec = writable {
-            withBlock("vec![", "]") {
-                for (segment in httpTrait.uri.segments) {
-                    val variant = when {
-                        segment.isGreedyLabel -> "Greedy"
-                        segment.isLabel -> "Label"
-                        else -> """Literal(String::from("${segment.content}"))"""
-                    }
-                    rustTemplate(
-                        "#{PathSegment}::$variant,",
-                        *extraCodegenScope
-                    )
-                }
-            }
-        }
-
-        val querySegmentsVec = writable {
-            withBlock("vec![", "]") {
-                for (queryLiteral in httpTrait.uri.queryLiterals) {
-                    val variant = if (queryLiteral.value == "") {
-                        """Key(String::from("${queryLiteral.key}"))"""
-                    } else {
-                        """KeyValue(String::from("${queryLiteral.key}"), String::from("${queryLiteral.value}"))"""
-                    }
-                    rustTemplate("#{QuerySegment}::$variant,", *extraCodegenScope)
-                }
-            }
-        }
-
-        return writable {
-            rustTemplate(
-                """
-                #{RequestSpec}::new(
-                    #{Method}::${httpTrait.method},
-                    #{UriSpec}::new(
-                        #{PathAndQuerySpec}::new(
-                            #{PathSpec}::from_vector_unchecked(#{PathSegmentsVec:W}),
-                            #{QuerySpec}::from_vector_unchecked(#{QuerySegmentsVec:W})
-                        )
-                    ),
-                )
-                """,
-                *codegenScope,
-                *extraCodegenScope,
-                "PathSegmentsVec" to pathSegmentsVec,
-                "QuerySegmentsVec" to querySegmentsVec,
-                "Method" to CargoDependency.Http.asType().member("Method"),
-            )
-        }
-    }
-
     private fun operationImplementationStubs(operations: List<OperationShape>): String =
         operations.joinToString("\n///\n") {
             val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
@@ -438,11 +346,11 @@ ${operationImplementationStubs(operations)}
                 operationDocumentation.replace("#", "##").prependIndent("/// /// ") + "\n"
             } else ""
             ret +
-                    """
-                    /// ${it.signature()} {
-                    ///     todo!()
-                    /// }
-                    """.trimIndent()
+                """
+                /// ${it.signature()} {
+                ///     todo!()
+                /// }
+                """.trimIndent()
         }
 
     /**
@@ -451,7 +359,7 @@ ${operationImplementationStubs(operations)}
     private fun OperationShape.signature(): String {
         val inputSymbol = symbolProvider.toSymbol(inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(outputShape(model))
-        val errorSymbol = errorSymbol(symbolProvider)
+        val errorSymbol = errorSymbol(model, symbolProvider, CodegenTarget.SERVER)
 
         val inputT = "${Inputs.namespace}::${inputSymbol.name}"
         val t = "${Outputs.namespace}::${outputSymbol.name}"
@@ -465,4 +373,14 @@ ${operationImplementationStubs(operations)}
         val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
         return "async fn $operationName(input: $inputT) -> $outputT"
     }
+
+    /**
+     * Returns a writable for the `RequestSpec` for an operation based on the service's protocol.
+     */
+    private fun OperationShape.requestSpec(): Writable = protocol.serverRouterRequestSpec(
+        this,
+        symbolProvider.toSymbol(this).name,
+        serviceName,
+        ServerCargoDependency.SmithyHttpServer(runtimeConfig).asType().member("routing::request_spec"),
+    )
 }

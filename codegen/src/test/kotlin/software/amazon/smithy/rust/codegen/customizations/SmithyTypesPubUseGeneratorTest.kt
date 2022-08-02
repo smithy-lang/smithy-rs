@@ -18,7 +18,7 @@ class SmithyTypesPubUseGeneratorTest {
         inputMember: String = "",
         outputMember: String = "",
         unionMember: String = "",
-        additionalShape: String = ""
+        additionalShape: String = "",
     ): Model {
         return """
             namespace test
@@ -49,7 +49,7 @@ class SmithyTypesPubUseGeneratorTest {
         inputMember: String = "",
         outputMember: String = "",
         unionMember: String = "",
-        additionalShape: String = ""
+        additionalShape: String = "",
     ) = pubUseTypes(TestRuntimeConfig, modelWithMember(inputMember, outputMember, unionMember, additionalShape))
 
     private fun assertDoesntHaveTypes(types: List<RuntimeType>, expectedTypes: List<String>) =
@@ -68,7 +68,7 @@ class SmithyTypesPubUseGeneratorTest {
         if (types.none { t -> t.fullyQualifiedName() == type }) {
             throw AssertionError(
                 "Expected $type to be re-exported. Re-exported types: " +
-                    types.joinToString { it.fullyQualifiedName() }
+                    types.joinToString { it.fullyQualifiedName() },
             )
         }
     }
@@ -85,11 +85,11 @@ class SmithyTypesPubUseGeneratorTest {
         assertHasType(typesWithMember(outputMember = "foo: Blob"), "aws_smithy_types::Blob")
         assertHasType(
             typesWithMember(inputMember = "foo: SomeUnion", unionMember = "foo: Blob"),
-            "aws_smithy_types::Blob"
+            "aws_smithy_types::Blob",
         )
         assertHasType(
             typesWithMember(outputMember = "foo: SomeUnion", unionMember = "foo: Blob"),
-            "aws_smithy_types::Blob"
+            "aws_smithy_types::Blob",
         )
     }
 
@@ -100,11 +100,11 @@ class SmithyTypesPubUseGeneratorTest {
         assertHasType(typesWithMember(outputMember = "foo: Timestamp"), "aws_smithy_types::DateTime")
         assertHasType(
             typesWithMember(inputMember = "foo: SomeUnion", unionMember = "foo: Timestamp"),
-            "aws_smithy_types::DateTime"
+            "aws_smithy_types::DateTime",
         )
         assertHasType(
             typesWithMember(outputMember = "foo: SomeUnion", unionMember = "foo: Timestamp"),
-            "aws_smithy_types::DateTime"
+            "aws_smithy_types::DateTime",
         )
     }
 
@@ -122,16 +122,16 @@ class SmithyTypesPubUseGeneratorTest {
         assertDoesntHaveTypes(
             typesWithMember(
                 additionalShape = "@streaming union EventStream { foo: SomeStruct }",
-                inputMember = "m: EventStream"
+                inputMember = "m: EventStream",
             ),
-            streamingTypes
+            streamingTypes,
         )
         assertDoesntHaveTypes(
             typesWithMember(
                 additionalShape = "@streaming union EventStream { foo: SomeStruct }",
-                outputMember = "m: EventStream"
+                outputMember = "m: EventStream",
             ),
-            streamingTypes
+            streamingTypes,
         )
     }
 }

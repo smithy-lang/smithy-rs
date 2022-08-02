@@ -12,5 +12,9 @@ if [[ "${GITHUB_ACTIONS}" == "true" ]]; then
    SDK_PATH="$(git rev-parse --show-toplevel)"/aws-sdk/sdk
 fi
 
-./build-bundle --sdk-path "${SDK_PATH}" --manifest-only
-cargo clippy
+# The canary-lambda doesn't have a Cargo.toml in a fresh checkout of smithy-rs, so generate one before checks
+pushd ../canary-runner
+cargo run -- build-bundle --manifest-only --canary-path ../canary-lambda --sdk-path "${SDK_PATH}"
+popd
+
+cargo clippy --all-features

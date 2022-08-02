@@ -15,7 +15,7 @@ class RestXmlParserGenerator(
     private val xmlBindingTraitParserGenerator: XmlBindingTraitParserGenerator =
         XmlBindingTraitParserGenerator(
             coreCodegenContext,
-            xmlErrors
+            xmlErrors,
         ) { context, inner ->
             val shapeName = context.outputShapeName
             rustTemplate(
@@ -24,8 +24,8 @@ class RestXmlParserGenerator(
                     return Err(#{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
                 }
                 """,
-                "XmlError" to context.xmlErrorType
+                "XmlError" to context.xmlErrorType,
             )
             inner("decoder")
-        }
+        },
 ) : StructuredDataParserGenerator by xmlBindingTraitParserGenerator

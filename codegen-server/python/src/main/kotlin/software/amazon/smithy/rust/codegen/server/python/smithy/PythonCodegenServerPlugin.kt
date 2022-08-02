@@ -17,10 +17,11 @@ import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.StreamingShapeMetadataProvider
+import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
-import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -38,7 +39,7 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
-        // Discover [RustCodegenDecorators] on the classpath. [RustCodegenDectorator] return different types of
+        // Discover [RustCodegenDecorators] on the classpath. [RustCodegenDecorator] return different types of
         // customization. A customization is a function of:
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
@@ -66,7 +67,7 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let {
-                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
+                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER)
                 }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }

@@ -35,12 +35,15 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
         mapOf("package" to mapOf("readme" to "README.md"))
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        val awsConfigVersion = SdkSettings.from(codegenContext.settings).awsConfigVersion
         rustCrate.withFile("README.md") { writer ->
             val description = normalizeDescription(
                 codegenContext.moduleName,
-                codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: ""
+                codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
             )
             val moduleName = codegenContext.settings.moduleName
+            val snakeCaseModuleName = moduleName.replace('-', '_')
+            val shortModuleName = moduleName.removePrefix("aws-sdk-")
 
             writer.raw(
                 """
@@ -62,10 +65,29 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
                     ```toml
                     [dependencies]
-                    aws-config = "${codegenContext.settings.moduleVersion}"
+                    aws-config = "$awsConfigVersion"
                     $moduleName = "${codegenContext.settings.moduleVersion}"
                     tokio = { version = "1", features = ["full"] }
                     ```
+
+                    Then in code, a client can be created with the following:
+
+                    ```rust
+                    use $snakeCaseModuleName as $shortModuleName;
+
+                    #[tokio::main]
+                    async fn main() -> Result<(), $shortModuleName::Error> {
+                        let config = aws_config::load_from_env().await;
+                        let client = $shortModuleName::Client::new(&config);
+
+                        // ... make some calls with the client
+
+                        Ok(())
+                    }
+                    ```
+
+                    See the [client documentation](https://docs.rs/$moduleName/latest/$snakeCaseModuleName/client/struct.Client.html)
+                    for information on what calls can be made, and the inputs and outputs for each of those calls.
 
                     ## Using the SDK
 
@@ -83,7 +105,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
                     ## License
 
                     This project is licensed under the Apache-2.0 License.
-                    """.trimIndent()
+                    """.trimIndent(),
             )
         }
     }
@@ -146,7 +168,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
                 span.append(surround)
                 span.appendChildren(tag.childNodesCopy())
                 span.append(surround)
-            }
+            },
         )
     }
 
@@ -160,8 +182,8 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
                         "[$text]($link)"
                     } else {
                         text
-                    }
-                )
+                    },
+                ),
             )
         }
     }

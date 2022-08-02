@@ -27,7 +27,7 @@ pin-project-lite = "0.2.9"
 tracing = "0.1"
 
 # We are using hyper for our streaming body implementation, but this is an internal detail.
-hyper = "0.14"
+hyper = "0.14.12"
 
 # ByteStream internals
 futures-core = "0.3.14"
@@ -37,7 +37,7 @@ tokio-util = { version = "0.7", optional = true }
 [dev-dependencies]
 async-stream = "0.3"
 futures-util = "0.3"
-hyper = { version = "0.14", features = ["stream"] }
+hyper = { version = "0.14.12", features = ["stream"] }
 pretty_assertions = "1.2"
 proptest = "1"
 tokio = { version = "1.6", features = [

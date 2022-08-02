@@ -26,7 +26,7 @@ val TreeHashDependencies = listOf(
     CargoDependency.Bytes,
     TokioWithTestMacros,
     CargoDependency.Hex,
-    CargoDependency.TempFile
+    CargoDependency.TempFile,
 )
 
 private val UploadArchive: ShapeId = ShapeId.from("com.amazonaws.glacier#UploadArchive")
@@ -47,7 +47,7 @@ class TreeHashHeader(private val runtimeConfig: RuntimeConfig) : OperationCustom
                         &mut ${section.request}
                     ).await.map_err(|e|#{BuildError}::Other(e.into()))?;
                     """,
-                    "glacier_checksums" to glacierChecksums, "BuildError" to runtimeConfig.operationBuildError()
+                    "glacier_checksums" to glacierChecksums, "BuildError" to runtimeConfig.operationBuildError(),
                 )
             }
             else -> emptySection

@@ -21,7 +21,7 @@ object PythonServerCargoDependency {
     val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TowerHttp: CargoDependency = CargoDependency("tower-http", CratesIo("0.3"), features = setOf("trace"))
-    val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14"), features = setOf("server", "http1", "http2", "tcp", "stream"))
+    val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"), features = setOf("server", "http1", "http2", "tcp", "stream"))
     val NumCpus: CargoDependency = CargoDependency("num_cpus", CratesIo("1.13"))
 
     fun SmithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.runtimeCrate("http-server")

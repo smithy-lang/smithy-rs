@@ -1,1 +1,0 @@
-../../../../aws-smithy-http-server/examples/pokemon_service/tests/simple_integration_test.rs

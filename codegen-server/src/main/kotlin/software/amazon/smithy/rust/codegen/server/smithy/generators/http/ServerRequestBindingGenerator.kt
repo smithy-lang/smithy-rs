@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 class ServerRequestBindingGenerator(
     protocol: Protocol,
     coreCodegenContext: CoreCodegenContext,
-    operationShape: OperationShape
+    operationShape: OperationShape,
 ) {
     private val httpBindingGenerator = HttpBindingGenerator(protocol, coreCodegenContext, operationShape)
 
@@ -27,12 +27,12 @@ class ServerRequestBindingGenerator(
     fun generateDeserializePayloadFn(
         binding: HttpBindingDescriptor,
         errorT: RuntimeType,
-        structuredHandler: RustWriter.(String) -> Unit
+        structuredHandler: RustWriter.(String) -> Unit,
     ): RuntimeType = httpBindingGenerator.generateDeserializePayloadFn(
         binding,
         errorT,
         structuredHandler,
-        HttpMessageType.REQUEST
+        HttpMessageType.REQUEST,
     )
 
     fun generateDeserializePrefixHeadersFn(

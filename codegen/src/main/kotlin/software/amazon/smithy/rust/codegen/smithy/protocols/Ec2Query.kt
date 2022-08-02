@@ -5,13 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
@@ -30,8 +30,6 @@ class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, Cli
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
 
-    override fun transformModel(model: Model): Model = model
-
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
             /* Client support */
@@ -43,7 +41,7 @@ class Ec2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, Cli
             requestDeserialization = false,
             requestBodyDeserialization = false,
             responseSerialization = false,
-            errorSerialization = false
+            errorSerialization = false,
         )
     }
 }
@@ -56,7 +54,7 @@ class Ec2QueryProtocol(private val coreCodegenContext: CoreCodegenContext) : Pro
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
         "Response" to RuntimeType.http.member("Response"),
-        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError"),
     )
     private val xmlDeserModule = RustModule.private("xml_deser")
 
@@ -68,7 +66,7 @@ class Ec2QueryProtocol(private val coreCodegenContext: CoreCodegenContext) : Pro
             .uri(UriPattern.parse("/"))
             .build(),
         "application/x-www-form-urlencoded",
-        "text/xml"
+        "text/xml",
     )
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
@@ -83,7 +81,7 @@ class Ec2QueryProtocol(private val coreCodegenContext: CoreCodegenContext) : Pro
         RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
-                *errorScope
+                *errorScope,
             ) {
                 rust("#T::parse_generic_error(response.body().as_ref())", ec2QueryErrors)
             }
@@ -93,9 +91,22 @@ class Ec2QueryProtocol(private val coreCodegenContext: CoreCodegenContext) : Pro
         RuntimeType.forInlineFun("parse_event_stream_generic_error", xmlDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlError}>",
-                *errorScope
+                *errorScope,
             ) {
                 rust("#T::parse_generic_error(payload.as_ref())", ec2QueryErrors)
             }
         }
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ): Writable {
+        TODO("Not yet implemented")
+    }
+
+    override fun serverRouterRuntimeConstructor(): String {
+        TODO("Not yet implemented")
+    }
 }

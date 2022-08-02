@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -45,7 +46,7 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
             CombinedCodegenDecorator.fromClasspath(context, ServerRequiredCustomizations())
 
         // ServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
-        logger.info("Loaded plugin to generate pure Rust bindings for the server SSDK")
+        logger.info("Loaded plugin to generate pure Rust bindings for the server SDK")
         ServerCodegenVisitor(context, codegenDecorator).execute()
     }
 
@@ -59,12 +60,12 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
         fun baseSymbolProvider(
             model: Model,
             serviceShape: ServiceShape,
-            symbolVisitorConfig: SymbolVisitorConfig
+            symbolVisitorConfig: SymbolVisitorConfig,
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let {
-                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
+                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER)
                 }
                 // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }

@@ -23,7 +23,7 @@ class RetryPolicyDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + RetryPolicyFeature(codegenContext.runtimeConfig)
     }
@@ -35,7 +35,7 @@ class RetryPolicyFeature(private val runtimeConfig: RuntimeConfig) : OperationCu
         is OperationSection.FinalizeOperation -> writable {
             rust(
                 "let ${section.operation} = ${section.operation}.with_retry_policy(#T::new());",
-                retryType()
+                retryType(),
             )
         }
         else -> emptySection

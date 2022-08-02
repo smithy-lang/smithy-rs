@@ -14,19 +14,19 @@ import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 
 /**
  * ServerServiceGenerator
  *
- * Service generator is the main codegeneration entry point for Smithy services. Individual structures and unions are
+ * Service generator is the main code generation entry point for Smithy services. Individual structures and unions are
  * generated in codegen visitor, but this class handles all protocol-specific code generation (i.e. operations).
  */
 open class ServerServiceGenerator(
     private val rustCrate: RustCrate,
     private val protocolGenerator: ProtocolGenerator,
     private val protocolSupport: ProtocolSupport,
-    private val httpBindingResolver: HttpBindingResolver,
+    private val protocol: Protocol,
     private val coreCodegenContext: CoreCodegenContext,
 ) {
     private val index = TopDownIndex.of(coreCodegenContext.model)
@@ -61,8 +61,8 @@ open class ServerServiceGenerator(
                 """
                 Contains the [`operation_registry::OperationRegistry`], a place where
                 you can register your service's operation implementations.
-                """
-            )
+                """,
+            ),
         ) { writer ->
             renderOperationRegistry(writer, operations)
         }
@@ -74,7 +74,7 @@ open class ServerServiceGenerator(
 
     // Render combined errors.
     open fun renderCombinedErrors(writer: RustWriter, operation: OperationShape) {
-        ServerCombinedErrorGenerator(coreCodegenContext.model, coreCodegenContext.symbolProvider, operation).render(writer)
+        /* Subclasses can override */
     }
 
     // Render operations handler.
@@ -84,6 +84,6 @@ open class ServerServiceGenerator(
 
     // Render operations registry.
     private fun renderOperationRegistry(writer: RustWriter, operations: List<OperationShape>) {
-        ServerOperationRegistryGenerator(coreCodegenContext, httpBindingResolver, operations).render(writer)
+        ServerOperationRegistryGenerator(coreCodegenContext, protocol, operations).render(writer)
     }
 }

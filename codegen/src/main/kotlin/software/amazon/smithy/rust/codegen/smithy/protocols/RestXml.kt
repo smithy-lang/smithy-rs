@@ -6,17 +6,18 @@
 package software.amazon.smithy.rust.codegen.smithy.protocols
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.RestXmlParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
@@ -25,15 +26,13 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.XmlBinding
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
 class RestXmlFactory(
-    private val generator: (ClientCodegenContext) -> Protocol = { RestXml(it) }
+    private val generator: (ClientCodegenContext) -> Protocol = { RestXml(it) },
 ) : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
 
     override fun protocol(codegenContext: ClientCodegenContext): Protocol = generator(codegenContext)
 
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
-
-    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
@@ -46,7 +45,7 @@ class RestXmlFactory(
             requestDeserialization = false,
             requestBodyDeserialization = false,
             responseSerialization = false,
-            errorSerialization = false
+            errorSerialization = false,
         )
     }
 }
@@ -59,7 +58,7 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
         "Response" to RuntimeType.http.member("Response"),
-        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError"),
     )
     private val xmlDeserModule = RustModule.private("xml_deser")
 
@@ -69,7 +68,7 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
     }
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes.consistent("application/xml"))
+        HttpTraitHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes("application/xml", "application/xml", "application/vnd.amazon.eventstream"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME
@@ -86,7 +85,7 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
         RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
-                *errorScope
+                *errorScope,
             ) {
                 rust("#T::parse_generic_error(response.body().as_ref())", restXmlErrors)
             }
@@ -96,9 +95,18 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
         RuntimeType.forInlineFun("parse_event_stream_generic_error", xmlDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlError}>",
-                *errorScope
+                *errorScope,
             ) {
                 rust("#T::parse_generic_error(payload.as_ref())", restXmlErrors)
             }
         }
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+
+    override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
 }

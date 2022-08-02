@@ -76,7 +76,7 @@ internal class RecursiveShapeBoxerTest {
             "Atom\$add",
             "Atom\$sub",
             "SecondTree\$third",
-            "Atom\$more"
+            "Atom\$more",
         )
     }
 }

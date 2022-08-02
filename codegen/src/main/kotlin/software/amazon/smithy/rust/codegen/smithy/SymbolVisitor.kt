@@ -57,7 +57,7 @@ val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
     ShortShape::class to RustType.Integer(16),
     IntegerShape::class to RustType.Integer(32),
     LongShape::class to RustType.Integer(64),
-    StringShape::class to RustType.String
+    StringShape::class to RustType.String,
 )
 
 data class SymbolVisitorConfig(
@@ -101,11 +101,15 @@ fun Symbol.makeOptional(): Symbol {
     }
 }
 
-/** Map the RustType of a symbol with [f] */
+/**
+ * Map the [RustType] of a symbol with [f].
+ *
+ * WARNING: This function does not set any `SymbolReference`s on the returned symbol. You will have to add those
+ * yourself if your logic relies on them.
+ **/
 fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
     val newType = f(this.rustType())
     return Symbol.builder().rustType(newType)
-        .addReference(this)
         .name(newType.name)
         .build()
 }
@@ -145,6 +149,7 @@ interface RustSymbolProvider : SymbolProvider {
  * Make the return [value] optional if the [member] symbol is as well optional.
  */
 fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) { "Some($value)" }
+
 /**
  * Make the return [value] optional if the [member] symbol is not optional.
  */
@@ -172,7 +177,7 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
 class SymbolVisitor(
     private val model: Model,
     private val serviceShape: ServiceShape?,
-    private val config: SymbolVisitorConfig
+    private val config: SymbolVisitorConfig,
 ) : RustSymbolProvider,
     ShapeVisitor<Symbol> {
     private val nullableIndex = NullableIndex.of(model)
@@ -194,7 +199,6 @@ class SymbolVisitor(
     }
 
     override fun toMemberName(shape: MemberShape): String = when (val container = model.expectShape(shape.container)) {
-
         is StructureShape -> shape.memberName.toSnakeCase()
         is UnionShape -> shape.memberName.toPascalCase()
         else -> error("unexpected container shape: $container")
@@ -289,8 +293,8 @@ class SymbolVisitor(
         return symbolBuilder(
             RustType.Opaque(
                 shape.contextName(serviceShape)
-                    .replaceFirstChar { it.uppercase() }
-            )
+                    .replaceFirstChar { it.uppercase() },
+            ),
         )
             .locatedIn(Operations)
             .build()

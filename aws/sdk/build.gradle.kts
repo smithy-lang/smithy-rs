@@ -55,7 +55,6 @@ val awsServices: AwsServices by lazy { discoverServices(properties.get("aws.sdk.
 val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, properties) }
 
-fun getSdkVersion(): String = properties.get("aws.sdk.version") ?: throw Exception("SDK version missing")
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
 fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
 
@@ -73,11 +72,13 @@ fun eventStreamAllowList(): Set<String> {
 }
 
 fun generateSmithyBuild(services: AwsServices): String {
+    val awsConfigVersion = properties.get("smithy.rs.runtime.crate.version")
+        ?: throw IllegalStateException("missing smithy.rs.runtime.crate.version for aws-config version")
     val serviceProjections = services.services.map { service ->
-        val files = service.files().map { extraFile ->
+        val files = service.modelFiles().map { extraFile ->
             software.amazon.smithy.utils.StringUtils.escapeJavaString(
                 extraFile.absolutePath,
-                ""
+                "",
             )
         }
         val moduleName = "aws-sdk-${service.module}"
@@ -99,7 +100,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
-                        "moduleVersion": "${crateVersioner.decideCrateVersion(moduleName)}",
+                        "moduleVersion": "${crateVersioner.decideCrateVersion(moduleName, service)}",
                         "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                         "moduleDescription": "${service.moduleDescription}",
                         ${service.examplesUri(project)?.let { """"examples": "$it",""" } ?: ""}
@@ -107,6 +108,9 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "license": "Apache-2.0",
                         "customizationConfig": {
                             "awsSdk": {
+                                "awsConfigVersion": "$awsConfigVersion",
+                                "defaultConfigPath": "${services.defaultConfigPath}",
+                                "endpointsConfigPath": "${services.endpointsConfigPath}",
                                 "integrationTestPath": "${project.projectDir.resolve("integration-tests")}"
                             }
                         }
@@ -203,7 +207,7 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
         "use-path-and-version-dependencies",
         "--sdk-path", "../../sdk",
         "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
-        outputDir.resolve("examples").absolutePath
+        outputDir.resolve("examples").absolutePath,
     )
 
     outputs.dir(outputDir)
@@ -240,7 +244,7 @@ tasks.register("relocateAwsRuntime") {
         // Patch the Cargo.toml files
         CrateSet.AWS_SDK_RUNTIME.forEach { moduleName ->
             patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteAwsSdkCrateVersion(properties, line.let(::rewritePathDependency))
+                rewriteRuntimeCrateVersion(properties, line.let(::rewritePathDependency))
             }
         }
     }
@@ -251,7 +255,7 @@ tasks.register("relocateRuntime") {
         // Patch the Cargo.toml files
         CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { moduleName ->
             patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteSmithyRsCrateVersion(properties, line)
+                rewriteRuntimeCrateVersion(properties, line)
             }
         }
     }
@@ -310,16 +314,20 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
 tasks.register<ExecRustBuildTool>("hydrateReadme") {
     description = "Run the publisher tool's `hydrate-readme` sub-command to create the final AWS Rust SDK README file"
 
+    dependsOn("generateVersionManifest")
+
     inputs.dir(publisherToolPath)
-    outputs.dir(outputDir)
+    inputs.file(rootProject.projectDir.resolve("aws/SDK_README.md.hb"))
+    outputs.file(outputDir.resolve("README.md").absolutePath)
 
     toolPath = publisherToolPath
     binaryName = "publisher"
     arguments = listOf(
         "hydrate-readme",
-        "--sdk-version", getSdkVersion(),
+        "--versions-manifest", outputDir.resolve("versions.toml").toString(),
         "--msrv", getRustMSRV(),
-        "--output", outputDir.resolve("README.md").absolutePath
+        "--input", rootProject.projectDir.resolve("aws/SDK_README.md.hb").toString(),
+        "--output", outputDir.resolve("README.md").absolutePath,
     )
 }
 
@@ -345,13 +353,11 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
         "--smithy-build",
         buildDir.resolve("smithy-build.json").normalize().absolutePath,
         "--examples-revision",
-        properties.get("aws.sdk.examples.revision") ?: "missing"
+        properties.get("aws.sdk.examples.revision") ?: "missing",
     ).apply {
         val previousReleaseManifestPath = getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
             add("--previous-release-versions")
             add(manifestPath)
-            add("--release-tag")
-            add("v" + getSdkVersion())
         }
     }
 }
@@ -369,7 +375,7 @@ tasks.register("finalizeSdk") {
         "generateVersionManifest",
         "fixExampleManifests",
         "hydrateReadme",
-        "relocateChangelog"
+        "relocateChangelog",
     )
 }
 
