@@ -5539,7 +5539,7 @@ let router = aws_smithy_http_server::routing::Router::new_rest_json_router(route
 <ul>
 <li>The <a href="rfcs/rfc0018_logging_sensitive.html#http-binding-traits">HTTP bindings traits</a> and why they are of concern in the presence of <code>@sensitive</code>.</li>
 <li>The <a href="https://github.com/awslabs/smithy-rs/pull/229">Debug implementation</a> on structures.</li>
-<li>How to use the <code>Sensitive</code> struct, HTTP wrappers, and the <code>unredacted-logging</code> feature flag described in <a href="rfcs/rfc0018_logging_sensitive.html#unredacted-logging">Debug Logging</a> and <a href="rfcs/rfc0018_logging_sensitive.html#http-debugdisplay-wrappers">HTTP Debug/Display Wrappers</a>.</li>
+<li>How to use the <code>Sensitive</code> struct, HTTP wrappers, and the <code>unredacted-logging</code> feature flag described in <a href="rfcs/rfc0018_logging_sensitive.html#debug-logging">Debug Logging</a> and <a href="rfcs/rfc0018_logging_sensitive.html#http-debugdisplay-wrappers">HTTP Debug/Display Wrappers</a>.</li>
 <li>A warning against the two potential leaks described in <a href="rfcs/rfc0018_logging_sensitive.html#scope-and-guidelines">Scope and Guidelines</a>:
 <ul>
 <li>Sensitive data leaking from third-party dependencies.</li>
@@ -5548,7 +5548,7 @@ let router = aws_smithy_http_server::routing::Router::new_rest_json_router(route
 </li>
 </ul>
 <h2 id="alternative-proposals"><a class="header" href="#alternative-proposals">Alternative Proposals</a></h2>
-<p>All of the following proposals are compatible with, and benefit from, <a href="rfcs/rfc0018_logging_sensitive.html#unredacted-logging">Debug Logging</a>, <a href="rfcs/rfc0018_logging_sensitive.html#http-debugdisplay-wrappers">HTTP Debug/Display Wrappers</a>, and <a href="rfcs/rfc0018_logging_sensitive.html#developer-guideline">Developer Guideline</a> portions of the main proposal.</p>
+<p>All of the following proposals are compatible with, and benefit from, <a href="rfcs/rfc0018_logging_sensitive.html#debug-logging">Debug Logging</a>, <a href="rfcs/rfc0018_logging_sensitive.html#http-debugdisplay-wrappers">HTTP Debug/Display Wrappers</a>, and <a href="rfcs/rfc0018_logging_sensitive.html#developer-guideline">Developer Guideline</a> portions of the main proposal.</p>
 <p>The main proposal disallows the logging of potentially sensitive data in the runtime crates, instead opting for a dedicated code generated logging middleware. In contrast, the following proposals all seek ways to accommodate logging of potentially sensitive data in the runtime crates.</p>
 <h3 id="use-request-extensions"><a class="header" href="#use-request-extensions">Use Request Extensions</a></h3>
 <p>Request extensions can be used to adjoin data to a Request as it passes through the middleware. Concretely, they exist as the type map <a href="https://docs.rs/http/latest/http/struct.Extensions.html">http::Extensions</a> accessed via <a href="https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions">http::extensions</a> and <a href="https://docs.rs/http/latest/http/request/struct.Request.html#method.extensions_mut">http::extensions_mut</a>.</p>
@@ -5675,8 +5675,12 @@ impl&lt;B, S&gt; Service&lt;Request&lt;B&gt;&gt; for Middleware&lt;S&gt; {
 </ul>
 <h2 id="changes-checklist-12"><a class="header" href="#changes-checklist-12">Changes Checklist</a></h2>
 <ul>
-<li><input disabled="" type="checkbox"/>
-Implement and integrate code generated logging middleware.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement and integrate code generated logging middleware.
+<ul>
+<li>https://github.com/awslabs/smithy-rs/pull/1550</li>
+</ul>
+</li>
 <li><input disabled="" type="checkbox"/>
 Add logging to <code>Router</code> implementation.</li>
 <li><input disabled="" type="checkbox"/>
