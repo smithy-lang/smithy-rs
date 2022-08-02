@@ -11,4 +11,4 @@ tokio = { version = "1.18.2", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower = { version = "0.4", features = ["util", "filter"] }
-hyper = { version = "0.14", features = ["full"] }
+hyper = { version = "0.14.12", features = ["full"] }

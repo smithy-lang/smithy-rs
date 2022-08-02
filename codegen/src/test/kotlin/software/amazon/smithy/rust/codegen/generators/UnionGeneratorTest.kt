@@ -9,6 +9,7 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
@@ -93,6 +94,34 @@ class UnionGeneratorTest {
 
             """,
         )
+    }
+
+    @Test
+    fun `generate deprecated unions`() {
+        val model = """namespace test
+            union Nested {
+                foo: Foo,
+                @deprecated
+                foo2: Foo,
+            }
+            @deprecated
+            union Foo {
+                bar: Bar,
+            }
+
+            @deprecated
+            union Bar {}
+        """.asSmithyModel()
+        val provider: SymbolProvider = testSymbolProvider(model)
+        val writer = RustWriter.root()
+        writer.rust("##![allow(deprecated)]")
+        writer.withModule("model") {
+            UnionGenerator(model, provider, this, model.lookup("test#Nested")).render()
+            UnionGenerator(model, provider, this, model.lookup("test#Foo")).render()
+            UnionGenerator(model, provider, this, model.lookup("test#Bar")).render()
+        }
+
+        writer.compileAndTest()
     }
 
     private fun generateUnion(modelSmithy: String, unionName: String = "MyUnion", unknownVariant: Boolean = true): RustWriter {

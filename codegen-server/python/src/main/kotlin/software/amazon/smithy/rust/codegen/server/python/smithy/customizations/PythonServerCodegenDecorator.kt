@@ -14,9 +14,9 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerModuleGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
@@ -44,6 +44,9 @@ class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
                 "crate-type" to listOf("cdylib"),
             ),
         )
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
@@ -76,6 +79,9 @@ class PythonExportModuleDecorator : RustCodegenDecorator<ServerCodegenContext> {
         val serviceShapes = Walker(codegenContext.model).walkShapes(service)
         PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
@@ -91,6 +97,9 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerCodegenContext> {
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUsePythonTypes(codegenContext)
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 val DECORATORS = listOf(
@@ -106,9 +115,3 @@ val DECORATORS = listOf(
     // Render the Python shared library export.
     PythonExportModuleDecorator(),
 )
-
-// Combined codegen decorator for Python services.
-class PythonServerCodegenDecorator : CombinedCodegenDecorator<ServerCodegenContext>(DECORATORS) {
-    override val name: String = "PythonServerCodegenDecorator"
-    override val order: Byte = -1
-}

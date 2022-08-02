@@ -1,6 +1,6 @@
 # RFC: Logging in the Presence of Sensitive Data
 
-> Status: RFC
+> Status: Accepted
 
 Smithy provides a [sensitive trait](https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html#sensitive-trait) which exists as a `@sensitive` field annotation syntactically and has the following semantics:
 
@@ -15,7 +15,7 @@ The problem remains open due to the existence of HTTP binding traits and a lack 
 This RFC proposes:
 
 - A new logging middleware is generated and applied to each `OperationHandler` `Service`.
-- Internal and external developer guidelines are provided on how to avoid violating the specification.
+- A developer guideline is provided on how to avoid violating the specification.
 
 ## Terminology
 
@@ -63,7 +63,7 @@ These two cases illustrate that `smithy-rs` can only prevent violation of the sp
 
 ### Routing
 
-The sensitivity and HTTP bindings are declared within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any middleware applied _before_ routing has taken place cannot log anything sensitive without performing routing logic itself.
+The sensitivity and HTTP bindings are declared within specific structures/operations. For this reason, in the general case, it's unknowable whether or not any given part of a request is sensitive until we determine which operation is tasked with handling the request and hence which fields are bound. Implementation wise, this means that any middleware applied _before_ routing has taken place cannot log anything potentially sensitive without performing routing logic itself.
 
 Note that:
 
@@ -78,7 +78,7 @@ The crates existing in `rust-runtime` are not code generated - their source code
 
 ## Proposal
 
-This proposal serves to honor the sensitivity specification via code generation of a logging middleware which is aware of the sensitivity, together with a developer contract disallowing logging potentially sensitive data in the runtime crates. An internal and external guideline should be provided in addition to the middleware.
+This proposal serves to honor the sensitivity specification via code generation of a logging middleware which is aware of the sensitivity, together with a developer contract disallowing logging potentially sensitive data in the runtime crates. A developer guideline should be provided in addition to the middleware.
 
 All data known to be sensitive should be replaced with `"{redacted}"` when logged. Implementation wise this means that [tracing::Event](https://docs.rs/tracing/latest/tracing/struct.Event.html)s and [tracing::Span](https://docs.rs/tracing/latest/tracing/struct.Span.html)s of the form `debug!(field = "sensitive data")` and `span!(..., field = "sensitive data")` must become `debug!(field = "{redacted}")` and `span!(..., field = "{redacted}")`.
 
@@ -136,7 +136,7 @@ debug!(sensitive_data = %Sensitive(data));
 
 ### Code Generated Logging Middleware
 
-Using the smithy model, for each operation, a logging middleware should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging middleware can be careful crafted to avoid leaking sensitive data.
+Using the smithy model, for each operation, a logging middleware should be generated. Through the model, the code generation knows which fields are sensitive and which HTTP bindings exist, therefore the logging middleware can be carefully crafted to avoid leaking sensitive data.
 
 As a request enters this middleware it should record the method, HTTP headers, status code, and URI in a `tracing::span`. As a response leaves this middleware it should record the HTTP headers and status code in a `tracing::debug`.
 
@@ -250,27 +250,20 @@ There is need for logging within the `Router` implementation - this is a crucial
 
 In the case of AWS JSON 1.0 and 1.1 protocols, the request URI is always `/`, putting it outside of the reach of the `@sensitive` trait. We therefore have the option to log it before routing occurs. We make a choice not to do this in order to remove the special case - relying on the logging layer to log URIs when appropriate.
 
-### Internal Guideline
+### Developer Guideline
 
-A guideline should be made available to internal smithy developers to outline the following:
+A guideline should be made available, which includes:
 
 - The [HTTP bindings traits](#http-binding-traits) and why they are of concern in the presence of `@sensitive`.
 - The [Debug implementation](https://github.com/awslabs/smithy-rs/pull/229) on structures.
 - How to use the `Sensitive` struct, HTTP wrappers, and the `unredacted-logging` feature flag described in [Debug Logging](#unredacted-logging) and [HTTP Debug/Display Wrappers](#http-debugdisplay-wrappers).
-
-### Public Guideline
-
-A guideline should be made available to customers to outline the following:
-
-- The [HTTP bindings traits](#http-binding-traits) and why they are of concern in the presence of `@sensitive`.
-- Warn against the two potential leaks described in [Scope and Guidelines](#scope-and-guidelines):
+- A warning against the two potential leaks described in [Scope and Guidelines](#scope-and-guidelines):
   - Sensitive data leaking from third-party dependencies.
   - Sensitive data leaking from middleware applied to the `Router`.
-- How to use the `Sensitive` struct, HTTP wrappers, and the `unredacted-logging` feature flag described in [Debug Logging](#unredacted-logging) and [HTTP Debug/Display Wrappers](#http-debugdisplay-wrappers).
 
 ## Alternative Proposals
 
-All of the following proposals are compatible with, and benefit from, [Debug Logging](#unredacted-logging), [Internal Guideline](#internal-guideline)/[External Guideline](#external-guideline) portions of the main proposal.
+All of the following proposals are compatible with, and benefit from, [Debug Logging](#unredacted-logging), [HTTP Debug/Display Wrappers](#http-debugdisplay-wrappers), and [Developer Guideline](#developer-guideline) portions of the main proposal.
 
 The main proposal disallows the logging of potentially sensitive data in the runtime crates, instead opting for a dedicated code generated logging middleware. In contrast, the following proposals all seek ways to accommodate logging of potentially sensitive data in the runtime crates.
 
@@ -403,5 +396,5 @@ Code generation would be need to be used in order to produce the filtering crite
 
 - [ ] Implement and integrate code generated logging middleware.
 - [ ] Add logging to `Router` implementation.
-- [ ] Write public and internal developer guidelines.
+- [ ] Write developer guideline.
 - [ ] Refactor `Router` to allow for better positioning described in [Middleware Position](#middleware-position).
