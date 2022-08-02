@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -51,6 +52,9 @@ class HttpRequestChecksumDecorator : RustCodegenDecorator<ClientCodegenContext> 
     ): List<OperationCustomization> {
         return baseCustomizations + HttpRequestChecksumCustomization(codegenContext, operation)
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 private fun HttpChecksumTrait.requestAlgorithmMember(

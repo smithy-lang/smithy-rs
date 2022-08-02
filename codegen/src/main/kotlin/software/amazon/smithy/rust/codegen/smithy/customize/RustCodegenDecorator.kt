@@ -68,6 +68,8 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
         currentProtocols
 
     fun transformModel(service: ServiceShape, model: Model): Model = model
+
+    fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean
 }
 
 /**
@@ -75,7 +77,8 @@ interface RustCodegenDecorator<C : CoreCodegenContext> {
  *
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
-open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<RustCodegenDecorator<C>>) : RustCodegenDecorator<C> {
+open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<RustCodegenDecorator<C>>) :
+    RustCodegenDecorator<C> {
     private val orderedDecorators = decorators.sortedBy { it.order }
     override val name: String
         get() = "MetaDecorator"
@@ -137,6 +140,10 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
         }
     }
 
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        // `CombinedCodegenDecorator` can work with all types of codegen context.
+        CoreCodegenContext::class.java.isAssignableFrom(clazz)
+
     companion object {
         inline fun <reified T : CoreCodegenContext> fromClasspath(
             context: PluginContext,
@@ -147,31 +154,46 @@ open class CombinedCodegenDecorator<C : CoreCodegenContext>(decorators: List<Rus
                 RustCodegenDecorator::class.java,
                 context.pluginClassLoader.orElse(RustCodegenDecorator::class.java.classLoader),
             )
+
+            val filteredDecorators = filterDecorators<T>(decorators, logger).toList()
+            return CombinedCodegenDecorator(filteredDecorators + extras)
+        }
+
+        /*
+         * This function has been extracted solely for the purposes of easily unit testing the important filtering logic.
+         * Unfortunately, it must be part of the public API because public API inline functions are not allowed to use
+         * non-public-API declarations.
+         * See https://kotlinlang.org/docs/inline-functions.html#restrictions-for-public-api-inline-functions.
+         */
+        inline fun <reified T : CoreCodegenContext> filterDecorators(
+            decorators: Iterable<RustCodegenDecorator<*>>,
+            logger: Logger = Logger.getLogger("RustCodegenSPILoader"),
+        ): Sequence<RustCodegenDecorator<T>> =
+            decorators.asSequence()
+                .onEach {
+                    logger.info("Discovered Codegen Decorator: ${it.javaClass.name}")
+                }
                 // The JVM's `ServiceLoader` is woefully underpowered in that it can not load classes with generic
                 // parameters with _fixed_ parameters (like what we're trying to do here; we only want `RustCodegenDecorator`
                 // classes with code-generation context matching the input `T`).
                 // There are various workarounds: https://stackoverflow.com/questions/5451734/loading-generic-service-implementations-via-java-util-serviceloader
                 // All involve loading _all_ classes from the classpath (i.e. all `RustCodegenDecorator<*>`), and then
-                // filtering them. The most elegant way to filter is arguably by checking if we can cast the loaded
-                // class to what we want.
+                // filtering them.
+                // Note that attempting to downcast a generic class `C<T>` to `C<U>` where `U: T` is not possible to do
+                // in Kotlin (and presumably all JVM-based languages) _at runtime_. Not even when using reified type
+                // parameters of inline functions. See https://kotlinlang.org/docs/generics.html#type-erasure for details.
                 .filter {
-                    try {
-                        it as RustCodegenDecorator<T>
-                        true
-                    } catch (e: ClassCastException) {
-                        false
-                    }
+                    val clazz = T::class.java
+                    it.supportsCodegenContext(clazz)
                 }
                 .onEach {
                     logger.info("Adding Codegen Decorator: ${it.javaClass.name}")
                 }
                 .map {
                     // Cast is safe because of the filter above.
+                    // Not that it really has an effect at runtime, since its unchecked.
                     @Suppress("UNCHECKED_CAST")
                     it as RustCodegenDecorator<T>
                 }
-                .toList()
-            return CombinedCodegenDecorator(decorators + extras)
-        }
     }
 }

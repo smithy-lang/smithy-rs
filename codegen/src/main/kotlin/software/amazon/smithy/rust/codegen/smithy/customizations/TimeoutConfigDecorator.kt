@@ -113,6 +113,9 @@ class TimeoutConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     ): List<ConfigCustomization> {
         return baseCustomizations + TimeoutConfigProviderConfig(codegenContext)
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class TimeoutConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
