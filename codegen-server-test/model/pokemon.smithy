@@ -9,7 +9,7 @@ use aws.protocols#restJson1
 @restJson1
 service PokemonService {
     version: "2021-12-01",
-    resources: [PokemonSpecies],
+    resources: [PokemonSpecies, Storage],
     operations: [GetServerStatistics, EmptyOperation, CapturePokemonOperation],
 }
 
@@ -20,6 +20,14 @@ resource PokemonSpecies {
         name: String
     },
     read: GetPokemonSpecies,
+}
+
+/// A users current Pokémon storage.
+resource Storage {
+    identifiers: {
+        user: String
+    },
+    read: GetStorage,
 }
 
 /// Capture Pokémons via event streams
@@ -114,7 +122,6 @@ structure GetPokemonSpeciesInput {
     name: String
 }
 
-@output
 structure GetPokemonSpeciesOutput {
     /// The name for this resource.
     @required
@@ -123,6 +130,44 @@ structure GetPokemonSpeciesOutput {
     /// A list of flavor text entries for this Pokémon species.
     @required
     flavorTextEntries: FlavorTextEntries
+}
+
+/// Retrieve information about your Pokedex.
+@readonly
+@http(uri: "/pokedex/{user}", method: "GET")
+operation GetStorage {
+    input: GetStorageInput,
+    output: GetStorageOutput,
+    errors: [ResourceNotFoundException, NotAuthorized],
+}
+
+/// Not authorized to access Pokémon storage.
+@error("client")
+@httpError(401)
+structure NotAuthorized {}
+
+/// A request to access Pokémon storage.
+@input
+@sensitive
+structure GetStorageInput {
+    @required
+    @httpLabel
+    user: String,
+    @required
+    @httpHeader("passcode")
+    passcode: String,
+}
+
+/// A list of Pokémon species.
+list SpeciesCollection {
+    member: GetPokemonSpeciesOutput
+}
+
+/// Contents of the Pokémon storage.
+@output
+structure GetStorageOutput {
+    @required
+    collection: SpeciesCollection
 }
 
 /// Retrieve HTTP server statistiscs, such as calls count.
