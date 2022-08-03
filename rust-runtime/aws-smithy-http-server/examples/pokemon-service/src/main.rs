@@ -9,7 +9,7 @@ use std::{net::SocketAddr, sync::Arc};
 use aws_smithy_http_server::{AddExtensionLayer, Router};
 use clap::Parser;
 use pokemon_service::{
-    capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, health_check_operation,
+    capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, get_storage, health_check_operation,
     setup_tracing, State,
 };
 use pokemon_service_server_sdk::operation_registry::OperationRegistryBuilder;
