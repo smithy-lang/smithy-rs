@@ -9,7 +9,23 @@
 //! This crate is used to test the api-linter by exercising the all possible exposure
 //! of external types in a public API.
 
-use external_lib::{AssociatedGenericTrait, SimpleTrait, SomeOtherStruct, SomeStruct};
+use external_lib::{
+    AssociatedGenericTrait,
+    SimpleNewType,
+    SimpleTrait,
+    SomeOtherStruct,
+    SomeStruct,
+    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
+    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
+    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
+    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
+    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
+    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
+    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
+    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
+    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
+    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
+};
 
 pub struct LocalStruct;
 
@@ -131,4 +147,12 @@ pub trait SomeTraitWithGenericAssociatedType {
         T: SimpleTrait;
 
     fn some_fn<T: SimpleTrait>(&self, thing: Self::MyGAT<T>);
+}
+
+pub struct AssocConstStruct;
+
+impl AssocConstStruct {
+    pub const SOME_CONST: u32 = 5;
+
+    pub const OTHER_CONST: SimpleNewType = SimpleNewType(5);
 }
