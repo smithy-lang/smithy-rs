@@ -39,7 +39,21 @@ dependencies {
 }
 
 val allCodegenTests = listOf(
-    CodegenTest("com.amazonaws.apigateway#BackplaneControlService", "apigateway"),
+    CodegenTest(
+        "com.amazonaws.apigateway#BackplaneControlService",
+        "apigateway",
+        extraConfig = """
+            ,
+            "codegen": {
+                "includeFluentClient": false
+            },
+            "customizationConfig": {
+                "awsSdk": {
+                    "generateReadme": false
+                }
+            }
+        """,
+    ),
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
