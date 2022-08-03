@@ -15,7 +15,7 @@ use std::{
 
 use async_stream::stream;
 use aws_smithy_http_server::Extension;
-use pokemon_service_sdk::{error, input, model, model::CapturingPayload, output, types::Blob};
+use pokemon_service_server_sdk::{error, input, model, model::CapturingPayload, output, types::Blob};
 use rand::Rng;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
@@ -176,6 +176,18 @@ pub async fn get_pokemon_species(
     }
 }
 
+/// Retrieves the users storage
+pub async fn get_storage(
+    input: input::GetStorageInput,
+    _state: Extension<Arc<State>>,
+) -> Result<output::GetStorageOutput, error::GetStorageError> {
+    // We currently only support Ash and he has nothing stored
+    if !(input.user == "ash" && input.passcode == "pikachu123") {
+        return Err(error::GetStorageError::NotAuthorized(error::NotAuthorized {}));
+    }
+    Ok(output::GetStorageOutput { collection: vec![] })
+}
+
 /// Calculates and reports metrics about this server instance.
 pub async fn get_server_statistics(
     _input: input::GetServerStatisticsInput,
@@ -263,6 +275,11 @@ pub async fn capture_pokemon(
 /// Empty operation used to benchmark the service.
 pub async fn empty_operation(_input: input::EmptyOperationInput) -> output::EmptyOperationOutput {
     output::EmptyOperationOutput {}
+}
+
+/// Operation used to show the service is running.
+pub async fn health_check_operation(_input: input::HealthCheckOperationInput) -> output::HealthCheckOperationOutput {
+    output::HealthCheckOperationOutput {}
 }
 
 #[cfg(test)]

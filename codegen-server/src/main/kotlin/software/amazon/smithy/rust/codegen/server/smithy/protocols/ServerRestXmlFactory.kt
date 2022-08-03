@@ -32,7 +32,7 @@ class ServerRestXmlFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGen
             requestDeserialization = true,
             requestBodyDeserialization = true,
             responseSerialization = true,
-            errorSerialization = true
+            errorSerialization = true,
         )
     }
 }

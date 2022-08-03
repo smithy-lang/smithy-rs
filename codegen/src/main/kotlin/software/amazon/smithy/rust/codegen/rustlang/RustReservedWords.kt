@@ -159,7 +159,7 @@ object RustReservedWords : ReservedWords {
         "unsized",
         "virtual",
         "yield",
-        "try"
+        "try",
     )
 
     private val cantBeRaw = setOf("self", "crate", "super")

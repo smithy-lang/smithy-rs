@@ -28,12 +28,15 @@ class ApiGatewayDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations.letIf(applies(codegenContext)) {
             it + ApiGatewayAddAcceptHeader()
         }
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class ApiGatewayAddAcceptHeader : OperationCustomization() {
@@ -46,7 +49,7 @@ class ApiGatewayAddAcceptHeader : OperationCustomization() {
                 .http_mut()
                 .headers_mut()
                 .insert("Accept", #T::HeaderValue::from_static("application/json"));""",
-                RuntimeType.http
+                RuntimeType.http,
             )
         }
         else -> emptySection

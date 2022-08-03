@@ -47,7 +47,7 @@ class ServiceGenerator(
                         operationWriter,
                         inputWriter,
                         operation,
-                        decorator.operationCustomizations(clientCodegenContext, operation, listOf())
+                        decorator.operationCustomizations(clientCodegenContext, operation, listOf()),
                     )
 
                     // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
@@ -61,7 +61,7 @@ class ServiceGenerator(
         rustCrate.withModule(RustModule.Config) { writer ->
             ServiceConfigGenerator.withBaseBehavior(
                 clientCodegenContext,
-                extraCustomizations = decorator.configCustomizations(clientCodegenContext, listOf())
+                extraCustomizations = decorator.configCustomizations(clientCodegenContext, listOf()),
             ).render(writer)
         }
 

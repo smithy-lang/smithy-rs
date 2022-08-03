@@ -83,7 +83,7 @@ object RecursiveShapeBoxer {
             when (it) {
                 is ListShape,
                 is MapShape,
-                is SetShape -> true
+                is SetShape, -> true
                 else -> it.hasTrait<RustBoxTrait>()
             }
         } != null

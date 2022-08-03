@@ -213,3 +213,27 @@ Add explicit cast during JSON deserialization in case of custom Symbol providers
 references = ["smithy-rs#1520"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "crisidev"
+
+[[smithy-rs]]
+message = "Change detailed logs in CredentialsProviderChain from info to debug"
+references = ["smithy-rs#1578"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "lkts"
+
+[[smithy-rs]]
+message = "Support @deprecated trait for aggregate shapes"
+references = ["smithy-rs#1570"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "weihanglo"
+
+[[smithy-rs]]
+message = "Non-streaming struct members are now marked `#[doc(hidden)]` since they will be removed in the future"
+references = ["smithy-rs#1573", "smithy-rs#1569"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Non-streaming struct members are now marked `#[doc(hidden)]` since they will be removed in the future"
+references = ["smithy-rs#1573", "smithy-rs#1569"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"

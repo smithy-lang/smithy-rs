@@ -63,7 +63,7 @@ class ErrorGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
-    private val error: ErrorTrait
+    private val error: ErrorTrait,
 ) {
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         val symbol = symbolProvider.toSymbol(shape)
@@ -88,7 +88,7 @@ class ErrorGenerator(
                     """
                     /// Returns the error message.
                     pub fn message(&self) -> $returnType { $message }
-                    """
+                    """,
                 )
             }
 
@@ -104,7 +104,7 @@ class ErrorGenerator(
                     pub fn name(&self) -> &'static str {
                         ${shape.id.name.dq()}
                     }
-                    """
+                    """,
                 )
             }
         }

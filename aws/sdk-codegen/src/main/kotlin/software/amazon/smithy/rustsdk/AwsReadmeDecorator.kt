@@ -11,6 +11,7 @@ import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
@@ -39,7 +40,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
         rustCrate.withFile("README.md") { writer ->
             val description = normalizeDescription(
                 codegenContext.moduleName,
-                codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: ""
+                codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
             )
             val moduleName = codegenContext.settings.moduleName
             val snakeCaseModuleName = moduleName.replace('-', '_')
@@ -105,10 +106,13 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
                     ## License
 
                     This project is licensed under the Apache-2.0 License.
-                    """.trimIndent()
+                    """.trimIndent(),
             )
         }
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     /**
      * Strips HTML from the description and makes it human-readable Markdown.
@@ -168,7 +172,7 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
                 span.append(surround)
                 span.appendChildren(tag.childNodesCopy())
                 span.append(surround)
-            }
+            },
         )
     }
 
@@ -182,8 +186,8 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
                         "[$text]($link)"
                     } else {
                         text
-                    }
-                )
+                    },
+                ),
             )
         }
     }

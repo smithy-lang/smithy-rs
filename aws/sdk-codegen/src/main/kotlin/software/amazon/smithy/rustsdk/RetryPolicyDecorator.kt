@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -23,10 +24,13 @@ class RetryPolicyDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + RetryPolicyFeature(codegenContext.runtimeConfig)
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class RetryPolicyFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
@@ -35,7 +39,7 @@ class RetryPolicyFeature(private val runtimeConfig: RuntimeConfig) : OperationCu
         is OperationSection.FinalizeOperation -> writable {
             rust(
                 "let ${section.operation} = ${section.operation}.with_retry_policy(#T::new());",
-                retryType()
+                retryType(),
             )
         }
         else -> emptySection

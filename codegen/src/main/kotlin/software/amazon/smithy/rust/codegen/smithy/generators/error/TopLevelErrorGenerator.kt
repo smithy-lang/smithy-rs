@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.asType
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -68,9 +69,9 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
                         unionShape.eventStreamErrorSymbol(
                             model,
                             symbolProvider,
-                            coreCodegenContext.target
+                            coreCodegenContext.target,
                         ),
-                        errors.map { it.id }
+                        errors.map { it.id },
                     )
                 }
             writer.rust("impl #T for Error {}", RuntimeType.StdError)
@@ -96,12 +97,12 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
             rustBlock(
                 "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
                 sdkError,
-                symbol
+                symbol,
             ) {
                 rustBlockTemplate(
                     "fn from(err: #{SdkError}<#{OpError}, R>) -> Self",
                     "SdkError" to sdkError,
-                    "OpError" to symbol
+                    "OpError" to symbol,
                 ) {
                     rustBlock("match err") {
                         val operationErrors = errors.map { model.expectShape(it) }
@@ -110,7 +111,7 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
                                 val errSymbol = symbolProvider.toSymbol(errorShape)
                                 rust(
                                     "#TKind::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),",
-                                    symbol
+                                    symbol,
                                 )
                             }
                             rust("#TKind::Unhandled(inner) => Error::Unhandled(inner),", symbol)
@@ -126,11 +127,12 @@ class TopLevelErrorGenerator(private val coreCodegenContext: CoreCodegenContext,
         rust("/// All possible error types for this service.")
         RustMetadata(
             additionalAttributes = listOf(Attribute.NonExhaustive),
-            visibility = Visibility.PUBLIC
+            visibility = Visibility.PUBLIC,
         ).withDerives(RuntimeType.Debug).render(this)
         rustBlock("enum Error") {
             allErrors.forEach { error ->
                 documentShape(error, model)
+                deprecatedShape(error)
                 val sym = symbolProvider.toSymbol(error)
                 rust("${sym.name}(#T),", sym)
             }

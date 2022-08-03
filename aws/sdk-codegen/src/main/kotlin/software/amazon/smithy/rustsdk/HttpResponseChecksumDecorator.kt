@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
@@ -21,7 +22,7 @@ import software.amazon.smithy.rust.codegen.util.orNull
 
 private fun HttpChecksumTrait.requestValidationModeMember(
     codegenContext: ClientCodegenContext,
-    operationShape: OperationShape
+    operationShape: OperationShape,
 ): MemberShape? {
     val requestValidationModeMember = this.requestValidationModeMember.orNull() ?: return null
     return operationShape.inputShape(codegenContext.model).expectMember(requestValidationModeMember)
@@ -34,17 +35,20 @@ class HttpResponseChecksumDecorator : RustCodegenDecorator<ClientCodegenContext>
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + HttpResponseChecksumCustomization(codegenContext, operation)
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 // This generator was implemented based on this spec:
 // https://awslabs.github.io/smithy/1.0/spec/aws/aws-core.html#http-request-checksums
 class HttpResponseChecksumCustomization(
     private val codegenContext: ClientCodegenContext,
-    private val operationShape: OperationShape
+    private val operationShape: OperationShape,
 ) : OperationCustomization() {
     override fun section(section: OperationSection): Writable {
         val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return emptySection

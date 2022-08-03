@@ -39,7 +39,7 @@ class EventStreamSymbolProviderTest {
                 output: TestOutput,
             }
             service TestService { version: "123", operations: [TestOperation] }
-            """.asSmithyModel()
+            """.asSmithyModel(),
         )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape
@@ -75,7 +75,7 @@ class EventStreamSymbolProviderTest {
                 output: TestOutput,
             }
             service TestService { version: "123", operations: [TestOperation] }
-            """.asSmithyModel()
+            """.asSmithyModel(),
         )
 
         val service = model.expectShape(ShapeId.from("test#TestService")) as ServiceShape

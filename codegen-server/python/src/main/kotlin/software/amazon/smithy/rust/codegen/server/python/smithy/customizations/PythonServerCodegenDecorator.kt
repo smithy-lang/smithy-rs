@@ -14,13 +14,14 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerModuleGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
+import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
  * Configure the [lib] section of `Cargo.toml`.
@@ -34,9 +35,18 @@ class CdylibManifestDecorator : RustCodegenDecorator<ServerCodegenContext> {
     override val order: Byte = 0
 
     override fun crateManifestCustomizations(
-        codegenContext: ServerCodegenContext
+        codegenContext: ServerCodegenContext,
     ): ManifestCustomizations =
-        mapOf("lib" to mapOf("name" to codegenContext.settings.moduleName, "crate-type" to listOf("cdylib")))
+        mapOf(
+            "lib" to mapOf(
+                // Library target names cannot contain hyphen names.
+                "name" to codegenContext.settings.moduleName.toSnakeCase(),
+                "crate-type" to listOf("cdylib"),
+            ),
+        )
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
@@ -69,6 +79,9 @@ class PythonExportModuleDecorator : RustCodegenDecorator<ServerCodegenContext> {
         val serviceShapes = Walker(codegenContext.model).walkShapes(service)
         PythonServerModuleGenerator(codegenContext, rustCrate, serviceShapes).render()
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 /**
@@ -80,10 +93,13 @@ class PubUsePythonTypesDecorator : RustCodegenDecorator<ServerCodegenContext> {
 
     override fun libRsCustomizations(
         codegenContext: ServerCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUsePythonTypes(codegenContext)
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }
 
 val DECORATORS = listOf(
@@ -97,11 +113,5 @@ val DECORATORS = listOf(
     // Add `pub use` of `aws_smithy_http_server_python::types`.
     PubUsePythonTypesDecorator(),
     // Render the Python shared library export.
-    PythonExportModuleDecorator()
+    PythonExportModuleDecorator(),
 )
-
-// Combined codegen decorator for Python services.
-class PythonServerCodegenDecorator : CombinedCodegenDecorator<ServerCodegenContext>(DECORATORS) {
-    override val name: String = "PythonServerCodegenDecorator"
-    override val order: Byte = -1
-}

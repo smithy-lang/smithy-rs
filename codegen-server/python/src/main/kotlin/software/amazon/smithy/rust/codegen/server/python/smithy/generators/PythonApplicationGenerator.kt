@@ -64,8 +64,8 @@ class PythonApplicationGenerator(
     coreCodegenContext: CoreCodegenContext,
     private val operations: List<OperationShape>,
 ) {
-    private val crateName = coreCodegenContext.settings.moduleName
     private val symbolProvider = coreCodegenContext.symbolProvider
+    private val libName = "lib${coreCodegenContext.settings.moduleName.toSnakeCase()}"
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val model = coreCodegenContext.model
     private val codegenScope =
@@ -92,7 +92,7 @@ class PythonApplicationGenerator(
                 inner: #{SmithyPython}::PyApp
             }
             """,
-            *codegenScope
+            *codegenScope,
         )
 
         renderPyMethods(writer)
@@ -104,7 +104,7 @@ class PythonApplicationGenerator(
             ##[#{pyo3}::pymethods]
             impl App
             """,
-            *codegenScope
+            *codegenScope,
         ) {
             rustTemplate(
                 """
@@ -132,14 +132,14 @@ class PythonApplicationGenerator(
                     self.inner.run(py, address, port, backlog, workers)
                 }
                 """,
-                *codegenScope
+                *codegenScope,
             )
             rustBlockTemplate(
                 """
                 /// Dynamically codegenerate the routes, allowing to build the Smithy [#{SmithyServer}::Router].
                 pub fn build_router(&mut self, py: #{pyo3}::Python) -> #{pyo3}::PyResult<()>
                 """,
-                *codegenScope
+                *codegenScope,
             ) {
                 rustTemplate(
                     """
@@ -147,7 +147,7 @@ class PythonApplicationGenerator(
                     let event_loop = asyncio.call_method0("get_event_loop")?;
                     let router = crate::operation_registry::OperationRegistryBuilder::default();
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
                 for (operation in operations) {
                     val operationName = symbolProvider.toSymbol(operation).name
@@ -160,7 +160,7 @@ class PythonApplicationGenerator(
                             #{pyo3_asyncio}::tokio::scope(${name}_locals, crate::operation_handler::$name(input, state, handler))
                         });
                         """,
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
                 rustTemplate(
@@ -169,7 +169,7 @@ class PythonApplicationGenerator(
                     self.inner.router = Some(#{SmithyPython}::PyRouter(router));
                     Ok(())
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             operations.map { operation ->
@@ -183,7 +183,7 @@ class PythonApplicationGenerator(
                         self.inner.register_operation(py, "$name", func)
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -191,45 +191,59 @@ class PythonApplicationGenerator(
 
     private fun renderPyApplicationRustDocs(writer: RustWriter) {
         writer.rust(
-"""
-##[allow(clippy::tabs_in_doc_comments)]
-/// Main Python application, used to register operations and context and start multiple
-/// workers on the same shared socket.
-///
-/// Operations can be registrered using the application object as a decorator (`@app.operation_name`).
-///
-/// Here's a full example to get you started:
-///
-/// ```python
-${ if (operations.any { it.errors.isNotEmpty() }) {
-"""/// from $crateName import ${Inputs.namespace}
-/// from $crateName import ${Outputs.namespace}
-/// from $crateName import ${Errors.namespace}"""
-            } else {
-"""/// from $crateName import ${Inputs.namespace}
-/// from $crateName import ${Outputs.namespace}"""
-            } }
-/// from $crateName import App
-///
-/// @dataclass
-/// class Context:
-///     counter: int = 0
-///
-/// app = App()
-/// app.context(Context())
-///
-${operationImplementationStubs(operations)}
-///
-/// app.run()
-/// ```
-///
-/// Any of operations above can be written as well prepending the `async` keyword and
-/// the Python application will automatically handle it and schedule it on the event loop for you.
             """
+            ##[allow(clippy::tabs_in_doc_comments)]
+            /// Main Python application, used to register operations and context and start multiple
+            /// workers on the same shared socket.
+            ///
+            /// Operations can be registered using the application object as a decorator (`@app.operation_name`).
+            ///
+            /// Here's a full example to get you started:
+            ///
+            /// ```python
+            """.trimIndent(),
+        )
+        writer.rust(
+            if (operations.any { it.errors.isNotEmpty() }) {
+                """
+                /// from $libName import ${Inputs.namespace}
+                /// from $libName import ${Outputs.namespace}
+                /// from $libName import ${Errors.namespace}
+                """.trimIndent()
+            } else {
+                """
+                /// from $libName import ${Inputs.namespace}
+                /// from $libName import ${Outputs.namespace}
+                """.trimIndent()
+            },
+        )
+        writer.rust(
+            """
+            /// from $libName import App
+            ///
+            /// @dataclass
+            /// class Context:
+            ///     counter: int = 0
+            ///
+            /// app = App()
+            /// app.context(Context())
+            ///
+            """.trimIndent(),
+        )
+        writer.operationImplementationStubs(operations)
+        writer.rust(
+            """
+            ///
+            /// app.run()
+            /// ```
+            ///
+            /// Any of operations above can be written as well prepending the `async` keyword and
+            /// the Python application will automatically handle it and schedule it on the event loop for you.
+            """.trimIndent(),
         )
     }
 
-    private fun operationImplementationStubs(operations: List<OperationShape>): String =
+    private fun RustWriter.operationImplementationStubs(operations: List<OperationShape>) = rust(
         operations.joinToString("\n///\n") {
             val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
             val ret = if (!operationDocumentation.isNullOrBlank()) {
@@ -237,10 +251,11 @@ ${operationImplementationStubs(operations)}
             } else ""
             ret +
                 """
-                    /// ${it.signature()}:
-                    ///     raise NotImplementedError
+                /// ${it.signature()}:
+                ///     raise NotImplementedError
                 """.trimIndent()
-        }
+        },
+    )
 
     /**
      * Returns the function signature for an operation handler implementation. Used in the documentation.
