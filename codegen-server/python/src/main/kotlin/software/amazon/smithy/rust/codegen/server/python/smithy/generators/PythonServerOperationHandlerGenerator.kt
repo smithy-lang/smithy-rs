@@ -44,7 +44,7 @@ class PythonServerOperationHandlerGenerator(
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.asType(),
             "tokio" to PythonServerCargoDependency.Tokio.asType(),
-            "tracing" to PythonServerCargoDependency.Tracing.asType()
+            "tracing" to PythonServerCargoDependency.Tracing.asType(),
         )
 
     override fun render(writer: RustWriter) {
@@ -104,7 +104,7 @@ class PythonServerOperationHandlerGenerator(
                     })
                 })
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
 
@@ -124,7 +124,7 @@ class PythonServerOperationHandlerGenerator(
                 })?;
                 result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))?
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
 
@@ -145,7 +145,7 @@ class PythonServerOperationHandlerGenerator(
                     error
                 })
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
 }

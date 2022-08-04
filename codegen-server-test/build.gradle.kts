@@ -42,7 +42,7 @@ val allCodegenTests = listOf(
     CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
     CodegenTest("com.amazonaws.ebs#Ebs", "ebs"),
     CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
-    CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
+    CodegenTest("com.aws.example#PokemonService", "pokemon-service-server-sdk"),
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)

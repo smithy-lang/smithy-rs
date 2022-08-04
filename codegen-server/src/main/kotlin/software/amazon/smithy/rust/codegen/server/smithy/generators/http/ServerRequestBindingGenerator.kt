@@ -30,12 +30,12 @@ class ServerRequestBindingGenerator(
     fun generateDeserializePayloadFn(
         binding: HttpBindingDescriptor,
         errorT: RuntimeType,
-        structuredHandler: RustWriter.(String) -> Unit
+        structuredHandler: RustWriter.(String) -> Unit,
     ): RuntimeType = httpBindingGenerator.generateDeserializePayloadFn(
         binding,
         errorT,
         structuredHandler,
-        HttpMessageType.REQUEST
+        HttpMessageType.REQUEST,
     )
 
     fun generateDeserializePrefixHeadersFn(

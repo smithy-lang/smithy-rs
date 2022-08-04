@@ -89,7 +89,7 @@ class RequestBindingGenerator(
                 builder: #{HttpRequestBuilder}
             ) -> std::result::Result<#{HttpRequestBuilder}, #{BuildError}>
             """,
-            *codegenScope
+            *codegenScope,
         ) {
             write("let mut uri = String::new();")
             write("uri_base(input, &mut uri)?;")
@@ -101,7 +101,7 @@ class RequestBindingGenerator(
                     """
                     let builder = #{T}(input, builder)?;
                     """.trimIndent(),
-                    addHeadersFn
+                    addHeadersFn,
                 )
             }
             write("Ok(builder.method(${httpTrait.method.dq()}).uri(uri))")
@@ -125,7 +125,7 @@ class RequestBindingGenerator(
         writer.addImport(RuntimeType.stdfmt.member("Write").toSymbol(), null)
         writer.rustBlockTemplate(
             "fn uri_base(_input: &#{Input}, output: &mut String) -> Result<(), #{BuildError}>",
-            *codegenScope
+            *codegenScope,
         ) {
             httpTrait.uri.labels.map { label ->
                 val member = inputShape.expectMember(label.content)
@@ -163,7 +163,7 @@ class RequestBindingGenerator(
         val preloadedParams = literalParams.keys + dynamicParams.map { it.locationName }
         writer.rustBlockTemplate(
             "fn uri_query(_input: &#{Input}, mut output: &mut String) -> Result<(), #{BuildError}>",
-            *codegenScope
+            *codegenScope,
         ) {
             write("let mut query = #T::new(&mut output);", RuntimeType.QueryFormat(runtimeConfig, "Writer"))
             literalParams.forEach { (k, v) ->
@@ -209,7 +209,7 @@ class RequestBindingGenerator(
                         rust(
                             "query.push_kv(${param.locationName.dq()}, ${
                             paramFmtFun(writer, target, memberShape, innerField)
-                            });"
+                            });",
                         )
                     }
                 }
@@ -251,7 +251,7 @@ class RequestBindingGenerator(
             OperationBuildError(runtimeConfig).missingField(
                 this,
                 symbolProvider.toMemberName(member),
-                "cannot be empty or unset"
+                "cannot be empty or unset",
             )
         }
         val input = safeName("input")
@@ -274,7 +274,7 @@ class RequestBindingGenerator(
             else -> {
                 rust(
                     "let mut ${outputVar}_encoder = #T::from(${autoDeref(input)}); let $outputVar = ${outputVar}_encoder.encode();",
-                    Encoder
+                    Encoder,
                 )
             }
         }
@@ -283,7 +283,7 @@ class RequestBindingGenerator(
             if $outputVar.is_empty() {
                 return Err(${buildError()})
             }
-            """
+            """,
         )
     }
     /** End URI generation **/

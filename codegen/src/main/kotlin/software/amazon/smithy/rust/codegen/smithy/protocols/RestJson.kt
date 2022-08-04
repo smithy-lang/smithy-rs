@@ -38,8 +38,6 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, Cli
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
         HttpBoundProtocolGenerator(codegenContext, RestJson(codegenContext))
 
-    override fun transformModel(model: Model): Model = model
-
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
             /* Client support */
@@ -51,7 +49,7 @@ class RestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, Cli
             requestDeserialization = false,
             requestBodyDeserialization = false,
             responseSerialization = false,
-            errorSerialization = false
+            errorSerialization = false,
         )
     }
 }
@@ -102,7 +100,7 @@ class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
     private val jsonDeserModule = RustModule.private("json_deser")
 
     override val httpBindingResolver: HttpBindingResolver =
-        RestJsonHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes.consistent("application/json"))
+        RestJsonHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes("application/json", "application/json", "application/vnd.amazon.eventstream"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
@@ -127,7 +125,7 @@ class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
                     #{json_errors}::parse_generic_error(response.body(), response.headers())
                 }
                 """,
-                *errorScope
+                *errorScope,
             )
         }
 
@@ -140,7 +138,7 @@ class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
                     #{json_errors}::parse_generic_error(payload, &#{HeaderMap}::new())
                 }
                 """,
-                *errorScope
+                *errorScope,
             )
         }
 
@@ -148,7 +146,7 @@ class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
         operationShape: OperationShape,
         operationName: String,
         serviceName: String,
-        requestSpecModule: RuntimeType
+        requestSpecModule: RuntimeType,
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRuntimeConstructor() = "new_rest_json_router"

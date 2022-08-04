@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.rustlang.Writable
@@ -38,8 +37,6 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) :
     override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
         ServerHttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
 
-    override fun transformModel(model: Model): Model = model
-
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
             /* Client support */
@@ -51,7 +48,7 @@ class ServerAwsJsonFactory(private val version: AwsJsonVersion) :
             requestDeserialization = true,
             requestBodyDeserialization = true,
             responseSerialization = true,
-            errorSerialization = true
+            errorSerialization = true,
         )
     }
 }
@@ -93,13 +90,13 @@ class ServerAwsJsonSerializerGenerator(
             coreCodegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            customizations = listOf(ServerAwsJsonError(awsJsonVersion))
-        )
+            customizations = listOf(ServerAwsJsonError(awsJsonVersion)),
+        ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator
 
 class ServerAwsJson(
     private val coreCodegenContext: CoreCodegenContext,
-    private val awsJsonVersion: AwsJsonVersion
+    private val awsJsonVersion: AwsJsonVersion,
 ) : AwsJson(coreCodegenContext, awsJsonVersion) {
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
         ServerAwsJsonSerializerGenerator(coreCodegenContext, httpBindingResolver, awsJsonVersion)

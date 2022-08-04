@@ -78,7 +78,7 @@ class PythonServerEnumGenerator(
                 }
             }
             """,
-            "name_method" to renderPyEnumName()
+            "name_method" to renderPyEnumName(),
         )
     }
 

@@ -55,7 +55,7 @@ private fun syntheticShapeId(shape: ToShapeId): ShapeId =
 
 internal class PresignableOperation(
     val payloadSigningType: PayloadSigningType,
-    val modelTransforms: List<PresignModelTransform> = emptyList()
+    val modelTransforms: List<PresignModelTransform> = emptyList(),
 ) {
     fun hasModelTransforms(): Boolean = modelTransforms.isNotEmpty()
 }
@@ -78,13 +78,13 @@ internal val PRESIGNABLE_OPERATIONS by lazy {
             modelTransforms = listOf(
                 OverrideHttpMethodTransform(mapOf(SYNTHESIZE_SPEECH_OP to "GET")),
                 MoveDocumentMembersToQueryParamsTransform(listOf(SYNTHESIZE_SPEECH_OP)),
-            )
+            ),
         ),
     )
 }
 
 class AwsPresigningDecorator internal constructor(
-    private val presignableOperations: Map<ShapeId, PresignableOperation> = PRESIGNABLE_OPERATIONS
+    private val presignableOperations: Map<ShapeId, PresignableOperation> = PRESIGNABLE_OPERATIONS,
 ) : RustCodegenDecorator<ClientCodegenContext> {
     companion object {
         const val ORDER: Byte = 0
@@ -96,7 +96,7 @@ class AwsPresigningDecorator internal constructor(
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(codegenContext, operation))
 
     /**
@@ -117,6 +117,9 @@ class AwsPresigningDecorator internal constructor(
         return presignableTransforms.fold(intermediate) { m, t -> t.transform(m) }
     }
 
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
+
     private fun addSyntheticOperations(model: Model): Model {
         val presignableOps = model.shapes()
             .filter { shape -> shape is OperationShape && presignableOperations.containsKey(shape.id) }
@@ -131,7 +134,7 @@ class AwsPresigningDecorator internal constructor(
 
 class AwsInputPresignedMethod(
     private val coreCodegenContext: CoreCodegenContext,
-    private val operationShape: OperationShape
+    private val operationShape: OperationShape,
 ) : OperationCustomization() {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val symbolProvider = coreCodegenContext.symbolProvider
@@ -145,7 +148,7 @@ class AwsInputPresignedMethod(
         "aws_sigv4" to runtimeConfig.awsRuntimeDependency("aws-sigv4").asType(),
         "sig_auth" to runtimeConfig.sigAuth().asType(),
         "tower" to CargoDependency.Tower.asType(),
-        "Middleware" to runtimeConfig.defaultMiddleware()
+        "Middleware" to runtimeConfig.defaultMiddleware(),
     )
 
     override fun section(section: OperationSection): Writable = writable {
@@ -155,7 +158,7 @@ class AwsInputPresignedMethod(
     }
 
     private fun RustWriter.writeInputPresignedMethod(section: OperationSection.InputImpl) {
-        val operationError = operationShape.errorSymbol(symbolProvider)
+        val operationError = operationShape.errorSymbol(coreCodegenContext.model, symbolProvider, coreCodegenContext.target)
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(operationShape.id)
 
         val makeOperationOp = if (presignableOp.hasModelTransforms()) {
@@ -173,7 +176,7 @@ class AwsInputPresignedMethod(
             // Prefixed with underscore to avoid colliding with modeled functions
             functionName = makeOperationFn,
             public = false,
-            includeDefaultPayloadHeaders = false
+            includeDefaultPayloadHeaders = false,
         ).generateMakeOperation(this, makeOperationOp, section.customizations)
 
         documentPresignedMethod(hasConfigArg = true)
@@ -186,7 +189,7 @@ class AwsInputPresignedMethod(
             ) -> Result<#{PresignedRequest}, #{SdkError}<#{OpError}>>
             """,
             *codegenScope,
-            "OpError" to operationError
+            "OpError" to operationError,
         ) {
             rustTemplate(
                 """
@@ -195,7 +198,7 @@ class AwsInputPresignedMethod(
                     .map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?
                     .into_request_response();
                 """,
-                *codegenScope
+                *codegenScope,
             )
             rustBlock("") {
                 rust(
@@ -203,7 +206,7 @@ class AwsInputPresignedMethod(
                     // Change signature type to query params and wire up presigning config
                     let mut props = request.properties_mut();
                     props.insert(presigning_config.start_time());
-                    """
+                    """,
                 )
                 withBlock("props.insert(", ");") {
                     rustTemplate(
@@ -212,7 +215,7 @@ class AwsInputPresignedMethod(
                                 PayloadSigningType.EMPTY -> "Bytes(b\"\")"
                                 PayloadSigningType.UNSIGNED_PAYLOAD -> "UnsignedPayload"
                             },
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
                 rustTemplate(
@@ -222,7 +225,7 @@ class AwsInputPresignedMethod(
                     config.signature_type = #{sig_auth}::signer::HttpSignatureType::HttpRequestQueryParams;
                     config.expires_in = Some(presigning_config.expires());
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             rustTemplate(
@@ -235,7 +238,7 @@ class AwsInputPresignedMethod(
                 use #{tower}::{Service, ServiceExt};
                 Ok(svc.ready().await?.call(request).await?)
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -248,7 +251,7 @@ class AwsPresignedFluentBuilderMethod(
         "Error" to AwsRuntimeType.Presigning.member("config::Error"),
         "PresignedRequest" to AwsRuntimeType.Presigning.member("request::PresignedRequest"),
         "PresigningConfig" to AwsRuntimeType.Presigning.member("config::PresigningConfig"),
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError")
+        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("result::SdkError"),
     )
 
     override fun section(section: FluentClientSection): Writable = writable {
@@ -262,14 +265,14 @@ class AwsPresignedFluentBuilderMethod(
                 ) -> Result<#{PresignedRequest}, #{SdkError}<#{OpError}>>
                 """,
                 *codegenScope,
-                "OpError" to section.operationErrorType
+                "OpError" to section.operationErrorType,
             ) {
                 rustTemplate(
                     """
                     let input = self.inner.build().map_err(|err| #{SdkError}::ConstructionFailure(err.into()))?;
                     input.presigned(&self.handle.conf, presigning_config).await
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -347,10 +350,11 @@ class MoveDocumentMembersToQueryParamsTransform(
 }
 
 private fun RustWriter.documentPresignedMethod(hasConfigArg: Boolean) {
-    val configBlurb = if (hasConfigArg)
+    val configBlurb = if (hasConfigArg) {
         "The credentials provider from the `config` will be used to generate the request's signature.\n"
-    else
+    } else {
         ""
+    }
     docs(
         """
         Creates a presigned request for this operation.
@@ -360,6 +364,6 @@ private fun RustWriter.documentPresignedMethod(hasConfigArg: Boolean) {
 
         Presigned requests can be given to other users or applications to access a resource or perform
         an operation without having access to the AWS security credentials.
-        """
+        """,
     )
 }

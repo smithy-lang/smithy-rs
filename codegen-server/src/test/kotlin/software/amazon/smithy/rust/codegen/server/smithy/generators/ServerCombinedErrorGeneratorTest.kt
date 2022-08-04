@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.error.ServerCombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -22,7 +23,7 @@ class ServerCombinedErrorGeneratorTest {
         namespace error
 
         operation Greeting {
-            errors: [InvalidGreeting, ComplexError, FooException]
+            errors: [InvalidGreeting, ComplexError, FooException, Deprecated]
         }
 
         @error("client")
@@ -40,6 +41,10 @@ class ServerCombinedErrorGeneratorTest {
             abc: String,
             other: Integer
         }
+
+        @error("server")
+        @deprecated
+        structure Deprecated { }
     """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val symbolProvider = serverTestSymbolProvider(model)
@@ -48,10 +53,11 @@ class ServerCombinedErrorGeneratorTest {
     fun `generates combined error enums`() {
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(RustModule.public("error")) { writer ->
-            listOf("FooException", "ComplexError", "InvalidGreeting").forEach {
+            listOf("FooException", "ComplexError", "InvalidGreeting", "Deprecated").forEach {
                 model.lookup<StructureShape>("error#$it").serverRenderWithModelBuilder(model, symbolProvider, writer)
             }
-            val generator = ServerCombinedErrorGenerator(model, symbolProvider, model.lookup("error#Greeting"))
+            val errors = listOf("FooException", "ComplexError", "InvalidGreeting").map { model.lookup<StructureShape>("error#$it") }
+            val generator = ServerCombinedErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(model.lookup("error#Greeting")), errors)
             generator.render(writer)
 
             writer.unitTest(
@@ -73,8 +79,11 @@ class ServerCombinedErrorGeneratorTest {
 
                     // Indicate the original name in the display output.
                     let error = FooException::builder().build();
-                    assert_eq!(format!("{}", error), "FooException")
-                """
+                    assert_eq!(format!("{}", error), "FooException");
+
+                    let error = Deprecated::builder().build();
+                    assert_eq!(error.to_string(), "Deprecated");
+                """,
             )
 
             writer.unitTest(
@@ -82,7 +91,7 @@ class ServerCombinedErrorGeneratorTest {
                 test = """
                     let variant = InvalidGreeting { message: String::from("an error") };
                     let error: GreetingError = variant.into();
-                """
+                """,
             )
 
             project.compileAndTest()

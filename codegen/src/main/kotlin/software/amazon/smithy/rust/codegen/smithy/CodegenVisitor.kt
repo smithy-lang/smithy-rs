@@ -66,19 +66,18 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         val (protocol, generator) = ProtocolLoader(
-            codegenDecorator.protocols(service.id, ProtocolLoader.DefaultProtocols)
+            codegenDecorator.protocols(service.id, ProtocolLoader.DefaultProtocols),
         ).protocolFor(context.model, service)
         protocolGeneratorFactory = generator
-        model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
-        val baseProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
-        symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
+        model = codegenDecorator.transformModel(service, baseModel)
+        symbolProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings)
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
             DefaultPublicModules,
-            codegenContext.settings.codegenConfig
+            codegenContext.settings.codegenConfig,
         )
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
@@ -127,8 +126,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             codegenDecorator.crateManifestCustomizations(codegenContext),
             codegenDecorator.libRsCustomizations(
                 codegenContext,
-                listOf()
-            )
+                listOf(),
+            ),
         )
         try {
             "cargo fmt".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
@@ -154,7 +153,7 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             protocolGenerator,
             protocolGeneratorFactory.support(),
             codegenContext,
-            codegenDecorator
+            codegenDecorator,
         ).render()
     }
 

@@ -31,7 +31,7 @@ val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = false,
     handleRustBoxing = true,
-    handleRequired = true
+    handleRequired = true,
 )
 
 fun serverTestSymbolProvider(
@@ -57,7 +57,7 @@ fun serverTestRustSettings(
     codegenConfig: ServerCodegenConfig = ServerCodegenConfig(),
     license: String? = null,
     examplesUri: String? = null,
-    customizationConfig: ObjectNode? = null
+    customizationConfig: ObjectNode? = null,
 ) = ServerRustSettings(
     service,
     moduleName,
@@ -69,7 +69,7 @@ fun serverTestRustSettings(
     codegenConfig,
     license,
     examplesUri,
-    customizationConfig
+    customizationConfig,
 )
 
 fun serverTestCodegenContext(

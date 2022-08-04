@@ -56,7 +56,10 @@ class StreamingShapeSymbolProvider(private val base: RustSymbolProvider, private
  *
  * Note that since streaming members can only be used on the root shape, this can only impact input and output shapes.
  */
-class StreamingShapeMetadataProvider(private val base: RustSymbolProvider, private val model: Model) : SymbolMetadataProvider(base) {
+class StreamingShapeMetadataProvider(
+    private val base: RustSymbolProvider,
+    private val model: Model,
+) : SymbolMetadataProvider(base) {
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
         return base.toSymbol(memberShape).expectRustMetadata()
     }

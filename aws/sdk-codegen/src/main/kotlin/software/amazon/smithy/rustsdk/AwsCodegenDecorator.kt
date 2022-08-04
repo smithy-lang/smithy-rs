@@ -26,6 +26,8 @@ val DECORATORS = listOf(
     AwsEndpointDecorator(),
     UserAgentDecorator(),
     SigV4SigningDecorator(),
+    HttpRequestChecksumDecorator(),
+    HttpResponseChecksumDecorator(),
     RetryPolicyDecorator(),
     IntegrationTestDecorator(),
     AwsFluentClientDecorator(),
@@ -49,7 +51,7 @@ val DECORATORS = listOf(
     Route53Decorator(),
 
     // Only build docs-rs for linux to reduce load on docs.rs
-    DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu"), allFeatures = true))
+    DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu"), allFeatures = true)),
 )
 
 class AwsCodegenDecorator : CombinedCodegenDecorator<ClientCodegenContext>(DECORATORS) {

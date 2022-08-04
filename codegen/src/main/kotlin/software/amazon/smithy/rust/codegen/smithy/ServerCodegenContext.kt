@@ -27,5 +27,5 @@ data class ServerCodegenContext(
     override val settings: ServerRustSettings,
     val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
 ) : CoreCodegenContext(
-    model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.SERVER
+    model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
 )

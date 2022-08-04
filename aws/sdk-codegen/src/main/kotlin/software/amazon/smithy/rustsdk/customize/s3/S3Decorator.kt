@@ -40,22 +40,25 @@ class S3Decorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun protocols(
         serviceId: ShapeId,
-        currentProtocols: ProtocolMap<ClientCodegenContext>
+        currentProtocols: ProtocolMap<ClientCodegenContext>,
     ): ProtocolMap<ClientCodegenContext> =
         currentProtocols.letIf(applies(serviceId)) {
             it + mapOf(
                 RestXmlTrait.ID to RestXmlFactory { protocolConfig ->
                     S3(protocolConfig)
-                }
+                },
             )
         }
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> = baseCustomizations.letIf(applies(codegenContext.serviceShape.id)) {
         it + S3PubUse()
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class S3(coreCodegenContext: CoreCodegenContext) : RestXml(coreCodegenContext) {
@@ -74,7 +77,7 @@ class S3(coreCodegenContext: CoreCodegenContext) : RestXml(coreCodegenContext) {
         return RuntimeType.forInlineFun("parse_http_generic_error", RustModule.private("xml_deser")) {
             it.rustBlockTemplate(
                 "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
-                *errorScope
+                *errorScope,
             ) {
                 rustTemplate(
                     """
@@ -89,7 +92,7 @@ class S3(coreCodegenContext: CoreCodegenContext) : RestXml(coreCodegenContext) {
                         Ok(#{s3_errors}::parse_extended_error(base_err, response.headers()))
                     }
                     """,
-                    *errorScope
+                    *errorScope,
                 )
             }
         }

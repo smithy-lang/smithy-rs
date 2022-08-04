@@ -30,7 +30,7 @@ class AwsQueryParserGenerator(
     private val xmlBindingTraitParserGenerator: XmlBindingTraitParserGenerator =
         XmlBindingTraitParserGenerator(
             coreCodegenContext,
-            xmlErrors
+            xmlErrors,
         ) { context, inner ->
             val operationName = coreCodegenContext.symbolProvider.toSymbol(context.shape).name
             val responseWrapperName = operationName + "Response"
@@ -46,7 +46,7 @@ class AwsQueryParserGenerator(
                         return Err(#{XmlError}::custom(format!("invalid result, expected $resultWrapperName got {:?}", start_el)))
                     }
                 """,
-                "XmlError" to context.xmlErrorType
+                "XmlError" to context.xmlErrorType,
             )
             inner("result_tag")
             rustTemplate(
@@ -55,7 +55,7 @@ class AwsQueryParserGenerator(
                     return Err(#{XmlError}::custom("expected $resultWrapperName tag"))
                 };
                 """,
-                "XmlError" to context.xmlErrorType
+                "XmlError" to context.xmlErrorType,
             )
-        }
+        },
 ) : StructuredDataParserGenerator by xmlBindingTraitParserGenerator

@@ -15,9 +15,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerCombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
+import software.amazon.smithy.rust.codegen.smithy.generators.error.ServerCombinedErrorGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 
 /**
@@ -25,10 +26,10 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
  * to generate the errors from the model and adds the Rust implementation `From<pyo3::PyErr>`.
  */
 class PythonServerCombinedErrorGenerator(
-    model: Model,
+    private val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val operation: OperationShape
-) : ServerCombinedErrorGenerator(model, symbolProvider, operation) {
+    private val operation: OperationShape,
+) : ServerCombinedErrorGenerator(model, symbolProvider, symbolProvider.toSymbol(operation), listOf()) {
 
     private val operationIndex = OperationIndex.of(model)
     private val errors = operationIndex.getErrors(operation)
@@ -53,9 +54,9 @@ class PythonServerCombinedErrorGenerator(
 
             """,
             "pyo3" to PythonServerCargoDependency.PyO3.asType(),
-            "Error" to operation.errorSymbol(symbolProvider),
+            "Error" to operation.errorSymbol(model, symbolProvider, CodegenTarget.SERVER),
             "From" to RuntimeType.From,
-            "CastPyErrToRustError" to castPyErrToRustError()
+            "CastPyErrToRustError" to castPyErrToRustError(),
         )
     }
 
@@ -69,7 +70,7 @@ class PythonServerCombinedErrorGenerator(
                         if let Ok(error) = error.extract::<$errorSymbol>() {
                             return error.into()
                         }
-                        """
+                        """,
                     )
                 }
             }

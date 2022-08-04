@@ -81,7 +81,7 @@ class ServerEnumGeneratorTest {
                 InstanceType::T2Micro => (),
                 InstanceType::T2Nano => (),
             }
-            """
+            """,
         )
     }
 

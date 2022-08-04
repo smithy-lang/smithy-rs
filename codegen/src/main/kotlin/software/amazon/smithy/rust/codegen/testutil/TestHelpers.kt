@@ -61,21 +61,21 @@ fun testRustSettings(
     runtimeConfig,
     codegenConfig,
     license,
-    examplesUri
+    examplesUri,
 )
 
 fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
     RustCodegenPlugin.baseSymbolProvider(
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
-        TestSymbolVisitorConfig
+        TestSymbolVisitorConfig,
     )
 
 fun testCodegenContext(
     model: Model,
     serviceShape: ServiceShape? = null,
     settings: CoreRustSettings = testRustSettings(),
-    codegenTarget: CodegenTarget = CodegenTarget.CLIENT
+    codegenTarget: CodegenTarget = CodegenTarget.CLIENT,
 ): CoreCodegenContext = CoreCodegenContext(
     model,
     testSymbolProvider(model),
@@ -84,7 +84,7 @@ fun testCodegenContext(
         ?: ServiceShape.builder().version("test").id("test#Service").build(),
     ShapeId.from("test#Protocol"),
     settings,
-    codegenTarget
+    codegenTarget,
 )
 
 private const val SmithyVersion = "1.0"
@@ -110,7 +110,7 @@ val TokioWithTestMacros = CargoDependency(
     "tokio",
     CratesIo("1"),
     features = setOf("macros", "test-util", "rt"),
-    scope = DependencyScope.Dev
+    scope = DependencyScope.Dev,
 )
 
 val TokioTest = Attribute.Custom("tokio::test", listOf(TokioWithTestMacros.asType()))

@@ -19,6 +19,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 
 inline fun <reified T : Shape> Model.lookup(shapeId: String): T {
     return this.expectShape(ShapeId.from(shapeId), T::class.java)
@@ -57,7 +58,7 @@ fun MemberShape.isInputEventStream(model: Model): Boolean {
 }
 
 fun MemberShape.isOutputEventStream(model: Model): Boolean {
-    return isEventStream(model) && model.expectShape(container).hasTrait<SyntheticInputTrait>()
+    return isEventStream(model) && model.expectShape(container).hasTrait<SyntheticOutputTrait>()
 }
 
 fun Shape.hasEventStreamMember(model: Model): Boolean {

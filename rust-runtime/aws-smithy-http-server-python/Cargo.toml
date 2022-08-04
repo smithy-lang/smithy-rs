@@ -10,8 +10,7 @@ categories = ["asynchronous", "web-programming", "api-bindings"]
 description = """
 Python server runtime for Smithy Rust Server Framework.
 """
-# until this is not stable, it is not publishable.
-publish = false
+publish = true
 
 # [lib]
 # name = "aws_smithy_http_server_python"
@@ -20,7 +19,7 @@ publish = false
 [dependencies]
 aws-smithy-http-server = { path = "../aws-smithy-http-server" }
 aws-smithy-types = { path = "../aws-smithy-types" }
-hyper = { version = "0.14.19", features = ["server", "http1", "http2", "tcp", "stream"] }
+hyper = { version = "0.14.12", features = ["server", "http1", "http2", "tcp", "stream"] }
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
 pyo3 = "0.16.5"

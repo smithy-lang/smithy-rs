@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.generators
 
 import io.kotest.matchers.string.shouldContainInOrder
+import io.kotest.matchers.string.shouldNotContain
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -35,6 +37,8 @@ class StructureGeneratorTest {
                foo: String,
                @documentation("This *is* documentation about the member.")
                bar: PrimitiveInteger,
+               // Intentionally deprecated.
+               @deprecated
                baz: Integer,
                ts: Timestamp,
                inner: Inner,
@@ -86,10 +90,10 @@ class StructureGeneratorTest {
                 """
                 let s: Option<MyStruct> = None;
                 s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
-                """
+                """,
             )
             writer.toString().shouldContainInOrder(
-                "this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct"
+                "this documents the shape", "#[non_exhaustive]", "pub", "struct MyStruct",
             )
         }
         project.compileAndTest()
@@ -99,6 +103,7 @@ class StructureGeneratorTest {
     fun `generate structures with public fields`() {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.root()
+        writer.rust("##![allow(deprecated)]")
         writer.withModule("model") {
             val innerGenerator = StructureGenerator(model, provider, this, inner)
             innerGenerator.render()
@@ -116,7 +121,7 @@ class StructureGeneratorTest {
                     """
                     let s: Option<crate::structs::MyStruct> = None;
                     s.map(|i|println!("{:?}, {:?}", i.ts, i.byte_value));
-                    """
+                    """,
                 )
             }
         }
@@ -133,7 +138,7 @@ class StructureGeneratorTest {
             """
             let err = MyError { message: None };
             assert_eq!(err.retryable_error_kind(), aws_smithy_types::retry::ErrorKind::ServerError);
-            """
+            """,
         )
     }
 
@@ -152,7 +157,7 @@ class StructureGeneratorTest {
                 secret_key: Some("don't leak me".to_owned())
             };
             assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
-            """
+            """,
         )
         writer.compileAndTest()
     }
@@ -183,8 +188,8 @@ class StructureGeneratorTest {
                 RustMetadata(
                     // By attaching this lint, any missing documentation becomes a compiler error.
                     additionalAttributes = listOf(Attribute.Custom("deny(missing_docs)")),
-                    visibility = Visibility.PUBLIC
-                )
+                    visibility = Visibility.PUBLIC,
+                ),
             ) {
                 StructureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()
                 StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct")).render()
@@ -205,8 +210,70 @@ class StructureGeneratorTest {
                 // This will only compile if the document is optional
                 doc: None
             };
-            """
+            """,
         )
+    }
+
+    @Test
+    fun `deprecated trait with message and since`() {
+        val model = """
+            namespace test
+
+            @deprecated
+            structure Foo {}
+
+            @deprecated(message: "Fly, you fools!")
+            structure Bar {}
+
+            @deprecated(since: "1.2.3")
+            structure Baz {}
+
+            @deprecated(message: "Fly, you fools!", since: "1.2.3")
+            structure Qux {}
+        """.asSmithyModel()
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.root()
+        writer.rust("##![allow(deprecated)]")
+        writer.withModule("model") {
+            StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Baz")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Qux")).render()
+        }
+
+        // turn on clippy to check the semver-compliant version of `since`.
+        writer.compileAndTest(clippy = true)
+    }
+
+    @Test
+    fun `nested deprecated trait`() {
+        val model = """
+            namespace test
+
+            structure Nested {
+                foo: Foo,
+                @deprecated
+                foo2: Foo,
+            }
+
+            @deprecated
+            structure Foo {
+                bar: Bar,
+            }
+
+            @deprecated
+            structure Bar {}
+        """.asSmithyModel()
+        val provider = testSymbolProvider(model)
+        val writer = RustWriter.root()
+        writer.rust("##![allow(deprecated)]")
+        writer.withModule("model") {
+            StructureGenerator(model, provider, this, model.lookup("test#Nested")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Foo")).render()
+            StructureGenerator(model, provider, this, model.lookup("test#Bar")).render()
+        }
+
+        writer.compileAndTest()
     }
 
     @Test
@@ -244,7 +311,7 @@ class StructureGeneratorTest {
                 structure Two {
                     one: One,
                 }
-                """.asSmithyModel()
+                """.asSmithyModel(),
             )
         val provider = testSymbolProvider(testModel)
         val project = TestWorkspace.testProject(provider)
@@ -280,17 +347,54 @@ class StructureGeneratorTest {
                     let _: Option<i32> = one.build_value();
                     let _: Option<i32> = one.builder_value();
                     let _: Option<i32> = one.default_value();
-                    """
+                    """,
                 )
             }
             writer.rustBlock("fn compile_test_two(two: &crate::model::Two)") {
                 rust(
                     """
                     let _: Option<&crate::model::One> = two.one();
-                    """
+                    """,
                 )
             }
         }
         project.compileAndTest()
+    }
+
+    @Test
+    fun `non-streaming fields are doc-hidden`() {
+        val model = """
+            namespace com.test
+            structure MyStruct {
+               foo: String,
+               bar: PrimitiveInteger,
+               baz: Integer,
+               ts: Timestamp,
+               byteValue: Byte,
+            }
+        """.asSmithyModel()
+        val struct = model.lookup<StructureShape>("com.test#MyStruct")
+
+        val provider = testSymbolProvider(model)
+        RustWriter.forModule("test").let { writer ->
+            StructureGenerator(model, provider, writer, struct).render()
+            assertEquals(6, writer.toString().split("#[doc(hidden)]").size, "there should be 5 doc-hiddens")
+        }
+    }
+
+    @Test
+    fun `streaming fields are NOT doc-hidden`() {
+        val model = """
+            namespace com.test
+            @streaming blob SomeStreamingThing
+            structure MyStruct { foo: SomeStreamingThing }
+        """.asSmithyModel()
+        val struct = model.lookup<StructureShape>("com.test#MyStruct")
+
+        val provider = testSymbolProvider(model)
+        RustWriter.forModule("test").let { writer ->
+            StructureGenerator(model, provider, writer, struct).render()
+            writer.toString().shouldNotContain("#[doc(hidden)]")
+        }
     }
 }

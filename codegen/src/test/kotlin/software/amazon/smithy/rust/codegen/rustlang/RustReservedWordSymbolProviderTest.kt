@@ -44,11 +44,11 @@ internal class RustReservedWordSymbolProviderTest {
         """.trimMargin().asSmithyModel()
         val provider = RustReservedWordSymbolProvider(Stub(), model)
         provider.toMemberName(
-            MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build()
+            MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build(),
         ) shouldBe "r##async"
 
         provider.toMemberName(
-            MemberShape.builder().id("namespace#container\$self").target("namespace#Integer").build()
+            MemberShape.builder().id("namespace#container\$self").target("namespace#Integer").build(),
         ) shouldBe "self_"
     }
 

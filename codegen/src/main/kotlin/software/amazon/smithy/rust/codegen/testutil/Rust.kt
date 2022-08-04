@@ -67,9 +67,9 @@ object TestWorkspace {
         val workspaceToml = TomlWriter().write(
             mapOf(
                 "workspace" to mapOf(
-                    "members" to subprojects
-                )
-            )
+                    "members" to subprojects,
+                ),
+            ),
         )
         cargoToml.writeText(workspaceToml)
     }
@@ -82,7 +82,7 @@ object TestWorkspace {
                 [package]
                 name = "stub-${newProject.name}"
                 version = "0.0.1"
-                """.trimIndent()
+                """.trimIndent(),
             )
             subprojects.add(newProject.name)
             generate()
@@ -110,7 +110,7 @@ object TestWorkspace {
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,
-            CoreCodegenConfig(debugMode = debugMode)
+            CoreCodegenConfig(debugMode = debugMode),
         )
     }
 }
@@ -140,8 +140,8 @@ fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectN
             "runtimeConfig",
             Node.objectNodeBuilder().withMember(
                 "relativePath",
-                Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path)
-            ).build()
+                Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path),
+            ).build(),
         )
 
     if (addModuleToEventStreamAllowList) {
@@ -149,8 +149,8 @@ fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectN
             "codegen",
             Node.objectNodeBuilder().withMember(
                 "eventStreamAllowList",
-                Node.fromStrings(moduleName)
-            ).build()
+                Node.fromStrings(moduleName),
+            ).build(),
         )
     }
 
@@ -162,7 +162,7 @@ fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectN
 
 fun RustWriter.unitTest(
     name: String? = null,
-    @Language("Rust", prefix = "fn test() {", suffix = "}") test: String
+    @Language("Rust", prefix = "fn test() {", suffix = "}") test: String,
 ) {
     val testName = name ?: safeName("test")
     raw("#[test]")
@@ -177,7 +177,7 @@ fun RustWriter.unitTest(
 fun RustWriter.unitTest(
     name: String,
     vararg args: Any,
-    block: RustWriter.() -> Unit
+    block: RustWriter.() -> Unit,
 ): RustWriter {
     raw("#[test]")
     return rustBlock("fn $name()", *args, block = block)
@@ -191,7 +191,7 @@ fun RustWriter.unitTest(
 class TestWriterDelegator(
     private val fileManifest: FileManifest,
     symbolProvider: RustSymbolProvider,
-    val codegenConfig: CoreCodegenConfig
+    val codegenConfig: CoreCodegenConfig,
 ) :
     RustCrate(fileManifest, symbolProvider, DefaultPublicModules, codegenConfig) {
     val baseDir: Path = fileManifest.baseDir
@@ -240,7 +240,7 @@ fun TestWriterDelegator.rustSettings() =
     testRustSettings(
         service = ShapeId.from("fake#Fake"),
         moduleName = "test_${baseDir.toFile().nameWithoutExtension}",
-        codegenConfig = this.codegenConfig
+        codegenConfig = this.codegenConfig,
     )
 
 fun String.shouldParseAsRust() {
@@ -257,7 +257,7 @@ fun RustWriter.compileAndTest(
     @Language("Rust", prefix = "fn test() {", suffix = "}")
     main: String = "",
     clippy: Boolean = false,
-    expectFailure: Boolean = false
+    expectFailure: Boolean = false,
 ): String {
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
     val module = if (this.namespace.contains("::")) {
@@ -291,7 +291,7 @@ private fun String.intoCrate(
     deps: Set<CargoDependency>,
     module: String? = null,
     main: String = "",
-    strict: Boolean = false
+    strict: Boolean = false,
 ): File {
     this.shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
@@ -317,7 +317,7 @@ private fun String.intoCrate(
             fn test() {
                 $main
             }
-            """.trimIndent()
+            """.trimIndent(),
         )
     }
 
@@ -325,7 +325,7 @@ private fun String.intoCrate(
         mainRs.appendText(
             """
             #![deny(clippy::all)]
-            """.trimIndent()
+            """.trimIndent(),
         )
     }
 
@@ -334,7 +334,7 @@ private fun String.intoCrate(
         pub mod $module;
         pub use crate::$module::*;
         pub fn main() {}
-        """.trimIndent()
+        """.trimIndent(),
     )
     return tempDir
 }

@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -80,10 +81,13 @@ internal class HttpVersionListGeneratorTest {
                             let expected_http_versions = &vec![http::Version::HTTP_11];
                             assert_eq!(actual_http_versions, expected_http_versions);
                         }
-                        """
+                        """,
                     )
                 }
             }
+
+            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(testWriter)
@@ -142,10 +146,13 @@ internal class HttpVersionListGeneratorTest {
                             let expected_http_versions = &vec![http::Version::HTTP_11, http::Version::HTTP_2];
                             assert_eq!(actual_http_versions, expected_http_versions);
                         }
-                        """
+                        """,
                     )
                 }
             }
+
+            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
 
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
@@ -203,7 +210,7 @@ internal class HttpVersionListGeneratorTest {
 
             override fun configCustomizations(
                 codegenContext: ClientCodegenContext,
-                baseCustomizations: List<ConfigCustomization>
+                baseCustomizations: List<ConfigCustomization>,
             ): List<ConfigCustomization> {
                 return super.configCustomizations(codegenContext, baseCustomizations) + FakeSigningConfig(codegenContext.runtimeConfig)
             }
@@ -224,10 +231,13 @@ internal class HttpVersionListGeneratorTest {
                             let expected_http_versions = &vec![http::Version::HTTP_2];
                             assert_eq!(actual_http_versions, expected_http_versions);
                         }
-                        """
+                        """,
                     )
                 }
             }
+
+            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
 
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
@@ -245,23 +255,23 @@ class FakeSigningConfig(
         "SharedPropertyBag" to RuntimeType(
             "SharedPropertyBag",
             CargoDependency.SmithyHttp(runtimeConfig),
-            "aws_smithy_http::property_bag"
+            "aws_smithy_http::property_bag",
         ),
         "SignMessageError" to RuntimeType(
             "SignMessageError",
             CargoDependency.SmithyEventStream(runtimeConfig),
-            "aws_smithy_eventstream::frame"
+            "aws_smithy_eventstream::frame",
         ),
         "SignMessage" to RuntimeType(
             "SignMessage",
             CargoDependency.SmithyEventStream(runtimeConfig),
-            "aws_smithy_eventstream::frame"
+            "aws_smithy_eventstream::frame",
         ),
         "Message" to RuntimeType(
             "Message",
             CargoDependency.SmithyEventStream(runtimeConfig),
-            "aws_smithy_eventstream::frame"
-        )
+            "aws_smithy_eventstream::frame",
+        ),
     )
 
     override fun section(section: ServiceConfig): Writable {
@@ -277,7 +287,7 @@ class FakeSigningConfig(
                         FakeSigner::new(properties)
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             is ServiceConfig.Extras -> writable {
@@ -299,12 +309,12 @@ class FakeSigningConfig(
                             Ok(message)
                         }
 
-                        fn sign_empty(&mut self) -> Result<#{Message}, #{SignMessageError}> {
-                            Ok(#{Message}::new(Vec::new()))
+                        fn sign_empty(&mut self) -> Option<Result<#{Message}, #{SignMessageError}>> {
+                            Some(Ok(#{Message}::new(Vec::new())))
                         }
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             else -> emptySection

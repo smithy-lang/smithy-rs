@@ -10,7 +10,12 @@ import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 
-val ClippyAllowLints = listOf(
+val AllowedRustcLints = listOf(
+    // Deprecated items should be safe to compile, so don't block the compilation.
+    "deprecated",
+)
+
+val AllowedClippyLints = listOf(
     // Sometimes operations are named the same as our module e.g. output leading to `output::output`.
     "module_inception",
 
@@ -36,26 +41,26 @@ val ClippyAllowLints = listOf(
     "type_complexity",
 )
 
-val AllowDocsLints = listOf(
+val AllowedRustdocLints = listOf(
     // Rust >=1.53.0 requires links to be wrapped in `<link>`. This is extremely hard to enforce for
     // docs that come from the modeled documentation, so we need to disable this lint
-    "bare_urls"
+    "bare_urls",
 )
 
 class AllowLintsGenerator(
-    private val bareLints: List<String> = listOf(),
-    private val clippyLints: List<String> = ClippyAllowLints,
-    private val docsLints: List<String> = AllowDocsLints
+    private val rustcLints: List<String> = AllowedRustcLints,
+    private val clippyLints: List<String> = AllowedClippyLints,
+    private val rustdocLints: List<String> = AllowedRustdocLints,
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Attributes -> writable {
-            bareLints.forEach {
+            rustcLints.forEach {
                 Attribute.Custom("allow($it)", container = true).render(this)
             }
             clippyLints.forEach {
                 Attribute.Custom("allow(clippy::$it)", container = true).render(this)
             }
-            docsLints.forEach {
+            rustdocLints.forEach {
                 Attribute.Custom("allow(rustdoc::$it)", container = true).render(this)
             }
             // add a newline at the end

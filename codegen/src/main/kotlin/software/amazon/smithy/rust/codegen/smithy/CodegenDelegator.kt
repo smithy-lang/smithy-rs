@@ -47,7 +47,7 @@ open class RustCrate(
      * private as well as any other metadata. [baseModules] enables configuring this. See [DefaultPublicModules].
      */
     baseModules: Map<String, RustModule>,
-    coreCodegenConfig: CoreCodegenConfig
+    coreCodegenConfig: CoreCodegenConfig,
 ) {
     private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(coreCodegenConfig.debugMode))
     private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
@@ -74,8 +74,8 @@ open class RustCrate(
                 features.remove(existing)
                 features.add(
                     existing.copy(
-                        deps = (existing.deps + feature.deps).toSortedSet().toList()
-                    )
+                        deps = (existing.deps + feature.deps).toSortedSet().toList(),
+                    ),
                 )
             }
         }
@@ -103,7 +103,7 @@ open class RustCrate(
             libRsCustomizations,
             modules,
             this.features.toList(),
-            requireDocs
+            requireDocs,
         )
     }
 
@@ -131,7 +131,7 @@ open class RustCrate(
      */
     fun withModule(
         module: RustModule,
-        moduleWriter: (RustWriter) -> Unit
+        moduleWriter: (RustWriter) -> Unit,
     ): RustCrate {
         val moduleName = module.name
         modules[moduleName] = module
@@ -187,7 +187,7 @@ fun WriterDelegator<RustWriter>.finalize(
     }
     val cargoDependencies = mergeDependencyFeatures(
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }
-            .filterIsInstance<CargoDependency>().distinct()
+            .filterIsInstance<CargoDependency>().distinct(),
     )
     this.useFileWriter("Cargo.toml") {
         val cargoToml = CargoTomlGenerator(
@@ -195,7 +195,7 @@ fun WriterDelegator<RustWriter>.finalize(
             it,
             manifestCustomizations,
             cargoDependencies,
-            features
+            features,
         )
         cargoToml.render()
     }
@@ -206,7 +206,7 @@ private fun CargoDependency.mergeWith(other: CargoDependency): CargoDependency {
     check(key == other.key)
     return copy(
         features = features + other.features,
-        optional = optional && other.optional
+        optional = optional && other.optional,
     )
 }
 

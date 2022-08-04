@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 class ServerResponseBindingGenerator(
     protocol: Protocol,
     coreCodegenContext: CoreCodegenContext,
-    operationShape: OperationShape
+    operationShape: OperationShape,
 ) {
     private val httpBindingGenerator =
         HttpBindingGenerator(protocol, coreCodegenContext, coreCodegenContext.symbolProvider, operationShape)

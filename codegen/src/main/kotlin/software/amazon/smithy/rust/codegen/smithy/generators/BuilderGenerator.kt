@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
@@ -61,7 +62,7 @@ fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
 class BuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val shape: StructureShape
+    private val shape: StructureShape,
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
@@ -96,7 +97,7 @@ class BuilderGenerator(
         val detailedMessage = "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
         rust(
             """#T::MissingField { field: "$field", details: "$detailedMessage" } """,
-            runtimeConfig.operationBuildError()
+            runtimeConfig.operationBuildError(),
         )
     }
 
@@ -119,11 +120,12 @@ class BuilderGenerator(
         writer: RustWriter,
         coreType: RustType,
         member: MemberShape,
-        memberName: String
+        memberName: String,
     ) {
         val input = coreType.asArgument("input")
 
         writer.documentShape(member, model)
+        writer.deprecatedShape(member)
         writer.rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
             write("self.$memberName = Some(${input.value});")
             write("self")
@@ -138,7 +140,7 @@ class BuilderGenerator(
         writer: RustWriter,
         outerType: RustType,
         member: MemberShape,
-        memberName: String
+        memberName: String,
     ) {
         // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
         //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
@@ -146,6 +148,7 @@ class BuilderGenerator(
         val inputType = outerType.asOptional()
 
         writer.documentShape(member, model)
+        writer.deprecatedShape(member)
         writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
             rust("self.$memberName = input; self")
         }
@@ -195,6 +198,7 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
+        deprecatedShape(member)
         val input = coreType.member.asArgument("input")
 
         rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
@@ -204,7 +208,7 @@ class BuilderGenerator(
                 v.push(${input.value});
                 self.$memberName = Some(v);
                 self
-                """
+                """,
             )
         }
     }
@@ -215,11 +219,12 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
+        deprecatedShape(member)
         val k = coreType.key.asArgument("k")
         val v = coreType.member.asArgument("v")
 
         rustBlock(
-            "pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self"
+            "pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self",
         ) {
             rust(
                 """
@@ -227,7 +232,7 @@ class BuilderGenerator(
                 hash_map.insert(${k.value}, ${v.value});
                 self.$memberName = Some(hash_map);
                 self
-                """
+                """,
             )
         }
     }
@@ -255,7 +260,7 @@ class BuilderGenerator(
                         !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
                         !memberSymbol.isOptional() -> withBlock(
                             ".ok_or(",
-                            ")?"
+                            ")?",
                         ) { missingRequiredField(memberName) }
                     }
                 }
