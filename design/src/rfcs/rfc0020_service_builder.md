@@ -1,4 +1,4 @@
-# RFC: Better Service Builders
+# RFC: Service Builder Improvements
 
 > Status: RFC
 
@@ -16,7 +16,7 @@ This RFC proposes a new builder, deprecating the existing one, which addresses A
 
 ## Background
 
-Before engaging with the proposal, a survey of the current state of affairs is required.
+To provide context for the proposal we perform a survey of the current state of affairs.
 
 The following is a reference model we will use throughout the RFC:
 
@@ -43,7 +43,7 @@ We have purposely omitted details from the model that are unimportant to describ
 
 ### Handlers
 
-Before we progress onto a more general look at the current service builder, we should familiarize ourselves with the specifics of the `Handler` trait:
+An core concept in the current service builder is the `Handler` trait:
 
 ```rust
 pub trait Handler<T, Input> {
@@ -280,3 +280,7 @@ let new_routes = old_routes
     // Collect the iterator back into a collection (`Vec` or `TinyMap`)
     .collect();
 ```
+
+### Comparison to Axum
+
+Historically, `smithy-rs` has borrowed from [axum](https://github.com/tokio-rs/axum). Despite various divergences the code bases still have much in common.
