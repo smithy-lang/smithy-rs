@@ -223,7 +223,7 @@ let app: Router = OperationRegistryBuilder::default()
 
 ### Router
 
-The router today exists as
+The [router today](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60) exists as
 
 ```rust
 pub struct Route {
@@ -257,7 +257,7 @@ impl Service<http::Request> for Router
     async fn call(&mut self, request: http::Request) -> Result<Self::Response, Self::Error> {
         match &self.routes {
             Routes::/* protocol */(routes) => {
-                let route: Result<_, _> = /* perform route matching logic */;
+                let route: Result<Route, _> = /* perform route matching logic */;
                 match route {
                     Ok(ok) => ok.oneshot().await,
                     Err(err) => /* Convert routing error into http::Response */
@@ -266,4 +266,17 @@ impl Service<http::Request> for Router
         }
     }
 }
+```
+
+Along side the protocol specific constructors, `Router` includes a `layer` method. This provides a way for the customer to apply a `tower::Layer` to all routes. For every protocol, `Router::layer`, has the approximately the same behavior:
+
+```rust
+let new_routes = old_routes
+    .into_iter()
+    // Apply the layer
+    .map(|route| layer.layer(route))
+    // Re-box the service, to restore `Route` type
+    .map(|svc| Box::new(svc))
+    // Collect the iterator back into a collection (`Vec` or `TinyMap`)
+    .collect();
 ```
