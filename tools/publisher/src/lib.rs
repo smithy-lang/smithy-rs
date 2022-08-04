@@ -12,6 +12,8 @@ pub const SMITHYRS_REPO_NAME: &str = "smithy-rs";
 pub const CRATE_OWNERS: &[&str] = &[
     // https://github.com/orgs/awslabs/teams/rust-sdk-owners
     "github:awslabs:rust-sdk-owners",
+    // https://github.com/orgs/awslabs/teams/smithy-rs-server
+    "github:awslabs:smithy-rs-server",
     // https://github.com/aws-sdk-rust-ci
     "aws-sdk-rust-ci",
 ];
