@@ -2,7 +2,7 @@
 
 > Status: RFC
 
-One might characterize `smithy-rs` as a tool for transforming a [Smithy service](https://awslabs.github.io/smithy/1.0/spec/core/model.html#service) into a [tower::Service](https://docs.rs/tower-service/latest/tower_service/trait.Service.html) builder. A Smithy model defines semantics and constrains the behavior of the generated service, but not completely - closures must be passed to the builder to before the `tower::Service` is fully specified. This builder structure is the primary API surface we provide to the customer, as a result, it is important that it meets their needs.
+One might characterize `smithy-rs` as a tool for transforming a [Smithy service](https://awslabs.github.io/smithy/1.0/spec/core/model.html#service) into a [tower::Service](https://docs.rs/tower-service/latest/tower_service/trait.Service.html) builder. A Smithy model defines behavior of the generated service partially - handlers must be passed to the builder before the `tower::Service` is fully specified. This builder structure is the primary API surface we provide to the customer, as a result, it is important that it meets their needs.
 
 This RFC proposes a new builder, deprecating the existing one, which addresses API deficiencies and takes steps to improve performance.
 
@@ -13,6 +13,7 @@ This RFC proposes a new builder, deprecating the existing one, which addresses A
 - **Service**: The `tower::Service` trait is an interface for writing network applications in a modular and reusable way. `Service`s act on requests to produce responses.
 - **Service Builder**: A `tower::Service` builder, generated from a Smithy service, by `smithy-rs`.
 - **Middleware**: Broadly speaking, middleware modify requests and responses. Concretely, these are exist as implementations of [Layer](https://docs.rs/tower/latest/tower/layer/trait.Layer.html)/a `Service` wrapping an inner `Service`.
+- **Handler**: A closure defining the behavior of a particular request after routing. These are provided to the service builder to complete the describe of the service.
 
 ## Background
 
@@ -34,16 +35,40 @@ operation Operation1 {
 service Service {
     operations: [
         Operation0,
-        Operation0,
+        Operation1,
     ]
 }
 ```
 
-We have purposely omitted details from the model that are unimportant to describing the proposal. We also omit distracting details from the Rust snippets.
+We have purposely omitted details from the model that are unimportant to describing the proposal. We also omit distracting details from the Rust snippets. Code generation is linear in the sense that, code snippets can be assumed to extend to multiple operations in a predictable way. In the case where we do want to speak generally about an operation and it's associated types, we use `{Operation}`, for example `{Operation}Input` is the input type of an unspecified operation.
+
+Here is a quick example of what a customer might write when using the service builder:
+
+```rust
+async fn handler0(input: Operation0Input) -> Operation0Output {
+    todo!()
+}
+
+async fn handler1(input: Operation1Input) -> Operation1Output {
+    todo!()
+}
+
+let app: Router = OperationRegistryBuilder::default()
+    // Use the setters
+    .operation0(handler0)
+    .operation1(handler1)
+    // Convert to `OperationRegistry`
+    .build()
+    .unwrap()
+    // Convert to `Router`
+    .into();
+```
+
+During the survey we touch on the major mechanisms used to acheive this API.
 
 ### Handlers
 
-An core concept in the current service builder is the `Handler` trait:
+A core concept in the service builder is the `Handler` trait:
 
 ```rust
 pub trait Handler<T, Input> {
@@ -51,14 +76,14 @@ pub trait Handler<T, Input> {
 }
 ```
 
-Its purpose is to provide an even interface over closures of the form `FnOnce(Input) -> impl Future<Output = Output>` and `FnOnce(Input, State) -> impl Future<Output = Output>`. It's this abstraction which allows the customers to supply both `async fn operation0(input: Operation0Input) -> Operation0Output` and `async fn operation0(input: Operation0Input, state: Extension<S>) -> Operation0Output` to the service builder.
+Its purpose is to provide an even interface over closures of the form `FnOnce({Operation}Input) -> impl Future<Output = {Operation}Output>` and `FnOnce({Operation}Input, State) -> impl Future<Output = {Operation}Output>`. It's this abstraction which allows the customers to supply both `async fn handler(input: {Operation}Input) -> {Operation}Output` and `async fn handler(input: {Operation}Input, state: Extension<S>) -> {Operation}Output` to the service builder.
 
-We generate `Handler` implementations for said closures in [ServerOperationHandlerGenerator.kt](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt), for `Operation0` these are:
+We generate `Handler` implementations for said closures in [ServerOperationHandlerGenerator.kt](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt):
 
 ```rust
 impl<Fun, Fut> Handler<(), Operation0Input> for Fun
 where
-    Fun: FnOnce(crate::input::Operation0Input) -> Fut,
+    Fun: FnOnce(Operation0Input) -> Fut,
     Fut: Future<Output = Operation0Output>,
 {
     async fn call(self, request: http::Request) -> http::Response {
@@ -90,16 +115,15 @@ where
 }
 ```
 
-Creating `Operation0Input` from a `http::Request` and `http::Response` from a `Operation0Output` involves the HTTP binding traits and protocol aware deserialization. The structure [RuntimeError](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5) enumerates internal error cases such as serialization/deserialization failures, `extensions().get::<T>()` failures, etc. We omit error handling in the snippets above, but, in full, they also involve protocol aware conversions from the `RuntimeError` and `http::Response`. The reader should make note of the influence of the model/protocol on the different sections of this procedure.
+Creating `{Operation}Input` from a `http::Request` and `http::Response` from a `{Operation}Output` involves the [HTTP binding traits](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html) and protocol aware serialization/deserialization. The [RuntimeError](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5) enumerates error cases such as serialization/deserialization failures, `extensions().get::<T>()` failures, etc. We omit error handling in the snippets above, but, in full, they also involve protocol aware conversions from the `RuntimeError` and `http::Response`. The reader should make note of the influence of the model on the different sections of this procedure.
 
 The `request.extensions().get::<T>()` present in the `Fun: FnOnce(Operation0Input, Extension<S>) -> Fut` implementation is the current approach to injecting state into handlers. The customer is required to apply a [AddExtensionLayer](https://docs.rs/tower-http/latest/tower_http/add_extension/struct.AddExtensionLayer.html) to the output of the service builder so that, when the request reaches the handler, the `extensions().get::<T>()` will succeed.
 
-To convert the closures described above into a `Service` `OperationHandler` is used:
+To convert the closures described above into a `Service` an `OperationHandler` is used:
 
 ```rust
 pub struct OperationHandler<H, T, Input> {
     handler: H,
-    _marker: PhantomData<(T, Input)>,
 }
 
 impl<H, T, Input> Service<Request<B>> for OperationHandler<H, T, Input>
@@ -120,11 +144,9 @@ where
 }
 ```
 
-The service build uses both `Handler` and `OperationHandler`
-
 ### Builder
 
-The service builder we currently provide to the customer takes the form of the `OperationRegistryBuilder`, generated from [ServerOperationRegistryGenerator.kt](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt).
+The service builder we provide to the customer takes the form of the `OperationRegistryBuilder`, generated from [ServerOperationRegistryGenerator.kt](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt).
 
 Currently, the reference model would generate the following `OperationRegistryBuilder` and `OperationRegistry`:
 
@@ -132,13 +154,11 @@ Currently, the reference model would generate the following `OperationRegistryBu
 pub struct OperationRegistryBuilder<Op0, In0, Op1, In1> {
     operation1: Option<Op0>,
     operation2: Option<Op1>,
-    _phantom: PhantomData<(In0, In1)>,
 }
 
 pub struct OperationRegistry<Op0, In0, Op1, In1> {
     operation1: Op0,
     operation2: Op1,
-    _phantom: PhantomData<(In0, In1)>,
 }
 ```
 
@@ -160,7 +180,6 @@ impl<Op0, In0, Op1, In1> OperationRegistryBuilder<Op0, In0, Op1, In1> {
         Ok(OperationRegistry {
             operation0: self.operation0.ok_or(/* OperationRegistryBuilderError */)?,
             operation1: self.operation1.ok_or(/* OperationRegistryBuilderError */)?,
-            _phantom: PhantomData,
         })
     }
 }
@@ -199,31 +218,9 @@ where
 }
 ```
 
-A customer using this API would follow this kind of pattern:
-
-```rust
-async fn handler0(input: Operation0Input) -> Operation0Output {
-    todo!()
-}
-
-async fn handler1(input: Operation1Input) -> Operation1Output {
-    todo!()
-}
-
-let app: Router = OperationRegistryBuilder::default()
-    // Use the setters
-    .operation0(handler0)
-    .operation1(handler1)
-    // Convert to `OperationRegistry`
-    .build()
-    .unwrap()
-    // Convert to `Router`
-    .into();
-```
-
 ### Router
 
-The [router today](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60) exists as
+The [aws_smithy_http::routing::Router](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60) provides the protocol aware routing of requests to their target service, it exists as
 
 ```rust
 pub struct Route {
@@ -268,7 +265,7 @@ impl Service<http::Request> for Router
 }
 ```
 
-Along side the protocol specific constructors, `Router` includes a `layer` method. This provides a way for the customer to apply a `tower::Layer` to all routes. For every protocol, `Router::layer`, has the approximately the same behavior:
+Along side the protocol specific constructors, `Router` includes a `layer` method. This provides a way for the customer to apply a `tower::Layer` to all routes. For every protocol, `Router::layer` has the approximately the same behavior:
 
 ```rust
 let new_routes = old_routes
@@ -283,4 +280,95 @@ let new_routes = old_routes
 
 ### Comparison to Axum
 
-Historically, `smithy-rs` has borrowed from [axum](https://github.com/tokio-rs/axum). Despite various divergences the code bases still have much in common.
+Historically, `smithy-rs` has borrowed from [axum](https://github.com/tokio-rs/axum). Despite various divergences the code bases still have much in common:
+
+* Reliance on `Handler` trait to abstract over different closure signatures:
+  * [axum::handler::Handler](https://docs.rs/axum/latest/axum/handler/trait.Handler.html)
+  * [Handler](#handlers)
+* A mechanism for turning `H: Handler` into a `tower::Service`:
+  * [axum::handler::IntoService](https://docs.rs/axum/latest/axum/handler/struct.IntoService.html)
+  * [OperationHandler](#handlers)
+* A `Router` to route requests to various handlers:
+  * [axum::Router](https://docs.rs/axum/latest/axum/struct.Router.html)
+  * [aws_smithy_http_server::routing::Router](#router)
+
+To identify where the implementations should differ we should classify in what ways the use cases differ. There are two primary areas which we describe below.
+
+#### Extractors and Responses
+
+In `axum` there is a notion of [Extractor](https://docs.rs/axum/latest/axum/extract/index.html), which allows the customer to easily define a decomposition of an incoming `http::Request` by specify the arguments to the handlers. For example,
+
+```rust
+async fn request(Json(payload): Json<Value>, Query(params): Query<HashMap<String, String>>, headers: HeaderMap) {
+    todo!()
+}
+```
+
+is a valid handler - each argument satisfies the [axum::extract::FromRequest](https://docs.rs/axum/latest/axum/extract/trait.FromRequest.html) trait, therefore satisfies one of `axum` blanket `Handler` implementations:
+
+```rust
+macro_rules! impl_handler {
+    ( $($ty:ident),* $(,)? ) => {
+        impl<F, Fut, Res, $($ty,)*> Handler<($($ty,)*)> for F
+        where
+            F: FnOnce($($ty,)*) -> Fut + Clone + Send + 'static,
+            Fut: Future<Output = Res> + Send,
+            Res: IntoResponse,
+            $( $ty: FromRequest + Send,)*
+        {
+            fn call(self, req: http::Request) -> Self::Future {
+                async {
+                    let mut req = RequestParts::new(req);
+
+                    $(
+                        let $ty = match $ty::from_request(&mut req).await {
+                            Ok(value) => value,
+                            Err(rejection) => return rejection.into_response(),
+                        };
+                    )*
+
+                    let res = self($($ty,)*).await;
+
+                    res.into_response()
+                }
+            }
+        }
+    };
+}
+```
+
+The implementations of `Handler` in `axum` and `smithy-rs` follow a similar pattern - convert `http::Request` into the closures input, run the closure, convert the output of the closure to `http::Response`.
+
+In `smithy-rs` we do not need a notion of "extractor", that role is fulfilled by HTTP binding traits. In `smithy-rs` the `http::Request` decomposition is determined by the Smithy model and the service protocol, whereas in `axum` it's defined by the handlers signature. In `smithy-rs` the only remaining degree of freedom in the signature of the handler is whether or not state is included.
+
+Dual to `FromRequest` is the [axum::response::IntoResponse](https://docs.rs/axum/latest/axum/response/trait.IntoResponse.html) trait, this plays the role of converting the output of the handler to `http::Response`. Again, the difference between `axum` and `smithy-rs` is that `smithy-rs` has the conversion from `{Operation}Output` to `http::Response` specified by the Smithy model, whereas `axum` the customer is free to specify a return type which implements `axum::response::IntoResponse`.
+
+#### Routing
+
+The Smithy model not only specifies the `http::Request` decomposition and `http::Response` composition for a given service, it also determines the routing. The `From<OperationRegistry>` implementation, described in [Builder](#builder), yields a fully formed router based on the protocol and [http traits](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#http-trait) specified.
+
+This is in contrast to `axum`, where the user decides the routing by various combinators included on the `axum::Router`. In an `axum` application one might encounter the following code:
+
+```rust
+let user_routes = Router::new().route("/:id", /* service */);
+
+let team_routes = Router::new().route("/", /* service */);
+
+let api_routes = Router::new()
+    .nest("/users", user_routes)
+    .nest("/teams", team_routes);
+
+let app = Router::new().nest("/api", api_routes);
+```
+
+Introducing state to handlers in `axum` is done in the same way as `smithy-rs`, described briefly in [Handlers](#handlers) - a layer is used to insert state into incoming `http::Request`s and the `Handler` implementation pops it out of the type map layer. In `axum`, if a customer wanted to scope state to all routes within `/users/` they are able to do the following:
+
+```rust
+async fn handler(Extension(state): Extension</* State */>) -> /* Return Type */ {}
+
+let api_routes = Router::new()
+    .nest("/users", user_routes.layer(Extension(/* state */)))
+    .nest("/teams", team_routes);
+```
+
+In `smithy-rs` a customer is only able to apply a layer to either the `aws_smithy_http::routing::Router` or every route via the [layer method](#router) described above.
