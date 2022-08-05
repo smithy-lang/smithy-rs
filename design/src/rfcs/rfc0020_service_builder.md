@@ -372,3 +372,78 @@ let api_routes = Router::new()
 ```
 
 In `smithy-rs` a customer is only able to apply a layer to either the `aws_smithy_http::routing::Router` or every route via the [layer method](#router) described above.
+
+# Proposal
+
+The proposal is presented as a series of transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, and where there exists an interdependency it is stated.
+
+Although presented as a mutation to the existing service builder, the actual implementation should exist as a entirely separate builder - reusing code generation from the old builder but exposes a new Rust API. Preserving the old API surface will prevent breakage and make it easier to perform comparative benchmarks and testing.
+
+## Remove `OperationRegistry`
+
+As described in [Builder](#builder), the customer is required to perform two conversions. One from `OperationRegistryBuilder` via `OperationRegistryBuilder::build`, the second from `OperationRegistryBuilder` to `Router` via the `From<OperationRegistry> for Router` implementation. The intermediary stop at `OperationRegistry` is not required and should be removed.
+
+## Statically check for missing Handlers
+
+As described in [Builder](#builder), the `OperationRegistryBuilder::build` method is fallible - it yields a runtime error when one of the handlers has not been set.
+
+```rust
+    pub fn build(
+        self,
+    ) -> Result<OperationRegistry<Op0, In0, Op1, In1>, OperationRegistryBuilderError> {
+        Ok(OperationRegistry {
+            operation0: self.operation0.ok_or(/* OperationRegistryBuilderError */)?,
+            operation1: self.operation1.ok_or(/* OperationRegistryBuilderError */)?,
+        })
+    }
+```
+
+We can do away with fallibility if we put bounds on `Op0`, `Op1`, etc which are not satisfied by the default type parameters. For example,
+
+```rust
+impl OperationRegistryBuilder<Op0, In0, Op1, In1> {
+    pub fn operation0<NewOp0>(mut self, value: NewOp0) -> OperationRegistryBuilder<NewOp0, In0, Op1, In1> {
+        OperationRegistryBuilder {
+            operation0: value,
+            operation1: self.operation1
+        }
+    }
+    pub fn operation1<NewOp1>(mut self, value: NewOp1) -> OperationRegistryBuilder<Op0, In0, NewOp1, In1> {
+        OperationRegistryBuilder {
+            operation0: self.operation0,
+            operation1: value
+        }
+    }
+}
+
+impl OperationRegistryBuilder<Op0, In0, Op1, In1>
+where
+    Op0: Handler<B, In0, Operation0Input>,
+    Op1: Handler<B, In1, Operation1Input>,
+{
+    pub fn build(self) -> OperationRegistry<Op0, In0, Op1, In1> {
+        OperationRegistry {
+            operation0: self.operation0,
+            operation1: self.operation1,
+        }
+    }
+}
+```
+
+The customer will now get a compile time error rather than a runtime error when they fail to specify a handler.
+
+## Switch `From<OperationRegistry> for Router` to a `OperationRegistry::build` method
+
+## Eagerly convert to Service in the service builder
+
+### Add `layer_all` method to service builder
+
+### Add `{operation}_layer` methods to service builder
+
+## Blanket implementation `Handler`
+
+## Protocol specific routers
+
+## Protocol specific errors
+
+## Type erasure with the name of the Smithy service
