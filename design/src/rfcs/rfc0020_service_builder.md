@@ -13,7 +13,7 @@ This RFC proposes a new builder, deprecating the existing one, which addresses A
 - **Service**: The `tower::Service` trait is an interface for writing network applications in a modular and reusable way. `Service`s act on requests to produce responses.
 - **Service Builder**: A `tower::Service` builder, generated from a Smithy service, by `smithy-rs`.
 - **Middleware**: Broadly speaking, middleware modify requests and responses. Concretely, these are exist as implementations of [Layer](https://docs.rs/tower/latest/tower/layer/trait.Layer.html)/a `Service` wrapping an inner `Service`.
-- **Handler**: A closure defining the behavior of a particular request after routing. These are provided to the service builder to complete the describe of the service.
+- **Handler**: A closure defining the behavior of a particular request after routing. These are provided to the service builder to complete the description of the service.
 
 ## Background
 
