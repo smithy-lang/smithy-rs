@@ -10,10 +10,15 @@
 use std::time::Duration;
 
 use crate::helpers::{client, PokemonService};
+
 use async_stream::stream;
 use pokemon_service_client::{
-    error::AttemptCapturingPokemonEventError, error::AttemptCapturingPokemonEventErrorKind,
-    error::MasterBallUnsuccessful, model::AttemptCapturingPokemonEvent, model::CapturingEvent, model::CapturingPayload,
+    error::{
+        AttemptCapturingPokemonEventError, AttemptCapturingPokemonEventErrorKind, GetStorageError, GetStorageErrorKind,
+        MasterBallUnsuccessful, NotAuthorized,
+    },
+    model::{AttemptCapturingPokemonEvent, CapturingEvent, CapturingPayload},
+    types::SdkError,
 };
 use rand::Rng;
 use serial_test::serial;
@@ -42,6 +47,16 @@ fn get_pokemon_to_capture() -> String {
 
 #[tokio::test]
 #[serial]
+async fn test_health_check_operation() {
+    let _program = PokemonService::run();
+    // Give PokémonService some time to start up.
+    time::sleep(Duration::from_millis(500)).await;
+
+    let _health_check = client().health_check_operation().send().await.unwrap();
+}
+
+#[tokio::test]
+#[serial]
 async fn simple_integration_test() {
     let _program = PokemonService::run();
     // Give PokémonService some time to start up.
@@ -55,6 +70,29 @@ async fn simple_integration_test() {
 
     let service_statistics_out = client().get_server_statistics().send().await.unwrap();
     assert_eq!(1, service_statistics_out.calls_count.unwrap());
+
+    let storage_err = client().get_storage().user("ash").passcode("pikachu321").send().await;
+    if let Err(SdkError::ServiceError {
+        err:
+            GetStorageError {
+                kind: GetStorageErrorKind::NotAuthorized(NotAuthorized { .. }),
+                ..
+            },
+        ..
+    }) = storage_err
+    {
+    } else {
+        assert!(false, "expected NotAuthorized error")
+    }
+
+    let storage_out = client()
+        .get_storage()
+        .user("ash")
+        .passcode("pikachu123")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(Some(vec![]), storage_out.collection);
 
     let pokemon_species_error = client()
         .get_pokemon_species()

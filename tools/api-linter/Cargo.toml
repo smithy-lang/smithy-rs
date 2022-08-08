@@ -13,7 +13,7 @@ cargo_metadata = "0.14"
 clap = { version = "~3.1.18", features = ["derive"] }
 owo-colors = { version = "3", features = ["supports-colors"] }
 pest = "2" # For pretty error formatting
-rustdoc-types = "0.10"
+rustdoc-types = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }

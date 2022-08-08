@@ -333,6 +333,7 @@ sealed class Attribute {
          */
         val NonExhaustive = Custom("non_exhaustive")
         val AllowUnusedMut = Custom("allow(unused_mut)")
+        val DocHidden = Custom("doc(hidden)")
         val DocInline = Custom("doc(inline)")
     }
 
@@ -372,6 +373,29 @@ sealed class Attribute {
             writer.raw("#$bang[$annotation]")
             symbols.forEach {
                 writer.addDependency(it.dependency)
+            }
+        }
+
+        companion object {
+            /**
+             * Renders a
+             * [`#[deprecated]`](https://doc.rust-lang.org/reference/attributes/diagnostics.html#the-deprecated-attribute)
+             * attribute.
+             */
+            fun deprecated(note: String? = null, since: String? = null): Custom {
+                val builder = StringBuilder()
+                builder.append("deprecated")
+
+                if (note != null && since != null) {
+                    builder.append("(note = ${note.dq()}, since = ${since.dq()})")
+                } else if (note != null) {
+                    builder.append("(note = ${note.dq()})")
+                } else if (since != null) {
+                    builder.append("(since = ${since.dq()})")
+                } else {
+                    // No-op. Rustc would emit a default message.
+                }
+                return Custom(builder.toString())
             }
         }
     }

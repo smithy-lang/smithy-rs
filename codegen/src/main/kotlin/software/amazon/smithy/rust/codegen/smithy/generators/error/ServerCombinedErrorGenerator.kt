@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.Writable
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
@@ -53,6 +54,7 @@ open class ServerCombinedErrorGenerator(
         writer.rustBlock("enum ${errorSymbol.name}") {
             errors.forEach { errorVariant ->
                 documentShape(errorVariant, model)
+                deprecatedShape(errorVariant)
                 val errorVariantSymbol = symbolProvider.toSymbol(errorVariant)
                 write("${errorVariantSymbol.name}(#T),", errorVariantSymbol)
             }
