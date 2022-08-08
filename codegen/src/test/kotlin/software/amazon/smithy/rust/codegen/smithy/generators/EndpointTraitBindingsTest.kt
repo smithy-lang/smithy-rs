@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
@@ -171,6 +172,9 @@ internal class EndpointTraitBindingsTest {
                     )
                 }
             }
+
+            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(codegenDecorator)

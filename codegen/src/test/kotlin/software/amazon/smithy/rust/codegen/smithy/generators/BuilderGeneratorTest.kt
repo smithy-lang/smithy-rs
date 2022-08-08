@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.rust.codegen.generators.StructureGeneratorTest
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.smithy.Default
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -29,6 +30,7 @@ internal class BuilderGeneratorTest {
     fun `generate builders`() {
         val provider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")
+        writer.rust("##![allow(deprecated)]")
         val innerGenerator = StructureGenerator(model, provider, writer, inner)
         val generator = StructureGenerator(model, provider, writer, struct)
         val builderGenerator = BuilderGenerator(model, provider, struct)
@@ -69,6 +71,7 @@ internal class BuilderGeneratorTest {
                 }
             }
         val writer = RustWriter.forModule("model")
+        writer.rust("##![allow(deprecated)]")
         val innerGenerator = StructureGenerator(
             StructureGeneratorTest.model, provider, writer,
             StructureGeneratorTest.inner,

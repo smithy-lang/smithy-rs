@@ -18,10 +18,12 @@ import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.rustType
+import software.amazon.smithy.rust.codegen.util.getTrait
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.utils.AbstractCodeWriter
 import java.io.File
@@ -266,6 +268,20 @@ fun <T : AbstractCodeWriter<T>> T.docs(text: String, vararg args: Any, newlinePr
         }
     write(cleaned, *args)
     popState()
+    return this
+}
+
+/**
+ * Generates a `#[deprecated]` attribute for [shape].
+ */
+fun RustWriter.deprecatedShape(shape: Shape): RustWriter {
+    val deprecatedTrait = shape.getTrait<DeprecatedTrait>() ?: return this
+
+    val note = deprecatedTrait.message.orNull()
+    val since = deprecatedTrait.since.orNull()
+
+    Attribute.Custom.deprecated(note, since).render(this)
+
     return this
 }
 

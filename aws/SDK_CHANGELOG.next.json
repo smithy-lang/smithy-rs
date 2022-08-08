@@ -6,59 +6,46 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Fix compilation of `aws-config` with `rustls` and `native-tls` disabled. The\n`ProviderConfig::with_tcp_connector` method uses\n`aws_smithy_client::hyper_ext`, which only exists with the `client-hyper`\nfeature enabled. Add a feature enabling that, and enable it by default.\n",
+      "message": "Rename EventStreamInput to EventStreamSender",
       "meta": {
-        "bug": true,
-        "breaking": false,
+        "bug": false,
+        "breaking": true,
         "tada": false
       },
-      "author": "joshtriplett",
+      "author": "82marbag",
       "references": [
-        "smithy-rs#1541"
+        "smithy-rs#1157"
       ],
-      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
     },
     {
-      "message": "Add support for aws-chunked content encoding. Only single-chunk encoding is supported. Multiple chunks and\nchunk signing are not supported at this time.\n",
+      "message": "The type of streaming unions that contain errors is generated without those errors.\nErrors in a streaming union `Union` are generated as members of the type `UnionError`.\nTaking Transcribe as an example, the `AudioStream` streaming union generates, in the client, both the `AudioStream` type:\n```rust\npub enum AudioStream {\n    AudioEvent(crate::model::AudioEvent),\n    Unknown,\n}\n```\nand its error type,\n```rust\npub struct AudioStreamError {\n    /// Kind of error that occurred.\n    pub kind: AudioStreamErrorKind,\n    /// Additional metadata about the error, including error code, message, and request ID.\n    pub(crate) meta: aws_smithy_types::Error,\n}\n```\n`AudioStreamErrorKind` contains all error variants for the union.\nBefore, the generated code looked as:\n```rust\npub enum AudioStream {\n    AudioEvent(crate::model::AudioEvent),\n    ... all error variants,\n    Unknown,\n}\n```\n",
       "meta": {
         "bug": false,
-        "breaking": false,
+        "breaking": true,
         "tada": false
       },
-      "author": "Velfi",
+      "author": "82marbag",
       "references": [
-        "smithy-rs#1263"
+        "smithy-rs#1157"
       ],
-      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
     },
     {
-      "message": "Re-export aws_types::SdkConfig in aws_config",
+      "message": "`aws_smithy_http::event_stream::EventStreamSender` and `aws_smithy_http::event_stream::Receiver` are now generic over `<T, E>`,\nwhere `T` is a streaming union and `E` the union's errors.\nThis means that event stream errors are now sent as `Err` of the union's error type.\nWith this example model:\n```smithy\n@streaming union Event {\n    throttlingError: ThrottlingError\n}\n@error(\"client\") structure ThrottlingError {}\n```\nBefore:\n```rust\nstream! { yield Ok(Event::ThrottlingError ...) }\n```\nAfter:\n```rust\nstream! { yield Err(EventError::ThrottlingError ...) }\n```\nAn example from the SDK is in [transcribe streaming](https://github.com/awslabs/smithy-rs/blob/4f51dd450ea3234a7faf481c6025597f22f03805/aws/sdk/integration-tests/transcribestreaming/tests/test.rs#L80).\n",
       "meta": {
         "bug": false,
-        "breaking": false,
-        "tada": true
+        "breaking": true,
+        "tada": false
       },
-      "author": "calavera",
+      "author": "82marbag",
       "references": [
-        "smithy-rs#1457"
+        "smithy-rs#1157"
       ],
-      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
     },
     {
-      "message": "Add `From<aws_smithy_client::erase::DynConnector>` impl for `aws_smithy_client::http_connector::HttpConnector`",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "Velfi",
-      "references": [
-        "aws-sdk-rust#581"
-      ],
-      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
-    },
-    {
-      "message": "Updated SDK Client retry behavior to allow for a configurable initial backoff. Previously, the initial backoff\n(named `r` in the code) was set to 2 seconds. This is not an ideal default for services like DynamoDB that expect\nclients to quickly retry failed request attempts. Now, users can set quicker (or slower) backoffs according to their\nneeds.\n\n```rust\n#[tokio::main]\nasync fn main() -> Result<(), aws_sdk_dynamodb::Error> {\n    let retry_config = aws_smithy_types::retry::RetryConfigBuilder::new()\n        .max_attempts(4)\n        .initial_backoff(Duration::from_millis(20));\n\n    let shared_config = aws_config::from_env()\n        .retry_config(retry_config)\n        .load()\n        .await;\n\n    let client = aws_sdk_dynamodb::Client::new(&shared_config);\n\n    // Given the 20ms backoff multiplier, and assuming this request fails 3 times before succeeding,\n    // the first retry would take place between 0-20ms after the initial request,\n    // the second retry would take place between 0-40ms after the first retry,\n    // and the third retry would take place between 0-80ms after the second retry.\n    let request = client\n        .put_item()\n        .table_name(\"users\")\n        .item(\"username\", \"Velfi\")\n        .item(\"account_type\", \"Developer\")\n        .send().await?;\n\n    Ok(())\n}\n```\n",
+      "message": "The AWS SDK for Rust now supports [additional checksum algorithms for Amazon S3](https://aws.amazon.com/blogs/aws/new-additional-checksum-algorithms-for-amazon-s3/).\nWhen getting and putting objects, you may now request that the request body be validated with a checksum. The supported\nalgorithms are SHA-1, SHA-256, CRC-32, and CRC-32C.\n\n```rust\n#[tokio::main]\nasync fn main() -> Result<(), Box<dyn std::error::Error>> {\n    let sdk_config = aws_config::load_from_env().await;\n    let s3_client = aws_sdk_s3::Client::new(&sdk_config);\n    let body = aws_sdk_s3::types::ByteStream::read_from()\n        .path(std::path::Path::new(\"./path/to/your/file.txt\"))\n        .build()\n        .await\n        .unwrap();\n\n    let _ = s3_client\n        .put_object()\n        .bucket(\"your-bucket\")\n        .key(\"file.txt\")\n        .body(body)\n        // When using this field, the checksum will be calculated for you\n        .checksum_algorithm(aws_sdk_s3::model::ChecksumAlgorithm::Crc32C)\n        .send()\n        .await?;\n\n    let body = aws_sdk_s3::types::ByteStream::read_from()\n        .path(std::path::Path::new(\"./path/to/your/other-file.txt\"))\n        .build()\n        .await\n        .unwrap();\n\n    let _ = s3_client\n        .put_object()\n        .bucket(\"your-bucket\")\n        .key(\"other-file.txt\")\n        .body(body)\n        // Alternatively, you can pass a checksum that you've calculated yourself. It must be base64\n        // encoded. Also, make sure that you're base64 encoding the bytes of the checksum, not its\n        // string representation.\n        .checksum_crc32_c(aws_smithy_types::base64::encode(&A_PRECALCULATED_CRC_32_C_CHECKSUM[..]))\n        .send()\n        .await?;\n}\n```\n",
       "meta": {
         "bug": false,
         "breaking": false,
@@ -66,53 +53,12 @@
       },
       "author": "Velfi",
       "references": [
-        "aws-sdk-rust#567"
+        "smithy-rs#1482"
       ],
-      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
     },
     {
-      "message": "Until now, SDK crates have all shared the exact same version numbers.\nThis changes with this release. From now on, SDK crates will only version\nbump if they have changes. Coincidentally, they may share the same version\nnumber for some releases since changes to the code generator will cause\na version bump in all of them, but this should not be relied upon.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#1540"
-      ],
-      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
-    },
-    {
-      "message": "Remove warning for valid IMDS provider use-case",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#1559",
-        "aws-sdk-rust#582"
-      ],
-      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
-    },
-    {
-      "message": "Only emit a warning about failing to expand a `~` to the home\ndirectory in a profile file's path if that path was explicitly\nset (don't emit it for the default paths)\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#1558",
-        "aws-sdk-rust#583"
-      ],
-      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
-    },
-    {
-      "message": "The `imds::Client` in `aws-config` now implements `Clone`",
+      "message": "SDK crate READMEs now include an example of creating a client",
       "meta": {
         "bug": false,
         "breaking": false,
@@ -120,13 +66,13 @@
       },
       "author": "jdisanti",
       "references": [
-        "smithy-rs#1557",
-        "aws-sdk-rust#580"
+        "smithy-rs#1571",
+        "smithy-rs#1385"
       ],
-      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
     },
     {
-      "message": "The `sleep_impl` methods on the `SdkConfig` builder are now exposed and documented.",
+      "message": "Non-streaming struct members are now marked `#[doc(hidden)]` since they will be removed in the future",
       "meta": {
         "bug": false,
         "breaking": false,
@@ -134,9 +80,10 @@
       },
       "author": "jdisanti",
       "references": [
-        "smithy-rs#1556"
+        "smithy-rs#1573",
+        "smithy-rs#1569"
       ],
-      "since-commit": "010a234832b8130faf7b41bcb1e08043d9d9af0a"
+      "since-commit": "65e53ab87a9bf6fdc45f85e29fddaaaf7b482a1b"
     }
   ],
   "aws-sdk-model": []
