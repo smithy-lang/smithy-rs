@@ -10,3 +10,9 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "Add codegen version to generated package metadata"
+references = ["smithy-rs#1612"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "unexge"
