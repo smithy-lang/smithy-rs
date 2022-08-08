@@ -39,28 +39,28 @@ class RequiredCustomizations : RustCodegenDecorator<ClientCodegenContext> {
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> =
         baseCustomizations +
-                IdempotencyTokenGenerator(codegenContext, operation) +
-                EndpointPrefixGenerator(codegenContext, operation) +
-                HttpChecksumRequiredGenerator(codegenContext, operation) +
-                HttpVersionListCustomization(codegenContext, operation)
+            IdempotencyTokenGenerator(codegenContext, operation) +
+            EndpointPrefixGenerator(codegenContext, operation) +
+            HttpChecksumRequiredGenerator(codegenContext, operation) +
+            HttpVersionListCustomization(codegenContext, operation)
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
         baseCustomizations +
-                RetryConfigProviderCustomization(codegenContext) +
-                SleepImplProviderCustomization(codegenContext) +
-                TimeoutConfigProviderCustomization(codegenContext)
+            RetryConfigProviderCustomization(codegenContext) +
+            SleepImplProviderCustomization(codegenContext) +
+            TimeoutConfigProviderCustomization(codegenContext)
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
         baseCustomizations + CrateVersionGenerator() +
-                SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) +
-                AllowLintsGenerator() +
-                PubUseRetryConfigGenerator(codegenContext.runtimeConfig)
+            SmithyTypesPubUseGenerator(codegenContext.runtimeConfig) +
+            AllowLintsGenerator() +
+            PubUseRetryConfigGenerator(codegenContext.runtimeConfig)
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         // Add rt-tokio feature for `ByteStream::from_path`
