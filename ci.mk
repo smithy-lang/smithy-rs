@@ -36,6 +36,10 @@ check-aws-sdk-smoketest-docs-clippy-udeps: generate-aws-sdk-smoketest
 check-aws-sdk-smoketest-unit-tests: generate-aws-sdk-smoketest
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-aws-sdk-standalone-integration-tests
+check-aws-sdk-standalone-integration-tests: generate-aws-sdk-smoketest
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-client-codegen-integration-tests
 check-client-codegen-integration-tests:
 	$(CI_ACTION) $@ $(ARGS)
