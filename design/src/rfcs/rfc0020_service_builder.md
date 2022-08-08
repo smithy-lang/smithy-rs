@@ -284,7 +284,7 @@ Historically, `smithy-rs` has borrowed from [axum](https://github.com/tokio-rs/a
 
 * Reliance on `Handler` trait to abstract over different closure signatures:
   * [axum::handler::Handler](https://docs.rs/axum/latest/axum/handler/trait.Handler.html)
-  * [Handler](#handlers)
+  * [Handlers](#handlers)
 * A mechanism for turning `H: Handler` into a `tower::Service`:
   * [axum::handler::IntoService](https://docs.rs/axum/latest/axum/handler/struct.IntoService.html)
   * [OperationHandler](#handlers)
@@ -458,13 +458,56 @@ let app = /* Service builder */.build();
 
 As mentioned in [Comparison to Axum: Routing](#routing) and [Handlers](#handlers), the `smithy-rs` service builder accepts handlers and only converts them into a `tower::Service` during the final conversion into a `Router`. There are downsides to this:
 
-- The customer has no opportunity to apply middleware to a specific operation before they are all collected into `Router`. The `Router` does have a `layer` method, described in [Router](#router), but this applies the middleware uniformly across all operations.
-- The builder has no way to apply middleware around customer applied middleware. A concrete example of where this would be useful is described in the [Middleware Position](rfc0018_logging_sensitive.md#middleware-position) section of [RFC: Logging in the Presence of Sensitive Data](rfc0018_logging_sensitive.md).
-- The customer has no way of expressing readiness of the underlying operation - all handlers are converted to services with [Service::poll_ready](https://docs.rs/tower/latest/tower/trait.Service.html#tymethod.poll_ready) returning `Poll::Ready(Ok(()))`.
+1. The customer has no opportunity to apply middleware to a specific operation before they are all collected into `Router`. The `Router` does have a `layer` method, described in [Router](#router), but this applies the middleware uniformly across all operations.
+2. The builder has no way to apply middleware around customer applied middleware. A concrete example of where this would be useful is described in the [Middleware Position](rfc0018_logging_sensitive.md#middleware-position) section of [RFC: Logging in the Presence of Sensitive Data](rfc0018_logging_sensitive.md).
+3. The customer has no way of expressing readiness of the underlying operation - all handlers are converted to services with [Service::poll_ready](https://docs.rs/tower/latest/tower/trait.Service.html#tymethod.poll_ready) returning `Poll::Ready(Ok(()))`.
 
-There are two points at which the customer might want to apply middleware: around `tower::Service<{Operation}Input, Response = {Operation}Output>` and `tower::Service<http::Response, Response = http::Response>`, that is, before and after the serialization/deserialization is performed.
+The three use cases described above are supported by `axum` by virtue of the [Router::route](https://docs.rs/axum/latest/axum/routing/struct.Router.html#method.route) method accepting a `tower::Service`. The reader should consider a similar approach where the service builder setters accept a `tower::Service<http::Request, Response = http::Response>` rather than the `Handler`.
 
-The three use cases described above are supported by `axum` by virtue of the [Router::route](https://docs.rs/axum/latest/axum/routing/struct.Router.html#method.route) method accepting a `tower::Service`. The reader should consider a similar approach where the service builder setters accept a `tower::Service<http::Request, Response = http::Response>` rather than the `Handler`. In this way the we separate the building of the entire service from the building of individual operations, this leads us to one of the central tenets of this proposal: operations as middleware. More concretely, the customer is provided with the following generated code
+The smallest changeset to make progress towards these problems would require the customer eagerly uses `OperationHandler::new` rather than it being applied internally within `From<OperationRegistry> for Router` (see [Handlers](#handlers)). The usage would become
+
+```rust
+async fn handler0(input: Operation0Input) -> Operation0Output {
+    todo!()
+}
+
+async fn handler1(input: Operation1Input, state: State) -> Operation1Output {
+    todo!()
+}
+
+// Create a `Service<http::Request, Response = http::Response, Error = Infallible>` eagerly
+let svc = OperationHandler::new(handler0);
+
+// Middleware can be applied at this point
+let operation0 = http_layer.layer(op1_svc);
+
+let operation1 = OperationHandler::new(handler1);
+
+OperationRegistryBuilder::default()
+    .operation0(operation0)
+    .operation1(operation1)
+    /* ... */
+```
+
+Note that this requires that the `OperationRegistryBuilder` stores services, rather than `Handler`s. An unintended and superficial benefit of this is that we are able to drop `In{n}` from the `OperationRegistryBuilder<Op0, In0, Op1, In1>`, only `Op{n}` remains and it parametrizes each operations `tower::Service`.
+
+It is still possible to retain the original API which accepts `Handler` by introducing the following setters:
+
+```rust
+impl<Op1, Op2> OperationRegistry<Op1, Op2> {
+    fn operation0_handler<H: Handler>(self, handler: H) -> OperationRegistryBuilder<OperationHandler<H>, Op2> {
+        self.operation0(OperationHandler::new(handler))
+    }
+}
+```
+
+There are two points at which the customer might want to apply middleware: around `tower::Service<{Operation}Input, Response = {Operation}Output>` and `tower::Service<http::Response, Response = http::Response>`, that is, before and after the model aware serialization/deserialization is performed. The change described only succeeds in the later, and therefore is only a partial solution to (1).
+
+This solves (2), the service builder may apply additional middleware around the service.
+
+This does not solve (3), as the customer is not permitted to provide a `Service`.
+
+<!-- In this way the we separate the building of the entire service from the building of individual operations, this leads us to one of the central tenets of this proposal: operations as middleware. More concretely, the customer is provided with the following generated code
 
 ```rust
 struct Operation0<S> {
@@ -500,46 +543,7 @@ fn make_operation_0<S>(inner: S) -> Operation0<S> {
 }
 ```
 
-which is concerned with all the same model aware serialization/deserialization we noted in [Handler](#handler). The API usage then becomes
-
-```rust
-async fn handler0(input: Operation0Input) -> Operation0Output {
-    todo!()
-}
-
-async fn handler1(input: Operation1Input, state: State) -> Operation1Output {
-    todo!()
-}
-
-// Model agnostic `into_service` method which transforms a handler `{Operation}Input -> {Operation}Output` to
-// `tower::Service<{Operation}Input, Response = {Operation}Output, Error = Infallible>`
-let svc = OperationHandler::new(handler0);
-
-// Middleware can be applied at this point
-let svc = model_layer.layer(svc);
-
-// Model aware conversion between `tower::Service<{Operation}Input, Response = {Operation}Output, Error = Infallible>`
-// and `tower::Service<http::Request, Response = http::Response, Error = Infallible>`
-let operation0 = make_operation0(svc);
-
-// Middleware can be applied at this point
-let operation0 = http_layer.layer(op1_svc);
-
-OperationRegistryBuilder::default()
-    .operation0(operation0)
-    .operation1(make_operation1(OperationHandler::new(handler1)))
-    /* ... */
-```
-
-Note that this requires that the `OperationRegistryBuilder` stores services, rather than `Handler`s. An unintended and superficial benefit of this is that we are able to drop `In{n}` from the `OperationRegistryBuilder<Op0, In0, Op1, In1>`, only `Op{n}` remains and it parametrizes each operations `tower::Service`.
-
-It is still possible to retain the original API which accepts `Handler` by introducing the following setters
-
-```rust
-fn operation0_handler<H: Handler>(self, handler: H) -> OperationRegistryBuilder<Operation> {
-    self.operation0(make_operation0(handler.into_service()))
-}
-```
+which is concerned with all the same model aware serialization/deserialization we noted in [Handlers](#handlers). -->
 
 ## Protocol specific routers
 
