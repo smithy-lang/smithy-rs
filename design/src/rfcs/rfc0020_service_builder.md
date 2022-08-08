@@ -347,7 +347,7 @@ Dual to `FromRequest` is the [axum::response::IntoResponse](https://docs.rs/axum
 
 The Smithy model not only specifies the `http::Request` decomposition and `http::Response` composition for a given service, it also determines the routing. The `From<OperationRegistry>` implementation, described in [Builder](#builder), yields a fully formed router based on the protocol and [http traits](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#http-trait) specified.
 
-This is in contrast to `axum`, where the user decides the routing by various combinators included on the `axum::Router`. In an `axum` application one might encounter the following code:
+This is in contrast to `axum`, where the user specifies the routing by use of various combinators included on the `axum::Router`, applied to other `tower::Service`s. In an `axum` application one might encounter the following code:
 
 ```rust
 let user_routes = Router::new().route("/:id", /* service */);
@@ -360,6 +360,8 @@ let api_routes = Router::new()
 
 let app = Router::new().nest("/api", api_routes);
 ```
+
+Note that, in `axum` handlers are quickly converted to `tower::Service` (via `IntoService`) before they are passed into the `Router`. In contrast, in `smithy-rs` handlers are passed into a builder and then the conversion to `tower::Service` is performed (via `OperationHandler`).
 
 Introducing state to handlers in `axum` is done in the same way as `smithy-rs`, described briefly in [Handlers](#handlers) - a layer is used to insert state into incoming `http::Request`s and the `Handler` implementation pops it out of the type map layer. In `axum`, if a customer wanted to scope state to all routes within `/users/` they are able to do the following:
 
@@ -375,13 +377,13 @@ In `smithy-rs` a customer is only able to apply a layer to either the `aws_smith
 
 # Proposal
 
-The proposal is presented as a series of transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, and where there exists an interdependency it is stated.
+The proposal is presented as a series of compatible transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, but in the case where there exists an interdependency it is stated.
 
 Although presented as a mutation to the existing service builder, the actual implementation should exist as a entirely separate builder - reusing code generation from the old builder but exposes a new Rust API. Preserving the old API surface will prevent breakage and make it easier to perform comparative benchmarks and testing.
 
-## Remove `OperationRegistry`
+## Remove two-step build procedure
 
-As described in [Builder](#builder), the customer is required to perform two conversions. One from `OperationRegistryBuilder` via `OperationRegistryBuilder::build`, the second from `OperationRegistryBuilder` to `Router` via the `From<OperationRegistry> for Router` implementation. The intermediary stop at `OperationRegistry` is not required and should be removed.
+As described in [Builder](#builder), the customer is required to perform two conversions. One from `OperationRegistryBuilder` via `OperationRegistryBuilder::build`, the second from `OperationRegistryBuilder` to `Router` via the `From<OperationRegistry> for Router` implementation. The intermediary stop at `OperationRegistry` is not required and can be removed.
 
 ## Statically check for missing Handlers
 
@@ -398,7 +400,7 @@ As described in [Builder](#builder), the `OperationRegistryBuilder::build` metho
     }
 ```
 
-We can do away with fallibility if we put bounds on `Op0`, `Op1`, etc which are not satisfied by the default type parameters. For example,
+We can do away with fallibility if we allow for on `Op0`, `Op1`, to switch types during build. For example,
 
 ```rust
 impl OperationRegistryBuilder<Op0, In0, Op1, In1> {
@@ -434,13 +436,110 @@ The customer will now get a compile time error rather than a runtime error when 
 
 ## Switch `From<OperationRegistry> for Router` to a `OperationRegistry::build` method
 
-## Eagerly convert to Service in the service builder
+To construct a `Router`, the customer must either give a type ascription
 
-### Add `layer_all` method to service builder
+```rust
+let app: Router = /* Service builder */.into();
+```
 
-### Add `{operation}_layer` methods to service builder
+or be explicit about the `Router` namespace
 
-## Blanket implementation `Handler`
+```rust
+let app = Router::from(/* Service builder */);
+```
+
+If we switch from a `From<OperationRegistry> for Router` to a `build` method on `OperationRegistry` the customer may simply
+
+```rust
+let app = /* Service builder */.build();
+```
+
+## Operations as Middleware
+
+As mentioned in [Comparison to Axum: Routing](#routing) and [Handlers](#handlers), the `smithy-rs` service builder accepts handlers and only converts them into a `tower::Service` during the final conversion into a `Router`. There are downsides to this:
+
+- The customer has no opportunity to apply middleware to a specific operation before they are all collected into `Router`. The `Router` does have a `layer` method, described in [Router](#router), but this applies the middleware uniformly across all operations.
+- The builder has no way to apply middleware around customer applied middleware. A concrete example of where this would be useful is described in the [Middleware Position](rfc0018_logging_sensitive.md#middleware-position) section of [RFC: Logging in the Presence of Sensitive Data](rfc0018_logging_sensitive.md).
+- The customer has no way of expressing readiness of the underlying operation - all handlers are converted to services with [Service::poll_ready](https://docs.rs/tower/latest/tower/trait.Service.html#tymethod.poll_ready) returning `Poll::Ready(Ok(()))`.
+
+There are two points at which the customer might want to apply middleware: around `tower::Service<{Operation}Input, Response = {Operation}Output>` and `tower::Service<http::Response, Response = http::Response>`, that is, before and after the serialization/deserialization is performed.
+
+The three use cases described above are supported by `axum` by virtue of the [Router::route](https://docs.rs/axum/latest/axum/routing/struct.Router.html#method.route) method accepting a `tower::Service`. The reader should consider a similar approach where the service builder setters accept a `tower::Service<http::Request, Response = http::Response>` rather than the `Handler`. In this way the we separate the building of the entire service from the building of individual operations, this leads us to one of the central tenets of this proposal: operations as middleware. More concretely, the customer is provided with the following generated code
+
+```rust
+struct Operation0<S> {
+    inner: S,
+}
+
+impl<S> Service<http::Request> for Operation0<S>
+where
+    S: Service<Operation0Input, Response = Operation0Output, Error = Infallible>
+{
+    type Response = http::Response;
+    type Error = Infallible;
+
+    fn poll_ready(&mut self, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+        // We defer to the inner service for readiness
+        self.inner.poll_ready(cx)
+    }
+
+    async fn call(&mut self, request: http::Request) -> Result<Self::Response, Self::Error> {
+        let input = /* Create `Operation0Input` from `request: http::Request` */;
+
+        self.inner.call(input).await;
+
+        let response = /* Create `http::Response` from `output: Operation0Output` */
+        response
+    }
+}
+
+fn make_operation_0<S>(inner: S) -> Operation0<S> {
+    Operation0 {
+        inner
+    }
+}
+```
+
+which is concerned with all the same model aware serialization/deserialization we noted in [Handler](#handler). The API usage then becomes
+
+```rust
+async fn handler0(input: Operation0Input) -> Operation0Output {
+    todo!()
+}
+
+async fn handler1(input: Operation1Input, state: State) -> Operation1Output {
+    todo!()
+}
+
+// Model agnostic `into_service` method which transforms a handler `{Operation}Input -> {Operation}Output` to
+// `tower::Service<{Operation}Input, Response = {Operation}Output, Error = Infallible>`
+let svc = OperationHandler::new(handler0);
+
+// Middleware can be applied at this point
+let svc = model_layer.layer(svc);
+
+// Model aware conversion between `tower::Service<{Operation}Input, Response = {Operation}Output, Error = Infallible>`
+// and `tower::Service<http::Request, Response = http::Response, Error = Infallible>`
+let operation0 = make_operation0(svc);
+
+// Middleware can be applied at this point
+let operation0 = http_layer.layer(op1_svc);
+
+OperationRegistryBuilder::default()
+    .operation0(operation0)
+    .operation1(make_operation1(OperationHandler::new(handler1)))
+    /* ... */
+```
+
+Note that this requires that the `OperationRegistryBuilder` stores services, rather than `Handler`s. An unintended and superficial benefit of this is that we are able to drop `In{n}` from the `OperationRegistryBuilder<Op0, In0, Op1, In1>`, only `Op{n}` remains and it parametrizes each operations `tower::Service`.
+
+It is still possible to retain the original API which accepts `Handler` by introducing the following setters
+
+```rust
+fn operation0_handler<H: Handler>(self, handler: H) -> OperationRegistryBuilder<Operation> {
+    self.operation0(make_operation0(handler.into_service()))
+}
+```
 
 ## Protocol specific routers
 
