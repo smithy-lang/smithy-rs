@@ -1,4 +1,67 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 4th, 2022
+================
+**Breaking Changes:**
+- ⚠🎉 (all, [smithy-rs#1570](https://github.com/awslabs/smithy-rs/issues/1570), @weihanglo) Support @deprecated trait for aggregate shapes
+- ⚠ (all, [smithy-rs#1157](https://github.com/awslabs/smithy-rs/issues/1157)) Rename EventStreamInput to EventStreamSender
+- ⚠ (all, [smithy-rs#1157](https://github.com/awslabs/smithy-rs/issues/1157)) The type of streaming unions that contain errors is generated without those errors.
+    Errors in a streaming union `Union` are generated as members of the type `UnionError`.
+    Taking Transcribe as an example, the `AudioStream` streaming union generates, in the client, both the `AudioStream` type:
+    ```rust
+    pub enum AudioStream {
+        AudioEvent(crate::model::AudioEvent),
+        Unknown,
+    }
+    ```
+    and its error type,
+    ```rust
+    pub struct AudioStreamError {
+        /// Kind of error that occurred.
+        pub kind: AudioStreamErrorKind,
+        /// Additional metadata about the error, including error code, message, and request ID.
+        pub(crate) meta: aws_smithy_types::Error,
+    }
+    ```
+    `AudioStreamErrorKind` contains all error variants for the union.
+    Before, the generated code looked as:
+    ```rust
+    pub enum AudioStream {
+        AudioEvent(crate::model::AudioEvent),
+        ... all error variants,
+        Unknown,
+    }
+    ```
+- ⚠ (all, [smithy-rs#1157](https://github.com/awslabs/smithy-rs/issues/1157)) `aws_smithy_http::event_stream::EventStreamSender` and `aws_smithy_http::event_stream::Receiver` are now generic over `<T, E>`,
+    where `T` is a streaming union and `E` the union's errors.
+    This means that event stream errors are now sent as `Err` of the union's error type.
+    With this example model:
+    ```smithy
+    @streaming union Event {
+        throttlingError: ThrottlingError
+    }
+    @error("client") structure ThrottlingError {}
+    ```
+    Before:
+    ```rust
+    stream! { yield Ok(Event::ThrottlingError ...) }
+    ```
+    After:
+    ```rust
+    stream! { yield Err(EventError::ThrottlingError ...) }
+    ```
+    An example from the SDK is in [transcribe streaming](https://github.com/awslabs/smithy-rs/blob/4f51dd450ea3234a7faf481c6025597f22f03805/aws/sdk/integration-tests/transcribestreaming/tests/test.rs#L80).
+
+**New this release:**
+- 🎉 (all, [smithy-rs#1482](https://github.com/awslabs/smithy-rs/issues/1482)) Update codegen to generate support for flexible checksums.
+- (all, [smithy-rs#1520](https://github.com/awslabs/smithy-rs/issues/1520)) Add explicit cast during JSON deserialization in case of custom Symbol providers.
+- (all, [smithy-rs#1578](https://github.com/awslabs/smithy-rs/issues/1578), @lkts) Change detailed logs in CredentialsProviderChain from info to debug
+- (all, [smithy-rs#1573](https://github.com/awslabs/smithy-rs/issues/1573), [smithy-rs#1569](https://github.com/awslabs/smithy-rs/issues/1569)) Non-streaming struct members are now marked `#[doc(hidden)]` since they will be removed in the future
+
+**Contributors**
+Thank you for your contributions! ❤
+- @lkts ([smithy-rs#1578](https://github.com/awslabs/smithy-rs/issues/1578))
+- @weihanglo ([smithy-rs#1570](https://github.com/awslabs/smithy-rs/issues/1570))
+
 July 20th, 2022
 ===============
 **New this release:**
