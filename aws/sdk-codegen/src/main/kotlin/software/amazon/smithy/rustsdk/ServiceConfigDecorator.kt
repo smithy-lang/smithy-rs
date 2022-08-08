@@ -9,6 +9,7 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
@@ -21,6 +22,9 @@ class ServiceConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> = baseCustomizations + SharedConfigDocsCustomization()
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class SharedConfigDocsCustomization : ConfigCustomization() {

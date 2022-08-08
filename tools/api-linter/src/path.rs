@@ -9,6 +9,7 @@ use std::fmt;
 /// Component type for components in a [`Path`].
 #[derive(Copy, Clone, Debug)]
 pub enum ComponentType {
+    AssocConst,
     AssocType,
     Constant,
     Crate,
