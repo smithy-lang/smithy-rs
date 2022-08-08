@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.smithy.customizations.RetryConfigProviderConfig
+import software.amazon.smithy.rust.codegen.smithy.customizations.RetryConfigProviderCustomization
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -37,7 +37,7 @@ internal class RetryConfigDecoratorTest {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val project = TestWorkspace.testProject()
         val codegenContext = testCodegenContext(model, settings = project.rustSettings())
-
-        validateConfigCustomizations(RetryConfigProviderConfig(codegenContext), project)
+        
+        validateConfigCustomizations(RetryConfigProviderCustomization(codegenContext), project)
     }
 }

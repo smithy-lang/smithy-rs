@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.smithy.customizations.TimeoutConfigProviderConfig
+import software.amazon.smithy.rust.codegen.smithy.customizations.TimeoutConfigProviderCustomization
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
@@ -38,6 +38,6 @@ internal class TimeoutConfigDecoratorTest {
         val project = TestWorkspace.testProject()
         val codegenContext = testCodegenContext(model, settings = project.rustSettings())
 
-        validateConfigCustomizations(TimeoutConfigProviderConfig(codegenContext), project)
+        validateConfigCustomizations(TimeoutConfigProviderCustomization(codegenContext), project)
     }
 }
