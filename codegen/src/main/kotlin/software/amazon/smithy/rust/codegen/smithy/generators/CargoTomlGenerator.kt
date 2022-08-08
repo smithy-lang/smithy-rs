@@ -81,5 +81,4 @@ class CargoTomlGenerator(
     }
 }
 
-fun smithyCodegenVersion(): String =
-    try { Version.crateVersion() } catch (ex: Exception) { "unknown" }
+fun smithyCodegenVersion(): String = Version.crateVersion()
