@@ -47,7 +47,7 @@ structure CreateFooInput {}
         </PrimitiveIntDocument>
     """,
     bodyMediaType: "application/xml",
-    params: {}
+    params: { requiredValue: 0 }
 }, {
        id: "RestXmlSerPrimitiveIntSet",
        protocol: "aws.protocols#restXml",
@@ -61,7 +61,7 @@ structure CreateFooInput {}
         </PrimitiveIntDocument>
        """,
        bodyMediaType: "application/xml",
-       params: { value: 1 }
+       params: { value: 1, requiredValue: 0 }
    }])
 @http(uri: "/primitive-document", method: "POST")
 operation PrimitiveIntOpXml {
