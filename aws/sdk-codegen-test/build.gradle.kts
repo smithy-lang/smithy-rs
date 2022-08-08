@@ -8,7 +8,10 @@ extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
 
 tasks["jar"].enabled = false
 
-plugins { id("software.amazon.smithy").version("0.5.3") }
+plugins {
+    val smithyGradlePluginVersion: String by project
+    id("software.amazon.smithy").version(smithyGradlePluginVersion)
+}
 
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
@@ -16,6 +19,17 @@ val properties = PropertyRetriever(rootProject, project)
 
 val pluginName = "rust-codegen"
 val workingDirUnderBuildDir = "smithyprojections/sdk-codegen-test/"
+
+configure<software.amazon.smithy.gradle.SmithyExtension> {
+    outputDirectory = file("$buildDir/$workingDirUnderBuildDir")
+}
+
+buildscript {
+    val smithyVersion: String by project
+    dependencies {
+        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
+    }
+}
 
 dependencies {
     implementation(project(":aws:sdk-codegen"))
@@ -30,6 +44,7 @@ val allCodegenTests = listOf(
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
+project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
