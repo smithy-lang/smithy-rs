@@ -484,7 +484,6 @@ impl<Op0, Op1> OperationRegistryBuilder<Op0, Op1> {
 }
 ```
 
-
 The API usage would then become
 
 ```rust
@@ -503,7 +502,7 @@ OperationRegistryBuilder::default()
     /* ... */
 ```
 
-Note that this requires that the `OperationRegistryBuilder` stores services, rather than `Handler`s. An unintended and superficial benefit of this is that we are able to drop `In{n}` from the `OperationRegistryBuilder<Op0, In0, Op1, In1>`, only `Op{n}` remains and it parametrizes each operations `tower::Service`.
+Note that this requires that the `OperationRegistryBuilder` stores services, rather than `Handler`s. An unintended and superficial benefit of this is that we are able to drop `In{n}` from the `OperationRegistryBuilder<Op0, In0, Op1, In1>` - only `Op{n}` remains and it parametrizes each operations `tower::Service`.
 
 It is still possible to retain the original API which accepts `Handler` by introducing the following setters:
 
@@ -604,7 +603,7 @@ OperationRegistryBuilder::default()
 
 ### Approach C: Operations as Middleware Constructors
 
-While [Attempt B](#approach-b-operations-as-middleware) solves all three problems, it fails to adequately model the semantics Smithy. Note that an operation cannot uniquely define a `tower::Service` without reference to a parent Smithy service - information concerning the serialization/deserialization, error modes are all inherited from the Smithy service it used within. In this way, `Operation0` should not be a standalone middleware, but become middleware once accepted by the service builder.
+While [Attempt B](#approach-b-operations-as-middleware) solves all three problems, it fails to adequately model the Smithy semantics. An operation cannot uniquely define a `tower::Service` without reference to a parent Smithy service - information concerning the serialization/deserialization, error modes are all inherited from the Smithy service an operation is used within. In this way, `Operation0` should not be a standalone middleware, but become middleware once accepted by the service builder.
 
 Any solution which provides an `{Operation}` structure and wishes it to be accepted by multiple service builders must deal with this problem. We currently build one library per service and hence have duplicate structures when [service closures](https://awslabs.github.io/smithy/1.0/spec/core/model.html?highlight=closure#service-closure) overlap. This means we wouldn't run into this problem today, but it would be a future obstruction if we wanted to reduce the amount of generated code.
 
@@ -697,11 +696,11 @@ An alternative to [Approach C](#approach-c-operations-as-middleware-constructors
 
 This is functionally similar to [Attempt C](#approach-c-operations-as-middleware-constructors) except that all composition is done internal to the service builder and the namespace exists in the method name, rather than the `{Operation}` struct.
 
-## Service generic Routers
+## Service parameterized Routers
 
 Currently the `Router` stores `Box<dyn tower::Service<http::Request, Response = http::Response>`. As a result the `Router::layer` method, seen in [Router](#router), must re-box a service after every `tower::Layer` applied. The heap allocation `Box::new` itself is not cause for concern because `Router`s are typically constructed once at startup, however one might expect the indirection to regress performance.
 
-Having the service type parameterized, `Router<S>`, allows us to write:
+Having the service type parameterized as `Router<S>`, allows us to write:
 
 ```rust
 impl<S> Router<S> {
