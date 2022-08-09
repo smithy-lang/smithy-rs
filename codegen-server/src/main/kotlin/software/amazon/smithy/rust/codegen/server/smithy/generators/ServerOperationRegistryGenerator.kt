@@ -8,9 +8,9 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.asType
@@ -28,12 +28,11 @@ import software.amazon.smithy.rust.codegen.smithy.Errors
 import software.amazon.smithy.rust.codegen.smithy.Inputs
 import software.amazon.smithy.rust.codegen.smithy.Outputs
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.util.dq
-import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.util.getTrait
+import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -250,38 +249,34 @@ ${operationImplementationStubs(operations)}
      * The `build()` method converts the builder into an `OperationRegistry` instance.
      */
     private fun renderOperationRegistryBuilderImplementation(writer: RustWriter) {
-        // A lot of things can become pretty complex in this type as it will hold 2 generics per operation.
-        Attribute.Custom("allow(clippy::all)").render(writer)
-        writer.rustBlockTemplate(
-            """
-            impl<$genericArguments> $operationRegistryBuilderNameWithArguments
-            """.trimIndent(),
-            *codegenScope
-        ) {
-            val registerOperations = operationNames.mapIndexed { i, operationName ->
-                """pub fn $operationName(self, value: Op$i) -> Self {
-                let mut new = self;
-                new.$operationName = Some(value);
-                new
-                }"""
-            }.joinToString(separator = "\n")
-            val registerOperationsBuilder = operationNames.map { operationName ->
-                """
-                $operationName: match self.$operationName {
-                    Some(v) => v,
-                    None => return Err(${operationRegistryBuilderName}Error::UninitializedField(${operationName.dq()})),
+        writer.rustBlock("impl<$genericArguments> $operationRegistryBuilderNameWithArguments") {
+            operationNames.forEachIndexed { i, operationName ->
+                rust(
+                    """
+                    pub fn $operationName(self, value: Op$i) -> Self {
+                        let mut new = self;
+                        new.$operationName = Some(value);
+                        new
+                    }
+                    """,
+                )
+            }
+
+            rustBlock("pub fn build(self) -> Result<$operationRegistryNameWithArguments, $operationRegistryErrorName>") {
+                withBlock("Ok( $operationRegistryName {", "})") {
+                    for (operationName in operationNames) {
+                        rust(
+                            """
+                            $operationName: match self.$operationName {
+                                Some(v) => v,
+                                None => return Err($operationRegistryErrorName::UninitializedField("$operationName")),
+                            },
+                            """,
+                        )
+                    }
+                    rustTemplate("_phantom: #{Phantom}", *codegenScope)
                 }
-                """
-            }.joinToString(separator = "\n,")
-            rustTemplate(
-                """
-                $registerOperations
-                pub fn build(self) -> Result<$operationRegistryNameWithArguments, ${operationRegistryBuilderName}Error> {
-                    Ok($operationRegistryName { $registerOperationsBuilder, _phantom: #{Phantom} })
-                }
-                """,
-                *codegenScope
-            )
+            }
         }
     }
 
