@@ -691,14 +691,13 @@ An alternative to [Approach C](#approach-c-operations-as-middleware-constructors
 
 - `operation0_from_service`, accepts a `tower::Service<Operation0Input, Response = Operation0Output>`.
 - `operation0_from_handler`, accepts an async `Fn(Operation0Input) -> Operation0Output`.
-- `operation0_from_handler_with_state`, accepts an async `Fn(Operation0Input, State) -> Operation0Output` and a `State`.
 - `operation0_layer`, accepts a `tower::Layer<Op0>`.
 
 This is functionally similar to [Attempt C](#approach-c-operations-as-middleware-constructors) except that all composition is done internal to the service builder and the namespace exists in the method name, rather than the `{Operation}` struct.
 
 ## Service parameterized Routers
 
-Currently the `Router` stores `Box<dyn tower::Service<http::Request, Response = http::Response>`. As a result the `Router::layer` method, seen in [Router](#router), must re-box a service after every `tower::Layer` applied. The heap allocation `Box::new` itself is not cause for concern because `Router`s are typically constructed once at startup, however one might expect the indirection to regress performance.
+Currently the `Router` stores `Box<dyn tower::Service<http::Request, Response = http::Response>`. As a result the `Router::layer` method, seen in [Router](#router), must re-box a service after every `tower::Layer` applied. The heap allocation `Box::new` itself is not cause for concern because `Router`s are typically constructed once at startup, however one might expect the indirection to regress performance when the server is running.
 
 Having the service type parameterized as `Router<S>`, allows us to write:
 
