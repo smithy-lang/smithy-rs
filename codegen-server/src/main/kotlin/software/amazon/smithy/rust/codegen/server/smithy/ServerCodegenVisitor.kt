@@ -78,6 +78,7 @@ open class ServerCodegenVisitor(
     protected val settings = ServerRustSettings.from(context.model, context.settings)
 
     protected var symbolProvider: RustSymbolProvider
+    protected var constrainedShapeSymbolProvider: RustSymbolProvider
     protected val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider
     protected val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider
@@ -113,13 +114,26 @@ open class ServerCodegenVisitor(
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
         model = codegenDecorator.transformModel(service, baseModel)
-        symbolProvider = RustCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
+        // TODO Can we make it work setting `publicConstrainedTypes` to `false`?
+        symbolProvider = RustCodegenServerPlugin.baseSymbolProvider(
+            model,
+            service,
+            symbolVisitorConfig,
+            publicConstrainedTypes = settings.codegenConfig.publicConstrainedTypes,
+        )
+        constrainedShapeSymbolProvider = RustCodegenServerPlugin.baseSymbolProvider(
+            model,
+            service,
+            symbolVisitorConfig,
+            publicConstrainedTypes = true,
+        )
+        // TODO Shouldn't `UnconstrainedShapeSymbolProvider` be applied at the same level as the `ConstrainedShapeSymbolProvider`?
         unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(
             RustCodegenServerPlugin.baseSymbolProvider(
                 model,
                 service,
                 symbolVisitorConfig,
-                publicConstrainedTypesEnabled = false,
+                publicConstrainedTypes = false,
             ),
             model, service,
         )
@@ -132,7 +146,8 @@ open class ServerCodegenVisitor(
             service,
             protocol,
             settings,
-            unconstrainedShapeSymbolProvider
+            unconstrainedShapeSymbolProvider,
+            constrainedShapeSymbolProvider,
         )
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
@@ -284,6 +299,7 @@ open class ServerCodegenVisitor(
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
                     pubCrateConstrainedShapeSymbolProvider,
+                    constrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
                     unconstrainedModuleWriter,
                     shape
@@ -307,12 +323,13 @@ open class ServerCodegenVisitor(
 
         val isDirectlyConstrained = shape.isDirectlyConstrained(symbolProvider)
         if (isDirectlyConstrained) {
-            rustCrate.useShapeWriter(shape) { writer ->
+            rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
                 ConstrainedMapGenerator(
                     model,
-                    symbolProvider,
+                    constrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
-                    writer,
+                    settings.codegenConfig.publicConstrainedTypes,
+                    modelsModuleWriter,
                     shape,
                     if (renderUnconstrainedMap) unconstrainedShapeSymbolProvider.toSymbol(shape) else null
                 ).render()
@@ -361,19 +378,20 @@ open class ServerCodegenVisitor(
         if (shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(symbolProvider)) {
             logger.warning(
                 """
-                String shape $shape has an `enum` trait and another constraint trait. This is valid according to the Smithy
-                spec v1 IDL, but it's unclear what the semantics are. In any case, the Smithy CLI should enforce the
-                constraints (which it currently does not), not each code generator.
-                See https://github.com/awslabs/smithy/issues/1121f for more information.
-                """.trimIndent()
+            String shape $shape has an `enum` trait and another constraint trait. This is valid according to the Smithy
+            spec v1 IDL, but it's unclear what the semantics are. In any case, the Smithy CLI should enforce the
+            constraints (which it currently does not), not each code generator.
+            See https://github.com/awslabs/smithy/issues/1121f for more information.
+            """.trimIndent()
             )
         } else if (shape.isDirectlyConstrained(symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) { writer ->
                 ConstrainedStringGenerator(
                     model,
-                    symbolProvider,
+                    constrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
+                    settings.codegenConfig.publicConstrainedTypes,
                     writer,
                     shape
                 ).render()

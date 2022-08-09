@@ -70,22 +70,35 @@ data class ServerRustSettings(
     }
 }
 
+/**
+ * [publicConstrainedTypes]: Generate constrained wrapper newtypes for constrained shapes
+ */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
     override val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
+    // TODO Unit test that we don't generate public constrained types when this setting is enabled.
+    val publicConstrainedTypes: Boolean = true
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList,
 ) {
     companion object {
-        // Note `node` is unused, because at the moment `ServerCodegenConfig` has the same properties as
-        // `CodegenConfig`. In the future, the server will have server-specific codegen options just like the client
-        // does.
+        private const val defaultPublicConstrainedTypes = true
+
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
-            ServerCodegenConfig(
-                formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
-                debugMode = coreCodegenConfig.debugMode,
-                eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
-            )
+            if (node.isPresent) {
+                ServerCodegenConfig(
+                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    debugMode = coreCodegenConfig.debugMode,
+                    eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
+                    publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", defaultPublicConstrainedTypes)
+                )
+            } else {
+                ServerCodegenConfig(
+                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    debugMode = coreCodegenConfig.debugMode,
+                    eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
+                )
+            }
     }
 }

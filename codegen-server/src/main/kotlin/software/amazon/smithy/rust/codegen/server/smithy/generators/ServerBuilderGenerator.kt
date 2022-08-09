@@ -53,13 +53,14 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 //     - Always implements either From<Builder> for Structure or TryFrom<Builder> for Structure.
 //     - `pubCrateConstrainedShapeSymbolProvider` only needed if we want the builder to take in unconstrained types.
 class ServerBuilderGenerator(
-    codegenContext: ServerCodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider? = null,
 ) {
     private val takeInUnconstrainedTypes = pubCrateConstrainedShapeSymbolProvider != null
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val constraintViolationSymbolProvider =
         ConstraintViolationSymbolProvider(codegenContext.symbolProvider, model, codegenContext.serviceShape)
     private val members: List<MemberShape> = shape.allMembers.values.toList()
@@ -221,6 +222,8 @@ class ServerBuilderGenerator(
     /**
      * Render a `foo` method to set shape member `foo`. The caller must provide a value with the exact same type
      * as the shape member's type.
+     *
+     * This method is meant for use by the user; it is not used by the generated crate's (de)serializers.
      */
     private fun renderBuilderMemberFn(
         writer: RustWriter,
@@ -233,6 +236,7 @@ class ServerBuilderGenerator(
         val wrapInMaybeConstrained = takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)
 
         writer.documentShape(member, model)
+
         if (hasBox && wrapInMaybeConstrained) {
             // In the case of recursive shapes, the member might be boxed. If so, and the member is also constrained, the
             // implementation of this function needs to immediately unbox the value to wrap it in `MaybeConstrained`,
@@ -246,14 +250,20 @@ class ServerBuilderGenerator(
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
                 if (wrapInMaybeConstrained) {
-                    val maybeConstrainedConstrained = "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
+                    val maybeConstrainedVariant = if (!codegenContext.settings.codegenConfig.publicConstrainedTypes)
+                        // If constrained types are not public, the user is sending us an unconstrained type, and we
+                        // will have to check the constraints when `build()` is called.
+                        "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Unconstrained"
+                    else {
+                        "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
+                    }
                     // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
                     var varExpr = if (symbol.isOptional()) "v" else "input"
                     if (hasBox) varExpr = "*$varExpr"
                     if (!constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
                     conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
                         conditionalBlock("Box::new(", ")", conditional = hasBox) {
-                            rust("$maybeConstrainedConstrained($varExpr)")
+                            rust("$maybeConstrainedVariant($varExpr)")
                         }
                     }
                 } else {
@@ -440,7 +450,7 @@ class ServerBuilderGenerator(
     private fun builderMemberSymbol(member: MemberShape): Symbol =
         if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
             val strippedOption = if (member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)) {
-                symbolProvider.toSymbol(member)
+                constrainedShapeSymbolProvider.toSymbol(member)
             } else {
                 pubCrateConstrainedShapeSymbolProvider!!.toSymbol(member)
             }

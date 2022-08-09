@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.implBlock
 import software.amazon.smithy.rust.codegen.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.testutil.testSymbolProvider
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
 val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
@@ -43,7 +42,7 @@ fun serverTestSymbolProvider(
         model,
         serviceShape ?: ServiceShape.builder().version("test").id("test#Service").build(),
         ServerTestSymbolVisitorConfig,
-        publicConstrainedTypesEnabled = publicConstrainedTypesEnabled
+        publicConstrainedTypes = publicConstrainedTypesEnabled
     )
 
 fun serverTestRustSettings(
@@ -84,6 +83,7 @@ fun serverTestCodegenContext(
             ?: ServiceShape.builder().version("test").id("test#Service").build()
     val symbolProvider = serverTestSymbolProvider(model, serviceShape)
     val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, service)
+    val constrainedShapeSymbolProvider = serverTestSymbolProvider(model, publicConstrainedTypesEnabled = true)
     val protocol = protocolShapeId ?: ShapeId.from("test#Protocol")
     return ServerCodegenContext(
         model,
@@ -91,7 +91,8 @@ fun serverTestCodegenContext(
         service,
         protocol,
         settings,
-        unconstrainedShapeSymbolProvider
+        unconstrainedShapeSymbolProvider,
+        constrainedShapeSymbolProvider,
     )
 }
 

@@ -28,6 +28,7 @@ class UnconstrainedMapGenerator(
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
+    constrainedShapeSymbolProvider: RustSymbolProvider,
     constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     private val unconstrainedModuleWriter: RustWriter,
     val shape: MapShape
@@ -38,7 +39,7 @@ class UnconstrainedMapGenerator(
     private val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
     private val valueShape = model.expectShape(shape.value.target)
     private val constrainedSymbol = if (shape.isDirectlyConstrained(symbolProvider)) {
-        symbolProvider.toSymbol(shape)
+        constrainedShapeSymbolProvider.toSymbol(shape)
     } else {
         pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
     }

@@ -9,7 +9,10 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
@@ -31,8 +34,9 @@ import software.amazon.smithy.rust.codegen.util.expectTrait
  */
 class ConstrainedMapGenerator(
     val model: Model,
-    val symbolProvider: RustSymbolProvider,
+    private val constrainedSymbolProvider: RustSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+    private val publicConstrainedTypes: Boolean,
     val writer: RustWriter,
     val shape: MapShape,
     private val unconstrainedSymbol: Symbol? = null,
@@ -41,7 +45,7 @@ class ConstrainedMapGenerator(
         // The `length` trait is the only constraint trait applicable to map shapes.
         val lengthTrait = shape.expectTrait<LengthTrait>()
 
-        val name = symbolProvider.toSymbol(shape).name
+        val name = constrainedSymbolProvider.toSymbol(shape).name
         val inner = "std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>"
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
 
@@ -53,11 +57,23 @@ class ConstrainedMapGenerator(
             "length <= ${lengthTrait.max.get()}"
         }
 
+        val constrainedTypeVisibility = if (publicConstrainedTypes) {
+            Visibility.PUBLIC
+        } else {
+            Visibility.PUBCRATE
+        }
+        val constrainedTypeMetadata = RustMetadata(
+            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq)),
+            visibility = constrainedTypeVisibility
+        )
+
+        // TODO Display impl missing; it should honor `sensitive` trait.
+
         writer.documentShape(shape, model, note = rustDocsNote(name))
+        constrainedTypeMetadata.render(writer)
         writer.rustTemplate(
             """
-            ##[derive(Debug, Clone, PartialEq)]
-            pub struct $name(pub(crate) $inner);
+            struct $name(pub(crate) $inner);
             
             impl $name {
                 /// ${rustDocsParseMethod(name, inner)}
@@ -89,8 +105,8 @@ class ConstrainedMapGenerator(
                 }
             }
             """,
-            "KeySymbol" to symbolProvider.toSymbol(model.expectShape(shape.key.target)),
-            "ValueSymbol" to symbolProvider.toSymbol(model.expectShape(shape.value.target)),
+            "KeySymbol" to constrainedSymbolProvider.toSymbol(model.expectShape(shape.key.target)),
+            "ValueSymbol" to constrainedSymbolProvider.toSymbol(model.expectShape(shape.value.target)),
             "TryFrom" to RuntimeType.TryFrom,
             "ConstraintViolation" to constraintViolation
         )

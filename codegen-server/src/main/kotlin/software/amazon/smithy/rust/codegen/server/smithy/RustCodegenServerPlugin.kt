@@ -63,12 +63,12 @@ class RustCodegenServerPlugin : SmithyBuildPlugin {
             model: Model,
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
-            publicConstrainedTypesEnabled: Boolean = true
+            publicConstrainedTypes: Boolean = true
         ) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // TODO Docs
                 .let {
-                    if (publicConstrainedTypesEnabled) ConstrainedShapeSymbolProvider(
+                    if (publicConstrainedTypes) ConstrainedShapeSymbolProvider(
                         it,
                         model,
                         serviceShape

@@ -8,8 +8,11 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.rust.codegen.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
@@ -27,15 +30,16 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  */
 class ConstrainedStringGenerator(
     val model: Model,
-    val symbolProvider: RustSymbolProvider,
+    private val constrainedSymbolProvider: RustSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+    private val publicConstrainedTypes: Boolean,
     val writer: RustWriter,
     val shape: StringShape
 ) {
     fun render() {
         val lengthTrait = shape.expectTrait<LengthTrait>()
 
-        val symbol = symbolProvider.toSymbol(shape)
+        val symbol = constrainedSymbolProvider.toSymbol(shape)
         val name = symbol.name
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
@@ -48,15 +52,25 @@ class ConstrainedStringGenerator(
             "length <= ${lengthTrait.max.get()}"
         }
 
+        val constrainedTypeVisibility = if (publicConstrainedTypes) {
+            Visibility.PUBLIC
+        } else {
+            Visibility.PUBCRATE
+        }
+        val constrainedTypeMetadata = RustMetadata(
+            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq, RuntimeType.Eq, RuntimeType.Hash)),
+            visibility = constrainedTypeVisibility
+        )
+
         // TODO Display impl does not honor `sensitive` trait.
         // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
         // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
         // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
         writer.documentShape(shape, model, note = rustDocsNote(name))
+        constrainedTypeMetadata.render(writer)
         writer.rustTemplate(
             """
-            ##[derive(Debug, Clone, PartialEq, Eq, Hash)]
-            pub struct $name(pub(crate) $inner);
+            struct $name(pub(crate) $inner);
             
             impl $name {
                 /// ${rustDocsParseMethod(name, inner)}
