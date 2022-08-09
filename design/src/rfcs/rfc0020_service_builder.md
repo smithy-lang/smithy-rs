@@ -40,7 +40,7 @@ service Service0 {
 }
 ```
 
-We have purposely omitted details from the model that are unimportant to describing the proposal. We also omit distracting details from the Rust snippets. Code generation is linear in the sense that, code snippets can be assumed to extend to multiple operations in a predictable way. In the case where we do want to speak generally about an operation and it's associated types, we use `{Operation}`, for example `{Operation}Input` is the input type of an unspecified operation.
+We have purposely omitted details from the model that are unimportant to describing the proposal. We also omit distracting details from the Rust snippets. Code generation is linear in the sense that, code snippets can be assumed to extend to multiple operations in a predictable way. In the case where we do want to speak generally about an operation and its associated types, we use `{Operation}`, for example `{Operation}Input` is the input type of an unspecified operation.
 
 Here is a quick example of what a customer might write when using the service builder:
 
@@ -296,7 +296,7 @@ To identify where the implementations should differ we should classify in what w
 
 #### Extractors and Responses
 
-In `axum` there is a notion of [Extractor](https://docs.rs/axum/latest/axum/extract/index.html), which allows the customer to easily define a decomposition of an incoming `http::Request` by specify the arguments to the handlers. For example,
+In `axum` there is a notion of [Extractor](https://docs.rs/axum/latest/axum/extract/index.html), which allows the customer to easily define a decomposition of an incoming `http::Request` by specifying the arguments to the handlers. For example,
 
 ```rust
 async fn request(Json(payload): Json<Value>, Query(params): Query<HashMap<String, String>>, headers: HeaderMap) {
@@ -337,11 +337,11 @@ macro_rules! impl_handler {
 }
 ```
 
-The implementations of `Handler` in `axum` and `smithy-rs` follow a similar pattern - convert `http::Request` into the closures input, run the closure, convert the output of the closure to `http::Response`.
+The implementations of `Handler` in `axum` and `smithy-rs` follow a similar pattern - convert `http::Request` into the closure's input, run the closure, convert the output of the closure to `http::Response`.
 
 In `smithy-rs` we do not need a notion of "extractor", that role is fulfilled by the model, including HTTP binding traits. In `smithy-rs` the `http::Request` decomposition is determined by the Smithy model and the service protocol, whereas in `axum` it's defined by the handlers signature. In `smithy-rs` the only remaining degree of freedom in the signature of the handler is whether or not state is included.
 
-Dual to `FromRequest` is the [axum::response::IntoResponse](https://docs.rs/axum/latest/axum/response/trait.IntoResponse.html) trait, this plays the role of converting the output of the handler to `http::Response`. Again, the difference between `axum` and `smithy-rs` is that `smithy-rs` has the conversion from `{Operation}Output` to `http::Response` specified by the Smithy model, whereas `axum` the customer is free to specify a return type which implements `axum::response::IntoResponse`.
+Dual to `FromRequest` is the [axum::response::IntoResponse](https://docs.rs/axum/latest/axum/response/trait.IntoResponse.html) trait. This plays the role of converting the output of the handler to `http::Response`. Again, the difference between `axum` and `smithy-rs` is that `smithy-rs` has the conversion from `{Operation}Output` to `http::Response` specified by the Smithy model, whereas in `axum` the customer is free to specify a return type which implements `axum::response::IntoResponse`.
 
 #### Routing
 
