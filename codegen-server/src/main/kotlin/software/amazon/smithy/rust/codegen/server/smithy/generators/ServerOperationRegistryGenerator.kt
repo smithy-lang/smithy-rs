@@ -386,7 +386,7 @@ ${operationImplementationStubs(operations)}
             "Result<$t, $e>"
         }
 
-        val operationName = symbolProvider.toSymbol(this).name.toSnakeCase()
+        val operationName = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(this).name.toSnakeCase())
         return "async fn $operationName(input: $inputT) -> $outputT"
     }
 

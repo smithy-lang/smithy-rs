@@ -33,28 +33,8 @@ dependencies {
 }
 
 val allCodegenTests = listOf(
-    CodegenTest(
-        "crate#Config",
-        "naming_test_ops",
-        """
-            ,
-            "codegen": { 
-                "renameErrors": false,
-                "includeFluentClient": false
-            }
-        """.trimIndent()
-    ),
-    CodegenTest(
-        "naming_obs_structs#NamingObstacleCourseStructs",
-        "naming_test_structs",
-        """
-            ,
-            "codegen": { 
-                "renameErrors": false,
-                "includeFluentClient": false
-            }
-        """.trimIndent()
-    ),
+    CodegenTest("crate#Config", "naming_test_ops"),
+    CodegenTest("naming_obs_structs#NamingObstacleCourseStructs", "naming_test_structs"),
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
     CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
     CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation"),
