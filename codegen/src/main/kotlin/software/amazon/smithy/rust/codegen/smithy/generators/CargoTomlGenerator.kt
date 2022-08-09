@@ -81,4 +81,4 @@ class CargoTomlGenerator(
     }
 }
 
-fun smithyCodegenVersion(): String = Version.version()
+fun smithyCodegenVersion(): String = Version.fullVersion()
