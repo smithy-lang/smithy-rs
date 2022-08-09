@@ -59,6 +59,7 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
         test:
+        - action: check-aws-sdk-adhoc-tests
         - action: check-client-codegen-integration-tests
         - action: check-client-codegen-unit-tests
         - action: check-sdk-codegen-unit-tests

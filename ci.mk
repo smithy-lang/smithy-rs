@@ -16,6 +16,10 @@ CI_ACTION=$(CI_BUILD)/ci-action
 acquire-build-image:
 	$(CI_BUILD)/acquire-build-image
 
+.PHONY: check-aws-sdk-adhoc-tests
+check-aws-sdk-adhoc-tests:
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-aws-sdk-examples
 check-aws-sdk-examples: generate-aws-sdk
 	$(CI_ACTION) $@ $(ARGS)
