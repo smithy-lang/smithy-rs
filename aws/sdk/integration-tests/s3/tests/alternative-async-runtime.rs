@@ -14,9 +14,10 @@ use aws_smithy_http::result::SdkError;
 use aws_smithy_types::timeout;
 use aws_smithy_types::tristate::TriState;
 
+use aws_smithy_async::assert_elapsed;
 use std::fmt::Debug;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 struct SmolSleep;
@@ -88,7 +89,7 @@ async fn timeout_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std
         .build();
     let client = Client::from_conf_conn(config, conn.clone());
 
-    let now = std::time::Instant::now();
+    let now = Instant::now();
 
     let err = client
         .select_object_content()
@@ -116,17 +117,8 @@ async fn timeout_test(sleep_impl: Arc<dyn AsyncSleep>) -> Result<(), Box<dyn std
         .unwrap_err();
 
     assert_eq!(format!("{:?}", err), "TimeoutError(RequestTimeoutError { kind: \"API call (all attempts including retries)\", duration: 500ms })");
-
-    let actual = now.elapsed();
-    let expected = std::time::Duration::from_millis(500);
-    let margin_of_error = std::time::Duration::from_millis(10);
-    // Check time elapsed is 500ms with a 10ms margin of error
-    assert!(
-            actual >= expected && actual <= expected + margin_of_error,
-            "actual = {:?}, expected = {:?}",
-            actual,
-            expected
-        );
+    // Assert 500ms have passed with a 10ms margin of error
+    assert_elapsed!(now, Duration::from_millis(500), Duration::from_millis(10));
 
     Ok(())
 }
