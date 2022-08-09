@@ -13,6 +13,7 @@ cd smithy-rs
 # Make aws-config (which depends on generated services) available to additional checks
 mkdir -p aws/sdk/build
 mv ../aws-sdk-smoketest aws/sdk/build/aws-sdk
+SDK_PATH="$(git rev-parse --show-toplevel)"/aws/sdk/build/aws-sdk/sdk
 
 pushd tools/ci-cdk/canary-lambda
 
