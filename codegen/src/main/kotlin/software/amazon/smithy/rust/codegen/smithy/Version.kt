@@ -11,7 +11,7 @@ class Version {
     companion object {
         // generated as part of the build in the "{smithy_rs_version}-{git_commit_hash}" format,
         // see codegen/build.gradle.kts
-        private const val VERSION_FILENAME = "smithy-version.txt"
+        private const val VERSION_FILENAME = "runtime-crate-version.txt"
 
         fun version(): String {
             return object {}.javaClass.getResource(VERSION_FILENAME)?.readText()
