@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.smithy.generators.CargoTomlGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsGenerator
@@ -46,9 +47,9 @@ open class RustCrate(
      * private as well as any other metadata. [baseModules] enables configuring this. See [DefaultPublicModules].
      */
     baseModules: Map<String, RustModule>,
-    codegenConfig: CodegenConfig
+    coreCodegenConfig: CoreCodegenConfig,
 ) {
-    private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(codegenConfig.debugMode))
+    private val inner = WriterDelegator(fileManifest, symbolProvider, RustWriter.factory(coreCodegenConfig.debugMode))
     private val modules: MutableMap<String, RustModule> = baseModules.toMutableMap()
     private val features: MutableSet<Feature> = mutableSetOf()
 
@@ -73,8 +74,8 @@ open class RustCrate(
                 features.remove(existing)
                 features.add(
                     existing.copy(
-                        deps = (existing.deps + feature.deps).toSortedSet().toList()
-                    )
+                        deps = (existing.deps + feature.deps).toSortedSet().toList(),
+                    ),
                 )
             }
         }
@@ -86,7 +87,7 @@ open class RustCrate(
      * This is also where inline dependencies are actually reified and written, potentially recursively.
      */
     fun finalize(
-        settings: RustSettings,
+        settings: CoreRustSettings,
         model: Model,
         manifestCustomizations: ManifestCustomizations,
         libRsCustomizations: List<LibRsCustomization>,
@@ -94,7 +95,7 @@ open class RustCrate(
     ) {
         injectInlineDependencies()
         val modules = inner.writers.values.mapNotNull { it.module() }.filter { it != "lib" }
-            .map { modules[it] ?: RustModule.default(it, false) }
+            .map { modules[it] ?: RustModule.default(it, visibility = Visibility.PRIVATE) }
         inner.finalize(
             settings,
             model,
@@ -102,7 +103,7 @@ open class RustCrate(
             libRsCustomizations,
             modules,
             this.features.toList(),
-            requireDocs
+            requireDocs,
         )
     }
 
@@ -130,7 +131,7 @@ open class RustCrate(
      */
     fun withModule(
         module: RustModule,
-        moduleWriter: (RustWriter) -> Unit
+        moduleWriter: (RustWriter) -> Unit,
     ): RustCrate {
         val moduleName = module.name
         modules[moduleName] = module
@@ -166,7 +167,7 @@ val DefaultPublicModules = setOf(
  * - generating (and writing) a Cargo.toml based on the settings & the required dependencies
  */
 fun WriterDelegator<RustWriter>.finalize(
-    settings: RustSettings,
+    settings: CoreRustSettings,
     model: Model,
     manifestCustomizations: ManifestCustomizations,
     libRsCustomizations: List<LibRsCustomization>,
@@ -179,7 +180,7 @@ fun WriterDelegator<RustWriter>.finalize(
     }
     val cargoDependencies = mergeDependencyFeatures(
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }
-            .filterIsInstance<CargoDependency>().distinct()
+            .filterIsInstance<CargoDependency>().distinct(),
     )
     this.useFileWriter("Cargo.toml") {
         val cargoToml = CargoTomlGenerator(
@@ -187,7 +188,7 @@ fun WriterDelegator<RustWriter>.finalize(
             it,
             manifestCustomizations,
             cargoDependencies,
-            features
+            features,
         )
         cargoToml.render()
     }
@@ -198,7 +199,7 @@ private fun CargoDependency.mergeWith(other: CargoDependency): CargoDependency {
     check(key == other.key)
     return copy(
         features = features + other.features,
-        optional = optional && other.optional
+        optional = optional && other.optional,
     )
 }
 

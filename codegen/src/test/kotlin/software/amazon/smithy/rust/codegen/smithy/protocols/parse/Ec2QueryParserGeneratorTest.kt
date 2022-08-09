@@ -46,7 +46,7 @@ class Ec2QueryParserGeneratorTest {
         val symbolProvider = testSymbolProvider(model)
         val parserGenerator = Ec2QueryParserGenerator(
             testCodegenContext(model),
-            RuntimeType.wrappedXmlErrors(TestRuntimeConfig)
+            RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
         )
         val operationParser = parserGenerator.operationParser(model.lookup("test#SomeOperation"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))
@@ -63,7 +63,7 @@ class Ec2QueryParserGeneratorTest {
                 let output = ${writer.format(operationParser)}(xml, output::some_operation_output::Builder::default()).unwrap().build();
                 assert_eq!(output.some_attribute, Some(5));
                 assert_eq!(output.some_val, Some("Some value".to_string()));
-                """
+                """,
             )
         }
 

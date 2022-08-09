@@ -121,7 +121,7 @@ class Ec2QuerySerializerGeneratorTest {
                     &Top.Rec.1.Extra=55\
                     "
                 );
-                """
+                """,
             )
         }
         project.withModule(RustModule.public("model")) {

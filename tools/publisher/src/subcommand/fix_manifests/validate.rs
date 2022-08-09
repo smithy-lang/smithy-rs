@@ -15,25 +15,25 @@ use tracing::info;
 /// Validations that run before the manifests are fixed.
 ///
 /// For now, this validates:
-/// - `aws-config` version number matches all `aws-sdk-` prefixed versions
 /// - `aws-smithy-` prefixed versions match `aws-` (NOT `aws-sdk-`) prefixed versions
-pub(super) fn validate_before_fixes(versions: &BTreeMap<String, Version>) -> Result<()> {
+pub(super) fn validate_before_fixes(
+    versions: &BTreeMap<String, Version>,
+    disable_version_number_validation: bool,
+) -> Result<()> {
+    // Later when we only generate independently versioned SDK crates, this flag can become permanent.
+    if disable_version_number_validation {
+        return Ok(());
+    }
+
     info!("Pre-validation manifests...");
-    let maybe_sdk_version = versions.get("aws-config");
-    let expected_smithy_version = versions
+    let expected_runtime_version = versions
         .get("aws-smithy-types")
         .ok_or_else(|| anyhow!("`aws-smithy-types` crate missing"))?;
 
     for (name, version) in versions {
         let category = PackageCategory::from_package_name(name);
-        if category == PackageCategory::SmithyRuntime {
-            confirm_version(name, expected_smithy_version, version)?;
-        } else if let Some(expected_sdk_version) = maybe_sdk_version {
-            if category.is_sdk() {
-                confirm_version(name, expected_sdk_version, version)?;
-            }
-        } else if category.is_sdk() {
-            bail!("`aws-config` crate missing");
+        if category == PackageCategory::SmithyRuntime || category == PackageCategory::AwsRuntime {
+            confirm_version(name, expected_runtime_version, version)?;
         }
     }
     Ok(())
@@ -75,12 +75,12 @@ mod test {
 
     #[track_caller]
     fn expect_success(version_tuples: &[(&'static str, &'static str)]) {
-        validate_before_fixes(&versions(version_tuples)).expect("success");
+        validate_before_fixes(&versions(version_tuples), false).expect("success");
     }
 
     #[track_caller]
     fn expect_failure(message: &str, version_tuples: &[(&'static str, &'static str)]) {
-        if let Err(err) = validate_before_fixes(&versions(version_tuples)) {
+        if let Err(err) = validate_before_fixes(&versions(version_tuples), false) {
             assert_eq!(message, format!("{}", err));
         } else {
             panic!("Expected validation failure");
@@ -90,10 +90,10 @@ mod test {
     #[test]
     fn pre_validate() {
         expect_success(&[
-            ("aws-config", "0.5.1"),
+            ("aws-config", "0.35.1"),
             ("aws-sdk-s3", "0.5.1"),
             ("aws-smithy-types", "0.35.1"),
-            ("aws-types", "0.5.1"),
+            ("aws-types", "0.35.1"),
         ]);
 
         expect_success(&[
@@ -111,30 +111,27 @@ mod test {
             ],
         );
 
-        expect_failure(
-            "Crate named `aws-sdk-s3` should be at version `0.5.1` but is at `0.5.0`",
-            &[
-                ("aws-config", "0.5.1"),
-                ("aws-sdk-s3", "0.5.0"),
-                ("aws-smithy-types", "0.35.1"),
-                ("aws-types", "0.5.1"),
-            ],
-        );
+        expect_success(&[
+            ("aws-config", "0.35.1"),
+            ("aws-sdk-s3", "0.5.0"),
+            ("aws-smithy-types", "0.35.1"),
+            ("aws-types", "0.35.1"),
+        ]);
 
         expect_failure(
-            "Crate named `aws-types` should be at version `0.5.1` but is at `0.5.0`",
+            "Crate named `aws-types` should be at version `0.35.1` but is at `0.35.0`",
             &[
-                ("aws-config", "0.5.1"),
+                ("aws-config", "0.35.1"),
                 ("aws-sdk-s3", "0.5.1"),
                 ("aws-smithy-types", "0.35.1"),
-                ("aws-types", "0.5.0"),
+                ("aws-types", "0.35.0"),
             ],
         );
 
         expect_failure(
             "Crate named `aws-smithy-http` should be at version `0.35.1` but is at `0.35.0`",
             &[
-                ("aws-config", "0.5.1"),
+                ("aws-config", "0.35.1"),
                 ("aws-sdk-s3", "0.5.1"),
                 ("aws-smithy-types", "0.35.1"),
                 ("aws-smithy-http", "0.35.0"),

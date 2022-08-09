@@ -8,19 +8,23 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
-class ServiceConfigDecorator : RustCodegenDecorator {
+class ServiceConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "ServiceConfigGenerator"
     override val order: Byte = 0
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> = baseCustomizations + SharedConfigDocsCustomization()
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class SharedConfigDocsCustomization : ConfigCustomization() {
@@ -41,7 +45,7 @@ class SharedConfigDocsCustomization : ConfigCustomization() {
                     ```
 
                     The service config can also be constructed manually using its builder.
-                    """
+                    """,
                 )
             }
         } else {

@@ -5,21 +5,23 @@
 
 package software.amazon.smithy.rust.codegen.smithy.customizations
 
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 
 /**
- * Customizations that apply only to generated clients
+ * Customizations that apply only to generated clients.
  */
-class ClientCustomizations : RustCodegenDecorator {
+class ClientCustomizations : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "ClientCustomizations"
     override val order: Byte = 0
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<LibRsCustomization>
-    ): List<LibRsCustomization> {
-        return baseCustomizations + ClientDocsGenerator()
-    }
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<LibRsCustomization>,
+    ): List<LibRsCustomization> = baseCustomizations + ClientDocsGenerator()
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

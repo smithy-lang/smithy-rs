@@ -11,7 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.OperationNormalizer
@@ -91,11 +91,11 @@ class AwsQuerySerializerGeneratorTest {
     fun `generates valid serializers`(generateUnknownVariant: Boolean) {
         val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
         val symbolProvider = testSymbolProvider(model)
-        val mode = when (generateUnknownVariant) {
-            true -> CodegenMode.Client
-            false -> CodegenMode.Server
+        val target = when (generateUnknownVariant) {
+            true -> CodegenTarget.CLIENT
+            false -> CodegenTarget.SERVER
         }
-        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model).copy(mode = mode))
+        val parserGenerator = AwsQuerySerializerGenerator(testCodegenContext(model, codegenTarget = target))
         val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
@@ -129,7 +129,7 @@ class AwsQuerySerializerGeneratorTest {
                     &top.rec.item.1.extra=55\
                     "
                 );
-                """
+                """,
             )
         }
         project.withModule(RustModule.public("model")) {

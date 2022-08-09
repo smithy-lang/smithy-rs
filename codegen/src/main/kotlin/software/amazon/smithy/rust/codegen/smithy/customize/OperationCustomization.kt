@@ -28,7 +28,7 @@ sealed class OperationSection(name: String) : Section(name) {
     data class MutateInput(
         override val customizations: List<OperationCustomization>,
         val input: String,
-        val config: String
+        val config: String,
     ) : OperationSection("MutateInput")
 
     /** Write custom code into the block that builds an operation
@@ -40,14 +40,19 @@ sealed class OperationSection(name: String) : Section(name) {
     data class MutateRequest(
         override val customizations: List<OperationCustomization>,
         val request: String,
-        val config: String
+        val config: String,
     ) : OperationSection("Feature")
 
     data class FinalizeOperation(
         override val customizations: List<OperationCustomization>,
         val operation: String,
-        val config: String
+        val config: String,
     ) : OperationSection("Finalize")
+
+    data class MutateOutput(
+        override val customizations: List<OperationCustomization>,
+        val operationShape: OperationShape,
+    ) : OperationSection("MutateOutput")
 }
 
 abstract class OperationCustomization : NamedSectionGenerator<OperationSection>() {

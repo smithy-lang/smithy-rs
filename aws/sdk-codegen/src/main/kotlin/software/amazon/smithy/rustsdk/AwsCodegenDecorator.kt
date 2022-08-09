@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataDecorator
 import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataSettings
 import software.amazon.smithy.rust.codegen.smithy.customizations.RetryConfigDecorator
@@ -25,6 +26,8 @@ val DECORATORS = listOf(
     AwsEndpointDecorator(),
     UserAgentDecorator(),
     SigV4SigningDecorator(),
+    HttpRequestChecksumDecorator(),
+    HttpResponseChecksumDecorator(),
     RetryPolicyDecorator(),
     IntegrationTestDecorator(),
     AwsFluentClientDecorator(),
@@ -48,10 +51,10 @@ val DECORATORS = listOf(
     Route53Decorator(),
 
     // Only build docs-rs for linux to reduce load on docs.rs
-    DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu"), allFeatures = true))
+    DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu"), allFeatures = true)),
 )
 
-class AwsCodegenDecorator : CombinedCodegenDecorator(DECORATORS) {
+class AwsCodegenDecorator : CombinedCodegenDecorator<ClientCodegenContext>(DECORATORS) {
     override val name: String = "AwsSdkCodegenDecorator"
     override val order: Byte = -1
 }

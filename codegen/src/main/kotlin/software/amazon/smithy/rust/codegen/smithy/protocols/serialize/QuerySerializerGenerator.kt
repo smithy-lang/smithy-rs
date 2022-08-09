@@ -31,7 +31,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
@@ -46,7 +46,7 @@ import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 
-abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
+abstract class QuerySerializerGenerator(coreCodegenContext: CoreCodegenContext) : StructuredDataSerializerGenerator {
     protected data class Context<T : Shape>(
         /** Expression that yields a QueryValueWriter */
         val writerExpression: String,
@@ -66,32 +66,32 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
             fun structMember(
                 context: Context<StructureShape>,
                 member: MemberShape,
-                symProvider: RustSymbolProvider
+                symProvider: RustSymbolProvider,
             ): MemberContext =
                 MemberContext(
                     context.writerExpression,
                     ValueExpression.Value("${context.valueExpression.name}.${symProvider.toMemberName(member)}"),
-                    member
+                    member,
                 )
 
             fun unionMember(
                 context: Context<UnionShape>,
                 variantReference: String,
-                member: MemberShape
+                member: MemberShape,
             ): MemberContext =
                 MemberContext(
                     context.writerExpression,
                     ValueExpression.Reference(variantReference),
-                    member
+                    member,
                 )
         }
     }
 
-    protected val model = codegenContext.model
-    protected val symbolProvider = codegenContext.symbolProvider
-    protected val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
-    private val serviceShape = codegenContext.serviceShape
+    protected val model = coreCodegenContext.model
+    protected val symbolProvider = coreCodegenContext.symbolProvider
+    protected val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val target = coreCodegenContext.target
+    private val serviceShape = coreCodegenContext.serviceShape
     private val serializerError = runtimeConfig.serializationError()
     private val smithyTypes = CargoDependency.SmithyTypes(runtimeConfig).asType()
     private val smithyQuery = CargoDependency.smithyQuery(runtimeConfig).asType()
@@ -130,7 +130,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         return RuntimeType.forInlineFun(fnName, operationSerModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
-                *codegenScope, "target" to symbolProvider.toSymbol(inputShape)
+                *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
             ) {
                 val action = operationShape.id.name
                 val version = serviceShape.version
@@ -142,7 +142,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 Attribute.AllowUnusedMut.render(writer)
                 rustTemplate(
                     "let mut writer = #{QueryWriter}::new(&mut out, ${action.dq()}, ${version.dq()});",
-                    *codegenScope
+                    *codegenScope,
                 )
                 serializeStructureInner(Context("writer", ValueExpression.Reference("input"), inputShape))
                 rust("writer.finish();")
@@ -159,7 +159,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
             writer.rustBlockTemplate(
                 "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
                 "Input" to structureSymbol,
-                *codegenScope
+                *codegenScope,
             ) {
                 if (context.shape.members().isEmpty()) {
                     rust("let (_, _) = (writer, input);") // Suppress unused argument warnings
@@ -219,12 +219,12 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 }
                 rust(
                     "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
-                    smithyTypes.member("Number")
+                    smithyTypes.member("Number"),
                 )
             }
             is BlobShape -> rust(
                 "$writer.string(&#T(${value.name}));",
-                RuntimeType.Base64Encode(runtimeConfig)
+                RuntimeType.Base64Encode(runtimeConfig),
             )
             is TimestampShape -> {
                 val timestampFormat = determineTimestampFormat(context.shape)
@@ -270,7 +270,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 val targetShape = model.expectShape(context.shape.member.target)
                 serializeMemberValue(
                     MemberContext(entryName, ValueExpression.Reference(itemName), context.shape.member),
-                    targetShape
+                    targetShape,
                 )
             }
             rust("$listName.finish();")
@@ -318,16 +318,16 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                                 MemberContext.unionMember(
                                     context.copy(writerExpression = "writer"),
                                     "inner",
-                                    member
-                                )
+                                    member,
+                                ),
                             )
                         }
                     }
-                    if (mode.renderUnknownVariant()) {
+                    if (target.renderUnknownVariant()) {
                         rustTemplate(
                             "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                             "Union" to unionSymbol,
-                            *codegenScope
+                            *codegenScope,
                         )
                     }
                 }

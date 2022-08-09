@@ -14,9 +14,11 @@ import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -25,20 +27,18 @@ import software.amazon.smithy.rust.codegen.util.toPascalCase
 /**
  * ServerOperationHandlerGenerator
  */
-class ServerOperationHandlerGenerator(
-    codegenContext: CodegenContext,
+open class ServerOperationHandlerGenerator(
+    coreCodegenContext: CoreCodegenContext,
     private val operations: List<OperationShape>,
 ) {
     private val serverCrate = "aws_smithy_http_server"
-    private val service = codegenContext.serviceShape
-    private val model = codegenContext.model
-    private val protocol = codegenContext.protocol
-    private val symbolProvider = codegenContext.symbolProvider
-    private val operationNames = operations.map { symbolProvider.toSymbol(it).name }
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val service = coreCodegenContext.serviceShape
+    private val model = coreCodegenContext.model
+    private val protocol = coreCodegenContext.protocol
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
-        "PinProjectLite" to ServerCargoDependency.PinProjectLite.asType(),
         "Tower" to ServerCargoDependency.Tower.asType(),
         "FuturesUtil" to ServerCargoDependency.FuturesUtil.asType(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
@@ -48,12 +48,12 @@ class ServerOperationHandlerGenerator(
         "http" to RuntimeType.http,
     )
 
-    fun render(writer: RustWriter) {
+    open fun render(writer: RustWriter) {
         renderHandlerImplementations(writer, false)
         renderHandlerImplementations(writer, true)
     }
 
-    /*
+    /**
      * Renders the implementation of the `Handler` trait for all operations.
      * Handlers are implemented for `FnOnce` function types whose signatures take in state or not.
      */
@@ -75,7 +75,7 @@ class ServerOperationHandlerGenerator(
                 where
                     ${operationTraitBounds(operation, inputName, state)}
                 """.trimIndent(),
-                *codegenScope
+                *codegenScope,
             ) {
                 val callImpl = if (state) {
                     """
@@ -106,8 +106,6 @@ class ServerOperationHandlerGenerator(
                     type Sealed = #{ServerOperationHandler}::sealed::Hidden;
                     async fn call(self, req: #{http}::Request<B>) -> #{http}::Response<#{SmithyHttpServer}::body::BoxBody> {
                         let mut req = #{SmithyHttpServer}::request::RequestParts::new(req);
-                        use #{SmithyHttpServer}::request::FromRequest;
-                        use #{SmithyHttpServer}::response::IntoResponse;
                         let input_wrapper = match $inputWrapperName::from_request(&mut req).await {
                             Ok(v) => v,
                             Err(runtime_error) => {
@@ -123,13 +121,13 @@ class ServerOperationHandlerGenerator(
                         response.map(#{SmithyHttpServer}::body::boxed)
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
     }
 
-    /*
+    /**
      * Generates the trait bounds of the `Handler` trait implementation, depending on:
      *     - the presence of state; and
      *     - whether the operation is fallible or not.
@@ -141,8 +139,8 @@ class ServerOperationHandlerGenerator(
         } else {
             "Fun: FnOnce($inputName) -> Fut + Clone + Send + 'static,"
         }
-        val outputType = if (operation.errors.isNotEmpty()) {
-            "Result<${symbolProvider.toSymbol(operation.outputShape(model)).fullName}, ${operation.errorSymbol(symbolProvider).fullyQualifiedName()}>"
+        val outputType = if (operation.operationErrors(model).isNotEmpty()) {
+            "Result<${symbolProvider.toSymbol(operation.outputShape(model)).fullName}, ${operation.errorSymbol(model, symbolProvider, CodegenTarget.SERVER).fullyQualifiedName()}>"
         } else {
             symbolProvider.toSymbol(operation.outputShape(model)).fullName
         }

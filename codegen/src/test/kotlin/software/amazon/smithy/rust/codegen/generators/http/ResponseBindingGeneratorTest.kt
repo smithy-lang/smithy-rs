@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpTraitHttpBindingResolver
@@ -70,7 +70,7 @@ class ResponseBindingGeneratorTest {
     private val model = OperationNormalizer.transform(baseModel)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
     private val symbolProvider = testSymbolProvider(model)
-    private val testCodegenContext: CodegenContext = testCodegenContext(model)
+    private val testCoreCodegenContext: CoreCodegenContext = testCodegenContext(model)
 
     private fun RustWriter.renderOperation() {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
@@ -80,9 +80,9 @@ class ResponseBindingGeneratorTest {
                 .filter { it.location == HttpLocation.HEADER }
             bindings.forEach { binding ->
                 val runtimeType = ResponseBindingGenerator(
-                    RestJson(testCodegenContext),
-                    testCodegenContext,
-                    operationShape
+                    RestJson(testCoreCodegenContext),
+                    testCoreCodegenContext,
+                    operationShape,
                 ).generateDeserializeHeaderFn(binding)
                 // little hack to force these functions to be generated
                 rust("// use #T;", runtimeType)
@@ -109,7 +109,7 @@ class ResponseBindingGeneratorTest {
                 assert_eq!(http_serde::deser_header_put_object_put_object_output_int_list(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
                 assert_eq!(http_serde::deser_header_put_object_put_object_output_media_type(resp.headers()).expect("valid").unwrap(), "smithy-rs");
                 assert_eq!(http_serde::deser_header_put_object_put_object_output_date_header_list(resp.headers()).unwrap().unwrap().len(), 3);
-                """
+                """,
             )
         }
         testProject.compileAndTest()

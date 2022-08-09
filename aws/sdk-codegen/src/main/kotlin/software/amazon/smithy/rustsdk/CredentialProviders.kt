@@ -11,7 +11,8 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -22,31 +23,34 @@ import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
-class CredentialsProviderDecorator : RustCodegenDecorator {
+class CredentialsProviderDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "CredentialsProvider"
     override val order: Byte = 0
 
     override fun configCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + CredentialProviderConfig(codegenContext.runtimeConfig)
     }
 
     override fun operationCustomizations(
-        codegenContext: CodegenContext,
+        codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + CredentialsProviderFeature(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(
-        codegenContext: CodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 /**
@@ -56,14 +60,14 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
     private val defaultProvider = defaultProvider()
     private val codegenScope = arrayOf(
         "credentials" to awsTypes(runtimeConfig).asType().member("credentials"),
-        "DefaultProvider" to defaultProvider
+        "DefaultProvider" to defaultProvider,
     )
 
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
                 """pub(crate) credentials_provider: #{credentials}::SharedCredentialsProvider,""",
-                *codegenScope
+                *codegenScope,
             )
             is ServiceConfig.ConfigImpl -> emptySection
             is ServiceConfig.BuilderStruct ->
@@ -88,7 +92,7 @@ class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomizati
             }
             ServiceConfig.BuilderBuild -> rustTemplate(
                 "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -102,7 +106,7 @@ class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : Ope
                     """
                     #T(&mut ${section.request}.properties_mut(), ${section.config}.credentials_provider.clone());
                     """,
-                    setProvider(runtimeConfig)
+                    setProvider(runtimeConfig),
                 )
             }
             else -> emptySection

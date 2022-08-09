@@ -2,7 +2,14 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-#![warn(missing_docs)]
+
+#![warn(
+    missing_debug_implementations,
+    missing_docs,
+    rust_2018_idioms,
+    rustdoc::missing_crate_level_docs,
+    unreachable_pub
+)]
 
 //! `aws-config` provides implementations of region, credential resolution.
 //!
@@ -123,6 +130,8 @@ pub mod sso;
 
 pub mod connector;
 
+pub mod credential_process;
+
 pub(crate) mod parsing;
 
 // Re-export types from smithy-types
@@ -130,7 +139,10 @@ pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout;
 
 // Re-export types from aws-types
-pub use aws_types::app_name::{AppName, InvalidAppName};
+pub use aws_types::{
+    app_name::{AppName, InvalidAppName},
+    SdkConfig,
+};
 
 /// Create an environment loader for AWS Configuration
 ///
@@ -318,6 +330,7 @@ mod loader {
         ///
         /// # Examples
         /// ```no_run
+        /// # #[cfg(feature = "hyper-client")]
         /// # async fn docs() {
         /// use aws_config::provider_config::ProviderConfig;
         /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new().

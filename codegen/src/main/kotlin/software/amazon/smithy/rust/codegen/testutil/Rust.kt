@@ -21,12 +21,11 @@ import software.amazon.smithy.rust.codegen.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenConfig
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -68,9 +67,9 @@ object TestWorkspace {
         val workspaceToml = TomlWriter().write(
             mapOf(
                 "workspace" to mapOf(
-                    "members" to subprojects
-                )
-            )
+                    "members" to subprojects,
+                ),
+            ),
         )
         cargoToml.writeText(workspaceToml)
     }
@@ -83,7 +82,7 @@ object TestWorkspace {
                 [package]
                 name = "stub-${newProject.name}"
                 version = "0.0.1"
-                """.trimIndent()
+                """.trimIndent(),
             )
             subprojects.add(newProject.name)
             generate()
@@ -110,7 +109,7 @@ object TestWorkspace {
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,
-            CodegenConfig(debugMode = debugMode)
+            CoreCodegenConfig(debugMode = debugMode),
         )
     }
 }
@@ -140,8 +139,8 @@ fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectN
             "runtimeConfig",
             Node.objectNodeBuilder().withMember(
                 "relativePath",
-                Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path)
-            ).build()
+                Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path),
+            ).build(),
         )
 
     if (addModuleToEventStreamAllowList) {
@@ -149,8 +148,8 @@ fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectN
             "codegen",
             Node.objectNodeBuilder().withMember(
                 "eventStreamAllowList",
-                Node.fromStrings(moduleName)
-            ).build()
+                Node.fromStrings(moduleName),
+            ).build(),
         )
     }
 
@@ -162,7 +161,7 @@ fun generatePluginContext(model: Model, additionalSettings: ObjectNode = ObjectN
 
 fun RustWriter.unitTest(
     name: String? = null,
-    @Language("Rust", prefix = "fn test() {", suffix = "}") test: String
+    @Language("Rust", prefix = "fn test() {", suffix = "}") test: String,
 ) {
     val testName = name ?: safeName("test")
     raw("#[test]")
@@ -171,12 +170,28 @@ fun RustWriter.unitTest(
     }
 }
 
+/*
+ * Writes a Rust-style unit test
+ */
+fun RustWriter.unitTest(
+    name: String,
+    vararg args: Any,
+    block: RustWriter.() -> Unit,
+): RustWriter {
+    raw("#[test]")
+    return rustBlock("fn $name()", *args, block = block)
+}
+
 /**
  * WriterDelegator used for test purposes
  *
  * This exposes both the base directory and a list of [generatedFiles] for test purposes
  */
-class TestWriterDelegator(private val fileManifest: FileManifest, symbolProvider: RustSymbolProvider, val codegenConfig: CodegenConfig) :
+class TestWriterDelegator(
+    private val fileManifest: FileManifest,
+    symbolProvider: RustSymbolProvider,
+    val codegenConfig: CoreCodegenConfig,
+) :
     RustCrate(fileManifest, symbolProvider, DefaultPublicModules, codegenConfig) {
     val baseDir: Path = fileManifest.baseDir
 
@@ -221,16 +236,10 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
 }
 
 fun TestWriterDelegator.rustSettings() =
-    RustSettings(
-        ShapeId.from("fake#Fake"),
-        "test_${baseDir.toFile().nameWithoutExtension}",
-        "0.0.1",
-        moduleAuthors = listOf("test@module.com"),
-        moduleDescription = "test",
-        moduleRepository = null,
-        runtimeConfig = TestRuntimeConfig,
+    testRustSettings(
+        service = ShapeId.from("fake#Fake"),
+        moduleName = "test_${baseDir.toFile().nameWithoutExtension}",
         codegenConfig = this.codegenConfig,
-        license = null
     )
 
 fun String.shouldParseAsRust() {
@@ -247,7 +256,7 @@ fun RustWriter.compileAndTest(
     @Language("Rust", prefix = "fn test() {", suffix = "}")
     main: String = "",
     clippy: Boolean = false,
-    expectFailure: Boolean = false
+    expectFailure: Boolean = false,
 ): String {
     val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
     val module = if (this.namespace.contains("::")) {
@@ -281,7 +290,7 @@ private fun String.intoCrate(
     deps: Set<CargoDependency>,
     module: String? = null,
     main: String = "",
-    strict: Boolean = false
+    strict: Boolean = false,
 ): File {
     this.shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
@@ -307,7 +316,7 @@ private fun String.intoCrate(
             fn test() {
                 $main
             }
-            """.trimIndent()
+            """.trimIndent(),
         )
     }
 
@@ -315,7 +324,7 @@ private fun String.intoCrate(
         mainRs.appendText(
             """
             #![deny(clippy::all)]
-            """.trimIndent()
+            """.trimIndent(),
         )
     }
 
@@ -324,7 +333,7 @@ private fun String.intoCrate(
         pub mod $module;
         pub use crate::$module::*;
         pub fn main() {}
-        """.trimIndent()
+        """.trimIndent(),
     )
     return tempDir
 }

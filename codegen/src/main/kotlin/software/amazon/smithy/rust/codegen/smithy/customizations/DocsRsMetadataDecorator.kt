@@ -5,7 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.smithy.customizations
 
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
 
@@ -22,7 +23,7 @@ data class DocsRsMetadataSettings(
     val rustdocArgs: List<String>? = null,
     val cargoArgs: List<String>? = null,
     /** Any custom key-value pairs to be inserted into the docsrs metadata */
-    val custom: HashMap<String, Any> = HashMap()
+    val custom: HashMap<String, Any> = HashMap(),
 )
 
 fun DocsRsMetadataSettings.asMap(): Map<String, Any> {
@@ -34,7 +35,7 @@ fun DocsRsMetadataSettings.asMap(): Map<String, Any> {
         targets?.let { "targets" to it },
         rustcArgs?.let { "rustc-args" to it },
         rustdocArgs?.let { "rustdoc-args" to it },
-        cargoArgs?.let { "cargo-args" to it }
+        cargoArgs?.let { "cargo-args" to it },
     ).toMap() + custom
     return mapOf("package" to mapOf("metadata" to mapOf("docs" to mapOf("rs" to inner))))
 }
@@ -48,11 +49,15 @@ fun DocsRsMetadataSettings.asMap(): Map<String, Any> {
  * # Notes
  * This decorator is not used by default, code generators must manually configure and include it in their builds.
  */
-class DocsRsMetadataDecorator(private val docsRsMetadataSettings: DocsRsMetadataSettings) : RustCodegenDecorator {
+class DocsRsMetadataDecorator(private val docsRsMetadataSettings: DocsRsMetadataSettings) :
+    RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "docsrs-metadata"
     override val order: Byte = 0
 
-    override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations {
+    override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations {
         return docsRsMetadataSettings.asMap()
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

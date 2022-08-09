@@ -30,10 +30,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.smithy.generators.unknownVariantError
@@ -43,9 +43,9 @@ import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasTrait
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 
-class EventStreamMarshallerGenerator(
+open class EventStreamMarshallerGenerator(
     private val model: Model,
-    private val mode: CodegenMode,
+    private val target: CodegenTarget,
     runtimeConfig: RuntimeConfig,
     private val symbolProvider: RustSymbolProvider,
     private val unionShape: UnionShape,
@@ -62,7 +62,7 @@ class EventStreamMarshallerGenerator(
         "Error" to RuntimeType("Error", smithyEventStream, "aws_smithy_eventstream::error"),
     )
 
-    fun render(): RuntimeType {
+    open fun render(): RuntimeType {
         val marshallerType = unionShape.eventStreamMarshallerType()
         val unionSymbol = symbolProvider.toSymbol(unionShape)
 
@@ -83,18 +83,18 @@ class EventStreamMarshallerGenerator(
                     ${marshallerType.name}
                 }
             }
-            """
+            """,
         )
 
         rustBlockTemplate(
             "impl #{MarshallMessage} for ${marshallerType.name}",
-            *codegenScope
+            *codegenScope,
         ) {
             rust("type Input = ${unionSymbol.rustType().render(fullyQualified = true)};")
 
             rustBlockTemplate(
                 "fn marshall(&self, input: Self::Input) -> std::result::Result<#{Message}, #{Error}>",
-                *codegenScope
+                *codegenScope,
             ) {
                 rust("let mut headers = Vec::new();")
                 addStringHeader(":message-type", "\"event\".into()")
@@ -107,14 +107,14 @@ class EventStreamMarshallerGenerator(
                             renderMarshallEvent(member, target)
                         }
                     }
-                    if (mode.renderUnknownVariant()) {
+                    if (target.renderUnknownVariant()) {
                         rustTemplate(
                             """
                             Self::Input::${UnionGenerator.UnknownVariantName} => return Err(
                                 #{Error}::Marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
                             )
                             """,
-                            *codegenScope
+                            *codegenScope,
                         )
                     }
                 }
@@ -134,15 +134,17 @@ class EventStreamMarshallerGenerator(
         if (payloadMember != null) {
             val memberName = symbolProvider.toMemberName(payloadMember)
             val target = model.expectShape(payloadMember.target)
-            renderMarshallEventPayload("inner.$memberName", payloadMember, target)
+            val serializerFn = serializerGenerator.payloadSerializer(payloadMember)
+            renderMarshallEventPayload("inner.$memberName", payloadMember, target, serializerFn)
         } else if (headerMembers.isEmpty()) {
-            renderMarshallEventPayload("inner", unionMember, eventStruct)
+            val serializerFn = serializerGenerator.payloadSerializer(unionMember)
+            renderMarshallEventPayload("inner", unionMember, eventStruct, serializerFn)
         } else {
             rust("Vec::new()")
         }
     }
 
-    private fun RustWriter.renderMarshallEventHeader(memberName: String, member: MemberShape, target: Shape) {
+    protected fun RustWriter.renderMarshallEventHeader(memberName: String, member: MemberShape, target: Shape) {
         val headerName = member.memberName
         handleOptional(
             symbolProvider.toSymbol(member).isOptional(),
@@ -156,7 +158,7 @@ class EventStreamMarshallerGenerator(
         withBlock("headers.push(", ");") {
             rustTemplate(
                 "#{Header}::new(${headerName.dq()}, #{HeaderValue}::${headerValue(inputName, target)})",
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -175,7 +177,12 @@ class EventStreamMarshallerGenerator(
         else -> throw IllegalStateException("unsupported event stream header shape type: $target")
     }
 
-    private fun RustWriter.renderMarshallEventPayload(inputExpr: String, member: MemberShape, target: Shape) {
+    protected fun RustWriter.renderMarshallEventPayload(
+        inputExpr: String,
+        member: Shape,
+        target: Shape,
+        serializerFn: RuntimeType,
+    ) {
         val optional = symbolProvider.toSymbol(member).isOptional()
         if (target is BlobShape || target is StringShape) {
             data class PayloadContext(val conversionFn: String, val contentType: String)
@@ -191,12 +198,11 @@ class EventStreamMarshallerGenerator(
                 inputExpr,
                 "inner_payload",
                 { input -> rust("$input.${ctx.conversionFn}()") },
-                { rust("Vec::new()") }
+                { rust("Vec::new()") },
             )
         } else {
             addStringHeader(":content-type", "${payloadContentType.dq()}.into()")
 
-            val serializerFn = serializerGenerator.payloadSerializer(member)
             handleOptional(
                 optional,
                 inputExpr,
@@ -208,10 +214,10 @@ class EventStreamMarshallerGenerator(
                             .map_err(|err| #{Error}::Marshalling(format!("{}", err)))?
                         """,
                         "serializerFn" to serializerFn,
-                        *codegenScope
+                        *codegenScope,
                     )
                 },
-                { rust("unimplemented!(\"TODO(EventStream): Figure out what to do when there's no payload\")") }
+                { rust("unimplemented!(\"TODO(EventStream): Figure out what to do when there's no payload\")") },
             )
         }
     }
@@ -237,7 +243,7 @@ class EventStreamMarshallerGenerator(
         }
     }
 
-    private fun RustWriter.addStringHeader(name: String, valueExpr: String) {
+    protected fun RustWriter.addStringHeader(name: String, valueExpr: String) {
         rustTemplate("headers.push(#{Header}::new(${name.dq()}, #{HeaderValue}::String($valueExpr)));", *codegenScope)
     }
 

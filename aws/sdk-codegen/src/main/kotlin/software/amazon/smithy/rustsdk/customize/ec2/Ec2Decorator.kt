@@ -8,10 +8,12 @@ package software.amazon.smithy.rustsdk.customize.ec2
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.letIf
 
-class Ec2Decorator : RustCodegenDecorator {
+class Ec2Decorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "Ec2"
     override val order: Byte = 0
     private val ec2 = ShapeId.from("com.amazonaws.ec2#AmazonEC2")
@@ -24,7 +26,10 @@ class Ec2Decorator : RustCodegenDecorator {
         // need to be boxed for the API to work properly
         return model.letIf(
             applies(service),
-            BoxPrimitiveShapes::processModel
+            BoxPrimitiveShapes::processModel,
         )
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

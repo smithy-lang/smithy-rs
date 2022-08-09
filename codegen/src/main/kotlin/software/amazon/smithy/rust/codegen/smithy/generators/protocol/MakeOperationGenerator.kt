@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -35,7 +35,7 @@ import software.amazon.smithy.rust.codegen.util.inputShape
 
 /** Generates the `make_operation` function on input structs */
 open class MakeOperationGenerator(
-    protected val codegenContext: CodegenContext,
+    protected val coreCodegenContext: CoreCodegenContext,
     private val protocol: Protocol,
     private val bodyGenerator: ProtocolPayloadGenerator,
     private val public: Boolean,
@@ -43,23 +43,23 @@ open class MakeOperationGenerator(
     private val includeDefaultPayloadHeaders: Boolean,
     private val functionName: String = "make_operation",
 ) {
-    protected val model = codegenContext.model
-    protected val runtimeConfig = codegenContext.runtimeConfig
-    protected val symbolProvider = codegenContext.symbolProvider
+    protected val model = coreCodegenContext.model
+    protected val runtimeConfig = coreCodegenContext.runtimeConfig
+    protected val symbolProvider = coreCodegenContext.symbolProvider
     protected val httpBindingResolver = protocol.httpBindingResolver
 
     private val sdkId =
-        codegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")
-            ?: codegenContext.serviceShape.id.getName(codegenContext.serviceShape)
+        coreCodegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")
+            ?: coreCodegenContext.serviceShape.id.getName(coreCodegenContext.serviceShape)
 
     private val codegenScope = arrayOf(
         "config" to RuntimeType.Config,
         "header_util" to CargoDependency.SmithyHttp(runtimeConfig).asType().member("header"),
         "http" to RuntimeType.http,
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
-        "OpBuildError" to codegenContext.runtimeConfig.operationBuildError(),
+        "OpBuildError" to coreCodegenContext.runtimeConfig.operationBuildError(),
         "operation" to RuntimeType.operationModule(runtimeConfig),
-        "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig)
+        "SdkBody" to RuntimeType.sdkBody(coreCodegenContext.runtimeConfig),
     )
 
     fun generateMakeOperation(
@@ -84,7 +84,7 @@ open class MakeOperationGenerator(
         Attribute.Custom("allow(clippy::needless_borrow)").render(implBlockWriter) // Allows builders that don’t consume the input borrow
         implBlockWriter.rustBlockTemplate(
             "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
-            *codegenScope
+            *codegenScope,
         ) {
             writeCustomizations(customizations, OperationSection.MutateInput(customizations, "self", "_config"))
 
@@ -112,7 +112,7 @@ open class MakeOperationGenerator(
                         request = #{header_util}::set_request_header_if_absent(request, #{http}::header::CONTENT_LENGTH, content_length);
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             rust("""let request = request.body(body).expect("should be valid request");""")
@@ -120,7 +120,7 @@ open class MakeOperationGenerator(
                 """
                 let mut request = #{operation}::Request::from_parts(request, properties);
                 """,
-                *codegenScope
+                *codegenScope,
             )
             writeCustomizations(customizations, OperationSection.MutateRequest(customizations, "request", "_config"))
             rustTemplate(
@@ -129,7 +129,7 @@ open class MakeOperationGenerator(
                     .with_metadata(#{operation}::Metadata::new(${operationName.dq()}, ${sdkId.dq()}));
                 """,
                 *codegenScope,
-                "OperationType" to symbolProvider.toSymbol(shape)
+                "OperationType" to symbolProvider.toSymbol(shape),
             )
             writeCustomizations(customizations, OperationSection.FinalizeOperation(customizations, "op", "_config"))
             rust("Ok(op)")
@@ -151,7 +151,7 @@ open class MakeOperationGenerator(
         writer.format(symbolProvider.toSymbol(shape))
 
     private fun buildOperationTypeRetry(writer: RustWriter, customizations: List<OperationCustomization>): String =
-        customizations.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
+        customizations.firstNotNullOfOrNull { it.retryType() }?.let { writer.format(it) } ?: "()"
 
     private fun needsContentLength(operationShape: OperationShape): Boolean {
         return protocol.httpBindingResolver.requestBindings(operationShape)
@@ -160,9 +160,9 @@ open class MakeOperationGenerator(
 
     open fun createHttpRequest(writer: RustWriter, operationShape: OperationShape) {
         val httpBindingGenerator = RequestBindingGenerator(
-            codegenContext,
+            coreCodegenContext,
             protocol,
-            operationShape
+            operationShape,
         )
         val contentType = httpBindingResolver.requestContentType(operationShape)
         httpBindingGenerator.renderUpdateHttpBuilder(writer)
@@ -171,7 +171,7 @@ open class MakeOperationGenerator(
         if (includeDefaultPayloadHeaders && contentType != null) {
             writer.rustTemplate(
                 "builder = #{header_util}::set_request_header_if_absent(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",
-                *codegenScope
+                *codegenScope,
             )
         }
         for (header in protocol.additionalRequestHeaders(operationShape)) {
@@ -183,7 +183,7 @@ open class MakeOperationGenerator(
                     ${header.second.dq()}
                 );
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
         writer.rust("builder")

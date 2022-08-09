@@ -11,18 +11,18 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenMode
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
-fun CodegenMode.renderUnknownVariant() = when (this) {
-    is CodegenMode.Server -> false
-    is CodegenMode.Client -> true
+fun CodegenTarget.renderUnknownVariant() = when (this) {
+    CodegenTarget.SERVER -> false
+    CodegenTarget.CLIENT -> true
 }
 
 /**
@@ -53,6 +53,7 @@ class UnionGenerator(
 
     private fun renderUnion() {
         writer.documentShape(shape, model)
+        writer.deprecatedShape(shape)
 
         val unionSymbol = symbolProvider.toSymbol(shape)
         val containerMeta = unionSymbol.expectRustMetadata()
@@ -63,6 +64,7 @@ class UnionGenerator(
                 val note =
                     memberSymbol.renamedFrom()?.let { oldName -> "This variant has been renamed from `$oldName`." }
                 documentShape(member, model, note = note)
+                deprecatedShape(member)
                 memberSymbol.expectRustMetadata().renderAttributes(this)
                 write("${symbolProvider.toMemberName(member)}(#T),", symbolProvider.toSymbol(member))
             }

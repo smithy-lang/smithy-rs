@@ -8,12 +8,9 @@ extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
 
 tasks["jar"].enabled = false
 
-plugins {
-    id("software.amazon.smithy").version("0.5.3")
-}
+plugins { id("software.amazon.smithy").version("0.5.3") }
 
 val smithyVersion: String by project
-val defaultRustFlags: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
@@ -45,104 +42,59 @@ val allCodegenTests = listOf(
     CodegenTest("aws.protocoltests.misc#MiscService", "misc"),
     CodegenTest(
         "aws.protocoltests.restxml#RestXml", "rest_xml",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
 
     CodegenTest(
         "aws.protocoltests.query#AwsQuery", "aws_query",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
     CodegenTest(
         "aws.protocoltests.ec2#AwsEc2", "ec2_query",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
     CodegenTest(
         "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
         "rest_xml_namespace",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
     CodegenTest(
         "aws.protocoltests.restxml#RestXmlExtras",
         "rest_xml_extras",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
     CodegenTest(
         "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
         "rest_xml_extras_unwrapped",
-        extraConfig = """, "codegen": { "addMessageToErrors": false } """
+        extraConfig = """, "codegen": { "addMessageToErrors": false } """,
     ),
     CodegenTest(
         "crate#Config",
         "naming_test_ops",
         """
             , "codegen": { "renameErrors": false }
-        """.trimIndent()
+        """.trimIndent(),
     ),
     CodegenTest(
         "naming_obs_structs#NamingObstacleCourseStructs",
         "naming_test_structs",
         """
             , "codegen": { "renameErrors": false }
-        """.trimIndent()
+        """.trimIndent(),
     ),
-    CodegenTest("com.aws.example#PokemonService", "pokemon_service_client")
+    CodegenTest("com.aws.example#PokemonService", "pokemon-service-client"),
 )
 
-tasks.register("generateSmithyBuild") {
-    description = "generate smithy-build.json"
-    doFirst {
-        projectDir.resolve("smithy-build.json")
-            .writeText(
-                generateSmithyBuild(
-                    rootProject.projectDir.absolutePath,
-                    pluginName,
-                    codegenTests(properties, allCodegenTests)
-                )
-            )
-    }
-}
-
-tasks.register("generateCargoWorkspace") {
-    description = "generate Cargo.toml workspace file"
-    doFirst {
-        buildDir.resolve("$workingDirUnderBuildDir/Cargo.toml")
-            .writeText(generateCargoWorkspace(pluginName, codegenTests(properties, allCodegenTests)))
-    }
-}
+project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
+project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
+project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
-tasks.register<Exec>(Cargo.CHECK.toString) {
-    workingDir("$buildDir/$workingDirUnderBuildDir")
-    environment("RUSTFLAGS", defaultRustFlags)
-    commandLine("cargo", "check")
-    dependsOn("assemble")
-}
-
-tasks.register<Exec>(Cargo.TEST.toString) {
-    workingDir("$buildDir/$workingDirUnderBuildDir")
-    environment("RUSTFLAGS", defaultRustFlags)
-    commandLine("cargo", "test")
-    dependsOn("assemble")
-}
-
-tasks.register<Exec>(Cargo.DOCS.toString) {
-    workingDir("$buildDir/$workingDirUnderBuildDir")
-    environment("RUSTDOCFLAGS", defaultRustDocFlags)
-    commandLine("cargo", "doc", "--no-deps")
-    dependsOn("assemble")
-}
-
-tasks.register<Exec>(Cargo.CLIPPY.toString) {
-    workingDir("$buildDir/$workingDirUnderBuildDir")
-    environment("RUSTFLAGS", defaultRustFlags)
-    commandLine("cargo", "clippy")
-    dependsOn("assemble")
-}
+project.registerModifyMtimeTask()
+project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 
-tasks["clean"].doFirst {
-    delete("smithy-build.json")
-}
+tasks["clean"].doFirst { delete("smithy-build.json") }

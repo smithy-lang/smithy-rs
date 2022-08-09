@@ -8,7 +8,6 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 plugins {
     kotlin("jvm")
     jacoco
-    maven
     `maven-publish`
 }
 
@@ -32,13 +31,13 @@ dependencies {
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
 
-val generateAwsSdkVersion by tasks.registering {
+val generateAwsRuntimeCrateVersion by tasks.registering {
     // generate the version of the runtime to use as a resource.
     // this keeps us from having to manually change version numbers in multiple places
     val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rustsdk"
     val versionFile = file("$resourcesDir/sdk-crate-version.txt")
     outputs.file(versionFile)
-    val crateVersion = project.properties["aws.sdk.version"]?.toString()!!
+    val crateVersion = project.properties["smithy.rs.runtime.crate.version"]?.toString()!!
     inputs.property("crateVersion", crateVersion)
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
@@ -48,7 +47,7 @@ val generateAwsSdkVersion by tasks.registering {
 
 tasks.compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
-    dependsOn(generateAwsSdkVersion)
+    dependsOn(generateAwsRuntimeCrateVersion)
 }
 
 tasks.compileTestKotlin {

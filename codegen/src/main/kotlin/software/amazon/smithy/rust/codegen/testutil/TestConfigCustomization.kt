@@ -31,12 +31,12 @@ fun stubConfigCustomization(name: String): ConfigCustomization {
                             self._$name = Some($name);
                         self
                     }
-                    """
+                    """,
                 )
                 ServiceConfig.BuilderBuild -> rust(
                     """
                     _$name: self._$name.unwrap_or(123),
-                    """
+                    """,
                 )
                 else -> emptySection
             }
@@ -52,7 +52,7 @@ fun stubConfigCustomization(name: String): ConfigCustomization {
 @Suppress("NAME_SHADOWING")
 fun validateConfigCustomizations(
     customization: ConfigCustomization,
-    project: TestWriterDelegator? = null
+    project: TestWriterDelegator? = null,
 ): TestWriterDelegator {
     val project = project ?: TestWorkspace.testProject()
     stubConfigProject(customization, project)
@@ -70,7 +70,7 @@ fun stubConfigProject(customization: ConfigCustomization, project: TestWriterDel
             """
             fn assert_send_sync<T: Send + Sync>() {}
             assert_send_sync::<Config>();
-            """
+            """,
         )
     }
     project.lib { it.rust("pub use config::Config;") }

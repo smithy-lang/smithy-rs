@@ -7,15 +7,13 @@
 //!
 //! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 
-use self::future::RouterFuture;
 use self::request_spec::RequestSpec;
+use self::tiny_map::TinyMap;
 use crate::body::{boxed, Body, BoxBody, HttpBody};
 use crate::error::BoxError;
 use crate::protocols::Protocol;
-use crate::response::IntoResponse;
 use crate::runtime_error::{RuntimeError, RuntimeErrorKind};
 use http::{Request, Response, StatusCode};
-use std::collections::HashMap;
 use std::{
     convert::Infallible,
     task::{Context, Poll},
@@ -32,8 +30,9 @@ mod into_make_service;
 pub mod request_spec;
 
 mod route;
+mod tiny_map;
 
-pub use self::{into_make_service::IntoMakeService, route::Route};
+pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::Route};
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
 /// based on the request's URI and HTTP method or on some specific header setting the target operation.
@@ -60,6 +59,11 @@ pub struct Router<B = Body> {
     routes: Routes<B>,
 }
 
+// This constant determines when the `TinyMap` implementation switches from being a `Vec` to a
+// `HashMap`. This is chosen to be 15 as a result of the discussion around
+// https://github.com/awslabs/smithy-rs/pull/1429#issuecomment-1147516546
+const ROUTE_CUTOFF: usize = 15;
+
 /// Protocol-aware routes types.
 ///
 /// RestJson1 and RestXml routes are stored in a `Vec` because there can be multiple matches on the
@@ -71,8 +75,8 @@ pub struct Router<B = Body> {
 enum Routes<B = Body> {
     RestXml(Vec<(Route<B>, RequestSpec)>),
     RestJson1(Vec<(Route<B>, RequestSpec)>),
-    AwsJson10(HashMap<String, Route<B>>),
-    AwsJson11(HashMap<String, Route<B>>),
+    AwsJson10(TinyMap<String, Route<B>, ROUTE_CUTOFF>),
+    AwsJson11(TinyMap<String, Route<B>, ROUTE_CUTOFF>),
 }
 
 impl<B> Clone for Router<B> {
@@ -343,7 +347,7 @@ where
                         // Find the `x-amz-target` header.
                         if let Some(target) = req.headers().get("x-amz-target") {
                             if let Ok(target) = target.to_str() {
-                                // Lookup in the `HashMap` for a route for the target.
+                                // Lookup in the `TinyMap` for a route for the target.
                                 let route = routes.get(target);
                                 if let Some(route) = route {
                                     return RouterFuture::from_oneshot(route.clone().oneshot(req));

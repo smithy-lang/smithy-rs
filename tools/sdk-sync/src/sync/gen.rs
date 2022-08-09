@@ -4,14 +4,35 @@
  */
 
 use crate::fs::Fs;
-use crate::git::{CommitHash, Git, GitCLI};
 use anyhow::{Context, Result};
+use smithy_rs_tool_common::git::{CommitHash, Git, GitCLI};
 use smithy_rs_tool_common::here;
 use smithy_rs_tool_common::shell::handle_failure;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
-use tracing::{info, instrument};
+use tracing::{error, info, instrument, warn};
+
+#[derive(Clone, Debug)]
+pub struct CodeGenSettings {
+    pub smithy_parallelism: usize,
+    pub max_gradle_heap_megabytes: usize,
+    pub max_gradle_metaspace_megabytes: usize,
+    pub aws_models_path: Option<PathBuf>,
+    pub model_metadata_path: Option<PathBuf>,
+}
+
+impl Default for CodeGenSettings {
+    fn default() -> Self {
+        Self {
+            smithy_parallelism: 1,
+            max_gradle_heap_megabytes: 512,
+            max_gradle_metaspace_megabytes: 512,
+            aws_models_path: None,
+            model_metadata_path: None,
+        }
+    }
+}
 
 pub struct GeneratedSdk {
     path: PathBuf,
@@ -43,21 +64,25 @@ pub trait SdkGenerator {
 /// SDK generator that creates a temporary directory and clones the given `smithy-rs` into it
 /// so that generation can safely be done in parallel for other commits.
 pub struct DefaultSdkGenerator {
+    previous_versions_manifest: PathBuf,
     aws_doc_sdk_examples_revision: CommitHash,
     examples_path: PathBuf,
     fs: Arc<dyn Fs>,
     smithy_rs: Box<dyn Git>,
+    settings: CodeGenSettings,
     temp_dir: Arc<tempfile::TempDir>,
 }
 
 impl DefaultSdkGenerator {
     #[instrument(skip(fs))]
     pub fn new(
+        previous_versions_manifest: &Path,
         aws_doc_sdk_examples_revision: &CommitHash,
         examples_path: &Path,
         fs: Arc<dyn Fs>,
         reset_to_commit: Option<CommitHash>,
         original_smithy_rs_path: &Path,
+        settings: &CodeGenSettings,
     ) -> Result<Self> {
         let temp_dir = tempfile::tempdir().context(here!("create temp dir"))?;
         GitCLI::new(original_smithy_rs_path)
@@ -73,10 +98,12 @@ impl DefaultSdkGenerator {
         }
 
         Ok(Self {
+            previous_versions_manifest: previous_versions_manifest.into(),
             aws_doc_sdk_examples_revision: aws_doc_sdk_examples_revision.clone(),
             examples_path: examples_path.into(),
             fs,
             smithy_rs: Box::new(smithy_rs) as Box<dyn Git>,
+            settings: settings.clone(),
             temp_dir: Arc::new(temp_dir),
         })
     }
@@ -104,22 +131,105 @@ impl DefaultSdkGenerator {
         Ok(())
     }
 
-    /// Runs `aws:sdk:assemble` target with property `aws.fullsdk=true` set
-    #[instrument(skip(self))]
-    fn aws_sdk_assemble(&self) -> Result<()> {
-        info!("Generating the SDK...");
+    fn do_aws_sdk_assemble(&self, attempt: u32) -> Result<()> {
         let mut command = Command::new("./gradlew");
-        command.arg("-Paws.fullsdk=true");
+        command.arg("--no-daemon"); // Don't let Gradle continue running after the build
+        command.arg("--no-parallel"); // Disable Gradle parallelism
+        command.arg("--max-workers=1"); // Cap the Gradle workers at 1
+        command.arg("--info"); // Increase logging verbosity for failure debugging
+
+        // Customize the Gradle daemon JVM args (these are required even with `--no-daemon`
+        // since Gradle still forks out a daemon process that gets terminated at the end)
+        command.arg(format!(
+            "-Dorg.gradle.jvmargs={}",
+            [
+                // Configure Gradle JVM memory settings
+                format!("-Xmx{}m", self.settings.max_gradle_heap_megabytes),
+                format!(
+                    "-XX:MaxMetaspaceSize={}m",
+                    self.settings.max_gradle_metaspace_megabytes
+                ),
+                "-XX:+UseSerialGC".to_string(),
+                "-verbose:gc".to_string(),
+                // Disable incremental compilation and caching since we're compiling exactly once per commit
+                "-Dkotlin.incremental=false".to_string(),
+                "-Dkotlin.caching.enabled=false".to_string(),
+                // Run the compiler in the gradle daemon process to avoid more forking thrash
+                "-Dkotlin.compiler.execution.strategy=in-process".to_string()
+            ]
+            .join(" ")
+        ));
+
+        // Disable Smithy's codegen parallelism in favor of sdk-sync parallelism
+        command.arg(format!(
+            "-Djava.util.concurrent.ForkJoinPool.common.parallelism={}",
+            self.settings.smithy_parallelism
+        ));
+
+        if let Some(models_path) = &self.settings.aws_models_path {
+            command.arg(format!(
+                "-Paws.sdk.models.path={}",
+                models_path
+                    .to_str()
+                    .expect("aws models path is a valid str")
+            ));
+        }
+        if let Some(model_metadata_path) = &self.settings.model_metadata_path {
+            command.arg(format!(
+                "-Paws.sdk.model.metadata={}",
+                model_metadata_path
+                    .to_str()
+                    .expect("model metadata path is a valid str")
+            ));
+        }
+        command.arg(format!(
+            "-Paws.sdk.previous.release.versions.manifest={}",
+            self.previous_versions_manifest
+                .to_str()
+                .expect("not expecting strange file names")
+        ));
         command.arg(format!(
             "-Paws.sdk.examples.revision={}",
             &self.aws_doc_sdk_examples_revision
         ));
+        // This property doesn't affect the build at all, but allows us to reliably test retry with `fake-sdk-assemble`
+        command.arg(format!("-Paws.sdk.sync.attempt={}", attempt));
         command.arg("aws:sdk:assemble");
         command.current_dir(self.smithy_rs.path());
+
+        info!("Generating the SDK with: {:#?}", command);
 
         let output = command.output()?;
         handle_failure("aws_sdk_assemble", &output)?;
         Ok(())
+    }
+
+    /// Runs `aws:sdk:assemble` target
+    #[instrument(skip(self))]
+    fn aws_sdk_assemble(&self) -> Result<()> {
+        // Retry gradle daemon startup failures up to 3 times
+        let (mut attempt, max_attempts) = (1, 3);
+        loop {
+            match self.do_aws_sdk_assemble(attempt) {
+                Ok(_) => return Ok(()),
+                Err(err) => {
+                    let error_message = format!("{}", err);
+                    let should_retry = attempt < max_attempts
+                        && error_message
+                            .contains("Timeout waiting to connect to the Gradle daemon");
+                    if !should_retry {
+                        error!("Codegen failed after {} attempt(s): {}", attempt, err);
+                        return Err(err);
+                    } else {
+                        warn!(
+                            "Gradle daemon start failed. Will retry. Full error: {}",
+                            error_message
+                        );
+                    }
+                }
+            }
+            attempt += 1;
+        }
     }
 }
 

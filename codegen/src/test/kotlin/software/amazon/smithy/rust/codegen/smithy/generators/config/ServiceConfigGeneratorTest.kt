@@ -103,7 +103,7 @@ internal class ServiceConfigGeneratorTest {
                 builder.config_field = Some(99);
                 let config = builder.build();
                 assert_eq!(config.config_field, 99);
-                """
+                """,
             )
         }
         project.compileAndTest()

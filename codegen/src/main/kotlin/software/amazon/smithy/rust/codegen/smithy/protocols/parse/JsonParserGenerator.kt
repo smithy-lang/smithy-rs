@@ -33,9 +33,10 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
@@ -53,17 +54,18 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.utils.StringUtils
 
 class JsonParserGenerator(
-    codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
 ) : StructuredDataParserGenerator {
-    private val model = codegenContext.model
-    private val symbolProvider = codegenContext.symbolProvider
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val mode = codegenContext.mode
+    private val model = coreCodegenContext.model
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
+    private val target = coreCodegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
+    private val typeConversionGenerator = TypeConversionGenerator(symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
         "Error" to smithyJson.member("deserialize::Error"),
         "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
@@ -92,14 +94,14 @@ class JsonParserGenerator(
     private fun structureParser(
         fnName: String,
         structureShape: StructureShape,
-        includedMembers: List<MemberShape>
+        includedMembers: List<MemberShape>,
     ): RuntimeType {
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
             it.rustBlockTemplate(
                 "pub fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
                 "Builder" to structureShape.builderSymbol(symbolProvider),
-                *codegenScope
+                *codegenScope,
             ) {
                 rustTemplate(
                     """
@@ -107,7 +109,7 @@ class JsonParserGenerator(
                     let tokens = &mut tokens_owned;
                     #{expect_start_object}(tokens.next())?;
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
                 deserializeStructInner(includedMembers)
                 expectEndOfTokenStream()
@@ -124,7 +126,7 @@ class JsonParserGenerator(
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &[u8]) -> Result<#{Shape}, #{Error}>",
                 *codegenScope,
-                "Shape" to symbolProvider.toSymbol(shape)
+                "Shape" to symbolProvider.toSymbol(shape),
             ) {
                 val input = if (shape is DocumentShape) {
                     "input"
@@ -137,7 +139,7 @@ class JsonParserGenerator(
                     let mut tokens_owned = #{json_token_iter}($input).peekable();
                     let tokens = &mut tokens_owned;
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
                 rust("let result =")
                 deserializeMember(member)
@@ -177,7 +179,7 @@ class JsonParserGenerator(
                     data
                 }
             }
-            """
+            """,
         )
     }
 
@@ -195,7 +197,7 @@ class JsonParserGenerator(
         rustBlock("if tokens.next().is_some()") {
             rustTemplate(
                 "return Err(#{Error}::custom(\"found more JSON tokens after completing parsing\"));",
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -220,8 +222,8 @@ class JsonParserGenerator(
             is StringShape -> deserializeString(target)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
             is NumberShape -> deserializeNumber(target)
-            is BlobShape -> rustTemplate("#{expect_blob_or_null}(tokens.next())?", *codegenScope)
-            is TimestampShape -> deserializeTimestamp(memberShape)
+            is BlobShape -> deserializeBlob(target)
+            is TimestampShape -> deserializeTimestamp(target, memberShape)
             is CollectionShape -> deserializeCollection(target)
             is MapShape -> deserializeMap(target)
             is StructureShape -> deserializeStruct(target)
@@ -235,17 +237,35 @@ class JsonParserGenerator(
         }
     }
 
+    private fun RustWriter.deserializeBlob(target: BlobShape) {
+        rustTemplate(
+            "#{expect_blob_or_null}(tokens.next())?#{ConvertFrom:W}",
+            "ConvertFrom" to typeConversionGenerator.convertViaFrom(target),
+            *codegenScope,
+        )
+    }
+
     private fun RustWriter.deserializeStringInner(target: StringShape, escapedStrName: String) {
         withBlock("$escapedStrName.to_unescaped().map(|u|", ")") {
             when (target.hasTrait<EnumTrait>()) {
-                true -> rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
+                true -> {
+                    if (convertsToEnumInServer(target)) {
+                        rust("#T::try_from(u.as_ref())", symbolProvider.toSymbol(target))
+                    } else {
+                        rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
+                    }
+                }
                 else -> rust("u.into_owned()")
             }
         }
     }
 
+    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
+
     private fun RustWriter.deserializeString(target: StringShape) {
-        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ").transpose()?", *codegenScope) {
+        // additional .transpose()? because Rust does not allow ? up from closures
+        val additionalTranspose = if (convertsToEnumInServer(target)) { ".transpose()?".repeat(2) } else { ".transpose()?" }
+        withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ")$additionalTranspose", *codegenScope) {
             deserializeStringInner(target, "s")
         }
     }
@@ -255,14 +275,17 @@ class JsonParserGenerator(
         rustTemplate("#{expect_number_or_null}(tokens.next())?.map(|v| v.to_#{T}())", "T" to symbol, *codegenScope)
     }
 
-    private fun RustWriter.deserializeTimestamp(member: MemberShape) {
+    private fun RustWriter.deserializeTimestamp(shape: TimestampShape, member: MemberShape) {
         val timestampFormat =
             httpBindingResolver.timestampFormat(
                 member, HttpLocation.DOCUMENT,
-                TimestampFormatTrait.Format.EPOCH_SECONDS
+                TimestampFormatTrait.Format.EPOCH_SECONDS,
             )
         val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
-        rustTemplate("#{expect_timestamp_or_null}(tokens.next(), #{T})?", "T" to timestampFormatType, *codegenScope)
+        rustTemplate(
+            "#{expect_timestamp_or_null}(tokens.next(), #{T})?#{ConvertFrom:W}",
+            "T" to timestampFormatType, "ConvertFrom" to typeConversionGenerator.convertViaFrom(shape), *codegenScope,
+        )
     }
 
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
@@ -335,6 +358,9 @@ class JsonParserGenerator(
                         withBlock("let value =", ";") {
                             deserializeMember(shape.value)
                         }
+                        if (convertsToEnumInServer(keyTarget)) {
+                            rust("let key = key?;")
+                        }
                         if (isSparse) {
                             rust("map.insert(key, value);")
                         } else {
@@ -372,7 +398,7 @@ class JsonParserGenerator(
                                 """.map_err(|err| #{Error}::new(
                                 #{ErrorReason}::Custom(format!("{}", err).into()), None)
                                 )?""",
-                                *codegenScope
+                                *codegenScope,
                             )
                         }
                     }
@@ -392,7 +418,7 @@ class JsonParserGenerator(
                     where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                 """,
                 *codegenScope,
-                "Shape" to symbol
+                "Shape" to symbol,
             ) {
                 rust("let mut variant = None;")
                 rustBlock("match tokens.next().transpose()?") {
@@ -401,7 +427,7 @@ class JsonParserGenerator(
                         Some(#{Token}::ValueNull { .. }) => return Ok(None),
                         Some(#{Token}::StartObject { .. }) =>
                         """,
-                        *codegenScope
+                        *codegenScope,
                     ) {
                         objectKeyLoop(hasMembers = shape.members().isNotEmpty()) {
                             rustTemplate(
@@ -410,7 +436,7 @@ class JsonParserGenerator(
                                     return Err(#{Error}::custom("encountered mixed variants in union"));
                                 }
                                 """,
-                                *codegenScope
+                                *codegenScope,
                             )
                             withBlock("variant = match key.to_unescaped()?.as_ref() {", "};") {
                                 for (member in shape.members()) {
@@ -422,7 +448,7 @@ class JsonParserGenerator(
                                         }
                                     }
                                 }
-                                when (mode.renderUnknownVariant()) {
+                                when (target.renderUnknownVariant()) {
                                     // in client mode, resolve an unknown union variant to the unknown variant
                                     true -> rustTemplate(
                                         """
@@ -431,12 +457,12 @@ class JsonParserGenerator(
                                           Some(#{Union}::${UnionGenerator.UnknownVariantName})
                                         }
                                         """,
-                                        "Union" to symbol, *codegenScope
+                                        "Union" to symbol, *codegenScope,
                                     )
                                     // in server mode, use strict parsing
                                     false -> rustTemplate(
                                         """variant => return Err(#{Error}::custom(format!("unexpected union variant: {}", variant)))""",
-                                        *codegenScope
+                                        *codegenScope,
                                     )
                                 }
                             }
@@ -444,7 +470,7 @@ class JsonParserGenerator(
                     }
                     rustTemplate(
                         """_ => return Err(#{Error}::custom("expected start object or null"))""",
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
                 rust("Ok(variant)")
@@ -459,7 +485,7 @@ class JsonParserGenerator(
         } else {
             rustTemplate(
                 ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?",
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -475,13 +501,13 @@ class JsonParserGenerator(
                         Some(#{Token}::EndObject { .. }) => break,
                         Some(#{Token}::ObjectKey { key, .. }) =>
                         """,
-                        *codegenScope
+                        *codegenScope,
                     ) {
                         inner()
                     }
                     rustTemplate(
                         """other => return Err(#{Error}::custom(format!("expected object key or end object, found: {:?}", other)))""",
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
             }
@@ -497,14 +523,14 @@ class JsonParserGenerator(
                 Some(#{Token}::ValueNull { .. }) => Ok(None),
                 Some(#{Token}::Start${StringUtils.capitalize(objectOrArray)} { .. }) =>
                 """,
-                *codegenScope
+                *codegenScope,
             ) {
                 inner()
             }
             rustBlockTemplate("_ =>") {
                 rustTemplate(
                     "Err(#{Error}::custom(\"expected start $objectOrArray or null\"))",
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }

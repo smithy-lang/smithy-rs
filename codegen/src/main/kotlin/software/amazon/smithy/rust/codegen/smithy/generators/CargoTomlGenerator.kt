@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
 
 /**
@@ -42,11 +42,11 @@ typealias ManifestCustomizations = Map<String, Any?>
  * Generates the crate manifest Cargo.toml file.
  */
 class CargoTomlGenerator(
-    private val settings: RustSettings,
+    private val settings: CoreRustSettings,
     private val writer: RustWriter,
     private val manifestCustomizations: ManifestCustomizations,
     private val dependencies: List<CargoDependency>,
-    private val features: List<Feature>
+    private val features: List<Feature>,
 ) {
     fun render() {
         val cargoFeatures = features.map { it.name to it.deps }.toMutableList()
@@ -60,7 +60,7 @@ class CargoTomlGenerator(
                 "version" to settings.moduleVersion,
                 "authors" to settings.moduleAuthors,
                 settings.moduleDescription?.let { "description" to it },
-                "edition" to "2018",
+                "edition" to "2021",
                 "license" to settings.license,
                 "repository" to settings.moduleRepository,
             ).toMap(),
@@ -68,7 +68,7 @@ class CargoTomlGenerator(
                 .associate { it.name to it.toMap() },
             "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
                 .associate { it.name to it.toMap() },
-            "features" to cargoFeatures.toMap()
+            "features" to cargoFeatures.toMap(),
         ).deepMergeWith(manifestCustomizations)
 
         writer.writeWithNoFormatting(TomlWriter().write(cargoToml))

@@ -17,5 +17,9 @@ if [[ $# -lt 1 ]]; then
     exit 1
 fi
 
+ACTION_NAME=$1
+shift
+ACTION_ARGS=("$@")
+
 cd ..
-make -f ./smithy-rs/ci.mk "$@"
+make -f ./smithy-rs/ci.mk "${ACTION_NAME}" ARGS="${ACTION_ARGS[*]}"

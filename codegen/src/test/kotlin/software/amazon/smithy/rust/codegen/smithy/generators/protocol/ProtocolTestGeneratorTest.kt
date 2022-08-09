@@ -9,16 +9,17 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.protocols.Protocol
@@ -43,12 +44,12 @@ private class TestProtocolPayloadGenerator(private val body: String) : ProtocolP
 }
 
 private class TestProtocolTraitImplGenerator(
-    private val codegenContext: CodegenContext,
-    private val correctResponse: String
+    private val coreCodegenContext: CoreCodegenContext,
+    private val correctResponse: String,
 ) : ProtocolTraitImplGenerator {
-    private val symbolProvider = codegenContext.symbolProvider
+    private val symbolProvider = coreCodegenContext.symbolProvider
 
-    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
+    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
         operationWriter.rustTemplate(
             """
             impl #{parse_strict} for ${operationShape.id.name}{
@@ -57,26 +58,26 @@ private class TestProtocolTraitImplGenerator(
                     ${operationWriter.escape(correctResponse)}
                 }
                     }""",
-            "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
-            "output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
-            "error" to operationShape.errorSymbol(symbolProvider),
+            "parse_strict" to RuntimeType.parseStrictResponse(coreCodegenContext.runtimeConfig),
+            "output" to symbolProvider.toSymbol(operationShape.outputShape(coreCodegenContext.model)),
+            "error" to operationShape.errorSymbol(coreCodegenContext.model, symbolProvider, coreCodegenContext.target),
             "response" to RuntimeType.Http("Response"),
-            "bytes" to RuntimeType.Bytes
+            "bytes" to RuntimeType.Bytes,
         )
     }
 }
 
 private class TestProtocolMakeOperationGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     protocol: Protocol,
     body: String,
-    private val httpRequestBuilder: String
+    private val httpRequestBuilder: String,
 ) : MakeOperationGenerator(
-    codegenContext,
+    coreCodegenContext,
     protocol,
     TestProtocolPayloadGenerator(body),
     public = true,
-    includeDefaultPayloadHeaders = true
+    includeDefaultPayloadHeaders = true,
 ) {
     override fun createHttpRequest(writer: RustWriter, operationShape: OperationShape) {
         writer.rust("#T::new()", RuntimeType.HttpRequestBuilder)
@@ -86,38 +87,36 @@ private class TestProtocolMakeOperationGenerator(
 
 // A stubbed test protocol to do enable testing intentionally broken protocols
 private class TestProtocolGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     protocol: Protocol,
     httpRequestBuilder: String,
     body: String,
-    correctResponse: String
+    correctResponse: String,
 ) : ProtocolGenerator(
-    codegenContext,
+    coreCodegenContext,
     protocol,
-    TestProtocolMakeOperationGenerator(codegenContext, protocol, body, httpRequestBuilder),
-    TestProtocolTraitImplGenerator(codegenContext, correctResponse)
+    TestProtocolMakeOperationGenerator(coreCodegenContext, protocol, body, httpRequestBuilder),
+    TestProtocolTraitImplGenerator(coreCodegenContext, correctResponse),
 )
 
 private class TestProtocolFactory(
     private val httpRequestBuilder: String,
     private val body: String,
-    private val correctResponse: String
-) : ProtocolGeneratorFactory<ProtocolGenerator> {
-    override fun protocol(codegenContext: CodegenContext): Protocol {
+    private val correctResponse: String,
+) : ProtocolGeneratorFactory<ProtocolGenerator, ClientCodegenContext> {
+    override fun protocol(codegenContext: ClientCodegenContext): Protocol {
         return RestJson(codegenContext)
     }
 
-    override fun buildProtocolGenerator(codegenContext: CodegenContext): ProtocolGenerator {
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): ProtocolGenerator {
         return TestProtocolGenerator(
             codegenContext,
             protocol(codegenContext),
             httpRequestBuilder,
             body,
-            correctResponse
+            correctResponse,
         )
     }
-
-    override fun transformModel(model: Model): Model = model
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
@@ -128,7 +127,7 @@ private class TestProtocolFactory(
             requestDeserialization = false,
             requestBodyDeserialization = false,
             responseSerialization = false,
-            errorSerialization = false
+            errorSerialization = false,
         )
     }
 }
@@ -211,26 +210,31 @@ class ProtocolTestGeneratorTest {
     private val correctBody = """{"name": "Teddy"}"""
 
     /**
-     * Creates an fake HTTP implementation for SayHello & generates the protocol test
+     * Creates a fake HTTP implementation for SayHello & generates the protocol test
      *
      * Returns the [Path] the service was generated at, suitable for running `cargo test`
      */
     private fun generateService(
         httpRequestBuilder: String,
         body: String = "${correctBody.dq()}.to_string()",
-        correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())"""
+        correctResponse: String = """Ok(crate::output::SayHelloOutput::builder().value("hey there!").build())""",
     ): Path {
         val (pluginContext, testDir) = generatePluginContext(model)
         val visitor = CodegenVisitor(
             pluginContext,
-            object : RustCodegenDecorator {
+            object : RustCodegenDecorator<ClientCodegenContext> {
                 override val name: String = "mock"
                 override val order: Byte = 0
-                override fun protocols(serviceId: ShapeId, currentProtocols: ProtocolMap): ProtocolMap {
+                override fun protocols(
+                    serviceId: ShapeId,
+                    currentProtocols: ProtocolMap<ClientCodegenContext>,
+                ): ProtocolMap<ClientCodegenContext> =
                     // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
-                    return mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
-                }
-            }
+                    mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
+
+                override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+                    clazz.isAssignableFrom(ClientCodegenContext::class.java)
+            },
         )
         visitor.execute()
         println("file:///$testDir/src/operation.rs")
@@ -244,7 +248,7 @@ class ProtocolTestGeneratorTest {
             .uri("/?Hi=Hello%20there&required")
             .header("X-Greeting", "Hi")
             .method("POST")
-            """
+            """,
         )
 
         val testOutput = "cargo test".runCommand(path)
@@ -260,7 +264,7 @@ class ProtocolTestGeneratorTest {
             .header("X-Greeting", "Hi")
             .method("POST")
             """,
-            correctResponse = "Ok(crate::output::SayHelloOutput::builder().build())"
+            correctResponse = "Ok(crate::output::SayHelloOutput::builder().build())",
         )
         val err = assertThrows<CommandFailed> {
             "cargo test".runCommand(path)
@@ -277,7 +281,7 @@ class ProtocolTestGeneratorTest {
             .header("X-Greeting", "Hi")
             .method("POST")
             """,
-            """"{}".to_string()"""
+            """"{}".to_string()""",
         )
 
         val err = assertThrows<CommandFailed> {
@@ -296,7 +300,7 @@ class ProtocolTestGeneratorTest {
             .uri("/?Hi=INCORRECT&required")
             .header("X-Greeting", "Hi")
             .method("POST")
-            """
+            """,
         )
 
         val err = assertThrows<CommandFailed> {
@@ -314,7 +318,7 @@ class ProtocolTestGeneratorTest {
             .uri("/?goodbye&Hi=Hello%20there&required")
             .header("X-Greeting", "Hi")
             .method("POST")
-            """
+            """,
         )
 
         val err = assertThrows<CommandFailed> {
@@ -333,7 +337,7 @@ class ProtocolTestGeneratorTest {
             .uri("/?Hi=Hello%20there")
             .header("X-Greeting", "Hi")
             .method("POST")
-            """
+            """,
         )
 
         val err = assertThrows<CommandFailed> {
@@ -352,7 +356,7 @@ class ProtocolTestGeneratorTest {
             // should be "Hi"
             .header("X-Greeting", "Hey")
             .method("POST")
-            """
+            """,
         )
 
         val err = assertThrows<CommandFailed> {

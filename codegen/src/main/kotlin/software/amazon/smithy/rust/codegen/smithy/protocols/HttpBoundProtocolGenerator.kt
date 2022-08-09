@@ -20,8 +20,11 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
@@ -32,6 +35,7 @@ import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTr
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.smithy.transformers.errorMessageMember
+import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
@@ -41,28 +45,28 @@ import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 class HttpBoundProtocolGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     protocol: Protocol,
 ) : ProtocolGenerator(
-    codegenContext,
+    coreCodegenContext,
     protocol,
     MakeOperationGenerator(
-        codegenContext,
+        coreCodegenContext,
         protocol,
-        HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+        HttpBoundProtocolPayloadGenerator(coreCodegenContext, protocol),
         public = true,
-        includeDefaultPayloadHeaders = true
+        includeDefaultPayloadHeaders = true,
     ),
-    HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
+    HttpBoundProtocolTraitImplGenerator(coreCodegenContext, protocol),
 )
 
 class HttpBoundProtocolTraitImplGenerator(
-    private val codegenContext: CodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val protocol: Protocol,
 ) : ProtocolTraitImplGenerator {
-    private val symbolProvider = codegenContext.symbolProvider
-    private val model = codegenContext.model
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = coreCodegenContext.model
+    private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val operationDeserModule = RustModule.private("operation_deser")
 
@@ -74,7 +78,11 @@ class HttpBoundProtocolTraitImplGenerator(
         "Bytes" to RuntimeType.Bytes,
     )
 
-    override fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape) {
+    override fun generateTraitImpls(
+        operationWriter: RustWriter,
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
+    ) {
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
 
@@ -83,11 +91,11 @@ class HttpBoundProtocolTraitImplGenerator(
         // if an error occurred or if the streaming parser indicates that it needs the full data to proceed.
         if (operationShape.outputShape(model).hasStreamingMember(model)) {
             with(operationWriter) {
-                renderStreamingTraits(operationName, outputSymbol, operationShape)
+                renderStreamingTraits(operationName, outputSymbol, operationShape, customizations)
             }
         } else {
             with(operationWriter) {
-                renderNonStreamingTraits(operationName, outputSymbol, operationShape)
+                renderNonStreamingTraits(operationName, outputSymbol, operationShape, customizations)
             }
         }
     }
@@ -95,7 +103,8 @@ class HttpBoundProtocolTraitImplGenerator(
     private fun RustWriter.renderNonStreamingTraits(
         operationName: String?,
         outputSymbol: Symbol,
-        operationShape: OperationShape
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
     ) {
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
@@ -112,16 +121,17 @@ class HttpBoundProtocolTraitImplGenerator(
             }""",
             *codegenScope,
             "O" to outputSymbol,
-            "E" to operationShape.errorSymbol(symbolProvider),
+            "E" to operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target),
             "parse_error" to parseError(operationShape),
-            "parse_response" to parseResponse(operationShape)
+            "parse_response" to parseResponse(operationShape, customizations),
         )
     }
 
     private fun RustWriter.renderStreamingTraits(
         operationName: String,
         outputSymbol: Symbol,
-        operationShape: OperationShape
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
     ) {
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
@@ -142,10 +152,10 @@ class HttpBoundProtocolTraitImplGenerator(
             }
             """,
             "O" to outputSymbol,
-            "E" to operationShape.errorSymbol(symbolProvider),
-            "parse_streaming_response" to parseStreamingResponse(operationShape),
+            "E" to operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target),
+            "parse_streaming_response" to parseStreamingResponse(operationShape, customizations),
             "parse_error" to parseError(operationShape),
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -153,21 +163,21 @@ class HttpBoundProtocolTraitImplGenerator(
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_error"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
-                "E" to errorSymbol
+                "E" to errorSymbol,
             ) {
                 rust(
                     "let generic = #T(response).map_err(#T::unhandled)?;",
                     protocol.parseHttpGenericError(operationShape),
-                    errorSymbol
+                    errorSymbol,
                 )
-                if (operationShape.errors.isNotEmpty()) {
+                if (operationShape.operationErrors(model).isNotEmpty()) {
                     rustTemplate(
                         """
                         let error_code = match generic.code() {
@@ -180,14 +190,15 @@ class HttpBoundProtocolTraitImplGenerator(
                         "error_symbol" to errorSymbol,
                     )
                     withBlock("Err(match error_code {", "})") {
-                        operationShape.errors.forEach { error ->
-                            val errorShape = model.expectShape(error, StructureShape::class.java)
-                            val variantName = symbolProvider.toSymbol(model.expectShape(error)).name
+                        val errors = operationShape.operationErrors(model)
+                        errors.forEach { error ->
+                            val errorShape = model.expectShape(error.id, StructureShape::class.java)
+                            val variantName = symbolProvider.toSymbol(model.expectShape(error.id)).name
                             val errorCode = httpBindingResolver.errorCode(errorShape).dq()
                             withBlock(
                                 "$errorCode => #1T { meta: generic, kind: #1TKind::$variantName({",
                                 "})},",
-                                errorSymbol
+                                errorSymbol,
                             ) {
                                 Attribute.AllowUnusedMut.render(this)
                                 assignment("mut tmp") {
@@ -196,7 +207,8 @@ class HttpBoundProtocolTraitImplGenerator(
                                             operationShape,
                                             errorShape,
                                             httpBindingResolver.errorResponseBindings(errorShape),
-                                            errorSymbol
+                                            errorSymbol,
+                                            listOf(),
                                         )
                                     }
                                 }
@@ -206,7 +218,7 @@ class HttpBoundProtocolTraitImplGenerator(
                                         if (&tmp.message).is_none() {
                                             tmp.message = _error_message;
                                         }
-                                        """
+                                        """,
                                     )
                                 }
                                 rust("tmp")
@@ -221,51 +233,55 @@ class HttpBoundProtocolTraitImplGenerator(
         }
     }
 
-    private fun parseStreamingResponse(operationShape: OperationShape): RuntimeType {
+    private fun parseStreamingResponse(operationShape: OperationShape, customizations: List<OperationCustomization>): RuntimeType {
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 "pub fn $fnName(op_response: &mut #{operation}::Response) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
-                "E" to errorSymbol
+                "E" to errorSymbol,
             ) {
-                write("let response = op_response.http_mut();")
+                // Not all implementations will use the property bag, but some will
+                Attribute.Custom("allow(unused_variables)").render(it)
+                rust("let (response, properties) = op_response.parts_mut();")
                 withBlock("Ok({", "})") {
                     renderShapeParser(
                         operationShape,
                         outputShape,
                         httpBindingResolver.responseBindings(operationShape),
-                        errorSymbol
+                        errorSymbol,
+                        customizations,
                     )
                 }
             }
         }
     }
 
-    private fun parseResponse(operationShape: OperationShape): RuntimeType {
+    private fun parseResponse(operationShape: OperationShape, customizations: List<OperationCustomization>): RuntimeType {
         val fnName = "parse_${operationShape.id.name.toSnakeCase()}_response"
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
         return RuntimeType.forInlineFun(fnName, operationDeserModule) {
             Attribute.Custom("allow(clippy::unnecessary_wraps)").render(it)
             it.rustBlockTemplate(
                 "pub fn $fnName(response: &#{http}::Response<#{Bytes}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
-                "E" to errorSymbol
+                "E" to errorSymbol,
             ) {
                 withBlock("Ok({", "})") {
                     renderShapeParser(
                         operationShape,
                         outputShape,
                         httpBindingResolver.responseBindings(operationShape),
-                        errorSymbol
+                        errorSymbol,
+                        customizations,
                     )
                 }
             }
@@ -277,8 +293,9 @@ class HttpBoundProtocolTraitImplGenerator(
         outputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
         errorSymbol: RuntimeType,
+        customizations: List<OperationCustomization>,
     ) {
-        val httpBindingGenerator = ResponseBindingGenerator(protocol, codegenContext, operationShape)
+        val httpBindingGenerator = ResponseBindingGenerator(protocol, coreCodegenContext, operationShape)
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", outputShape.builderSymbol(symbolProvider))
@@ -289,7 +306,7 @@ class HttpBoundProtocolTraitImplGenerator(
                 rust(
                     "output = #T(response.body().as_ref(), output).map_err(#T::unhandled)?;",
                     parser,
-                    errorSymbol
+                    errorSymbol,
                 )
             }
         } else {
@@ -297,7 +314,7 @@ class HttpBoundProtocolTraitImplGenerator(
             structuredDataParser.errorParser(outputShape)?.also { parser ->
                 rust(
                     "output = #T(response.body().as_ref(), output).map_err(#T::unhandled)?;",
-                    parser, errorSymbol
+                    parser, errorSymbol,
                 )
             }
         }
@@ -314,6 +331,9 @@ class HttpBoundProtocolTraitImplGenerator(
         val err = if (StructureGenerator.fallibleBuilder(outputShape, symbolProvider)) {
             ".map_err(${format(errorSymbol)}::unhandled)?"
         } else ""
+
+        writeCustomizations(customizations, OperationSection.MutateOutput(customizations, operationShape))
+
         rust("output.build()$err")
     }
 
@@ -328,7 +348,7 @@ class HttpBoundProtocolTraitImplGenerator(
         httpBindingGenerator: ResponseBindingGenerator,
         structuredDataParser: StructuredDataParserGenerator,
     ): Writable? {
-        val errorSymbol = operationShape.errorSymbol(symbolProvider)
+        val errorSymbol = operationShape.errorSymbol(model, symbolProvider, coreCodegenContext.target)
         val member = binding.member
         return when (binding.location) {
             HttpLocation.HEADER -> writable {
@@ -338,7 +358,7 @@ class HttpBoundProtocolTraitImplGenerator(
                     #T(response.headers())
                         .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
                     """,
-                    fnName, errorSymbol
+                    fnName, errorSymbol,
                 )
             }
             HttpLocation.DOCUMENT -> {
@@ -352,7 +372,7 @@ class HttpBoundProtocolTraitImplGenerator(
                 val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
                     binding,
                     errorSymbol,
-                    payloadParser = payloadParser
+                    payloadParser = payloadParser,
                 )
                 return if (binding.member.isStreaming(model)) {
                     writable { rust("Some(#T(response.body_mut())?)", deserializer) }
@@ -373,7 +393,7 @@ class HttpBoundProtocolTraitImplGenerator(
                                 #{err}::unhandled("Failed to parse ${member.memberName} from prefix header `${binding.locationName}")
                              )?
                         """,
-                        "deser" to sym, "err" to errorSymbol
+                        "deser" to sym, "err" to errorSymbol,
                     )
                 }
             }

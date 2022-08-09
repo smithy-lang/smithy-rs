@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.docLink
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationSection
@@ -70,14 +70,14 @@ interface ProtocolPayloadGenerator {
  *                           must have the complete body to return a result.
  */
 interface ProtocolTraitImplGenerator {
-    fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape)
+    fun generateTraitImpls(operationWriter: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>)
 }
 
 /**
  * Class providing scaffolding for HTTP based protocols that must build an HTTP request (headers / URL) and a body.
  */
 open class ProtocolGenerator(
-    codegenContext: CodegenContext,
+    coreCodegenContext: CoreCodegenContext,
     /**
      * `Protocol` contains all protocol specific information. Each smithy protocol, e.g. RestJson, RestXml, etc. will
      * have their own implementation of the protocol interface which defines how an input shape becomes and http::Request
@@ -95,8 +95,8 @@ open class ProtocolGenerator(
      */
     private val traitGenerator: ProtocolTraitImplGenerator,
 ) {
-    private val symbolProvider = codegenContext.symbolProvider
-    private val model = codegenContext.model
+    private val symbolProvider = coreCodegenContext.symbolProvider
+    private val model = coreCodegenContext.model
 
     /**
      * Render all code required for serializing requests and deserializing responses for the operation
@@ -110,7 +110,7 @@ open class ProtocolGenerator(
         operationWriter: RustWriter,
         inputWriter: RustWriter,
         operationShape: OperationShape,
-        customizations: List<OperationCustomization>
+        customizations: List<OperationCustomization>,
     ) {
         val inputShape = operationShape.inputShape(model)
         val builderGenerator = BuilderGenerator(model, symbolProvider, operationShape.inputShape(model))
@@ -124,7 +124,7 @@ open class ProtocolGenerator(
         inputWriter.implBlock(inputShape, symbolProvider) {
             writeCustomizations(
                 customizations,
-                OperationSection.InputImpl(customizations, operationShape, inputShape, protocol)
+                OperationSection.InputImpl(customizations, operationShape, inputShape, protocol),
             )
             makeOperationGenerator.generateMakeOperation(this, operationShape, customizations)
 
@@ -142,7 +142,7 @@ open class ProtocolGenerator(
             /// [`$fluentBuilderName`](${docLink("crate::client::Client::$fluentBuilderName")}).
             ///
             /// See [`crate::client::fluent_builders::$operationName`] for more details about the operation.
-            """
+            """,
         )
         Attribute.Derives(setOf(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
         operationWriter.rustBlock("pub struct $operationName") {
@@ -158,29 +158,29 @@ open class ProtocolGenerator(
 
             writeCustomizations(customizations, OperationSection.OperationImplBlock(customizations))
         }
-        traitGenerator.generateTraitImpls(operationWriter, operationShape)
+        traitGenerator.generateTraitImpls(operationWriter, operationShape, customizations)
     }
 
     /**
-     * The server implementation uses this method to generate implementations of the `FromRequest` and `IntoResponse`
+     * The server implementation uses this method to generate implementations of the `from_request` and `into_response`
      * traits for operation input and output shapes, respectively.
      */
     fun serverRenderOperation(
         operationWriter: RustWriter,
         operationShape: OperationShape,
     ) {
-        traitGenerator.generateTraitImpls(operationWriter, operationShape)
+        traitGenerator.generateTraitImpls(operationWriter, operationShape, emptyList())
     }
 
     private fun renderTypeAliases(
         inputWriter: RustWriter,
         operationShape: OperationShape,
         customizations: List<OperationCustomization>,
-        inputShape: StructureShape
+        inputShape: StructureShape,
     ) {
         // TODO(https://github.com/awslabs/smithy-rs/issues/976): Callers should be able to invoke
-        // buildOperationType* directly to get the type rather than depending on these aliases.
-        // These are used in fluent clients.
+        //     buildOperationType* directly to get the type rather than depending on these aliases.
+        //     These are used in fluent clients.
         val operationTypeOutput = buildOperationTypeOutput(inputWriter, operationShape)
         val operationTypeRetry = buildOperationTypeRetry(inputWriter, customizations)
         val inputPrefix = symbolProvider.toSymbol(inputShape).name
@@ -189,7 +189,7 @@ open class ProtocolGenerator(
             """
             ##[doc(hidden)] pub type ${inputPrefix}OperationOutputAlias = $operationTypeOutput;
             ##[doc(hidden)] pub type ${inputPrefix}OperationRetryAlias = $operationTypeRetry;
-            """
+            """,
         )
     }
 
@@ -197,5 +197,5 @@ open class ProtocolGenerator(
         writer.format(symbolProvider.toSymbol(shape))
 
     private fun buildOperationTypeRetry(writer: RustWriter, customizations: List<OperationCustomization>): String =
-        customizations.mapNotNull { it.retryType() }.firstOrNull()?.let { writer.format(it) } ?: "()"
+        customizations.firstNotNullOfOrNull { it.retryType() }?.let { writer.format(it) } ?: "()"
 }

@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asDeref
 import software.amazon.smithy.rust.codegen.rustlang.asRef
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.isCopy
 import software.amazon.smithy.rust.codegen.rustlang.isDeref
@@ -50,20 +51,20 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
     }
 }
 
-class StructureGenerator(
+open class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
-    private val shape: StructureShape
+    private val shape: StructureShape,
 ) {
     private val errorTrait = shape.getTrait<ErrorTrait>()
-    private val members: List<MemberShape> = shape.allMembers.values.toList()
-    private val accessorMembers: List<MemberShape> = when (errorTrait) {
+    protected val members: List<MemberShape> = shape.allMembers.values.toList()
+    protected val accessorMembers: List<MemberShape> = when (errorTrait) {
         null -> members
         // Let the ErrorGenerator render the error message accessor if this is an error struct
         else -> members.filter { "message" != symbolProvider.toMemberName(it) }
     }
-    private val name = symbolProvider.toSymbol(shape).name
+    protected val name = symbolProvider.toSymbol(shape).name
 
     fun render(forWhom: CodegenTarget = CodegenTarget.CLIENT) {
         renderStructure()
@@ -114,7 +115,7 @@ class StructureGenerator(
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
                     val fieldValue = redactIfNecessary(
-                        member, model, "self.$memberName"
+                        member, model, "self.$memberName",
                     )
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
@@ -133,6 +134,7 @@ class StructureGenerator(
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
                 renderMemberDoc(member, memberSymbol)
+                writer.deprecatedShape(member)
                 val memberType = memberSymbol.rustType()
                 val returnType = when {
                     memberType.isCopy() -> memberType
@@ -153,18 +155,24 @@ class StructureGenerator(
         }
     }
 
-    private fun renderStructure() {
+    open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+        writer.renderMemberDoc(member, memberSymbol)
+        writer.deprecatedShape(member)
+        memberSymbol.expectRustMetadata().render(writer)
+        writer.write("$memberName: #T,", symbolProvider.toSymbol(member))
+    }
+
+    open fun renderStructure() {
         val symbol = symbolProvider.toSymbol(shape)
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
+        writer.deprecatedShape(shape)
         val withoutDebug = containerMeta.derives.copy(derives = containerMeta.derives.derives - RuntimeType.Debug)
         containerMeta.copy(derives = withoutDebug).render(writer)
 
         writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
-            forEachMember(members) { member, memberName, memberSymbol ->
-                renderMemberDoc(member, memberSymbol)
-                memberSymbol.expectRustMetadata().render(this)
-                write("$memberName: #T,", symbolProvider.toSymbol(member))
+            writer.forEachMember(members) { member, memberName, memberSymbol ->
+                renderStructureMember(writer, member, memberName, memberSymbol)
             }
         }
 
@@ -172,9 +180,9 @@ class StructureGenerator(
         renderDebugImpl()
     }
 
-    private fun RustWriter.forEachMember(
+    protected fun RustWriter.forEachMember(
         toIterate: List<MemberShape>,
-        block: RustWriter.(MemberShape, String, Symbol) -> Unit
+        block: RustWriter.(MemberShape, String, Symbol) -> Unit,
     ) {
         toIterate.forEach { member ->
             val memberName = symbolProvider.toMemberName(member)
@@ -188,7 +196,7 @@ class StructureGenerator(
             member,
             model,
             note = memberSymbol.renamedFrom()
-                ?.let { oldName -> "This member has been renamed from `$oldName`." }
+                ?.let { oldName -> "This member has been renamed from `$oldName`." },
         )
     }
 }

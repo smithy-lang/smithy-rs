@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.EnumMemberModel
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
@@ -100,13 +101,16 @@ class EnumGeneratorTest {
                         value: "t2.micro",
                         name: "T2_MICRO",
                         documentation: "T2 instances are Burstable Performance Instances.",
+                        deprecated: true,
                         tags: ["ebsOnly"]
                     },
                 ])
+                @deprecated(since: "1.2.3")
                 string InstanceType
             """.asSmithyModel()
             val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")
+            writer.rust("##![allow(deprecated)]")
             val shape = model.lookup<StringShape>("test#InstanceType")
             val generator = EnumGenerator(model, provider, writer, shape, shape.expectTrait<EnumTrait>())
             generator.render()
@@ -118,14 +122,18 @@ class EnumGeneratorTest {
                 assert_eq!(InstanceType::from("other"), InstanceType::Unknown("other".to_owned()));
                 // round trip unknown variants:
                 assert_eq!(InstanceType::from("other").as_str(), "other");
-                """
+                """,
             )
-
-            writer.toString() shouldContain "#[non_exhaustive]"
+            val output = writer.toString()
+            output shouldContain "#[non_exhaustive]"
+            // on enum variant `T2Micro`
+            output shouldContain "#[deprecated]"
+            // on enum itself
+            output shouldContain "#[deprecated(since = \"1.2.3\")]"
         }
 
         @Test
-        fun `named enums are implement eq and hash`() {
+        fun `named enums implement eq and hash`() {
             val model = """
                 namespace test
                 @enum([
@@ -139,7 +147,7 @@ class EnumGeneratorTest {
                 }])
                 string FooEnum
             """.asSmithyModel()
-            val shape: StringShape = model.lookup("test#FooEnum")
+            val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val writer = RustWriter.forModule("model")
             val generator = EnumGenerator(model, testSymbolProvider(model), writer, shape, trait)
@@ -150,12 +158,12 @@ class EnumGeneratorTest {
                 assert_ne!(FooEnum::Bar, FooEnum::Foo);
                 let mut hash_of_enums = std::collections::HashSet::new();
                 hash_of_enums.insert(FooEnum::Foo);
-                """.trimIndent()
+                """.trimIndent(),
             )
         }
 
         @Test
-        fun `unnamed enums are implement eq and hash`() {
+        fun `unnamed enums implement eq and hash`() {
             val model = """
                 namespace test
                 @enum([
@@ -165,11 +173,13 @@ class EnumGeneratorTest {
                 {
                     value: "Bar",
                 }])
+                @deprecated
                 string FooEnum
             """.asSmithyModel()
-            val shape: StringShape = model.lookup("test#FooEnum")
+            val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val writer = RustWriter.forModule("model")
+            writer.rust("##![allow(deprecated)]")
             val generator = EnumGenerator(model, testSymbolProvider(model), writer, shape, trait)
             generator.render()
             writer.compileAndTest(
@@ -178,12 +188,12 @@ class EnumGeneratorTest {
                 assert_ne!(FooEnum::from("Bar"), FooEnum::from("Foo"));
                 let mut hash_of_enums = std::collections::HashSet::new();
                 hash_of_enums.insert(FooEnum::from("Foo"));
-                """
+                """,
             )
         }
 
         @Test
-        fun `it generates unamed enums`() {
+        fun `it generates unnamed enums`() {
             val model = """
                 namespace test
                 @enum([
@@ -205,17 +215,18 @@ class EnumGeneratorTest {
                 ])
                 string FooEnum
             """.asSmithyModel()
-            val shape: StringShape = model.lookup("test#FooEnum")
+            val shape = model.lookup<StringShape>("test#FooEnum")
             val trait = shape.expectTrait<EnumTrait>()
             val provider = testSymbolProvider(model)
             val writer = RustWriter.forModule("model")
+            writer.rust("##![allow(deprecated)]")
             val generator = EnumGenerator(model, provider, writer, shape, trait)
             generator.render()
             writer.compileAndTest(
                 """
                 // Values should be sorted
                 assert_eq!(FooEnum::${EnumGenerator.Values}(), ["0", "1", "Bar", "Baz", "Foo"]);
-                """
+                """,
             )
         }
 
@@ -242,7 +253,7 @@ class EnumGeneratorTest {
                 assert_eq!(SomeEnum::from("Unknown"), SomeEnum::UnknownValue);
                 assert_eq!(SomeEnum::from("UnknownValue"), SomeEnum::UnknownValue_);
                 assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
-                """
+                """,
             )
         }
 
@@ -318,7 +329,7 @@ class EnumGeneratorTest {
             """
             assert_eq!(SomeEnum::from("other"), SomeEnum::SelfValue);
             assert_eq!(SomeEnum::from("SomethingNew"), SomeEnum::Unknown("SomethingNew".into()));
-            """
+            """,
         )
     }
 }

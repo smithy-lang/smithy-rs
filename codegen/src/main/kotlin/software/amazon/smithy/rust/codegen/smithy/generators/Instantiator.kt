@@ -58,22 +58,23 @@ import software.amazon.smithy.rust.codegen.util.isStreaming
 class Instantiator(
     private val symbolProvider: RustSymbolProvider,
     private val model: Model,
-    private val runtimeConfig: RuntimeConfig
+    private val runtimeConfig: RuntimeConfig,
+    private val target: CodegenTarget,
 ) {
     data class Ctx(
         // The Rust HTTP library lower cases headers but Smithy protocol tests
         // contain httpPrefix headers with uppercase keys
         val lowercaseMapKeys: Boolean,
         val streaming: Boolean,
-        // Whether or not we are instantiating with a Builder, in which case all setters take Option
-        val builder: Boolean
+        // Whether we are instantiating with a Builder, in which case all setters take Option
+        val builder: Boolean,
     )
 
     fun render(
         writer: RustWriter,
         shape: Shape,
         arg: Node,
-        ctx: Ctx = Ctx(lowercaseMapKeys = false, streaming = false, builder = false)
+        ctx: Ctx = Ctx(lowercaseMapKeys = false, streaming = false, builder = false),
     ) {
         when (shape) {
             // Compound Shapes
@@ -91,7 +92,7 @@ class Instantiator(
             // Wrapped Shapes
             is TimestampShape -> writer.write(
                 "#T::from_secs(${(arg as NumberNode).value})",
-                RuntimeType.DateTime(runtimeConfig)
+                RuntimeType.DateTime(runtimeConfig),
             )
 
             /**
@@ -102,12 +103,12 @@ class Instantiator(
             is BlobShape -> if (ctx.streaming) {
                 writer.write(
                     "#T::from_static(b${(arg as StringNode).value.dq()})",
-                    RuntimeType.byteStream(runtimeConfig)
+                    RuntimeType.ByteStream(runtimeConfig),
                 )
             } else {
                 writer.write(
                     "#T::new(${(arg as StringNode).value.dq()})",
-                    RuntimeType.Blob(runtimeConfig)
+                    RuntimeType.Blob(runtimeConfig),
                 )
             }
 
@@ -120,7 +121,7 @@ class Instantiator(
                     writer.rust(
                         """<#T as #T>::parse_smithy_primitive(${arg.value.dq()}).expect("invalid string for number")""",
                         numberSymbol,
-                        CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse")
+                        CargoDependency.SmithyTypes(runtimeConfig).asType().member("primitive::Parse"),
                     )
                 }
                 is NumberNode -> writer.write(arg.value)
@@ -151,18 +152,18 @@ class Instantiator(
         val symbol = symbolProvider.toSymbol(shape)
         if (arg is NullNode) {
             check(
-                symbol.isOptional()
+                symbol.isOptional(),
             ) { "A null node was provided for $shape but the symbol was not optional. This is invalid input data." }
             writer.write("None")
         } else {
             writer.conditionalBlock(
                 "Some(", ")",
-                conditional = ctx.builder || symbol.isOptional()
+                conditional = ctx.builder || symbol.isOptional(),
             ) {
                 writer.conditionalBlock(
                     "Box::new(",
                     ")",
-                    conditional = symbol.rustType().stripOuter<RustType.Option>() is RustType.Box
+                    conditional = symbol.rustType().stripOuter<RustType.Option>() is RustType.Box,
                 ) {
                     render(
                         this,
@@ -173,7 +174,7 @@ class Instantiator(
                                 it.copy(lowercaseMapKeys = true)
                             }.letIf(shape.isStreaming(model)) {
                                 it.copy(streaming = true)
-                            }
+                            },
                     )
                 }
             }
@@ -252,7 +253,11 @@ class Instantiator(
             writer.rust("$data.to_string()")
         } else {
             val enumSymbol = symbolProvider.toSymbol(shape)
-            writer.rust("#T::from($data)", enumSymbol)
+            if (target == CodegenTarget.SERVER) {
+                writer.rust("""#T::try_from($data).expect("This is used in tests ONLY")""", enumSymbol)
+            } else {
+                writer.rust("#T::from($data)", enumSymbol)
+            }
         }
     }
 

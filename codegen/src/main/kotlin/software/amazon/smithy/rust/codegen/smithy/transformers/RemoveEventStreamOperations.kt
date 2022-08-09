@@ -9,7 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.smithy.RustSettings
+import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.util.orNull
 import java.util.logging.Logger
@@ -19,9 +19,10 @@ import java.util.logging.Logger
 object RemoveEventStreamOperations {
     private val logger = Logger.getLogger(javaClass.name)
 
-    fun transform(model: Model, settings: RustSettings): Model {
+    fun transform(model: Model, settings: CoreRustSettings): Model {
         // If Event Stream is allowed in build config, then don't remove the operations
-        if (settings.codegenConfig.eventStreamAllowList.contains(settings.moduleName)) {
+        val allowList = settings.codegenConfig.eventStreamAllowList
+        if (allowList.isEmpty() || allowList.contains(settings.moduleName)) {
             return model
         }
 
@@ -32,7 +33,7 @@ object RemoveEventStreamOperations {
                 val ioShapes = listOfNotNull(parentShape.output.orNull(), parentShape.input.orNull()).map {
                     model.expectShape(
                         it,
-                        StructureShape::class.java
+                        StructureShape::class.java,
                     )
                 }
                 val hasEventStream = ioShapes.any { ioShape ->

@@ -81,11 +81,11 @@ class InstantiatorTest {
     @Test
     fun `generate unions`() {
         val union = model.lookup<UnionShape>("com.test#MyUnion")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         val data = Node.parse(
             """{
             "stringVariant": "ok!"
-        }"""
+        }""",
         )
         val writer = RustWriter.forModule("model")
         UnionGenerator(model, symbolProvider, writer, union).render()
@@ -100,7 +100,7 @@ class InstantiatorTest {
     @Test
     fun `generate struct builders`() {
         val structure = model.lookup<StructureShape>("com.test#MyStruct")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         val data = Node.parse("""{ "bar": 10, "foo": "hello" }""")
         val writer = RustWriter.forModule("model")
         structure.renderWithModelBuilder(model, symbolProvider, writer)
@@ -117,14 +117,14 @@ class InstantiatorTest {
     @Test
     fun `generate builders for boxed structs`() {
         val structure = model.lookup<StructureShape>("com.test#WithBox")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         val data = Node.parse(
             """ {
             "member": {
                 "member": { }
             }, "value": 10
             }
-            """.trimIndent()
+            """.trimIndent(),
         )
         val writer = RustWriter.forModule("model")
         structure.renderWithModelBuilder(model, symbolProvider, writer)
@@ -141,7 +141,7 @@ class InstantiatorTest {
                         member: Some(Box::new(WithBox { value: None, member: None })),
                     }))
                 });
-                """
+                """,
             )
         }
         writer.compileAndTest()
@@ -154,10 +154,10 @@ class InstantiatorTest {
             "bar",
             "foo"
             ]
-            """
+            """,
         )
         val writer = RustWriter.forModule("lib")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#MyList"), data)
@@ -175,10 +175,10 @@ class InstantiatorTest {
             "foo",
             null
             ]
-            """
+            """,
         )
         val writer = RustWriter.forModule("lib")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         writer.test {
             writer.withBlock("let result = ", ";") {
                 sut.render(writer, model.lookup("com.test#MySparseList"), data)
@@ -196,10 +196,10 @@ class InstantiatorTest {
             "k2": { "map": { "k3": {} } },
             "k3": { }
             }
-            """
+            """,
         )
         val writer = RustWriter.forModule("model")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         val inner: StructureShape = model.lookup("com.test#Inner")
         inner.renderWithModelBuilder(model, symbolProvider, writer)
         writer.test {
@@ -212,7 +212,7 @@ class InstantiatorTest {
                 assert_eq!(result.get("k1").unwrap().map.as_ref().unwrap().len(), 0);
                 assert_eq!(result.get("k2").unwrap().map.as_ref().unwrap().len(), 1);
                 assert_eq!(result.get("k3").unwrap().map, None);
-                """
+                """,
             )
         }
         writer.compileAndTest(clippy = true)
@@ -223,13 +223,13 @@ class InstantiatorTest {
         // "Parameter values that contain binary data MUST be defined using values
         // that can be represented in plain text (for example, use "foo" and not "Zm9vCg==")."
         val writer = RustWriter.forModule("lib")
-        val sut = Instantiator(symbolProvider, model, runtimeConfig)
+        val sut = Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.CLIENT)
         writer.test {
             withBlock("let blob = ", ";") {
                 sut.render(
                     this,
                     BlobShape.builder().id(ShapeId.from("com.example#Blob")).build(),
-                    StringNode.parse("foo".dq())
+                    StringNode.parse("foo".dq()),
                 )
             }
             write("assert_eq!(std::str::from_utf8(blob.as_ref()).unwrap(), \"foo\");")

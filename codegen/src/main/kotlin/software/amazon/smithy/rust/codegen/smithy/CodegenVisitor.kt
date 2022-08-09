@@ -41,41 +41,45 @@ import java.util.logging.Logger
 /**
  * Base Entrypoint for Code generation
  */
-class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator) :
+class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustCodegenDecorator<ClientCodegenContext>) :
     ShapeVisitor.Default<Unit>() {
 
     private val logger = Logger.getLogger(javaClass.name)
-    private val settings = RustSettings.from(context.model, context.settings)
+    private val settings = ClientRustSettings.from(context.model, context.settings)
 
     private val symbolProvider: RustSymbolProvider
     private val rustCrate: RustCrate
     private val fileManifest = context.fileManifest
     private val model: Model
-    private val codegenContext: CodegenContext
-    private val protocolGenerator: ProtocolGeneratorFactory<ProtocolGenerator>
-    private val httpGenerator: ProtocolGenerator
+    private val codegenContext: ClientCodegenContext
+    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ProtocolGenerator, ClientCodegenContext>
+    private val protocolGenerator: ProtocolGenerator
 
     init {
         val symbolVisitorConfig =
-            SymbolVisitorConfig(runtimeConfig = settings.runtimeConfig, codegenConfig = settings.codegenConfig)
+            SymbolVisitorConfig(
+                runtimeConfig = settings.runtimeConfig,
+                renameExceptions = settings.codegenConfig.renameExceptions,
+                handleRequired = false,
+                handleRustBoxing = true,
+            )
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         val (protocol, generator) = ProtocolLoader(
-            codegenDecorator.protocols(service.id, ProtocolLoader.DefaultProtocols)
+            codegenDecorator.protocols(service.id, ProtocolLoader.DefaultProtocols),
         ).protocolFor(context.model, service)
-        protocolGenerator = generator
-        model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
-        val baseProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
-        symbolProvider = codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
+        protocolGeneratorFactory = generator
+        model = codegenDecorator.transformModel(service, baseModel)
+        symbolProvider = RustCodegenPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
-        codegenContext = CodegenContext(model, symbolProvider, service, protocol, settings, mode = CodegenMode.Client)
+        codegenContext = ClientCodegenContext(model, symbolProvider, service, protocol, settings)
         rustCrate = RustCrate(
             context.fileManifest,
             symbolProvider,
             DefaultPublicModules,
-            codegenContext.settings.codegenConfig
+            codegenContext.settings.codegenConfig,
         )
-        httpGenerator = protocolGenerator.buildProtocolGenerator(codegenContext)
+        protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
     /**
@@ -122,8 +126,8 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
             codegenDecorator.crateManifestCustomizations(codegenContext),
             codegenDecorator.libRsCustomizations(
                 codegenContext,
-                listOf()
-            )
+                listOf(),
+            ),
         )
         try {
             "cargo fmt".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
@@ -146,10 +150,10 @@ class CodegenVisitor(context: PluginContext, private val codegenDecorator: RustC
     override fun serviceShape(shape: ServiceShape) {
         ServiceGenerator(
             rustCrate,
-            httpGenerator,
-            protocolGenerator.support(),
+            protocolGenerator,
+            protocolGeneratorFactory.support(),
             codegenContext,
-            codegenDecorator
+            codegenDecorator,
         ).render()
     }
 

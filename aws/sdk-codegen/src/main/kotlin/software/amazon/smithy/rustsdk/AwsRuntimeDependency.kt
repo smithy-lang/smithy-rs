@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -36,26 +37,26 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
         path
     }
     return runtimeCrateLocation.copy(
-        path = updatedPath, version = runtimeCrateLocation.version?.let { defaultSdkVersion() }
+        path = updatedPath, version = runtimeCrateLocation.version?.let { defaultSdkVersion() },
     )
 }
 
 object AwsRuntimeType {
     val S3Errors by lazy { RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_errors")) }
     val Presigning by lazy {
-        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", public = true))
+        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
     }
 
     fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
-            "middleware", public = true,
+            "middleware", visibility = Visibility.PUBLIC,
             CargoDependency.SmithyHttp(this),
             CargoDependency.SmithyHttpTower(this),
             CargoDependency.SmithyClient(this),
             CargoDependency.Tower,
             awsHttp(),
             awsEndpoint(),
-        )
+        ),
     ).member("DefaultMiddleware")
 }
 

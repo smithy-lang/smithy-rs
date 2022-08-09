@@ -10,11 +10,11 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
-import software.amazon.smithy.rust.codegen.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.util.getTrait
 
-class AwsQuerySerializerGenerator(codegenContext: CodegenContext) : QuerySerializerGenerator(codegenContext) {
+class AwsQuerySerializerGenerator(coreCodegenContext: CoreCodegenContext) : QuerySerializerGenerator(coreCodegenContext) {
     override val protocolName: String get() = "AWS Query"
 
     override fun MemberShape.queryKeyName(prioritizedFallback: String?): String =

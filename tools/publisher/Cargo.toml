@@ -1,6 +1,6 @@
 [package]
 name = "publisher"
-version = "0.2.0"
+version = "0.4.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Tool used to publish the AWS SDK to crates.io"
 edition = "2021"
@@ -18,7 +18,7 @@ anyhow = "1.0"
 async-recursion = "0.3.2"
 async-trait = "0.1.51"
 cargo_toml = "0.10.1"
-clap = { version = "3", features = ["derive"] }
+clap = { version = "~3.1.18", features = ["derive"] }
 crates_io_api = "0.7.3"
 dialoguer = "0.8"
 handlebars = "4.2"
@@ -35,3 +35,7 @@ tokio = { version = "1.12", features = ["full"] }
 toml = { version = "0.5.8", features = ["preserve_order"] }
 tracing = "0.1.29"
 tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
+
+[dev-dependencies]
+pretty_assertions = "1.2.1"
+tempfile = "3.3.0"
