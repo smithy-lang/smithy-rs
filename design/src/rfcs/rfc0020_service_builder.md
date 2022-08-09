@@ -339,7 +339,7 @@ macro_rules! impl_handler {
 
 The implementations of `Handler` in `axum` and `smithy-rs` follow a similar pattern - convert `http::Request` into the closure's input, run the closure, convert the output of the closure to `http::Response`.
 
-In `smithy-rs` we do not need a notion of "extractor", that role is fulfilled by the model, including HTTP binding traits. In `smithy-rs` the `http::Request` decomposition is determined by the Smithy model and the service protocol, whereas in `axum` it's defined by the handlers signature. In `smithy-rs` the only remaining degree of freedom in the signature of the handler is whether or not state is included.
+In `smithy-rs` we do not need a notion of "extractor" - the `http::Request` decomposition is specified by the Smithy model, whereas in `axum` it's defined by the handlers signature. In `smithy-rs` the only remaining degree of freedom in the signature of the handler is whether or not state is included.
 
 Dual to `FromRequest` is the [axum::response::IntoResponse](https://docs.rs/axum/latest/axum/response/trait.IntoResponse.html) trait. This plays the role of converting the output of the handler to `http::Response`. Again, the difference between `axum` and `smithy-rs` is that `smithy-rs` has the conversion from `{Operation}Output` to `http::Response` specified by the Smithy model, whereas in `axum` the customer is free to specify a return type which implements `axum::response::IntoResponse`.
 
@@ -379,7 +379,7 @@ In `smithy-rs` a customer is only able to apply a layer to either the `aws_smith
 
 The proposal is presented as a series of compatible transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, but in the case where there exists an interdependency it is stated.
 
-Although presented as a mutation to the existing service builder, the actual implementation should exist as a entirely separate builder - reusing code generation from the old builder while exposing a new Rust API. Preserving the old API surface will prevent breakage and make it easier to perform comparative benchmarks and testing.
+Although presented as a mutation to the existing service builder, the actual implementation should exist as an entirely separate builder - reusing code generation from the old builder while exposing a new Rust API. Preserving the old API surface will prevent breakage and make it easier to perform comparative benchmarks and testing.
 
 ## Remove two-step build procedure
 
@@ -464,7 +464,7 @@ As mentioned in [Comparison to Axum: Routing](#routing) and [Handlers](#handlers
 
 The three use cases described above are supported by `axum` by virtue of the [Router::route](https://docs.rs/axum/latest/axum/routing/struct.Router.html#method.route) method accepting a `tower::Service`. The reader should consider a similar approach where the service builder setters accept a `tower::Service<http::Request, Response = http::Response>` rather than the `Handler`.
 
-Throughout this section we purposely ignore the existence of handlers accepting state alongside the `{Operation}Input`, this class of handlers serve as a distraction and can be handled with small perturbations from each approach.
+Throughout this section we purposely ignore the existence of handlers accepting state alongside the `{Operation}Input`, this class of handlers serve as a distraction and can be accommodated with small perturbations from each approach.
 
 ### Approach A: Customer uses `OperationHandler::new`
 
@@ -495,19 +495,19 @@ async fn handler0(input: Operation0Input) -> Operation0Output {
 let svc = OperationHandler::new(handler0);
 
 // Middleware can be applied at this point
-let operation0 = http_layer.layer(op1_svc);
+let operation0 = /* A HTTP `tower::Layer` */.layer(op1_svc);
 
 OperationRegistryBuilder::default()
     .operation0(operation0)
     /* ... */
 ```
 
-Note that this requires that the `OperationRegistryBuilder` stores services, rather than `Handler`s. An unintended and superficial benefit of this is that we are able to drop `In{n}` from the `OperationRegistryBuilder<Op0, In0, Op1, In1>` - only `Op{n}` remains and it parametrizes each operations `tower::Service`.
+Note that this requires that the `OperationRegistryBuilder` stores services, rather than `Handler`s. An unintended and superficial benefit of this is that we are able to drop `In{n}` from the `OperationRegistryBuilder<Op0, In0, Op1, In1>` - only `Op{n}` remains and it parametrizes each operation's `tower::Service`.
 
 It is still possible to retain the original API which accepts `Handler` by introducing the following setters:
 
 ```rust
-impl<Op1, Op2> OperationRegistry<Op1, Op2> {
+impl<Op1, Op2> OperationRegistryBuilder<Op1, Op2> {
     fn operation0_handler<H: Handler>(self, handler: H) -> OperationRegistryBuilder<OperationHandler<H>, Op2> {
         OperationRegistryBuilder {
             operation0: OperationHandler::new(handler),
