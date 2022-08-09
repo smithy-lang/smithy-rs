@@ -32,7 +32,7 @@ This RFC proposes:
 Smithy provides various HTTP binding traits. These allow protocols to configure a HTTP request by way of binding fields to parts of the request. For this reason sensitive data might be unintentionally leaked through logging of a bound request.
 
 | Trait                                                                                                        | Configurable     |
-| ------------------------------------------------------------------------------------------------------------ | ---------------- |
+|--------------------------------------------------------------------------------------------------------------|------------------|
 | [httpHeader](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpheader-trait)               | Headers          |
 | [httpPrefixHeaders](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpprefixheaders-trait) | Headers          |
 | [httpLabel](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait)                 | URI              |
@@ -256,14 +256,14 @@ A guideline should be made available, which includes:
 
 - The [HTTP bindings traits](#http-binding-traits) and why they are of concern in the presence of `@sensitive`.
 - The [Debug implementation](https://github.com/awslabs/smithy-rs/pull/229) on structures.
-- How to use the `Sensitive` struct, HTTP wrappers, and the `unredacted-logging` feature flag described in [Debug Logging](#unredacted-logging) and [HTTP Debug/Display Wrappers](#http-debugdisplay-wrappers).
+- How to use the `Sensitive` struct, HTTP wrappers, and the `unredacted-logging` feature flag described in [Debug Logging](#debug-logging) and [HTTP Debug/Display Wrappers](#http-debugdisplay-wrappers).
 - A warning against the two potential leaks described in [Scope and Guidelines](#scope-and-guidelines):
   - Sensitive data leaking from third-party dependencies.
   - Sensitive data leaking from middleware applied to the `Router`.
 
 ## Alternative Proposals
 
-All of the following proposals are compatible with, and benefit from, [Debug Logging](#unredacted-logging), [HTTP Debug/Display Wrappers](#http-debugdisplay-wrappers), and [Developer Guideline](#developer-guideline) portions of the main proposal.
+All of the following proposals are compatible with, and benefit from, [Debug Logging](#debug-logging), [HTTP Debug/Display Wrappers](#http-debugdisplay-wrappers), and [Developer Guideline](#developer-guideline) portions of the main proposal.
 
 The main proposal disallows the logging of potentially sensitive data in the runtime crates, instead opting for a dedicated code generated logging middleware. In contrast, the following proposals all seek ways to accommodate logging of potentially sensitive data in the runtime crates.
 
@@ -394,7 +394,8 @@ Code generation would be need to be used in order to produce the filtering crite
 
 ## Changes Checklist
 
-- [ ] Implement and integrate code generated logging middleware.
+- [x] Implement and integrate code generated logging middleware.
+  - https://github.com/awslabs/smithy-rs/pull/1550
 - [ ] Add logging to `Router` implementation.
 - [ ] Write developer guideline.
 - [ ] Refactor `Router` to allow for better positioning described in [Middleware Position](#middleware-position).

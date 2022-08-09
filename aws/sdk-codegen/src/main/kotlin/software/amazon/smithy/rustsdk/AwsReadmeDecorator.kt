@@ -11,6 +11,7 @@ import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
@@ -109,6 +110,9 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
             )
         }
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     /**
      * Strips HTML from the description and makes it human-readable Markdown.
