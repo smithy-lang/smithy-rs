@@ -20,6 +20,10 @@ acquire-build-image:
 check-aws-config: generate-aws-sdk-smoketest
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-aws-sdk-canary
+check-aws-sdk-canary: generate-aws-sdk-smoketest
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-aws-sdk-adhoc-tests
 check-aws-sdk-adhoc-tests:
 	$(CI_ACTION) $@ $(ARGS)

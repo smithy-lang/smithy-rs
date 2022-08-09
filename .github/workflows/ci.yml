@@ -95,6 +95,7 @@ jobs:
         # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
         test:
         - action: check-aws-config
+        - action: check-aws-sdk-canary
         - action: check-aws-sdk-services
         - action: check-aws-sdk-smoketest-docs-clippy-udeps
         - action: check-aws-sdk-smoketest-unit-tests
