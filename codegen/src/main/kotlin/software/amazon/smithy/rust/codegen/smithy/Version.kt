@@ -9,12 +9,16 @@ import software.amazon.smithy.codegen.core.CodegenException
 
 class Version {
     companion object {
-        // generated as part of the build, see codegen/build.gradle.kts
-        private const val CRATE_VERSION_FILENAME = "runtime-crate-version.txt"
+        // generated as part of the build in the "{smithy_rs_version}-{git_commit_hash}" format,
+        // see codegen/build.gradle.kts
+        private const val VERSION_FILENAME = "smithy-version.txt"
 
-        fun crateVersion(): String {
-            return object {}.javaClass.getResource(CRATE_VERSION_FILENAME)?.readText()
-                ?: throw CodegenException("$CRATE_VERSION_FILENAME does not exist")
+        fun version(): String {
+            return object {}.javaClass.getResource(VERSION_FILENAME)?.readText()
+                ?: throw CodegenException("$VERSION_FILENAME does not exist")
         }
+
+        fun crateVersion(): String =
+            version().split("-").first()
     }
 }
