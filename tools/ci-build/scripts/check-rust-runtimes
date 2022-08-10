@@ -33,7 +33,8 @@ do
         if [[ -f "${crate_path}/external-types.toml" ]]; then
             echo -e "## ${C_YELLOW}Running 'cargo check-external-types' on ${runtime_path}...${C_RESET}"
             pushd "${crate_path}" &>/dev/null
-            cargo +"${RUST_NIGHTLY_VERSION}" check-external-types --all-features --config external-types.toml
+            # Override "fail on warning" for docs since `cargo-check-external-types` relies on rustdoc JSON output.
+            RUSTDOCFLAGS="" cargo +"${RUST_NIGHTLY_VERSION}" check-external-types --all-features --config external-types.toml
             popd &>/dev/null
         fi
     done
