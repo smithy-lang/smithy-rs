@@ -57,7 +57,7 @@ impl FromStr for OutputFormat {
 }
 
 #[derive(clap::Args, Debug)]
-struct ApiLinterArgs {
+struct CheckExternalTypesArgs {
     /// Enables all crate features
     #[clap(long)]
     all_features: bool,
@@ -84,7 +84,7 @@ struct ApiLinterArgs {
 #[derive(Parser, Debug)]
 #[clap(author, version, about, bin_name = "cargo")]
 enum Args {
-    ApiLinter(ApiLinterArgs),
+    CheckExternalTypes(CheckExternalTypesArgs),
 }
 
 enum Error {
@@ -110,7 +110,7 @@ fn main() {
 }
 
 fn run_main() -> Result<(), Error> {
-    let Args::ApiLinter(args) = Args::parse();
+    let Args::CheckExternalTypes(args) = Args::parse();
     if args.verbose {
         let filter_layer = EnvFilter::try_from_default_env()
             .or_else(|_| EnvFilter::try_new("debug"))

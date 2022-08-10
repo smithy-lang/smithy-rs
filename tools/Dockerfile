@@ -102,7 +102,7 @@ RUN set -eux; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
     cargo install --locked --path tools/publisher; \
-    cargo +${rust_nightly_version} install --locked --path tools/api-linter; \
+    cargo install --locked --path tools/cargo-check-external-types; \
     cargo install --locked --path tools/changelogger; \
     cargo install --locked --path tools/crate-hasher; \
     cargo install --locked --path tools/sdk-lints; \
