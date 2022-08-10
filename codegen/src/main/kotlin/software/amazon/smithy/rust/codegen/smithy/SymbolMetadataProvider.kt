@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -14,6 +15,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
@@ -73,6 +75,7 @@ abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : Wr
  */
 class BaseSymbolMetadataProvider(
     base: RustSymbolProvider,
+    private val model: Model,
     additionalAttributes: List<Attribute>,
 ) : SymbolMetadataProvider(base) {
     private val containerDefault = RustMetadata(
@@ -82,7 +85,28 @@ class BaseSymbolMetadataProvider(
     )
 
     override fun memberMeta(memberShape: MemberShape): RustMetadata {
-        return RustMetadata(visibility = Visibility.PUBLIC)
+        val container = model.expectShape(memberShape.container)
+        return when {
+            container.isStructureShape -> {
+                // TODO(https://github.com/awslabs/smithy-rs/issues/943): Once streaming accessors are usable,
+                // then also make streaming members `#[doc(hidden)]`
+                if (memberShape.getMemberTrait(model, StreamingTrait::class.java).isPresent) {
+                    RustMetadata(visibility = Visibility.PUBLIC)
+                } else {
+                    RustMetadata(
+                        // At some point, visibility will be made PRIVATE, so make these `#[doc(hidden)]` for now
+                        visibility = Visibility.PUBLIC,
+                        additionalAttributes = listOf(Attribute.DocHidden),
+                    )
+                }
+            }
+            container.isUnionShape ||
+                container.isListShape ||
+                container.isSetShape ||
+                container.isMapShape
+            -> RustMetadata(visibility = Visibility.PUBLIC)
+            else -> TODO("Unrecognized container type: $container")
+        }
     }
 
     override fun structureMeta(structureShape: StructureShape): RustMetadata {

@@ -12,10 +12,10 @@ import threading
 from libpokemon_service_server_sdk.error import \
     ResourceNotFoundException
 from libpokemon_service_server_sdk.input import (
-    EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput)
+    EmptyOperationInput, GetPokemonSpeciesInput, GetServerStatisticsInput, HealthCheckOperationInput)
 from libpokemon_service_server_sdk.model import FlavorText, Language
 from libpokemon_service_server_sdk.output import (
-    EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput)
+    EmptyOperationOutput, GetPokemonSpeciesOutput, GetServerStatisticsOutput, HealthCheckOperationOutput)
 from libpokemon_service_server_sdk import App
 
 
@@ -135,6 +135,10 @@ def get_server_statistics(
     calls_count = context.get_calls_count()
     logging.debug("The service handled %d requests", calls_count)
     return GetServerStatisticsOutput(calls_count=calls_count)
+
+@app.health_check_operation
+def health_check_operation(_: HealthCheckOperationInput) -> HealthCheckOperationOutput:
+    return HealthCheckOperationOutput()
 
 ###########################################################
 # Run the server.

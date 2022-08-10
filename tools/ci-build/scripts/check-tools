@@ -10,23 +10,6 @@ C_RESET='\033[0m'
 set -eux
 cd smithy-rs
 
-# Make aws-config (which depends on generated services) available to additional checks
-mkdir -p aws/sdk/build
-mv ../aws-sdk-smoketest aws/sdk/build/aws-sdk
-
-for runtime_path in \
-    "rust-runtime" \
-    "aws/rust-runtime"
-do
-    echo -e "${C_YELLOW}Testing ${runtime_path}...${C_RESET}"
-    pushd "${runtime_path}" &>/dev/null
-    cargo clippy --all-features
-    cargo test --all-features
-    cargo doc --no-deps --document-private-items --all-features
-    cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --all-features
-    popd &>/dev/null
-done
-
 # test_tool tool_path rust_version
 function test_tool {
     local tool_path="$1"
@@ -40,6 +23,7 @@ function test_tool {
 }
 
 test_tool "tools/api-linter" "${RUST_NIGHTLY_VERSION}"
+test_tool "tools/changelogger" "${RUST_STABLE_VERSION}"
 test_tool "tools/ci-cdk/canary-runner" "${RUST_STABLE_VERSION}"
 test_tool "tools/crate-hasher" "${RUST_STABLE_VERSION}"
 test_tool "tools/publisher" "${RUST_STABLE_VERSION}"

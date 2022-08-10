@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Local development of the SDK integration tests is far easier from the aws/sdk/integration-tests
+# directory, but the hand-written Cargo.toml files there can get out of sync with the generated
+# SDK Cargo.toml files, which causes them to not compile in local development. This script verifies
+# that they continue to compile for local dev.
+
+set -eux
+
+# Make sure all integration tests are included in the workspace
+pushd smithy-rs/aws/sdk/integration-tests
+set +x
+for test_path in *; do
+    if [[ -d "${test_path}" ]]; then
+        grep -q "\"${test_path}\"" Cargo.toml || (echo "ERROR: '${test_path}' missing from '$(pwd)/Cargo.toml' workspace" && exit 1)
+    fi
+done
+set -x
+popd
+
+# The integration tests use path dependencies that expect the smoke test SDK to be in the smithy-rs
+# build artifacts. In CI, the smoke test SDK is extracted into the same top-level directory as the
+# smithy-rs repo, so the following creates a temp directory to replicate the expectations of the
+# Cargo.toml files.
+tmp_dir=$(mktemp -d -t smithy-rs-ci-XXXXXXXX)
+function remove_tmp_dir {
+    rm -rf "${tmp_dir}"
+}
+trap remove_tmp_dir EXIT
+
+mkdir -p "${tmp_dir}/aws/sdk/build"
+cp -r smithy-rs/aws/sdk/integration-tests "${tmp_dir}/aws/sdk/"
+cp -r aws-sdk-smoketest "${tmp_dir}/aws/sdk/build/aws-sdk"
+find "${tmp_dir}"
+
+pushd "${tmp_dir}/aws/sdk/integration-tests"
+cargo check --tests
+popd

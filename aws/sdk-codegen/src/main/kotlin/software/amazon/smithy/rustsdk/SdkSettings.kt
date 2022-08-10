@@ -20,25 +20,22 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
     }
 
     /** Path to the `sdk-default-configuration.json` config file */
-    val defaultsConfigPath: Path get() =
-        Paths.get(
-            awsSdk?.getStringMember("defaultConfigPath")?.orNull()?.value
-                ?: throw IllegalStateException("missing defaultConfigPath property"),
-        )
+    val defaultsConfigPath: Path? get() =
+        awsSdk?.getStringMember("defaultConfigPath")?.orNull()?.value.let { Paths.get(it) }
 
     /** Path to the `sdk-endpoints.json` configuration */
-    val endpointsConfigPath: Path get() =
-        Paths.get(
-            awsSdk?.getStringMember("endpointsConfigPath")?.orNull()?.value
-                ?: throw IllegalStateException("missing endpointsConfigPath property"),
-        )
+    val endpointsConfigPath: Path? get() =
+        awsSdk?.getStringMember("endpointsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
 
     /** Path to AWS SDK integration tests */
     val integrationTestPath: String get() =
         awsSdk?.getStringMember("integrationTestPath")?.orNull()?.value ?: "aws/sdk/integration-tests"
 
     /** Version number of the `aws-config` crate */
-    val awsConfigVersion: String get() =
+    val awsConfigVersion: String? get() =
         awsSdk?.getStringMember("awsConfigVersion")?.orNull()?.value
-            ?: throw IllegalStateException("missing `awsConfigVersion` codegen setting")
+
+    /** Whether or not to generate a README */
+    val generateReadme: Boolean get() =
+        awsSdk?.getBooleanMember("generateReadme")?.orNull()?.value ?: true
 }
