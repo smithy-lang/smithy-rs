@@ -10,6 +10,3 @@ set -e
 
 echo "### Checking for duplicate dependency versions in the normal dependency graph with all features enabled"
 cargo tree -d --edges normal --all-features
-
-echo "### Running cargo-check-external-types"
-cargo "+${RUST_NIGHTLY_VERSION}" check-external-types --all-features
