@@ -61,7 +61,7 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
     val crateVersion = project.properties["smithy.rs.runtime.crate.version"].toString()
     inputs.property("crateVersion", crateVersion)
     // version format must be in sync with `software.amazon.smithy.rust.codegen.smithy.Version`
-    val version = "$crateVersion-${gitCommitHash()}"
+    val version = "$crateVersion\n${gitCommitHash()}"
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
         versionFile.writeText(version)

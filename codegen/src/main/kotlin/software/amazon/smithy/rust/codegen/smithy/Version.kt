@@ -7,22 +7,17 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.CodegenException
 
-class Version(private val content: String) {
-    fun fullVersion(): String = content
+// generated as part of the build in the "{smithy_rs_version}\n{git_commit_hash}" format,
+// see codegen/build.gradle.kts
+private const val VERSION_FILENAME = "runtime-crate-version.txt"
 
-    fun crateVersion(): String {
-        val parts = content.split("-")
-        if (parts.size < 2) {
-            return ""
-        }
-        return parts.first()
-    }
+class Version(private val content: String) {
+    // Returns full version in the "{smithy_rs_version}-{git_commit_hash}" format
+    fun fullVersion(): String = content.lines().joinToString("-")
+
+    fun crateVersion(): String = content.lines().first()
 
     companion object {
-        // generated as part of the build in the "{smithy_rs_version}-{git_commit_hash}" format,
-        // see codegen/build.gradle.kts
-        private const val VERSION_FILENAME = "runtime-crate-version.txt"
-
         fun fullVersion(): String =
             fromDefaultResource().fullVersion()
 
