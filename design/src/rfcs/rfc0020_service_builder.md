@@ -517,7 +517,7 @@ impl<Op1, Op2> OperationRegistryBuilder<Op1, Op2> {
 }
 ```
 
-There are two points at which the customer might want to apply middleware: around `tower::Service<{Operation}Input, Response = {Operation}Output>` and `tower::Service<http::Response, Response = http::Response>`, that is, before and after the serialization/deserialization is performed. The change described only succeeds in the later, and therefore is only a partial solution to (1).
+There are two points at which the customer might want to apply middleware: around `tower::Service<{Operation}Input, Response = {Operation}Output>` and `tower::Service<http::Request, Response = http::Response>`, that is, before and after the serialization/deserialization is performed. The change described only succeeds in the latter, and therefore is only a partial solution to (1).
 
 This solves (2), the service builder may apply additional middleware around the service.
 
@@ -605,7 +605,7 @@ OperationRegistryBuilder::default()
 
 While [Attempt B](#approach-b-operations-as-middleware) solves all three problems, it fails to adequately model the Smithy semantics. An operation cannot uniquely define a `tower::Service` without reference to a parent Smithy service - information concerning the serialization/deserialization, error modes are all inherited from the Smithy service an operation is used within. In this way, `Operation0` should not be a standalone middleware, but become middleware once accepted by the service builder.
 
-Any solution which provides an `{Operation}` structure and wishes it to be accepted by multiple service builders must deal with this problem. We currently build one library per service and hence have duplicate structures when [service closures](https://awslabs.github.io/smithy/1.0/spec/core/model.html?highlight=closure#service-closure) overlap. This means we wouldn't run into this problem today, but it would be a future obstruction if we wanted to reduce the amount of generated code.
+Any solution which provides an `{Operation}` structure and wishes it to be accepted by multiple service builders must deal with this problem. We currently build one library per service and hence have duplicate structures when [service closures](https://awslabs.github.io/smithy/1.0/spec/core/model.html#service-closure) overlap. This means we wouldn't run into this problem today, but it would be a future obstruction if we wanted to reduce the amount of generated code.
 
 ```rust
 use tower::layer::util::{Stack, Identity};
