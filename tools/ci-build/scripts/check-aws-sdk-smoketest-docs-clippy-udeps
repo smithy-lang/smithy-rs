@@ -27,7 +27,9 @@ popd &>/dev/null
 pushd smithy-rs/aws/sdk/build/aws-sdk/sdk &>/dev/null
 for crate_path in $(ls | grep -v "aws-"); do
     if [[ -d "${crate_path}" ]]; then
-        cargo +"${RUST_NIGHTLY_VERSION}" check-external-types --all-features --config ../../../sdk-external-types.toml
+        pushd "${crate_path}" &>/dev/null
+        cargo +"${RUST_NIGHTLY_VERSION}" check-external-types --all-features --config ../../../../sdk-external-types.toml
+        popd &>/dev/null
     fi
 done
 popd &>/dev/null
