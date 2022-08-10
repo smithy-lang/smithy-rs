@@ -24,6 +24,7 @@ pub mod header;
 pub mod http_versions;
 pub mod label;
 pub mod middleware;
+pub mod minimum_throughput;
 pub mod operation;
 pub mod property_bag;
 pub mod query;
