@@ -5,7 +5,7 @@
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rustsdk.AwsReadmeDecorator
+import software.amazon.smithy.rustsdk.AwsSdkReadmeGenerator
 
 class AwsReadmeDecoratorTest {
     @Test
@@ -18,7 +18,7 @@ class AwsReadmeDecoratorTest {
 
             More information [can be found here](https://example.com).
             """.trimIndent(),
-            AwsReadmeDecorator().normalizeDescription(
+            AwsSdkReadmeGenerator().normalizeDescription(
                 "",
                 """
                 <fullname>Some service</fullname>
@@ -44,7 +44,7 @@ class AwsReadmeDecoratorTest {
 
             More text.
             """.trimIndent(),
-            AwsReadmeDecorator().normalizeDescription(
+            AwsSdkReadmeGenerator().normalizeDescription(
                 "",
                 """
                 <p>Some text introducing a list:
@@ -81,7 +81,7 @@ class AwsReadmeDecoratorTest {
 
             Some trailing text.
             """.trimIndent(),
-            AwsReadmeDecorator().normalizeDescription(
+            AwsSdkReadmeGenerator().normalizeDescription(
                 "",
                 """
                 <p>Some text introducing a description list:

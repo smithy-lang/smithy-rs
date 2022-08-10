@@ -16,16 +16,24 @@ CI_ACTION=$(CI_BUILD)/ci-action
 acquire-build-image:
 	$(CI_BUILD)/acquire-build-image
 
+.PHONY: check-aws-config
+check-aws-config: generate-aws-sdk-smoketest
+	$(CI_ACTION) $@ $(ARGS)
+
+.PHONY: check-aws-sdk-canary
+check-aws-sdk-canary: generate-aws-sdk-smoketest
+	$(CI_ACTION) $@ $(ARGS)
+
+.PHONY: check-aws-sdk-adhoc-tests
+check-aws-sdk-adhoc-tests:
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-aws-sdk-examples
 check-aws-sdk-examples: generate-aws-sdk
 	$(CI_ACTION) $@ $(ARGS)
 
 .PHONY: check-aws-sdk-services
 check-aws-sdk-services: generate-aws-sdk
-	$(CI_ACTION) $@ $(ARGS)
-
-.PHONY: check-aws-sdk-smoketest-additional-checks
-check-aws-sdk-smoketest-additional-checks: generate-aws-sdk-smoketest
 	$(CI_ACTION) $@ $(ARGS)
 
 .PHONY: check-aws-sdk-smoketest-docs-clippy-udeps
@@ -48,8 +56,12 @@ check-client-codegen-integration-tests:
 check-client-codegen-unit-tests:
 	$(CI_ACTION) $@ $(ARGS)
 
-.PHONY: check-rust-runtimes-and-tools
-check-rust-runtimes-and-tools: generate-aws-sdk-smoketest
+.PHONY: check-rust-runtimes
+check-rust-runtimes:
+	$(CI_ACTION) $@ $(ARGS)
+
+.PHONY: check-tools
+check-tools:
 	$(CI_ACTION) $@ $(ARGS)
 
 .PHONY: check-sdk-codegen-unit-tests
