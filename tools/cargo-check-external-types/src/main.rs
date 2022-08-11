@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::error::ErrorPrinter;
-use crate::visitor::Visitor;
 use anyhow::{anyhow, bail};
 use anyhow::{Context, Result};
+use cargo_check_external_types::cargo::CargoRustDocJson;
+use cargo_check_external_types::error::ErrorPrinter;
+use cargo_check_external_types::here;
+use cargo_check_external_types::visitor::Visitor;
 use cargo_metadata::{CargoOpt, Metadata};
 use clap::Parser;
 use owo_colors::{OwoColorize, Stream};
-use smithy_rs_tool_common::macros::here;
-use smithy_rs_tool_common::shell::ShellOperation;
 use std::borrow::Cow;
 use std::fmt;
 use std::fs;
@@ -20,12 +20,6 @@ use std::process;
 use std::str::FromStr;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
-
-mod cargo;
-mod config;
-mod error;
-mod path;
-mod visitor;
 
 #[derive(Debug)]
 enum OutputFormat {
@@ -163,7 +157,7 @@ fn run_main() -> Result<(), Error> {
     let cargo_features = resolve_features(&cargo_metadata)?;
 
     eprintln!("Running rustdoc to produce json doc output...");
-    let package = cargo::CargoRustDocJson::new(
+    let package = CargoRustDocJson::new(
         &*cargo_metadata
             .root_package()
             .as_ref()
