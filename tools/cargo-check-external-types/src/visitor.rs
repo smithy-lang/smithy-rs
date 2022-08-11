@@ -5,13 +5,13 @@
 
 use crate::config::Config;
 use crate::error::{ErrorLocation, ValidationError};
+use crate::here;
 use crate::path::{ComponentType, Path};
 use anyhow::{anyhow, Context, Result};
 use rustdoc_types::{
     Crate, FnDecl, GenericArgs, GenericBound, GenericParamDef, GenericParamDefKind, Generics, Id,
     Item, ItemEnum, ItemSummary, Struct, Term, Trait, Type, Variant, Visibility, WherePredicate,
 };
-use smithy_rs_tool_common::macros::here;
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use tracing::debug;

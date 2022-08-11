@@ -3,11 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use cargo_check_external_types::cargo::handle_failure;
 use pretty_assertions::assert_str_eq;
-use smithy_rs_tool_common::shell::{handle_failure, output_text};
 use std::fs;
 use std::path::Path;
+use std::process::Output;
 use test_bin::get_test_bin;
+
+/// Returns (stdout, stderr)
+pub fn output_text(output: &Output) -> (String, String) {
+    (
+        String::from_utf8_lossy(&output.stdout).to_string(),
+        String::from_utf8_lossy(&output.stderr).to_string(),
+    )
+}
 
 fn run_with_args(in_path: impl AsRef<Path>, args: &[&str]) -> String {
     let mut cmd = get_test_bin("cargo-check-external-types");
