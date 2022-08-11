@@ -97,7 +97,7 @@ impl OperationExtension {
         self.name
     }
 
-    /// Returns the absolute operation shape I.
+    /// Returns the absolute operation shape ID.
     pub fn absolute(&self) -> &'static str {
         self.absolute
     }
