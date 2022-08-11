@@ -115,9 +115,8 @@ open class ServerOperationHandlerGenerator(
                         $callImpl
                         let output_wrapper: $outputWrapperName = output_inner.into();
                         let mut response = output_wrapper.into_response();
-                        response.extensions_mut().insert(
-                            #{SmithyHttpServer}::extension::OperationExtension::new("${operation.id.namespace}", "$operationName")
-                        );
+                        let operation_ext = #{SmithyHttpServer}::extension::OperationExtension::new("${operation.id.namespace}##$operationName").expect("malformed absolute shape ID");
+                        response.extensions_mut().insert(operation_ext);
                         response.map(#{SmithyHttpServer}::body::boxed)
                     }
                     """,
