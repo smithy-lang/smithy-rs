@@ -16,7 +16,6 @@ pest = "2" # For pretty error formatting
 rustdoc-types = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
 toml = "0.5"
 tracing = "0.1"
 tracing-attributes = "0.1"
