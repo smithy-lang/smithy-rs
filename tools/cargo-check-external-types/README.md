@@ -23,15 +23,39 @@ a [table of external types](tests/output-format-markdown-table-expected-output.m
 How to Use
 ----------
 
-_Important:_ This tool requires a nightly build of Rust to be installed.
+_Important:_ This tool requires a nightly build of Rust to be installed since it relies on rustdoc JSON output.
+It was last tested against nightly-2022-07-25.
 
 To install, run the following from this README path:
 
 ```bash
-cargo install --path .
+cargo install --locked cargo-check-external-types
 ```
 
 Then, in your library crate path, run:
+```bash
+cargo +nightly check-external-types
 ```
-cargo check-external-types
+
+This will produce errors if any external types are used in a public API at all. That's not terribly useful
+on its own, so the tool can be given a config file to allow certain types. For example, we can allow
+any type in `bytes` with:
+
+```toml
+allowed_external_types = [
+    "bytes::*",
+]
 ```
+
+Save that file somewhere in your project (in this example, we choose the name `external-types.toml`), and then
+run the command with:
+
+```bash
+cargo +nightly check-external-types --config external-types.toml
+```
+
+License
+-------
+
+This tool is distributed under the terms of Apache License Version 2.0.
+See the [LICENSE](LICENSE) file for more information.
