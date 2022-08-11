@@ -6,7 +6,7 @@ on:
       issue_number:
         description: The issue number to post the diff comment to.
         required: true
-        type: number
+        type: string
       base_revision:
         description: Base git revision.
         required: true
