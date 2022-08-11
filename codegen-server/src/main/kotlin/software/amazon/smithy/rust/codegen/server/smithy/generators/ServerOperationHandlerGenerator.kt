@@ -60,7 +60,7 @@ open class ServerOperationHandlerGenerator(
     private fun renderHandlerImplementations(writer: RustWriter, state: Boolean) {
         operations.map { operation ->
             val operationName = symbolProvider.toSymbol(operation).name
-            val inputName = "crate::input::${operationName}Input"
+            val inputName = symbolProvider.toSymbol(operation.inputShape(model)).fullName
             val inputWrapperName = "crate::operation::$operationName${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
             val outputWrapperName = "crate::operation::$operationName${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
             val fnSignature = if (state) {

@@ -1,0 +1,1 @@
+../../codegen-test/model/naming-obstacle-course-ops.smithy
