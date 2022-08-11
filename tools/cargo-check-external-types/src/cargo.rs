@@ -3,14 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::here;
 use anyhow::{bail, Context, Result};
 use rustdoc_types::{Crate, FORMAT_VERSION};
 use serde::Deserialize;
-use smithy_rs_tool_common::macros::here;
-use smithy_rs_tool_common::shell::{handle_failure, ShellOperation};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Output};
 
 #[derive(Deserialize)]
 struct CrateFormatVersion {
@@ -43,12 +42,8 @@ impl CargoRustDocJson {
             features,
         }
     }
-}
 
-impl ShellOperation for CargoRustDocJson {
-    type Output = Crate;
-
-    fn run(&self) -> Result<Crate> {
+    pub fn run(&self) -> Result<Crate> {
         let cargo = std::env::var("CARGO")
             .ok()
             .unwrap_or_else(|| "cargo".to_string());
@@ -101,4 +96,26 @@ impl ShellOperation for CargoRustDocJson {
             .context(here!())?;
         Ok(package)
     }
+}
+
+pub fn handle_failure(operation_name: &str, output: &Output) -> Result<(), anyhow::Error> {
+    if !output.status.success() {
+        return Err(capture_error(operation_name, output));
+    }
+    Ok(())
+}
+
+pub fn capture_error(operation_name: &str, output: &Output) -> anyhow::Error {
+    let message = format!(
+        "Failed to {name}:\nStatus: {status}\nStdout: {stdout}\nStderr: {stderr}\n",
+        name = operation_name,
+        status = if let Some(code) = output.status.code() {
+            format!("{}", code)
+        } else {
+            "Killed by signal".to_string()
+        },
+        stdout = String::from_utf8_lossy(&output.stdout),
+        stderr = String::from_utf8_lossy(&output.stderr)
+    );
+    anyhow::Error::msg(message)
 }
