@@ -35,7 +35,7 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
     val awsConfigVersion: String? get() =
         awsSdk?.getStringMember("awsConfigVersion")?.orNull()?.value
 
-    /** Whether or not to generate a README */
+    /** Whether to generate a README */
     val generateReadme: Boolean get() =
-        awsSdk?.getBooleanMember("generateReadme")?.orNull()?.value ?: true
+        awsSdk?.getBooleanMember("generateReadme")?.orNull()?.value ?: false
 }
