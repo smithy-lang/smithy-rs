@@ -115,7 +115,7 @@ where
 }
 ```
 
-Creating `{Operation}Input` from a `http::Request` and `http::Response` from a `{Operation}Output` involves the [HTTP binding traits](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html) and protocol aware serialization/deserialization. The [RuntimeError](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5) enumerates error cases such as serialization/deserialization failures, `extensions().get::<T>()` failures, etc. We omit error handling in the snippets above, but, in full, they also involve protocol aware conversions from the `RuntimeError` and `http::Response`. The reader should make note of the influence of the model on the different sections of this procedure.
+Creating `{Operation}Input` from a `http::Request` and `http::Response` from a `{Operation}Output` involves protocol aware serialization/deserialization, for example, it can involve the [HTTP binding traits](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html). The [RuntimeError](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5) enumerates error cases such as serialization/deserialization failures, `extensions().get::<T>()` failures, etc. We omit error handling in the snippet above, but, in full, it also involves protocol aware conversions from the `RuntimeError` to `http::Response`. The reader should make note of the influence of the model on the different sections of this procedure.
 
 The `request.extensions().get::<T>()` present in the `Fun: FnOnce(Operation0Input, Extension<S>) -> Fut` implementation is the current approach to injecting state into handlers. The customer is required to apply a [AddExtensionLayer](https://docs.rs/tower-http/latest/tower_http/add_extension/struct.AddExtensionLayer.html) to the output of the service builder so that, when the request reaches the handler, the `extensions().get::<T>()` will succeed.
 
@@ -146,7 +146,7 @@ where
 
 ### Builder
 
-The service builder we provide to the customer takes the form of the `OperationRegistryBuilder`, generated from [ServerOperationRegistryGenerator.kt](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt).
+The service builder we provide to the customer is the `OperationRegistryBuilder`, generated from [ServerOperationRegistryGenerator.kt](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt).
 
 Currently, the reference model would generate the following `OperationRegistryBuilder` and `OperationRegistry`:
 
@@ -220,11 +220,11 @@ where
 
 ### Router
 
-The [aws_smithy_http::routing::Router](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60) provides the protocol aware routing of requests to their target service, it exists as
+The [aws_smithy_http::routing::Router](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60) provides the protocol aware routing of requests to their target , it exists as
 
 ```rust
 pub struct Route {
-    service: BoxCloneService<http::Request, http::Response, Infallible>,
+    service: Box<dyn Service<http::Request, Response = http::Response>>,
 }
 
 enum Routes {
@@ -379,7 +379,7 @@ In `smithy-rs` a customer is only able to apply a layer to either the `aws_smith
 
 The proposal is presented as a series of compatible transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, but in the case where there exists an interdependency it is stated.
 
-Although presented as a mutation to the existing service builder, the actual implementation should exist as an entirely separate builder - reusing code generation from the old builder while exposing a new Rust API. Preserving the old API surface will prevent breakage and make it easier to perform comparative benchmarks and testing.
+Although presented as a mutation to the existing service builder, the actual implementation should exist as an entirely separate builder, living in a separate namespace, reusing code generation from the old builder, while exposing a new Rust API. Preserving the old API surface will prevent breakage and make it easier to perform comparative benchmarks and testing.
 
 ## Remove two-step build procedure
 
