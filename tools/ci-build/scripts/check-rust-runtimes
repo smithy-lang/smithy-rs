@@ -14,12 +14,34 @@ for runtime_path in \
     "rust-runtime" \
     "aws/rust-runtime"
 do
-    echo -e "${C_YELLOW}Testing ${runtime_path}...${C_RESET}"
+    echo -e "# ${C_YELLOW}Testing ${runtime_path}...${C_RESET}"
     pushd "${runtime_path}" &>/dev/null
+
+    echo -e "## ${C_YELLOW}Running 'cargo clippy' on ${runtime_path}...${C_RESET}"
     cargo clippy --all-features
+
+    echo -e "## ${C_YELLOW}Running 'cargo test' on ${runtime_path}...${C_RESET}"
     cargo test --all-features
+
+    echo -e "## ${C_YELLOW}Running 'cargo doc' on ${runtime_path}...${C_RESET}"
     cargo doc --no-deps --document-private-items --all-features
+
+    echo -e "## ${C_YELLOW}Running 'cargo minimal-versions check' on ${runtime_path}...${C_RESET}"
     cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --all-features
+
+    for crate_path in *; do
+        if [[ -f "${crate_path}/external-types.toml" ]]; then
+            # Skip `aws-config` since it has its own checks in `check-aws-config`
+            if [[ "${crate_path}" != "aws-config" ]]; then
+                echo -e "## ${C_YELLOW}Running 'cargo check-external-types' on ${crate_path}...${C_RESET}"
+                pushd "${crate_path}" &>/dev/null
+                # Override "fail on warning" for docs since `cargo-check-external-types` relies on rustdoc JSON output.
+                RUSTDOCFLAGS="" cargo +"${RUST_NIGHTLY_VERSION}" check-external-types --all-features --config external-types.toml
+                popd &>/dev/null
+            fi
+        fi
+    done
+
     popd &>/dev/null
 
     echo -e "${C_YELLOW}Running additional per-crate checks for ${runtime_path}...${C_RESET}"

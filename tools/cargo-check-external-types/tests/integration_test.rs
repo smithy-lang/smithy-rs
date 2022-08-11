@@ -10,16 +10,18 @@ use std::path::Path;
 use test_bin::get_test_bin;
 
 fn run_with_args(in_path: impl AsRef<Path>, args: &[&str]) -> String {
-    let mut cmd = get_test_bin("cargo-api-linter");
+    let mut cmd = get_test_bin("cargo-check-external-types");
     cmd.current_dir(in_path.as_ref());
-    cmd.arg("api-linter");
+    cmd.arg("check-external-types");
     for &arg in args {
         cmd.arg(arg);
     }
-    let output = cmd.output().expect("failed to start cargo-api-linter");
+    let output = cmd
+        .output()
+        .expect("failed to start cargo-check-external-types");
     match output.status.code() {
         Some(1) => { /* expected */ }
-        _ => handle_failure("cargo-api-linter", &output).unwrap(),
+        _ => handle_failure("cargo-check-external-types", &output).unwrap(),
     }
     let (stdout, _) = output_text(&output);
     stdout

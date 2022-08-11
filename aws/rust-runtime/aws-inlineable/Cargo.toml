@@ -1,5 +1,5 @@
 [package]
-name = "inlineable-aws"
+name = "aws-inlineable"
 version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
 description = """

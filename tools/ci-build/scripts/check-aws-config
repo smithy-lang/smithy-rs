@@ -30,7 +30,7 @@ echo "${C_YELLOW}## Running 'cargo minimal-versions check'${C_RESET}"
 cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --all-features
 
 echo "${C_YELLOW}## Checking for external types in public API${C_RESET}"
-cargo "+${RUST_NIGHTLY_VERSION:-nightly}" api-linter --all-features --config api-linter.toml
+cargo "+${RUST_NIGHTLY_VERSION:-nightly}" check-external-types --all-features --config external-types.toml
 
 echo "${C_YELLOW}## Checking for duplicate dependency versions in the normal dependency graph with all features enabled${C_RESET}"
 cargo tree -d --edges normal --all-features

@@ -19,6 +19,8 @@ struct CrateFormatVersion {
 
 /// Runs the `cargo rustdoc` command required to produce Rustdoc's JSON output with a nightly compiler.
 pub struct CargoRustDocJson {
+    /// Name of the crate (as specified in the Cargo.toml file)
+    crate_name: String,
     /// Path of the crate to examine
     crate_path: PathBuf,
     /// Expected `target/` directory where the output will be
@@ -29,11 +31,13 @@ pub struct CargoRustDocJson {
 
 impl CargoRustDocJson {
     pub fn new(
+        crate_name: impl Into<String>,
         crate_path: impl Into<PathBuf>,
         target_path: impl Into<PathBuf>,
         features: Vec<String>,
     ) -> Self {
         CargoRustDocJson {
+            crate_name: crate_name.into(),
             crate_path: crate_path.into(),
             target_path: target_path.into(),
             features,
@@ -48,7 +52,6 @@ impl ShellOperation for CargoRustDocJson {
         let cargo = std::env::var("CARGO")
             .ok()
             .unwrap_or_else(|| "cargo".to_string());
-        let crate_path = self.crate_path.canonicalize().context(here!())?;
 
         let mut command = Command::new(&cargo);
         command.current_dir(&self.crate_path).arg("rustdoc");
@@ -68,12 +71,11 @@ impl ShellOperation for CargoRustDocJson {
             .context(here!("failed to run nightly rustdoc"))?;
         handle_failure("rustdoc", &output)?;
 
-        let crate_name = crate_path.file_name().expect("file name").to_string_lossy();
         let output_file_name = self
             .target_path
             .canonicalize()
             .context(here!())?
-            .join(format!("doc/{}.json", crate_name.replace('-', "_")));
+            .join(format!("doc/{}.json", self.crate_name.replace('-', "_")));
 
         let json = fs::read_to_string(output_file_name).context(here!())?;
         let format_version: CrateFormatVersion = serde_json::from_str(&json)

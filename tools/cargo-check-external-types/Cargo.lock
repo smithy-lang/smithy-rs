@@ -88,7 +88,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cargo-api-linter"
+name = "cargo-check-external-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",

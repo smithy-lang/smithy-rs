@@ -6,8 +6,8 @@
 #![feature(generic_associated_types)]
 #![allow(dead_code)]
 
-//! This crate is used to test the api-linter by exercising the all possible exposure
-//! of external types in a public API.
+//! This crate is used to test the cargo-check-external-types by exercising the all possible
+//! exposure of external types in a public API.
 
 use external_lib::{
     AssociatedGenericTrait,
@@ -55,7 +55,7 @@ pub fn external_in_fn_output_generic() -> Option<SomeStruct> {
     unimplemented!()
 }
 
-// Try to trick api-linter here by putting something in a private module and re-exporting it
+// Try to trick cargo-check-external-types here by putting something in a private module and re-exporting it
 mod private_module {
     use external_lib::SomeStruct;
 
