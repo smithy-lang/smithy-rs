@@ -1,0 +1,24 @@
+# These are the allowed external types in the `aws-sdk-*` generated crates, checked by CI.
+allowed_external_types = [
+    "aws_http::*",
+    "aws_smithy_async::*",
+    "aws_smithy_client::*",
+    "aws_smithy_http::*",
+    "aws_smithy_types::*",
+    "aws_types::*",
+    "http::header::map::HeaderMap",
+    "http::header::value::HeaderValue",
+    "http::request::Request",
+    "http::error::Error",
+    "http::uri::Uri",
+    "http::method::Method",
+
+    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Switch to AsyncIterator once standardized
+    "futures_core::stream::Stream",
+
+    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
+    "aws_smithy_eventstream::*",
+
+    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Decide if we want to continue exposing tower_layer
+    "tower_layer::Layer",
+]

@@ -22,7 +22,7 @@ function test_tool {
     popd &>/dev/null
 }
 
-test_tool "tools/api-linter" "${RUST_NIGHTLY_VERSION}"
+test_tool "tools/cargo-check-external-types" "${RUST_NIGHTLY_VERSION}"
 test_tool "tools/changelogger" "${RUST_STABLE_VERSION}"
 test_tool "tools/ci-cdk/canary-runner" "${RUST_STABLE_VERSION}"
 test_tool "tools/crate-hasher" "${RUST_STABLE_VERSION}"

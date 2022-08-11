@@ -1,5 +1,5 @@
-cargo-api-linter
-================
+cargo-check-external-types
+==========================
 
 Static analysis tool that detects external types used in a Rust library's public API.
 Configuration can be provided to allow certain external types so that this tool can
@@ -33,5 +33,5 @@ cargo install --path .
 
 Then, in your library crate path, run:
 ```
-cargo api-linter
+cargo check-external-types
 ```

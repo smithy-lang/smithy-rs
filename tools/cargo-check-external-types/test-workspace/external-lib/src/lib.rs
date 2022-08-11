@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! This crate exports a bunch of types for testing the api-linter against `test-crate`
+//! This crate exports a bunch of types for testing cargo-check-external-types against `test-crate`
 
 pub struct SomeStruct;
 pub struct SomeOtherStruct;
