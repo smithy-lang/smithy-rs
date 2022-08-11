@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-description = "Generates Rust/Python code from Smithy models and runs the protocol tests"
-extra["displayName"] = "Smithy :: Rust :: Codegen :: Server :: Python :: Test"
-extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.python.test"
+extra["displayName"] = "Smithy :: Rust :: Codegen :: Test"
+extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
 
 tasks["jar"].enabled = false
 
@@ -18,8 +17,8 @@ val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
-val pluginName = "rust-server-codegen-python"
-val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-python/"
+val pluginName = "rust-codegen"
+val workingDirUnderBuildDir = "smithyprojections/sdk-adhoc-test/"
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
     outputDirectory = file("$buildDir/$workingDirUnderBuildDir")
@@ -33,15 +32,28 @@ buildscript {
 }
 
 dependencies {
-    implementation(project(":codegen-server:python"))
+    implementation(project(":aws:sdk-codegen"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
 val allCodegenTests = listOf(
-    CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("com.aws.example#PokemonService", "pokemon-service-server-sdk"),
+    CodegenTest(
+        "com.amazonaws.apigateway#BackplaneControlService",
+        "apigateway",
+        extraConfig = """
+            ,
+            "codegen": {
+                "includeFluentClient": false
+            },
+            "customizationConfig": {
+                "awsSdk": {
+                    "generateReadme": false
+                }
+            }
+        """,
+    ),
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)

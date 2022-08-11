@@ -59,16 +59,19 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
         test:
+        - action: check-aws-sdk-adhoc-tests
         - action: check-client-codegen-integration-tests
         - action: check-client-codegen-unit-tests
+        - action: check-rust-runtimes
         - action: check-sdk-codegen-unit-tests
         - action: check-server-codegen-integration-tests
-        - action: check-server-codegen-unit-tests
         - action: check-server-codegen-integration-tests-python
+        - action: check-server-codegen-unit-tests
         - action: check-server-codegen-unit-tests-python
         - action: check-server-e2e-test
         - action: check-server-python-e2e-test
         - action: check-style-and-lints
+        - action: check-tools
     steps:
     - uses: actions/checkout@v3
       with:
@@ -80,8 +83,8 @@ jobs:
 
   # Test all the things that require generated code. Note: the Rust runtimes require codegen
   # to be checked since `aws-config` depends on the generated STS client.
-  test-runtimes-tools-and-sdk:
-    name: Test Rust Runtimes, Tools, and SDK
+  test-sdk:
+    name: Test the SDK
     needs: generate
     runs-on: ubuntu-latest
     # To avoid repeating setup boilerplate, we have the actual test commands
@@ -91,12 +94,12 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-build/scripts that will be run in the Docker build image
         test:
+        - action: check-aws-config
+        - action: check-aws-sdk-canary
         - action: check-aws-sdk-services
-        - action: check-aws-sdk-smoketest-additional-checks
         - action: check-aws-sdk-smoketest-docs-clippy-udeps
         - action: check-aws-sdk-smoketest-unit-tests
         - action: check-aws-sdk-standalone-integration-tests
-        - action: check-rust-runtimes-and-tools
     steps:
     - uses: actions/checkout@v3
       with:
@@ -159,7 +162,7 @@ jobs:
     needs:
     - generate
     - test-codegen
-    - test-runtimes-tools-and-sdk
+    - test-sdk
     - test-rust-windows
     # Run this job even if its dependency jobs fail
     if: always()
