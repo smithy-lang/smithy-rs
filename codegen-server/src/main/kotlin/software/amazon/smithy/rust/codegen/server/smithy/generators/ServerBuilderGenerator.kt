@@ -32,8 +32,10 @@ import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.hasConstraintTraitOrTargetHasConstraintTrait
+import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
+import software.amazon.smithy.rust.codegen.smithy.isTransitivelyConstrained
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
@@ -67,6 +69,7 @@ class ServerBuilderGenerator(
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val moduleName = shape.builderSymbol(symbolProvider).namespace.split("::").last()
     private val isBuilderFallible = StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
+    private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
 
     private val codegenScope = arrayOf(
         "RequestRejection" to ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig),
@@ -250,9 +253,11 @@ class ServerBuilderGenerator(
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
                 if (wrapInMaybeConstrained) {
-                    val maybeConstrainedVariant = if (!codegenContext.settings.codegenConfig.publicConstrainedTypes)
-                        // If constrained types are not public, the user is sending us an unconstrained type, and we
-                        // will have to check the constraints when `build()` is called.
+                    val maybeConstrainedVariant = if (!publicConstrainedTypes &&
+                        member.hasPublicConstrainedWrapperTupleType(model))
+                        // If constrained types are not public and this member shape is one that would generate a
+                        // public constrained type were the setting to be enabled, the user is sending us an unconstrained
+                        // type, and we will have to check the constraints when `build()` is called.
                         "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Unconstrained"
                     else {
                         "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
@@ -260,7 +265,19 @@ class ServerBuilderGenerator(
                     // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
                     var varExpr = if (symbol.isOptional()) "v" else "input"
                     if (hasBox) varExpr = "*$varExpr"
-                    if (!constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
+                    if (publicConstrainedTypes && !constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
+
+                    // If constrained types are not public, the user is sending us a fully unconstrained type.
+                    // If the shape is transitively but not directly constrained, we need to constrain the
+                    // fully unconstrained inner types into their corresponding unconstrained types first.
+                    val targetShape = model.expectShape(member.target)
+                    if (!publicConstrainedTypes &&
+                        member.isTransitivelyConstrained(model, symbolProvider) &&
+                        !targetShape.isStructureShape &&
+                        !targetShape.isUnionShape) {
+                        varExpr = "($varExpr).into()"
+                    }
+
                     conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
                         conditionalBlock("Box::new(", ")", conditional = hasBox) {
                             rust("$maybeConstrainedVariant($varExpr)")
@@ -531,6 +548,18 @@ class ServerBuilderGenerator(
                                 .transpose()?
                                 """,
                                 *codegenScope
+                            )
+                        }
+                        // If constrained types are not public and this is a member shape that would have generated a
+                        // public constrained type, were the setting to be enabled, it means the user sent us an
+                        // unconstrained type. We've just checked the constraints hold by going through the non-public
+                        // constrained type, but the user wants to work with the unconstrained type, so we have to
+                        // unwrap it.
+                        if (!codegenContext.settings.codegenConfig.publicConstrainedTypes &&
+                            member.hasPublicConstrainedWrapperTupleType(model)) {
+                            rust(
+                                ".map(|v: #T| v.into())",
+                                constrainedShapeSymbolProvider.toSymbol(model.expectShape(member.target)),
                             )
                         }
                     }

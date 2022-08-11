@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.escape
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.protocols.AwsJson
@@ -82,22 +81,23 @@ class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonCusto
  * https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
  */
 class ServerAwsJsonSerializerGenerator(
-    private val coreCodegenContext: CoreCodegenContext,
+    private val serverCodegenContext: ServerCodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     private val awsJsonVersion: AwsJsonVersion,
     private val jsonSerializerGenerator: JsonSerializerGenerator =
         JsonSerializerGenerator(
-            coreCodegenContext,
+            serverCodegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
             customizations = listOf(ServerAwsJsonError(awsJsonVersion)),
+            publicConstrainedTypes = serverCodegenContext.settings.codegenConfig.publicConstrainedTypes
         ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator
 
 class ServerAwsJson(
-    private val coreCodegenContext: CoreCodegenContext,
+    private val serverCodegenContext: ServerCodegenContext,
     private val awsJsonVersion: AwsJsonVersion,
-) : AwsJson(coreCodegenContext, awsJsonVersion) {
+) : AwsJson(serverCodegenContext, awsJsonVersion) {
     override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        ServerAwsJsonSerializerGenerator(coreCodegenContext, httpBindingResolver, awsJsonVersion)
+        ServerAwsJsonSerializerGenerator(serverCodegenContext, httpBindingResolver, awsJsonVersion)
 }

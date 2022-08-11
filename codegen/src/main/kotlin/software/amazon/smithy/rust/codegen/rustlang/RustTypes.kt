@@ -339,6 +339,7 @@ sealed class Attribute {
          * indicates that more fields may be added in the future
          */
         val NonExhaustive = Custom("non_exhaustive")
+        val AllowUnused = Custom("allow(unused)")
         val AllowUnusedMut = Custom("allow(unused_mut)")
         val DocInline = Custom("doc(inline)")
         val DocHidden = Custom("doc(hidden)")

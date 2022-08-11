@@ -77,8 +77,8 @@ data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
     override val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
-    // TODO Unit test that we don't generate public constrained types when this setting is enabled.
-    val publicConstrainedTypes: Boolean = true
+    // TODO Unit test that we don't generate public constrained types when this setting is false.
+    val publicConstrainedTypes: Boolean = defaultPublicConstrainedTypes
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode, eventStreamAllowList,
 ) {
@@ -91,7 +91,7 @@ data class ServerCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
                     eventStreamAllowList = coreCodegenConfig.eventStreamAllowList,
-                    publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", defaultPublicConstrainedTypes)
+                    publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", defaultPublicConstrainedTypes),
                 )
             } else {
                 ServerCodegenConfig(

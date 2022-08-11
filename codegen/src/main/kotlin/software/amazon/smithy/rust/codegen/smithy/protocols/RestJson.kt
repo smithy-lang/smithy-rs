@@ -87,7 +87,7 @@ class RestJsonHttpBindingResolver(
     }
 }
 
-class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
+open class RestJson(private val coreCodegenContext: CoreCodegenContext) : Protocol {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,

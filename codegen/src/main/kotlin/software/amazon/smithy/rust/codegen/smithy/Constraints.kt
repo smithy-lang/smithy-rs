@@ -43,6 +43,7 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider) = when (this) {
     else -> false
 }
 
+// TODO Make this method take in the `publicConstrainedTypes` boolean, even if it is just going to AND it with the rest of the condition, for API safety usage.
 fun Shape.hasPublicConstrainedWrapperTupleType(model: Model): Boolean = when (this) {
     is MapShape -> this.hasTrait<LengthTrait>()
     is StringShape -> !this.hasTrait<EnumTrait>() && this.hasTrait<LengthTrait>()

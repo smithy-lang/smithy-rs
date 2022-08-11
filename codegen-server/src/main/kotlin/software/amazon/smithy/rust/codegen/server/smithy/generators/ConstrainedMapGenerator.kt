@@ -37,6 +37,7 @@ class ConstrainedMapGenerator(
     private val constrainedSymbolProvider: RustSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     private val publicConstrainedTypes: Boolean,
+    private val symbolProvider: RustSymbolProvider,
     val writer: RustWriter,
     val shape: MapShape,
     private val unconstrainedSymbol: Symbol? = null,
@@ -67,14 +68,23 @@ class ConstrainedMapGenerator(
             visibility = constrainedTypeVisibility
         )
 
+        val codegenScope = arrayOf(
+            "KeySymbol" to constrainedSymbolProvider.toSymbol(model.expectShape(shape.key.target)),
+            "ValueSymbol" to constrainedSymbolProvider.toSymbol(model.expectShape(shape.value.target)),
+            "TryFrom" to RuntimeType.TryFrom,
+            "ConstraintViolation" to constraintViolation
+        )
+
         // TODO Display impl missing; it should honor `sensitive` trait.
 
         writer.documentShape(shape, model, note = rustDocsNote(name))
         constrainedTypeMetadata.render(writer)
+        writer.rustTemplate("struct $name(pub(crate) $inner);", *codegenScope)
+        if (constrainedTypeVisibility == Visibility.PUBCRATE) {
+            Attribute.AllowUnused.render(writer)
+        }
         writer.rustTemplate(
             """
-            struct $name(pub(crate) $inner);
-            
             impl $name {
                 /// ${rustDocsParseMethod(name, inner)}
                 pub fn parse(value: $inner) -> Result<Self, #{ConstraintViolation}> {
@@ -105,10 +115,7 @@ class ConstrainedMapGenerator(
                 }
             }
             """,
-            "KeySymbol" to constrainedSymbolProvider.toSymbol(model.expectShape(shape.key.target)),
-            "ValueSymbol" to constrainedSymbolProvider.toSymbol(model.expectShape(shape.value.target)),
-            "TryFrom" to RuntimeType.TryFrom,
-            "ConstraintViolation" to constraintViolation
+            *codegenScope
         )
 
         if (unconstrainedSymbol != null) {
@@ -120,6 +127,25 @@ class ConstrainedMapGenerator(
                 """,
                 "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
                 "UnconstrainedSymbol" to unconstrainedSymbol,
+            )
+        }
+
+        if (!publicConstrainedTypes) {
+            // Note that if public constrained types is not enabled, then the regular `symbolProvider` produces
+            // "fully unconstrained" symbols for all shapes (i.e. as if the shapes didn't have any constraint traits).
+            writer.rustTemplate(
+                """
+                impl #{From}<$name> for #{FullyUnconstrainedSymbol} {
+                    fn from(constrained: $name) -> Self {
+                        constrained.into_inner()
+                            .into_iter()
+                            .map(|(k, v)| (k.into(), v.into()))
+                            .collect()
+                    }
+                }
+                """,
+                "From" to RuntimeType.From,
+                "FullyUnconstrainedSymbol" to symbolProvider.toSymbol(shape),
             )
         }
     }

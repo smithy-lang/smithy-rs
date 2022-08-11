@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
@@ -28,8 +29,9 @@ class UnconstrainedMapGenerator(
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
-    constrainedShapeSymbolProvider: RustSymbolProvider,
+    private val constrainedShapeSymbolProvider: RustSymbolProvider,
     constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+    private val publicConstrainedTypes: Boolean,
     private val unconstrainedModuleWriter: RustWriter,
     val shape: MapShape
 ) {
@@ -62,7 +64,6 @@ class UnconstrainedMapGenerator(
                         Self::Unconstrained(value)
                     }
                 }
-                
                 """,
                 "KeySymbol" to keySymbol,
                 "ValueSymbol" to valueSymbol,
@@ -70,6 +71,10 @@ class UnconstrainedMapGenerator(
             )
 
             renderTryFromUnconstrainedForConstrained(this)
+
+            if (!publicConstrainedTypes) {
+                renderFromFullyUnconstrainedForUnconstrained(this)
+            }
         }
     }
 
@@ -86,7 +91,7 @@ class UnconstrainedMapGenerator(
                     val constrainedValueSymbol = if (resolveToNonPublicConstrainedValueType) {
                         pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
                     } else {
-                        symbolProvider.toSymbol(valueShape)
+                        constrainedShapeSymbolProvider.toSymbol(valueShape)
                     }
 
                     rustTemplate(
@@ -152,5 +157,21 @@ class UnconstrainedMapGenerator(
                 }
             }
         }
+    }
+
+    private fun renderFromFullyUnconstrainedForUnconstrained(writer: RustWriter) {
+        // Note that if public constrained types is not enabled, then the regular `symbolProvider` produces
+        // "fully unconstrained" symbols for all shapes (i.e. as if the shapes didn't have any constraint traits).
+        writer.rustTemplate(
+            """
+            impl #{From}<#{FullyUnconstrainedSymbol}> for $name {
+                fn from(fully_unconstrained: #{FullyUnconstrainedSymbol}) -> Self {
+                    Self(fully_unconstrained.into_iter().map(|(k, v)| (k.into(), v.into())).collect())
+                }
+            }
+            """,
+            "From" to RuntimeType.From,
+            "FullyUnconstrainedSymbol" to symbolProvider.toSymbol(shape),
+        )
     }
 }

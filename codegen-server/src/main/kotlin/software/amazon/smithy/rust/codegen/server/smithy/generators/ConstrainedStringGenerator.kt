@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
@@ -68,10 +69,12 @@ class ConstrainedStringGenerator(
         // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
         writer.documentShape(shape, model, note = rustDocsNote(name))
         constrainedTypeMetadata.render(writer)
+        writer.rust("struct $name(pub(crate) $inner);")
+        if (constrainedTypeVisibility == Visibility.PUBCRATE) {
+            Attribute.AllowUnused.render(writer)
+        }
         writer.rustTemplate(
             """
-            struct $name(pub(crate) $inner);
-            
             impl $name {
                 /// ${rustDocsParseMethod(name, inner)}
                 pub fn parse(value: $inner) -> Result<Self, #{ConstraintViolation}> {
@@ -122,6 +125,12 @@ class ConstrainedStringGenerator(
                     } else {
                         Err(#{ConstraintViolation}::Length(length))
                     }
+                }
+            }
+            
+            impl From<$name> for $inner {
+                fn from(value: $name) -> $inner {
+                    value.into_inner()
                 }
             }
             """,

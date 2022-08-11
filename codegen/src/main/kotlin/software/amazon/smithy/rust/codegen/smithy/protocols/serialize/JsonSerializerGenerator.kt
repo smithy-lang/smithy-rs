@@ -72,6 +72,7 @@ class JsonSerializerGenerator(
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
     private val customizations: List<JsonCustomization> = listOf(),
+    private val publicConstrainedTypes: Boolean = false,
 ) : StructuredDataSerializerGenerator {
     private data class Context<T : Shape>(
         /** Expression that retrieves a JsonValueWriter from either a JsonObjectWriter or JsonArrayWriter */
@@ -352,7 +353,7 @@ class JsonSerializerGenerator(
 
         val workingWithPublicConstrainedWrapperTupleType =
             codegenTarget == CodegenTarget.SERVER && context.shape.hasPublicConstrainedWrapperTupleType(model)
-        val value = if (workingWithPublicConstrainedWrapperTupleType) {
+        val value = if (publicConstrainedTypes && workingWithPublicConstrainedWrapperTupleType) {
             ValueExpression.Value("${context.valueExpression.name}.0")
         } else {
             context.valueExpression
@@ -431,7 +432,7 @@ class JsonSerializerGenerator(
             val workingWithPublicConstrainedWrapperTupleType =
                 codegenTarget == CodegenTarget.SERVER && keyTarget.hasPublicConstrainedWrapperTupleType(model)
             val keyExpression = if (workingWithPublicConstrainedWrapperTupleType) {
-                "$keyName.0.as_str()"
+                "$keyName.into_inner().as_str()"
             } else if (keyTarget.hasTrait<EnumTrait>()) {
                 "$keyName.as_str()"
             } else {
