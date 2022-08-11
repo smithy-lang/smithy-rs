@@ -16,6 +16,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerStructureGenerator
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
@@ -122,7 +123,10 @@ class PythonServerCodegenVisitor(
      * Note: this does not generate serializers
      */
     override fun unionShape(shape: UnionShape) {
-        throw CodegenException("Union shapes are not supported in Python yet")
+        logger.info("[rust-server-codegen] Generating an union $shape")
+        rustCrate.useShapeWriter(shape) { writer ->
+            PythonServerUnionGenerator(model, symbolProvider, writer, shape).render()
+        }
     }
 
     /**
