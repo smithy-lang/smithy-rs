@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.smithy.Version
 import software.amazon.smithy.rust.codegen.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.testutil.unitTest
@@ -35,7 +36,7 @@ class CargoTomlGeneratorTest {
                     .expect("missing `smithy.codegen-version` field")
                     .as_str()
                     .expect("`smithy.codegen-version` is not str");
-                assert_eq!(codegen_version, "${smithyCodegenVersion()}");
+                assert_eq!(codegen_version, "${Version.fullVersion()}");
                 """,
             )
         }

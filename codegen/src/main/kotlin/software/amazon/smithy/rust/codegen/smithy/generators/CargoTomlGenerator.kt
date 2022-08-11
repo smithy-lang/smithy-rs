@@ -66,7 +66,7 @@ class CargoTomlGenerator(
                 "repository" to settings.moduleRepository,
                 "metadata" to listOfNotNull(
                     "smithy" to listOfNotNull(
-                        "codegen-version" to smithyCodegenVersion(),
+                        "codegen-version" to Version.fullVersion(),
                     ).toMap(),
                 ).toMap(),
             ).toMap(),
@@ -80,5 +80,3 @@ class CargoTomlGenerator(
         writer.writeWithNoFormatting(TomlWriter().write(cargoToml))
     }
 }
-
-fun smithyCodegenVersion(): String = Version.fullVersion()

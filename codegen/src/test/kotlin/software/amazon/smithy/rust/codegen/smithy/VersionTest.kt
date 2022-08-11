@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
+import io.kotest.assertions.throwables.shouldThrowAny
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
@@ -18,8 +19,17 @@ class VersionTest {
         fullVersion: String,
         crateVersion: String,
     ) {
-        Version(content).fullVersion() shouldBe fullVersion
-        Version(content).crateVersion() shouldBe crateVersion
+        val version = Version.parse(content)
+        version.fullVersion shouldBe fullVersion
+        version.crateVersion shouldBe crateVersion
+    }
+
+    @ParameterizedTest()
+    @MethodSource("invalidVersionProvider")
+    fun `fails to parse version`(
+        content: String,
+    ) {
+        shouldThrowAny { Version.parse(content) }
     }
 
     companion object {
@@ -50,16 +60,9 @@ class VersionTest {
                 "0.27.0-alpha.1-643f2ee",
                 "0.27.0-alpha.1",
             ),
-            Arguments.of(
-                "0.0.0",
-                "0.0.0",
-                "0.0.0",
-            ),
-            Arguments.of(
-                "",
-                "",
-                "",
-            ),
         )
+
+        @JvmStatic
+        fun invalidVersionProvider() = listOf("0.0.0", "")
     }
 }
