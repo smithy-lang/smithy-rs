@@ -294,7 +294,8 @@ class ServerHttpSensitivityGenerator(
                 it.direction == RelationshipDirection.DIRECTED && !it.shape.hasTrait<A>()
             }
             .filter {
-                it.hasTrait<A>()
+                it.hasTrait<A>() || (it.asMemberShape().isPresent()
+                        && model.expectShape(it.asMemberShape().get().getTarget()).hasTrait<A>())
             }
             .flatMap {
                 Walker(model)

@@ -1,4 +1,5 @@
 # Example changelog entries
+# 
 # [[aws-sdk-rust]]
 # message = "Fix typos in module documentation for generated crates"
 # references = ["smithy-rs#920"]
@@ -52,3 +53,10 @@ message = "Add codegen version to generated package metadata"
 references = ["smithy-rs#1612"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "unexge"
+
+[[smithy-rs]]
+message = "Update Smithy dependency to 1.23.0. Models using version 2.0 of the IDL are now supported."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "sdk" = "all"}
+author = "ogudavid"
+>>>>>>> 29f92893... WIP -- adjust sensitivity determination. Need to fix unit tests.

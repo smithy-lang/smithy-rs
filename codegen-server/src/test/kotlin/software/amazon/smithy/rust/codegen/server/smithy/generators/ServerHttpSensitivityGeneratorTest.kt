@@ -66,36 +66,6 @@ class ServerHttpSensitivityGeneratorTest {
     }
 
     @Test
-    fun `find inner sensitive`() {
-        val model = """
-            namespace test
-
-            operation Secret {
-                input: Input,
-            }
-
-            structure Input {
-                @required
-                @sensitive
-                @httpHeader("header-a")
-                headerA: String,
-
-                @required
-                @httpHeader("header-b")
-                headerB: String
-            }
-        """.asSmithyModel()
-
-        val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
-
-        val inputShape = operation.inputShape(model)
-        val members: List<String> = generator.findSensitiveBound<HttpHeaderTrait>(inputShape).map(MemberShape::getMemberName)
-
-        assertEquals(members, listOf("headerA"))
-    }
-
-    @Test
     fun `find nested sensitive`() {
         val model = """
             namespace test
@@ -142,19 +112,10 @@ class ServerHttpSensitivityGeneratorTest {
                 @httpQuery("query_a")
                 queryA: String,
 
-                @sensitive
-                nestedA: NestedA,
-
                 nestedB: NestedB
             }
 
-            structure NestedA {
-                @required
-                @httpQuery("query_b")
-                queryB: String
-            }
-
-            @sensitive
+           @sensitive
             structure NestedB {
                 @required
                 @httpQuery("query_c")
@@ -167,7 +128,7 @@ class ServerHttpSensitivityGeneratorTest {
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
         assertEquals(querySensitivity.allKeysSensitive, false)
-        assertEquals((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.NotSensitiveMapValue).queryKeys, listOf("query_c", "query_b"))
+        assertEquals((querySensitivity as ServerHttpSensitivityGenerator.QuerySensitivity.NotSensitiveMapValue).queryKeys, listOf("query_c"))
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
         testProject.lib { writer ->
@@ -178,7 +139,6 @@ class ServerHttpSensitivityGeneratorTest {
                 rustTemplate(
                     """
                     assert_eq!(closure("query_a"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: false });
-                    assert_eq!(closure("query_b"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: true });
                     assert_eq!(closure("query_c"), #{SmithyHttpServer}::logging::sensitivity::uri::QueryMarker { key: false, value: true });
                     """,
                     *codegenScope,
@@ -250,9 +210,11 @@ class ServerHttpSensitivityGeneratorTest {
                 queryMap: QueryMap,
             }
 
+            @sensitive
+            string SensitiveKey
+
             map QueryMap {
-                @sensitive
-                key: String,
+                key: SensitiveKey,
                 value: String
             }
 
@@ -297,10 +259,12 @@ class ServerHttpSensitivityGeneratorTest {
                 queryMap: QueryMap,
             }
 
+            @sensitive
+            string SensitiveValue
+
             map QueryMap {
                 key: String,
-                @sensitive
-                value: String
+                value: SensitiveValue
             }
 
         """.asSmithyModel()
@@ -343,16 +307,7 @@ class ServerHttpSensitivityGeneratorTest {
                 @httpHeader("header-a")
                 headerA: String,
 
-                @sensitive
-                nestedA: NestedA,
-
                 nestedB: NestedB
-            }
-
-            structure NestedA {
-                @required
-                @httpHeader("header-b")
-                headerB: String
             }
 
             @sensitive
@@ -367,7 +322,7 @@ class ServerHttpSensitivityGeneratorTest {
 
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
-        assertEquals(headerData.headerKeys, listOf("header-c", "header-b"))
+        assertEquals(headerData.headerKeys, listOf("header-c"))
         assertEquals((headerData as ServerHttpSensitivityGenerator.HeaderSensitivity.NotSensitiveMapValue).prefixHeader, null)
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
@@ -380,8 +335,6 @@ class ServerHttpSensitivityGeneratorTest {
                     """
                     let name = #{Http}::header::HeaderName::from_static("header-a");
                     assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: false, key_suffix: None });
-                    let name = #{Http}::header::HeaderName::from_static("header-b");
-                    assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: true, key_suffix: None });
                     let name = #{Http}::header::HeaderName::from_static("header-c");
                     assert_eq!(closure(&name), #{SmithyHttpServer}::logging::sensitivity::headers::HeaderMarker { value: true, key_suffix: None });
                     """,
@@ -458,9 +411,10 @@ class ServerHttpSensitivityGeneratorTest {
                 prefix_map: PrefixMap,
             }
 
+            @sensitive
+            string SensitiveKey
             map PrefixMap {
-                @sensitive
-                key: String,
+                key: SensitiveKey,
                 value: String
             }
 
@@ -511,10 +465,12 @@ class ServerHttpSensitivityGeneratorTest {
                 prefix_map: PrefixMap,
             }
 
+            @sensitive
+            string SensitiveValue
+
             map PrefixMap {
                 key: String,
-                @sensitive
-                value: String
+                value: SensitiveValue
             }
 
         """.asSmithyModel()
@@ -560,15 +516,16 @@ class ServerHttpSensitivityGeneratorTest {
                 input: Input,
             }
 
+            @sensitive
+            string SensitiveString
+
             structure Input {
                 @required
-                @sensitive
                 @httpLabel
-                labelA: String,
+                labelA: SensitiveString,
                 @required
                 @httpLabel
-                @sensitive
-                labelB: String,
+                labelB: SensitiveString,
             }
         """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
