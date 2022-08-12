@@ -1110,7 +1110,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             rustTemplate(
                                 """
                                 let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
-                                let value = #{DateTime}::from_str(value.as_ref(), #{format})?#{ConverInto:W};
+                                let value = #{DateTime}::from_str(value.as_ref(), #{format})?#{ConvertInto:W};
                                 """,
                                 *codegenScope,
                                 "format" to timestampFormatType,
@@ -1119,7 +1119,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         } else {
                             rustTemplate(
                                 """
-                                let value = #{DateTime}::from_str(value, #{format})?#{ConverInto:W};
+                                let value = #{DateTime}::from_str(value, #{format})?#{ConvertInto:W};
                                 """,
                                 *codegenScope,
                                 "format" to timestampFormatType,

@@ -7,7 +7,6 @@
 
 use std::{
     pin::Pin,
-    str::FromStr,
     sync::Arc,
     task::{Context, Poll},
 };
@@ -110,14 +109,6 @@ impl From<Format> for aws_smithy_types::date_time::Format {
             Format::HttpDate => aws_smithy_types::date_time::Format::HttpDate,
             Format::EpochSeconds => aws_smithy_types::date_time::Format::EpochSeconds,
         }
-    }
-}
-
-impl FromStr for DateTime {
-    type Err = pyo3::PyErr;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_str(s, Format::DateTime)
     }
 }
 
@@ -261,7 +252,7 @@ impl<'date> From<&'date DateTime> for &'date aws_smithy_types::DateTime {
 /// ByteStream provides misuse-resistant primitives to make it easier to handle common patterns with streaming data.
 ///
 /// On the Rust side, The Python implementation wraps the original [ByteStream](aws_smithy_http::byte_stream::ByteStream)
-/// in a clonable structure and implements the [Stream](futures_core::stream::Stream) trait for it to
+/// in a clonable structure and implements the [Stream](futures::stream::Stream) trait for it to
 /// allow Rust to handle the type transparently.
 ///
 /// On the Python side both sync and async iterators are exposed by implementing `__iter__()` and `__aiter__()` magic methods,
@@ -318,7 +309,7 @@ async fn yield_data_chunk(
 }
 
 impl ByteStream {
-    /// Construct a new [ByteStream](aws_smithy_http::byte_stream::Stream) from a
+    /// Construct a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a
     /// [SdkBody](aws_smithy_http::body::SdkBody).
     ///
     /// This method is available only to Rust and it is required to comply with the
@@ -372,7 +363,7 @@ impl ByteStream {
 
     /// Allow to syncronously iterate over the stream.
     ///
-    /// More info: https://docs.python.org/3/reference/datamodel.html#object.__iter__
+    /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__iter__.>`
     pub fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
@@ -382,6 +373,8 @@ impl ByteStream {
     ///
     /// To get tnext value of the iterator, the `Arc` inner stream is cloned and the Rust call to `next()` is executed
     /// inside a call blocking the Tokio runtime.
+    ///
+    /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__next__.>`
     pub fn __next__(slf: PyRefMut<Self>) -> PyResult<IterNextOutput<Py<PyAny>, PyObject>> {
         let body = slf.0.clone();
         let data_chunk = futures::executor::block_on(yield_data_chunk(body));
@@ -399,7 +392,7 @@ impl ByteStream {
 
     /// Allow to asyncronously iterate over the stream.
     ///
-    /// More info: https://docs.python.org/3/reference/datamodel.html#object.__aiter__
+    /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__aiter__.>`
     pub fn __aiter__(slf: PyRef<Self>) -> PyRef<Self> {
         slf
     }
@@ -411,7 +404,7 @@ impl ByteStream {
     /// To get the next value of the iterator, the `Arc` inner stream is cloned and the Rust call
     /// to `next()` is converted into an awaitable Python coroutine.
     ///
-    /// More info: https://docs.python.org/3/reference/datamodel.html#object.__anext__
+    /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__anext__.>`
     pub fn __anext__(slf: PyRefMut<Self>) -> PyResult<IterANextOutput<Py<PyAny>, PyObject>> {
         let body = slf.0.clone();
         let data_chunk = pyo3_asyncio::tokio::local_future_into_py(slf.py(), async move {

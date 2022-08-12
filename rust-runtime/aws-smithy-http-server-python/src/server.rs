@@ -43,7 +43,7 @@ impl Deref for PyHandler {
 /// To properly function, the application requires some state:
 /// * `workers`: the list of child Python worker processes, protected by a Mutex.
 /// * `context`: the optional Python object that should be passed inside the Rust state struct.
-/// * `handlers`: the mapping between an operation name and its `PyHandler` representation.
+/// * `handlers`: the mapping between an operation name and its [PyHandler] representation.
 ///
 /// Since the Python application is spawning multiple workers, it also requires signal handling to allow the gracefull
 /// termination of multiple Hyper servers. The main Rust process is registering signal and using them to understand when it
@@ -184,8 +184,8 @@ event_loop.add_signal_handler(signal.SIGINT,
     /// Start a single worker with its own Tokio and Python async runtime and provided shared socket.
     ///
     /// Python asynchronous loop needs to be started and handled during the lifetime of the process and
-    /// it is passed to this method by the caller, which can use [configure_python_event_loop] to properly
-    /// setup it up.
+    /// it is passed to this method by the caller, which can use
+    /// [configure_python_event_loop](#method.configure_python_event_loop) to properly setup it up.
     ///
     /// We retrieve the Python context object, if setup by the user calling [PyApp::context] method,
     /// generate the state structure and build the [aws_smithy_http_server::Router], filling
@@ -194,7 +194,7 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///
     /// Now that all the setup is done, we can start the two runtimes and run the [hyper] server.
     /// We spawn a thread with a new [tokio::runtime], setup the middlewares and finally block the
-    /// thread on `hyper::serve`.
+    /// thread on Hyper serve() method.
     /// The main process continues and at the end it is blocked on Python `loop.run_forever()`.
     ///
     /// [uvloop]: https://github.com/MagicStack/uvloop
@@ -291,6 +291,8 @@ event_loop.add_signal_handler(signal.SIGINT,
     /// performs ~20% better than Python standard event loop in most benchmarks, while being 100%
     /// compatible. If [uvloop] is not available as a dependency, we just fall back to the standard
     /// Python event loop.
+    ///
+    /// [uvloop]: https://github.com/MagicStack/uvloop
     fn configure_python_event_loop<'py>(&self, py: Python<'py>) -> PyResult<&'py PyAny> {
         let asyncio = py.import("asyncio")?;
         match py.import("uvloop") {
