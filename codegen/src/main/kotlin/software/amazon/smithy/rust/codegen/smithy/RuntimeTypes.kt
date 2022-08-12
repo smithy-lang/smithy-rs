@@ -287,12 +287,6 @@ data class RuntimeType(val name: String?, val dependency: RustDependency?, val n
             namespace = "aws_smithy_http::response",
         )
 
-        fun jsonDeserialize(runtimeConfig: RuntimeConfig) = RuntimeType(
-            name = "Error",
-            dependency = CargoDependency.smithyJson(runtimeConfig),
-            namespace = "aws_smithy_json::deserialize",
-        )
-
         fun ec2QueryErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.ec2QueryErrors(runtimeConfig))
 
