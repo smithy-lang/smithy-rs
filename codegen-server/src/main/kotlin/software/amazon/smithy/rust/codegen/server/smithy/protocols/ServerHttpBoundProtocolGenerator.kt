@@ -63,6 +63,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.parse.StructuredData
 import software.amazon.smithy.rust.codegen.smithy.toOptional
 import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.smithy.wrapOptional
+import software.amazon.smithy.rust.codegen.util.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.expectTrait
 import software.amazon.smithy.rust.codegen.util.findStreamingMember
@@ -117,6 +118,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val operationDeserModule = RustModule.private("operation_deser")
     private val operationSerModule = RustModule.private("operation_ser")
+    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.asType(),
@@ -969,10 +971,11 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                                 val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
                                 rustTemplate(
                                     """
-                                    let v = #{DateTime}::from_str(&v, #{format})?;
+                                    let v = #{DateTime}::from_str(&v, #{format})?#{ConvertInto:W};
                                     """.trimIndent(),
                                     *codegenScope,
                                     "format" to timestampFormatType,
+                                    "ConvertInto" to typeConversionGenerator.convertViaInto(memberShape),
                                 )
                             }
                             else -> { // Number or boolean.
@@ -1107,18 +1110,20 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                             rustTemplate(
                                 """
                                 let value = #{PercentEncoding}::percent_decode_str(value).decode_utf8()?;
-                                let value = #{DateTime}::from_str(value.as_ref(), #{format})?;
+                                let value = #{DateTime}::from_str(value.as_ref(), #{format})?#{ConverInto:W};
                                 """,
                                 *codegenScope,
                                 "format" to timestampFormatType,
+                                "ConvertInto" to typeConversionGenerator.convertViaInto(target),
                             )
                         } else {
                             rustTemplate(
                                 """
-                                let value = #{DateTime}::from_str(value, #{format})?;
+                                let value = #{DateTime}::from_str(value, #{format})?#{ConverInto:W};
                                 """,
                                 *codegenScope,
                                 "format" to timestampFormatType,
+                                "ConvertInto" to typeConversionGenerator.convertViaInto(target),
                             )
                         }
                     }

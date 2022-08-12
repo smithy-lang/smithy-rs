@@ -12,24 +12,25 @@ Python server runtime for Smithy Rust Server Framework.
 """
 publish = true
 
-# [lib]
-# name = "aws_smithy_http_server_python"
-# crate-type = ["cdylib"]
-
 [dependencies]
 aws-smithy-http-server = { path = "../aws-smithy-http-server" }
 aws-smithy-types = { path = "../aws-smithy-types" }
-hyper = { version = "0.14.12", features = ["server", "http1", "http2", "tcp", "stream"] }
+aws-smithy-http = { path = "../aws-smithy-http" }
+bytes = "1.2"
+futures = "0.3"
+hyper = { version = "0.14.20", features = ["server", "http1", "http2", "tcp", "stream"] }
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
 pyo3 = "0.16.5"
+pyo3-asyncio = { version = "0.16.0", features = ["tokio-runtime"] }
 signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
 socket2 = { version = "0.4.4", features = ["all"] }
-thiserror = "1.0.31"
-tokio = { version = "1.19.2", features = ["full"] }
+thiserror = "1.0.32"
+tokio = { version = "1.20.1", features = ["full", "tracing"] }
+tokio-stream = "0.1"
 tower = "0.4.13"
-tracing = "0.1.35"
-tracing-subscriber = { version = "0.3.11", features = ["env-filter"] }
+tracing = "0.1.36"
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 
 [dev-dependencies]
 pretty_assertions = "1"

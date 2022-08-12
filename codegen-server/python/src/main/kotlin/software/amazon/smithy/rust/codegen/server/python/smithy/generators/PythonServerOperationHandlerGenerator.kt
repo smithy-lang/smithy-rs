@@ -65,16 +65,14 @@ class PythonServerOperationHandlerGenerator(
                 /// Python handler for operation `$operationName`.
                 pub(crate) async fn $fnName(
                     input: $input,
-                    state: #{SmithyServer}::Extension<#{SmithyPython}::PyState>,
-                    handler: std::sync::Arc<#{SmithyPython}::PyHandler>,
+                    state: #{SmithyServer}::Extension<#{pyo3}::PyObject>,
+                    handler: #{SmithyPython}::PyHandler,
                 ) -> std::result::Result<$output, $error> {
                     // Async block used to run the handler and catch any Python error.
-                    let result = async {
-                        if handler.is_coroutine {
-                            #{PyCoroutine:W}
-                        } else {
-                            #{PyFunction:W}
-                        }
+                    let result = if handler.is_coroutine {
+                        #{PyCoroutine:W}
+                    } else {
+                        #{PyFunction:W}
                     };
                     #{PyError:W}
                 }
@@ -98,7 +96,7 @@ class PythonServerOperationHandlerGenerator(
                         let output = if handler.args == 1 {
                             pyhandler.call1((input,))?
                         } else {
-                            pyhandler.call1((input, &*state.0.context))?
+                            pyhandler.call1((input, state.0))?
                         };
                         output.extract::<$output>()
                     })
@@ -118,7 +116,7 @@ class PythonServerOperationHandlerGenerator(
                     let coroutine = if handler.args == 1 {
                         pyhandler.call1((input,))?
                     } else {
-                        pyhandler.call1((input, &*state.0.context))?
+                        pyhandler.call1((input, state.0))?
                     };
                     #{pyo3_asyncio}::tokio::into_future(coroutine)
                 })?;
@@ -133,7 +131,7 @@ class PythonServerOperationHandlerGenerator(
             rustTemplate(
                 """
                 // Catch and record a Python traceback.
-                result.await.map_err(|e| {
+                result.map_err(|e| {
                     let traceback = #{pyo3}::Python::with_gil(|py| {
                         match e.traceback(py) {
                             Some(t) => t.format().unwrap_or_else(|e| e.to_string()),

@@ -11,7 +11,6 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
@@ -121,9 +120,9 @@ class PythonServerCodegenVisitor(
      *
      * Note: this does not generate serializers
      */
-    override fun unionShape(shape: UnionShape) {
-        throw CodegenException("Union shapes are not supported in Python yet")
-    }
+    // override fun unionShape(shape: UnionShape) {
+    //     throw CodegenException("Union shapes are not supported in Python yet")
+    // }
 
     /**
      * Generate service-specific code for the model:
