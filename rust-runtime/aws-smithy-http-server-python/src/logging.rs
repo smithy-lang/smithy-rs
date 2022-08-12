@@ -20,18 +20,14 @@ pub fn setup(py: Python, level: LogLevel) -> PyResult<()> {
     match EnvFilter::try_from_default_env() {
         Ok(filter) => {
             let level: LogLevel = filter.to_string().into();
-            // let console = console_subscriber::spawn();
             tracing_subscriber::registry()
-                // .with(console)
                 .with(format)
                 .with(filter)
                 .init();
             setup_python_logging(py, level)?;
         }
         Err(_) => {
-            // let console = console_subscriber::spawn();
             tracing_subscriber::registry()
-                // .with(console)
                 .with(format)
                 .with(LevelFilter::from_level(level.into()))
                 .init();

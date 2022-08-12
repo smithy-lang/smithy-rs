@@ -434,7 +434,6 @@ impl ByteStream {
 #[cfg(test)]
 mod tests {
     use pyo3::py_run;
-    use pyo3_asyncio::TaskLocals;
 
     use super::*;
 
