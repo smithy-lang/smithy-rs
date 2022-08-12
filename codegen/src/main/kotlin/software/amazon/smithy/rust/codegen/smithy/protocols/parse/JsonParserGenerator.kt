@@ -270,10 +270,7 @@ class JsonParserGenerator(
             rustTemplate(
                 """
                 #{expect_number_or_null}(tokens.next())?
-                    .map(|v| {
-                        use std::convert::TryInto;
-                        v.try_into()
-                    })
+                    .map(|v| v.try_into())
                     .transpose()?
                 """,
                 *codegenScope

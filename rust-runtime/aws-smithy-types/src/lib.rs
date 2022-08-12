@@ -125,21 +125,21 @@ pub enum TryFromNumberError {
     F64ToF32LossyConversion(f64),
     /// Used when attempting to convert a decimal, infinite, or `NaN` floating point type into an
     /// integer type.
-    UnexpectedFloat(f64),
+    FloatToIntegerLossyConversion(f64),
     /// Used when attempting to convert a negative [`Number`] into an unsigned integer type.
-    UnexpectedNegativeInteger(i64),
+    NegativeToUnsignedLossyConversion(i64),
 }
 
 impl std::fmt::Display for TryFromNumberError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TryFromNumberError::OutsideIntegerRange(err) => write!(f, "integer too large: {}", err),
-            TryFromNumberError::UnexpectedFloat(v) => write!(
+            TryFromNumberError::FloatToIntegerLossyConversion(v) => write!(
                 f,
                 "cannot convert floating point number {} into an integer",
                 v
             ),
-            TryFromNumberError::UnexpectedNegativeInteger(v) => write!(
+            TryFromNumberError::NegativeToUnsignedLossyConversion(v) => write!(
                 f,
                 "cannot convert negative integer {} into an unsigned integer type",
                 v
@@ -184,8 +184,8 @@ macro_rules! to_unsigned_integer_converter {
             fn try_from(value: Number) -> Result<Self, Self::Error> {
                 match value {
                     Number::PosInt(v) => Ok(Self::try_from(v)?),
-                    Number::NegInt(v) => Err(Self::Error::UnexpectedNegativeInteger(v)),
-                    Number::Float(v) => Err(Self::Error::UnexpectedFloat(v)),
+                    Number::NegInt(v) => Err(Self::Error::NegativeToUnsignedLossyConversion(v)),
+                    Number::Float(v) => Err(Self::Error::FloatToIntegerLossyConversion(v)),
                 }
             }
         }
@@ -208,7 +208,7 @@ macro_rules! to_signed_integer_converter {
                 match value {
                     Number::PosInt(v) => Ok(Self::try_from(v)?),
                     Number::NegInt(v) => Ok(Self::try_from(v)?),
-                    Number::Float(v) => Err(Self::Error::UnexpectedFloat(v)),
+                    Number::Float(v) => Err(Self::Error::FloatToIntegerLossyConversion(v)),
                 }
             }
         }
@@ -226,8 +226,8 @@ impl TryFrom<Number> for u64 {
     fn try_from(value: Number) -> Result<Self, Self::Error> {
         match value {
             Number::PosInt(v) => Ok(v),
-            Number::NegInt(v) => Err(Self::Error::UnexpectedNegativeInteger(v)),
-            Number::Float(v) => Err(Self::Error::UnexpectedFloat(v)),
+            Number::NegInt(v) => Err(Self::Error::NegativeToUnsignedLossyConversion(v)),
+            Number::Float(v) => Err(Self::Error::FloatToIntegerLossyConversion(v)),
         }
     }
 }
@@ -242,7 +242,7 @@ impl TryFrom<Number> for i64 {
         match value {
             Number::PosInt(v) => Ok(Self::try_from(v)?),
             Number::NegInt(v) => Ok(v),
-            Number::Float(v) => Err(Self::Error::UnexpectedFloat(v)),
+            Number::Float(v) => Err(Self::Error::FloatToIntegerLossyConversion(v)),
         }
     }
 }
@@ -318,13 +318,13 @@ mod number {
 
             assert!(matches!(
                 $typ::try_from(Number::NegInt(-1i64)).unwrap_err(),
-                TryFromNumberError::UnexpectedNegativeInteger(..)
+                TryFromNumberError::NegativeToUnsignedLossyConversion(..)
             ));
 
             for val in [69.69f64, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
                 assert!(matches!(
                     $typ::try_from(Number::Float(val)).unwrap_err(),
-                    TryFromNumberError::UnexpectedFloat(..)
+                    TryFromNumberError::FloatToIntegerLossyConversion(..)
                 ));
             }
         };
@@ -336,13 +336,13 @@ mod number {
 
         assert!(matches!(
             u64::try_from(Number::NegInt(-1i64)).unwrap_err(),
-            TryFromNumberError::UnexpectedNegativeInteger(..)
+            TryFromNumberError::NegativeToUnsignedLossyConversion(..)
         ));
 
         for val in [69.69f64, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(matches!(
                 u64::try_from(Number::Float(val)).unwrap_err(),
-                TryFromNumberError::UnexpectedFloat(..)
+                TryFromNumberError::FloatToIntegerLossyConversion(..)
             ));
         }
     }
@@ -380,7 +380,7 @@ mod number {
             for val in [69.69f64, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
                 assert!(matches!(
                     u64::try_from(Number::Float(val)).unwrap_err(),
-                    TryFromNumberError::UnexpectedFloat(..)
+                    TryFromNumberError::FloatToIntegerLossyConversion(..)
                 ));
             }
         };
@@ -394,7 +394,7 @@ mod number {
         for val in [69.69f64, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(matches!(
                 u64::try_from(Number::Float(val)).unwrap_err(),
-                TryFromNumberError::UnexpectedFloat(..)
+                TryFromNumberError::FloatToIntegerLossyConversion(..)
             ));
         }
     }
