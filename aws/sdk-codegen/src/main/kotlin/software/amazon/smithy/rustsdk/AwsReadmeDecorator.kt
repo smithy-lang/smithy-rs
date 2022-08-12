@@ -11,6 +11,7 @@ import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.rustlang.raw
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.ManifestCustomizations
@@ -29,13 +30,32 @@ class AwsReadmeDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "AwsReadmeDecorator"
     override val order: Byte = 0
 
-    private val logger: Logger = Logger.getLogger(javaClass.name)
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 
     override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
-        mapOf("package" to mapOf("readme" to "README.md"))
+        if (generateReadme(codegenContext)) {
+            mapOf("package" to mapOf("readme" to "README.md"))
+        } else {
+            emptyMap()
+        }
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        if (generateReadme(codegenContext)) {
+            AwsSdkReadmeGenerator().generateReadme(codegenContext, rustCrate)
+        }
+    }
+
+    private fun generateReadme(codegenContext: ClientCodegenContext) =
+        SdkSettings.from(codegenContext.settings).generateReadme
+}
+
+internal class AwsSdkReadmeGenerator {
+    private val logger: Logger = Logger.getLogger(javaClass.name)
+
+    internal fun generateReadme(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val awsConfigVersion = SdkSettings.from(codegenContext.settings).awsConfigVersion
+            ?: throw IllegalStateException("missing `awsConfigVersion` codegen setting")
         rustCrate.withFile("README.md") { writer ->
             val description = normalizeDescription(
                 codegenContext.moduleName,

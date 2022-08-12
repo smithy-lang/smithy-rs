@@ -46,7 +46,7 @@ RUN set -eux; \
 #
 FROM bare_base_image AS install_rust
 ARG rust_stable_version=1.58.1
-ARG rust_nightly_version=nightly-2022-03-29
+ARG rust_nightly_version=nightly-2022-07-25
 ARG cargo_udeps_version=0.1.29
 ARG cargo_hack_version=0.5.14
 ARG cargo_minimal_versions_version=0.1.4
@@ -102,7 +102,7 @@ RUN set -eux; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
     cargo install --locked --path tools/publisher; \
-    cargo +${rust_nightly_version} install --locked --path tools/api-linter; \
+    cargo install --locked --path tools/cargo-check-external-types; \
     cargo install --locked --path tools/changelogger; \
     cargo install --locked --path tools/crate-hasher; \
     cargo install --locked --path tools/sdk-lints; \
@@ -115,7 +115,7 @@ RUN set -eux; \
 #
 FROM bare_base_image AS final_image
 ARG rust_stable_version=1.58.1
-ARG rust_nightly_version=nightly-2022-03-29
+ARG rust_nightly_version=nightly-2022-07-25
 RUN set -eux; \
     yum -y updateinfo; \
     yum -y install \

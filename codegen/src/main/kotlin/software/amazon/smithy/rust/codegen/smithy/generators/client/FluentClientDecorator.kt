@@ -99,6 +99,9 @@ class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
             }
         }
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 sealed class FluentClientSection(name: String) : Section(name) {
