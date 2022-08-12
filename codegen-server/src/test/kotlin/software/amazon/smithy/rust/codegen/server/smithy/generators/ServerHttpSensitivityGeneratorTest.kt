@@ -115,7 +115,7 @@ class ServerHttpSensitivityGeneratorTest {
                 nestedB: NestedB
             }
 
-           @sensitive
+            @sensitive
             structure NestedB {
                 @required
                 @httpQuery("query_c")
