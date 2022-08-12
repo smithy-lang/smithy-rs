@@ -46,12 +46,10 @@ fun RuntimeCrateLocation.crateLocation(): DependencyLocation = when (this.path) 
 }
 
 fun defaultRuntimeCrateVersion(): String {
-    // generated as part of the build, see codegen/build.gradle.kts
     try {
-        return object {}.javaClass.getResource("runtime-crate-version.txt")?.readText()
-            ?: throw CodegenException("sdk-version.txt does not exist")
+        return Version.crateVersion()
     } catch (ex: Exception) {
-        throw CodegenException("failed to load sdk-version.txt which sets the default client-runtime version", ex)
+        throw CodegenException("failed to get crate version which sets the default client-runtime version", ex)
     }
 }
 
