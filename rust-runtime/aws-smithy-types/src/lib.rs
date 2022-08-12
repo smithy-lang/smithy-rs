@@ -13,7 +13,7 @@
     unreachable_pub
 )]
 
-use std::{collections::HashMap, convert::TryFrom};
+use std::collections::HashMap;
 
 pub mod base64;
 pub mod date_time;
