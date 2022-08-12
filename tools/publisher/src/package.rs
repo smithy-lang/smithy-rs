@@ -98,7 +98,7 @@ impl Package {
 
         if self.category.is_sdk() {
             ret.insert(String::from(RUST_SDK_OWNER));
-        } else if self.handle.name == "aws-smithy-http-server" {
+        } else if self.handle.name.starts_with("aws-smithy-http-server") {
             ret.insert(String::from(SMITHY_RS_SERVER_OWNER));
         } else {
             ret.insert(String::from(RUST_SDK_OWNER));
@@ -527,16 +527,21 @@ mod tests {
 
     #[test]
     fn test_expected_package_owners_server_crate() {
-        let server_package = package("aws-smithy-http-server", &[]);
-        assert_eq!(
-            [
-                String::from("github:awslabs:smithy-rs-server"),
-                String::from("aws-sdk-rust-ci")
-            ]
-            .into_iter()
-            .collect::<HashSet<String>>(),
-            server_package.expected_owners()
-        );
+        let server_packages = vec![
+            package("aws-smithy-http-server", &[]),
+            package("aws-smithy-http-server-python", &[]),
+        ];
+        for pkg in server_packages {
+            assert_eq!(
+                [
+                    String::from("github:awslabs:smithy-rs-server"),
+                    String::from("aws-sdk-rust-ci")
+                ]
+                .into_iter()
+                .collect::<HashSet<String>>(),
+                pkg.expected_owners()
+            );
+        }
     }
 
     #[test]
