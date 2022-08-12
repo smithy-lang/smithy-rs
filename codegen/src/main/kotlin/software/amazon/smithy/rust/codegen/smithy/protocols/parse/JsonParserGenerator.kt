@@ -256,7 +256,7 @@ class JsonParserGenerator(
                                 .map_err(|e| #{Error}::custom(format!("unknown variant {}", e)))
                             """,
                             "EnumSymbol" to symbolProvider.toSymbol(target),
-                            *codegenScope
+                            *codegenScope,
                         )
                     } else {
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
