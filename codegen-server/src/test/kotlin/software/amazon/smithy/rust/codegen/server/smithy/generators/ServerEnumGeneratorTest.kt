@@ -49,7 +49,7 @@ class ServerEnumGeneratorTest {
             assert_eq!(InstanceType::try_from("t2.nano").unwrap(), InstanceType::T2Nano);
             assert_eq!(InstanceType::from_str("t2.nano").unwrap(), InstanceType::T2Nano);
             assert_eq!(InstanceType::try_from("unknown").unwrap_err(), InstanceTypeUnknownVariantError("unknown".to_string()));
-            """
+            """,
         )
     }
 
@@ -68,7 +68,7 @@ class ServerEnumGeneratorTest {
                 InstanceType::T2Micro => (),
                 InstanceType::T2Nano => (),
             }
-            """
+            """,
         )
     }
 

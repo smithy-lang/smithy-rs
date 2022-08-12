@@ -77,7 +77,7 @@ class RustWriterTest {
             let test = Test { member: ${RustType.HashSet.Namespace}::${RustType.HashSet.Type}::default(), otherMember: "hello".to_string() };
             assert_eq!(test.otherMember, "hello");
             assert_eq!(test.member.is_empty(), true);
-            """
+            """,
         )
     }
 
@@ -90,7 +90,7 @@ class RustWriterTest {
             |/* handle weird characters */
             |`a backtick`
             |[a link](asdf)
-            """.trimMargin()
+            """.trimMargin(),
         )
         sut.rustBlock("pub fn foo()") { }
         sut.compileAndTest()
@@ -133,13 +133,41 @@ class RustWriterTest {
     }
 
     @Test
+    fun `deprecated attribute without any field`() {
+        val sut = RustWriter.forModule("lib")
+        Attribute.Custom.deprecated().render(sut)
+        sut.toString() shouldContain "#[deprecated]"
+    }
+
+    @Test
+    fun `deprecated attribute with a note`() {
+        val sut = RustWriter.forModule("lib")
+        Attribute.Custom.deprecated("custom").render(sut)
+        sut.toString() shouldContain "#[deprecated(note = \"custom\")]"
+    }
+
+    @Test
+    fun `deprecated attribute with a since`() {
+        val sut = RustWriter.forModule("lib")
+        Attribute.Custom.deprecated(since = "1.2.3").render(sut)
+        sut.toString() shouldContain "#[deprecated(since = \"1.2.3\")]"
+    }
+
+    @Test
+    fun `deprecated attribute with a note and a since`() {
+        val sut = RustWriter.forModule("lib")
+        Attribute.Custom.deprecated("custom", "1.2.3").render(sut)
+        sut.toString() shouldContain "#[deprecated(note = \"custom\", since = \"1.2.3\")]"
+    }
+
+    @Test
     fun `template writables with upper case names`() {
         val inner = writable { rust("hello") }
         val sut = RustWriter.forModule("lib")
         sut.rustTemplate(
             "inner: #{Inner:W}, regular: #{http}",
             "Inner" to inner,
-            "http" to CargoDependency.Http.asType().member("foo")
+            "http" to CargoDependency.Http.asType().member("foo"),
         )
         sut.toString().shouldContain("inner: hello, regular: http::foo")
     }

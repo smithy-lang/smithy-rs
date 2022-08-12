@@ -16,7 +16,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.outputShape
@@ -58,7 +60,7 @@ open class ServerOperationHandlerGenerator(
     private fun renderHandlerImplementations(writer: RustWriter, state: Boolean) {
         operations.map { operation ->
             val operationName = symbolProvider.toSymbol(operation).name
-            val inputName = "crate::input::${operationName}Input"
+            val inputName = symbolProvider.toSymbol(operation.inputShape(model)).fullName
             val inputWrapperName = "crate::operation::$operationName${ServerHttpBoundProtocolGenerator.OPERATION_INPUT_WRAPPER_SUFFIX}"
             val outputWrapperName = "crate::operation::$operationName${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
             val fnSignature = if (state) {
@@ -73,7 +75,7 @@ open class ServerOperationHandlerGenerator(
                 where
                     ${operationTraitBounds(operation, inputName, state)}
                 """.trimIndent(),
-                *codegenScope
+                *codegenScope,
             ) {
                 val callImpl = if (state) {
                     """
@@ -113,13 +115,12 @@ open class ServerOperationHandlerGenerator(
                         $callImpl
                         let output_wrapper: $outputWrapperName = output_inner.into();
                         let mut response = output_wrapper.into_response();
-                        response.extensions_mut().insert(
-                            #{SmithyHttpServer}::extension::OperationExtension::new("${operation.id.namespace}", "$operationName")
-                        );
+                        let operation_ext = #{SmithyHttpServer}::extension::OperationExtension::new("${operation.id.namespace}##$operationName").expect("malformed absolute shape ID");
+                        response.extensions_mut().insert(operation_ext);
                         response.map(#{SmithyHttpServer}::body::boxed)
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
         }
@@ -137,8 +138,8 @@ open class ServerOperationHandlerGenerator(
         } else {
             "Fun: FnOnce($inputName) -> Fut + Clone + Send + 'static,"
         }
-        val outputType = if (operation.errors.isNotEmpty()) {
-            "Result<${symbolProvider.toSymbol(operation.outputShape(model)).fullName}, ${operation.errorSymbol(symbolProvider).fullyQualifiedName()}>"
+        val outputType = if (operation.operationErrors(model).isNotEmpty()) {
+            "Result<${symbolProvider.toSymbol(operation.outputShape(model)).fullName}, ${operation.errorSymbol(model, symbolProvider, CodegenTarget.SERVER).fullyQualifiedName()}>"
         } else {
             symbolProvider.toSymbol(operation.outputShape(model)).fullName
         }

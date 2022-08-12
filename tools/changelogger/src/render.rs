@@ -4,7 +4,7 @@
  */
 
 use crate::entry::{ChangeSet, ChangelogEntries, ChangelogEntry};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use ordinal::Ordinal;
 use serde::Serialize;
@@ -14,7 +14,6 @@ use smithy_rs_tool_common::changelog::{
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use std::env;
 use std::fmt::Write;
-use std::fs;
 use std::path::PathBuf;
 use time::OffsetDateTime;
 
@@ -94,24 +93,8 @@ pub fn subcommand_render(args: &RenderArgs) -> Result<()> {
         let sdk_metadata = date_based_release_metadata(now, "aws-sdk-rust-release-manifest.json");
         update_changelogs(args, &smithy_rs, &smithy_rs_metadata, &sdk_metadata)
     } else {
-        let auto = auto_changelog_meta(&smithy_rs)?;
-        let smithy_rs_metadata = version_based_release_metadata(
-            now,
-            &auto.smithy_version,
-            "smithy-rs-release-manifest.json",
-        );
-        let sdk_metadata = version_based_release_metadata(
-            now,
-            &auto.sdk_version,
-            "aws-sdk-rust-release-manifest.json",
-        );
-        update_changelogs(args, &smithy_rs, &smithy_rs_metadata, &sdk_metadata)
+        bail!("the --independent-versioning flag must be set; synchronized versioning no longer supported");
     }
-}
-
-struct ChangelogMeta {
-    smithy_version: String,
-    sdk_version: String,
 }
 
 struct ReleaseMetadata {
@@ -145,22 +128,6 @@ fn date_based_release_metadata(
     }
 }
 
-fn version_based_release_metadata(
-    now: OffsetDateTime,
-    version: &str,
-    manifest_name: impl Into<String>,
-) -> ReleaseMetadata {
-    ReleaseMetadata {
-        title: format!(
-            "v{version} ({date})",
-            version = version,
-            date = date_title(&now)
-        ),
-        tag: format!("v{version}", version = version),
-        manifest_name: manifest_name.into(),
-    }
-}
-
 fn date_title(now: &OffsetDateTime) -> String {
     format!(
         "{month} {day}, {year}",
@@ -168,27 +135,6 @@ fn date_title(now: &OffsetDateTime) -> String {
         day = Ordinal(now.date().day()),
         year = now.date().year()
     )
-}
-
-/// Discover the new version for the changelog from gradle.properties and the date.
-fn auto_changelog_meta(smithy_rs: &dyn Git) -> Result<ChangelogMeta> {
-    let gradle_props = fs::read_to_string(smithy_rs.path().join("gradle.properties"))
-        .context("failed to load gradle.properties")?;
-    let load_gradle_prop = |key: &str| {
-        let prop = gradle_props
-            .lines()
-            .flat_map(|line| line.trim().strip_prefix(key))
-            .flat_map(|prop| prop.strip_prefix('='))
-            .next();
-        prop.map(|prop| prop.to_string())
-            .ok_or_else(|| anyhow::Error::msg(format!("missing expected gradle property: {key}")))
-    };
-    let smithy_version = load_gradle_prop("smithy.rs.runtime.crate.version")?;
-    let sdk_version = load_gradle_prop("aws.sdk.version")?;
-    Ok(ChangelogMeta {
-        smithy_version,
-        sdk_version,
-    })
 }
 
 fn render_model_entry(entry: &SdkModelEntry, out: &mut String) {
@@ -442,10 +388,7 @@ fn render(entries: &[ChangelogEntry], release_header: &str) -> (String, String) 
 
 #[cfg(test)]
 mod test {
-    use super::{
-        date_based_release_metadata, render, version_based_release_metadata, Changelog,
-        ChangelogEntries, ChangelogEntry,
-    };
+    use super::{date_based_release_metadata, render, Changelog, ChangelogEntries, ChangelogEntry};
     use smithy_rs_tool_common::changelog::SdkAffected;
     use time::OffsetDateTime;
 
@@ -577,15 +520,6 @@ Thank you for your contributions! ❤
         assert_eq!("March 3rd, 1973", result.title);
         assert_eq!("release-1973-03-03", result.tag);
         assert_eq!("some-manifest.json", result.manifest_name);
-    }
-
-    #[test]
-    fn test_version_based_release_metadata() {
-        let now = OffsetDateTime::from_unix_timestamp(100_000_000).unwrap();
-        let result = version_based_release_metadata(now, "0.11.0", "some-other-manifest.json");
-        assert_eq!("v0.11.0 (March 3rd, 1973)", result.title);
-        assert_eq!("v0.11.0", result.tag);
-        assert_eq!("some-other-manifest.json", result.manifest_name);
     }
 
     #[test]

@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.testutil.TokioTest
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -59,7 +60,7 @@ class ServerProtocolTestGenerator(
     private val coreCodegenContext: CoreCodegenContext,
     private val protocolSupport: ProtocolSupport,
     private val operationShape: OperationShape,
-    private val writer: RustWriter
+    private val writer: RustWriter,
 ) {
     private val logger = Logger.getLogger(javaClass.name)
 
@@ -82,7 +83,7 @@ class ServerProtocolTestGenerator(
         "Http" to CargoDependency.Http.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(coreCodegenContext.runtimeConfig).asType(),
-        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!")
+        "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
     )
 
     sealed class TestCase {
@@ -135,9 +136,9 @@ class ServerProtocolTestGenerator(
             val moduleMeta = RustMetadata(
                 additionalAttributes = listOf(
                     Attribute.Cfg("test"),
-                    Attribute.Custom("allow(unreachable_code, unused_variables)")
+                    Attribute.Custom("allow(unreachable_code, unused_variables)"),
                 ),
-                visibility = Visibility.PRIVATE
+                visibility = Visibility.PRIVATE,
             )
             writer.withModule(testModuleName, moduleMeta) {
                 renderAllTestCases(allTests)
@@ -204,7 +205,7 @@ class ServerProtocolTestGenerator(
     private fun renderTestCaseBlock(
         testCase: TestCase,
         testModuleWriter: RustWriter,
-        block: RustWriter.() -> Unit
+        block: RustWriter.() -> Unit,
     ) {
         testModuleWriter.setNewlinePrefix("/// ")
         if (testCase.documentation != null) {
@@ -270,7 +271,7 @@ class ServerProtocolTestGenerator(
      */
     private fun RustWriter.renderHttpResponseTestCase(
         testCase: HttpResponseTestCase,
-        shape: StructureShape
+        shape: StructureShape,
     ) {
         if (!protocolSupport.responseSerialization || (
             !protocolSupport.errorSerialization && shape.hasTrait<ErrorTrait>()
@@ -282,7 +283,7 @@ class ServerProtocolTestGenerator(
         writeInline("let output =")
         instantiator.render(this, shape, testCase.params)
         write(";")
-        val operationImpl = if (operationShape.errors.isNotEmpty()) {
+        val operationImpl = if (operationShape.allErrors(model).isNotEmpty()) {
             if (shape.hasTrait<ErrorTrait>()) {
                 val variant = symbolProvider.toSymbol(shape).name
                 "$operationImplementationName::Error($operationErrorName::$variant(output))"
@@ -330,7 +331,7 @@ class ServerProtocolTestGenerator(
         headers: Map<String, String>,
         body: String?,
         queryParams: List<String>,
-        host: String?
+        host: String?,
     ) {
         rustTemplate(
             """
@@ -338,7 +339,7 @@ class ServerProtocolTestGenerator(
             let mut http_request = http::Request::builder()
                 .uri("$uri")
             """,
-            *codegenScope
+            *codegenScope,
         )
         for (header in headers) {
             rust(".header(${header.key.dq()}, ${header.value.dq()})")
@@ -360,7 +361,7 @@ class ServerProtocolTestGenerator(
             }
             }).unwrap();
             """,
-            *codegenScope
+            *codegenScope,
         )
         if (queryParams.isNotEmpty()) {
             val queryParamsString = queryParams.joinToString(separator = "&")
@@ -398,14 +399,14 @@ class ServerProtocolTestGenerator(
                             expected.$memberName.collect().await.unwrap().into_bytes()
                         );
                         """,
-                        *codegenScope
+                        *codegenScope,
                     )
                 } else {
                     rustWriter.rustTemplate(
                         """
                         #{AssertEq}(parsed.$memberName, expected.$memberName, "Unexpected value for `$memberName`");
                         """,
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
             }
@@ -422,13 +423,13 @@ class ServerProtocolTestGenerator(
                     when (coreCodegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             rustWriter.addUseImports(
-                                RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "FloatEquals").toSymbol()
+                                RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "FloatEquals").toSymbol(),
                             )
                             rustWriter.rust(
                                 """
                                 assert!(parsed.$memberName.float_equals(&expected.$memberName),
                                     "Unexpected value for `$memberName` {:?} vs. {:?}", expected.$memberName, parsed.$memberName);
-                                """
+                                """,
                             )
                         }
                         else -> {
@@ -436,7 +437,7 @@ class ServerProtocolTestGenerator(
                                 """
                                 #{AssertEq}(parsed.$memberName, expected.$memberName, "Unexpected value for `$memberName`");
                                 """,
-                                *codegenScope
+                                *codegenScope,
                             )
                         }
                     }
@@ -498,7 +499,7 @@ class ServerProtocolTestGenerator(
             """
             let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
             """,
-            *codegenScope
+            *codegenScope,
         )
         if (body == "") {
             rustWriter.rustTemplate(
@@ -506,7 +507,7 @@ class ServerProtocolTestGenerator(
                 // No body.
                 #{AssertEq}(std::str::from_utf8(&body).unwrap(), "");
                 """,
-                *codegenScope
+                *codegenScope,
             )
         } else {
             assertOk(rustWriter) {
@@ -515,7 +516,7 @@ class ServerProtocolTestGenerator(
                     rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "validate_body"),
-                    RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "MediaType")
+                    RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "MediaType"),
                 )
             }
         }
@@ -528,12 +529,12 @@ class ServerProtocolTestGenerator(
                 .get::<#{SmithyHttpServer}::extension::OperationExtension>()
                 .expect("extension `OperationExtension` not found");
             """.trimIndent(),
-            *codegenScope
+            *codegenScope,
         )
         rustWriter.writeWithNoFormatting(
             """
             assert_eq!(operation_extension.operation(), format!("{}#{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
-            """.trimIndent()
+            """.trimIndent(),
         )
     }
 
@@ -545,7 +546,7 @@ class ServerProtocolTestGenerator(
                 http_response.status()
             );
             """,
-            *codegenScope
+            *codegenScope,
         )
     }
 
@@ -555,7 +556,7 @@ class ServerProtocolTestGenerator(
             rustWriter,
             "required_headers",
             actualExpression,
-            "require_headers"
+            "require_headers",
         )
     }
 
@@ -565,7 +566,7 @@ class ServerProtocolTestGenerator(
             rustWriter,
             "forbidden_headers",
             actualExpression,
-            "forbid_headers"
+            "forbid_headers",
         )
     }
 
@@ -578,13 +579,13 @@ class ServerProtocolTestGenerator(
             writeWithNoFormatting(
                 headers.entries.joinToString(",") {
                     "(${it.key.dq()}, ${it.value.dq()})"
-                }
+                },
             )
         }
         assertOk(rustWriter) {
             write(
                 "#T($actualExpression, $variableName)",
-                RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "validate_headers")
+                RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, "validate_headers"),
             )
         }
     }
@@ -594,7 +595,7 @@ class ServerProtocolTestGenerator(
         rustWriter: RustWriter,
         expectedVariableName: String,
         actualExpression: String,
-        checkFunction: String
+        checkFunction: String,
     ) {
         if (params.isEmpty()) {
             return
@@ -605,7 +606,7 @@ class ServerProtocolTestGenerator(
         assertOk(rustWriter) {
             write(
                 "#T($actualExpression, $expectedVariableName)",
-                RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, checkFunction)
+                RuntimeType.ProtocolTestHelper(coreCodegenContext.runtimeConfig, checkFunction),
             )
         }
     }
@@ -669,12 +670,10 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJson, "RestJsonMalformedSetDuplicateItems", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonMalformedSetNullItem", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonHeaderMalformedStringInvalidBase64MediaType_case1", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonBodyTimestampDateTimeRejectsUTCOffsets_case0", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case5", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case7", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonBodyTimestampDefaultRejectsMalformedEpochSeconds_case9", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsDifferent8601Formats_case13", TestType.MalformedRequest),
-            FailingTest(RestJson, "RestJsonPathTimestampDefaultRejectsUTCOffsets", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonQueryTimestampDefaultRejectsDifferent8601Formats_case13", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonMalformedUnionNoFieldsSet", TestType.MalformedRequest),
             FailingTest(RestJson, "RestJsonMalformedSetDuplicateBlobs", TestType.MalformedRequest),
@@ -800,7 +799,7 @@ class ServerProtocolTestGenerator(
                         "Double": ["NaN"]
                     }
                 }
-                """.trimIndent()
+                """.trimIndent(),
             ).asObjectNode().get()
 
             return testCase.toBuilder().params(params).build()
@@ -817,8 +816,8 @@ class ServerProtocolTestGenerator(
                             "Double": ["Infinity"]
                         }
                     }
-                    """.trimMargin()
-                ).asObjectNode().get()
+                    """.trimMargin(),
+                ).asObjectNode().get(),
             ).build()
         private fun fixRestJsonSupportsNegativeInfinityFloatQueryValues(testCase: HttpRequestTestCase): HttpRequestTestCase =
             testCase.toBuilder().params(
@@ -832,8 +831,8 @@ class ServerProtocolTestGenerator(
                             "Double": ["-Infinity"]
                         }
                     }
-                    """.trimMargin()
-                ).asObjectNode().get()
+                    """.trimMargin(),
+                ).asObjectNode().get(),
             ).build()
         private fun fixRestJsonAllQueryStringTypes(testCase: HttpRequestTestCase): HttpRequestTestCase =
             testCase.toBuilder().params(
@@ -879,8 +878,8 @@ class ServerProtocolTestGenerator(
                             "EnumList": ["Foo", "Baz", "Bar"]
                         }
                     }
-                    """.trimMargin()
-                ).asObjectNode().get()
+                    """.trimMargin(),
+                ).asObjectNode().get(),
             ).build()
         private fun fixRestJsonQueryStringEscaping(testCase: HttpRequestTestCase): HttpRequestTestCase =
             testCase.toBuilder().params(
@@ -892,8 +891,8 @@ class ServerProtocolTestGenerator(
                             "String": ["%:/?#[]@!${'$'}&'()*+,;=😹"]
                         }
                     }
-                    """.trimMargin()
-                ).asObjectNode().get()
+                    """.trimMargin(),
+                ).asObjectNode().get(),
             ).build()
 
         // These are tests whose definitions in the `awslabs/smithy` repository are wrong.

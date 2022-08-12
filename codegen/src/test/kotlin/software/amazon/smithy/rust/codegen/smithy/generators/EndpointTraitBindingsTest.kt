@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CodegenVisitor
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
@@ -60,7 +61,7 @@ internal class EndpointTraitBindingsTest {
             sym,
             TestRuntimeConfig,
             operationShape,
-            operationShape.expectTrait(EndpointTrait::class.java)
+            operationShape.expectTrait(EndpointTrait::class.java),
         )
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.default("test", visibility = Visibility.PRIVATE)) {
@@ -69,13 +70,13 @@ internal class EndpointTraitBindingsTest {
                 struct GetStatusInput {
                     foo: Option<String>
                 }
-                """
+                """,
             )
             it.implBlock(model.lookup("test#GetStatusInput"), sym) {
                 it.rustBlock(
                     "fn endpoint_prefix(&self) -> std::result::Result<#T::endpoint::EndpointPrefix, #T>",
                     TestRuntimeConfig.smithyHttp(),
-                    TestRuntimeConfig.operationBuildError()
+                    TestRuntimeConfig.operationBuildError(),
                 ) {
                     endpointBindingGenerator.render(this, "self")
                 }
@@ -86,7 +87,7 @@ internal class EndpointTraitBindingsTest {
                 let inp = GetStatusInput { foo: Some("test_value".to_string()) };
                 let prefix = inp.endpoint_prefix().unwrap();
                 assert_eq!(prefix.as_str(), "test_valuea.data.");
-                """
+                """,
             )
             it.unitTest(
                 "invalid_prefix",
@@ -94,7 +95,7 @@ internal class EndpointTraitBindingsTest {
                 // not a valid URI component
                 let inp = GetStatusInput { foo: Some("test value".to_string()) };
                 inp.endpoint_prefix().expect_err("invalid uri component");
-                """
+                """,
             )
 
             it.unitTest(
@@ -103,7 +104,7 @@ internal class EndpointTraitBindingsTest {
                 // unset is invalid
                 let inp = GetStatusInput { foo: None };
                 inp.endpoint_prefix().expect_err("invalid uri component");
-                """
+                """,
             )
 
             it.unitTest(
@@ -112,7 +113,7 @@ internal class EndpointTraitBindingsTest {
                 // empty is invalid
                 let inp = GetStatusInput { foo: Some("".to_string()) };
                 inp.endpoint_prefix().expect_err("empty label is invalid");
-                """
+                """,
             )
         }
 
@@ -167,10 +168,13 @@ internal class EndpointTraitBindingsTest {
                                 .as_str();
                             assert_eq!(prefix, "test123.hello.");
                         }
-                        """
+                        """,
                     )
                 }
             }
+
+            override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+                clazz.isAssignableFrom(ClientCodegenContext::class.java)
         }
         val combinedCodegenDecorator: CombinedCodegenDecorator<ClientCodegenContext> =
             CombinedCodegenDecorator.fromClasspath(ctx, RequiredCustomizations()).withDecorator(codegenDecorator)

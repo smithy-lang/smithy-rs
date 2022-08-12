@@ -26,7 +26,7 @@ class EndpointPrefixGenerator(private val coreCodegenContext: CoreCodegenContext
                     coreCodegenContext.symbolProvider,
                     coreCodegenContext.runtimeConfig,
                     shape,
-                    epTrait
+                    epTrait,
                 )
                 withBlock("let endpoint_prefix = ", "?;") {
                     endpointTraitBindings.render(this, "self")

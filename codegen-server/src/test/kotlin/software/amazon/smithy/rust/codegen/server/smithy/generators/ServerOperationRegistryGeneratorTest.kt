@@ -12,14 +12,13 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 import software.amazon.smithy.rust.codegen.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.util.lookup
 
 class ServerOperationRegistryGeneratorTest {
     private val model = """
         namespace test
-        
+
         use aws.protocols#restJson1
 
         @restJson1
@@ -58,13 +57,12 @@ class ServerOperationRegistryGeneratorTest {
         val serviceShape = model.lookup<ServiceShape>("test#Service")
         val (protocolShapeId, protocolGeneratorFactory) = ServerProtocolLoader(ServerProtocolLoader.DefaultProtocols).protocolFor(
             model,
-            serviceShape
+            serviceShape,
         )
         val serverCodegenContext = serverTestCodegenContext(
             model,
             serviceShape,
-            settings = serverTestRustSettings(moduleName = "service"),
-            protocolShapeId = protocolShapeId
+            protocolShapeId = protocolShapeId,
         )
 
         val index = TopDownIndex.of(serverCodegenContext.model)
@@ -79,8 +77,8 @@ class ServerOperationRegistryGeneratorTest {
             """
             /// ```rust
             /// use std::net::SocketAddr;
-            /// use service::{input, output, error};
-            /// use service::operation_registry::OperationRegistryBuilder;
+            /// use test_module::{input, output, error};
+            /// use test_module::operation_registry::OperationRegistryBuilder;
             /// use aws_smithy_http_server::routing::Router;
             ///
             /// #[tokio::main]

@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.serialize.XmlBinding
 import software.amazon.smithy.rust.codegen.util.expectTrait
 
 class RestXmlFactory(
-    private val generator: (ClientCodegenContext) -> Protocol = { RestXml(it) }
+    private val generator: (ClientCodegenContext) -> Protocol = { RestXml(it) },
 ) : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
 
     override fun protocol(codegenContext: ClientCodegenContext): Protocol = generator(codegenContext)
@@ -45,7 +45,7 @@ class RestXmlFactory(
             requestDeserialization = false,
             requestBodyDeserialization = false,
             responseSerialization = false,
-            errorSerialization = false
+            errorSerialization = false,
         )
     }
 }
@@ -58,7 +58,7 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
         "Error" to RuntimeType.GenericError(runtimeConfig),
         "HeaderMap" to RuntimeType.http.member("HeaderMap"),
         "Response" to RuntimeType.http.member("Response"),
-        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError")
+        "XmlError" to CargoDependency.smithyXml(runtimeConfig).asType().member("decode::XmlError"),
     )
     private val xmlDeserModule = RustModule.private("xml_deser")
 
@@ -68,7 +68,7 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
     }
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes.consistent("application/xml"))
+        HttpTraitHttpBindingResolver(coreCodegenContext.model, ProtocolContentTypes("application/xml", "application/xml", "application/vnd.amazon.eventstream"))
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME
@@ -85,7 +85,7 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
         RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlError}>",
-                *errorScope
+                *errorScope,
             ) {
                 rust("#T::parse_generic_error(response.body().as_ref())", restXmlErrors)
             }
@@ -95,7 +95,7 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
         RuntimeType.forInlineFun("parse_event_stream_generic_error", xmlDeserModule) { writer ->
             writer.rustBlockTemplate(
                 "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlError}>",
-                *errorScope
+                *errorScope,
             ) {
                 rust("#T::parse_generic_error(payload.as_ref())", restXmlErrors)
             }
@@ -105,7 +105,7 @@ open class RestXml(private val coreCodegenContext: CoreCodegenContext) : Protoco
         operationShape: OperationShape,
         operationName: String,
         serviceName: String,
-        requestSpecModule: RuntimeType
+        requestSpecModule: RuntimeType,
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"

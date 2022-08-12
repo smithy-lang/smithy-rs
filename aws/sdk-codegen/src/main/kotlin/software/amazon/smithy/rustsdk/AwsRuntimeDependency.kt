@@ -37,7 +37,7 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
         path
     }
     return runtimeCrateLocation.copy(
-        path = updatedPath, version = runtimeCrateLocation.version?.let { defaultSdkVersion() }
+        path = updatedPath, version = runtimeCrateLocation.version?.let { defaultSdkVersion() },
     )
 }
 
@@ -56,7 +56,7 @@ object AwsRuntimeType {
             CargoDependency.Tower,
             awsHttp(),
             awsEndpoint(),
-        )
+        ),
     ).member("DefaultMiddleware")
 }
 

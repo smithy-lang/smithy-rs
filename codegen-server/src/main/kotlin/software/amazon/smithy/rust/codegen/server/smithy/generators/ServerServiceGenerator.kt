@@ -61,8 +61,8 @@ open class ServerServiceGenerator(
                 """
                 Contains the [`operation_registry::OperationRegistry`], a place where
                 you can register your service's operation implementations.
-                """
-            )
+                """,
+            ),
         ) { writer ->
             renderOperationRegistry(writer, operations)
         }
@@ -74,7 +74,7 @@ open class ServerServiceGenerator(
 
     // Render combined errors.
     open fun renderCombinedErrors(writer: RustWriter, operation: OperationShape) {
-        ServerCombinedErrorGenerator(coreCodegenContext.model, coreCodegenContext.symbolProvider, operation).render(writer)
+        /* Subclasses can override */
     }
 
     // Render operations handler.

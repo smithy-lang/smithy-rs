@@ -23,18 +23,21 @@ class GlacierDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         val extras = if (applies(codegenContext)) {
             val apiVersion = codegenContext.serviceShape.version
             listOfNotNull(
                 ApiVersionHeader(apiVersion),
                 TreeHashHeader.forOperation(operation, codegenContext.runtimeConfig),
-                AccountIdAutofill.forOperation(operation, codegenContext.model)
+                AccountIdAutofill.forOperation(operation, codegenContext.model),
             )
         } else {
             emptyList()
         }
         return baseCustomizations + extras
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }

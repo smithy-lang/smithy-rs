@@ -23,5 +23,5 @@ data class ClientCodegenContext(
     override val protocol: ShapeId,
     override val settings: ClientRustSettings,
 ) : CoreCodegenContext(
-    model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT
+    model, symbolProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT,
 )

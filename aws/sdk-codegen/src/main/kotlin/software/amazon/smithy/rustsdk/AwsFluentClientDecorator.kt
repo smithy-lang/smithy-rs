@@ -59,7 +59,7 @@ private class AwsClientGenerics(private val types: Types) : FluentClientGenerics
         rustTemplate(
             "<#{DynConnector}, #{DynMiddleware}<#{DynConnector}>>",
             "DynConnector" to types.dynConnector,
-            "DynMiddleware" to types.dynMiddleware
+            "DynMiddleware" to types.dynMiddleware,
         )
     }
 
@@ -86,8 +86,8 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
             generics = AwsClientGenerics(types),
             customizations = listOf(
                 AwsPresignedFluentBuilderMethod(codegenContext.runtimeConfig),
-                AwsFluentClientDocs(codegenContext)
-            )
+                AwsFluentClientDocs(codegenContext),
+            ),
         ).render(rustCrate)
         rustCrate.withModule(FluentClientGenerator.clientModule) { writer ->
             AwsFluentClientExtensions(types).render(writer)
@@ -99,7 +99,7 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         return baseCustomizations + object : LibRsCustomization() {
             override fun section(section: LibRsSection) = when (section) {
@@ -111,6 +111,9 @@ class AwsFluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
             }
         }
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 private class AwsFluentClientExtensions(types: Types) {
@@ -182,17 +185,21 @@ private class AwsFluentClientExtensions(types: Types) {
     }
 }
 
-private class AwsFluentClientDocs(coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
+private class AwsFluentClientDocs(private val coreCodegenContext: CoreCodegenContext) : FluentClientCustomization() {
     private val serviceName = coreCodegenContext.serviceShape.expectTrait<TitleTrait>().value
     private val serviceShape = coreCodegenContext.serviceShape
     private val crateName = coreCodegenContext.moduleUseName()
     private val codegenScope =
         arrayOf("aws_config" to coreCodegenContext.runtimeConfig.awsConfig().copy(scope = DependencyScope.Dev).asType())
 
-    // Usage docs on STS must be suppressed—aws-config cannot be added as a dev-dependency because it would create
-    // a circular dependency
+    // If no `aws-config` version is provided, assume that docs referencing `aws-config` cannot be given.
+    // Also, STS and SSO must NOT reference `aws-config` since that would create a circular dependency.
     private fun suppressUsageDocs(): Boolean =
-        setOf(ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"), ShapeId.from("com.amazonaws.sso#SWBPortalService")).contains(serviceShape.id)
+        SdkSettings.from(coreCodegenContext.settings).awsConfigVersion == null ||
+            setOf(
+                ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
+                ShapeId.from("com.amazonaws.sso#SWBPortalService"),
+            ).contains(serviceShape.id)
 
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
@@ -202,7 +209,7 @@ private class AwsFluentClientDocs(coreCodegenContext: CoreCodegenContext) : Flue
                     /// Client for $serviceName
                     ///
                     /// Client for invoking operations on $serviceName. Each operation on $serviceName is a method on this
-                    /// this struct. `.send()` MUST be invoked on the generated operations to dispatch the request to the service."""
+                    /// this struct. `.send()` MUST be invoked on the generated operations to dispatch the request to the service.""",
                 )
                 if (!suppressUsageDocs()) {
                     rustTemplate(
@@ -233,7 +240,7 @@ private class AwsFluentClientDocs(coreCodegenContext: CoreCodegenContext) : Flue
                         /// let client = $crateName::Client::from_conf(config);
                         /// ## }
                         """,
-                        *codegenScope
+                        *codegenScope,
                     )
                 }
             }

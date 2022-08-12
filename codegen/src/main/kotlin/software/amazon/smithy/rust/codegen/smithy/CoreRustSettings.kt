@@ -62,7 +62,7 @@ open class CoreCodegenConfig(
                 CoreCodegenConfig(
                     formatTimeoutSeconds = defaultFormatTimeoutSeconds,
                     debugMode = defaultDebugMode,
-                    eventStreamAllowList = defaultEventStreamAllowList
+                    eventStreamAllowList = defaultEventStreamAllowList,
                 )
             }
     }
@@ -93,7 +93,7 @@ open class CoreRustSettings(
     open val codegenConfig: CoreCodegenConfig,
     open val license: String?,
     open val examplesUri: String? = null,
-    open val customizationConfig: ObjectNode? = null
+    open val customizationConfig: ObjectNode? = null,
 ) {
 
     /**
@@ -124,13 +124,13 @@ open class CoreRustSettings(
                 services.isEmpty() -> {
                     throw CodegenException(
                         "Cannot infer a service to generate because the model does not " +
-                            "contain any service shapes"
+                            "contain any service shapes",
                     )
                 }
                 services.size > 1 -> {
                     throw CodegenException(
                         "Cannot infer service to generate because the model contains " +
-                            "multiple service shapes: " + services
+                            "multiple service shapes: " + services,
                     )
                 }
                 else -> {
@@ -175,8 +175,8 @@ open class CoreRustSettings(
                     CODEGEN_SETTINGS,
                     EXAMPLES,
                     LICENSE,
-                    CUSTOMIZATION_CONFIG
-                )
+                    CUSTOMIZATION_CONFIG,
+                ),
             )
 
             val service = config.getStringMember(SERVICE)
@@ -195,7 +195,7 @@ open class CoreRustSettings(
                 codegenConfig = coreCodegenConfig,
                 license = config.getStringMember(LICENSE).orNull()?.value,
                 examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
-                customizationConfig = config.getObjectMember(CUSTOMIZATION_CONFIG).orNull()
+                customizationConfig = config.getObjectMember(CUSTOMIZATION_CONFIG).orNull(),
             )
         }
     }

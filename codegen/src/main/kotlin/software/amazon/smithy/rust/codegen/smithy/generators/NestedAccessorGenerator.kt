@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.smithy.protocols.lensName
 /** Generator for accessing nested fields through optional values **/
 class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
     private val module = RustModule("lens", RustMetadata(visibility = Visibility.PUBLIC), "Generated accessors for nested fields")
+
     /**
      * Generate an accessor on [root] that consumes [root] and returns an `Option<T>` for the nested item
      */
@@ -39,7 +40,7 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
                     #{body:W}
                 }
                 """,
-                "Input" to symbolProvider.toSymbol(root), "Output" to baseType.makeOptional(), "body" to generateBody(path, false)
+                "Input" to symbolProvider.toSymbol(root), "Output" to baseType.makeOptional(), "body" to generateBody(path, false),
             )
         }
     }
@@ -59,7 +60,7 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
                     #{body:W}
                 }
                 """,
-                "Input" to symbolProvider.toSymbol(root), "Output" to referencedType, "body" to generateBody(path, true)
+                "Input" to symbolProvider.toSymbol(root), "Output" to referencedType, "body" to generateBody(path, true),
             )
         }
     }
@@ -77,7 +78,7 @@ class NestedAccessorGenerator(private val symbolProvider: RustSymbolProvider) {
                         None => return None,
                         Some(t) => t
                     };
-                    """
+                    """,
                 )
             } else {
                 rust("let input = input.${symbolProvider.toMemberName(head)};")

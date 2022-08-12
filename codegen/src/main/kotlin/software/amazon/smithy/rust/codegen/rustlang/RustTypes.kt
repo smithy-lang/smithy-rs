@@ -141,8 +141,7 @@ fun RustType.implInto(fullyQualified: Boolean = true): String {
 /** Format this Rust type so that it may be used as an argument type in a function definition */
 fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
     return when (this) {
-        is RustType.String,
-        is RustType.Box -> this.implInto(fullyQualified)
+        is RustType.String, is RustType.Box -> this.implInto(fullyQualified)
         else -> this.render(fullyQualified)
     }
 }
@@ -277,7 +276,7 @@ enum class Visibility {
 data class RustMetadata(
     val derives: Attribute.Derives = Attribute.Derives.Empty,
     val additionalAttributes: List<Attribute> = listOf(),
-    val visibility: Visibility = Visibility.PRIVATE
+    val visibility: Visibility = Visibility.PRIVATE,
 ) {
     fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
@@ -300,7 +299,7 @@ data class RustMetadata(
                 Visibility.PRIVATE -> ""
                 Visibility.PUBCRATE -> "pub(crate) "
                 Visibility.PUBLIC -> "pub "
-            }
+            },
         )
         return this
     }
@@ -334,6 +333,7 @@ sealed class Attribute {
          */
         val NonExhaustive = Custom("non_exhaustive")
         val AllowUnusedMut = Custom("allow(unused_mut)")
+        val DocHidden = Custom("doc(hidden)")
         val DocInline = Custom("doc(inline)")
     }
 
@@ -366,13 +366,36 @@ sealed class Attribute {
     data class Custom(
         val annotation: String,
         val symbols: List<RuntimeType> = listOf(),
-        val container: Boolean = false
+        val container: Boolean = false,
     ) : Attribute() {
         override fun render(writer: RustWriter) {
             val bang = if (container) "!" else ""
             writer.raw("#$bang[$annotation]")
             symbols.forEach {
                 writer.addDependency(it.dependency)
+            }
+        }
+
+        companion object {
+            /**
+             * Renders a
+             * [`#[deprecated]`](https://doc.rust-lang.org/reference/attributes/diagnostics.html#the-deprecated-attribute)
+             * attribute.
+             */
+            fun deprecated(note: String? = null, since: String? = null): Custom {
+                val builder = StringBuilder()
+                builder.append("deprecated")
+
+                if (note != null && since != null) {
+                    builder.append("(note = ${note.dq()}, since = ${since.dq()})")
+                } else if (note != null) {
+                    builder.append("(note = ${note.dq()})")
+                } else if (since != null) {
+                    builder.append("(since = ${since.dq()})")
+                } else {
+                    // No-op. Rustc would emit a default message.
+                }
+                return Custom(builder.toString())
             }
         }
     }

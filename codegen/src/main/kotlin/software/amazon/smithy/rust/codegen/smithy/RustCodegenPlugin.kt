@@ -14,7 +14,9 @@ import software.amazon.smithy.rust.codegen.rustlang.Attribute.Companion.NonExhau
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.customizations.ClientCustomizations
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.customize.NoOpEventStreamSigningDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.client.FluentClientDecorator
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -42,7 +44,8 @@ class RustCodegenPlugin : SmithyBuildPlugin {
                 context,
                 ClientCustomizations(),
                 RequiredCustomizations(),
-                FluentClientDecorator()
+                FluentClientDecorator(),
+                NoOpEventStreamSigningDecorator(),
             )
 
         // CodegenVisitor is the main driver of code generation that traverses the model and generates code
@@ -59,11 +62,11 @@ class RustCodegenPlugin : SmithyBuildPlugin {
         fun baseSymbolProvider(model: Model, serviceShape: ServiceShape, symbolVisitorConfig: SymbolVisitorConfig) =
             SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model) }
+                .let { EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.CLIENT) }
                 // Generate `ByteStream` instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
                 .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(NonExhaustive)) }
+                .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf(NonExhaustive)) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)
                 .let { StreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot

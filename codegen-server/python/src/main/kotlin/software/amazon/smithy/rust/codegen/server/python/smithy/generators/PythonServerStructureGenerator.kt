@@ -33,16 +33,17 @@ class PythonServerStructureGenerator(
     model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
-    private val shape: StructureShape
+    private val shape: StructureShape,
 ) : StructureGenerator(model, symbolProvider, writer, shape) {
 
     private val pyo3Symbols = listOf(PythonServerCargoDependency.PyO3.asType())
 
     override fun renderStructure() {
-        if (shape.hasTrait<ErrorTrait>())
+        if (shape.hasTrait<ErrorTrait>()) {
             Attribute.Custom("pyo3::pyclass(extends = pyo3::exceptions::PyException)", symbols = pyo3Symbols).render(writer)
-        else
+        } else {
             Attribute.Custom("pyo3::pyclass", symbols = pyo3Symbols).render(writer)
+        }
         super.renderStructure()
         renderPyO3Methods()
     }
@@ -73,7 +74,7 @@ class PythonServerStructureGenerator(
             }
             """,
             "BodySignature" to renderStructSignatureMembers(),
-            "BodyMembers" to renderStructBodyMembers()
+            "BodyMembers" to renderStructBodyMembers(),
         )
     }
 

@@ -5,7 +5,7 @@
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rustsdk.AwsReadmeDecorator
+import software.amazon.smithy.rustsdk.AwsSdkReadmeGenerator
 
 class AwsReadmeDecoratorTest {
     @Test
@@ -18,7 +18,7 @@ class AwsReadmeDecoratorTest {
 
             More information [can be found here](https://example.com).
             """.trimIndent(),
-            AwsReadmeDecorator().normalizeDescription(
+            AwsSdkReadmeGenerator().normalizeDescription(
                 "",
                 """
                 <fullname>Some service</fullname>
@@ -27,8 +27,8 @@ class AwsReadmeDecoratorTest {
                 <p>This is <i>another</i> paragraph
                 of information.</p>
                 <p>More information <a href="https://example.com">can be found here</a>.</p>
-                """.trimIndent()
-            )
+                """.trimIndent(),
+            ),
         )
     }
 
@@ -44,7 +44,7 @@ class AwsReadmeDecoratorTest {
 
             More text.
             """.trimIndent(),
-            AwsReadmeDecorator().normalizeDescription(
+            AwsSdkReadmeGenerator().normalizeDescription(
                 "",
                 """
                 <p>Some text introducing a list:
@@ -54,8 +54,8 @@ class AwsReadmeDecoratorTest {
                     <ol><li>nested item</li><li>another</li></ol>
                   </li>
                 </ul> More text.</p>
-                """.trimIndent()
-            )
+                """.trimIndent(),
+            ),
         )
     }
 
@@ -81,7 +81,7 @@ class AwsReadmeDecoratorTest {
 
             Some trailing text.
             """.trimIndent(),
-            AwsReadmeDecorator().normalizeDescription(
+            AwsSdkReadmeGenerator().normalizeDescription(
                 "",
                 """
                 <p>Some text introducing a description list:
@@ -98,8 +98,8 @@ class AwsReadmeDecoratorTest {
                 </dl>
                 Some trailing text.
                 </p>
-                """.trimIndent()
-            )
+                """.trimIndent(),
+            ),
         )
     }
 }

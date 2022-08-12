@@ -95,7 +95,7 @@ class JsonSerializerGenerator(
                     "${context.writerExpression}.value()",
                     ValueExpression.Reference(itemName),
                     context.shape.member,
-                    writeNulls = true
+                    writeNulls = true,
                 )
 
             fun mapMember(context: Context<MapShape>, key: String, value: String): MemberContext =
@@ -103,7 +103,7 @@ class JsonSerializerGenerator(
                     "${context.writerExpression}.key($key)",
                     ValueExpression.Reference(value),
                     context.shape.value,
-                    writeNulls = true
+                    writeNulls = true,
                 )
 
             fun structMember(
@@ -115,7 +115,7 @@ class JsonSerializerGenerator(
                 MemberContext(
                     objectValueWriterExpression(context.objectName, jsonName(member)),
                     ValueExpression.Value("${context.localName}.${symProvider.toMemberName(member)}"),
-                    member
+                    member,
                 )
 
             fun unionMember(
@@ -127,7 +127,7 @@ class JsonSerializerGenerator(
                 MemberContext(
                     objectValueWriterExpression(context.writerExpression, jsonName(member)),
                     ValueExpression.Reference(variantReference),
-                    member
+                    member,
                 )
 
             /** Returns an expression to get a JsonValueWriter from a JsonObjectWriter */
@@ -177,7 +177,7 @@ class JsonSerializerGenerator(
             it.rustBlockTemplate(
                 "pub fn $fnName(value: &#{target}) -> Result<String, #{Error}>",
                 *codegenScope,
-                "target" to symbolProvider.toSymbol(structureShape)
+                "target" to symbolProvider.toSymbol(structureShape),
             ) {
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
@@ -196,7 +196,7 @@ class JsonSerializerGenerator(
             writer.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> std::result::Result<#{ByteSlab}, #{Error}>",
                 *codegenScope,
-                "target" to symbolProvider.toSymbol(target)
+                "target" to symbolProvider.toSymbol(target),
             ) {
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
@@ -220,7 +220,7 @@ class JsonSerializerGenerator(
                     b"{}"[..].into()
                 }
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
@@ -237,7 +237,7 @@ class JsonSerializerGenerator(
         return RuntimeType.forInlineFun(fnName, operationSerModule) {
             it.rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
-                *codegenScope, "target" to symbolProvider.toSymbol(inputShape)
+                *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
             ) {
                 rust("let mut out = String::new();")
                 rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
@@ -259,7 +259,7 @@ class JsonSerializerGenerator(
                     out.into_bytes()
                 }
                 """,
-                "Document" to RuntimeType.Document(runtimeConfig), *codegenScope
+                "Document" to RuntimeType.Document(runtimeConfig), *codegenScope,
             )
         }
     }
@@ -360,12 +360,12 @@ class JsonSerializerGenerator(
                 }
                 rust(
                     "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
-                    smithyTypes.member("Number")
+                    smithyTypes.member("Number"),
                 )
             }
             is BlobShape -> rust(
                 "$writer.string_unchecked(&#T(${value.asRef()}));",
-                RuntimeType.Base64Encode(runtimeConfig)
+                RuntimeType.Base64Encode(runtimeConfig),
             )
             is TimestampShape -> {
                 val timestampFormat =
@@ -446,7 +446,7 @@ class JsonSerializerGenerator(
                         rustTemplate(
                             "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                             "Union" to unionSymbol,
-                            *codegenScope
+                            *codegenScope,
                         )
                     }
                 }

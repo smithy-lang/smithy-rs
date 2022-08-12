@@ -64,7 +64,7 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  *     - serializing data to an HTTP request (we are a client),
  *     - serializing data to an HTTP response (we are a server),
  */
-public enum class HttpMessageType {
+enum class HttpMessageType {
     REQUEST, RESPONSE
 }
 
@@ -89,7 +89,7 @@ public enum class HttpMessageType {
 class HttpBindingGenerator(
     private val protocol: Protocol,
     coreCodegenContext: CoreCodegenContext,
-    private val operationShape: OperationShape
+    private val operationShape: OperationShape,
 ) {
     private val runtimeConfig = coreCodegenContext.runtimeConfig
     private val symbolProvider = coreCodegenContext.symbolProvider
@@ -123,7 +123,7 @@ class HttpBindingGenerator(
                 "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 outputT,
-                headerUtil
+                headerUtil,
             ) {
                 rust("let headers = header_map.get_all(${binding.locationName.dq()}).iter();")
                 deserializeFromHeader(model.expectShape(binding.member.target), binding.member)
@@ -143,7 +143,7 @@ class HttpBindingGenerator(
                 "pub fn ${fnName}_inner(headers: #T::header::ValueIter<http::HeaderValue>) -> std::result::Result<Option<#T>, #T::ParseError>",
                 RuntimeType.http,
                 symbolProvider.toSymbol(model.expectShape(target.value.target)),
-                headerUtil
+                headerUtil,
             ) {
                 deserializeFromHeader(model.expectShape(target.value.target), binding.member)
             }
@@ -154,7 +154,7 @@ class HttpBindingGenerator(
                 "pub fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
                 RuntimeType.http,
                 returnTypeSymbol,
-                headerUtil
+                headerUtil,
             ) {
                 rust(
                     """
@@ -167,7 +167,7 @@ class HttpBindingGenerator(
                     }).collect();
                     out.map(Some)
                     """,
-                    headerUtil, inner
+                    headerUtil, inner,
                 )
             }
         }
@@ -181,7 +181,7 @@ class HttpBindingGenerator(
         errorT: RuntimeType,
         // Deserialize a single structure, union or document member marked as a payload
         payloadParser: RustWriter.(String) -> Unit,
-        httpMessageType: HttpMessageType = HttpMessageType.RESPONSE
+        httpMessageType: HttpMessageType = HttpMessageType.RESPONSE,
     ): RuntimeType {
         check(binding.location == HttpBinding.Location.PAYLOAD)
         val fnName = "deser_payload_${fnName(operationShape, binding)}"
@@ -192,7 +192,7 @@ class HttpBindingGenerator(
                     "pub fn $fnName(body: &mut #T) -> std::result::Result<#T, #T>",
                     RuntimeType.sdkBody(runtimeConfig),
                     outputT,
-                    errorT
+                    errorT,
                 ) {
                     // Streaming unions are Event Streams and should be handled separately
                     val target = model.expectShape(binding.member.target)
@@ -211,7 +211,7 @@ class HttpBindingGenerator(
                         binding,
                         errorT,
                         structuredHandler = payloadParser,
-                        httpMessageType
+                        httpMessageType,
                     )
                 }
             }
@@ -226,7 +226,7 @@ class HttpBindingGenerator(
             symbolProvider,
             operationShape,
             targetShape,
-            target
+            target,
         ).render()
         rustTemplate(
             """
@@ -250,7 +250,7 @@ class HttpBindingGenerator(
             let body = std::mem::replace(body, #{SdkBody}::taken());
             Ok(#{ByteStream}::new(body))
             """,
-            "ByteStream" to RuntimeType.ByteStream(runtimeConfig), "SdkBody" to RuntimeType.sdkBody(runtimeConfig)
+            "ByteStream" to RuntimeType.ByteStream(runtimeConfig), "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         )
     }
 
@@ -258,7 +258,7 @@ class HttpBindingGenerator(
         binding: HttpBindingDescriptor,
         errorSymbol: RuntimeType,
         structuredHandler: RustWriter.(String) -> Unit,
-        httpMessageType: HttpMessageType = HttpMessageType.RESPONSE
+        httpMessageType: HttpMessageType = HttpMessageType.RESPONSE,
     ) {
         val member = binding.member
         val targetShape = model.expectShape(member.target)
@@ -272,7 +272,7 @@ class HttpBindingGenerator(
                         HttpMessageType.RESPONSE -> {
                             rustTemplate(
                                 "let body_str = std::str::from_utf8(body).map_err(#{error_symbol}::unhandled)?;",
-                                "error_symbol" to errorSymbol
+                                "error_symbol" to errorSymbol,
                             )
                         }
                         HttpMessageType.REQUEST -> {
@@ -283,12 +283,12 @@ class HttpBindingGenerator(
                         if (target == CodegenTarget.SERVER) {
                             rust(
                                 "Ok(#T::try_from(body_str)?)",
-                                symbolProvider.toSymbol(targetShape)
+                                symbolProvider.toSymbol(targetShape),
                             )
                         } else {
                             rust(
                                 "Ok(#T::from(body_str))",
-                                symbolProvider.toSymbol(targetShape)
+                                symbolProvider.toSymbol(targetShape),
                             )
                         }
                     } else {
@@ -297,7 +297,7 @@ class HttpBindingGenerator(
                 }
                 is BlobShape -> rust(
                     "Ok(#T::new(body))",
-                    symbolProvider.toSymbol(targetShape)
+                    symbolProvider.toSymbol(targetShape),
                 )
                 // `httpPayload` can be applied to set/map/list shapes.
                 // However, none of the AWS protocols support it.
@@ -332,23 +332,23 @@ class HttpBindingGenerator(
                 index.determineTimestampFormat(
                     memberShape,
                     HttpBinding.Location.HEADER,
-                    defaultTimestampFormat
+                    defaultTimestampFormat,
                 )
             val timestampFormatType = RuntimeType.TimestampFormat(runtimeConfig, timestampFormat)
             rust(
                 "let $parsedValue: Vec<${coreType.render(true)}> = #T::many_dates(headers, #T)?;",
                 headerUtil,
-                timestampFormatType
+                timestampFormatType,
             )
         } else if (coreShape.isPrimitive()) {
             rust(
                 "let $parsedValue = #T::read_many_primitive::<${coreType.render(fullyQualified = true)}>(headers)?;",
-                headerUtil
+                headerUtil,
             )
         } else {
             rust(
                 "let $parsedValue: Vec<${coreType.render(fullyQualified = true)}> = #T::read_many_from_str(headers)?;",
-                headerUtil
+                headerUtil,
             )
             if (coreShape.hasTrait<MediaTypeTrait>()) {
                 rustTemplate(
@@ -360,7 +360,7 @@ class HttpBindingGenerator(
                         ).collect();
                     """,
                     "base_64_decode" to RuntimeType.Base64Decode(runtimeConfig),
-                    "header" to headerUtil
+                    "header" to headerUtil,
                 )
                 rust("let $parsedValue = $parsedValue?;")
             }
@@ -375,7 +375,7 @@ class HttpBindingGenerator(
                     } else {
                         None
                     })
-                    """
+                    """,
                 )
             is RustType.HashSet ->
                 rust(
@@ -385,7 +385,7 @@ class HttpBindingGenerator(
                     } else {
                         None
                     })
-                    """
+                    """,
                 )
             else -> rustTemplate(
                 """
@@ -396,7 +396,7 @@ class HttpBindingGenerator(
                     Ok($parsedValue.pop())
                 }
                 """,
-                "header_util" to headerUtil
+                "header_util" to headerUtil,
             )
         }
     }
@@ -418,7 +418,7 @@ class HttpBindingGenerator(
      */
     fun generateAddHeadersFn(
         shape: Shape,
-        httpMessageType: HttpMessageType = HttpMessageType.REQUEST
+        httpMessageType: HttpMessageType = HttpMessageType.REQUEST,
     ): RuntimeType? {
         val (headerBindings, prefixHeaderBinding) = when (httpMessageType) {
             // Only a single structure member can be bound by `httpPrefixHeaders`, hence the `getOrNull(0)`.
@@ -444,7 +444,7 @@ class HttpBindingGenerator(
                     }
                 } else {
                     shape
-                }
+                },
             )
             val codegenScope = arrayOf(
                 "BuildError" to runtimeConfig.operationBuildError(),
@@ -495,13 +495,13 @@ class HttpBindingGenerator(
                         redactIfNecessary(
                             memberShape,
                             model,
-                            "header_value"
+                            "header_value",
                         )
                         }, err)}
                         })?;
                         builder = builder.header("${httpBinding.locationName}", header_value);
                         """,
-                        "build_error" to runtimeConfig.operationBuildError()
+                        "build_error" to runtimeConfig.operationBuildError(),
                     )
                 }
             }
@@ -535,7 +535,7 @@ class HttpBindingGenerator(
                 redactIfNecessary(
                     memberShape,
                     model,
-                    "v"
+                    "v",
                 )
                 }, err)}
                     })?;
@@ -543,7 +543,7 @@ class HttpBindingGenerator(
                 }
 
                 """,
-                "build_error" to runtimeConfig.operationBuildError()
+                "build_error" to runtimeConfig.operationBuildError(),
             )
         }
     }
