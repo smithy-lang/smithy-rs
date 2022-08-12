@@ -15,7 +15,8 @@ extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
 tasks["jar"].enabled = false
 
 plugins {
-    id("software.amazon.smithy").version("0.6.0")
+    val smithyGradlePluginVersion: String by project
+    id("software.amazon.smithy").version(smithyGradlePluginVersion)
 }
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
@@ -108,6 +109,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "license": "Apache-2.0",
                         "customizationConfig": {
                             "awsSdk": {
+                                "generateReadme": true,
                                 "awsConfigVersion": "$awsConfigVersion",
                                 "defaultConfigPath": "${services.defaultConfigPath}",
                                 "endpointsConfigPath": "${services.endpointsConfigPath}",
