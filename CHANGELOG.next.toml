@@ -16,3 +16,9 @@ message = "Add codegen version to generated package metadata"
 references = ["smithy-rs#1612"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "unexge"
+
+[[smithy-rs]]
+message = "Support granular control of specifying runtime crate versions"
+references = ["smithy-rs#1416"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "weihanglo"
