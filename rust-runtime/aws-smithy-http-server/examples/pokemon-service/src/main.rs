@@ -16,6 +16,8 @@ use pokemon_service_server_sdk::operation_registry::OperationRegistryBuilder;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
+mod tls;
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -25,6 +27,15 @@ struct Args {
     /// Hyper server bind port.
     #[clap(short, long, action, default_value = "13734")]
     port: u16,
+    /// Hyper server whether to use TLS.
+    #[clap(long, action)]
+    use_tls: bool,
+    /// Hyper server TLS certificate path. Must be a PEM file.
+    #[clap(long, default_value = "")]
+    tls_cert_path: String,
+    /// Hyper server TLS private key path. Must be a PEM file.
+    #[clap(long, default_value = "")]
+    tls_key_path: String,
 }
 
 #[tokio::main]
@@ -55,13 +66,31 @@ pub async fn main() {
             .layer(AddExtensionLayer::new(shared_state)),
     );
 
-    // Start the [`hyper::Server`].
-    let bind: SocketAddr = format!("{}:{}", args.address, args.port)
+    let addr: SocketAddr = format!("{}:{}", args.address, args.port)
         .parse()
         .expect("unable to parse the server bind address and port");
-    let server = hyper::Server::bind(&bind).serve(app.into_make_service());
 
-    // Run forever-ish...
+    if args.use_tls {
+        run_tls_server(app, args, &addr).await;
+    } else {
+        run_server(app, &addr).await;
+    }
+}
+
+async fn run_server(app: Router, addr: &SocketAddr) {
+    let server = hyper::Server::bind(addr).serve(app.into_make_service());
+    if let Err(err) = server.await {
+        eprintln!("server error: {}", err);
+    }
+}
+
+async fn run_tls_server(app: Router, args: Args, addr: &SocketAddr) {
+    let acceptor = tls::acceptor(&args.tls_cert_path, &args.tls_key_path);
+    let server = hyper::Server::builder(tls_listener::TlsListener::new(
+        acceptor,
+        hyper::server::conn::AddrIncoming::bind(addr).expect("could not bind"),
+    ))
+    .serve(app.into_make_service());
     if let Err(err) = server.await {
         eprintln!("server error: {}", err);
     }
