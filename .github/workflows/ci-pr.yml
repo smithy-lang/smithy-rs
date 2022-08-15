@@ -46,6 +46,10 @@ jobs:
     # Only run this job on pull requests (not directly on main)
     if: ${{ github.head_ref }}
     uses: ./.github/workflows/pull-request-bot.yml
+    with:
+      issue_number: ${{ github.event.number }}
+      base_revision: ${{ github.event.pull_request.base.sha }}
+      head_revision: ${{ github.event.pull_request.head.sha }}
     secrets:
       SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME }}
       SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}

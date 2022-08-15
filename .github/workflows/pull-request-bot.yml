@@ -2,6 +2,19 @@
 name: PR Bot
 on:
   workflow_call:
+    inputs:
+      issue_number:
+        description: The issue number to post the diff comment to.
+        required: true
+        type: string
+      base_revision:
+        description: Base git revision.
+        required: true
+        type: string
+      head_revision:
+        description: Head git revision.
+        required: true
+        type: string
     secrets:
       SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME:
         required: true
@@ -10,7 +23,7 @@ on:
 
 # Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
 concurrency:
-  group: pull-request-bot-yml-${{ github.ref }}
+  group: pull-request-bot-yml-${{ inputs.issue_number }}
   cancel-in-progress: true
 
 env:
@@ -40,7 +53,7 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: generate-codegen-diff
-        action-arguments: ${{ github.event.pull_request.base.sha }}
+        action-arguments: ${{ inputs.base_revision }}
     - uses: aws-actions/configure-aws-credentials@v1
       name: Acquire credentials for uploading to S3
       with:
@@ -49,9 +62,9 @@ jobs:
         aws-region: us-west-2
     - name: Upload diff to S3
       run: |
-        if [[ -d artifacts/codegen-diff/${{ github.event.pull_request.base.sha }} ]]; then
-            aws s3 cp artifacts/codegen-diff/${{ github.event.pull_request.base.sha }} \
-                "s3://${S3_BUCKET_NAME}/codegen-diff/${{ github.event.pull_request.base.sha }}" --recursive
+        if [[ -d artifacts/codegen-diff/${{ inputs.base_revision }} ]]; then
+            aws s3 cp artifacts/codegen-diff/${{ inputs.base_revision }} \
+                "s3://${S3_BUCKET_NAME}/codegen-diff/${{ inputs.base_revision }}" --recursive
         fi
 
   generate-doc-preview:
@@ -107,9 +120,9 @@ jobs:
 
         cargo doc --no-deps --all-features
         popd
-        ./tools/generate-doc-preview-index.sh ${{ github.event.pull_request.base.sha }}
+        ./tools/generate-doc-preview-index.sh ${{ inputs.base_revision }}
 
-        echo '::set-output name=bot-message::A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/'${{ github.event.pull_request.head.sha }}'/index.html) is ready to view.'
+        echo '::set-output name=bot-message::A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/'${{ inputs.head_revision }}'/index.html) is ready to view.'
     - uses: aws-actions/configure-aws-credentials@v1
       name: Acquire credentials for uploading to S3
       with:
@@ -118,7 +131,7 @@ jobs:
         aws-region: us-west-2
     - name: Upload doc preview to S3
       run: |
-        aws s3 cp target/doc "s3://${S3_BUCKET_NAME}/docs/${{ github.event.pull_request.head.sha }}" --recursive
+        aws s3 cp target/doc "s3://${S3_BUCKET_NAME}/docs/${{ inputs.head_revision }}" --recursive
 
   post-bot-comment:
     needs:
@@ -143,11 +156,10 @@ jobs:
         echo ::set-output name=codegen-diff::"$(cat ./bot-message-codegen-diff)"
     - name: Post bot comment
       uses: actions/github-script@v5
-      if: ${{ github.head_ref != null }}
       with:
         script: |
           await github.rest.issues.createComment({
-            issue_number: context.issue.number,
+            issue_number: ${{ inputs.issue_number }},
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: '${{ steps.bot-messages.outputs.codegen-diff }}\n\n' +
