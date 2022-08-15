@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.rustlang.CargoDependency
@@ -23,26 +24,31 @@ import software.amazon.smithy.rust.codegen.rustlang.asType
 import software.amazon.smithy.rust.codegen.util.orNull
 import java.util.Optional
 
+private const val DEFAULT_KEY = "DEFAULT"
+
 /**
  * Location of the runtime crates (aws-smithy-http, aws-smithy-types etc.)
  *
- * This can be configured via the `runtimeConfig.version` field in smithy-build.json
+ * This can be configured via the `runtimeConfig.versions` field in smithy-build.json
  */
-data class RuntimeCrateLocation(val path: String?, val version: String?) {
+data class RuntimeCrateLocation(val path: String?, val versions: CrateVersionMap) {
     init {
-        check(path != null || version != null) {
-            "path ($path) or version ($version) must not be null"
+        check(path != null || versions.map.isNotEmpty()) {
+            "path ($path) or versions ($versions) must not be null or empty"
         }
     }
 
     companion object {
-        fun Path(path: String) = RuntimeCrateLocation(path, null)
+        fun Path(path: String) = RuntimeCrateLocation(path, CrateVersionMap(emptyMap()))
     }
 }
 
-fun RuntimeCrateLocation.crateLocation(): DependencyLocation = when (this.path) {
-    null -> CratesIo(this.version!!)
-    else -> Local(this.path, this.version)
+fun RuntimeCrateLocation.crateLocation(crateName: String): DependencyLocation {
+    val version = versions.map[crateName] ?: versions.map[DEFAULT_KEY]
+    return when (this.path) {
+        null -> CratesIo(version!!)
+        else -> Local(this.path, version)
+    }
 }
 
 fun defaultRuntimeCrateVersion(): String {
@@ -52,6 +58,14 @@ fun defaultRuntimeCrateVersion(): String {
         throw CodegenException("failed to get crate version which sets the default client-runtime version", ex)
     }
 }
+
+/**
+ * A mapping for crate name to user specified version.
+ */
+@JvmInline
+value class CrateVersionMap(
+    val map: Map<String, String>,
+)
 
 /**
  * Prefix & crate location for the runtime crates.
@@ -67,13 +81,14 @@ data class RuntimeConfig(
          */
         fun fromNode(node: Optional<ObjectNode>): RuntimeConfig {
             return if (node.isPresent) {
-                val resolvedVersion = when (val configuredVersion = node.get().getStringMember("version").orNull()?.value) {
-                    "DEFAULT" -> defaultRuntimeCrateVersion()
-                    null -> null
-                    else -> configuredVersion
+                val crateVersionMap = node.get().getObjectMember("versions").orElse(Node.objectNode()).members.entries.let { members ->
+                    // A preset of `DEFAULT` to detected runtime version
+                    val default = mutableMapOf(DEFAULT_KEY to defaultRuntimeCrateVersion())
+                    val map = members.associateTo(default) { it.key.toString() to it.value.expectStringNode().value }
+                    CrateVersionMap(map)
                 }
                 val path = node.get().getStringMember("relativePath").orNull()?.value
-                val runtimeCrateLocation = RuntimeCrateLocation(path = path, version = resolvedVersion)
+                val runtimeCrateLocation = RuntimeCrateLocation(path = path, versions = crateVersionMap)
                 RuntimeConfig(
                     node.get().getStringMemberOrDefault("cratePrefix", "aws-smithy"),
                     runtimeCrateLocation = runtimeCrateLocation,
@@ -86,8 +101,15 @@ data class RuntimeConfig(
 
     val crateSrcPrefix: String = cratePrefix.replace("-", "_")
 
-    fun runtimeCrate(runtimeCrateName: String, optional: Boolean = false, scope: DependencyScope = DependencyScope.Compile): CargoDependency =
-        CargoDependency("$cratePrefix-$runtimeCrateName", runtimeCrateLocation.crateLocation(), optional = optional, scope = scope)
+    fun runtimeCrate(runtimeCrateName: String, optional: Boolean = false, scope: DependencyScope = DependencyScope.Compile): CargoDependency {
+        val crateName = "$cratePrefix-$runtimeCrateName"
+        return CargoDependency(
+            crateName,
+            runtimeCrateLocation.crateLocation(crateName),
+            optional = optional,
+            scope = scope,
+        )
+    }
 }
 
 /**
