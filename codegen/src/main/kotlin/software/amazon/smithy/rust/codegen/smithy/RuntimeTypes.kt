@@ -43,8 +43,8 @@ data class RuntimeCrateLocation(val path: String?, val versions: CrateVersionMap
     }
 }
 
-fun RuntimeCrateLocation.crateLocation(crateName: String): DependencyLocation {
-    val version = versions.map[crateName] ?: versions.map[DEFAULT_KEY]
+fun RuntimeCrateLocation.crateLocation(crateName: String?): DependencyLocation {
+    val version = crateName.let { versions.map[crateName] } ?: versions.map[DEFAULT_KEY]
     return when (this.path) {
         null -> CratesIo(version!!)
         else -> Local(this.path, version)
