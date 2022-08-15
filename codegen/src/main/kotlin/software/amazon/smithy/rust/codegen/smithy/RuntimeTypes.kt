@@ -46,7 +46,9 @@ data class RuntimeCrateLocation(val path: String?, val versions: CrateVersionMap
 fun RuntimeCrateLocation.crateLocation(crateName: String?): DependencyLocation {
     val version = crateName.let { versions.map[crateName] } ?: versions.map[DEFAULT_KEY]
     return when (this.path) {
-        null -> CratesIo(version!!)
+        // CratesIo needs an exact version. However, for local crate we do not
+        // provide a detected version unless user explicitly sets via `DEFAULT` key.
+        null -> CratesIo(version ?: defaultRuntimeCrateVersion())
         else -> Local(this.path, version)
     }
 }
@@ -82,9 +84,7 @@ data class RuntimeConfig(
         fun fromNode(node: Optional<ObjectNode>): RuntimeConfig {
             return if (node.isPresent) {
                 val crateVersionMap = node.get().getObjectMember("versions").orElse(Node.objectNode()).members.entries.let { members ->
-                    // A preset of `DEFAULT` to detected runtime version
-                    val default = mutableMapOf(DEFAULT_KEY to defaultRuntimeCrateVersion())
-                    val map = members.associateTo(default) { it.key.toString() to it.value.expectStringNode().value }
+                    val map = members.associate { it.key.toString() to it.value.expectStringNode().value }
                     CrateVersionMap(map)
                 }
                 val path = node.get().getStringMember("relativePath").orNull()?.value
