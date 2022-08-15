@@ -49,13 +49,38 @@ meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
 author = "Velfi"
 
 [[smithy-rs]]
+message = "Update Smithy dependency to 1.23.0. Models using version 2.0 of the IDL are now supported."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ogudavid"
+
+[[smithy-rs]]
+message = "Fix detecting sensitive members through their target shape having the @sensitive trait applied."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ogudavid"
+
+[[smithy-rs]]
+message = "Remove @sensitive trait tests which applied trait to member. The ability to mark members with @sensitive was removed in Smithy 1.22."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ogudavid"
+
+[[smithy-rs]]
+message = "Fix SetShape matching needing to occur before ListShape since it is now a subclass. Sets were deprecated in Smithy 1.22."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ogudavid"
+
+[[smithy-rs]]
+message = "Fix Union shape test data having an invalid empty union. Break fixed from Smithy 1.21 to Smithy 1.22."
+references = ["smithy-rs#1623"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ogudavid"
+
+[[smithy-rs]]
 message = "Add codegen version to generated package metadata"
 references = ["smithy-rs#1612"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "unexge"
 
-[[smithy-rs]]
-message = "Update Smithy dependency to 1.23.0. Models using version 2.0 of the IDL are now supported."
-references = ["smithy-rs#1623"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "sdk" = "all"}
-author = "ogudavid"

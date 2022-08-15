@@ -311,8 +311,8 @@ class ServerHttpSensitivityGenerator(
     }
 
     internal inline fun <reified A : Trait> isDirectedRelationshipSensitive(partnerShape: Shape): Boolean {
-        return it.hasTrait<A>() || (it.asMemberShape().isPresent()
-                && model.expectShape(it.asMemberShape().get().getTarget()).hasTrait<A>())
+        return partnerShape.hasTrait<A>() || (partnerShape.asMemberShape().isPresent()
+                && model.expectShape(partnerShape.asMemberShape().get().getTarget()).hasTrait<A>())
     }
 
     // Find member shapes with trait `T` contained in a shape enjoying `SensitiveTrait`.
