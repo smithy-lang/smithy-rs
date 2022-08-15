@@ -4,10 +4,12 @@
  */
 
 // This program is exported as a binary named `pokemon_service`.
+use std::future;
 use std::{net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::{AddExtensionLayer, Router};
 use clap::Parser;
+use futures_util::stream::StreamExt;
 use pokemon_service::{
     capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, get_storage, health_check_operation,
     setup_tracing, State,
@@ -86,11 +88,19 @@ async fn run_server(app: Router, addr: &SocketAddr) {
 
 async fn run_tls_server(app: Router, args: Args, addr: &SocketAddr) {
     let acceptor = tls::acceptor(&args.tls_cert_path, &args.tls_key_path);
-    let server = hyper::Server::builder(tls_listener::TlsListener::new(
+    let listener = tls_listener::TlsListener::new(
         acceptor,
         hyper::server::conn::AddrIncoming::bind(addr).expect("could not bind"),
-    ))
-    .serve(app.into_make_service());
+    )
+    .filter(|conn| {
+        if let Err(err) = conn {
+            eprintln!("connection error: {:?}", err);
+            future::ready(false)
+        } else {
+            future::ready(true)
+        }
+    });
+    let server = hyper::Server::builder(hyper::server::accept::from_stream(listener)).serve(app.into_make_service());
     if let Err(err) = server.await {
         eprintln!("server error: {}", err);
     }
