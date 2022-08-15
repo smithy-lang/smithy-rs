@@ -250,7 +250,14 @@ class JsonParserGenerator(
             when (target.hasTrait<EnumTrait>()) {
                 true -> {
                     if (convertsToEnumInServer(target)) {
-                        rust("#T::try_from(u.as_ref())", symbolProvider.toSymbol(target))
+                        rustTemplate(
+                            """
+                            #{EnumSymbol}::try_from(u.as_ref())
+                                .map_err(|e| #{Error}::custom(format!("unknown variant {}", e)))
+                            """,
+                            "EnumSymbol" to symbolProvider.toSymbol(target),
+                            *codegenScope,
+                        )
                     } else {
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
                     }
@@ -263,8 +270,8 @@ class JsonParserGenerator(
     private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
 
     private fun RustWriter.deserializeString(target: StringShape) {
-        // additional .transpose()? because Rust does not allow ? up from closures
-        val additionalTranspose = if (convertsToEnumInServer(target)) { ".transpose()?".repeat(2) } else { ".transpose()?" }
+        // Additional `.transpose()?` because we can't use `?` inside the closures that parsed the string.
+        val additionalTranspose = ".transpose()?".repeat(if (convertsToEnumInServer(target)) 2 else 1)
         withBlockTemplate("#{expect_string_or_null}(tokens.next())?.map(|s|", ")$additionalTranspose", *codegenScope) {
             deserializeStringInner(target, "s")
         }
