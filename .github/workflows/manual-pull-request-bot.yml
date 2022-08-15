@@ -1,0 +1,69 @@
+# This workflow allows maintainers to manually run the PR bot on a pull request to work around permissions
+# issues that prevent it from working for non-maintainers.
+name: Invoke PR Bot as Maintainer
+on:
+  workflow_dispatch:
+    inputs:
+      pull_number:
+        description: The PR number to invoke the PR bot on.
+        required: true
+        type: string
+
+jobs:
+  get-pr-info:
+    name: Get PR info
+    runs-on: ubuntu-latest
+    steps:
+    - name: Get PR info
+      id: get-pr-info
+      uses: actions/github-script@v5
+      with:
+        script: |
+          const response = await github.rest.pulls.get({
+            pull_number: ${{ inputs.pull_number }},
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          const data = {
+            base_revision: response.data.base.sha,
+            head_revision: response.data.head.sha,
+          };
+          console.log("data:", data);
+          return data;
+    outputs:
+      pull_data: ${{ steps.get-pr-info.outputs.result }}
+
+  # This job detects if the PR made changes to build tools. If it did, then it builds a new
+  # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
+  # it uploads the image as a build artifact for other jobs to download and use.
+  acquire-base-image:
+    name: Acquire Base Image
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+        fetch-depth: 0
+    - name: Acquire base image
+      id: acquire
+      run: ./smithy-rs/tools/ci-build/acquire-build-image
+    - name: Upload base image
+      uses: actions/upload-artifact@v3
+      with:
+        name: smithy-rs-base-image
+        path: smithy-rs-base-image
+        retention-days: 1
+
+  invoke-pr-bot:
+    name: PR Bot
+    needs:
+    - acquire-base-image
+    - get-pr-info
+    uses: ./.github/workflows/pull-request-bot.yml
+    with:
+      issue_number: ${{ inputs.pull_number }}
+      base_revision: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).base_revision }}
+      head_revision: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).head_revision }}
+    secrets:
+      SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME }}
+      SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
