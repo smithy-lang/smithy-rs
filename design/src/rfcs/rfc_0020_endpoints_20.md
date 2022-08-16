@@ -169,8 +169,9 @@ async fn main() {
 
 _Alternative Design_: [Context Aware Endpoint Trait](#context-aware-endpoint-traits)
 
-> _Optional addition_: We could add an additional `EndpointResolver` parameter to `SdkConfig` that exposed a global trait
-where `Params` is `&dyn Any` similar to [Context Aware Endpoint Trait](#context-aware-endpoint-traits). If these were
+> _Optional addition_: We could add an additional `EndpointResolver` parameter to `SdkConfig` that exposed a global
+> trait
+> where `Params` is `&dyn Any` similar to [Context Aware Endpoint Trait](#context-aware-endpoint-traits). If these were
 **both** set, a runtime panic would alert users to the misconfiguration.
 
 ### New Endpoint Traits
@@ -465,10 +466,9 @@ class EndpointParamsDecorator(
 
 #### Loading values for builtIns
 
-The fundamental point of builtIn values is enabling _other codegenerators to define where these values come from.
-Because of that,
-we will need to expose the ability to customize builtIns. One way to do this is with a new customization
-type, `EndpointCustomization`:
+The fundamental point of builtIn values is enabling _other_ code generators to define where these values come from.
+Because of that, we will need to expose the ability to customize builtIns. One way to do this is with a new
+customization type, `EndpointCustomization`:
 
 ```kotlin
 fun endpointCustomizations(
@@ -568,7 +568,7 @@ Changes checklist
 - [ ] Remove/deprecate the `ResolveAwsEndpoint` trait and replace it with the vanilla Smithy trait. Potentially, provide
   a bridge.
 - [ ] Update `make_operation` to write a [`smithy::Endpoint`](#the-endpoint-struct) into the property bag
-- [ ] Update AWS Endpoint middleware to work off of a [`smithy::Endpoint`]
+- [ ] Update AWS Endpoint middleware to work off of a [`smithy::Endpoint`](#the-endpoint-struct)
 - [ ] Wire the endpoint override to the `SDK::Endpoint` builtIn parameter
 
 Alternative Designs
