@@ -162,9 +162,9 @@ private class AwsFluentClientExtensions(types: Types) {
                 /// Creates a new client from the service [`Config`](crate::Config).
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
-                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
-                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
-                    let sleep_impl = conf.sleep_impl.clone();
+                    let retry_config = conf.retry_config().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
+                    let sleep_impl = conf.sleep_impl().clone();
                     let mut builder = #{aws_smithy_client}::Builder::dyn_https()
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
                     builder.set_retry_config(retry_config.into());
