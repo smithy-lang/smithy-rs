@@ -11,6 +11,19 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "client | server | all"}
 # author = "rcoh"
 
+[[aws-sdk-rust]]
+message = """
+Service configs are now generated with new accessors for:
+- `Config::retry_config()` - Returns a reference to the inner retry configuration.
+- `Config::timeout_config()` - Returns a reference to the inner timeout configuration.
+- `Config::sleep_impl()` - Returns a clone of the inner async sleep implementation.
+
+Previously, these were only accessible through `SdkConfig`.
+"""
+references = ["smithy-rs#1598"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
 [[smithy-rs]]
 message = """
 Previously, the config customizations that added functionality related to retry configs, timeout configs, and the 
