@@ -46,7 +46,7 @@ data class RuntimeCrateLocation(val path: String?, val versions: CrateVersionMap
 fun RuntimeCrateLocation.crateLocation(crateName: String?): DependencyLocation {
     val version = crateName.let { versions.map[crateName] } ?: versions.map[DEFAULT_KEY]
     return when (this.path) {
-        // CratesIo needs an exact version. However, for runtime crates we do not
+        // CratesIo needs an exact version. However, for local runtime crates we do not
         // provide a detected version unless the user explicitly sets one via the `versions` map.
         null -> CratesIo(version ?: defaultRuntimeCrateVersion())
         else -> Local(this.path, version)
