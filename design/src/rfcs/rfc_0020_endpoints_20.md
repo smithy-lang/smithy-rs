@@ -22,9 +22,11 @@ Terminology
 - **Smithy-native**: In reference to features/code that is _not_ AWS specific and is supported for all Smithy clients.
 - **Rules language**: A JSON-based rules language used to resolve endpoints
 - [**Smithy Endpoint**](#the-endpoint-struct): An endpoint, as returned from the rules-language. This contains a URI,
-  headers, and an
-  untyped property bag. This must undergo another level of transformation before it can be used as an AwsEndpoint
-- **AWS Endpoint**: An endpoint with explicit signing configuration applied.
+  headers, and configuration map of `String -> Document`. This must
+  undergo [another level of transformation](#converting-a-smithy-endpoint-to-an-aws-endpoint) before it
+  can be used as an `AwsEndpoint`.
+- **AWS Endpoint**: An endpoint with explicit signing configuration applied. AWS Endpoints need to contain region &
+  service metadata to control signing.
 - **Middleware**: A transformation applied to a request, prior to request dispatch
 - **Endpoint Parameters**: A code-generated structure for each service which contains service-specific (and general)
   endpoint parameters.
@@ -54,7 +56,7 @@ The following flow chart traces the endpoints 2.0 influence on a request via the
 
 ```mermaid
 flowchart TD
-    globalConfig("SDK global configuration (eg. region provider, UseFIPS, etc.)")
+    globalConfig("SDK global configuration (e.g. region provider, UseFIPS, etc.)")
 
     serviceConfig("Modeled, service specific configuration information (clientContextParams)")
 
@@ -101,7 +103,7 @@ pub trait ResolveAwsEndpoint<T>: Send + Sync {
 ```
 
 The trait itself would then be parameterized by service-specific endpoint parameter, eg:
-`aws_sdk_s3::endpoint::Params`. The endpoint parameters we would use for S3 (eg. including `Bucket`) are different
+`aws_sdk_s3::endpoint::Params`. The endpoint parameters we would use for S3 (e.g. including `Bucket`) are different
 from the endpoint parameters we might use for a service like DynamoDB which, today, doesn't have any custom endpoint
 behavior.
 
@@ -109,7 +111,7 @@ Going forward we want to provide two different avenues for customers to customiz
 
 1. Configuration driven URL override. This mechanism hasn't been specified, but suppose that the Rust SDK supported
    an `SDK_ENDPOINT` environment variable. This variable would be an input to the existing endpoint resolver.
-   machinery. and would be backwards compatible with other SDKs (eg. by prefixing the bucket as a host label for S3).
+   machinery and would be backwards compatible with other SDKs (e.g. by prefixing the bucket as a host label for S3).
 2. Wholesale endpoint resolver override. In this case, customers would gain access to all endpoint parameters and be
    able to write their own resolver.
 
@@ -167,8 +169,9 @@ async fn main() {
 
 _Alternative Design_: [Context Aware Endpoint Trait](#context-aware-endpoint-traits)
 
-_Optional addition_: We could add an additional `EndpointResolver` parameter to `SdkConfig` that exposed a global trait
-where `Params` is `&dyn Any` similar to [Context Aware Endpoint Trait](#context-aware-endpoint-traits).
+> _Optional addition_: We could add an additional `EndpointResolver` parameter to `SdkConfig` that exposed a global trait
+where `Params` is `&dyn Any` similar to [Context Aware Endpoint Trait](#context-aware-endpoint-traits). If these were
+**both** set, a runtime panic would alert users to the misconfiguration.
 
 ### New Endpoint Traits
 
@@ -190,10 +193,11 @@ type MaybeStatic<T> = Cow<'static, T>;
 /// Endpoint
 #[derive(Debug, PartialEq)]
 pub struct Endpoint {
-    // TODO: consider using `http::Uri` here. However, by using `String` we can keep `Endpoint` extremely flexible.
+    // Note that this allows `Endpoint` to contain an invalid URI. During conversion to an actual endpoint, the
+    // the middleware can fail, returning a `ConstructionFailure` to the user
     url: MaybeStatic<str>,
-    headers: HashMap<MaybeStatic<str>, MaybeStatic<str>>,
-    properties: HashMap<MaybeStatic<str>, Document>,
+    headers: HashMap<MaybeStatic<str>, Vec<MaybeStatic<str>>>,
+    properties: HashMap<MaybeStatic<str>, aws_smithy_types::Document>,
 }
 
 // not shown:
@@ -226,8 +230,7 @@ if they wish to override the endpoint resolver.
 We've mentioned "service specific endpoint parameters" a few times. In Endpoints 2.0, we will code generate Endpoint
 Parameters for every service based on their rules. **Note**: the endpoint parameters themselves are generated solely
 from the ruleset. The Smithy model provides additional information about parameter binding, but that only influences how
-the
-parameters are set, *not* how they are generated.
+the parameters are set, *not* how they are generated.
 
 **Example `Params` struct for S3:**
 
@@ -292,7 +295,7 @@ impl ResolveEndpoint<crate::endpoint::Params> for DefaultEndpointResolver {
 ```
 
 `DefaultEndpointResolver` **MUST** be publicly accessible and offer both a default constructor and the ability to
-configure resolution behavior (e.g. by supporting adding additional partitions.).
+configure resolution behavior (e.g. by supporting adding additional partitions.)
 
 
 How to actually implement this RFC
@@ -318,8 +321,7 @@ rules-engine internals, skip to [implementing the rules engine](#implementing-th
 
 When a smithy model uses the `@clientContextParams` trait, we need to generate client params onto the Rust SDK. This is
 a **Smithy-native** feature. This should be implemented as a "standard" config decorator that reads traits from the
-current
-model.
+current model.
 
 <details>
 <summary>Kotlin Snippet for Client context params</summary>
@@ -575,8 +577,8 @@ Alternative Designs
 ### Context Aware Endpoint Traits
 
 An alternative design that could provide more flexibility is a context-aware endpoint trait where the return type would
-give context about the endpoint being returned. This would, eg. allow a customer to say explicitly "don't modify this
-endpoint":
+give context about the endpoint being returned. This would, for example, allow a customer to say explicitly "don't
+modify this endpoint":
 
 ```rust
 enum ContextualEndpoint {
