@@ -44,7 +44,7 @@ These classes have been renamed:
 - `TimeoutConfigProviderConfig` is now `TimeoutConfigProviderCustomization`
 """
 references = ["smithy-rs#1598"]
-meta = { "breaking" = true, "tada" = true, "bug" = false }
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
 author = "Velfi"
 
 [[smithy-rs]]
