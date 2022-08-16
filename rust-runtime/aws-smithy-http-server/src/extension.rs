@@ -50,6 +50,8 @@
 
 use std::ops::Deref;
 
+use thiserror::Error;
+
 use crate::request::RequestParts;
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
@@ -58,19 +60,31 @@ use crate::request::RequestParts;
 /// request fails to deserialize into the modeled operation input.
 #[derive(Debug, Clone)]
 pub struct OperationExtension {
-    /// Smithy model namespace.
+    absolute: &'static str,
+
     namespace: &'static str,
-    /// Smithy operation name.
-    operation_name: &'static str,
+    name: &'static str,
+}
+
+/// An error occurred when parsing an absolute operation shape ID.
+#[derive(Debug, Clone, Error)]
+#[non_exhaustive]
+pub enum ParseError {
+    #[error("# was not found - missing namespace")]
+    MissingNamespace,
 }
 
 impl OperationExtension {
-    /// Creates a new `OperationExtension`.
-    pub fn new(namespace: &'static str, operation_name: &'static str) -> Self {
-        Self {
+    /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation.
+    pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
+        let (namespace, name) = absolute_operation_id
+            .split_once('#')
+            .ok_or(ParseError::MissingNamespace)?;
+        Ok(Self {
+            absolute: absolute_operation_id,
             namespace,
-            operation_name,
-        }
+            name,
+        })
     }
 
     /// Returns the Smithy model namespace.
@@ -79,13 +93,13 @@ impl OperationExtension {
     }
 
     /// Returns the Smithy operation name.
-    pub fn operation_name(&self) -> &'static str {
-        self.operation_name
+    pub fn name(&self) -> &'static str {
+        self.name
     }
 
-    /// Returns the current operation formatted as `<namespace>#<operation_name>`.
-    pub fn operation(&self) -> String {
-        format!("{}#{}", self.namespace, self.operation_name)
+    /// Returns the absolute operation shape ID.
+    pub fn absolute(&self) -> &'static str {
+        self.absolute
     }
 }
 

@@ -33,3 +33,9 @@ These classes have been renamed:
 references = ["smithy-rs#1598"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Add codegen version to generated package metadata"
+references = ["smithy-rs#1612"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "unexge"

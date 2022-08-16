@@ -9,7 +9,10 @@ extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.test"
 
 tasks["jar"].enabled = false
 
-plugins { id("software.amazon.smithy").version("0.5.3") }
+plugins {
+    val smithyGradlePluginVersion: String by project
+    id("software.amazon.smithy").version(smithyGradlePluginVersion)
+}
 
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
@@ -33,6 +36,8 @@ dependencies {
 }
 
 val allCodegenTests = listOf(
+    CodegenTest("crate#Config", "naming_test_ops"),
+    CodegenTest("naming_obs_structs#NamingObstacleCourseStructs", "naming_test_structs"),
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
     CodegenTest("aws.protocoltests.restjson#RestJson", "rest_json"),
     CodegenTest("aws.protocoltests.restjson.validation#RestJsonValidation", "rest_json_validation"),

@@ -4,6 +4,7 @@
  */
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import java.io.ByteArrayOutputStream
 
 plugins {
     kotlin("jvm")
@@ -39,6 +40,18 @@ tasks.compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
+fun gitCommitHash() =
+    try {
+        val output = ByteArrayOutputStream()
+        exec {
+            commandLine = listOf("git", "rev-parse", "HEAD")
+            standardOutput = output
+        }
+        output.toString().trim()
+    } catch (ex: Exception) {
+        "unknown"
+    }
+
 val generateSmithyRuntimeCrateVersion by tasks.registering {
     // generate the version of the runtime to use as a resource.
     // this keeps us from having to manually change version numbers in multiple places
@@ -47,9 +60,11 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
     outputs.file(versionFile)
     val crateVersion = project.properties["smithy.rs.runtime.crate.version"].toString()
     inputs.property("crateVersion", crateVersion)
+    // version format must be in sync with `software.amazon.smithy.rust.codegen.smithy.Version`
+    val version = "$crateVersion\n${gitCommitHash()}"
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
-        versionFile.writeText(crateVersion)
+        versionFile.writeText(version)
     }
 }
 

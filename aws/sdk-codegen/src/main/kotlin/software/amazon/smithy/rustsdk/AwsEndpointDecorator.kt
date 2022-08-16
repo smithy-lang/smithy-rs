@@ -46,7 +46,13 @@ class AwsEndpointDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     private fun endpoints(sdkSettings: SdkSettings): ObjectNode {
         if (endpointsCache == null) {
-            val endpointsJson = sdkSettings.endpointsConfigPath.readText()
+            val endpointsJson = when (val path = sdkSettings.endpointsConfigPath) {
+                null -> (
+                    javaClass.getResource("/default-sdk-endpoints.json")
+                        ?: throw IllegalStateException("Failed to find default-sdk-endpoints.json in the JAR")
+                    ).readText()
+                else -> path.readText()
+            }
             endpointsCache = Node.parse(endpointsJson).expectObjectNode()
         }
         return endpointsCache!!
@@ -316,7 +322,7 @@ class EndpointResolverGenerator(coreCodegenContext: CoreCodegenContext, private 
     /**
      * Represents a partition from endpoints.json
      */
-    private inner class PartitionNode(endpointPrefix: String, val config: ObjectNode) {
+    private inner class PartitionNode(endpointPrefix: String, config: ObjectNode) {
         // the partition id/name (e.g. "aws")
         val id: String = config.expectStringMember("partition").value
 
