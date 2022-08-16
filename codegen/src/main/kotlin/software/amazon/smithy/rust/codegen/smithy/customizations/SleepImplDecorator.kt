@@ -131,8 +131,8 @@ class SleepImplProviderCustomization(coreCodegenContext: CoreCodegenContext) : C
             is ServiceConfig.ConfigImpl -> {
                 rustTemplate(
                     """
-                    /// Return a reference to the async sleep implementation contained in this config, if any.
-                    pub fn sleep_impl(&self) -> Option<&std::sync::Arc<dyn #{AsyncSleep}>> { self.sleep_impl.as_ref() }
+                    /// Return a cloned Arc containing the async sleep implementation from this config, if any.
+                    pub fn sleep_impl(&self) -> Option<std::sync::Arc<dyn #{AsyncSleep}>> { self.sleep_impl.clone() }
                     """,
                     *codegenScope,
                 )
