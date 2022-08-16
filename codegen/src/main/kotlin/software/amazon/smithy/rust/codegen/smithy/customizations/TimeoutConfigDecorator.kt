@@ -115,11 +115,13 @@ class TimeoutConfigProviderCustomization(coreCodegenContext: CoreCodegenContext)
                 *codegenScope,
             )
             is ServiceConfig.ConfigImpl -> {
-                rustTemplate("""
+                rustTemplate(
+                    """
                     /// Return a reference to the timeout configuration contained in this config, if any.
                     pub fn timeout_config(&self) -> Option<&#{TimeoutConfig}> { self.timeout_config.as_ref() }
                     """,
-                *codegenScope,)
+                    *codegenScope,
+                )
             }
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("timeout_config: Option<#{TimeoutConfig}>,", *codegenScope)

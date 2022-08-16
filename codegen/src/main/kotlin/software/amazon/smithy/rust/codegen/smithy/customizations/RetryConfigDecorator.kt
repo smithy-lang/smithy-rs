@@ -76,11 +76,13 @@ class RetryConfigProviderCustomization(coreCodegenContext: CoreCodegenContext) :
                 *codegenScope,
             )
             is ServiceConfig.ConfigImpl -> {
-                rustTemplate("""
+                rustTemplate(
+                    """
                     /// Return a reference to the retry configuration contained in this config, if any.
                     pub fn retry_config(&self) -> Option<&#{RetryConfig}> { self.retry_config.as_ref() }
                     """,
-                *codegenScope,)
+                    *codegenScope,
+                )
             }
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("retry_config: Option<#{RetryConfig}>,", *codegenScope)
