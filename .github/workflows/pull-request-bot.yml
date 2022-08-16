@@ -39,6 +39,8 @@ jobs:
     env:
       AWS_REGION: us-west-2
       S3_BUCKET_NAME: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME }}
+      # Override version commit hash to prevent unnecessary diffs
+      SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE: ci
     permissions:
       id-token: write
       contents: read
