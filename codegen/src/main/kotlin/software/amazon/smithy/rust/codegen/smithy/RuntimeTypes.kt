@@ -34,7 +34,7 @@ private const val DEFAULT_KEY = "DEFAULT"
 data class RuntimeCrateLocation(val path: String?, val versions: CrateVersionMap) {
     init {
         check(path != null || versions.map.isNotEmpty()) {
-            "path ($path) or versions ($versions) must not be null or empty"
+            "path ($path) must not be null or or versions ($versions) must not be empty"
         }
     }
 
@@ -46,8 +46,8 @@ data class RuntimeCrateLocation(val path: String?, val versions: CrateVersionMap
 fun RuntimeCrateLocation.crateLocation(crateName: String?): DependencyLocation {
     val version = crateName.let { versions.map[crateName] } ?: versions.map[DEFAULT_KEY]
     return when (this.path) {
-        // CratesIo needs an exact version. However, for local crate we do not
-        // provide a detected version unless user explicitly sets via `DEFAULT` key.
+        // CratesIo needs an exact version. However, for runtime crates we do not
+        // provide a detected version unless the user explicitly sets one via the `versions` map.
         null -> CratesIo(version ?: defaultRuntimeCrateVersion())
         else -> Local(this.path, version)
     }
@@ -62,7 +62,7 @@ fun defaultRuntimeCrateVersion(): String {
 }
 
 /**
- * A mapping for crate name to user specified version.
+ * A mapping from crate name to a user-specified version.
  */
 @JvmInline
 value class CrateVersionMap(
