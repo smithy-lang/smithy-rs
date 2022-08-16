@@ -138,9 +138,9 @@ private class AwsFluentClientExtensions(types: Types) {
                     C: #{SmithyConnector}<Error = E> + Send + 'static,
                     E: Into<#{ConnectorError}>,
                 {
-                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_default();
-                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
-                    let sleep_impl = conf.sleep_impl.clone();
+                    let retry_config = conf.retry_config().cloned().unwrap_or_default();
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
+                    let sleep_impl = conf.sleep_impl().clone();
                     let mut builder = #{aws_smithy_client}::Builder::new()
                         .connector(#{DynConnector}::new(conn))
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
