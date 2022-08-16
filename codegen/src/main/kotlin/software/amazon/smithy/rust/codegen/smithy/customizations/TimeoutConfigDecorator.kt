@@ -7,10 +7,8 @@ package software.amazon.smithy.rust.codegen.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
@@ -103,22 +101,7 @@ fn test_1() {
 }
  */
 
-class TimeoutConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
-    override val name: String = "TimeoutConfig"
-    override val order: Byte = 0
-
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> {
-        return baseCustomizations + TimeoutConfigProviderConfig(codegenContext)
-    }
-
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
-}
-
-class TimeoutConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
+class TimeoutConfigProviderCustomization(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
     private val smithyTypesCrate = coreCodegenContext.runtimeConfig.runtimeCrate("types")
     private val timeoutModule = RuntimeType("timeout", smithyTypesCrate, "aws_smithy_types")
     private val moduleUseName = coreCodegenContext.moduleUseName()
@@ -128,10 +111,18 @@ class TimeoutConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : Conf
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
-                "pub(crate) timeout_config: Option<#{TimeoutConfig}>,",
+                "timeout_config: Option<#{TimeoutConfig}>,",
                 *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.ConfigImpl -> {
+                rustTemplate(
+                    """
+                    /// Return a reference to the timeout configuration contained in this config, if any.
+                    pub fn timeout_config(&self) -> Option<&#{TimeoutConfig}> { self.timeout_config.as_ref() }
+                    """,
+                    *codegenScope,
+                )
+            }
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("timeout_config: Option<#{TimeoutConfig}>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
