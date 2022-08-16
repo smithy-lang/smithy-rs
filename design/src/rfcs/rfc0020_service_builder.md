@@ -775,3 +775,32 @@ let service_0: Service0 = Service0::builder()
     /* use the setters */
     .build();
 ```
+
+### Type-safe Handler State
+
+As described in [Handlers](#handlers), the current method of exposing state to a handler is via the insertion then lookup of items from the `http::Request::extensions` type map. In [Handlers](#handlers) we noted that the retrieval of state from this presents an extra failure case. In [Comparison to Axum](#comparison-to-axum) we noted that, in `smithy-rs`, we no longer have the use case where state is scoped to subtrees of the routing tree.
+
+Removing this runtime insertion/removal and opting for a static alternative would remove a runtime failure case and improve performance.
+
+The `Handler` trait already enjoys a blanket implementation for any `FnOnce({OperationInput}) -> Fut + Clone + Send + 'static` where `Fut: Future<Output = {Operation}Output>`. This includes any closure which captures cloneable state. In this way the customer already has the option to provide state to handlers while building their service.
+
+Requiring that the customer writes all handlers as closures might be cumbersome, providing the following API will make adjoining state to a handler easier for customers:
+
+```rust
+async fn operation_0(input: Operation0Input, state: T) -> Operation0Output {
+    todo!()
+}
+
+let handler = operation_0.with_state(/* something T valued */);
+```
+
+The `with_state` extension method creates the following wrapper
+
+```rust
+struct StatefulWrapper<F, T> {
+    f: F,
+    state: T
+}
+```
+
+which enjoys `Handler` and hence allows it to be provided to the service builder in the same way as a `async fn operation_0(input: Operation0Input) -> Operation0Output` would be.
