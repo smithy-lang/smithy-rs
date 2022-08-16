@@ -714,6 +714,64 @@ impl<S> Router<S> {
 
 ## Protocol specific Routers
 
+Currently there is a single `Router` structure, described in [Router](#router), situated in the `rust-runtime/aws-smithy-http-server` crate, which is output by the service builder. This, roughly, takes the form of an `enum` listing the different protocols.
+
+```rust
+#[derive(Debug)]
+enum Routes {
+    RestXml(/* Container */),
+    RestJson1(/* Container */),
+    AwsJson10(/* Container */),
+    AwsJson11(/* Container */),
+}
+```
+
+A consequence of this is that it obstructs the ability of a third-party to extend `smithy-rs` to additional protocols.
+
+<!-- This needs work. -->
+
 ## Protocol specific Errors
 
+Currently, protocol specific routing errors are either:
+
+- Converted to `RuntimeError`s and then `http::Response` (see [unknown_operation](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L106-L118)).
+- Converted directly to a `http::Response` (see [method_not_allowed](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L121-L127)). This is an outlier to the common pattern.
+
+The `from_request` functions yield protocol specific errors which are converted to `RequestRejection`s then `RuntimeError`s (see [ServerHttpBoundProtocolGenerator.kt](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L194-L210)).
+
+In these scenarios protocol specific errors are converted into `RuntimeError` before being converted to a `http::Response` via `into_response` method.
+
+Two consequences of this are:
+
+- `RuntimeError` captures the union of all possible errors across all existing protocols, so is larger than needed when modelling the errors for a specific protocol.
+- If a third-party wanted extend `smithy-rs` to additional protocols with differing failure modes `RuntimeError` would have to be extended.
+
+
+<!-- This needs work. -->
+
 ## Type erasure with the name of the Smithy service
+
+Currently the service builder is named `OperationRegistryBuilder`. Despite the name being model agnostic, the `OperationRegistryBuilder` mutates when the associated service mutates. Renaming `OperationRegistryBuilder` to `{Service}Builder` would reflect the relationship between the builder and the Smithy service and prevent naming conflicts if multiple service builders are to exist in the same namespace.
+
+Similarly, the output of the service builder is `Router`. This ties the output of the service builder to a structure in `rust-runtime`. Introducing a type erasure here around `Router` using a newtype named `{Service}` would:
+
+- Ensure we are free to change the implementation of `{Service}` without changing the `Router` implementation.
+- Allow us to put a `builder` method on `{Service}` which returns `{Service}Builder`.
+
+With both of these changes the API would take the form:
+
+```rust
+let service_0: Service0 = Service0::builder()
+    /* use the setters */
+    .build()
+    .unwrap()
+    .into();
+```
+
+With [Remove two-step build procedure](#remove-two-step-build-procedure), [Switch `From<OperationRegistry> for Router` to a `OperationRegistry::build` method](#switch-fromoperationregistry-for-router-to-a-operationregistrybuild-method), and [Statically check for missing Handlers](#statically-check-for-missing-handlers) we obtain the following API:
+
+```rust
+let service_0: Service0 = Service0::builder()
+    /* use the setters */
+    .build();
+```
