@@ -434,7 +434,7 @@ where
 
 The customer will now get a compile time error rather than a runtime error when they fail to specify a handler.
 
-## Switch `From<OperationRegistry> for Router` to a `OperationRegistry::build` method
+## Switch `From<OperationRegistry> for Router` to an `OperationRegistry::build` method
 
 To construct a `Router`, the customer must either give a type ascription
 
