@@ -18,7 +18,45 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "unexge"
 
 [[smithy-rs]]
-message = "Support granular control of specifying runtime crate versions"
-references = ["smithy-rs#1416"]
+message = """
+Support granular control of specifying runtime crate versions.
+
+For code generation, the field `runtimeConfig.version` in smithy-build.json has been removed.
+The new field `runtimeConfig.verisions` is an object that keys are runtime crate names (e.g. aws-smithy-http),
+and values are their versions user specifying.
+
+If you previous set `version = "DEFAULT"`, then you're lucky.
+The new behaviour automatically detects and injects the version for you by checking the version of the code generator.
+You don't need to add any new configuration.
+
+If you specified a certain version such as `version = "0.47.0", you can migrate to a special reserved key `DEFAULT`.
+The equivalent JSON config would look like:
+
+```json
+{
+  "runtimeConfig": {
+      "versions": {
+          "DEFAULT": "0.47.0"
+      }
+  }
+}
+```
+
+Then all runtime crate are set with version 0.47.0 by default unless specified versions by crate name. For example,
+
+```json
+{
+  "runtimeConfig": {
+      "versions": {
+          "DEFAULT": "0.47.0",
+          "aws-smithy-http": "0.47.1"
+      }
+  }
+}
+```
+
+It implies that we're using aws-smithy-http 0.47.1 specifically. For other crates default to 0.47.0.
+"""
+references = ["smithy-rs#1635", "smithy-rs#1416"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "weihanglo"
