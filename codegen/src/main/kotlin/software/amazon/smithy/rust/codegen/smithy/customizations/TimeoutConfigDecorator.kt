@@ -111,10 +111,13 @@ class TimeoutConfigProviderCustomization(coreCodegenContext: CoreCodegenContext)
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
-                "pub(crate) timeout_config: Option<#{TimeoutConfig}>,",
+                "timeout_config: Option<#{TimeoutConfig}>,",
                 *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.ConfigImpl -> {
+                rustTemplate("pub fn timeout_config(&self) -> Option<&#{TimeoutConfig}> { self.timeout_config.as_ref() }",
+                *codegenScope,)
+            }
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("timeout_config: Option<#{TimeoutConfig}>,", *codegenScope)
             ServiceConfig.BuilderImpl ->

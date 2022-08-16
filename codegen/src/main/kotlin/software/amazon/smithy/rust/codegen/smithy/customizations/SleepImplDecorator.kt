@@ -125,10 +125,13 @@ class SleepImplProviderCustomization(coreCodegenContext: CoreCodegenContext) : C
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
-                "pub(crate) sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,",
+                "sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,",
                 *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.ConfigImpl -> {
+                rustTemplate("pub fn sleep_impl(&self) -> Option<&std::sync::Arc<dyn #{AsyncSleep}>> { self.sleep_impl.as_ref() }",
+                *codegenScope,)
+            }
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,", *codegenScope)
             ServiceConfig.BuilderImpl ->

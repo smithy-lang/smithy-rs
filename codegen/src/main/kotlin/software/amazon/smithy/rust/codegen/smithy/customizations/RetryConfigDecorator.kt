@@ -72,10 +72,13 @@ class RetryConfigProviderCustomization(coreCodegenContext: CoreCodegenContext) :
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
-                "pub(crate) retry_config: Option<#{RetryConfig}>,",
+                "retry_config: Option<#{RetryConfig}>,",
                 *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.ConfigImpl -> {
+                rustTemplate("pub fn retry_config(&self) -> Option<&#{RetryConfig}> { self.retry_config.as_ref() }",
+                *codegenScope,)
+            }
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("retry_config: Option<#{RetryConfig}>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
