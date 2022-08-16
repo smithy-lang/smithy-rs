@@ -289,7 +289,7 @@ class JsonParserGenerator(
                     .map(|v| v.try_into())
                     .transpose()?
                 """,
-                *codegenScope
+                *codegenScope,
             )
         }
     }
