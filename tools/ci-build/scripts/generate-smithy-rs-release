@@ -42,6 +42,6 @@ mv "${SMITHY_RS_DIR}/rust-runtime/build/smithy-rs/rust-runtime" \
 # the `smithy-rs-release` artifact for push to GitHub
 pushd "${ARTIFACTS_DIR}"
 git clone "${SMITHY_RS_DIR}"
-# Copy over the original remotes so that it's possibel to push to `origin`
+# Copy over the original remotes so that it's possible to push to `origin`
 cp "${SMITHY_RS_DIR}/.git/config" smithy-rs/.git/config
 popd
