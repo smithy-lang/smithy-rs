@@ -24,7 +24,7 @@ class RuntimeTypesTest {
     ) {
         val node = Node.parse(runtimeConfig)
         val cfg = RuntimeConfig.fromNode(node.asObjectNode())
-        cfg.runtimeCrateLocation shouldBeEqualToComparingFields expectedCrateLocation
+        cfg.runtimeCrateLocation shouldBe expectedCrateLocation
     }
 
     @ParameterizedTest
@@ -37,7 +37,7 @@ class RuntimeTypesTest {
     ) {
         val crateLoc = RuntimeCrateLocation(path, versions)
         val depLoc = crateLoc.crateLocation(crateName)
-        depLoc.toString() shouldBeEqualComparingTo expectedDependencyLocation.toString()
+        depLoc shouldBe expectedDependencyLocation
     }
 
     companion object {
@@ -79,7 +79,7 @@ class RuntimeTypesTest {
 
         @JvmStatic
         fun runtimeCrateLocationProvider() = listOf(
-            // If user specifies relativePath in runtimeConfig, then that always takes precedence over versions.
+            // If user specifies `relativePath` in `runtimeConfig`, then that always takes precedence over versions.
             Arguments.of(
                 "/path",
                 mapOf<String, String>(),

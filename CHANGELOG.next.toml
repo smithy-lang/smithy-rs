@@ -25,9 +25,9 @@ For code generation, the field `runtimeConfig.version` in smithy-build.json has 
 The new field `runtimeConfig.versions` is an object whose keys are runtime crate names (e.g. `aws-smithy-http`),
 and values are user-specified versions.
 
-If you previous set `version = "DEFAULT"`, the migration path is simple.
-By setting `versions` with an empty object or just not setting at all,
-the version number of the code-generator would be used as the version for all runtime crates.
+If you previously set `version = "DEFAULT"`, the migration path is simple.
+By setting `versions` with an empty object or just not setting it at all,
+the version number of the code generator will be used as the version for all runtime crates.
 
 If you specified a certain version such as `version = "0.47.0", you can migrate to a special reserved key `DEFAULT`.
 The equivalent JSON config would look like:
@@ -55,7 +55,7 @@ Then all runtime crates are set with version 0.47.0 by default unless overridden
 }
 ```
 
-It implies that we're using aws-smithy-http 0.47.1 specifically. For other crates default to 0.47.0.
+implies that we're using `aws-smithy-http` 0.47.1 specifically. For the rest of the crates, it will default to 0.47.0.
 """
 references = ["smithy-rs#1635", "smithy-rs#1416"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
