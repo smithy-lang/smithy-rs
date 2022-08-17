@@ -5,8 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.smithy
 
-import io.kotest.matchers.comparables.shouldBeEqualComparingTo
-import io.kotest.matchers.equality.shouldBeEqualToComparingFields
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
@@ -47,32 +46,38 @@ class RuntimeTypesTest {
         @JvmStatic
         fun runtimeConfigProvider() = listOf(
             Arguments.of(
-                """{}""",
+                "{}",
                 RuntimeCrateLocation(null, CrateVersionMap(mapOf())),
             ),
             Arguments.of(
-                """{
-                "relativePath": "/path"
-                }""",
+                """
+                {
+                    "relativePath": "/path"
+                }
+                """,
                 RuntimeCrateLocation("/path", CrateVersionMap(mapOf())),
             ),
             Arguments.of(
-                """{
-                "versions": {
-                    "a": "1.0",
-                    "b": "2.0"
+                """
+                {
+                    "versions": {
+                        "a": "1.0",
+                        "b": "2.0"
+                    }
                 }
-                }""",
+                """,
                 RuntimeCrateLocation(null, CrateVersionMap(mapOf("a" to "1.0", "b" to "2.0"))),
             ),
             Arguments.of(
-                """{
-                "relativePath": "/path",
-                "versions": {
-                    "a": "1.0",
-                    "b": "2.0"
+                """
+                {
+                    "relativePath": "/path",
+                    "versions": {
+                        "a": "1.0",
+                        "b": "2.0"
+                    }
                 }
-                }""",
+                """,
                 RuntimeCrateLocation("/path", CrateVersionMap(mapOf("a" to "1.0", "b" to "2.0"))),
             ),
         )
