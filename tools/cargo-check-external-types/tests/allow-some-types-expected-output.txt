@@ -18,4 +18,22 @@ error: Unapproved external type `external_lib::AssociatedGenericTrait` reference
     |
     = in trait bound of `test_crate::SomeTraitWithExternalDefaultTypes::OtherThing`
 
-2 errors emitted
+error: Unapproved external type `external_lib::ReprCType` referenced in public API
+  --> test-crate/src/test_union.rs:10:5
+   |
+10 |     pub repr_c: ReprCType,
+   |     ^-------------------^
+   |
+   = in struct field of `test_crate::test_union::SimpleUnion::repr_c`
+
+error: Unapproved external type `external_lib::ReprCType` referenced in public API
+  --> test-crate/src/test_union.rs:15:5
+   |
+15 |     pub fn repr_c(&self) -> &ReprCType {
+   | ...
+17 |     }␊
+   |     ^
+   |
+   = in return value of `test_crate::test_union::SimpleUnion::repr_c`
+
+4 errors emitted
