@@ -1,6 +1,6 @@
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 use http::uri;
@@ -46,7 +46,7 @@ where
 }
 
 /// Converts a `lambda_http::Request` into a `http::Request<hyper::Body>`
-/// Issue: https://github.com/awslabs/smithy-rs/issues/1125
+/// Issue: <https://github.com/awslabs/smithy-rs/issues/1125>
 ///
 /// While converting the event the [API Gateway Stage] portion of the URI
 /// is removed from the uri that gets returned as a new `http::Request`.
