@@ -45,6 +45,13 @@ where
     }
 }
 
+/// Converts a `lambda_http::Request` into a `http::Request<hyper::Body>`
+/// Issue: https://github.com/awslabs/smithy-rs/issues/1125
+///
+/// While converting the event the [API Gateway Stage] portion of the URI
+/// is removed from the uri that gets returned as a new `http::Request`.
+///
+/// [API Gateway Stage]: https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-stages.html
 fn convert_event(request: Request) -> HyperRequest {
     let raw_path = request.raw_http_path();
     let (mut parts, body) = request.into_parts();
@@ -78,4 +85,35 @@ fn convert_event(request: Request) -> HyperRequest {
     };
 
     http::Request::from_parts(parts, body)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lambda_http::RequestExt;
+
+    #[test]
+    fn traits() {
+        use crate::test_helpers::*;
+
+        assert_send::<LambdaHandler<()>>();
+        assert_sync::<LambdaHandler<()>>();
+    }
+
+    #[test]
+    fn raw_http_path() {
+        // lambda_http::Request doesn't have a fn `builder`
+        let event = http::Request::builder()
+            .uri("https://id.execute-api.us-east-1.amazonaws.com/prod/resources/1")
+            .body(())
+            .expect("unable to build Request");
+        let (parts, _) = event.into_parts();
+
+        // the lambda event will have a raw path which is the path without stage name in it
+        let event =
+            lambda_http::Request::from_parts(parts, lambda_http::Body::Empty).with_raw_http_path("/resources/1");
+        let request = convert_event(event);
+
+        assert_eq!(request.uri().path(), "/resources/1")
+    }
 }
