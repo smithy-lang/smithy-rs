@@ -12,6 +12,8 @@ if [[ $# -ne 1 ]]; then
     exit 1
 fi
 
+# Override version commit hash to prevent unnecessary diffs
+export SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE=ci
 base_revision="$1"
 ./tools/codegen-diff-revisions.py . "${base_revision}"
 

@@ -40,8 +40,16 @@ tasks.compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
-fun gitCommitHash() =
-    try {
+fun gitCommitHash(): String {
+    // Use commit hash from env if provided, it is helpful to override commit hash in some contexts.
+    // For example: while generating diff for generated SDKs we don't want to see version diff,
+    // so we are overriding commit hash to something fixed
+    val commitHashFromEnv = System.getenv("SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE")
+    if (commitHashFromEnv != null) {
+        return commitHashFromEnv
+    }
+
+    return try {
         val output = ByteArrayOutputStream()
         exec {
             commandLine = listOf("git", "rev-parse", "HEAD")
@@ -51,6 +59,7 @@ fun gitCommitHash() =
     } catch (ex: Exception) {
         "unknown"
     }
+}
 
 val generateSmithyRuntimeCrateVersion by tasks.registering {
     // generate the version of the runtime to use as a resource.
