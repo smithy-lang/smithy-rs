@@ -46,3 +46,11 @@ hyper-rustls = { version = "0.23.0", features = ["http2"] }
 aws-smithy-client = { path = "../../../aws-smithy-client/", features = ["rustls"] }
 aws-smithy-http = { path = "../../../aws-smithy-http/" }
 pokemon-service-client = { path = "../pokemon-service-client/" }
+
+[[bin]]
+name = "bootstrap"
+path = "src/main.rs"
+
+[[bin]]
+name = "lambda"
+path = "src/lambda.rs"

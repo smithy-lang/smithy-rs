@@ -35,7 +35,7 @@ where
 
     #[inline]
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(cx).map_err(|err| err.into())
+        self.service.poll_ready(cx)
     }
 
     fn call(&mut self, event: Request) -> Self::Future {
@@ -52,7 +52,9 @@ fn convert_event(request: Request) -> Request {
         path = raw_path;
 
         let uri_parts: uri::Parts = parts.uri.into();
-        let path_and_query = uri_parts.path_and_query.unwrap();
+        let path_and_query = uri_parts
+            .path_and_query
+            .expect("request URI does not have `PathAndQuery`");
 
         if let Some(query) = path_and_query.query() {
             path.push('?');
@@ -60,12 +62,12 @@ fn convert_event(request: Request) -> Request {
         }
 
         parts.uri = uri::Uri::builder()
-            .authority(uri_parts.authority.unwrap())
-            .scheme(uri_parts.scheme.unwrap())
+            .authority(uri_parts.authority.expect("request URI does not have authority set"))
+            .scheme(uri_parts.scheme.expect("request URI does not have scheme set"))
             .path_and_query(path)
             .build()
-            .unwrap();
+            .expect("unable to construct new URI");
     }
 
-    http::Request::from_parts(parts, body)
+    Request::from_parts(parts, body)
 }
