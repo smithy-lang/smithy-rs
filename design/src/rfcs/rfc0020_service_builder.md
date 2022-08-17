@@ -459,6 +459,8 @@ If we switch from a `From<OperationRegistry> for Router` to a `build` method on 
 let app = /* Service builder */.build();
 ```
 
+There already exists a `build` method taking `OperationRegistryBuilder` to `OperationRegistry`, this is removed in [Remove two-step build procedure](#remove-two-step-build-procedure). These two transforms pair well together for this reason.
+
 ## Operations as Middleware Constructors
 
 As mentioned in [Comparison to Axum: Routing](#routing) and [Handlers](#handlers), the `smithy-rs` service builder accepts handlers and only converts them into a `tower::Service` during the final conversion into a `Router`. There are downsides to this:
@@ -781,7 +783,7 @@ let service_0: Service0 = Service0::builder()
     .build();
 ```
 
-### Type-safe Handler State
+## Type-safe Handler State
 
 As described in [Handlers](#handlers), the current method of exposing state to a handler is via the insertion then lookup of items from the `http::Request::extensions` type map. In [Handlers](#handlers) we noted that the retrieval of state from this presents an extra failure case. In [Comparison to Axum](#comparison-to-axum) we noted that, in `smithy-rs`, we no longer have the use case where state is scoped to subtrees of the routing tree.
 
@@ -809,3 +811,59 @@ struct StatefulWrapper<F, T> {
 ```
 
 which enjoys `Handler` and hence allows it to be provided to the service builder in the same way as a `async fn operation_0(input: Operation0Input) -> Operation0Output` would be.
+
+### Combined Proposal
+
+A combination of all the proposed transformations result in the following API:
+
+```rust
+struct State {
+    /* fields */
+}
+
+async fn handler(input: Operation0Input) -> Operation0Output {
+    todo!()
+}
+
+async fn stateful_handler(input: Operation0Input, state: State) -> Operation0Output {
+    todo!()
+}
+
+struct Operation1Service {
+    /* fields */
+}
+
+impl Service<Operation1Input> for Operation1Service {
+    type Response = Operation1Output;
+
+    /* implementation */
+}
+
+// Create an operation from a handler
+let operation_0 = Operation0::from_handler(handler);
+
+// Create an operation from a handler with state
+let operation_0 = Operation::from_handler(stateful_handler.with_state(State { /* initialize */ }));
+
+// Create an operation from a `tower::Service`
+let operation_1_svc = Operation1Service { /* initialize */ };
+let operation_1 = Operation::from_service(operation_1_svc);
+
+// Apply a layer
+let operation_0 = operation_0.layer(/* layer */);
+
+// Use the service builder
+let service_0 = Service0::builder()
+    .operation_0(operation_0)
+    .operation_1(operation_1)
+    .build();
+```
+
+A toy implementation of the combined proposal presented in the [this PR](https://github.com/hlbarber/service-builder/pull/1).
+
+## Changes Checklist
+
+- [ ] Add protocol specific routers to `rust-runtime/aws-smithy-http-server`.
+- [ ] Add middleware primitives and error types to `rust-runtime/aws-smithy-http-server`.
+- [ ] Add code generation which outputs new service builder.
+- [ ] Deprecate `OperationRegistryBuilder`, `OperationRegistry` and `Router`.
