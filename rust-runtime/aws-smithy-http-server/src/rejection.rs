@@ -263,5 +263,5 @@ convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
 // everyone will run a Hyper-based server in their services).
 convert_to_request_rejection!(hyper::Error, HttpBody);
 
-// In order to use `Router<lambda_http::Body>` this line works around [Simplify conversion from HTTP body error type to RequestRejection](https://github.com/awslabs/smithy-rs/issues/1364)
+// Required in order to accept Lambda HTTP requests using `Router<lambda_http::Body>`.
 convert_to_request_rejection!(lambda_http::Error, HttpBody);
