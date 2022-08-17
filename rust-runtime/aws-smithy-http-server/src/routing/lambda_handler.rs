@@ -13,9 +13,10 @@ use tower::Service;
 
 type HyperRequest = http::Request<hyper::Body>;
 
-/// A [`MakeService`] that produces AWS Lambda compliant services.
+/// A [`Service`] that takes a `lambda_http::Request` and converts
+/// it to `http::Request<hyper::Body>`.
 ///
-/// [`MakeService`]: tower::make::MakeService
+/// [`Service`]: tower::Service
 #[derive(Debug, Clone)]
 pub struct LambdaHandler<S> {
     service: S,
