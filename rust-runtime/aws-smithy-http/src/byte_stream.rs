@@ -445,12 +445,6 @@ impl From<hyper::Body> for ByteStream {
     }
 }
 
-impl From<lambda_http::Body> for ByteStream {
-    fn from(input: lambda_http::Body) -> Self {
-        ByteStream::new(SdkBody::from(input))
-    }
-}
-
 #[derive(Debug)]
 pub struct Error(Box<dyn StdError + Send + Sync + 'static>);
 

@@ -6,7 +6,7 @@
 // This program is exported as a binary named `pokemon_service`.
 use std::sync::Arc;
 
-use aws_smithy_http_server::{AddExtensionLayer, Router};
+use aws_smithy_http_server::{routing::LambdaHandler, AddExtensionLayer, Router};
 use pokemon_service::{
     capture_pokemon, empty_operation, get_pokemon_species, get_server_statistics, get_storage, health_check_operation,
     setup_tracing, State,
@@ -19,7 +19,7 @@ use tower_http::trace::TraceLayer;
 pub async fn main() {
     setup_tracing();
 
-    let app: Router<lambda_http::Body> = OperationRegistryBuilder::default()
+    let app: Router = OperationRegistryBuilder::default()
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
@@ -43,7 +43,8 @@ pub async fn main() {
             .layer(AddExtensionLayer::new(shared_state)),
     );
 
-    let lambda = lambda_http::run(app.into_make_lambda_service());
+    let handler = LambdaHandler::new(app);
+    let lambda = lambda_http::run(handler);
 
     if let Err(err) = lambda.await {
         eprintln!("lambda error: {}", err);

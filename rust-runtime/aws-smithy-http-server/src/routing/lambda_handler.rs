@@ -11,23 +11,25 @@ use std::{
 };
 use tower::Service;
 
+type HyperRequest = http::Request<hyper::Body>;
+
 /// A [`MakeService`] that produces AWS Lambda compliant services.
 ///
 /// [`MakeService`]: tower::make::MakeService
 #[derive(Debug, Clone)]
-pub struct IntoMakeLambdaService<S> {
+pub struct LambdaHandler<S> {
     service: S,
 }
 
-impl<S> IntoMakeLambdaService<S> {
+impl<S> LambdaHandler<S> {
     pub fn new(service: S) -> Self {
         Self { service }
     }
 }
 
-impl<S> Service<Request> for IntoMakeLambdaService<S>
+impl<S> Service<Request> for LambdaHandler<S>
 where
-    S: Service<Request>,
+    S: Service<HyperRequest>,
 {
     type Error = S::Error;
     type Response = S::Response;
@@ -43,7 +45,7 @@ where
     }
 }
 
-fn convert_event(request: Request) -> Request {
+fn convert_event(request: Request) -> HyperRequest {
     let raw_path = request.raw_http_path();
     let (mut parts, body) = request.into_parts();
     let mut path = String::from(parts.uri.path());
@@ -69,5 +71,11 @@ fn convert_event(request: Request) -> Request {
             .expect("unable to construct new URI");
     }
 
-    Request::from_parts(parts, body)
+    let body = match body {
+        lambda_http::Body::Empty => hyper::Body::empty(),
+        lambda_http::Body::Text(s) => hyper::Body::from(s),
+        lambda_http::Body::Binary(v) => hyper::Body::from(v),
+    };
+
+    http::Request::from_parts(parts, body)
 }

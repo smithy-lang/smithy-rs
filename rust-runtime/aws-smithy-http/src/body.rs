@@ -250,22 +250,6 @@ impl From<hyper::Body> for SdkBody {
     }
 }
 
-impl From<lambda_http::Body> for SdkBody {
-    fn from(body: lambda_http::Body) -> Self {
-        let hyper_body = match body {
-            lambda_http::Body::Empty => hyper::Body::empty(),
-            lambda_http::Body::Text(s) => hyper::Body::from(s),
-            lambda_http::Body::Binary(v) => hyper::Body::from(v),
-        };
-
-        SdkBody {
-            inner: Inner::Streaming { inner: hyper_body },
-            rebuild: None,
-            callbacks: Vec::new(),
-        }
-    }
-}
-
 impl From<Vec<u8>> for SdkBody {
     fn from(data: Vec<u8>) -> Self {
         Self::from(Bytes::from(data))
