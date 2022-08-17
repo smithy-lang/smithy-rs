@@ -189,6 +189,9 @@ class SigV4SigningFeature(
                     """
                     ${section.request}.properties_mut().insert(signing_config);
                     ${section.request}.properties_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
+                    if let Some(region) = &${section.config}.region {
+                        ${section.request}.properties_mut().insert(#{aws_types}::region::SigningRegion::from(region.clone()));
+                    }
                     """,
                     *codegenScope,
                 )
