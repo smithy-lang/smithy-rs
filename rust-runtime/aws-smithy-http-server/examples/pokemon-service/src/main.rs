@@ -57,7 +57,7 @@ pub async fn run_lambda() {
             .layer(AddExtensionLayer::new(shared_state)),
     );
 
-    let lambda = lambda_http::run(app);
+    let lambda = lambda_http::run(app.into_make_lambda_service());
 
     if let Err(err) = lambda.await {
         eprintln!("lambda error: {}", err);

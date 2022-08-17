@@ -7,6 +7,7 @@
 //!
 //! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
 
+use self::into_make_lambda_service::IntoMakeLambdaService;
 use self::request_spec::RequestSpec;
 use self::tiny_map::TinyMap;
 use crate::body::{boxed, Body, BoxBody, HttpBody};
@@ -24,6 +25,7 @@ use tower::{Service, ServiceBuilder};
 use tower_http::map_response_body::MapResponseBodyLayer;
 
 mod future;
+mod into_make_lambda_service;
 mod into_make_service;
 
 #[doc(hidden)]
@@ -135,6 +137,18 @@ where
     /// [`MakeService`]: tower::make::MakeService
     pub fn into_make_service(self) -> IntoMakeService<Self> {
         IntoMakeService::new(self)
+    }
+
+    /// Convert this router into a [`MakeService`], that is a [`Service`] whose
+    /// response is another service.
+    ///
+    /// This is useful when running your application with AWS Lambda's
+    /// [`run`].
+    ///
+    /// [`run`]: lambda_http::run
+    /// [`MakeService`]: tower::make::MakeService
+    pub fn into_make_lambda_service(self) -> IntoMakeLambdaService<Self> {
+        IntoMakeLambdaService::new(self)
     }
 
     /// Apply a [`tower::Layer`] to the router.
