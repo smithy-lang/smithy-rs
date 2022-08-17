@@ -322,7 +322,9 @@ impl Visitor {
                 }
             }
             Type::Infer => unimplemented!("visit_type Type::Infer"),
-            Type::RawPointer { type_: _, .. } => unimplemented!("visit_type Type::RawPointer"),
+            Type::RawPointer { type_, .. } => {
+                self.visit_type(path, what, type_).context(here!())?
+            }
             Type::BorrowedRef { type_, .. } => {
                 self.visit_type(path, what, type_).context(here!())?
             }

@@ -8,8 +8,44 @@
 # [[smithy-rs]]
 # message = "Fix typos in module documentation for generated crates"
 # references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false, "sdk" = "client | server | all"}
+# meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """
+Service configs are now generated with new accessors for:
+- `Config::retry_config()` - Returns a reference to the inner retry configuration.
+- `Config::timeout_config()` - Returns a reference to the inner timeout configuration.
+- `Config::sleep_impl()` - Returns a clone of the inner async sleep implementation.
+
+Previously, these were only accessible through `SdkConfig`.
+"""
+references = ["smithy-rs#1598"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+Previously, the config customizations that added functionality related to retry configs, timeout configs, and the 
+async sleep impl were defined in the smithy codegen module but were being loaded in the AWS codegen module. They
+have now been updated to be loaded during smithy codegen. The affected classes are all defined in the
+`software.amazon.smithy.rust.codegen.smithy.customizations` module of smithy codegen.` This change does not affect
+the generated code.
+
+These classes have been removed:
+- `RetryConfigDecorator`
+- `SleepImplDecorator`
+- `TimeoutConfigDecorator`
+
+These classes have been renamed:
+- `RetryConfigProviderConfig` is now `RetryConfigProviderCustomization`
+- `PubUseRetryConfig` is now `PubUseRetryConfigGenerator`
+- `SleepImplProviderConfig` is now `SleepImplProviderCustomization`
+- `TimeoutConfigProviderConfig` is now `TimeoutConfigProviderCustomization`
+"""
+references = ["smithy-rs#1598"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
+author = "Velfi"
 
 [[smithy-rs]]
 message = "Add codegen version to generated package metadata"
