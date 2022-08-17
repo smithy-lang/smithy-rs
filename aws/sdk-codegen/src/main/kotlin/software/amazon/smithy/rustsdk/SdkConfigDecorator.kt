@@ -50,7 +50,7 @@ class SdkConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
                         builder.set_endpoint_resolver(input.endpoint_resolver().clone());
                         builder.set_retry_config(input.retry_config().cloned());
                         builder.set_timeout_config(input.timeout_config().cloned());
-                        builder.set_sleep_impl(input.sleep_impl().clone());
+                        builder.set_sleep_impl(input.sleep_impl());
                         builder.set_credentials_provider(input.credentials_provider().cloned());
                         builder.set_app_name(input.app_name().cloned());
                         builder
