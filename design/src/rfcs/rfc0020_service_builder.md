@@ -400,9 +400,14 @@ As described in [Builder](#builder), the `OperationRegistryBuilder::build` metho
     }
 ```
 
-We can do away with fallibility if we allow for on `Op0`, `Op1`, to switch types during build. For example,
+We can do away with fallibility if we allow for on `Op0`, `Op1` to switch types during build and remove the `Option` from around the fields. The `OperationRegistryBuilder` then becomes
 
 ```rust
+struct OperationRegistryBuilder<Op0, Op1> {
+    operation_0: Op0,
+    operation_1: Op1
+}
+
 impl OperationRegistryBuilder<Op0, In0, Op1, In1> {
     pub fn operation0<NewOp0>(mut self, value: NewOp0) -> OperationRegistryBuilder<NewOp0, In0, Op1, In1> {
         OperationRegistryBuilder {
