@@ -32,6 +32,7 @@ operation Operation1 {
     output: Output1
 }
 
+@restJson1
 service Service0 {
     operations: [
         Operation0,
@@ -733,9 +734,14 @@ enum Routes {
 }
 ```
 
-A consequence of this is that it obstructs the ability of a third-party to extend `smithy-rs` to additional protocols.
+Recall the form of the `Service::call` method, given in [Router](#router), which involved matching on the protocol and then performing protocol specific logic.
 
-<!-- This needs work. -->
+Two downsides of modelling `Router` in this way are:
+
+- `Router` is larger and has more branches than a protocol specific implementation.
+- If a third-party wanted to extend `smithy-rs` to additional protocols `Routes` would have to be extended. A synopsis of this obstruction is presented in [Should we generate the `Router` type](https://github.com/awslabs/smithy-rs/issues/1606) issue.
+
+After taking the [Switch `From<OperationRegistry> for Router` to an `OperationRegistry::build` method](#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method) transform, code generation is free to switch between return types based on the model. This allows for a scenario where a `@restJson1` causes the service builder to output a specific `RestRouter1`.
 
 ## Protocol specific Errors
 
@@ -748,13 +754,10 @@ The `from_request` functions yield protocol specific errors which are converted 
 
 In these scenarios protocol specific errors are converted into `RuntimeError` before being converted to a `http::Response` via `into_response` method.
 
-Two consequences of this are:
+Two downsides of this are:
 
-- `RuntimeError` captures the union of all possible errors across all existing protocols, so is larger than needed when modelling the errors for a specific protocol.
-- If a third-party wanted extend `smithy-rs` to additional protocols with differing failure modes `RuntimeError` would have to be extended.
-
-
-<!-- This needs work. -->
+- `RuntimeError` enumerates all possible errors across all existing protocols, so is larger than modelling the errors for a specific protocol.
+- If a third-party wanted to extend `smithy-rs` to additional protocols with differing failure modes `RuntimeError` would have to be extended. As in [Protocol specific Errors](#protocol-specific-errors), a synopsis of this obstruction is presented in [Should we generate the `Router` type](https://github.com/awslabs/smithy-rs/issues/1606) issue.
 
 ## Type erasure with the name of the Smithy service
 
@@ -764,6 +767,8 @@ Similarly, the output of the service builder is `Router`. This ties the output o
 
 - Ensure we are free to change the implementation of `{Service}` without changing the `Router` implementation.
 - Allow us to put a `builder` method on `{Service}` which returns `{Service}Builder`.
+
+This is compatible with [Protocol specific Routers](#protocol-specific-routers), we simply newtype the protocol specific router rather than `Router`.
 
 With both of these changes the API would take the form:
 
@@ -789,7 +794,7 @@ As described in [Handlers](#handlers), the current method of exposing state to a
 
 Removing this runtime insertion/removal and opting for a static alternative would remove a runtime failure case and improve performance.
 
-The `Handler` trait already enjoys a blanket implementation for any `FnOnce({OperationInput}) -> Fut + Clone + Send + 'static` where `Fut: Future<Output = {Operation}Output>`. This includes any closure which captures cloneable state. In this way the customer already has the option to provide state to handlers while building their service.
+The `Handler` trait already enjoys a blanket implementation for any `FnOnce({OperationInput}) -> Fut + Clone + Send + 'static` where `Fut: Future<Output = {Operation}Output>`. This includes any closure which captures cloneable state. In this way the customer already has the option to provide type safe state to handlers while building their service.
 
 Requiring that the customer writes all handlers as closures might be cumbersome, providing the following API will make adjoining state to a handler easier for customers:
 
