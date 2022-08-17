@@ -32,12 +32,6 @@ private const val DEFAULT_KEY = "DEFAULT"
  * This can be configured via the `runtimeConfig.versions` field in smithy-build.json
  */
 data class RuntimeCrateLocation(val path: String?, val versions: CrateVersionMap) {
-    init {
-        check(path != null || versions.map.isNotEmpty()) {
-            "path ($path) must not be null or or versions ($versions) must not be empty"
-        }
-    }
-
     companion object {
         fun Path(path: String) = RuntimeCrateLocation(path, CrateVersionMap(emptyMap()))
     }
