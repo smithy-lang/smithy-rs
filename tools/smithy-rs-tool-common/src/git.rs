@@ -151,7 +151,7 @@ pub struct GitCLI {
 
 impl GitCLI {
     pub fn new(repo_path: &Path) -> Result<Self> {
-        if !repo_path.join(".git").is_dir() {
+        if !repo_path.join(".git").exists() {
             bail!("{:?} is not a git repository", repo_path);
         }
         Ok(Self {
@@ -429,7 +429,8 @@ fn log_command(command: Command) -> Command {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
+    use std::{env, fs};
+    use tempfile::TempDir;
 
     fn bin_path(script: &'static str) -> PathBuf {
         env::current_dir()
@@ -615,5 +616,27 @@ mod tests {
         cli("git-squash-merge")
             .squash_merge("some-dev", "some-email@example.com", "test-branch-name")
             .expect("successful invocation");
+    }
+
+    #[test]
+    fn repository_root_check() {
+        let tmp_dir = TempDir::new().unwrap();
+        GitCLI::new(tmp_dir.path())
+            .err()
+            .expect("repository root check should fail");
+
+        fs::create_dir(tmp_dir.path().join(".git")).unwrap();
+        GitCLI::new(tmp_dir.path()).expect("repository root check should succeed");
+    }
+
+    #[test]
+    fn repository_root_check_works_for_git_submodules() {
+        let tmp_dir = TempDir::new().unwrap();
+        GitCLI::new(tmp_dir.path())
+            .err()
+            .expect("repository root check should fail");
+
+        fs::write(tmp_dir.path().join(".git"), "gitdir: some/fake/path").unwrap();
+        GitCLI::new(tmp_dir.path()).expect("repository root check should succeed");
     }
 }
