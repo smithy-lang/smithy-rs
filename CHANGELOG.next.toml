@@ -26,7 +26,7 @@ author = "Velfi"
 
 [[smithy-rs]]
 message = """
-Previously, the config customizations that added functionality related to retry configs, timeout configs, and the 
+Previously, the config customizations that added functionality related to retry configs, timeout configs, and the
 async sleep impl were defined in the smithy codegen module but were being loaded in the AWS codegen module. They
 have now been updated to be loaded during smithy codegen. The affected classes are all defined in the
 `software.amazon.smithy.rust.codegen.smithy.customizations` module of smithy codegen.` This change does not affect
@@ -96,3 +96,14 @@ implies that we're using `aws-smithy-http` 0.47.1 specifically. For the rest of 
 references = ["smithy-rs#1635", "smithy-rs#1416"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "weihanglo"
+
+[[smithy-rs]]
+message = """
+Servers now allow requests' ACCEPT header values to be:
+- `*/*`
+- `type/*`
+- `type/subtype`
+"""
+references = ["smithy-rs#1544"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "82marbag"
