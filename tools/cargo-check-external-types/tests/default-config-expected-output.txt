@@ -338,4 +338,32 @@ error: Unapproved external type `external_lib::SimpleNewType` referenced in publ
     |
     = in struct field of `test_crate::AssocConstStruct::OTHER_CONST`
 
-39 errors emitted
+error: Unapproved external type `external_lib::ReprCType` referenced in public API
+  --> test-crate/src/test_union.rs:10:5
+   |
+10 |     pub repr_c: ReprCType,
+   |     ^-------------------^
+   |
+   = in struct field of `test_crate::test_union::SimpleUnion::repr_c`
+
+error: Unapproved external type `external_lib::ReprCType` referenced in public API
+  --> test-crate/src/test_union.rs:15:5
+   |
+15 |     pub fn repr_c(&self) -> &ReprCType {
+   | ...
+17 |     }␊
+   |     ^
+   |
+   = in return value of `test_crate::test_union::SimpleUnion::repr_c`
+
+error: Unapproved external type `external_lib::SimpleTrait` referenced in public API
+  --> test-crate/src/test_union.rs:21:1
+   |
+21 | pub union GenericUnion<T: Copy + SimpleTrait> {
+   | ...
+24 | }␊
+   | ^
+   |
+   = in trait bound of `test_crate::test_union::GenericUnion`
+
+42 errors emitted
