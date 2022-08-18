@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use assert_cmd::prelude::*;
 use aws_smithy_client::{erase::DynConnector, hyper_ext::Adapter};
+use aws_smithy_http::operation::Request;
 use pokemon_service_client::{Builder, Client, Config};
 use tokio::time;
 
@@ -82,12 +83,7 @@ pub fn client() -> Client<
     let base_url = PokemonServiceVariant::Http.base_url();
     let raw_client = Builder::new()
         .rustls()
-        .middleware_fn(move |mut req| {
-            let http_req = req.http_mut();
-            let uri = format!("{base_url}{}", http_req.uri().path());
-            *http_req.uri_mut() = uri.parse().unwrap();
-            req
-        })
+        .middleware_fn(rewrite_base_url(base_url))
         .build_dyn();
     let config = Config::builder().build();
     Client::with_config(raw_client, config)
@@ -120,13 +116,17 @@ pub fn client_http2_only() -> Client<
     let base_url = PokemonServiceVariant::Https.base_url();
     let raw_client = Builder::new()
         .connector(DynConnector::new(Adapter::builder().build(connector)))
-        .middleware_fn(move |mut req| {
-            let http_req = req.http_mut();
-            let uri = format!("{base_url}{}", http_req.uri().path());
-            *http_req.uri_mut() = uri.parse().unwrap();
-            req
-        })
+        .middleware_fn(rewrite_base_url(base_url))
         .build_dyn();
     let config = Config::builder().build();
     Client::with_config(raw_client, config)
+}
+
+fn rewrite_base_url(base_url: String) -> impl Fn(Request) -> Request + Clone {
+    move |mut req| {
+        let http_req = req.http_mut();
+        let uri = format!("{base_url}{}", http_req.uri().path());
+        *http_req.uri_mut() = uri.parse().unwrap();
+        req
+    }
 }

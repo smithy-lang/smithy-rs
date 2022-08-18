@@ -42,5 +42,6 @@ wrk-api-bench = "0.0.7"
 hyper-rustls = { version = "0.23.0", features = ["http2"] }
 
 # Local paths
-aws-smithy-client  = { path = "../../../aws-smithy-client/", features = ["rustls"] }
+aws-smithy-client = { path = "../../../aws-smithy-client/", features = ["rustls"] }
+aws-smithy-http = { path = "../../../aws-smithy-http/" }
 pokemon-service-client = { path = "../pokemon-service-client/" }
