@@ -8,7 +8,7 @@
 // to serve TLS connections. It also enables h2 ALPN protocol,
 // without this clients by default don't upgrade to http2.
 //
-// You can use `mkcert` to create certificates for testing:
+// You can use `mkcert` (https://github.com/FiloSottile/mkcert) to create certificates for testing:
 // `$ mkcert localhost`
 // it should create `./localhost.pem` and `./localhost-key.pem`,
 // then you can run TLS server via:
@@ -20,7 +20,7 @@
 // # ...
 // ```
 // note that by default created certificates will be unknown and you should use `-k|--insecure`
-// flag while making requests with cURL or you can run `$ mkcert -install` to trust certificates created by `mkcert`.
+// flag while making requests with cURL or you can run `mkcert -install` to trust certificates created by `mkcert`.
 
 use std::fs::File;
 use std::future;

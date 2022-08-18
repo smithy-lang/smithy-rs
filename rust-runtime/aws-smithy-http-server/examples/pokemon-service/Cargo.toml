@@ -22,7 +22,7 @@ tower-http = { version = "0.3", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# This dependencies only required for `pokemon-service-tls`
+# These dependencies are only required for `pokemon-service-tls`.
 tls-listener = { version = "0.5.1", features = ["rustls", "hyper-h2"] }
 tokio-rustls = "0.23.4"
 rustls-pemfile = "1.0.1"
@@ -38,7 +38,7 @@ home = "0.5"
 serial_test = "0.7.0"
 wrk-api-bench = "0.0.7"
 
-# This dependencies only required for testing `pokemon-service-tls`
+# These dependencies are only required for testing `pokemon-service-tls`.
 hyper-rustls = { version = "0.23.0", features = ["http2"] }
 
 # Local paths
