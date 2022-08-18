@@ -66,7 +66,7 @@ pub fn accept_header_classifier<B>(req: &RequestParts<B>, content_type: &'static
                  * and remove the optional "; q=x" parameters
                  * NOTE: the unwrap() is safe, because it takes the first element (if there's nothing to split, returns the string)
                  */
-                .flat_map(|s| s.split(",").map(|typ| typ.split(";").nth(0).unwrap().trim()))
+                .flat_map(|s| s.split(',').map(|typ| typ.split(';').next().unwrap().trim()))
         })
         .filter_map(|h| h.parse::<mime::Mime>().ok())
         .any(|mim| {
