@@ -43,3 +43,5 @@ async fn main() -> anyhow::Result<()> {
         Args::Run(subopt) => run::run(subopt).await,
     }
 }
+
+// Tests for individual subcommands can be found in their respective modules
