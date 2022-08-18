@@ -70,7 +70,7 @@ operation PrimitiveIntOpXml {
 structure PrimitiveIntDocument {
     value: PrimitiveInt
     @default(0)
-    requiredValue: PrimitiveInt
+    defaultedValue: PrimitiveInt
 }
 
 @enum([{"value": "enumvalue", "name": "V"}])
