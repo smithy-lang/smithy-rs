@@ -40,6 +40,7 @@ pub fn check_content_type<B>(
 }
 
 pub fn accept_header_classifier<B>(req: &RequestParts<B>, content_type: &'static str) -> bool {
+    // Allow no ACCEPT header
     if req.headers().is_none() {
         return true;
     }
@@ -47,9 +48,10 @@ pub fn accept_header_classifier<B>(req: &RequestParts<B>, content_type: &'static
     if !headers.contains_key(http::header::ACCEPT) {
         return true;
     }
+    // Must be of the form: type/subtype
     let content_type = content_type
         .parse::<mime::Mime>()
-        .expect("BUG: content_type is not valid");
+        .expect("BUG: MIME parsing failed, content_type is not valid");
     headers
         .get_all(http::header::ACCEPT)
         .into_iter()
@@ -58,21 +60,25 @@ pub fn accept_header_classifier<B>(req: &RequestParts<B>, content_type: &'static
                 .to_str()
                 .ok()
                 .into_iter()
+                /*
+                 * turn a header value of: "type0/subtype0, type1/subtype1, ..."
+                 * into: ["type0/subtype0", "type1/subtype1", ...]
+                 * and remove the optional "; q=x" parameters
+                 * NOTE: the unwrap() is safe, because it takes the first element (if there's nothing to split, returns the string)
+                 */
                 .flat_map(|s| s.split(",").map(|typ| typ.split(";").nth(0).unwrap().trim()))
         })
-        .any(|h| {
-            h.parse::<mime::Mime>()
-                .map(|mim| {
-                    let typ = content_type.type_();
-                    let subtype = content_type.subtype();
-                    match (mim.type_(), mim.subtype()) {
-                        (t, s) if t == typ && s == subtype => true,
-                        (t, mime::STAR) if t == typ => true,
-                        (mime::STAR, mime::STAR) => true,
-                        _ => false,
-                    }
-                })
-                .unwrap_or(false)
+        .filter_map(|h| h.parse::<mime::Mime>().ok())
+        .any(|mim| {
+            let typ = content_type.type_();
+            let subtype = content_type.subtype();
+            // Accept: */*, type/*, type/subtype
+            match (mim.type_(), mim.subtype()) {
+                (t, s) if t == typ && s == subtype => true,
+                (t, mime::STAR) if t == typ => true,
+                (mime::STAR, mime::STAR) => true,
+                _ => false,
+            }
         })
 }
 
@@ -183,6 +189,12 @@ mod tests {
     fn valid_empty_accept_header_classifier() {
         let valid_request = Request::builder().body("").unwrap();
         let valid_request = RequestParts::new(valid_request);
+        assert!(accept_header_classifier(&valid_request, "application/json"));
+    }
+
+    #[test]
+    fn valid_accept_header_classifier_with_params() {
+        let valid_request = req_accept("application/json; q=30, */*");
         assert!(accept_header_classifier(&valid_request, "application/json"));
     }
 
