@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.util
+package software.amazon.smithy.rust.codegen.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.rust.codegen.rustlang.Writable
@@ -18,8 +17,6 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 
 /*
  * Utility class used to force casting a non primitive type into one overriden by a new symbol provider,
@@ -31,13 +28,7 @@ import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticOutputTrait
 class TypeConversionGenerator(private val model: Model, private val symbolProvider: RustSymbolProvider, private val runtimeConfig: RuntimeConfig) {
     private fun findOldSymbol(shape: Shape): Symbol {
         return when (shape) {
-            is BlobShape -> {
-                if (shape.isStreaming()) {
-                    RuntimeType.ByteStream(runtimeConfig).toSymbol()
-                } else {
-                    RuntimeType.Blob(runtimeConfig).toSymbol()
-                }
-            }
+            is BlobShape -> RuntimeType.Blob(runtimeConfig).toSymbol()
             is TimestampShape -> RuntimeType.DateTime(runtimeConfig).toSymbol()
             else -> symbolProvider.toSymbol(shape)
         }
@@ -60,17 +51,4 @@ class TypeConversionGenerator(private val model: Model, private val symbolProvid
                 rust(".into()")
             }
         }
-
-    fun Shape.isStreaming(): Boolean {
-        if (this !is MemberShape) {
-            return false
-        }
-
-        val container = model.expectShape(this.container)
-        if (!(container.hasTrait<SyntheticOutputTrait>() || container.hasTrait<SyntheticInputTrait>())) {
-            return false
-        }
-
-        return this.isStreaming(model)
-    }
 }

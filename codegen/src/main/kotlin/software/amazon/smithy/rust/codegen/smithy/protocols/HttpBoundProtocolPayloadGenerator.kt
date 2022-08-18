@@ -61,8 +61,6 @@ class HttpBoundProtocolPayloadGenerator(
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
         "hyper" to CargoDependency.HyperWithStream.asType(),
-        "ByteStream" to RuntimeType.ByteStream(runtimeConfig),
-        "ByteSlab" to RuntimeType.ByteSlab,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "BuildError" to runtimeConfig.operationBuildError(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
