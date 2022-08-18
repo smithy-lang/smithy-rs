@@ -1,4 +1,4 @@
-$version: "1.0"
+$version: "2.0"
 namespace aws.protocoltests.restxml
 
 use aws.protocols#restXml
@@ -38,30 +38,28 @@ structure CreateFooInput {}
 @httpRequestTests([{
     id: "RestXmlSerPrimitiveIntUnset",
     protocol: "aws.protocols#restXml",
-    documentation: "Client side primitive ints should not be serialized when they are unset",
+    documentation: "Primitive ints should not be serialized when they are unset",
     uri: "/primitive-document",
     method: "POST",
    body: """
         <PrimitiveIntDocument>
-            <requiredValue>0</requiredValue>
         </PrimitiveIntDocument>
     """,
     bodyMediaType: "application/xml",
-    params: { requiredValue: 0 }
+    params: { }
 }, {
        id: "RestXmlSerPrimitiveIntSetToDefault",
        protocol: "aws.protocols#restXml",
-       documentation: "Client side primitive ints should be serialized, even when set explicitly to the default value",
+       documentation: "Primitive ints should not be serialized when they are unset",
        uri: "/primitive-document",
        method: "POST",
        body: """
        <PrimitiveIntDocument>
             <value>1</value>
-            <requiredValue>0</requiredValue>
        </PrimitiveIntDocument>
        """,
        bodyMediaType: "application/xml",
-       params: { value: 1, requiredValue: 0 }
+       params: { value: 1 }
    }])
 @http(uri: "/primitive-document", method: "POST")
 operation PrimitiveIntOpXml {
@@ -71,7 +69,7 @@ operation PrimitiveIntOpXml {
 
 structure PrimitiveIntDocument {
     value: PrimitiveInt
-    @required
+    @default(0)
     requiredValue: PrimitiveInt
 }
 
