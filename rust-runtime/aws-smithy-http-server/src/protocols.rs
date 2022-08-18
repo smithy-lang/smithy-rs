@@ -39,16 +39,58 @@ pub fn check_content_type<B>(
     }
 }
 
+pub fn accept_header_classifier<B>(req: &RequestParts<B>, content_type: &'static str) -> bool {
+    if req.headers().is_none() {
+        return true;
+    }
+    let headers = req.headers().unwrap();
+    if !headers.contains_key(http::header::ACCEPT) {
+        return true;
+    }
+    let content_type = content_type
+        .parse::<mime::Mime>()
+        .expect("BUG: content_type is not valid");
+    headers
+        .get_all(http::header::ACCEPT)
+        .into_iter()
+        .flat_map(|header| {
+            header
+                .to_str()
+                .ok()
+                .into_iter()
+                .flat_map(|s| s.split(",").map(|typ| typ.split(";").nth(0).unwrap().trim()))
+        })
+        .any(|h| {
+            h.parse::<mime::Mime>()
+                .map(|mim| {
+                    let typ = content_type.type_();
+                    let subtype = content_type.subtype();
+                    match (mim.type_(), mim.subtype()) {
+                        (t, s) if t == typ && s == subtype => true,
+                        (t, mime::STAR) if t == typ => true,
+                        (mime::STAR, mime::STAR) => true,
+                        _ => false,
+                    }
+                })
+                .unwrap_or(false)
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use http::Request;
 
-    fn req(content_type: &str) -> RequestParts<&str> {
+    fn req_content_type(content_type: &str) -> RequestParts<&str> {
         let request = Request::builder()
             .header("content-type", content_type)
             .body("")
             .unwrap();
+        RequestParts::new(request)
+    }
+
+    fn req_accept(content_type: &str) -> RequestParts<&str> {
+        let request = Request::builder().header("accept", content_type).body("").unwrap();
         RequestParts::new(request)
     }
 
@@ -57,7 +99,7 @@ mod tests {
 
     #[test]
     fn check_valid_content_type() {
-        let valid_request = req("application/json");
+        let valid_request = req_content_type("application/json");
         assert!(check_content_type(&valid_request, &EXPECTED_MIME_APPLICATION_JSON).is_ok());
     }
 
@@ -65,7 +107,7 @@ mod tests {
     fn check_invalid_content_type() {
         let invalid = vec!["application/ajson", "text/xml"];
         for invalid_mime in invalid {
-            let request = req(invalid_mime);
+            let request = req_content_type(invalid_mime);
             let result = check_content_type(&request, &EXPECTED_MIME_APPLICATION_JSON);
 
             // Validates the rejection type since we cannot implement `PartialEq`
@@ -98,7 +140,7 @@ mod tests {
 
     #[test]
     fn check_not_parsable_content_type() {
-        let request = req("123");
+        let request = req_content_type("123");
         let result = check_content_type(&request, &EXPECTED_MIME_APPLICATION_JSON);
         assert!(matches!(
             result.unwrap_err(),
@@ -108,8 +150,45 @@ mod tests {
 
     #[test]
     fn check_non_ascii_visible_characters_content_type() {
-        let request = req("application/💩");
+        let request = req_content_type("application/💩");
         let result = check_content_type(&request, &EXPECTED_MIME_APPLICATION_JSON);
         assert!(matches!(result.unwrap_err(), MissingContentTypeReason::ToStrError(_)));
+    }
+
+    #[test]
+    fn valid_accept_header_classifier_multiple_values() {
+        let valid_request = req_accept("text/strings, application/json, invalid");
+        assert!(accept_header_classifier(&valid_request, "application/json"));
+    }
+
+    #[test]
+    fn invalid_accept_header_classifier() {
+        let invalid_request = req_accept("text/invalid, invalid, invalid/invalid");
+        assert!(!accept_header_classifier(&invalid_request, "application/json"));
+    }
+
+    #[test]
+    fn valid_accept_header_classifier_star() {
+        let valid_request = req_accept("application/*");
+        assert!(accept_header_classifier(&valid_request, "application/json"));
+    }
+
+    #[test]
+    fn valid_accept_header_classifier_star_star() {
+        let valid_request = req_accept("*/*");
+        assert!(accept_header_classifier(&valid_request, "application/json"));
+    }
+
+    #[test]
+    fn valid_empty_accept_header_classifier() {
+        let valid_request = Request::builder().body("").unwrap();
+        let valid_request = RequestParts::new(valid_request);
+        assert!(accept_header_classifier(&valid_request, "application/json"));
+    }
+
+    #[test]
+    fn valid_accept_header_classifier() {
+        let valid_request = req_accept("application/json");
+        assert!(accept_header_classifier(&valid_request, "application/json"));
     }
 }
