@@ -18,6 +18,7 @@ service MiscService {
         ResponseCodeRequiredOperation,
         ResponseCodeHttpFallbackOperation,
         ResponseCodeDefaultOperation,
+        AcceptHeaderStarService,
     ],
 }
 
@@ -199,3 +200,40 @@ structure ResponseCodeRequiredOutput {
     @httpResponseCode
     responseCode: Integer,
 }
+
+@idempotent
+@http(method: "GET", uri: "/test-accept-header")
+@documentation("Service accepts `*` in ACCEPT header")
+@httpRequestTests([
+    {
+        id: "AcceptHeaderStarRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/test-accept-header",
+        headers: {
+            "Accept": "application/*",
+        },
+        params: {},
+        body: "{}",
+        method: "GET",
+    },
+    {
+        id: "AcceptHeaderStarStarRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/test-accept-header",
+        headers: {
+            "Accept": "*/*",
+        },
+        params: {},
+        body: "{}",
+        method: "GET",
+    }
+])
+operation AcceptHeaderStarService {
+    input: AcceptHeaderStarServiceInput,
+    output: AcceptHeaderStarServiceOutput,
+}
+
+@output
+structure AcceptHeaderStarServiceOutput {}
+@input
+structure AcceptHeaderStarServiceInput {}
