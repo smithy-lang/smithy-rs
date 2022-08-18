@@ -243,6 +243,13 @@ trailers) sent in a request or received in a response.</p>
 </ol>
 <p>In the future, we may add <code>serde</code> support behind a feature gate. However, we would only support this for operation <code>Input</code>
 and <code>Output</code> structs with the aim of making SDK-related tests easier to set up and run.</p>
+<h2 id="i-want-to-add-new-request-building-behavior-should-i-add-that-functionality-to-the-make_operation-codegen-or-write-a-request-altering-middleware"><a class="header" href="#i-want-to-add-new-request-building-behavior-should-i-add-that-functionality-to-the-make_operation-codegen-or-write-a-request-altering-middleware">I want to add new request building behavior. Should I add that functionality to the <code>make_operation</code> codegen or write a request-altering middleware?</a></h2>
+<p>The main question to ask yourself in this case is <em>&quot;is this new behavior relevant to all services or is it only relevant to some services?&quot;</em></p>
+<ul>
+<li><strong>If the behavior is relevant to all services:</strong> Behavior like this should be defined as a middleware. Behavior like this is often AWS-specific and may not be relevant to non-AWS smithy clients. Middlewares are defined outside of codegen. One example of behavior that should be defined as a middleware is request signing because all requests to AWS services must be signed.</li>
+<li><strong>If the behavior is only relevant to some services/depends on service model specifics:</strong> Behavior like this should be defined within <code>make_operation</code>. Avoid defining AWS-specific behavior within <code>make_operation</code>. One example of behavior that should be defined in <code>make_operation</code> is checksum validation because only some AWS services have APIs that support checksum validation.</li>
+</ul>
+<p><em>&quot;Wait a second&quot;</em> I hear you say, <em>&quot;checksum validation is part of the AWS smithy spec, not the core smithy spec. Why is that behavior defined in <code>make_operation</code>?&quot;</em> The answer is that that feature only applies to some operations and we don't want to codegen a middleware that only supports a subset of operations for a service.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="transport"><a class="header" href="#transport">Transport</a></h1>
 <p>The transport layer of smithy-rs and the Rust SDK. Our goal is support customers to bring their own HTTP stack and runtime.</p>
 <h2 id="where-we-are-today"><a class="header" href="#where-we-are-today">Where we are today</a></h2>
