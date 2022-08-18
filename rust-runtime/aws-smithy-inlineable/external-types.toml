@@ -1,0 +1,11 @@
+allowed_external_types = [
+    "aws_smithy_client::*",
+    "aws_smithy_http::*",
+    "aws_smithy_types::*",
+    "http::header::map::HeaderMap",
+    "http::header::value::HeaderValue",
+    "http::request::Request",
+    "http::error::Error",
+    "http::uri::Uri",
+    "http::method::Method",
+]

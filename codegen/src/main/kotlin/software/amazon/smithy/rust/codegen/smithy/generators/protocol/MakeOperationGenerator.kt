@@ -39,7 +39,7 @@ open class MakeOperationGenerator(
     private val protocol: Protocol,
     private val bodyGenerator: ProtocolPayloadGenerator,
     private val public: Boolean,
-    /** Whether or not to include default values for content-length and content-type */
+    /** Whether to include default values for content-length and content-type */
     private val includeDefaultPayloadHeaders: Boolean,
     private val functionName: String = "make_operation",
 ) {

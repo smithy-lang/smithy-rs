@@ -40,6 +40,8 @@ import software.amazon.smithy.rust.codegen.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.InlineSmithyDependency
+import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
@@ -56,11 +58,20 @@ import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.smithy.generators.smithyHttp
 import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.inputShape
 import software.amazon.smithy.rust.codegen.util.orNull
 import software.amazon.smithy.rust.codegen.util.outputShape
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
+
+fun RuntimeConfig.smithyCustomizableOperation() = RuntimeType.forInlineDependency(
+    InlineSmithyDependency.forRustFile(
+        "customizable_operation", visibility = Visibility.PUBLIC,
+        CargoDependency.Http,
+        CargoDependency.SmithyHttp(this),
+    ),
+)
 
 class FluentClientDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override val name: String = "FluentClient"
@@ -493,11 +504,32 @@ class FluentClientGenerator(
                     val inputType = symbolProvider.toSymbol(operation.inputShape(model))
                     val outputType = symbolProvider.toSymbol(operation.outputShape(model))
                     val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
+                    // TODO figure out how to properly get the RetryPolicy here
                     rustTemplate(
                         """
                         /// Creates a new `${operationSymbol.name}`.
                         pub(crate) fn new(handle: std::sync::Arc<super::Handle${generics.inst}>) -> Self {
                             Self { handle, inner: Default::default() }
+                        }
+
+                        /// Consume this builder, creating a customizable operation that can be modified before being
+                        /// sent. The operation's inner [http::Request] can be modified as well.
+                        pub async fn customize(self) -> Result<
+                            #{CustomizableOperation}<
+                                #{Operation},
+                                impl #{ClassifyResponse}<
+                                    #{SdkSuccess}<#{OperationOutput}>,
+                                    #{SdkError}<#{OperationError}>
+                                > + Send + Sync>,
+                            #{SdkError}<#{OperationError}>
+                        > {
+                            let handle = self.handle.clone();
+                            let operation = self.inner.build().map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?
+                                .make_operation(&handle.conf)
+                                .await
+                                .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
+
+                            Ok(#{CustomizableOperation} { handle, operation })
                         }
 
                         /// Sends the request and returns the response.
@@ -508,19 +540,22 @@ class FluentClientGenerator(
                         /// By default, any retryable failures will be retried twice. Retry behavior
                         /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
                         /// set when configuring the client.
-                        pub async fn send(self) -> std::result::Result<#{ok}, #{sdk_err}<#{operation_err}>>
+                        pub async fn send(self) -> std::result::Result<#{OperationOutput}, #{SdkError}<#{OperationError}>>
                         #{send_bounds:W} {
-                            let op = self.inner.build().map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?
+                            let op = self.inner.build().map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?
                                 .make_operation(&self.handle.conf)
                                 .await
-                                .map_err(|err|#{sdk_err}::ConstructionFailure(err.into()))?;
+                                .map_err(|err|#{SdkError}::ConstructionFailure(err.into()))?;
                             self.handle.client.call(op).await
                         }
                         """,
-                        "ok" to outputType,
-                        "operation_err" to errorType,
-                        "sdk_err" to CargoDependency.SmithyHttp(runtimeConfig).asType()
-                            .copy(name = "result::SdkError"),
+                        "ClassifyResponse" to runtimeConfig.smithyHttp().member("retry::ClassifyResponse"),
+                        "CustomizableOperation" to runtimeConfig.smithyCustomizableOperation().member("CustomizableOperation"),
+                        "Operation" to symbolProvider.toSymbol(operation),
+                        "OperationError" to errorType,
+                        "OperationOutput" to outputType,
+                        "SdkError" to runtimeConfig.smithyHttp().member("result::SdkError"),
+                        "SdkSuccess" to runtimeConfig.smithyHttp().member("result::SdkSuccess"),
                         "send_bounds" to generics.sendBounds(inputType, outputType, errorType),
                     )
                     PaginatorGenerator.paginatorType(coreCodegenContext, generics, operation)?.also { paginatorType ->
