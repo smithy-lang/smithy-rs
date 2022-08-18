@@ -215,6 +215,7 @@ structure ResponseCodeRequiredOutput {
         params: {},
         body: "{}",
         method: "GET",
+        appliesTo: "server",
     },
     {
         id: "AcceptHeaderStarStarRequestTest",
@@ -226,6 +227,7 @@ structure ResponseCodeRequiredOutput {
         params: {},
         body: "{}",
         method: "GET",
+        appliesTo: "server",
     }
 ])
 operation AcceptHeaderStarService {
