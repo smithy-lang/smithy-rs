@@ -30,7 +30,7 @@ lambda_watch:
 	cargo lambda watch
 
 lambda_invoke:
-	cargo lambda invoke lambda --data-file pokemon-service/tests/fixtures/example-apigw-request.json
+	cargo lambda invoke pokemon-service-lambda --data-file pokemon-service/tests/fixtures/example-apigw-request.json
 
 distclean: clean
 	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) Cargo.lock

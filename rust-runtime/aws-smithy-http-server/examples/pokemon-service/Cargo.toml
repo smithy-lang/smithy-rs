@@ -11,6 +11,14 @@ default-run = "pokemon-service"
 name = "pokemon-service-tls"
 path = "src/bin/pokemon-service-tls.rs"
 
+[[bin]]
+name = "pokemon-service"
+path = "src/main.rs"
+
+[[bin]]
+name = "pokemon-service-lambda"
+path = "src/lambda.rs"
+
 [dependencies]
 async-stream = "0.3"
 clap = { version = "~3.2.1", features = ["derive"] }
@@ -46,11 +54,3 @@ hyper-rustls = { version = "0.23.0", features = ["http2"] }
 aws-smithy-client = { path = "../../../aws-smithy-client/", features = ["rustls"] }
 aws-smithy-http = { path = "../../../aws-smithy-http/" }
 pokemon-service-client = { path = "../pokemon-service-client/" }
-
-[[bin]]
-name = "bootstrap"
-path = "src/main.rs"
-
-[[bin]]
-name = "lambda"
-path = "src/lambda.rs"
