@@ -168,15 +168,11 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
-                    if let Some(headers) = req.headers() {
-                        if let Some(accept) = headers.get(#{http}::header::ACCEPT) {
-                            if accept != "$contentType" {
-                                return Err(#{RuntimeError} {
-                                    protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
-                                    kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
-                                })
-                            }
-                        }
+                    if ! #{SmithyHttpServer}::protocols::accept_header_classifier(req, ${contentType.dq()}) {
+                        return Err(#{RuntimeError} {
+                            protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
+                            kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
+                        })
                     }
                     """,
                     *codegenScope,
