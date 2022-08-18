@@ -12,18 +12,18 @@ mod run;
 
 #[derive(Debug, Parser, Eq, PartialEq)]
 #[clap(version, about)]
-pub(crate) enum Opt {
+pub(crate) enum Args {
     /// Builds the canary Lambda bundle
     #[clap(alias = "build-bundle")]
-    BuildBundle(build_bundle::BuildBundleOpt),
+    BuildBundle(build_bundle::BuildBundleArgs),
 
     /// Generates a GitHub Actions test matrix for the canary
     #[clap(alias = "generate-matrix")]
-    GenerateMatrix(generate_matrix::GenerateMatrixOpt),
+    GenerateMatrix(generate_matrix::GenerateMatrixArgs),
 
     /// Builds, uploads, and invokes the canary as a Lambda
     #[clap(alias = "run")]
-    Run(run::RunOpt),
+    Run(run::RunArgs),
 }
 
 #[tokio::main]
@@ -36,10 +36,10 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer().with_target(false))
         .init();
 
-    let opt = Opt::parse();
+    let opt = Args::parse();
     match opt {
-        Opt::BuildBundle(subopt) => build_bundle::build_bundle(subopt).await.map(|_| ()),
-        Opt::GenerateMatrix(subopt) => generate_matrix::generate_matrix(subopt).await,
-        Opt::Run(subopt) => run::run(subopt).await,
+        Args::BuildBundle(subopt) => build_bundle::build_bundle(subopt).await.map(|_| ()),
+        Args::GenerateMatrix(subopt) => generate_matrix::generate_matrix(subopt).await,
+        Args::Run(subopt) => run::run(subopt).await,
     }
 }
