@@ -275,7 +275,7 @@ mod tests {
         ])
         .is_err());
         assert_eq!(
-            Args::BuildBundle(BuildBundleOpt {
+            Args::BuildBundle(BuildBundleArgs {
                 canary_path: None,
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
@@ -292,7 +292,7 @@ mod tests {
             .expect("valid args")
         );
         assert_eq!(
-            Args::BuildBundle(BuildBundleOpt {
+            Args::BuildBundle(BuildBundleArgs {
                 canary_path: Some("some-canary-path".into()),
                 sdk_release_tag: None,
                 sdk_path: Some("some-sdk-path".into()),
@@ -311,7 +311,7 @@ mod tests {
             .expect("valid args")
         );
         assert_eq!(
-            Args::BuildBundle(BuildBundleOpt {
+            Args::BuildBundle(BuildBundleArgs {
                 canary_path: None,
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
