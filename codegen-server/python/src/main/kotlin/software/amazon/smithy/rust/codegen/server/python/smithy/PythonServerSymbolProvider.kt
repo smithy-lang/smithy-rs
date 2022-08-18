@@ -50,19 +50,21 @@ class PythonServerSymbolVisitor(
 
     override fun toSymbol(shape: Shape): Symbol {
         val initial = shape.accept(this)
-        // We are only targetting member shapes
+
         if (shape !is MemberShape) {
             return initial
         }
         val target = model.expectShape(shape.target)
         val container = model.expectShape(shape.container)
 
-        // We are only targeting output shapes
-        if (!(container.hasTrait<SyntheticOutputTrait>() || container.hasTrait<SyntheticInputTrait>())) {
+        // We are only targetting non syntetic inputs and outputs.
+        if (!container.hasTrait<SyntheticOutputTrait>() && !container.hasTrait<SyntheticInputTrait>()) {
             return initial
         }
 
-        // We are only targeting streaming blobs
+        // We are only targeting streaming blobs as the rest of the symbols do not change if streaming is enabled.
+        // For example a TimestampShape doesn't become a different symbol when streaming is involved, but BlobShape
+        // become a ByteStream.
         return if (target is BlobShape && shape.isStreaming(model)) {
             PythonServerRuntimeType.ByteStream(config().runtimeConfig).toSymbol()
         } else {
