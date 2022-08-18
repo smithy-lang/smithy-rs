@@ -14,7 +14,7 @@
 // CAUTION: This subcommand will `git reset --hard` in some cases. Don't ever run
 // it against a smithy-rs repo that you're actively working in.
 
-use crate::build_bundle::BuildBundleOpt;
+use crate::build_bundle::BuildBundleArgs;
 use anyhow::{bail, Context, Result};
 use aws_sdk_cloudwatch as cloudwatch;
 use aws_sdk_lambda as lambda;
@@ -52,7 +52,7 @@ lazy_static::lazy_static! {
 }
 
 #[derive(Debug, Parser, Eq, PartialEq)]
-pub struct RunOpt {
+pub struct RunArgs {
     /// Version of the SDK to compile the canary against
     #[clap(
         long,
@@ -102,7 +102,7 @@ struct Options {
 }
 
 impl Options {
-    fn load_from(run_opt: RunOpt) -> Result<Options> {
+    fn load_from(run_opt: RunArgs) -> Result<Options> {
         if let Some(cdk_output) = &run_opt.cdk_output {
             #[derive(Deserialize)]
             struct Inner {
@@ -144,7 +144,7 @@ impl Options {
     }
 }
 
-pub async fn run(opt: RunOpt) -> Result<()> {
+pub async fn run(opt: RunArgs) -> Result<()> {
     let options = Options::load_from(opt)?;
     let start_time = SystemTime::now();
     let config = aws_config::load_from_env().await;
@@ -271,7 +271,7 @@ fn use_correct_revision(smithy_rs: &dyn Git, sdk_release_tag: &ReleaseTag) -> Re
 
 /// Returns the path to the compiled bundle zip file
 async fn build_bundle(options: &Options) -> Result<PathBuf> {
-    Ok(crate::build_bundle::build_bundle(BuildBundleOpt {
+    Ok(crate::build_bundle::build_bundle(BuildBundleArgs {
         canary_path: None,
         sdk_release_tag: options.sdk_release_tag.clone(),
         sdk_path: options.sdk_path.clone(),
