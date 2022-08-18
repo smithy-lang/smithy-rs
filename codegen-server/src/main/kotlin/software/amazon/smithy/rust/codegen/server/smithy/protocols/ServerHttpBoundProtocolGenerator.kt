@@ -168,7 +168,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                 rustTemplate(
                     """
-                    if ! #{SmithyHttpServer}::protocols::accept_header_classifier(&req, ${contentType.dq()}) {
+                    if ! #{SmithyHttpServer}::protocols::accept_header_classifier(req, ${contentType.dq()}) {
                         return Err(#{RuntimeError} {
                             protocol: #{SmithyHttpServer}::protocols::Protocol::${codegenContext.protocol.name.toPascalCase()},
                             kind: #{SmithyHttpServer}::runtime_error::RuntimeErrorKind::NotAcceptable,
