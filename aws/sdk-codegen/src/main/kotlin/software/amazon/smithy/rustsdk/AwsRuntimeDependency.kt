@@ -37,7 +37,7 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
         path
     }
     return runtimeCrateLocation.copy(
-        path = updatedPath, version = runtimeCrateLocation.version?.let { defaultSdkVersion() },
+        path = updatedPath, versions = runtimeCrateLocation.versions,
     )
 }
 
@@ -61,7 +61,7 @@ object AwsRuntimeType {
 }
 
 fun RuntimeConfig.awsRuntimeDependency(name: String, features: Set<String> = setOf()): CargoDependency =
-    CargoDependency(name, awsRoot().crateLocation(), features = features)
+    CargoDependency(name, awsRoot().crateLocation(null), features = features)
 
 fun RuntimeConfig.awsHttp(): CargoDependency = awsRuntimeDependency("aws-http")
 fun RuntimeConfig.awsTypes(): CargoDependency = awsRuntimeDependency("aws-types")
