@@ -25,6 +25,7 @@ use tower_http::map_response_body::MapResponseBodyLayer;
 
 mod future;
 mod into_make_service;
+mod lambda_handler;
 
 #[doc(hidden)]
 pub mod request_spec;
@@ -32,6 +33,7 @@ pub mod request_spec;
 mod route;
 mod tiny_map;
 
+pub use self::lambda_handler::LambdaHandler;
 pub use self::{future::RouterFuture, into_make_service::IntoMakeService, route::Route};
 
 /// The router is a [`tower::Service`] that routes incoming requests to other `Service`s
