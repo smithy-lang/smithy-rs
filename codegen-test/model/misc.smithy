@@ -201,9 +201,8 @@ structure ResponseCodeRequiredOutput {
     responseCode: Integer,
 }
 
-@idempotent
+// TODO(https://github.com/awslabs/smithy/pull/1365): remove when these tests are in smithy
 @http(method: "GET", uri: "/test-accept-header")
-@documentation("Service accepts `*` in ACCEPT header")
 @httpRequestTests([
     {
         id: "AcceptHeaderStarRequestTest",
@@ -230,12 +229,4 @@ structure ResponseCodeRequiredOutput {
         appliesTo: "server",
     }
 ])
-operation AcceptHeaderStarService {
-    input: AcceptHeaderStarServiceInput,
-    output: AcceptHeaderStarServiceOutput,
-}
-
-@output
-structure AcceptHeaderStarServiceOutput {}
-@input
-structure AcceptHeaderStarServiceInput {}
+operation AcceptHeaderStarService {}
