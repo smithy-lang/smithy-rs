@@ -49,7 +49,7 @@ meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
 author = "Velfi"
 
 [[smithy-rs]]
-message = "Update Smithy dependency to 1.23.0. Models using version 2.0 of the IDL are now supported."
+message = "Update Smithy dependency to 1.23.1. Models using version 2.0 of the IDL are now supported."
 references = ["smithy-rs#1623"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "ogudavid"
