@@ -262,3 +262,6 @@ convert_to_request_rejection!(std::str::Utf8Error, InvalidUtf8);
 // tests use `[crate::body::Body]` as their body type when constructing requests (and almost
 // everyone will run a Hyper-based server in their services).
 convert_to_request_rejection!(hyper::Error, HttpBody);
+
+// Required in order to accept Lambda HTTP requests using `Router<lambda_http::Body>`.
+convert_to_request_rejection!(lambda_http::Error, HttpBody);

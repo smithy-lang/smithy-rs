@@ -9,14 +9,14 @@
 //! This crate is used to test the cargo-check-external-types by exercising the all possible
 //! exposure of external types in a public API.
 
+pub mod test_union;
+
 use external_lib::{
     AssociatedGenericTrait,
     SimpleNewType,
     SimpleTrait,
     SomeOtherStruct,
     SomeStruct,
-    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
-    // Remove this comment if more lines are needed for imports in the future to preserve line numbers
     // Remove this comment if more lines are needed for imports in the future to preserve line numbers
     // Remove this comment if more lines are needed for imports in the future to preserve line numbers
     // Remove this comment if more lines are needed for imports in the future to preserve line numbers

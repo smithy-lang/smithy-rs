@@ -11,10 +11,19 @@ default-run = "pokemon-service"
 name = "pokemon-service-tls"
 path = "src/bin/pokemon-service-tls.rs"
 
+[[bin]]
+name = "pokemon-service"
+path = "src/main.rs"
+
+[[bin]]
+name = "pokemon-service-lambda"
+path = "src/lambda.rs"
+
 [dependencies]
 async-stream = "0.3"
 clap = { version = "~3.2.1", features = ["derive"] }
 hyper = {version = "0.14.12", features = ["server"] }
+lambda_http = "0.6.0"
 rand = "0.8"
 tokio = "1"
 tower = "0.4"

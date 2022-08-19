@@ -2,6 +2,8 @@
 | ---   | ---  | ---     |
 | external_lib | external_lib::AssociatedGenericTrait | test-crate/src/lib.rs:125:0 |
 | external_lib | external_lib::AssociatedGenericTrait | test-crate/src/lib.rs:136:4 |
+| external_lib | external_lib::ReprCType | test-crate/src/test_union.rs:10:4 |
+| external_lib | external_lib::ReprCType | test-crate/src/test_union.rs:15:4 |
 | external_lib | external_lib::SimpleNewType | test-crate/src/lib.rs:158:4 |
 | external_lib | external_lib::SimpleTrait | test-crate/src/lib.rs:104:4 |
 | external_lib | external_lib::SimpleTrait | test-crate/src/lib.rs:122:0 |
@@ -13,6 +15,7 @@
 | external_lib | external_lib::SimpleTrait | test-crate/src/lib.rs:47:0 |
 | external_lib | external_lib::SimpleTrait | test-crate/src/lib.rs:89:4 |
 | external_lib | external_lib::SimpleTrait | test-crate/src/lib.rs:92:8 |
+| external_lib | external_lib::SimpleTrait | test-crate/src/test_union.rs:21:0 |
 | external_lib | external_lib::SomeOtherStruct | test-crate/src/lib.rs:125:0 |
 | external_lib | external_lib::SomeOtherStruct | test-crate/src/lib.rs:136:4 |
 | external_lib | external_lib::SomeOtherStruct | test-crate/src/lib.rs:72:4 |
