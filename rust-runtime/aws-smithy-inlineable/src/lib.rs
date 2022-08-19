@@ -32,7 +32,7 @@ pub(crate) mod client {
     /// A fake Handle to enable testing of customizable operations
     #[derive(Debug)]
     pub(crate) struct Handle {
-        pub client: Client,
+        pub(crate) client: Client,
     }
 
     /// A fake smithy client to enable testing of customizable operations

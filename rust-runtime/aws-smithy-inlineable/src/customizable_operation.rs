@@ -39,14 +39,12 @@ impl<O, R> CustomizableOperation<O, R> {
     }
 
     /// Convenience for `map_request` where infallible direct mutation of request is acceptable
-    pub fn mutate_request<E>(self, f: impl FnOnce(&mut http::Request<SdkBody>) -> ()) -> Self {
-        let mapped_self = self
-            .map_request(|mut req| {
-                f(&mut req);
-                Result::<_, Infallible>::Ok(req)
-            })
-            .expect("infallible");
-        mapped_self
+    pub fn mutate_request<E>(self, f: impl FnOnce(&mut http::Request<SdkBody>)) -> Self {
+        self.map_request(|mut req| {
+            f(&mut req);
+            Result::<_, Infallible>::Ok(req)
+        })
+        .expect("infallible")
     }
 
     /// Allows for customizing the entire operation
