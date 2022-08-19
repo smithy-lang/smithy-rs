@@ -59,16 +59,19 @@ impl ResolveEndpoint<Params> for EndpointShim {
     ) -> Result<SmithyEndpoint, aws_smithy_http::endpoint::Error> {
         let aws_endpoint = self
             .0
-            .resolve_endpoint(params.region.as_ref().unwrap_or(
-                /*EndpointError::message("no region in params")*/
-                &Region::from_static("us-east-1"),
-            ))
+            .resolve_endpoint(
+                params
+                    .region
+                    .as_ref()
+                    .ok_or(EndpointError::message("no region in params"))?,
+            )
             .map_err(|err| EndpointError::message("failure resolving endpoint").with_cause(err))?;
         let uri = aws_endpoint.endpoint().uri();
-        let mut auth_scheme = HashMap::from([("name".to_string(), Document::String("v4".into()))]);
+        let mut auth_scheme =
+            HashMap::from([("name".to_string(), Document::String("sigv4".into()))]);
         if let Some(region) = aws_endpoint.credential_scope().region() {
             auth_scheme.insert(
-                "signingScope".to_string(),
+                "signingRegion".to_string(),
                 region.as_ref().to_string().into(),
             );
         }
@@ -116,21 +119,24 @@ impl MapRequest for AwsEndpointStage {
 
     fn apply(&self, request: Request) -> Result<Request, Self::Error> {
         request.augment(|mut http_req, props| {
-            /*
-               We want to return an endpoint resolution error if there was one. To do that, we
-               need to take ownership. But also, for retries, we need to be careful to ensure that the
-               property bag doesn't get broken across subsequent requests, so we need to remove it,
-               potentially return a (non retryable) endpoint resolution error
-             */
             let endpoint_result = props
-                .remove::<aws_smithy_http::endpoint::Result>()
+                .get_mut::<aws_smithy_http::endpoint::Result>()
                 .ok_or(AwsEndpointStageError::NoEndpointResolver)?;
-            let endpoint = endpoint_result.map_err(|err|AwsEndpointStageError::EndpointResolutionError(err.into()))?;
-            props.insert::<aws_smithy_http::endpoint::Result>(Ok(endpoint));
-            // unwrap safety: we just put it in the bag, we can take it out again.
-            let endpoint = props
-                .get::<aws_smithy_http::endpoint::Result>()
-                .map(|res|res.as_ref().unwrap()).unwrap();
+            let endpoint = match endpoint_result {
+                // downgrade the mut ref to a shared ref
+                Ok(_endpoint) => props.get::<aws_smithy_http::endpoint::Result>()
+                    .expect("unreachable (prevalidated that the endpoint is in the bag)")
+                    .as_ref()
+                    .expect("unreachable (prevalidated that this is OK)"),
+                Err(e) => {
+                    // We need to own the error to return it, so take it and leave a stub error in
+                    // its place
+                    return Err(AwsEndpointStageError::EndpointResolutionError(std::mem::replace(
+                        e,
+                        aws_smithy_http::endpoint::Error::message("the original error was directly returned")
+                    ).into()));
+                }
+            };
             let (uri, signing_scope_override, signing_service_override) = smithy_to_aws(endpoint)
                 .map_err(|err| AwsEndpointStageError::EndpointResolutionError(err))?;
             tracing::debug!(endpoint = ?endpoint, base_region = ?signing_scope_override, "resolved endpoint");
@@ -175,7 +181,7 @@ fn smithy_to_aws(value: &SmithyEndpoint) -> Result<EndpointMetadata, Box<dyn Err
         .iter()
         .flat_map(|doc| match doc {
             Document::Object(map)
-                if map.get("name") == Some(&Document::String("v4".to_string())) =>
+                if map.get("name") == Some(&Document::String("sigv4".to_string())) =>
             {
                 Some(map)
             }
@@ -184,7 +190,7 @@ fn smithy_to_aws(value: &SmithyEndpoint) -> Result<EndpointMetadata, Box<dyn Err
         .next()
         .ok_or("could not find v4 as an acceptable auth scheme")?;
 
-    let signing_scope = match v4.get("signingScope") {
+    let signing_scope = match v4.get("signingRegion") {
         Some(Document::String(s)) => Some(SigningRegion::from(Region::new(s.clone()))),
         None => None,
         _ => return Err("unexpected type".into()),
@@ -242,12 +248,18 @@ mod test {
             Some(&SigningService::from_static("kinesis"))
         );
 
-        let (req, _conf) = req.into_parts();
+        let (req, conf) = req.into_parts();
         assert_eq!(
             req.uri(),
             &Uri::from_static("https://kinesis.us-east-1.amazonaws.com")
         );
         assert!(req.headers().get(HOST).is_none());
+        assert!(
+            conf.acquire()
+                .get::<aws_smithy_http::endpoint::Result>()
+                .is_some(),
+            "Endpoint middleware MUST leave the result in the bag"
+        );
     }
 
     #[test]
