@@ -60,11 +60,11 @@ fun ShapeId.toRustIdentifier(): String {
 private fun RustSymbolProvider.shapeFunctionName(prefix: String, shape: Shape): String {
     val symbolNameSnakeCase = toSymbol(shape).fullName.replace("::", "_").toSnakeCase()
     return prefix + "_" + when (shape) {
-        is ListShape -> "list_${shape.id.toRustIdentifier()}"
         is MapShape -> "map_${shape.id.toRustIdentifier()}"
         is MemberShape -> "member_${shape.container.toRustIdentifier()}_${shape.memberName.toSnakeCase()}"
         is OperationShape -> "operation_$symbolNameSnakeCase"
-        is SetShape -> "set_${shape.id.toRustIdentifier()}"
+        is SetShape -> "set_${shape.id.toRustIdentifier()}" // set shape check MUST come before list, it is a subclass
+        is ListShape -> "list_${shape.id.toRustIdentifier()}"
         is StructureShape -> "structure_$symbolNameSnakeCase"
         is UnionShape -> "union_$symbolNameSnakeCase"
         is DocumentShape -> "document"
