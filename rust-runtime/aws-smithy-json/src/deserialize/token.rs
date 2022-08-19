@@ -216,9 +216,22 @@ pub fn expect_timestamp_or_null(
     timestamp_format: Format,
 ) -> Result<Option<DateTime>, Error> {
     Ok(match timestamp_format {
-        Format::EpochSeconds => {
-            expect_number_or_null(token)?.map(|v| DateTime::from_secs_f64(v.to_f64_lossy()))
-        }
+        Format::EpochSeconds => expect_number_or_null(token)?
+            .map(|v| v.to_f64_lossy())
+            .map(|v| {
+                if v.is_infinite() || v.is_nan() {
+                    Err(Error::new(
+                        ErrorReason::Custom(Cow::Owned(format!(
+                            "NaN and Infinity are not valid epochs: {}",
+                            v
+                        ))),
+                        None,
+                    ))
+                } else {
+                    Ok(DateTime::from_secs_f64(v))
+                }
+            })
+            .transpose()?,
         Format::DateTime | Format::HttpDate => expect_string_or_null(token)?
             .map(|v| DateTime::from_str(v.as_escaped_str(), timestamp_format))
             .transpose()
@@ -578,6 +591,21 @@ pub mod test {
             Ok(None),
             expect_timestamp_or_null(value_null(0), Format::HttpDate)
         );
+        for &invalid in &[f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
+            assert_eq!(
+                Err(Error::new(
+                    ErrorReason::Custom(Cow::Owned(format!(
+                        "NaN and Infinity are not valid epochs: {}",
+                        invalid
+                    ))),
+                    None,
+                )),
+                expect_timestamp_or_null(
+                    value_number(0, Number::Float(invalid)),
+                    Format::EpochSeconds
+                )
+            );
+        }
         assert_eq!(
             Ok(Some(DateTime::from_secs_f64(2048.0))),
             expect_timestamp_or_null(value_number(0, Number::Float(2048.0)), Format::EpochSeconds)
