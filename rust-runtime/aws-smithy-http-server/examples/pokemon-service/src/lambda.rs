@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// This program is exported as a binary named `pokemon_service`.
+// This program is exported as a binary named `pokemon-service-lambda`.
 use std::sync::Arc;
 
 use aws_smithy_http_server::{routing::LambdaHandler, AddExtensionLayer, Router};
