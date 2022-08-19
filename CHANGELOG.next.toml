@@ -107,3 +107,73 @@ Servers now allow requests' ACCEPT header values to be:
 references = ["smithy-rs#1544"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "82marbag"
+
+[[smithy-rs]]
+message = """
+There is a canonical and easier way to run smithy-rs on Lambda [see example].
+
+[see example]: https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/lambda.rs
+"""
+references = ["smithy-rs#1551"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
+author = "hugobast"
+
+[[smithy-rs]]
+message = """
+Lossy converters into integer types for `aws_smithy_types::Number` have been
+removed. Lossy converters into floating point types for
+`aws_smithy_types::Number` have been suffixed with `_lossy`. If you were
+directly using the integer lossy converters, we recommend you use the safe
+converters.
+_Before:_
+```rust
+fn f1(n: aws_smithy_types::Number) {
+    let foo: f32 = n.to_f32(); // Lossy conversion!
+    let bar: u32 = n.to_u32(); // Lossy conversion!
+}
+```
+_After:_
+```rust
+fn f1(n: aws_smithy_types::Number) {
+    use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.
+    let foo: f32 = n.try_into().expect("lossy conversion detected"); // Or handle the error instead of panicking.
+    // You can still do lossy conversions, but only into floating point types.
+    let foo: f32 = n.to_f32_lossy();
+    // To lossily convert into integer types, use an `as` cast directly.
+    let bar: u32 = n as u32; // Lossy conversion!
+}
+```
+"""
+references = ["smithy-rs#1274"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "all" }
+author = "david-perez"
+
+[[aws-sdk-rust]]
+message = """
+Lossy converters into integer types for `aws_smithy_types::Number` have been
+removed. Lossy converters into floating point types for
+`aws_smithy_types::Number` have been suffixed with `_lossy`. If you were
+directly using the integer lossy converters, we recommend you use the safe
+converters.
+_Before:_
+```rust
+fn f1(n: aws_smithy_types::Number) {
+    let foo: f32 = n.to_f32(); // Lossy conversion!
+    let bar: u32 = n.to_u32(); // Lossy conversion!
+}
+```
+_After:_
+```rust
+fn f1(n: aws_smithy_types::Number) {
+    use std::convert::TryInto; // Unnecessary import if you're using Rust 2021 edition.
+    let foo: f32 = n.try_into().expect("lossy conversion detected"); // Or handle the error instead of panicking.
+    // You can still do lossy conversions, but only into floating point types.
+    let foo: f32 = n.to_f32_lossy();
+    // To lossily convert into integer types, use an `as` cast directly.
+    let bar: u32 = n as u32; // Lossy conversion!
+}
+```
+"""
+references = ["smithy-rs#1274"]
+meta = { "breaking" = true, "tada" = false, "bug" = true }
+author = "david-perez"
