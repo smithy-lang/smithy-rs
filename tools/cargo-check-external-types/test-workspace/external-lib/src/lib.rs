@@ -33,3 +33,10 @@ pub trait AssociatedGenericTrait {
 }
 
 pub struct SimpleNewType(pub u32);
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ReprCType {
+    i: i32,
+    f: f32,
+}

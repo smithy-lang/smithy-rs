@@ -10,12 +10,22 @@ use crate::path::{ComponentType, Path};
 use anyhow::{anyhow, Context, Result};
 use rustdoc_types::{
     Crate, FnDecl, GenericArgs, GenericBound, GenericParamDef, GenericParamDefKind, Generics, Id,
-    Item, ItemEnum, ItemSummary, Struct, Term, Trait, Type, Variant, Visibility, WherePredicate,
+    Item, ItemEnum, ItemSummary, Struct, Term, Trait, Type, Union, Variant, Visibility,
+    WherePredicate,
 };
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use tracing::debug;
 use tracing_attributes::instrument;
+
+macro_rules! unstable_rust_feature {
+    ($name:expr, $documentation_uri:expr) => {
+        panic!(
+            "unstable Rust feature '{}' (see {}) is not supported by cargo-check-external-types",
+            $name, $documentation_uri
+        )
+    };
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum VisibilityCheck {
@@ -137,7 +147,10 @@ impl Visitor {
                     self.visit_item(&path, self.item(id)?, VisibilityCheck::Default)?;
                 }
             }
-            ItemEnum::ForeignType => unimplemented!("visit_item ItemEnum::ForeignType"),
+            ItemEnum::ForeignType => unstable_rust_feature!(
+                "extern_types",
+                "https://doc.rust-lang.org/beta/unstable-book/language-features/extern-types.html"
+            ),
             ItemEnum::Function(function) => {
                 path.push(ComponentType::Function, item);
                 self.visit_fn_decl(&path, &function.decl)?;
@@ -176,7 +189,7 @@ impl Visitor {
                     }
                 }
             }
-            ItemEnum::OpaqueTy(_) => unimplemented!("visit_item ItemEnum::OpaqueTy"),
+            ItemEnum::OpaqueTy(_) => unstable_rust_feature!("type_alias_impl_trait", "https://doc.rust-lang.org/beta/unstable-book/language-features/type-alias-impl-trait.html"),
             ItemEnum::Static(sttc) => {
                 path.push(ComponentType::Static, item);
                 self.visit_type(&path, &ErrorLocation::Static, &sttc.type_)?;
@@ -200,10 +213,14 @@ impl Visitor {
                     .context(here!())?;
                 self.visit_generics(&path, &typedef.generics)?;
             }
-            // Trait aliases aren't stable:
-            // https://doc.rust-lang.org/beta/unstable-book/language-features/trait-alias.html
-            ItemEnum::TraitAlias(_) => unimplemented!("unstable trait alias support"),
-            ItemEnum::Union(_) => unimplemented!("union support"),
+            ItemEnum::TraitAlias(_) => unstable_rust_feature!(
+                "trait_alias",
+                "https://doc.rust-lang.org/beta/unstable-book/language-features/trait-alias.html"
+            ),
+            ItemEnum::Union(unn) => {
+                path.push(ComponentType::Union, item);
+                self.visit_union(&path, unn)?;
+            }
             ItemEnum::Variant(variant) => {
                 path.push(ComponentType::EnumVariant, item);
                 self.visit_variant(&path, variant)?;
@@ -225,6 +242,19 @@ impl Visitor {
             self.visit_item(path, field, VisibilityCheck::Default)?;
         }
         for id in &strct.impls {
+            self.visit_impl(path, self.item(id)?)?;
+        }
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self, path, unn), fields(path = %path))]
+    fn visit_union(&self, path: &Path, unn: &Union) -> Result<()> {
+        self.visit_generics(path, &unn.generics)?;
+        for id in &unn.fields {
+            let field = self.item(id)?;
+            self.visit_item(path, field, VisibilityCheck::Default)?;
+        }
+        for id in &unn.impls {
             self.visit_impl(path, self.item(id)?)?;
         }
         Ok(())
@@ -321,8 +351,15 @@ impl Visitor {
                     }
                 }
             }
-            Type::Infer => unimplemented!("visit_type Type::Infer"),
-            Type::RawPointer { type_: _, .. } => unimplemented!("visit_type Type::RawPointer"),
+            Type::Infer => {
+                unimplemented!(
+                    "visit_type for Type::Infer: not sure what Rust code triggers this. \
+                    If you encounter this, please report it with a link to the code it happens with."
+                )
+            }
+            Type::RawPointer { type_, .. } => {
+                self.visit_type(path, what, type_).context(here!())?
+            }
             Type::BorrowedRef { type_, .. } => {
                 self.visit_type(path, what, type_).context(here!())?
             }
