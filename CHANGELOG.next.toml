@@ -114,6 +114,6 @@ There is a canonical and easier way to run smithy-rs on Lambda [see example].
 
 [see example]: https://github.com/awslabs/smithy-rs/blob/031376bf96fa9d0262e15336a0e20a99d43112cc/rust-runtime/aws-smithy-http-server/examples/pokemon-service/src/lambda.rs
 """
-references = ["smithy-rs#1551]
+references = ["smithy-rs#1551"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
 author = "hugobast"
