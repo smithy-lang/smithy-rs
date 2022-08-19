@@ -19,7 +19,7 @@ const KNOWN_YANKED_RELEASE_TAGS: &[&str] = &[
 ];
 
 #[derive(Debug, Parser, Eq, PartialEq)]
-pub struct GenerateMatrixOpt {
+pub struct GenerateMatrixArgs {
     /// Number of previous SDK versions to run the canary against
     #[clap(short, long)]
     sdk_versions: u8,
@@ -99,7 +99,7 @@ async fn retrieve_latest_release_tags(
         .collect())
 }
 
-pub async fn generate_matrix(opt: GenerateMatrixOpt) -> Result<()> {
+pub async fn generate_matrix(opt: GenerateMatrixArgs) -> Result<()> {
     let retrieve_releases = GitHubRetrieveReleases::new()?;
     let sdk_release_tags =
         retrieve_latest_release_tags(&retrieve_releases, opt.sdk_versions as usize).await?;

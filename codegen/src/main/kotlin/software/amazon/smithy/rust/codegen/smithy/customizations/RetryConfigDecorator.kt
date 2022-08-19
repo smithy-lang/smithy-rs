@@ -9,11 +9,9 @@ import software.amazon.smithy.rust.codegen.rustlang.Writable
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
@@ -67,39 +65,25 @@ fn test_1() {
 }
  */
 
-class RetryConfigDecorator : RustCodegenDecorator<ClientCodegenContext> {
-    override val name: String = "RetryConfig"
-    override val order: Byte = 0
-
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> {
-        return baseCustomizations + RetryConfigProviderConfig(codegenContext)
-    }
-
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseRetryConfig(codegenContext.runtimeConfig)
-    }
-
-    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
-}
-
-class RetryConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
+class RetryConfigProviderCustomization(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
     private val retryConfig = smithyTypesRetry(coreCodegenContext.runtimeConfig)
     private val moduleUseName = coreCodegenContext.moduleUseName()
     private val codegenScope = arrayOf("RetryConfig" to retryConfig.member("RetryConfig"))
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
-                "pub(crate) retry_config: Option<#{RetryConfig}>,",
+                "retry_config: Option<#{RetryConfig}>,",
                 *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.ConfigImpl -> {
+                rustTemplate(
+                    """
+                    /// Return a reference to the retry configuration contained in this config, if any.
+                    pub fn retry_config(&self) -> Option<&#{RetryConfig}> { self.retry_config.as_ref() }
+                    """,
+                    *codegenScope,
+                )
+            }
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("retry_config: Option<#{RetryConfig}>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
@@ -152,7 +136,7 @@ class RetryConfigProviderConfig(coreCodegenContext: CoreCodegenContext) : Config
     }
 }
 
-class PubUseRetryConfig(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+class PubUseRetryConfigGenerator(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
             is LibRsSection.Body -> writable {

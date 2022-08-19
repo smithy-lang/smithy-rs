@@ -141,15 +141,14 @@ private class AwsFluentClientExtensions(types: Types) {
                     C: #{SmithyConnector}<Error = E> + Send + 'static,
                     E: Into<#{ConnectorError}>,
                 {
-                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
-                    let sleep_impl = conf.sleep_impl.clone();
+                    let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
                     let mut builder = #{aws_smithy_client}::Builder::new()
                         .connector(#{DynConnector}::new(conn))
                         .middleware(#{DynMiddleware}::new(#{Middleware}::new()));
                     builder.set_retry_config(retry_config.into());
                     builder.set_timeout_config(timeout_config);
-                    if let Some(sleep_impl) = sleep_impl {
+                    if let Some(sleep_impl) = conf.sleep_impl() {
                         builder.set_sleep_impl(Some(sleep_impl));
                     }
                     let client = builder.build();
@@ -165,9 +164,9 @@ private class AwsFluentClientExtensions(types: Types) {
                 /// Creates a new client from the service [`Config`](crate::Config).
                 ##[cfg(any(feature = "rustls", feature = "native-tls"))]
                 pub fn from_conf(conf: crate::Config) -> Self {
-                    let retry_config = conf.retry_config.as_ref().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config.as_ref().cloned().unwrap_or_default();
-                    let sleep_impl = conf.sleep_impl.clone();
+                    let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
+                    let timeout_config = conf.timeout_config().cloned().unwrap_or_default();
+                    let sleep_impl = conf.sleep_impl();
                     if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
                         panic!("An async sleep implementation is required for retries or timeouts to work. \
                                 Set the `sleep_impl` on the Config passed into this function to fix this panic.");

@@ -61,8 +61,6 @@ class HttpBoundProtocolPayloadGenerator(
     private val smithyEventStream = CargoDependency.SmithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
         "hyper" to CargoDependency.HyperWithStream.asType(),
-        "ByteStream" to RuntimeType.ByteStream(runtimeConfig),
-        "ByteSlab" to RuntimeType.ByteSlab,
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "BuildError" to runtimeConfig.operationBuildError(),
         "SmithyHttp" to CargoDependency.SmithyHttp(runtimeConfig).asType(),
@@ -247,10 +245,11 @@ class HttpBoundProtocolPayloadGenerator(
         val fnName = "serialize_payload_${member.container.name.toSnakeCase()}"
         val ref = if (payloadMetadata.takesOwnership) "" else "&"
         val serializer = RuntimeType.forInlineFun(fnName, operationSerModule) {
-            val outputT = if (member.isStreaming(model)) "ByteStream" else "ByteSlab"
+            val outputT = if (member.isStreaming(model)) symbolProvider.toSymbol(member) else RuntimeType.ByteSlab.toSymbol()
             it.rustBlockTemplate(
-                "pub fn $fnName(payload: $ref#{Member}) -> Result<#{$outputT}, #{BuildError}>",
+                "pub fn $fnName(payload: $ref#{Member}) -> Result<#{outputT}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),
+                "outputT" to outputT,
                 *codegenScope,
             ) {
                 val asRef = if (payloadMetadata.takesOwnership) "" else ".as_ref()"
