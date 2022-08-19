@@ -65,7 +65,7 @@ let app: Router = OperationRegistryBuilder::default()
     .into();
 ```
 
-During the survey we touch on the major mechanisms used to acheive this API.
+During the survey we touch on the major mechanisms used to achieve this API.
 
 ### Handlers
 
@@ -340,7 +340,7 @@ macro_rules! impl_handler {
 
 The implementations of `Handler` in `axum` and `smithy-rs` follow a similar pattern - convert `http::Request` into the closure's input, run the closure, convert the output of the closure to `http::Response`.
 
-In `smithy-rs` we do not need a notion of "extractor" - the `http::Request` decomposition is specified by the Smithy model, whereas in `axum` it's defined by the handlers signature. In `smithy-rs` the only remaining degree of freedom in the signature of the handler is whether or not state is included.
+In `smithy-rs` we do not need a general notion of "extractor" - the `http::Request` decomposition is specified by the Smithy model, whereas in `axum` it's defined by the handlers signature. Despite the Smithy specification the customer may still want an "escape hatch" to allow them access to data outside of the Smithy service inputs, for this reason we should continue to support a restricted notion of extractor. This will help support use cases such as passing [lambda_http::Context](https://docs.rs/lambda_http/latest/lambda_http/struct.Context.html) through to the handler despite it not being modeled in the Smithy model.
 
 Dual to `FromRequest` is the [axum::response::IntoResponse](https://docs.rs/axum/latest/axum/response/trait.IntoResponse.html) trait. This plays the role of converting the output of the handler to `http::Response`. Again, the difference between `axum` and `smithy-rs` is that `smithy-rs` has the conversion from `{Operation}Output` to `http::Response` specified by the Smithy model, whereas in `axum` the customer is free to specify a return type which implements `axum::response::IntoResponse`.
 
@@ -376,17 +376,17 @@ let api_routes = Router::new()
 
 In `smithy-rs` a customer is only able to apply a layer to either the `aws_smithy_http::routing::Router` or every route via the [layer method](#router) described above.
 
-# Proposal
+## Proposal
 
 The proposal is presented as a series of compatible transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, but in the case where there exists an interdependency it is stated.
 
 Although presented as a mutation to the existing service builder, the actual implementation should exist as an entirely separate builder, living in a separate namespace, reusing code generation from the old builder, while exposing a new Rust API. Preserving the old API surface will prevent breakage and make it easier to perform comparative benchmarks and testing.
 
-## Remove two-step build procedure
+### Remove two-step build procedure
 
 As described in [Builder](#builder), the customer is required to perform two conversions. One from `OperationRegistryBuilder` via `OperationRegistryBuilder::build`, the second from `OperationRegistryBuilder` to `Router` via the `From<OperationRegistry> for Router` implementation. The intermediary stop at `OperationRegistry` is not required and can be removed.
 
-## Statically check for missing Handlers
+### Statically check for missing Handlers
 
 As described in [Builder](#builder), the `OperationRegistryBuilder::build` method is fallible - it yields a runtime error when one of the handlers has not been set.
 
@@ -440,7 +440,7 @@ where
 
 The customer will now get a compile time error rather than a runtime error when they fail to specify a handler.
 
-## Switch `From<OperationRegistry> for Router` to an `OperationRegistry::build` method
+### Switch `From<OperationRegistry> for Router` to an `OperationRegistry::build` method
 
 To construct a `Router`, the customer must either give a type ascription
 
@@ -462,7 +462,7 @@ let app = /* Service builder */.build();
 
 There already exists a `build` method taking `OperationRegistryBuilder` to `OperationRegistry`, this is removed in [Remove two-step build procedure](#remove-two-step-build-procedure). These two transforms pair well together for this reason.
 
-## Operations as Middleware Constructors
+### Operations as Middleware Constructors
 
 As mentioned in [Comparison to Axum: Routing](#routing) and [Handlers](#handlers), the `smithy-rs` service builder accepts handlers and only converts them into a `tower::Service` during the final conversion into a `Router`. There are downsides to this:
 
@@ -474,7 +474,7 @@ The three use cases described above are supported by `axum` by virtue of the [Ro
 
 Throughout this section we purposely ignore the existence of handlers accepting state alongside the `{Operation}Input`, this class of handlers serve as a distraction and can be accommodated with small perturbations from each approach.
 
-### Approach A: Customer uses `OperationHandler::new`
+#### Approach A: Customer uses `OperationHandler::new`
 
 It's possible to make progress with a small changeset, by requiring the customer eagerly uses `OperationHandler::new` rather than it being applied internally within `From<OperationRegistry> for Router` (see [Handlers](#handlers)). The setter would then become:
 
@@ -531,7 +531,7 @@ This solves (2), the service builder may apply additional middleware around the 
 
 This does not solve (3), as the customer is not able to provide a `tower::Service<{Operation}Input, Response = {Operation}Output>`.
 
-### Approach B: Operations as Middleware
+#### Approach B: Operations as Middleware
 
 In order to achieve all three we model operations as middleware:
 
@@ -609,7 +609,7 @@ OperationRegistryBuilder::default()
     /* ... */
 ```
 
-### Approach C: Operations as Middleware Constructors
+#### Approach C: Operations as Middleware Constructors
 
 While [Attempt B](#approach-b-operations-as-middleware) solves all three problems, it fails to adequately model the Smithy semantics. An operation cannot uniquely define a `tower::Service` without reference to a parent Smithy service - information concerning the serialization/deserialization, error modes are all inherited from the Smithy service an operation is used within. In this way, `Operation0` should not be a standalone middleware, but become middleware once accepted by the service builder.
 
@@ -693,7 +693,7 @@ Notice that we get some additional type safety here when compared to [Approach A
 
 The RFC favours this approach out of all those presented.
 
-### Approach D: Add more methods to the Service Builder
+#### Approach D: Add more methods to the Service Builder
 
 An alternative to [Approach C](#approach-c-operations-as-middleware-constructors) is to simply add more methods to the service builder while internally storing a `tower::Service`:
 
@@ -703,7 +703,7 @@ An alternative to [Approach C](#approach-c-operations-as-middleware-constructors
 
 This is functionally similar to [Attempt C](#approach-c-operations-as-middleware-constructors) except that all composition is done internal to the service builder and the namespace exists in the method name, rather than the `{Operation}` struct.
 
-## Service parameterized Routers
+### Service parameterized Routers
 
 Currently the `Router` stores `Box<dyn tower::Service<http::Request, Response = http::Response>`. As a result the `Router::layer` method, seen in [Router](#router), must re-box a service after every `tower::Layer` applied. The heap allocation `Box::new` itself is not cause for concern because `Router`s are typically constructed once at startup, however one might expect the indirection to regress performance when the server is running.
 
@@ -720,7 +720,7 @@ impl<S> Router<S> {
 }
 ```
 
-## Protocol specific Routers
+### Protocol specific Routers
 
 Currently there is a single `Router` structure, described in [Router](#router), situated in the `rust-runtime/aws-smithy-http-server` crate, which is output by the service builder. This, roughly, takes the form of an `enum` listing the different protocols.
 
@@ -741,9 +741,9 @@ Two downsides of modelling `Router` in this way are:
 - `Router` is larger and has more branches than a protocol specific implementation.
 - If a third-party wanted to extend `smithy-rs` to additional protocols `Routes` would have to be extended. A synopsis of this obstruction is presented in [Should we generate the `Router` type](https://github.com/awslabs/smithy-rs/issues/1606) issue.
 
-After taking the [Switch `From<OperationRegistry> for Router` to an `OperationRegistry::build` method](#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method) transform, code generation is free to switch between return types based on the model. This allows for a scenario where a `@restJson1` causes the service builder to output a specific `RestRouter1`.
+After taking the [Switch `From<OperationRegistry> for Router` to an `OperationRegistry::build` method](#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method) transform, code generation is free to switch between return types based on the model. This allows for a scenario where a `@restJson1` causes the service builder to output a specific `RestJson1Router`.
 
-## Protocol specific Errors
+### Protocol specific Errors
 
 Currently, protocol specific routing errors are either:
 
@@ -759,7 +759,9 @@ Two downsides of this are:
 - `RuntimeError` enumerates all possible errors across all existing protocols, so is larger than modelling the errors for a specific protocol.
 - If a third-party wanted to extend `smithy-rs` to additional protocols with differing failure modes `RuntimeError` would have to be extended. As in [Protocol specific Errors](#protocol-specific-errors), a synopsis of this obstruction is presented in [Should we generate the `Router` type](https://github.com/awslabs/smithy-rs/issues/1606) issue.
 
-## Type erasure with the name of the Smithy service
+Switching from using `RuntimeError` to protocol specific errors which satisfy a common interface, `IntoResponse`, would resolve these problem.
+
+### Type erasure with the name of the Smithy service
 
 Currently the service builder is named `OperationRegistryBuilder`. Despite the name being model agnostic, the `OperationRegistryBuilder` mutates when the associated service mutates. Renaming `OperationRegistryBuilder` to `{Service}Builder` would reflect the relationship between the builder and the Smithy service and prevent naming conflicts if multiple service builders are to exist in the same namespace.
 
@@ -788,41 +790,12 @@ let service_0: Service0 = Service0::builder()
     .build();
 ```
 
-## Type-safe Handler State
-
-As described in [Handlers](#handlers), the current method of exposing state to a handler is via the insertion then lookup of items from the `http::Request::extensions` type map. In [Handlers](#handlers) we noted that the retrieval of state from this presents an extra failure case. In [Comparison to Axum](#comparison-to-axum) we noted that, in `smithy-rs`, we no longer have the use case where state is scoped to subtrees of the routing tree.
-
-Removing this runtime insertion/removal and opting for a static alternative would remove a runtime failure case and improve performance.
-
-The `Handler` trait already enjoys a blanket implementation for any `FnOnce({OperationInput}) -> Fut + Clone + Send + 'static` where `Fut: Future<Output = {Operation}Output>`. This includes any closure which captures cloneable state. In this way the customer already has the option to provide type safe state to handlers while building their service.
-
-Requiring that the customer writes all handlers as closures might be cumbersome, providing the following API will make adjoining state to a handler easier for customers:
-
-```rust
-async fn operation_0(input: Operation0Input, state: T) -> Operation0Output {
-    todo!()
-}
-
-let handler = operation_0.with_state(/* something T valued */);
-```
-
-The `with_state` extension method creates the following wrapper
-
-```rust
-struct StatefulWrapper<F, T> {
-    f: F,
-    state: T
-}
-```
-
-which enjoys `Handler` and hence allows it to be provided to the service builder in the same way as a `async fn operation_0(input: Operation0Input) -> Operation0Output` would be.
-
 ### Combined Proposal
 
-A combination of all the proposed transformations result in the following API:
+A combination of all the proposed transformations results in the following API:
 
 ```rust
-struct State {
+struct Context {
     /* fields */
 }
 
@@ -830,7 +803,7 @@ async fn handler(input: Operation0Input) -> Operation0Output {
     todo!()
 }
 
-async fn stateful_handler(input: Operation0Input, state: State) -> Operation0Output {
+async fn handler_with_ext(input: Operation0Input, extension: Extension<Context>) -> Operation0Output {
     todo!()
 }
 
@@ -844,14 +817,28 @@ impl Service<Operation1Input> for Operation1Service {
     /* implementation */
 }
 
+struct Operation1ServiceWithExt {
+    /* fields */
+}
+
+impl Service<(Operation1Input, Extension<Context>)> for Operation1Service {
+    type Response = Operation1Output;
+
+    /* implementation */
+}
+
 // Create an operation from a handler
 let operation_0 = Operation0::from_handler(handler);
 
-// Create an operation from a handler with state
-let operation_0 = Operation::from_handler(stateful_handler.with_state(State { /* initialize */ }));
+// Create an operation from a handler with extension
+let operation_0 = Operation::from_handler(handler_with_ext);
 
 // Create an operation from a `tower::Service`
 let operation_1_svc = Operation1Service { /* initialize */ };
+let operation_1 = Operation::from_service(operation_1_svc);
+
+// Create an operation from a `tower::Service` with extension
+let operation_1_svc = Operation1ServiceWithExtension { /* initialize */ };
 let operation_1 = Operation::from_service(operation_1_svc);
 
 // Apply a layer
