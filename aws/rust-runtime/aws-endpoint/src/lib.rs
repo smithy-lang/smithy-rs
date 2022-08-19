@@ -52,6 +52,7 @@ impl EndpointShim {
         Self(arc)
     }
 }
+
 impl ResolveEndpoint<Params> for EndpointShim {
     fn resolve_endpoint(
         &self,
@@ -63,7 +64,7 @@ impl ResolveEndpoint<Params> for EndpointShim {
                 params
                     .region
                     .as_ref()
-                    .ok_or(EndpointError::message("no region in params"))?,
+                    .ok_or_else(|| EndpointError::message("no region in params"))?,
             )
             .map_err(|err| EndpointError::message("failure resolving endpoint").with_cause(err))?;
         let uri = aws_endpoint.endpoint().uri();
