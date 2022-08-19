@@ -299,9 +299,7 @@ where
     /// [`DynConnector`](crate::erase::DynConnector) for details. To avoid that overhead, use
     /// [`Builder::rustls`](ClientBuilder::rustls) or `Builder::native_tls` instead.
     pub fn dyn_https() -> Self {
-        ClientBuilder::<DynConnector, M>::dyn_https()
-            .default_async_sleep()
-            .build()
+        ClientBuilder::<DynConnector, M>::dyn_https().build()
     }
 }
 
