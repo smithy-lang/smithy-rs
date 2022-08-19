@@ -24,6 +24,7 @@ pub enum ComponentType {
     StructField,
     Trait,
     TypeDef,
+    Union,
 }
 
 /// Represents one component in a [`Path`].
