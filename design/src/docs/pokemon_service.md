@@ -194,12 +194,14 @@ inherits from `SmithyBuildPlugin` in [smithy-build](https://github.com/awslabs/s
 
 The comment at the beginning of `execute` described what a `Decorator` is and uses the following terms:
 * Context: contains the model being generated, projection and settings for the build
-* Decorator: customizes how code is being generated. AWS services are required to sign with the SigV4 protocol, and [a decorator](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/SigV4SigningDecorator.kt#L45) adds Rust code to sign requests and responses.
+* Decorator: (also referred to as customizations) customizes how code is being generated. AWS services are required to sign with the SigV4 protocol, and [a decorator](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/SigV4SigningDecorator.kt#L45) adds Rust code to sign requests and responses.
 Decorators are applied in reverse order of being added and have a priority order.
 * Writer: creates files and adds content; it supports templating, using `#` for substitutions
 * Location: the file where a symbol will be written to
 
-`execute` is given a `Context`, constructs the sequence of decorators and calls a [CodegenVisitor](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L44).
+The only task of a `RustCodegenPlugin` is to construct a `CodegenVisitor` and call its [execute()](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L115-L115) method.
+
+`CodegenVisitor::execute()` is given a `Context`, constructs the sequence of decorators and calls a [CodegenVisitor](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L44).
 
 CodegenVisitor, RustCodegenPlugin, and wherever there are different implementations between client and server, such as in generating error types,
 have corresponding server versions.
@@ -223,3 +225,15 @@ and all other providers will work with this [new](https://github.com/awslabs/smi
 Model.expectShape(shapeId)
 ```
 Each model has a `shapeId` to `shape` map; this method returns the shape associated with this shapeId.
+
+Some objects implement a `transform` [method](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/transformers/OperationNormalizer.kt#L52-L52) that only change the input model, so that code generation will work on that new model. This is used to, for example, add a trait to a shape.
+
+`CodegenVisitor` is a `ShapeVisitor`. For all services in the input model, shapes are [converted into Rust](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L119-L119);
+[here](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L150-L150) is how a service is constructed,
+[here](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L172-L172) a structure and so on.
+
+Code generation flows from writer to files and entities are (mostly) generated only on a [need-by-need basis](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L119-L126).
+The complete result is a [Rust crate](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L42-L42),
+in which all dependencies are written into their modules and `lib.rs` is generated ([here](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L96-L107)).
+`execute()` ends by running [cargo fmt](https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L133-L133),
+to avoid having to format correctly Rust in `Writer`s and to be sure the generated code follows the styling rules.
