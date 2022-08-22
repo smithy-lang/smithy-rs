@@ -206,7 +206,7 @@ structure ConA {
 
     conBMap: ConBMap,
 
-//    mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
+    mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 //
 //    constrainedUnion: ConstrainedUnion,
 //    enumString: EnumString,

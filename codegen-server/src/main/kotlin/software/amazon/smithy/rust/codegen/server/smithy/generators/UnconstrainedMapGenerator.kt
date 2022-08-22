@@ -72,7 +72,7 @@ class UnconstrainedMapGenerator(
 
             renderTryFromUnconstrainedForConstrained(this)
 
-            if (!publicConstrainedTypes) {
+            if (!publicConstrainedTypes && shape.isDirectlyConstrained(symbolProvider)) {
                 renderFromFullyUnconstrainedForUnconstrained(this)
             }
         }
