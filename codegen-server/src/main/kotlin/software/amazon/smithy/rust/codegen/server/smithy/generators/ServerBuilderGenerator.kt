@@ -269,8 +269,6 @@ class ServerBuilderGenerator(
                     // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
                     var varExpr = if (symbol.isOptional()) "v" else "input"
                     if (hasBox) varExpr = "*$varExpr"
-                    // TODO I think the first part of the condition could be refined, and we could get rid of the
-                    //   `redundant_closure` allow lint below.
                     if (!publicConstrainedTypes || (publicConstrainedTypes && !constrainedTypeHoldsFinalType(member))) {
                         varExpr = "($varExpr).into()"
                     }

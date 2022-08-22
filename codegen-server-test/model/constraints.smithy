@@ -203,9 +203,9 @@ structure ConA {
     conBList2: ConBList2,
 
     conBSet: ConBSet,
-//
-//    conBMap: ConBMap,
-//
+
+    conBMap: ConBMap,
+
 //    mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 //
 //    constrainedUnion: ConstrainedUnion,

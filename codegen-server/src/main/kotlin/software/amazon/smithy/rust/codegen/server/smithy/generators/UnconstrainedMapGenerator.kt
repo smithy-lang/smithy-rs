@@ -72,11 +72,9 @@ class UnconstrainedMapGenerator(
 
             renderTryFromUnconstrainedForConstrained(this)
 
-            // TODO I thought I needed this converter but turns out I don't. Remove it if it ends up I truly don't end
-            //   up needing it.
-//            if (!publicConstrainedTypes) {
-//                renderFromFullyUnconstrainedForUnconstrained(this)
-//            }
+            if (!publicConstrainedTypes) {
+                renderFromFullyUnconstrainedForUnconstrained(this)
+            }
         }
     }
 
