@@ -198,11 +198,11 @@ structure ConA {
     minLengthString: MinLengthString,
     maxLengthString: MaxLengthString,
     fixedLengthString: FixedLengthString,
-//
-//    conBList: ConBList,
-//    conBList2: ConBList2,
-//
-//    conBSet: ConBSet,
+
+    conBList: ConBList,
+    conBList2: ConBList2,
+
+    conBSet: ConBSet,
 //
 //    conBMap: ConBMap,
 //

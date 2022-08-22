@@ -33,9 +33,9 @@ import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
+import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
-import software.amazon.smithy.rust.codegen.smithy.isTransitivelyConstrained
 import software.amazon.smithy.rust.codegen.smithy.letIf
 import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.smithy.makeOptional
@@ -253,27 +253,25 @@ class ServerBuilderGenerator(
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
                 val targetShape = model.expectShape(member.target)
-                // If constrained types are not public, the user is sending us a fully unconstrained type.
-                // If the shape is transitively but not directly constrained, we need to:
-                //     1. constrain the fully unconstrained inner types into their corresponding unconstrained types first; and
-                //     2. store the corresponding unconstrained type in a `MaybeConstrained::Unconstrained` variant.
-                // We will then check the constraints when `build()` is called.
+                // If constrained types are not public and the target shape is one that would generate a public constrained
+                // type had the `publicConstrainedTypes` setting been enabled, then we need to:
+                //     1. constrain the input type into the corresponding `pub(crate)` unconstrained types first; and
+                //     2. store the resulting value in a `MaybeConstrained::Unconstrained` variant.
                 // This condition is calculated once here and used later when the above two steps are performed.
-                // Note that we explicitly opt out of members targeting structure and union shapes: these shapes _always_
-                // generate public constrained types, even when `publicConstrainedTypes` is disabled.
+                // Note we explicitly opt out when the target shape is a structure shape, since in that case public
+                // constrained types are _always_ generated, regardless of whether `publicConstrainedTypes` is enabled,
+                // and structure shapes are directly constrained when at least one of their members is non-optional.
                 val isInputFullyUnconstrained = !publicConstrainedTypes &&
-                        member.isTransitivelyConstrained(model, symbolProvider) &&
-                        !targetShape.isStructureShape &&
-                        !targetShape.isUnionShape
+                    targetShape.isDirectlyConstrained(symbolProvider) &&
+                    !targetShape.isStructureShape
 
                 if (wrapInMaybeConstrained) {
                     // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
                     var varExpr = if (symbol.isOptional()) "v" else "input"
                     if (hasBox) varExpr = "*$varExpr"
-                    if (publicConstrainedTypes && !constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
-
-                    if (isInputFullyUnconstrained) {
-                        // Step 1 above.
+                    // TODO I think the first part of the condition could be refined, and we could get rid of the
+                    //   `redundant_closure` allow lint below.
+                    if (!publicConstrainedTypes || (publicConstrainedTypes && !constrainedTypeHoldsFinalType(member))) {
                         varExpr = "($varExpr).into()"
                     }
 
