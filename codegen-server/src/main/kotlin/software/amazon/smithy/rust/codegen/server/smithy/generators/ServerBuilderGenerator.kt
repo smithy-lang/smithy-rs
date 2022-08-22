@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -258,12 +259,14 @@ class ServerBuilderGenerator(
                 //     1. constrain the input type into the corresponding `pub(crate)` unconstrained types first; and
                 //     2. store the resulting value in a `MaybeConstrained::Unconstrained` variant.
                 // This condition is calculated once here and used later when the above two steps are performed.
-                // Note we explicitly opt out when the target shape is a structure shape, since in that case public
-                // constrained types are _always_ generated, regardless of whether `publicConstrainedTypes` is enabled,
-                // and structure shapes are directly constrained when at least one of their members is non-optional.
+                // Note we explicitly opt out when the target shape is a structure shape or a string shape with the
+                // `enum` trait, since in those cases public constrained types are _always_ generated, regardless of
+                // whether `publicConstrainedTypes` is enabled (remember structure shapes are directly constrained
+                // when at least one of their members is non-optional).
                 val isInputFullyUnconstrained = !publicConstrainedTypes &&
                     targetShape.isDirectlyConstrained(symbolProvider) &&
-                    !targetShape.isStructureShape
+                    !targetShape.isStructureShape &&
+                    !(targetShape.isStringShape && targetShape.hasTrait<EnumTrait>())
 
                 if (wrapInMaybeConstrained) {
                     // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).

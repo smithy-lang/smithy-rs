@@ -209,7 +209,7 @@ structure ConA {
     mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 
     constrainedUnion: ConstrainedUnion,
-//    enumString: EnumString,
+    enumString: EnumString,
 //
 //    listOfLengthString: ListOfLengthString,
 //
