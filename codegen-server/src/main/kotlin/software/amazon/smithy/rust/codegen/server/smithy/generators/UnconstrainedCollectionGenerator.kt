@@ -26,16 +26,18 @@ class UnconstrainedCollectionGenerator(
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+    private val publicConstrainedTypes: Boolean,
     private val unconstrainedModuleWriter: RustWriter,
     private val modelsModuleWriter: RustWriter,
     val shape: CollectionShape
 ) {
+    private val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
+    private val name = symbol.name
+
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
-        val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val module = symbol.namespace.split(symbol.namespaceDelimiter).last()
-        val name = symbol.name
         val innerShape = model.expectShape(shape.member.target)
         val innerUnconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(innerShape)
         val constrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
@@ -76,6 +78,10 @@ class UnconstrainedCollectionGenerator(
                 "MaybeConstrained" to constrainedSymbol.makeMaybeConstrained(),
                 "TryFrom" to RuntimeType.TryFrom,
             )
+
+//            if (!publicConstrainedTypes) {
+//                renderFromFullyUnconstrainedForUnconstrained(this)
+//            }
         }
 
         modelsModuleWriter.withModule(
@@ -89,5 +95,21 @@ class UnconstrainedCollectionGenerator(
                 "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
             )
         }
+    }
+
+    private fun renderFromFullyUnconstrainedForUnconstrained(writer: RustWriter) {
+        // Note that if public constrained types is not enabled, then the regular `symbolProvider` produces
+        // "fully unconstrained" symbols for all shapes (i.e. as if the shapes didn't have any constraint traits).
+        writer.rustTemplate(
+            """
+            impl #{From}<#{FullyUnconstrainedSymbol}> for $name {
+                fn from(fully_unconstrained: #{FullyUnconstrainedSymbol}) -> Self {
+                    Self(fully_unconstrained.into_iter().map(|v| v.into()).collect())
+                }
+            }
+            """,
+            "From" to RuntimeType.From,
+            "FullyUnconstrainedSymbol" to symbolProvider.toSymbol(shape),
+        )
     }
 }

@@ -252,30 +252,36 @@ class ServerBuilderGenerator(
         writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
+                val targetShape = model.expectShape(member.target)
+                // If constrained types are not public, the user is sending us a fully unconstrained type.
+                // If the shape is transitively but not directly constrained, we need to:
+                //     1. constrain the fully unconstrained inner types into their corresponding unconstrained types first; and
+                //     2. store the corresponding unconstrained type in a `MaybeConstrained::Unconstrained` variant.
+                // We will then check the constraints when `build()` is called.
+                // This condition is calculated once here and used later when the above two steps are performed.
+                // Note that we explicitly opt out of members targeting structure and union shapes: these shapes _always_
+                // generate public constrained types, even when `publicConstrainedTypes` is disabled.
+                val isInputFullyUnconstrained = !publicConstrainedTypes &&
+                        member.isTransitivelyConstrained(model, symbolProvider) &&
+                        !targetShape.isStructureShape &&
+                        !targetShape.isUnionShape
+
                 if (wrapInMaybeConstrained) {
-                    val maybeConstrainedVariant = if (!publicConstrainedTypes &&
-                        member.hasPublicConstrainedWrapperTupleType(model))
-                        // If constrained types are not public and this member shape is one that would generate a
-                        // public constrained type were the setting to be enabled, the user is sending us an unconstrained
-                        // type, and we will have to check the constraints when `build()` is called.
-                        "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Unconstrained"
-                    else {
-                        "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
-                    }
                     // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
                     var varExpr = if (symbol.isOptional()) "v" else "input"
                     if (hasBox) varExpr = "*$varExpr"
                     if (publicConstrainedTypes && !constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
 
-                    // If constrained types are not public, the user is sending us a fully unconstrained type.
-                    // If the shape is transitively but not directly constrained, we need to constrain the
-                    // fully unconstrained inner types into their corresponding unconstrained types first.
-                    val targetShape = model.expectShape(member.target)
-                    if (!publicConstrainedTypes &&
-                        member.isTransitivelyConstrained(model, symbolProvider) &&
-                        !targetShape.isStructureShape &&
-                        !targetShape.isUnionShape) {
+                    if (isInputFullyUnconstrained) {
+                        // Step 1 above.
                         varExpr = "($varExpr).into()"
+                    }
+
+                    val maybeConstrainedVariant = if (isInputFullyUnconstrained)
+                        // Step 2 above.
+                        "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Unconstrained"
+                    else {
+                        "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
                     }
 
                     conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {

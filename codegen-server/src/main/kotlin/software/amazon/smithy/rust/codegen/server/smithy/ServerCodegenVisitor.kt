@@ -264,6 +264,7 @@ open class ServerCodegenVisitor(
                         unconstrainedShapeSymbolProvider,
                         pubCrateConstrainedShapeSymbolProvider,
                         constraintViolationSymbolProvider,
+                        settings.codegenConfig.publicConstrainedTypes,
                         unconstrainedModuleWriter,
                         modelsModuleWriter,
                         shape
@@ -301,7 +302,7 @@ open class ServerCodegenVisitor(
                     pubCrateConstrainedShapeSymbolProvider,
                     constrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
-                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                    settings.codegenConfig.publicConstrainedTypes,
                     unconstrainedModuleWriter,
                     shape
                 ).render()

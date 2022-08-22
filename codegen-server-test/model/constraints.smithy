@@ -192,19 +192,19 @@ structure ConA {
     @required
     conB: ConB,
 
-    optConB: ConB,
-
-    lengthString: LengthString,
-    minLengthString: MinLengthString,
-    maxLengthString: MaxLengthString,
-    fixedLengthString: FixedLengthString,
-
-    conBList: ConBList,
-    conBList2: ConBList2,
-
-    conBSet: ConBSet,
-
-    conBMap: ConBMap,
+//    optConB: ConB,
+//
+//    lengthString: LengthString,
+//    minLengthString: MinLengthString,
+//    maxLengthString: MaxLengthString,
+//    fixedLengthString: FixedLengthString,
+//
+//    conBList: ConBList,
+//    conBList2: ConBList2,
+//
+//    conBSet: ConBSet,
+//
+//    conBMap: ConBMap,
 //
 //    mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 //
