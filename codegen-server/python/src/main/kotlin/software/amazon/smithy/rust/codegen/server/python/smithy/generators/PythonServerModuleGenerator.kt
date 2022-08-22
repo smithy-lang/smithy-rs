@@ -96,6 +96,7 @@ class PythonServerModuleGenerator(
             let types = #{pyo3}::types::PyModule::new(py, "types")?;
             types.add_class::<#{SmithyPython}::types::Blob>()?;
             types.add_class::<#{SmithyPython}::types::DateTime>()?;
+            types.add_class::<#{SmithyPython}::types::ByteStream>()?;
             #{pyo3}::py_run!(
                 py,
                 types,
@@ -116,7 +117,7 @@ class PythonServerModuleGenerator(
             #{pyo3}::py_run!(
                 py,
                 socket,
-                "import sys; sys.modules['$libName.types'] = socket"
+                "import sys; sys.modules['$libName.socket'] = socket"
             );
             m.add_submodule(socket)?;
             """,

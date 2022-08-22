@@ -33,10 +33,10 @@ impl ShellOperation for Publish {
         let mut command = Command::new(self.program);
         command
             .current_dir(&self.package_path)
-            .env("CARGO_INCREMENTAL", "0") // Disable incremental compilation to reduce disk space used
             .arg("publish")
             .arg("--jobs")
-            .arg("1");
+            .arg("1")
+            .arg("--no-verify"); // The crates have already been built in previous CI steps
         let output = command.output()?;
         if !output.status.success() {
             let (stdout, stderr) = output_text(&output);

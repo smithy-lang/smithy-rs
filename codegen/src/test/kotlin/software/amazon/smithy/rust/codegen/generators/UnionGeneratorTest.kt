@@ -110,7 +110,7 @@ class UnionGeneratorTest {
             }
 
             @deprecated
-            union Bar {}
+            union Bar { x: Integer }
         """.asSmithyModel()
         val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.root()
