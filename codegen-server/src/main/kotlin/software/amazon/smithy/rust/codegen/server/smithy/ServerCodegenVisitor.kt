@@ -279,6 +279,8 @@ open class ServerCodegenVisitor(
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
                     pubCrateConstrainedShapeSymbolProvider,
+                    constrainedShapeSymbolProvider,
+                    settings.codegenConfig.publicConstrainedTypes,
                     writer,
                     shape
                 ).render()

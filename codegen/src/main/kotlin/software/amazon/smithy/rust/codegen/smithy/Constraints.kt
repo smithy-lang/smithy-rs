@@ -77,3 +77,10 @@ fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider)
     } else {
         Walker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
     }
+
+fun Shape.canReachStructureShape(model: Model) = Walker(model).walkShapes(this).toSet().any { it.isStructureShape }
+
+fun Shape.canReachConstrainedShapeOtherThanConstrainedStructureShape(model: Model, symbolProvider: SymbolProvider) =
+    Walker(model).walkShapes(this).toSet()
+        .filter { it.isDirectlyConstrained(symbolProvider) }
+        .any { !it.isStructureShape }

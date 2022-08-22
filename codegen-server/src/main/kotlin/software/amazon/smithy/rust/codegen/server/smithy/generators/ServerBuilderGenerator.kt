@@ -29,12 +29,12 @@ import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbol
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShapeOtherThanConstrainedStructureShape
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.hasConstraintTraitOrTargetHasConstraintTrait
 import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
-import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -264,8 +264,7 @@ class ServerBuilderGenerator(
                 // whether `publicConstrainedTypes` is enabled (remember structure shapes are directly constrained
                 // when at least one of their members is non-optional).
                 val isInputFullyUnconstrained = !publicConstrainedTypes &&
-                    targetShape.isDirectlyConstrained(symbolProvider) &&
-                    !targetShape.isStructureShape &&
+                    targetShape.canReachConstrainedShapeOtherThanConstrainedStructureShape(model, symbolProvider)
                     !(targetShape.isStringShape && targetShape.hasTrait<EnumTrait>())
 
                 if (wrapInMaybeConstrained) {

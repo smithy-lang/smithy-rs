@@ -210,10 +210,10 @@ structure ConA {
 
     constrainedUnion: ConstrainedUnion,
     enumString: EnumString,
-//
-//    listOfLengthString: ListOfLengthString,
-//
-//    setOfLengthString: SetOfLengthString,
+
+    listOfLengthString: ListOfLengthString,
+
+//  setOfLengthString: SetOfLengthString,
 }
 
 map MapOfLengthString {

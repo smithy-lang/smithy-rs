@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShapeOtherThanConstrainedStructureShape
 import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 
 // TODO Docs
@@ -79,11 +80,10 @@ class UnconstrainedCollectionGenerator(
                 "TryFrom" to RuntimeType.TryFrom,
             )
 
-            // TODO I thought I needed this converter but turns out I don't. Remove it if it ends up I truly don't end
-            //   up needing it.
-//            if (!publicConstrainedTypes) {
-//                renderFromFullyUnconstrainedForUnconstrained(this)
-//            }
+            // TODO I'm sure we'll have to eventually add the converter from structure shape to structure shape builder and remove the second condition.
+            if (!publicConstrainedTypes && !shape.canReachConstrainedShapeOtherThanConstrainedStructureShape(model, symbolProvider)) {
+                renderFromFullyUnconstrainedForUnconstrained(this)
+            }
         }
 
         modelsModuleWriter.withModule(
