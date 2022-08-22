@@ -1,6 +1,6 @@
 ## The Pokémon Service
 
-This is an overview of the Pokémon service. It describes:
+This is an overview of the Pokémon service. It introduces:
 * How a smithy-rs customer uses the vanilla SDK and writes their business logic
 * What the runtime is and how code is generated
 * The folder structure of the project
