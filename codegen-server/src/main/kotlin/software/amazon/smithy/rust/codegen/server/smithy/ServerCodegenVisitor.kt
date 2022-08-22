@@ -381,11 +381,11 @@ open class ServerCodegenVisitor(
         if (shape.hasTrait<EnumTrait>() && shape.isDirectlyConstrained(symbolProvider)) {
             logger.warning(
                 """
-            String shape $shape has an `enum` trait and another constraint trait. This is valid according to the Smithy
-            spec v1 IDL, but it's unclear what the semantics are. In any case, the Smithy CLI should enforce the
-            constraints (which it currently does not), not each code generator.
-            See https://github.com/awslabs/smithy/issues/1121f for more information.
-            """.trimIndent()
+                String shape $shape has an `enum` trait and another constraint trait. This is valid according to the Smithy
+                spec v1 IDL, but it's unclear what the semantics are. In any case, the Smithy CLI should enforce the
+                constraints (which it currently does not), not each code generator.
+                See https://github.com/awslabs/smithy/issues/1121f for more information.
+                """.trimIndent()
             )
         } else if (shape.isDirectlyConstrained(symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
@@ -428,6 +428,7 @@ open class ServerCodegenVisitor(
                         symbolProvider,
                         unconstrainedShapeSymbolProvider,
                         pubCrateConstrainedShapeSymbolProvider,
+                        constrainedShapeSymbolProvider,
                         constraintViolationSymbolProvider,
                         unconstrainedModuleWriter,
                         modelsModuleWriter,
