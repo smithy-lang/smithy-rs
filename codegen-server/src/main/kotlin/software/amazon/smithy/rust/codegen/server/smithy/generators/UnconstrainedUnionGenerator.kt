@@ -41,6 +41,7 @@ class UnconstrainedUnionGenerator(
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     private val constrainedShapeSymbolProvider: RustSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+    private val publicConstrainedTypes: Boolean,
     private val unconstrainedModuleWriter: RustWriter,
     private val modelsModuleWriter: RustWriter,
     val shape: UnionShape
@@ -184,6 +185,10 @@ class UnconstrainedUnionGenerator(
                                     """,
                                     "ConstrainedShapeSymbol" to constrainedShapeSymbolProvider.toSymbol(targetShape)
                                 )
+
+                                if (!publicConstrainedTypes) {
+                                    rust(".into()")
+                                }
                             }
                         } else {
                             rust("unconstrained")
