@@ -69,7 +69,7 @@ pub struct OperationExtension {
 }
 
 /// An error occurred when parsing an absolute operation shape ID.
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseError {
     #[error(". was not found - missing namespace")]
@@ -208,6 +208,9 @@ mod tests {
     #[test]
     fn ext_reject() {
         let value = "CompleteSnapshot";
-        assert!(OperationExtension::new(value).is_err())
+        assert_eq!(
+            OperationExtension::new(value).unwrap_err(),
+            ParseError::MissingNamespace
+        )
     }
 }
