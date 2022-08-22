@@ -154,7 +154,7 @@ ENV PATH=/opt/cargo/bin:/opt/nodejs/bin:$PATH \
 # This is used primarily by the `build.gradle.kts` files in choosing how to execute build tools. If inside the image,
 # they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
-RUN npm install -g diff2html-cli@5.1.11 && pip3 install --no-cache-dir uvloop==0.16.0
+RUN npm install -g diff2html-cli@5.1.11 && pip3 install --no-cache-dir uvloop==0.16.0 aiohttp==3.8.1
 WORKDIR /home/build
 COPY ci-build/scripts/sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test

@@ -132,7 +132,7 @@ class ServerHttpSensitivityGenerator(
                     it.direction == RelationshipDirection.DIRECTED
                 }
                 .filter {
-                    it.hasTrait<SensitiveTrait>()
+                    isDirectedRelationshipSensitive<SensitiveTrait>(it)
                 }.mapNotNull {
                     it as? MemberShape
                 }
@@ -294,7 +294,7 @@ class ServerHttpSensitivityGenerator(
                 it.direction == RelationshipDirection.DIRECTED && !it.shape.hasTrait<A>()
             }
             .filter {
-                it.hasTrait<A>()
+                isDirectedRelationshipSensitive<A>(it)
             }
             .flatMap {
                 Walker(model)
@@ -303,11 +303,18 @@ class ServerHttpSensitivityGenerator(
                         it.direction == RelationshipDirection.DIRECTED
                     }
                     .filter {
-                        it.hasTrait<B>()
+                        isDirectedRelationshipSensitive<B>(it)
                     }.mapNotNull {
                         it as? MemberShape
                     }
             }
+    }
+
+    internal inline fun <reified A : Trait> isDirectedRelationshipSensitive(partnerShape: Shape): Boolean {
+        return partnerShape.hasTrait<A>() || (
+            partnerShape.asMemberShape().isPresent() &&
+                model.expectShape(partnerShape.asMemberShape().get().getTarget()).hasTrait<A>()
+            )
     }
 
     // Find member shapes with trait `T` contained in a shape enjoying `SensitiveTrait`.

@@ -12,13 +12,12 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
-import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerSymbolProvider
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerSymbolVisitor
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonStreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.StreamingShapeMetadataProvider
-import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
@@ -68,20 +67,17 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
         ) =
-            SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
+            // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
+            // `aws_smithy_http_server_python::types`.
+            PythonServerSymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let {
                     EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER)
                 }
-                // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
-                .let { StreamingShapeSymbolProvider(it, model) }
-                // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
-                // `aws_smithy_http_server_python::types`.
-                .let { PythonServerSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf()) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)
-                .let { StreamingShapeMetadataProvider(it, model) }
+                .let { PythonStreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
                 .let { RustReservedWordSymbolProvider(it, model) }
