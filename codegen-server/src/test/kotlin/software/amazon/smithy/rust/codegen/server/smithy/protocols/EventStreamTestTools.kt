@@ -98,7 +98,7 @@ private fun fillInBaseModel(
         MessageWithNoHeaderPayloadTraits: MessageWithNoHeaderPayloadTraits,
         SomeError: SomeError,
     }
-    structure TestStreamInputOutput { @required value: TestStream }
+    structure TestStreamInputOutput { @httpPayload @required value: TestStream }
     operation TestStreamOp {
         input: TestStreamInputOutput,
         output: TestStreamInputOutput,

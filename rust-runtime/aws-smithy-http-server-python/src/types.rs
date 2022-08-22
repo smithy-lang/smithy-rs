@@ -3,9 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Python wrapped types from aws-smithy-types.
+//! Python wrapped types from aws-smithy-types and aws-smithy-http.
 
-use pyo3::prelude::*;
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
+
+use bytes::Bytes;
+use parking_lot::Mutex;
+use pyo3::{
+    exceptions::{PyRuntimeError, PyStopIteration},
+    iter::IterNextOutput,
+    prelude::*,
+    pyclass::IterANextOutput,
+};
+use tokio_stream::StreamExt;
 
 use crate::Error;
 
@@ -65,6 +79,12 @@ impl From<Blob> for aws_smithy_types::Blob {
     }
 }
 
+impl<'blob> From<&'blob Blob> for &'blob aws_smithy_types::Blob {
+    fn from(other: &'blob Blob) -> &'blob aws_smithy_types::Blob {
+        &other.0
+    }
+}
+
 /// Python Wrapper for [aws_smithy_types::date_time::DateTime].
 #[pyclass]
 #[derive(Debug, Clone, PartialEq)]
@@ -89,6 +109,18 @@ impl From<Format> for aws_smithy_types::date_time::Format {
             Format::HttpDate => aws_smithy_types::date_time::Format::HttpDate,
             Format::EpochSeconds => aws_smithy_types::date_time::Format::EpochSeconds,
         }
+    }
+}
+
+impl DateTime {
+    /// Formats the `DateTime` to a string using the given `format`.
+    ///
+    /// Returns an error if the given `DateTime` cannot be represented by the desired format.
+    pub fn fmt(
+        &self,
+        format: aws_smithy_types::date_time::Format,
+    ) -> Result<String, aws_smithy_types::date_time::DateTimeFormatError> {
+        self.0.fmt(format)
     }
 }
 
@@ -209,6 +241,189 @@ impl From<DateTime> for aws_smithy_types::DateTime {
     }
 }
 
+impl<'date> From<&'date DateTime> for &'date aws_smithy_types::DateTime {
+    fn from(other: &'date DateTime) -> &'date aws_smithy_types::DateTime {
+        &other.0
+    }
+}
+
+/// Python Wrapper for [aws_smithy_http::byte_stream::ByteStream].
+///
+/// ByteStream provides misuse-resistant primitives to make it easier to handle common patterns with streaming data.
+///
+/// On the Rust side, The Python implementation wraps the original [ByteStream](aws_smithy_http::byte_stream::ByteStream)
+/// in a clonable structure and implements the [Stream](futures::stream::Stream) trait for it to
+/// allow Rust to handle the type transparently.
+///
+/// On the Python side both sync and async iterators are exposed by implementing `__iter__()` and `__aiter__()` magic methods,
+/// which allows to just loop over the stream chunks.
+///
+/// ### Example of async streaming:
+///
+/// ```python
+///     stream = await ByteStream.from_path("/tmp/music.mp3")
+///     async for chunk in stream:
+///         print(chunk)
+/// ```
+///
+/// ### Example of sync streaming:
+///
+/// ```python
+///     stream = ByteStream.from_stream_blocking("/tmp/music.mp3")
+///     for chunk in stream:
+///         print(chunk)
+/// ```
+///
+/// The main difference between the two implementations is that the async one is scheduling the Python coroutines as Rust futures,
+/// effectively maintaining the asyncronous behavior that Rust exposes, while the sync one is blocking the Tokio runtime to be able
+/// to await one chunk at a time.
+///
+/// The original Rust [ByteStream](aws_smithy_http::byte_stream::ByteStream) is wrapped inside a `Arc<Mutex>` to allow the type to be
+/// [Clone] (required by PyO3) and to allow internal mutability, required to fetch the next chunk of data.
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct ByteStream(Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>);
+
+impl futures::stream::Stream for ByteStream {
+    type Item = Result<Bytes, aws_smithy_http::byte_stream::Error>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let mut stream = self.0.lock();
+        Pin::new(&mut *stream).poll_next(cx)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.lock().size_hint()
+    }
+}
+
+/// Return a new data chunk from the stream.
+async fn yield_data_chunk(
+    body: Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>,
+) -> PyResult<Bytes> {
+    let mut stream = body.lock();
+    match stream.next().await {
+        Some(bytes) => bytes.map_err(|e| PyRuntimeError::new_err(e.to_string())),
+        None => Err(PyStopIteration::new_err("stream exausted")),
+    }
+}
+
+impl ByteStream {
+    /// Construct a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a
+    /// [SdkBody](aws_smithy_http::body::SdkBody).
+    ///
+    /// This method is available only to Rust and it is required to comply with the
+    /// interface required by the code generator.
+    pub fn new(body: aws_smithy_http::body::SdkBody) -> Self {
+        Self(Arc::new(Mutex::new(
+            aws_smithy_http::byte_stream::ByteStream::new(body),
+        )))
+    }
+}
+
+/// ByteStream Abstractions.
+#[pymethods]
+impl ByteStream {
+    /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a slice of bytes.
+    #[new]
+    pub fn newpy(input: &[u8]) -> Self {
+        Self(Arc::new(Mutex::new(
+            aws_smithy_http::byte_stream::ByteStream::new(aws_smithy_http::body::SdkBody::from(
+                input,
+            )),
+        )))
+    }
+
+    /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a path, without
+    /// requiring Python to await this method.
+    ///
+    /// **NOTE:** This method will block the Rust event loop when it is running.
+    #[staticmethod]
+    pub fn from_path_blocking(py: Python, path: String) -> PyResult<Py<PyAny>> {
+        let byte_stream = futures::executor::block_on(async {
+            aws_smithy_http::byte_stream::ByteStream::from_path(path)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+        })?;
+        let result = Self(Arc::new(Mutex::new(byte_stream)));
+        Ok(result.into_py(py))
+    }
+
+    /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a path, forcing
+    /// Python to await this coroutine.
+    #[staticmethod]
+    pub fn from_path(py: Python, path: String) -> PyResult<&PyAny> {
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let byte_stream = aws_smithy_http::byte_stream::ByteStream::from_path(path)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            Ok(Self(Arc::new(Mutex::new(byte_stream))))
+        })
+    }
+
+    /// Allow to syncronously iterate over the stream.
+    ///
+    /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__iter__.>`
+    pub fn __iter__(slf: PyRef<Self>) -> PyRef<Self> {
+        slf
+    }
+
+    /// Return the next item from the iterator. If there are no further items, raise the StopIteration exception.
+    /// PyO3 allows to raise the correct exception using the enum [IterNextOutput](pyo3::pyclass::IterNextOutput).
+    ///
+    /// To get tnext value of the iterator, the `Arc` inner stream is cloned and the Rust call to `next()` is executed
+    /// inside a call blocking the Tokio runtime.
+    ///
+    /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__next__.>`
+    pub fn __next__(slf: PyRefMut<Self>) -> PyResult<IterNextOutput<Py<PyAny>, PyObject>> {
+        let body = slf.0.clone();
+        let data_chunk = futures::executor::block_on(yield_data_chunk(body));
+        match data_chunk {
+            Ok(data_chunk) => Ok(IterNextOutput::Yield(data_chunk.into_py(slf.py()))),
+            Err(e) => {
+                if e.is_instance_of::<PyStopIteration>(slf.py()) {
+                    Ok(IterNextOutput::Return(slf.py().None()))
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    /// Allow to asyncronously iterate over the stream.
+    ///
+    /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__aiter__.>`
+    pub fn __aiter__(slf: PyRef<Self>) -> PyRef<Self> {
+        slf
+    }
+
+    /// Return an awaitable resulting in a next value of the iterator or raise a StopAsyncIteration
+    /// exception when the iteration is over. PyO3 allows to raise the correct exception using the enum
+    /// [IterANextOutput](pyo3::pyclass::IterANextOutput).
+    ///
+    /// To get the next value of the iterator, the `Arc` inner stream is cloned and the Rust call
+    /// to `next()` is converted into an awaitable Python coroutine.
+    ///
+    /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__anext__.>`
+    pub fn __anext__(slf: PyRefMut<Self>) -> PyResult<IterANextOutput<Py<PyAny>, PyObject>> {
+        let body = slf.0.clone();
+        let data_chunk = pyo3_asyncio::tokio::local_future_into_py(slf.py(), async move {
+            let data = yield_data_chunk(body).await?;
+            Ok(Python::with_gil(|py| data.into_py(py)))
+        });
+        match data_chunk {
+            Ok(data_chunk) => Ok(IterANextOutput::Yield(data_chunk.into_py(slf.py()))),
+            Err(e) => {
+                if e.is_instance_of::<PyStopIteration>(slf.py()) {
+                    Ok(IterANextOutput::Return(slf.py().None()))
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pyo3::py_run;
@@ -278,5 +493,25 @@ mod tests {
                 "assert types.DateTime.from_secs(100).secs() == 100"
             );
         })
+    }
+
+    // TODO(When running in sync python, the iterator is reading the whole content in memory. Figure out why.)
+    #[tokio::test]
+    async fn bytestream_can_be_used_in_sync_python_when_initialized_in_rust() -> PyResult<()> {
+        crate::tests::initialize();
+        Python::with_gil(|py| {
+            let bytes = "repeat\n".repeat(100000);
+            let bytestream = ByteStream::newpy(bytes.as_bytes());
+            let bytestream = PyCell::new(py, bytestream).unwrap();
+            py_run!(
+                py,
+                bytestream,
+                r#"
+                for chunk in bytestream:
+                    assert len(chunk) > 10
+            "#
+            )
+        });
+        Ok(())
     }
 }
