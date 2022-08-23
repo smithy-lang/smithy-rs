@@ -120,9 +120,7 @@ impl Builder {
     /// # Panics
     /// Panics if URL is unset or empty
     pub fn build(self) -> Endpoint {
-        if self.endpoint.url() == "" {
-            panic!("URL was unset");
-        }
+        assert_ne!(self.endpoint.url(), "", "URL was unset");
         self.endpoint
     }
 }
