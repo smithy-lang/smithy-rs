@@ -196,7 +196,7 @@ impl<'a> CanonicalRequest<'a> {
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
                 HeaderName::from_str(&name.as_str().to_lowercase())?,
-                normalize_header_value(value),
+                normalize_header_value(value)?,
             );
         }
 
@@ -373,11 +373,12 @@ fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
     &bytes[starting_index..ending_index]
 }
 
-/// Works just like [trim_all] but acts on HeaderValues instead of bytes
-fn normalize_header_value(header_value: &HeaderValue) -> HeaderValue {
+/// Works just like [trim_all] but acts on HeaderValues instead of bytes.
+/// Will ensure that the underlying bytes are valid UTF-8.
+fn normalize_header_value(header_value: &HeaderValue) -> Result<HeaderValue, Error> {
     let trimmed_value = trim_all(header_value.as_bytes());
-    // This can't fail because we started with a valid HeaderValue and then only trimmed spaces
-    HeaderValue::from_bytes(&trimmed_value).unwrap()
+    let trimmed_value_as_utf8_str = std::str::from_utf8(&trimmed_value).map_err(Error::from)?;
+    HeaderValue::from_str(trimmed_value_as_utf8_str).map_err(Error::from)
 }
 
 #[derive(Debug, PartialEq, Default)]
@@ -738,9 +739,9 @@ mod tests {
         }
 
         #[test]
-        fn test_normalize_header_value_doesnt_panic(v in (".*")) {
+        fn test_normalize_header_value_works_on_valid_header_value(v in (".*")) {
             if let Ok(header_value) = HeaderValue::from_maybe_shared(v) {
-                let _ = normalize_header_value(&header_value);
+                assert!(normalize_header_value(&header_value).is_ok());
             }
         }
 
@@ -748,5 +749,34 @@ mod tests {
         fn test_trim_all_does_nothing_when_there_are_no_spaces(s in "[^ ]*") {
             assert_eq!(trim_all(s.as_bytes()).as_ref(), s.as_bytes());
         }
+    }
+
+    #[test]
+    fn test_normalize_header_value_returns_err_on_invalid_utf8() {
+        let header_value = HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap();
+        assert!(normalize_header_value(&header_value).is_err());
+    }
+
+    #[test]
+    fn test_signing_utf8_headers() {
+        let req = http::Request::builder()
+            .uri("https://foo.com/")
+            .header("x-sign-me", HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap())
+            .body(&[])
+            .unwrap();
+
+        // The test considered a pass if the creation of `creq` does not panic.
+        let _creq = crate::http_request::sign(
+            SignableRequest::from(&req),
+            &SigningParams::builder()
+                .region("us-east-1")
+                .access_key("123")
+                .service_name("foo")
+                .secret_key("asdf")
+                .time(std::time::SystemTime::now())
+                .settings(SigningSettings::default())
+                .build()
+                .unwrap(),
+        );
     }
 }
