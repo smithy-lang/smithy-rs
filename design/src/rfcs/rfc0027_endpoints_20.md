@@ -240,15 +240,15 @@ the parameters are set, *not* how they are generated.
 #[derive(std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
 /// Configuration parameters for resolving the correct endpoint
 pub struct Params {
-    pub(crate) bucket: std::option::Option<std::string::String>,
-    pub(crate) region: std::option::Option<std::string::String>,
-    pub(crate) use_fips: bool,
-    pub(crate) use_dual_stack: bool,
-    pub(crate) endpoint: std::option::Option<std::string::String>,
-    pub(crate) force_path_style: std::option::Option<bool>,
-    pub(crate) accelerate: bool,
-    pub(crate) disable_access_points: std::option::Option<bool>,
-    pub(crate) disable_mrap: std::option::Option<bool>,
+pub(crate) accelerate: bool,
+pub(crate) bucket: std::option::Option<std::string::String>,
+pub(crate) disable_access_points: std::option::Option<bool>,
+pub(crate) disable_mrap: std::option::Option<bool>,
+pub(crate) endpoint: std::option::Option<std::string::String>,
+pub(crate) force_path_style: std::option::Option<bool>,
+pub(crate) region: std::option::Option<std::string::String>,
+pub(crate) use_dual_stack: bool,
+pub(crate) use_fips: bool,
 }
 
 impl Params {
