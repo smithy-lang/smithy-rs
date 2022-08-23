@@ -37,7 +37,6 @@ class ConstrainedMapGenerator(
     private val constrainedSymbolProvider: RustSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     private val publicConstrainedTypes: Boolean,
-    private val symbolProvider: RustSymbolProvider,
     val writer: RustWriter,
     val shape: MapShape,
     private val unconstrainedSymbol: Symbol? = null,
@@ -127,25 +126,6 @@ class ConstrainedMapGenerator(
                 """,
                 "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
                 "UnconstrainedSymbol" to unconstrainedSymbol,
-            )
-        }
-
-        if (!publicConstrainedTypes) {
-            // Note that if public constrained types is not enabled, then the regular `symbolProvider` produces
-            // "fully unconstrained" symbols for all shapes (i.e. as if the shapes didn't have any constraint traits).
-            writer.rustTemplate(
-                """
-                impl #{From}<$name> for #{FullyUnconstrainedSymbol} {
-                    fn from(constrained: $name) -> Self {
-                        constrained.into_inner()
-                            .into_iter()
-                            .map(|(k, v)| (k.into(), v.into()))
-                            .collect()
-                    }
-                }
-                """,
-                "From" to RuntimeType.From,
-                "FullyUnconstrainedSymbol" to symbolProvider.toSymbol(shape),
             )
         }
     }

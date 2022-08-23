@@ -39,9 +39,7 @@ class UnconstrainedUnionGenerator(
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
-    private val constrainedShapeSymbolProvider: RustSymbolProvider,
     private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
-    private val publicConstrainedTypes: Boolean,
     private val unconstrainedModuleWriter: RustWriter,
     private val modelsModuleWriter: RustWriter,
     val shape: UnionShape
@@ -169,26 +167,23 @@ class UnconstrainedUnionGenerator(
                             if (resolveToNonPublicConstrainedType) {
                                 rustTemplate(
                                     """
-                                    #{PubCrateConstrainedShapeSymbol}::try_from(unconstrained)
+                                    let constrained: #{PubCrateConstrainedShapeSymbol} = unconstrained
+                                        .try_into()
                                         ${ if (hasBox) ".map(Box::new).map_err(Box::new)" else "" }
-                                        .map_err(Self::Error::${ConstraintViolation(member).name()})?
-                                        .into()
+                                        .map_err(Self::Error::${ConstraintViolation(member).name()})?;
+                                    constrained.into()
                                     """,
                                     "PubCrateConstrainedShapeSymbol" to pubCrateConstrainedShapeSymbolProvider.toSymbol(targetShape)
                                 )
                             } else {
-                                rustTemplate(
+                                rust(
                                     """
-                                    #{ConstrainedShapeSymbol}::try_from(unconstrained)
+                                    unconstrained
+                                        .try_into()
                                         ${ if (hasBox) ".map(Box::new).map_err(Box::new)" else "" }
                                         .map_err(Self::Error::${ConstraintViolation(member).name()})?
-                                    """,
-                                    "ConstrainedShapeSymbol" to constrainedShapeSymbolProvider.toSymbol(targetShape)
+                                    """
                                 )
-
-                                if (!publicConstrainedTypes) {
-                                    rust(".into()")
-                                }
                             }
                         } else {
                             rust("unconstrained")

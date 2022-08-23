@@ -40,24 +40,22 @@ class PubCrateConstrainedCollectionGenerator(
     val symbolProvider: RustSymbolProvider,
     private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
-    private val constrainedShapeSymbolProvider: RustSymbolProvider,
-    private val publicConstrainedTypes: Boolean,
     val writer: RustWriter,
     val shape: CollectionShape
 ) {
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
 
-        val constrainedSymbol = constrainedShapeSymbolProvider.toSymbol(shape)
-        val pubCrateConstrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
+        val symbol = symbolProvider.toSymbol(shape)
+        val constrainedSymbol = pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
         val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
-        val module = pubCrateConstrainedSymbol.namespace.split(pubCrateConstrainedSymbol.namespaceDelimiter).last()
-        val name = pubCrateConstrainedSymbol.name
+        val module = constrainedSymbol.namespace.split(constrainedSymbol.namespaceDelimiter).last()
+        val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
         val innerConstrainedSymbol = if (innerShape.isTransitivelyConstrained(model, symbolProvider)) {
             pubCrateConstrainedShapeSymbolProvider.toSymbol(innerShape)
         } else {
-            constrainedShapeSymbolProvider.toSymbol(innerShape)
+            symbolProvider.toSymbol(innerShape)
         }
 
         // If the target member shape is itself _not_ directly constrained, and is an aggregate non-Structure shape,
@@ -85,8 +83,8 @@ class PubCrateConstrainedCollectionGenerator(
                     type Unconstrained = #{UnconstrainedSymbol};
                 }
 
-                impl #{From}<#{ConstrainedSymbol}> for $name {
-                    fn from(v: #{ConstrainedSymbol}) -> Self {
+                impl From<#{Symbol}> for $name {
+                    fn from(v: #{Symbol}) -> Self {
                         ${ if (innerNeedsConstraining) {
                             "Self(v.into_iter().map(|item| item.into()).collect())"
                         } else {
@@ -95,7 +93,7 @@ class PubCrateConstrainedCollectionGenerator(
                     }
                 }
 
-                impl #{From}<$name> for #{ConstrainedSymbol} {
+                impl From<$name> for #{Symbol} {
                     fn from(v: $name) -> Self {
                         ${ if (innerNeedsConstraining) {
                             "v.0.into_iter().map(|item| item.into()).collect()"
@@ -105,28 +103,11 @@ class PubCrateConstrainedCollectionGenerator(
                     }
                 }
                 """,
-                "From" to RuntimeType.From,
                 "InnerConstrainedSymbol" to innerConstrainedSymbol,
                 "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
                 "UnconstrainedSymbol" to unconstrainedSymbol,
-                "ConstrainedSymbol" to constrainedSymbol,
+                "Symbol" to symbol,
             )
-
-//            if (!publicConstrainedTypes) {
-//                // Note that if public constrained types is not enabled, then the regular `symbolProvider` produces
-//                // "fully unconstrained" symbols for all shapes (i.e. as if the shapes didn't have any constraint traits).
-//                rustTemplate(
-//                    """
-//                    impl #{From}<$name> for #{FullyUnconstrainedSymbol} {
-//                        fn from(v: $name) -> Self {
-//                            v.0.into_iter().map(|item| item.into()).collect()
-//                        }
-//                    }
-//                    """,
-//                    "From" to RuntimeType.From,
-//                    "FullyUnconstrainedSymbol" to symbolProvider.toSymbol(shape),
-//                )
-//            }
         }
     }
 }

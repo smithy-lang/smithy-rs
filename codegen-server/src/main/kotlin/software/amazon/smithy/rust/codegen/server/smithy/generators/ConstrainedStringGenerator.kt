@@ -127,12 +127,6 @@ class ConstrainedStringGenerator(
                     }
                 }
             }
-            
-            impl From<$name> for $inner {
-                fn from(value: $name) -> $inner {
-                    value.into_inner()
-                }
-            }
             """,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "ConstraintViolation" to constraintViolation,

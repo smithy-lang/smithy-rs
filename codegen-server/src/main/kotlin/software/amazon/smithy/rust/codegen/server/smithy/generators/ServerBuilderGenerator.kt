@@ -9,7 +9,6 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
@@ -29,12 +28,10 @@ import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbol
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustBoxTrait
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShapeOtherThanConstrainedStructureShape
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.hasConstraintTraitOrTargetHasConstraintTrait
-import software.amazon.smithy.rust.codegen.smithy.hasPublicConstrainedWrapperTupleType
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.smithy.letIf
@@ -56,21 +53,19 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
 //     - Always implements either From<Builder> for Structure or TryFrom<Builder> for Structure.
 //     - `pubCrateConstrainedShapeSymbolProvider` only needed if we want the builder to take in unconstrained types.
 class ServerBuilderGenerator(
-    private val codegenContext: ServerCodegenContext,
+    codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider? = null,
 ) {
     private val takeInUnconstrainedTypes = pubCrateConstrainedShapeSymbolProvider != null
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
-    private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val constraintViolationSymbolProvider =
         ConstraintViolationSymbolProvider(codegenContext.symbolProvider, model, codegenContext.serviceShape)
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val moduleName = shape.builderSymbol(symbolProvider).namespace.split("::").last()
     private val isBuilderFallible = StructureGenerator.serverHasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
-    private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
 
     private val codegenScope = arrayOf(
         "RequestRejection" to ServerRuntimeType.RequestRejection(codegenContext.runtimeConfig),
@@ -240,7 +235,6 @@ class ServerBuilderGenerator(
         val wrapInMaybeConstrained = takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)
 
         writer.documentShape(member, model)
-
         if (hasBox && wrapInMaybeConstrained) {
             // In the case of recursive shapes, the member might be boxed. If so, and the member is also constrained, the
             // implementation of this function needs to immediately unbox the value to wrap it in `MaybeConstrained`,
@@ -253,38 +247,15 @@ class ServerBuilderGenerator(
         writer.rustBlock("pub fn $memberName(mut self, input: ${symbol.rustType().render()}) -> Self") {
             rust("self.$memberName = ")
             conditionalBlock("Some(", ")", conditional = !symbol.isOptional()) {
-                val targetShape = model.expectShape(member.target)
-                // If constrained types are not public and the target shape is one that would generate a public constrained
-                // type had the `publicConstrainedTypes` setting been enabled, then we need to:
-                //     1. constrain the input type into the corresponding `pub(crate)` unconstrained types first; and
-                //     2. store the resulting value in a `MaybeConstrained::Unconstrained` variant.
-                // This condition is calculated once here and used later when the above two steps are performed.
-                // Note we explicitly opt out when the target shape is a structure shape or a string shape with the
-                // `enum` trait, since in those cases public constrained types are _always_ generated, regardless of
-                // whether `publicConstrainedTypes` is enabled (remember structure shapes are directly constrained
-                // when at least one of their members is non-optional).
-                val isInputFullyUnconstrained = !publicConstrainedTypes &&
-                    targetShape.canReachConstrainedShapeOtherThanConstrainedStructureShape(model, symbolProvider)
-                    !(targetShape.isStringShape && targetShape.hasTrait<EnumTrait>())
-
                 if (wrapInMaybeConstrained) {
+                    val maybeConstrainedConstrained = "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
                     // TODO Add a protocol testing the branch (`symbol.isOptional() == false`, `hasBox == true`).
                     var varExpr = if (symbol.isOptional()) "v" else "input"
                     if (hasBox) varExpr = "*$varExpr"
-                    if (!publicConstrainedTypes || (publicConstrainedTypes && !constrainedTypeHoldsFinalType(member))) {
-                        varExpr = "($varExpr).into()"
-                    }
-
-                    val maybeConstrainedVariant = if (isInputFullyUnconstrained)
-                        // Step 2 above.
-                        "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Unconstrained"
-                    else {
-                        "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
-                    }
-
+                    if (!constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
                     conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
                         conditionalBlock("Box::new(", ")", conditional = hasBox) {
-                            rust("$maybeConstrainedVariant($varExpr)")
+                            rust("$maybeConstrainedConstrained($varExpr)")
                         }
                     }
                 } else {
@@ -471,7 +442,7 @@ class ServerBuilderGenerator(
     private fun builderMemberSymbol(member: MemberShape): Symbol =
         if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
             val strippedOption = if (member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)) {
-                constrainedShapeSymbolProvider.toSymbol(member)
+                symbolProvider.toSymbol(member)
             } else {
                 pubCrateConstrainedShapeSymbolProvider!!.toSymbol(member)
             }
@@ -552,18 +523,6 @@ class ServerBuilderGenerator(
                                 .transpose()?
                                 """,
                                 *codegenScope
-                            )
-                        }
-                        // If constrained types are not public and this is a member shape that would have generated a
-                        // public constrained type, were the setting to be enabled, it means the user sent us an
-                        // unconstrained type. We've just checked the constraints hold by going through the non-public
-                        // constrained type, but the user wants to work with the unconstrained type, so we have to
-                        // unwrap it.
-                        if (!codegenContext.settings.codegenConfig.publicConstrainedTypes &&
-                            member.hasPublicConstrainedWrapperTupleType(model)) {
-                            rust(
-                                ".map(|v: #T| v.into())",
-                                constrainedShapeSymbolProvider.toSymbol(model.expectShape(member.target)),
                             )
                         }
                     }

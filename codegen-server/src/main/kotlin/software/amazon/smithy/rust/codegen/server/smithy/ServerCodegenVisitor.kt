@@ -78,9 +78,9 @@ open class ServerCodegenVisitor(
     protected val settings = ServerRustSettings.from(context.model, context.settings)
 
     protected var symbolProvider: RustSymbolProvider
-    protected var constrainedShapeSymbolProvider: RustSymbolProvider
     protected val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider
+    private val constrainedShapeSymbolProvider: RustSymbolProvider
     protected val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider
     protected var rustCrate: RustCrate
     private val fileManifest = context.fileManifest
@@ -264,7 +264,6 @@ open class ServerCodegenVisitor(
                         unconstrainedShapeSymbolProvider,
                         pubCrateConstrainedShapeSymbolProvider,
                         constraintViolationSymbolProvider,
-                        settings.codegenConfig.publicConstrainedTypes,
                         unconstrainedModuleWriter,
                         modelsModuleWriter,
                         shape
@@ -279,8 +278,6 @@ open class ServerCodegenVisitor(
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
                     pubCrateConstrainedShapeSymbolProvider,
-                    constrainedShapeSymbolProvider,
-                    settings.codegenConfig.publicConstrainedTypes,
                     writer,
                     shape
                 ).render()
@@ -302,9 +299,7 @@ open class ServerCodegenVisitor(
                     symbolProvider,
                     unconstrainedShapeSymbolProvider,
                     pubCrateConstrainedShapeSymbolProvider,
-                    constrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
-                    settings.codegenConfig.publicConstrainedTypes,
                     unconstrainedModuleWriter,
                     shape
                 ).render()
@@ -333,7 +328,6 @@ open class ServerCodegenVisitor(
                     constrainedShapeSymbolProvider,
                     constraintViolationSymbolProvider,
                     settings.codegenConfig.publicConstrainedTypes,
-                    symbolProvider,
                     modelsModuleWriter,
                     shape,
                     if (renderUnconstrainedMap) unconstrainedShapeSymbolProvider.toSymbol(shape) else null
@@ -394,7 +388,7 @@ open class ServerCodegenVisitor(
             rustCrate.withModule(ModelsModule) { writer ->
                 ConstrainedStringGenerator(
                     model,
-                    constrainedShapeSymbolProvider,
+                    symbolProvider,
                     constraintViolationSymbolProvider,
                     settings.codegenConfig.publicConstrainedTypes,
                     writer,
@@ -430,9 +424,7 @@ open class ServerCodegenVisitor(
                         symbolProvider,
                         unconstrainedShapeSymbolProvider,
                         pubCrateConstrainedShapeSymbolProvider,
-                        constrainedShapeSymbolProvider,
                         constraintViolationSymbolProvider,
-                        settings.codegenConfig.publicConstrainedTypes,
                         unconstrainedModuleWriter,
                         modelsModuleWriter,
                         shape

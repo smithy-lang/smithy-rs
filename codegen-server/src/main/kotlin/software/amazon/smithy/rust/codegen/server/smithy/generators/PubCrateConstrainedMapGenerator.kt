@@ -57,7 +57,6 @@ class PubCrateConstrainedMapGenerator(
         val valueSymbol = if (valueShape.isTransitivelyConstrained(model, symbolProvider)) {
             pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
         } else {
-            // TODO Should use constrainedShapeSymbolProvider, see PubCrateConstrainedCollectionGenerator
             symbolProvider.toSymbol(valueShape)
         }
 
