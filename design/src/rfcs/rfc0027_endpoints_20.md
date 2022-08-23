@@ -19,10 +19,10 @@ Endpoints 2.0 will be a native Smithy feature and be available for vanilla SDKs 
 Terminology
 -----------
 
-- **Generic client**: In reference to features/code that is _not_ AWS specific and is supported for all Smithy clients.
+- **Smithy-native**: In reference to features/code that is _not_ AWS specific and is supported for all Smithy clients.
 - **Rules language**: A JSON-based rules language used to resolve endpoints
 - [**Smithy Endpoint**](#the-endpoint-struct): An endpoint, as returned from the rules-language. This contains a URI,
-  headers, and configuration map of `String -> Document` (`properties`). This must
+  headers, and configuration map of `String -> Document`. This must
   undergo [another level of transformation](#converting-a-smithy-endpoint-to-an-aws-endpoint) before it
   can be used as an `AwsEndpoint`.
 - **AWS Endpoint**: An endpoint with explicit signing configuration applied. AWS Endpoints need to contain region &
@@ -48,9 +48,9 @@ be generated.
 > code.
 
 SDK middleware will be updated to use the new [`smithy_types::Endpoint`](#the-endpoint-struct). During request
-construction in `make_operation`, a [smithy endpoint](#the-endpoint-struct) will be inserted into the property bag. The
+construction in `make_operation`, a [Smithy endpoint](#the-endpoint-struct) will be inserted into the property bag. The
 endpoint middleware will be updated to extract the Smithy endpoint from the property bag and set the request endpoint &
-signing information accordingly (see: [Converting to AWS Endpoint](#converting-a-smithy-endpoint-to-an-aws-endpoint).
+signing information accordingly (see: [Converting to AWS Endpoint](#converting-a-smithy-endpoint-to-an-aws-endpoint)).
 
 The following flow chart traces the endpoints 2.0 influence on a request via the green boxes.
 
@@ -97,8 +97,8 @@ is shared across all services. However, this isn't the case for `Endpoints 2.0` 
 parameter:
 
 ```rust
-pub trait ResolveEndpoint<T>: Send + Sync {
-    fn resolve_endpoint(&self, params: &T) -> Result<Endpoint, BoxError>;
+pub trait ResolveAwsEndpoint<T>: Send + Sync {
+    fn resolve_endpoint(&self, params: &T) -> Result<AwsEndpoint, BoxError>;
 }
 ```
 
@@ -107,7 +107,7 @@ The trait itself would then be parameterized by service-specific endpoint parame
 from the endpoint parameters we might use for a service like DynamoDB which, today, doesn't have any custom endpoint
 behavior.
 
-Going forward we will to provide two different avenues for customers to customize endpoints:
+Going forward we want to provide two different avenues for customers to customize endpoints:
 
 1. Configuration driven URL override. This mechanism hasn't been specified, but suppose that the Rust SDK supported
    an `SDK_ENDPOINT` environment variable. This variable would be an input to the existing endpoint resolver.
@@ -119,19 +119,18 @@ This RFC proposes making the following changes:
 
 1. For the current _global_ ability to override an endpoint, instead of accepting an `AwsEndpoint`, accept a URI. This
    will simplify the interface for most customers who don't actually need logic-driven endpoint construction. The
-   Endpoint that can be set will be passed in as the `SDK::Endpoint` built-in. This will be renamed to `endpoint_url`
+   Endpoint that can be set will be passed in as the `SDK::Endpoint` built-in. This will be renamed to `endpoint_uri`
    for clarity. **All** AWS services **MUST** accept the `SDK::Endpoint` built-in.
 2. For complex, service-specific behavior, customers will be able to provide a service specific endpoint resolver at
-   client construction time. This resolver will be parameterized with the service-specific parameters type, (
-   eg. `aws_sdk_s3::endpoint::Params`). Finally, customers will be able to access the `default_resolver()` for AWS
-   services directly. This will enable them to utilize the default S3 endpoint resolver in their resolver
-   implementation.
+   client construction time. This resolver will be parameterized with the service-specific parameters type,
+   (e.g. `aws_sdk_s3::endpoint::Params`). Finally, customers will be able to access the `default_resolver()` for S3
+   directly. This will enable them to utilize the default S3 endpoint resolver in their resolver implementation.
 
 **Example: overriding the endpoint URI globally**
 
 ```rust
 async fn main() {
-    let sdk_conf = aws_config::from_env().endpoint_url("http://localhost:8123").load().await;
+    let sdk_conf = aws_config::from_env().endpoint_uri("http://localhost:8123".parse().unwrap()).load().await;
     let dynamo = aws_sdk_dynamodb::Client::new(&sdk_conf);
     // snip ...
 }
@@ -149,9 +148,9 @@ impl ResolveEndpoint<aws_sdk_dynamodb::endpoint::Params> for CustomDdbResolver {
         let base_endpoint = aws_sdk_dynamodb::endpoint::default_resolver().resolve_endpoint(params).expect("valid endpoint should be resolved");
         if env::var("LOCAL") == Ok("true") {
             // update the URI on the returned endpoint to localhost while preserving the other properties
-            Ok(base_endpoint.builder().uri("http://localhost:8888").build())
+            base_endpoint.builder().uri("http://localhost:8888").build()
         } else {
-            Ok(base_endpoint)
+            base_endpoint
         }
     }
 }
@@ -162,11 +161,6 @@ async fn main() {
     let dynamodb = aws_sdk_dynamodb::Client::from_conf(ddb_conf);
 }
 ```
-
-Note: for generic clients, they cannot use `endpoint_url`—this is because `endpoint_url` is dependent on rules and
-generic
-clients do not necessarily rules. However, they can use the `impl<T> ResolveEndpoint<T> for &'static str { ... }`
-implementation.
 
 > **What about alternative S3 implementations? How do we say "don't put prefix bucket on this?"**
 >
@@ -218,8 +212,7 @@ pub struct Endpoint {
 > SDKs. Other Smithy implementors may choose a different pattern. For AWS SDKs, the `authSchemes` key is an ordered list
 > of authentication/signing schemes supported by the Endpoint that the SDK should use.
 
-To perform produce an `Endpoint` struct we have a generic `ResolveEndpoint` trait which will be both generic in terms of
-parameters and being "smithy-generic:
+To perform produce an `Endpoint` struct we have a generic `ResolveEndpoint` trait which will be native to Smithy:
 
 ```rust
 // module: `smithy_types::endpoint` or `aws_smithy_client`??
@@ -229,7 +222,7 @@ pub trait ResolveEndpoint<Params>: Send + Sync {
 }
 ```
 
-All Smithy services that have the `@endpointRuleSet` trait applied to the service shape will code generate a default
+All Smithy services that have the `@endpointRules` trait applied to the service shape will code generate a default
 endpoint resolver implementation. The default endpoint resolver **MUST** be public, so that customers can delegate to it
 if they wish to override the endpoint resolver.
 
@@ -312,15 +305,15 @@ To describe how this feature will work, let's take a step-by-step path through e
 
 1. A user defines a service client, possibly with some client specific configuration like region.
 
-   > `@clientContextParams` are code generated onto the client `Config`
-   . [Code generating `@clientContextParams`](#code-generating-client-context-params)
+   > `@clientContextParams` are code generated onto the client `Config`.
+     [Code generating `@clientContextParams`](#code-generating-client-context-params)
 
 2. A user invokes an operation like `s3::GetObject`. A [params object is created](#creating-params). In the body
-   of `make_operation()`, this is passed to `config.endpoint_resolver` to load a generic endpoint. The `Result` of the
-   of the endpoint resolution is written into the property bag.
-3. The generic smithy middleware (`SmithyEndpointStage`) sets the request endpoint.
-4. The AWS auth middleware (`AwsAuthStage`) reads the endpoint out of the property bag and applies signing overrides.
-5. The request is signed & dispatched
+   of `make_operation()`, this is passed to `config.endpoint_resolver` to load a Smithy-native endpoint. The Smithy
+   native endpoint is written into the property bag.
+3. The AWS endpoint middleware (non-generic) reads the endpoint out of the property bag and uses it to create an AWS
+   endpoint. See [converting to AWS Endpoint](#converting-a-smithy-endpoint-to-an-aws-endpoint).
+4. The request is dispatched!
 
 The other major piece of implementation required is actually implementing the rules engine. To learn more about
 rules-engine internals, skip to [implementing the rules engine](#implementing-the-rules-engine).
@@ -406,7 +399,7 @@ class ClientContextDecorator(ctx: ClientCodegenContext) : NamedSectionGenerator<
 
 ### Creating `Params`
 
-`Params` will be created and utilized in generic code generation.
+`Params` will be created and utilized in smithy-native code generation.
 
 `make_operation()` needs to load the parameters from several configuration sources. These sources have a priority order.
 To handle this priority order, we will load from all sources in reverse priority order, with lower priority sources
@@ -496,38 +489,87 @@ be wired in properly.)
 ### Converting a Smithy Endpoint to an AWS Endpoint
 
 A Smithy endpoint has an untyped, string->`Document` collection of properties. We need to interpret these properties to
-handle actually resolving an endpoint. As part of the `AwsAuthStage`, we load authentication schemes from the endpoint
-properties and use these to configure signing on the request.
+handle actually resolving an endpoint. We will implement this by implementing `TryFrom` from the Smithy endpoint to the
+AWS endpoint:
+> Note: It's possible `AWSEndpoint` will be removed entirely and the concept will be solely expressed in middleware. If
+> this is the case, this code would be ported into middleware directly.
 
-**Note**: Authentication schemes are **NOT** required as part of an endpoint. When the auth schemes are not set, the
-default
-authentication should be used. The Rust SDK will set `SigningRegion` and `SigningName` in the property bag by default
-as part of `make_operation`.
+<details>
+<summary>Converting from smithy-native `Endpoint` to `AwsEndpoint`</summary>
+
+```rust
+impl TryFrom<Endpoint> for AwsEndpoint {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(value: Endpoint) -> Result<Self, Self::Error> {
+        let uri: Uri = value.url().parse()?;
+        let base_endpoint = SmithyEndpoint::mutable(uri);
+        // look for v4 as an auth scheme
+        let auth_schemes = match value
+            .properties()
+            .get("authSchemes")
+            .ok_or("no auth schemes in metadata")?
+        {
+            Document::Array(schemes) => schemes,
+            _other => return Err("expected an array for authSchemes".into()),
+        };
+        let v4 = auth_schemes
+            .iter()
+            .flat_map(|doc| match doc {
+                Document::Object(map)
+                if map.get("name") == Some(&Document::String("v4".to_string())) =>
+                    {
+                        Some(map)
+                    }
+                _ => None,
+            })
+            .next()
+            .ok_or("could not find v4 as an acceptable auth scheme")?;
+
+        let signing_scope = match v4
+            .get("signingScope")
+            .ok_or_else(|| format!("signing scope missing: {:?}", v4))?
+        {
+            Document::String(s) => s.clone(),
+            _ => return Err("expected error".into()),
+        };
+        let signing_service = match v4.get("signingName").ok_or("signing service missing")? {
+            Document::String(s) => s.clone(),
+            _ => return Err("expected error".into()),
+        };
+        let credential_scope = CredentialScope::builder()
+            .region(Region::new(signing_scope))
+            .service(signing_service)
+            .build();
+        Ok(AwsEndpoint::new(base_endpoint, credential_scope))
+    }
+}
+```
+
+</details>
 
 ### Implementing the rules engine
-The Rust SDK code converts the rules into Rust code that will be compiled. The generated Rust code must conditionally
 
 <!-- Include a checklist of all the things that need to happen for this RFC's implementation to be considered complete -->
 Changes checklist
 -----------------
 **Rules Engine**
 
-- [x] Endpoint rules code generator
-- [x] Endpoint params code generator
-- [x] Endpoint tests code generator
-- [x] Implement ruleset standard library functions as inlineables. Note: pending future refactoring work, the `aws.`
+- [ ] Endpoint rules code generator
+- [ ] Endpoint params code generator
+- [ ] Endpoint tests code generator
+- [ ] Implement ruleset standard library functions as inlineables. Note: pending future refactoring work, the `aws.`
   functions will need to be integrated into the smithy core endpoint resolver.
-- [x] Implement partition function & ability to customize partitions
+- [ ] Implement partition function & ability to customize partitions
   **SDK Integration**
-- [x] Add a Smithy endpoint resolver to the service config, with a default that loads the default endpoint resolver.
-- [x] Update `SdkConfig` to accept a URI instead of an implementation of `ResolveAwsEndpoint`. This change can be done
+- [ ] Add a Smithy endpoint resolver to the service config, with a default that loads the default endpoint resolver.
+- [ ] Update `SdkConfig` to accept a URI instead of an implementation of `ResolveAwsEndpoint`. This change can be done
   standalone.
 - [ ] Remove/deprecate the `ResolveAwsEndpoint` trait and replace it with the vanilla Smithy trait. Potentially, provide
   a bridge.
-- [x] Update `make_operation` to write a [`smithy::Endpoint`](#the-endpoint-struct) into the property bag
-- [x] Update AWS Endpoint middleware to work off of a [`smithy::Endpoint`](#the-endpoint-struct)
-- [x] Wire the endpoint override to the `SDK::Endpoint` builtIn parameter
-- [x] Remove the old smithy endpoint
+- [ ] Update `make_operation` to write a [`smithy::Endpoint`](#the-endpoint-struct) into the property bag
+- [ ] Update AWS Endpoint middleware to work off of a [`smithy::Endpoint`](#the-endpoint-struct)
+- [ ] Wire the endpoint override to the `SDK::Endpoint` builtIn parameter
 
 Alternative Designs
 -------------------
