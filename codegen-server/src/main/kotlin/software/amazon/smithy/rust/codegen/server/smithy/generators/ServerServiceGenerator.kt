@@ -37,15 +37,11 @@ open class ServerServiceGenerator(
      * which assigns a symbol location to each shape.
      */
     fun render() {
+        rustCrate.withModule(RustModule.public("operation")) { writer ->
+            ServerProtocolTestGenerator(coreCodegenContext, protocolSupport, protocolGenerator).render(writer)
+        }
+
         for (operation in operations) {
-            rustCrate.useShapeWriter(operation) { operationWriter ->
-                protocolGenerator.serverRenderOperation(
-                    operationWriter,
-                    operation,
-                )
-                ServerProtocolTestGenerator(coreCodegenContext, protocolSupport, operation, operationWriter)
-                    .render()
-            }
             if (operation.errors.isNotEmpty()) {
                 rustCrate.withModule(RustModule.Error) { writer ->
                     renderCombinedErrors(writer, operation)

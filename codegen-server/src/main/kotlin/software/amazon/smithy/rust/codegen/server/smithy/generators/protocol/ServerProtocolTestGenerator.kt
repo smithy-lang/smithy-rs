@@ -5,7 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.OperationIndex
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
@@ -33,11 +35,13 @@ import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.Instantiator
+import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.testutil.TokioTest
@@ -59,19 +63,16 @@ import kotlin.reflect.KFunction1
 class ServerProtocolTestGenerator(
     private val coreCodegenContext: CoreCodegenContext,
     private val protocolSupport: ProtocolSupport,
-    private val operationShape: OperationShape,
-    private val writer: RustWriter,
+    private val protocolGenerator: ProtocolGenerator,
 ) {
     private val logger = Logger.getLogger(javaClass.name)
 
+    private val index = TopDownIndex.of(coreCodegenContext.model)
+    private val operations = index.getContainedOperations(coreCodegenContext.serviceShape).sortedBy { it.id }
+
     private val model = coreCodegenContext.model
-    private val inputShape = operationShape.inputShape(coreCodegenContext.model)
-    private val outputShape = operationShape.outputShape(coreCodegenContext.model)
     private val symbolProvider = coreCodegenContext.symbolProvider
-    private val operationSymbol = symbolProvider.toSymbol(operationShape)
     private val operationIndex = OperationIndex.of(coreCodegenContext.model)
-    private val operationImplementationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
-    private val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
     private val instantiator = with(coreCodegenContext) {
         Instantiator(symbolProvider, model, runtimeConfig, CodegenTarget.SERVER)
@@ -82,8 +83,10 @@ class ServerProtocolTestGenerator(
         "SmithyHttp" to CargoDependency.SmithyHttp(coreCodegenContext.runtimeConfig).asType(),
         "Http" to CargoDependency.Http.asType(),
         "Hyper" to CargoDependency.Hyper.asType(),
+        "Tower" to CargoDependency.Tower.asType(),
         "SmithyHttpServer" to ServerCargoDependency.SmithyHttpServer(coreCodegenContext.runtimeConfig).asType(),
         "AssertEq" to CargoDependency.PrettyAssertions.asType().member("assert_eq!"),
+        "Router" to ServerRuntimeType.Router(coreCodegenContext.runtimeConfig),
     )
 
     sealed class TestCase {
@@ -114,7 +117,29 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    fun render() {
+    fun render(writer: RustWriter) {
+        renderTestHelper(writer)
+
+        for (operation in operations) {
+            protocolGenerator.serverRenderOperation(writer, operation)
+            renderOperationTestCases(operation, writer)
+        }
+    }
+
+    /**
+     * Render a test helper module that help
+     *
+     * - generate dynamic builder for each handler, and
+     * - construct a tower service to exercise each test case.
+     */
+    private fun renderTestHelper(writer: RustWriter) {
+        // Create a tower service to perform protocol test
+    }
+
+    private fun renderOperationTestCases(operationShape: OperationShape, writer: RustWriter) {
+        val outputShape = operationShape.outputShape(coreCodegenContext.model)
+        val operationSymbol = symbolProvider.toSymbol(operationShape)
+
         val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()
             ?.getTestCasesFor(AppliesTo.SERVER).orEmpty().map { TestCase.RequestTest(it) }
         val responseTests = operationShape.getTrait<HttpResponseTestsTrait>()
@@ -141,18 +166,18 @@ class ServerProtocolTestGenerator(
                 visibility = Visibility.PRIVATE,
             )
             writer.withModule(testModuleName, moduleMeta) {
-                renderAllTestCases(allTests)
+                renderAllTestCases(operationShape, operationSymbol, allTests)
             }
         }
     }
 
-    private fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
+    private fun RustWriter.renderAllTestCases(operationShape: OperationShape, operationSymbol: Symbol, allTests: List<TestCase>) {
         allTests.forEach {
             renderTestCaseBlock(it, this) {
                 when (it) {
-                    is TestCase.RequestTest -> this.renderHttpRequestTestCase(it.testCase)
-                    is TestCase.ResponseTest -> this.renderHttpResponseTestCase(it.testCase, it.targetShape)
-                    is TestCase.MalformedRequestTest -> this.renderHttpMalformedRequestTestCase(it.testCase)
+                    is TestCase.RequestTest -> this.renderHttpRequestTestCase(it.testCase, operationShape, operationSymbol)
+                    is TestCase.ResponseTest -> this.renderHttpResponseTestCase(it.testCase, it.targetShape, operationShape, operationSymbol)
+                    is TestCase.MalformedRequestTest -> this.renderHttpMalformedRequestTestCase(it.testCase, operationSymbol)
                 }
             }
         }
@@ -236,6 +261,8 @@ class ServerProtocolTestGenerator(
      */
     private fun RustWriter.renderHttpRequestTestCase(
         httpRequestTestCase: HttpRequestTestCase,
+        operationShape: OperationShape,
+        operationSymbol: Symbol,
     ) {
         if (!protocolSupport.requestDeserialization) {
             rust("/* test case disabled for this protocol (not yet supported) */")
@@ -245,7 +272,7 @@ class ServerProtocolTestGenerator(
             renderHttpRequest(uri, headers, body.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
-            checkParams(httpRequestTestCase, this)
+            checkParams(operationShape, operationSymbol, httpRequestTestCase, this)
         }
 
         // Explicitly warn if the test case defined parameters that we aren't doing anything with
@@ -272,7 +299,12 @@ class ServerProtocolTestGenerator(
     private fun RustWriter.renderHttpResponseTestCase(
         testCase: HttpResponseTestCase,
         shape: StructureShape,
+        operationShape: OperationShape,
+        operationSymbol: Symbol,
     ) {
+        val operationImplementationName = "${operationSymbol.name}${ServerHttpBoundProtocolGenerator.OPERATION_OUTPUT_WRAPPER_SUFFIX}"
+        val operationErrorName = "crate::error::${operationSymbol.name}Error"
+
         if (!protocolSupport.responseSerialization || (
             !protocolSupport.errorSerialization && shape.hasTrait<ErrorTrait>()
             )
@@ -308,7 +340,7 @@ class ServerProtocolTestGenerator(
      * We are given a request definition and a response definition, and we have to assert that the request is rejected
      * with the given response.
      */
-    private fun RustWriter.renderHttpMalformedRequestTestCase(testCase: HttpMalformedRequestTestCase) {
+    private fun RustWriter.renderHttpMalformedRequestTestCase(testCase: HttpMalformedRequestTestCase, operationSymbol: Symbol) {
         with(testCase.request) {
             // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
             renderHttpRequest(uri.get(), headers, body.orNull(), queryParams, host.orNull())
@@ -372,7 +404,9 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    private fun checkParams(httpRequestTestCase: HttpRequestTestCase, rustWriter: RustWriter) {
+    private fun checkParams(operationShape: OperationShape, operationSymbol: Symbol, httpRequestTestCase: HttpRequestTestCase, rustWriter: RustWriter) {
+        val inputShape = operationShape.inputShape(coreCodegenContext.model)
+
         rustWriter.writeInline("let expected = ")
         instantiator.render(rustWriter, inputShape, httpRequestTestCase.params)
         rustWriter.write(";")
@@ -522,21 +556,24 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    private fun checkHttpOperationExtension(rustWriter: RustWriter) {
-        rustWriter.rustTemplate(
-            """
-            let operation_extension = http_response.extensions()
-                .get::<#{SmithyHttpServer}::extension::OperationExtension>()
-                .expect("extension `OperationExtension` not found");
-            """.trimIndent(),
-            *codegenScope,
-        )
-        rustWriter.writeWithNoFormatting(
-            """
-            assert_eq!(operation_extension.absolute(), format!("{}.{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
-            """.trimIndent(),
-        )
-    }
+    // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
+    // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
+    // invoke it with (like in the case of an `httpResponseTest` test case).
+    // private fun checkHttpOperationExtension(rustWriter: RustWriter) {
+    //     rustWriter.rustTemplate(
+    //         """
+    //         let operation_extension = http_response.extensions()
+    //             .get::<#{SmithyHttpServer}::extension::OperationExtension>()
+    //             .expect("extension `OperationExtension` not found");
+    //         """.trimIndent(),
+    //         *codegenScope,
+    //     )
+    //     rustWriter.writeWithNoFormatting(
+    //         """
+    //         assert_eq!(operation_extension.absolute(), format!("{}.{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
+    //         """.trimIndent(),
+    //     )
+    // }
 
     private fun checkStatusCode(rustWriter: RustWriter, statusCode: Int) {
         rustWriter.rustTemplate(
