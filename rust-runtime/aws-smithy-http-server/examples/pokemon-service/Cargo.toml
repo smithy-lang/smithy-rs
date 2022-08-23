@@ -25,7 +25,7 @@ clap = { version = "~3.2.1", features = ["derive"] }
 hyper = {version = "0.14.12", features = ["server"] }
 lambda_http = "0.6.0"
 rand = "0.8"
-tokio = "1"
+tokio = "1.20.1"
 tower = "0.4"
 tower-http = { version = "0.3", features = ["trace"] }
 tracing = "0.1"

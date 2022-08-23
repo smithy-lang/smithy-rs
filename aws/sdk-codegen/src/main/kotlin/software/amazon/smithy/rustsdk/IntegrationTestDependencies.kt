@@ -122,6 +122,6 @@ private val FuturesUtil = CargoDependency("futures-util", CratesIo("0.3.0"), sco
 private val Hound = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
 private val SerdeJson = CargoDependency("serde_json", CratesIo("1.0.0"), features = emptySet(), scope = DependencyScope.Dev)
 private val Smol = CargoDependency("smol", CratesIo("1.2.0"), scope = DependencyScope.Dev)
-private val Tokio = CargoDependency("tokio", CratesIo("1.0.0"), features = setOf("macros", "test-util"), scope = DependencyScope.Dev)
+private val Tokio = CargoDependency("tokio", CratesIo("1.8.4"), features = setOf("macros", "test-util"), scope = DependencyScope.Dev)
 private val Tracing = CargoDependency("tracing", CratesIo("0.1.0"), scope = DependencyScope.Dev)
 private val TracingSubscriber = CargoDependency("tracing-subscriber", CratesIo("0.3.5"), scope = DependencyScope.Dev, features = setOf("env-filter"))
