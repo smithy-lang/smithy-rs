@@ -91,11 +91,11 @@ sealed class RustType {
     }
 
     data class Reference(val lifetime: kotlin.String?, override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = member.name
+        override val name = member.name
     }
 
     data class Option(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = "Option"
+        override val name = "Option"
         override val namespace = "std::option"
 
         /** Convert `Option<T>` to `Option<&T>` **/
@@ -105,7 +105,7 @@ sealed class RustType {
     }
 
     data class Box(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = "Box"
+        override val name = "Box"
         override val namespace = "std::boxed"
     }
 
@@ -115,7 +115,7 @@ sealed class RustType {
     }
 
     data class Vec(override val member: RustType) : RustType(), Container {
-        override val name: kotlin.String = "Vec"
+        override val name = "Vec"
         override val namespace = "std::vec"
     }
 
@@ -141,32 +141,27 @@ fun RustType.implInto(fullyQualified: Boolean = true): String {
 /** Format this Rust type so that it may be used as an argument type in a function definition */
 fun RustType.asArgumentType(fullyQualified: Boolean = true): String {
     return when (this) {
-        is RustType.String,
-        is RustType.Box -> this.implInto(fullyQualified)
+        is RustType.String, is RustType.Box -> this.implInto(fullyQualified)
         else -> this.render(fullyQualified)
     }
 }
 
 /** Format this Rust type so that it may be used as an argument type in a function definition */
-fun RustType.asArgumentValue(name: String): String {
-    return when (this) {
-        is RustType.String,
-        is RustType.Box -> "$name.into()"
+fun RustType.asArgumentValue(name: String) =
+    when (this) {
+        is RustType.String, is RustType.Box -> "$name.into()"
         else -> name
     }
-}
 
 /**
  * For a given name, generate an `Argument` data class containing pre-formatted strings for using this type when
- * writing a Rust function
+ * writing a Rust function.
  */
-fun RustType.asArgument(name: String): Argument {
-    return Argument(
-        "$name: ${this.asArgumentType()}",
-        this.asArgumentValue(name),
-        this.render(),
-    )
-}
+fun RustType.asArgument(name: String) = Argument(
+    "$name: ${this.asArgumentType()}",
+    this.asArgumentValue(name),
+    this.render(),
+)
 
 /**
  * Render this type, including references and generic parameters.
@@ -281,7 +276,7 @@ enum class Visibility {
 data class RustMetadata(
     val derives: Attribute.Derives = Attribute.Derives.Empty,
     val additionalAttributes: List<Attribute> = listOf(),
-    val visibility: Visibility = Visibility.PRIVATE
+    val visibility: Visibility = Visibility.PRIVATE,
 ) {
     fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
         this.copy(derives = derives.copy(derives = derives.derives + newDerive))
@@ -298,13 +293,13 @@ data class RustMetadata(
         return this
     }
 
-    fun renderVisibility(writer: RustWriter): RustMetadata {
+    private fun renderVisibility(writer: RustWriter): RustMetadata {
         writer.writeInline(
             when (visibility) {
                 Visibility.PRIVATE -> ""
                 Visibility.PUBCRATE -> "pub(crate) "
                 Visibility.PUBLIC -> "pub "
-            }
+            },
         )
         return this
     }
@@ -338,6 +333,7 @@ sealed class Attribute {
          */
         val NonExhaustive = Custom("non_exhaustive")
         val AllowUnusedMut = Custom("allow(unused_mut)")
+        val DocHidden = Custom("doc(hidden)")
         val DocInline = Custom("doc(inline)")
     }
 
@@ -370,13 +366,36 @@ sealed class Attribute {
     data class Custom(
         val annotation: String,
         val symbols: List<RuntimeType> = listOf(),
-        val container: Boolean = false
+        val container: Boolean = false,
     ) : Attribute() {
         override fun render(writer: RustWriter) {
             val bang = if (container) "!" else ""
             writer.raw("#$bang[$annotation]")
             symbols.forEach {
                 writer.addDependency(it.dependency)
+            }
+        }
+
+        companion object {
+            /**
+             * Renders a
+             * [`#[deprecated]`](https://doc.rust-lang.org/reference/attributes/diagnostics.html#the-deprecated-attribute)
+             * attribute.
+             */
+            fun deprecated(note: String? = null, since: String? = null): Custom {
+                val builder = StringBuilder()
+                builder.append("deprecated")
+
+                if (note != null && since != null) {
+                    builder.append("(note = ${note.dq()}, since = ${since.dq()})")
+                } else if (note != null) {
+                    builder.append("(note = ${note.dq()})")
+                } else if (since != null) {
+                    builder.append("(since = ${since.dq()})")
+                } else {
+                    // No-op. Rustc would emit a default message.
+                }
+                return Custom(builder.toString())
             }
         }
     }

@@ -8,9 +8,6 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataDecorator
 import software.amazon.smithy.rust.codegen.smithy.customizations.DocsRsMetadataSettings
-import software.amazon.smithy.rust.codegen.smithy.customizations.RetryConfigDecorator
-import software.amazon.smithy.rust.codegen.smithy.customizations.SleepImplDecorator
-import software.amazon.smithy.rust.codegen.smithy.customizations.TimeoutConfigDecorator
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.auth.DisabledAuthDecorator
@@ -26,6 +23,8 @@ val DECORATORS = listOf(
     AwsEndpointDecorator(),
     UserAgentDecorator(),
     SigV4SigningDecorator(),
+    HttpRequestChecksumDecorator(),
+    HttpResponseChecksumDecorator(),
     RetryPolicyDecorator(),
     IntegrationTestDecorator(),
     AwsFluentClientDecorator(),
@@ -34,11 +33,6 @@ val DECORATORS = listOf(
     ServiceConfigDecorator(),
     AwsPresigningDecorator(),
     AwsReadmeDecorator(),
-
-    // Smithy specific decorators
-    RetryConfigDecorator(),
-    SleepImplDecorator(),
-    TimeoutConfigDecorator(),
 
     // Service specific decorators
     DisabledAuthDecorator(),
@@ -49,7 +43,7 @@ val DECORATORS = listOf(
     Route53Decorator(),
 
     // Only build docs-rs for linux to reduce load on docs.rs
-    DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu"), allFeatures = true))
+    DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu"), allFeatures = true)),
 )
 
 class AwsCodegenDecorator : CombinedCodegenDecorator<ClientCodegenContext>(DECORATORS) {

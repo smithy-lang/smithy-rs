@@ -11,15 +11,17 @@ import software.amazon.smithy.codegen.core.ReservedWordSymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWordSymbolProvider
+import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerSymbolVisitor
+import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonStreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.smithy.StreamingShapeMetadataProvider
-import software.amazon.smithy.rust.codegen.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.smithy.SymbolVisitorConfig
 import software.amazon.smithy.rust.codegen.smithy.customize.CombinedCodegenDecorator
+import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -37,13 +39,16 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
     override fun execute(context: PluginContext) {
         // Suppress extremely noisy logs about reserved words
         Logger.getLogger(ReservedWordSymbolProvider::class.java.name).level = Level.OFF
-        // Discover [RustCodegenDecorators] on the classpath. [RustCodegenDectorator] return different types of
+        // Discover [RustCodegenDecorators] on the classpath. [RustCodegenDecorator] return different types of
         // customization. A customization is a function of:
         // - location (e.g. the mutate section of an operation)
         // - context (e.g. the of the operation)
         // - writer: The active RustWriter at the given location
         val codegenDecorator: CombinedCodegenDecorator<ServerCodegenContext> =
-            CombinedCodegenDecorator.fromClasspath(context, ServerRequiredCustomizations())
+            CombinedCodegenDecorator.fromClasspath(
+                context,
+                CombinedCodegenDecorator(DECORATORS + ServerRequiredCustomizations()),
+            )
 
         // PythonServerCodegenVisitor is the main driver of code generation that traverses the model and generates code
         logger.info("Loaded plugin to generate Rust/Python bindings for the server SSDK for projection ${context.projectionName}")
@@ -62,20 +67,17 @@ class PythonCodegenServerPlugin : SmithyBuildPlugin {
             serviceShape: ServiceShape,
             symbolVisitorConfig: SymbolVisitorConfig,
         ) =
-            SymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
-                // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
-                // `aws_smithy_http_server_python::types`.
-                .let { PythonServerSymbolProvider(it) }
+            // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
+            // `aws_smithy_http_server_python::types`.
+            PythonServerSymbolVisitor(model, serviceShape = serviceShape, config = symbolVisitorConfig)
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
                 .let {
-                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model)
+                    EventStreamSymbolProvider(symbolVisitorConfig.runtimeConfig, it, model, CodegenTarget.SERVER)
                 }
-                // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
-                .let { StreamingShapeSymbolProvider(it, model) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
+                .let { BaseSymbolMetadataProvider(it, model, additionalAttributes = listOf()) }
                 // Streaming shapes need different derives (e.g. they cannot derive Eq)
-                .let { StreamingShapeMetadataProvider(it, model) }
+                .let { PythonStreamingShapeMetadataProvider(it, model) }
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
                 .let { RustReservedWordSymbolProvider(it, model) }

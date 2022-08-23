@@ -50,32 +50,58 @@
 
 use std::ops::Deref;
 
+use thiserror::Error;
+
 use crate::request::RequestParts;
 
 /// Extension type used to store information about Smithy operations in HTTP responses.
 /// This extension type is set when it has been correctly determined that the request should be
 /// routed to a particular operation. The operation handler might not even get invoked because the
 /// request fails to deserialize into the modeled operation input.
+///
+/// The format given must be the absolute shape ID with `#` replaced with a `.`.
 #[derive(Debug, Clone)]
 pub struct OperationExtension {
-    /// Smithy model namespace.
+    absolute: &'static str,
+
     namespace: &'static str,
-    /// Smithy operation name.
-    operation_name: &'static str,
+    name: &'static str,
+}
+
+/// An error occurred when parsing an absolute operation shape ID.
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ParseError {
+    #[error(". was not found - missing namespace")]
+    MissingNamespace,
 }
 
 impl OperationExtension {
-    /// Creates a new `OperationExtension`.
-    pub fn new(namespace: &'static str, operation_name: &'static str) -> Self {
-        Self {
+    /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation with `#` symbol replaced with a `.`.
+    pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
+        let (namespace, name) = absolute_operation_id
+            .rsplit_once('.')
+            .ok_or(ParseError::MissingNamespace)?;
+        Ok(Self {
+            absolute: absolute_operation_id,
             namespace,
-            operation_name,
-        }
+            name,
+        })
     }
 
-    /// Returns the current operation formatted as `<namespace>#<operation_name>`.
-    pub fn operation(&self) -> String {
-        format!("{}#{}", self.namespace, self.operation_name)
+    /// Returns the Smithy model namespace.
+    pub fn namespace(&self) -> &'static str {
+        self.namespace
+    }
+
+    /// Returns the Smithy operation name.
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// Returns the absolute operation shape ID.
+    pub fn absolute(&self) -> &'static str {
+        self.absolute
     }
 }
 
@@ -163,4 +189,28 @@ where
         .map(|x| x.clone())?;
 
     Ok(Extension(value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ext_accept() {
+        let value = "com.amazonaws.ebs.CompleteSnapshot";
+        let ext = OperationExtension::new(value).unwrap();
+
+        assert_eq!(ext.absolute(), value);
+        assert_eq!(ext.namespace(), "com.amazonaws.ebs");
+        assert_eq!(ext.name(), "CompleteSnapshot");
+    }
+
+    #[test]
+    fn ext_reject() {
+        let value = "CompleteSnapshot";
+        assert_eq!(
+            OperationExtension::new(value).unwrap_err(),
+            ParseError::MissingNamespace
+        )
+    }
 }

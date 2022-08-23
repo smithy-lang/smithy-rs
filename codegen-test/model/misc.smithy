@@ -18,6 +18,7 @@ service MiscService {
         ResponseCodeRequiredOperation,
         ResponseCodeHttpFallbackOperation,
         ResponseCodeDefaultOperation,
+        AcceptHeaderStarService,
     ],
 }
 
@@ -161,6 +162,9 @@ operation ResponseCodeDefaultOperation {
         id: "ResponseCodeHttpFallbackOperation",
         protocol: "aws.protocols#restJson1",
         code: 418,
+        headers: {
+            "Content-Length": "2"
+        }
     }
 ])
 @http(method: "GET", uri: "/responseCodeHttpFallbackOperation", code: 418)
@@ -178,7 +182,10 @@ structure EmptyStructure {}
         id: "ResponseCodeRequiredOperation",
         protocol: "aws.protocols#restJson1",
         code: 201,
-        params: {"responseCode": 201}
+        params: {"responseCode": 201},
+        headers: {
+            "Content-Length": "2"
+        }
     }
 ])
 @http(method: "GET", uri: "/responseCodeRequiredOperation", code: 200)
@@ -193,3 +200,33 @@ structure ResponseCodeRequiredOutput {
     @httpResponseCode
     responseCode: Integer,
 }
+
+// TODO(https://github.com/awslabs/smithy/pull/1365): remove when these tests are in smithy
+@http(method: "GET", uri: "/test-accept-header")
+@httpRequestTests([
+    {
+        id: "AcceptHeaderStarRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/test-accept-header",
+        headers: {
+            "Accept": "application/*",
+        },
+        params: {},
+        body: "{}",
+        method: "GET",
+        appliesTo: "server",
+    },
+    {
+        id: "AcceptHeaderStarStarRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/test-accept-header",
+        headers: {
+            "Accept": "*/*",
+        },
+        params: {},
+        body: "{}",
+        method: "GET",
+        appliesTo: "server",
+    }
+])
+operation AcceptHeaderStarService {}

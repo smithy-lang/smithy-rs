@@ -9,13 +9,13 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.rustlang.docs
 import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
@@ -56,13 +56,13 @@ class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
     fun serializationError(w: RustWriter, error: String) = "${w.format(runtimeConfig.operationBuildError())}::SerializationError($error.into())"
 }
 
-/** setter names will never hit a reserved word and therefore never need escaping */
-fun MemberShape.setterName(): String = "set_${this.memberName.toSnakeCase()}"
+// Setter names will never hit a reserved word and therefore never need escaping.
+fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
 
 class BuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val shape: StructureShape
+    private val shape: StructureShape,
 ) {
     private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
@@ -70,21 +70,21 @@ class BuilderGenerator(
 
     fun render(writer: RustWriter) {
         val symbol = symbolProvider.toSymbol(shape)
-        writer.docs("See #D", symbol)
+        writer.docs("See #D.", symbol)
         val segments = shape.builderSymbol(symbolProvider).namespace.split("::")
         writer.withModule(segments.last()) {
             renderBuilder(this)
         }
     }
 
-    private fun buildFn(implBlockWriter: RustWriter) {
+    private fun renderBuildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = StructureGenerator.fallibleBuilder(shape, symbolProvider)
         val outputSymbol = symbolProvider.toSymbol(shape)
         val returnType = when (fallibleBuilder) {
-            true -> "std::result::Result<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
+            true -> "Result<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
             false -> implBlockWriter.format(outputSymbol)
         }
-        implBlockWriter.docs("Consumes the builder and constructs a #D", outputSymbol)
+        implBlockWriter.docs("Consumes the builder and constructs a #D.", outputSymbol)
         implBlockWriter.rustBlock("pub fn build(self) -> $returnType") {
             conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
                 // If a wrapper is specified, use the `::new` associated function to construct the wrapper
@@ -94,20 +94,16 @@ class BuilderGenerator(
     }
 
     private fun RustWriter.missingRequiredField(field: String) {
-        val detailedMessage = "$field was not specified but it is required when building ${
-        symbolProvider.toSymbol(
-            shape
-        ).name
-        }"
+        val detailedMessage = "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
         rust(
-            """#T::MissingField { field: ${field.dq()}, details: ${detailedMessage.dq()}}""",
-            runtimeConfig.operationBuildError()
+            """#T::MissingField { field: "$field", details: "$detailedMessage" } """,
+            runtimeConfig.operationBuildError(),
         )
     }
 
     fun renderConvenienceMethod(implBlock: RustWriter) {
         val builderSymbol = shape.builderSymbol(symbolProvider)
-        implBlock.docs("Creates a new builder-style object to manufacture #D", structureSymbol)
+        implBlock.docs("Creates a new builder-style object to manufacture #D.", structureSymbol)
         implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
             write("#T::default()", builderSymbol)
         }
@@ -115,9 +111,8 @@ class BuilderGenerator(
 
     // TODO(EventStream): [DX] Consider updating builders to take EventInputStream as Into<EventInputStream>
     private fun renderBuilderMember(writer: RustWriter, memberName: String, memberSymbol: Symbol) {
-        // builder members are crate-public to enable using them
-        // directly in serializers/deserializers. During XML deserialization, `builder.<field>.take` is used to append to
-        // lists and maps
+        // Builder members are crate-public to enable using them directly in serializers/deserializers.
+        // During XML deserialization, `builder.<field>.take` is used to append to lists and maps.
         writer.write("pub(crate) $memberName: #T,", memberSymbol)
     }
 
@@ -125,27 +120,35 @@ class BuilderGenerator(
         writer: RustWriter,
         coreType: RustType,
         member: MemberShape,
-        memberName: String
+        memberName: String,
     ) {
         val input = coreType.asArgument("input")
 
         writer.documentShape(member, model)
+        writer.deprecatedShape(member)
         writer.rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
             write("self.$memberName = Some(${input.value});")
             write("self")
         }
     }
 
+    /**
+     * Render a `set_foo` method. This is useful as a target for code generation, because the argument type
+     * is the same as the resulting member type, and is always optional.
+     */
     private fun renderBuilderMemberSetterFn(
         writer: RustWriter,
         outerType: RustType,
         member: MemberShape,
-        memberName: String
+        memberName: String,
     ) {
-        // Render a `set_foo` method. This is useful as a target for code generation, because the argument type
-        // is the same as the resulting member type, and is always optional.
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
+        //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
+        //  a non `Option`al target type: in all other cases the client generates `Option`al types.
         val inputType = outerType.asOptional()
+
         writer.documentShape(member, model)
+        writer.deprecatedShape(member)
         writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
             rust("self.$memberName = input; self")
         }
@@ -154,31 +157,29 @@ class BuilderGenerator(
     private fun renderBuilder(writer: RustWriter) {
         val builderName = "Builder"
 
-        val symbol = structureSymbol
-        writer.docs("A builder for #D", symbol)
-        Attribute.NonExhaustive.render(writer)
-        // Matching derives to the main structure + `Default` since we are a builder and everything is optional
-        val baseDerives = symbol.expectRustMetadata().derives
+        writer.docs("A builder for #D.", structureSymbol)
+        // Matching derives to the main structure + `Default` since we are a builder and everything is optional.
+        val baseDerives = structureSymbol.expectRustMetadata().derives
         val derives = baseDerives.derives.intersect(setOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)) + RuntimeType.Default
         baseDerives.copy(derives = derives).render(writer)
         writer.rustBlock("pub struct $builderName") {
-            members.forEach { member ->
+            for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
-                // All fields in the builder are optional
+                // All fields in the builder are optional.
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
                 renderBuilderMember(this, memberName, memberSymbol)
             }
         }
 
         writer.rustBlock("impl $builderName") {
-            members.forEach { member ->
-                // All fields in the builder are optional
+            for (member in members) {
+                // All fields in the builder are optional.
                 val memberSymbol = symbolProvider.toSymbol(member)
                 val outerType = memberSymbol.rustType()
                 val coreType = outerType.stripOuter<RustType.Option>()
                 val memberName = symbolProvider.toMemberName(member)
                 // Render a context-aware builder method for certain types, e.g. a method for vectors that automatically
-                // appends
+                // appends.
                 when (coreType) {
                     is RustType.Vec -> renderVecHelper(member, memberName, coreType)
                     is RustType.HashMap -> renderMapHelper(member, memberName, coreType)
@@ -187,7 +188,7 @@ class BuilderGenerator(
 
                 renderBuilderMemberSetterFn(this, outerType, member, memberName)
             }
-            buildFn(this)
+            renderBuildFn(this)
         }
     }
 
@@ -197,6 +198,7 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
+        deprecatedShape(member)
         val input = coreType.member.asArgument("input")
 
         rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
@@ -206,7 +208,7 @@ class BuilderGenerator(
                 v.push(${input.value});
                 self.$memberName = Some(v);
                 self
-                """
+                """,
             )
         }
     }
@@ -217,11 +219,12 @@ class BuilderGenerator(
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
+        deprecatedShape(member)
         val k = coreType.key.asArgument("k")
         val v = coreType.member.asArgument("v")
 
         rustBlock(
-            "pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self"
+            "pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self",
         ) {
             rust(
                 """
@@ -229,24 +232,23 @@ class BuilderGenerator(
                 hash_map.insert(${k.value}, ${v.value});
                 self.$memberName = Some(hash_map);
                 self
-                """
+                """,
             )
         }
     }
 
     /**
      * The core builder of the inner type. If the structure requires a fallible builder, this may use `?` to return
-     * errors
+     * errors.
      * ```rust
      * SomeStruct {
-     *    field: builder.field,
-     *    field2: builder.field2,
-     *    field3: builder.field3.unwrap_or_default()
-     *    field4: builder.field4.ok_or("field4 is required when building SomeStruct")?
+     *    field1: builder.field1,
+     *    field2: builder.field2.unwrap_or_default()
+     *    field3: builder.field3.ok_or("field3 is required when building SomeStruct")?
      * }
      * ```
      */
-    protected fun coreBuilder(writer: RustWriter) {
+    private fun coreBuilder(writer: RustWriter) {
         writer.rustBlock("#T", structureSymbol) {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
@@ -258,7 +260,7 @@ class BuilderGenerator(
                         !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
                         !memberSymbol.isOptional() -> withBlock(
                             ".ok_or(",
-                            ")?"
+                            ")?",
                         ) { missingRequiredField(memberName) }
                     }
                 }

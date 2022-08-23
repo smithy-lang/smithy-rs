@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.rustlang.Feature
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.smithy.Version
 import software.amazon.smithy.rust.codegen.util.deepMergeWith
 
 /**
@@ -46,7 +47,7 @@ class CargoTomlGenerator(
     private val writer: RustWriter,
     private val manifestCustomizations: ManifestCustomizations,
     private val dependencies: List<CargoDependency>,
-    private val features: List<Feature>
+    private val features: List<Feature>,
 ) {
     fun render() {
         val cargoFeatures = features.map { it.name to it.deps }.toMutableList()
@@ -63,12 +64,17 @@ class CargoTomlGenerator(
                 "edition" to "2021",
                 "license" to settings.license,
                 "repository" to settings.moduleRepository,
+                "metadata" to listOfNotNull(
+                    "smithy" to listOfNotNull(
+                        "codegen-version" to Version.fullVersion(),
+                    ).toMap(),
+                ).toMap(),
             ).toMap(),
             "dependencies" to dependencies.filter { it.scope == DependencyScope.Compile }
                 .associate { it.name to it.toMap() },
             "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
                 .associate { it.name to it.toMap() },
-            "features" to cargoFeatures.toMap()
+            "features" to cargoFeatures.toMap(),
         ).deepMergeWith(manifestCustomizations)
 
         writer.writeWithNoFormatting(TomlWriter().write(cargoToml))

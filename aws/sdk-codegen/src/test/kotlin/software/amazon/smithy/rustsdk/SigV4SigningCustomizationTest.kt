@@ -19,9 +19,9 @@ internal class SigV4SigningCustomizationTest {
             SigV4SigningConfig(
                 AwsTestRuntimeConfig,
                 true,
-                SigV4Trait.builder().name("test-service").build()
+                SigV4Trait.builder().name("test-service").build(),
             ),
-            TestWorkspace.testProject()
+            TestWorkspace.testProject(),
         )
         project.lib {
             it.unitTest(
@@ -29,7 +29,7 @@ internal class SigV4SigningCustomizationTest {
                 """
                 let conf = crate::config::Config::builder().build();
                 assert_eq!(conf.signing_service(), "test-service");
-                """
+                """,
             )
         }
         project.compileAndTest()

@@ -119,7 +119,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                     map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
                     assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
                     assert_eq!(output.renamed_with_prefix.as_deref(), Some("hey"));
-                """
+                """,
             )
 
             writer.unitTest(
@@ -146,7 +146,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                     let mut map = std::collections::HashMap::new();
                     map.insert("some key".to_string(), model::Choice::S("hello".to_string()));
                     assert_eq!(output.choice, Some(model::Choice::FlatMap(map)));
-                """
+                """,
             )
 
             writer.unitTest(
@@ -170,7 +170,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                     </Top>
                     "#;
                     ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).expect("unknown union variant does not cause failure");
-                """
+                """,
             )
             writer.unitTest(
                 name = "unknown_union_variant",
@@ -188,7 +188,7 @@ internal class XmlBindingTraitParserGeneratorTest {
                     "#;
                     let output = ${writer.format(operationParser)}(xml, output::op_output::Builder::default()).unwrap().build();
                     assert!(output.choice.unwrap().is_unknown());
-                """
+                """,
             )
         }
         project.withModule(RustModule.public("model")) {

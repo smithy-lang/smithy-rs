@@ -7,11 +7,9 @@ package software.amazon.smithy.rust.codegen.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
-import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.config.ServiceConfig
 
@@ -116,19 +114,7 @@ impl Builder {
 }
  */
 
-class SleepImplDecorator : RustCodegenDecorator<ClientCodegenContext> {
-    override val name: String = "AsyncSleep"
-    override val order: Byte = 0
-
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
-    ): List<ConfigCustomization> {
-        return baseCustomizations + SleepImplProviderConfig(codegenContext)
-    }
-}
-
-class SleepImplProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
+class SleepImplProviderCustomization(coreCodegenContext: CoreCodegenContext) : ConfigCustomization() {
     private val sleepModule = smithyAsyncRtSleep(coreCodegenContext.runtimeConfig)
     private val moduleUseName = coreCodegenContext.moduleUseName()
     private val codegenScope = arrayOf(
@@ -139,10 +125,18 @@ class SleepImplProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCu
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             is ServiceConfig.ConfigStruct -> rustTemplate(
-                "pub(crate) sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,",
-                *codegenScope
+                "sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,",
+                *codegenScope,
             )
-            is ServiceConfig.ConfigImpl -> emptySection
+            is ServiceConfig.ConfigImpl -> {
+                rustTemplate(
+                    """
+                    /// Return a cloned Arc containing the async sleep implementation from this config, if any.
+                    pub fn sleep_impl(&self) -> Option<std::sync::Arc<dyn #{AsyncSleep}>> { self.sleep_impl.clone() }
+                    """,
+                    *codegenScope,
+                )
+            }
             is ServiceConfig.BuilderStruct ->
                 rustTemplate("sleep_impl: Option<std::sync::Arc<dyn #{AsyncSleep}>>,", *codegenScope)
             ServiceConfig.BuilderImpl ->
@@ -206,11 +200,11 @@ class SleepImplProviderConfig(coreCodegenContext: CoreCodegenContext) : ConfigCu
                         self
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             ServiceConfig.BuilderBuild -> rustTemplate(
                 """sleep_impl: self.sleep_impl,""",
-                *codegenScope
+                *codegenScope,
             )
             else -> emptySection
         }

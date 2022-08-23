@@ -33,7 +33,7 @@ class IdempotencyTokenProviderCustomization : NamedSectionGenerator<ServiceConfi
                         self
                     }
                     """,
-                    RuntimeType.IdempotencyToken
+                    RuntimeType.IdempotencyToken,
                 )
             }
             ServiceConfig.BuilderBuild -> writable {

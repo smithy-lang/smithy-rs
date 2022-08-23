@@ -7,17 +7,17 @@ use crate::fs::Fs;
 use crate::package::{
     discover_and_validate_package_batches, Package, PackageBatch, PackageHandle, PackageStats,
 };
-use crate::repo::{resolve_publish_location, Repository};
 use crate::retry::{run_with_retry, BoxError, ErrorClass};
-use crate::CRATE_OWNERS;
+use crate::SDK_REPO_CRATE_PATH;
 use crate::{cargo, SDK_REPO_NAME};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use crates_io_api::{AsyncClient, Error};
 use dialoguer::Confirm;
 use lazy_static::lazy_static;
+use smithy_rs_tool_common::git;
 use smithy_rs_tool_common::shell::ShellOperation;
-use smithy_rs_tool_common::versions_manifest::VersionsManifest;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -57,9 +57,6 @@ pub async fn subcommand_publish(
     info!("Discovering crates to publish...");
     let (batches, stats) = discover_and_validate_package_batches(Fs::Real, &location).await?;
     info!("Finished crate discovery.");
-
-    // Sanity check the repository tag if publishing from `aws-sdk-rust`
-    confirm_correct_tag(&location).await?;
 
     // Don't proceed unless the user confirms the plan
     confirm_plan(&batches, stats, *skip_confirmation)?;
@@ -103,6 +100,17 @@ pub async fn subcommand_publish(
     Ok(())
 }
 
+/// Given a `location`, this function looks for the `aws-sdk-rust` git repository. If found,
+/// it resolves the `sdk/` directory. Otherwise, it returns the original `location`.
+pub fn resolve_publish_location(location: &Path) -> PathBuf {
+    match git::find_git_repository_root(SDK_REPO_NAME, location) {
+        // If the given path was the `aws-sdk-rust` repo root, then resolve the `sdk/` directory to publish from
+        Ok(sdk_repo) => sdk_repo.join(SDK_REPO_CRATE_PATH),
+        // Otherwise, publish from the given path (likely the smithy-rs runtime bundle)
+        Err(_) => location.into(),
+    }
+}
+
 async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
     info!("Publishing `{}`...", handle);
     run_with_retry(
@@ -118,27 +126,6 @@ async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
         |_err| ErrorClass::Retry,
     )
     .await?;
-    Ok(())
-}
-
-async fn confirm_correct_tag(location: &Path) -> Result<()> {
-    let repository = Repository::new(SDK_REPO_NAME, location)?;
-    let versions_manifest = VersionsManifest::from_file(location.join("../versions.toml"))?;
-    if versions_manifest.release.is_none() {
-        // The release metadata is required for yanking in the event of a bad release, so don't
-        // allow publish if it's missing.
-        bail!("Generated `versions.toml` doesn't have release metadata. Refusing to publish!");
-    }
-    let expected_tag = versions_manifest.release.unwrap().tag;
-    let current_tag = repository.current_tag().await?;
-    if expected_tag != current_tag {
-        bail!(
-            "Current tag `{}` in the local `aws-sdk-rust` repository didn't match expected \
-             release tag `{}` from the `versions.toml` file",
-            current_tag,
-            expected_tag
-        );
-    }
     Ok(())
 }
 
@@ -194,21 +181,21 @@ async fn correct_owner(package: &Package) -> Result<()> {
         3,
         Duration::from_secs(5),
         || async {
-            let owners = cargo::GetOwners::new(&package.handle.name).spawn().await?;
+            let actual_owners: HashSet<String> = cargo::GetOwners::new(&package.handle.name).spawn().await?.into_iter().collect();
+            let expected_owners = package.expected_owners();
+
+            let owners_to_be_added = expected_owners.difference(&actual_owners);
+            let incorrect_owners = actual_owners.difference(&expected_owners);
+
             let mut added_individual = false;
-            for &crate_owner in CRATE_OWNERS {
-                if !owners.iter().any(|owner| owner == crate_owner) {
-                    cargo::AddOwner::new(&package.handle.name, crate_owner)
-                        .spawn()
-                        .await?;
-                    info!("Added `{}` as owner of `{}`", crate_owner, package.handle);
-                    // Teams in crates.io start with `github:` while individuals are just the GitHub user name
-                    added_individual |= !crate_owner.starts_with("github:");
-                }
+            for crate_owner in owners_to_be_added {
+                cargo::AddOwner::new(&package.handle.name, crate_owner)
+                    .spawn()
+                    .await?;
+                info!("Added `{}` as owner of `{}`", crate_owner, package.handle);
+                // Teams in crates.io start with `github:` while individuals are just the GitHub user name
+                added_individual |= !crate_owner.starts_with("github:");
             }
-            let incorrect_owners = owners
-                .iter()
-                .filter(|&owner| !CRATE_OWNERS.iter().any(|o| o == owner));
             for incorrect_owner in incorrect_owners {
                 // Adding an individual owner requires accepting an invite, so don't attempt to remove
                 // anyone if an owner was added, as removing the last individual owner may break.
@@ -217,7 +204,7 @@ async fn correct_owner(package: &Package) -> Result<()> {
                     cargo::RemoveOwner::new(&package.handle.name, incorrect_owner)
                         .spawn()
                         .await
-                        .context("remove incorrect owner")?;
+                        .context(format!("remove incorrect owner `{}` from crate `{}`", incorrect_owner, package.handle))?;
                     info!(
                         "Removed incorrect owner `{}` from crate `{}`",
                         incorrect_owner, package.handle

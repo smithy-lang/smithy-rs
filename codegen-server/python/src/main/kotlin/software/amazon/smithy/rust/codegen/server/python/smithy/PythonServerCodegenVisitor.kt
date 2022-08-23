@@ -7,9 +7,11 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.python.smithy.generators.PythonServerServiceGenerator
@@ -35,7 +37,7 @@ import software.amazon.smithy.rust.codegen.util.getTrait
  */
 class PythonServerCodegenVisitor(
     context: PluginContext,
-    codegenDecorator: RustCodegenDecorator<ServerCodegenContext>
+    codegenDecorator: RustCodegenDecorator<ServerCodegenContext>,
 ) : ServerCodegenVisitor(context, codegenDecorator) {
 
     init {
@@ -52,16 +54,13 @@ class PythonServerCodegenVisitor(
             ServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
-                    ServerProtocolLoader.DefaultProtocols
-                )
+                    ServerProtocolLoader.DefaultProtocols,
+                ),
             )
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
-        model = generator.transformModel(codegenDecorator.transformModel(service, baseModel))
-        val baseProvider = PythonCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
-        // Override symbolProvider.
-        symbolProvider =
-            codegenDecorator.symbolProvider(generator.symbolProvider(model, baseProvider))
+        model = codegenDecorator.transformModel(service, baseModel)
+        symbolProvider = PythonCodegenServerPlugin.baseSymbolProvider(model, service, symbolVisitorConfig)
 
         // Override `codegenContext` which carries the symbolProvider.
         codegenContext = ServerCodegenContext(model, symbolProvider, service, protocol, settings)
@@ -112,6 +111,17 @@ class PythonServerCodegenVisitor(
     }
 
     /**
+     * Union Shape Visitor
+     *
+     * Generate an `enum` for union shapes.
+     *
+     * Note: this does not generate serializers
+     */
+    override fun unionShape(shape: UnionShape) {
+        throw CodegenException("Union shapes are not supported in Python yet")
+    }
+
+    /**
      * Generate service-specific code for the model:
      * - Serializers
      * - Deserializers
@@ -126,7 +136,7 @@ class PythonServerCodegenVisitor(
             rustCrate,
             protocolGenerator,
             protocolGeneratorFactory.support(),
-            protocolGeneratorFactory.protocol(codegenContext).httpBindingResolver,
+            protocolGeneratorFactory.protocol(codegenContext),
             codegenContext,
         )
             .render()

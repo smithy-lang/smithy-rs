@@ -18,8 +18,8 @@ use aws_endpoint::partition::endpoint::{Protocol, SignatureVersion};
 use aws_endpoint::set_endpoint_resolver;
 use aws_http::retry::AwsErrorRetryPolicy;
 use aws_http::user_agent::AwsUserAgent;
+use aws_inlineable::middleware::DefaultMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
-use inlineable_aws::middleware::DefaultMiddleware;
 
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;

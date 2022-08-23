@@ -34,7 +34,7 @@ data class ServerRustSettings(
     override val codegenConfig: ServerCodegenConfig,
     override val license: String?,
     override val examplesUri: String?,
-    override val customizationConfig: ObjectNode?
+    override val customizationConfig: ObjectNode?,
 ) : CoreRustSettings(
     service,
     moduleName,
@@ -46,7 +46,7 @@ data class ServerRustSettings(
     codegenConfig,
     license,
     examplesUri,
-    customizationConfig
+    customizationConfig,
 ) {
     companion object {
         fun from(model: Model, config: ObjectNode): ServerRustSettings {
@@ -64,18 +64,18 @@ data class ServerRustSettings(
                 codegenConfig = ServerCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, codegenSettingsNode),
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
-                customizationConfig = coreRustSettings.customizationConfig
+                customizationConfig = coreRustSettings.customizationConfig,
             )
         }
     }
 }
 
 data class ServerCodegenConfig(
-    override val formatTimeoutSeconds: Int,
-    override val debugMode: Boolean,
-    override val eventStreamAllowList: Set<String>,
+    override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
+    override val debugMode: Boolean = defaultDebugMode,
+    override val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode, eventStreamAllowList
+    formatTimeoutSeconds, debugMode, eventStreamAllowList,
 ) {
     companion object {
         // Note `node` is unused, because at the moment `ServerCodegenConfig` has the same properties as

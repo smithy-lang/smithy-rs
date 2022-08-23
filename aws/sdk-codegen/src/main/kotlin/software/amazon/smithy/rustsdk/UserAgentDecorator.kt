@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.rustlang.writable
 import software.amazon.smithy.rust.codegen.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
@@ -34,14 +35,14 @@ class UserAgentDecorator : RustCodegenDecorator<ClientCodegenContext> {
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>
+        baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + AppNameCustomization(codegenContext.runtimeConfig)
     }
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>
+        baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
         // We are generating an AWS SDK, the service needs to have the AWS service trait
         val serviceTrait = codegenContext.serviceShape.expectTrait<ServiceTrait>()
@@ -51,10 +52,13 @@ class UserAgentDecorator : RustCodegenDecorator<ClientCodegenContext> {
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>
+        baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
         return baseCustomizations + UserAgentFeature(codegenContext.runtimeConfig)
     }
+
+    override fun supportsCodegenContext(clazz: Class<out CoreCodegenContext>): Boolean =
+        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 /**
@@ -68,7 +72,7 @@ private class ApiVersionAndPubUse(private val runtimeConfig: RuntimeConfig, serv
             // PKG_VERSION comes from CrateVersionGenerator
             rust(
                 "static API_METADATA: #1T::ApiMetadata = #1T::ApiMetadata::new(${serviceId.dq()}, PKG_VERSION);",
-                runtimeConfig.userAgentModule()
+                runtimeConfig.userAgentModule(),
             )
 
             // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
@@ -133,7 +137,7 @@ private class AppNameCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomi
                         self
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             is ServiceConfig.BuilderBuild -> writable {
@@ -153,7 +157,7 @@ private class AppNameCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomi
                         self.app_name.as_ref()
                     }
                     """,
-                    *codegenScope
+                    *codegenScope,
                 )
             }
             else -> emptySection

@@ -12,6 +12,7 @@ use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent, UserAgentStage};
@@ -62,6 +63,16 @@ fn user_agent() -> AwsUserAgent {
 /// _Note: This client ONLY supports IMDSv2. It will not fallback to IMDSv1. See
 /// [transitioning to IMDSv2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html#instance-metadata-transition-to-version-2)
 /// for more information._
+///
+/// **Note**: When running in a Docker container, all network requests will incur an additional hop. When combined with the default IMDS hop limit of 1, this will cause requests to IMDS to timeout! To fix this issue, you'll need to set the following instance metadata settings :
+/// ```txt
+/// amazonec2-metadata-token=required
+/// amazonec2-metadata-token-response-hop-limit=2
+/// ```
+///
+/// On an instance that is already running, these can be set with [ModifyInstanceMetadataOptions](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_ModifyInstanceMetadataOptions.html). On a new instance, these can be set with the `MetadataOptions` field on [RunInstances](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_RunInstances.html).
+///
+/// For more information about IMDSv2 vs. IMDSv1 see [this guide](https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/configuring-instance-metadata-service.html)
 ///
 /// # Client Configuration
 /// The IMDS client can load configuration explicitly, via environment variables, or via
@@ -114,10 +125,15 @@ fn user_agent() -> AwsUserAgent {
 ///
 /// 7. The default value of `http://169.254.169.254` will be used.
 ///
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Client {
+    inner: Arc<ClientInner>,
+}
+
+#[derive(Debug)]
+struct ClientInner {
     endpoint: Endpoint,
-    inner: aws_smithy_client::Client<DynConnector, ImdsMiddleware>,
+    smithy_client: aws_smithy_client::Client<DynConnector, ImdsMiddleware>,
 }
 
 /// Client where build is sync, but usage is async
@@ -184,25 +200,29 @@ impl Client {
     /// ```
     pub async fn get(&self, path: &str) -> Result<String, ImdsError> {
         let operation = self.make_operation(path)?;
-        self.inner.call(operation).await.map_err(|err| match err {
-            SdkError::ConstructionFailure(err) => match err.downcast::<ImdsError>() {
-                Ok(token_failure) => *token_failure,
-                Err(other) => ImdsError::Unexpected(other),
-            },
-            SdkError::TimeoutError(err) => ImdsError::IoError(err),
-            SdkError::DispatchFailure(err) => ImdsError::IoError(err.into()),
-            SdkError::ResponseError { err, .. } => ImdsError::IoError(err),
-            SdkError::ServiceError {
-                err: InnerImdsError::BadStatus,
-                raw,
-            } => ImdsError::ErrorResponse {
-                response: raw.into_parts().0,
-            },
-            SdkError::ServiceError {
-                err: InnerImdsError::InvalidUtf8,
-                ..
-            } => ImdsError::Unexpected("IMDS returned invalid UTF-8".into()),
-        })
+        self.inner
+            .smithy_client
+            .call(operation)
+            .await
+            .map_err(|err| match err {
+                SdkError::ConstructionFailure(err) => match err.downcast::<ImdsError>() {
+                    Ok(token_failure) => *token_failure,
+                    Err(other) => ImdsError::Unexpected(other),
+                },
+                SdkError::TimeoutError(err) => ImdsError::IoError(err),
+                SdkError::DispatchFailure(err) => ImdsError::IoError(err.into()),
+                SdkError::ResponseError { err, .. } => ImdsError::IoError(err),
+                SdkError::ServiceError {
+                    err: InnerImdsError::BadStatus,
+                    raw,
+                } => ImdsError::ErrorResponse {
+                    response: raw.into_parts().0,
+                },
+                SdkError::ServiceError {
+                    err: InnerImdsError::InvalidUtf8,
+                    ..
+                } => ImdsError::Unexpected("IMDS returned invalid UTF-8".into()),
+            })
     }
 
     /// Creates a aws_smithy_http Operation to for `path`
@@ -214,7 +234,7 @@ impl Client {
         path: &str,
     ) -> Result<Operation<ImdsGetResponseHandler, ImdsErrorPolicy>, ImdsError> {
         let mut base_uri: Uri = path.parse().map_err(|_| ImdsError::InvalidPath)?;
-        self.endpoint.set_endpoint(&mut base_uri, None);
+        self.inner.endpoint.set_endpoint(&mut base_uri, None);
         let request = http::Request::builder()
             .uri(base_uri)
             .body(SdkBody::empty())
@@ -558,7 +578,7 @@ impl Builder {
             config.sleep(),
         );
         let middleware = ImdsMiddleware { token_loader };
-        let inner_client = aws_smithy_client::Builder::new()
+        let smithy_client = aws_smithy_client::Builder::new()
             .connector(connector.clone())
             .middleware(middleware)
             .sleep_impl(config.sleep())
@@ -567,8 +587,10 @@ impl Builder {
             .with_timeout_config(timeout_config);
 
         let client = Client {
-            endpoint,
-            inner: inner_client,
+            inner: Arc::new(ClientInner {
+                endpoint,
+                smithy_client,
+            }),
         };
         Ok(client)
     }

@@ -35,7 +35,7 @@ open class ServerEnumGenerator(
             """
             ##[derive(Debug, PartialEq, Eq, Hash)]
             pub struct $errorStruct(String);
-            """
+            """,
         )
         writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.TryFrom) {
             write("type Error = $errorStruct;")
@@ -55,11 +55,6 @@ open class ServerEnumGenerator(
                     Self::EnumVariantNotFound(Box::new(e))
                 }
             }
-            impl #{From}<$errorStruct> for #{JsonDeserialize} {
-                fn from(e: $errorStruct) -> Self {
-                    Self::custom(format!("unknown variant {}", e))
-                }
-            }
             impl #{StdError} for $errorStruct { }
             impl #{Display} for $errorStruct {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -71,7 +66,6 @@ open class ServerEnumGenerator(
             "From" to RuntimeType.From,
             "StdError" to RuntimeType.StdError,
             "RequestRejection" to ServerRuntimeType.RequestRejection(runtimeConfig),
-            "JsonDeserialize" to RuntimeType.jsonDeserialize(runtimeConfig),
         )
     }
 
@@ -84,7 +78,7 @@ open class ServerEnumGenerator(
                     $enumName::try_from(s)
                 }
             }
-            """
+            """,
         )
     }
 }

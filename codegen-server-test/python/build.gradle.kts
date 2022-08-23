@@ -9,7 +9,10 @@ extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.python.
 
 tasks["jar"].enabled = false
 
-plugins { id("software.amazon.smithy") }
+plugins {
+    val smithyGradlePluginVersion: String by project
+    id("software.amazon.smithy").version(smithyGradlePluginVersion)
+}
 
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
@@ -38,7 +41,7 @@ dependencies {
 
 val allCodegenTests = listOf(
     CodegenTest("com.amazonaws.simple#SimpleService", "simple"),
-    CodegenTest("com.aws.example#PokemonService", "pokemon_service_sdk")
+    CodegenTest("com.aws.example#PokemonService", "pokemon-service-server-sdk"),
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)

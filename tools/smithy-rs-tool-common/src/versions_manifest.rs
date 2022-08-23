@@ -7,6 +7,7 @@
 //! in the root of the `aws-sdk-rust` repository.
 
 use crate::package::PackageCategory;
+use crate::release_tag::ReleaseTag;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -15,13 +16,19 @@ use std::path::Path;
 use std::str::FromStr;
 
 /// Root struct representing a `versions.toml` manifest
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct VersionsManifest {
     /// Git commit hash of the version of smithy-rs used to generate this SDK
     pub smithy_rs_revision: String,
 
     /// Git commit hash of the `aws-doc-sdk-examples` repository that was synced into this SDK
     pub aws_doc_sdk_examples_revision: String,
+
+    /// Optional manual interventions to apply to the next release.
+    /// These are intended to be filled out manually in the `versions.toml` via pull request
+    /// to `aws-sdk-rust`.
+    #[serde(default)]
+    pub manual_interventions: ManualInterventions,
 
     /// All SDK crate version metadata
     pub crates: BTreeMap<String, CrateVersion>,
@@ -43,6 +50,20 @@ impl VersionsManifest {
         .with_context(|| format!("Failed to parse {:?}", path.as_ref()))
     }
 
+    pub async fn from_github_tag(tag: &ReleaseTag) -> Result<VersionsManifest> {
+        let manifest_url = format!(
+            "https://raw.githubusercontent.com/awslabs/aws-sdk-rust/{}/versions.toml",
+            tag
+        );
+        let manifest_contents = reqwest::get(manifest_url)
+            .await
+            .context("failed to download release manifest")?
+            .text()
+            .await
+            .context("failed to download release manifest content")?;
+        Ok(Self::from_str(&manifest_contents).context("failed to parse versions.toml file")?)
+    }
+
     pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
         let serialized = toml::to_string_pretty(self)
             .context("failed to serialize versions manifest into TOML")?;
@@ -60,18 +81,33 @@ impl FromStr for VersionsManifest {
     }
 }
 
+/// The SDK release process has sanity checks sprinkled throughout it to make sure
+/// a release is done correctly. Sometimes, manual intervention is required to bypass
+/// these sanity checks. For example, when a service model is intentionally removed,
+/// without manual intervention, there would be no way to release that removal.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+pub struct ManualInterventions {
+    /// List of crate names that are being removed from the SDK in the next release.
+    ///
+    /// __Note:__ this only bypasses a release-time sanity check. The models for these crates
+    /// (if they're generated) need to be manually deleted, and the crates must be manually
+    /// yanked after the release (if necessary).
+    #[serde(default)]
+    pub crates_to_remove: Vec<String>,
+}
+
 /// Release metadata
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct Release {
     /// The release tag associated with this `versions.toml`
-    pub tag: String,
+    pub tag: Option<String>,
 
     /// Which crate versions were published with this release
     pub crates: BTreeMap<String, String>,
 }
 
 /// Version metadata for a crate
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct CrateVersion {
     /// What kind of crate this is. Is it the Smithy runtime? AWS runtime? SDK crate?
     pub category: PackageCategory,

@@ -16,31 +16,31 @@ class MapTest {
 
         mapOf<String, Any?>("foo" to 1, "bar" to "baz").deepMergeWith(mapOf()) shouldBe mapOf(
             "foo" to 1,
-            "bar" to "baz"
+            "bar" to "baz",
         )
 
         mapOf<String, Any?>().deepMergeWith(mapOf("foo" to 1, "bar" to "baz")) shouldBe mapOf(
             "foo" to 1,
-            "bar" to "baz"
+            "bar" to "baz",
         )
 
         mapOf<String, Any?>(
             "package" to mapOf<String, Any?>(
                 "name" to "foo",
                 "version" to "1.0.0",
-            )
+            ),
         ).deepMergeWith(
             mapOf<String, Any?>(
                 "package" to mapOf<String, Any?>(
                     "readme" to "README.md",
-                )
-            )
+                ),
+            ),
         ) shouldBe mapOf(
             "package" to mapOf<String, Any?>(
                 "name" to "foo",
                 "version" to "1.0.0",
                 "readme" to "README.md",
-            )
+            ),
         )
 
         mapOf<String, Any?>(
@@ -56,8 +56,8 @@ class MapTest {
                     "readme" to "README.md",
                     "overwrite-me" to "correct",
                 ),
-                "make-me-not-a-map" to 5
-            )
+                "make-me-not-a-map" to 5,
+            ),
         ) shouldBe mapOf(
             "package" to mapOf<String, Any?>(
                 "name" to "foo",
@@ -65,7 +65,7 @@ class MapTest {
                 "readme" to "README.md",
                 "overwrite-me" to "correct",
             ),
-            "make-me-not-a-map" to 5
+            "make-me-not-a-map" to 5,
         )
     }
 }

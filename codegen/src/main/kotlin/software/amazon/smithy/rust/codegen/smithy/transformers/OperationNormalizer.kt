@@ -58,7 +58,7 @@ object OperationNormalizer {
         }
         val shapeConflict = newShapes.firstOrNull() { shape -> model.getShape(shape.id).isPresent }
         check(
-            shapeConflict == null
+            shapeConflict == null,
         ) { "shape $shapeConflict conflicted with an existing shape in the model (${model.getShape(shapeConflict!!.id)}. This is a bug." }
         val modelWithOperationInputs = model.toBuilder().addShapes(newShapes).build()
         return transformer.mapShapes(modelWithOperationInputs) {
@@ -89,7 +89,7 @@ object OperationNormalizer {
             SyntheticOutputTrait(
                 operation = operation.id,
                 originalId = operation.output.orNull(),
-            )
+            ),
         ).build()
     }
 
@@ -107,8 +107,8 @@ object OperationNormalizer {
         return inputShapeBuilder.addTrait(
             SyntheticInputTrait(
                 operation = operation.id,
-                originalId = operation.input.orNull()
-            )
+                originalId = operation.input.orNull(),
+            ),
         ).build()
     }
 

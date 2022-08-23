@@ -101,10 +101,12 @@ class RequestBindingGeneratorTest {
             @httpPrefixHeaders("X-Prefix-")
             prefix: StringMap,
 
-            @sensitive
             @httpHeader("stringHeader")
-            stringHeader: String
+            stringHeader: SensitiveStringHeader
         }
+
+        @sensitive
+        string SensitiveStringHeader
     """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val symbolProvider = testSymbolProvider(model)
@@ -118,7 +120,7 @@ class RequestBindingGeneratorTest {
             codegenContext,
             // Any protocol is fine for this test.
             RestJson(codegenContext),
-            operationShape
+            operationShape,
         )
         writer.rustBlock("impl PutObjectInput") {
             // RequestBindingGenerator's functions expect to be rendered inside a function,
@@ -128,7 +130,7 @@ class RequestBindingGeneratorTest {
 
             rustBlock(
                 "pub fn test_uri_query(&self, mut output: &mut String) -> Result<(), #T>",
-                TestRuntimeConfig.operationBuildError()
+                TestRuntimeConfig.operationBuildError(),
             ) {
                 bindingGen.renderUpdateHttpBuilder(this)
                 rust("uri_query(self, output)")
@@ -136,7 +138,7 @@ class RequestBindingGeneratorTest {
 
             rustBlock(
                 "pub fn test_uri_base(&self, mut output: &mut String) -> Result<(), #T>",
-                TestRuntimeConfig.operationBuildError()
+                TestRuntimeConfig.operationBuildError(),
             ) {
                 bindingGen.renderUpdateHttpBuilder(this)
                 rust("uri_base(self, output)")
@@ -145,7 +147,7 @@ class RequestBindingGeneratorTest {
             rustBlock(
                 "pub fn test_request_builder_base(&self) -> Result<#T, #T>",
                 RuntimeType.HttpRequestBuilder,
-                TestRuntimeConfig.operationBuildError()
+                TestRuntimeConfig.operationBuildError(),
             ) {
                 bindingGen.renderUpdateHttpBuilder(this)
                 rust("let builder = #T::new();", RuntimeType.HttpRequestBuilder)
@@ -183,7 +185,7 @@ class RequestBindingGeneratorTest {
                     o.clear();
                     inp.test_uri_query(&mut o);
                     assert_eq!(o.as_str(), "?paramName=svq%21%21%25%26&hello=0&hello=1&hello=2&hello=44")
-                """
+                """,
             )
 
             writer.unitTest(
@@ -199,7 +201,7 @@ class RequestBindingGeneratorTest {
                     let mut o = String::new();
                     inp.test_uri_query(&mut o);
                     assert_eq!(o.as_str(), "?primitive=1&enabled=true")
-                """
+                """,
             )
 
             writer.unitTest(
@@ -232,7 +234,7 @@ class RequestBindingGeneratorTest {
 
                     let prefix_header = http_request.headers().get_all("X-Prefix-k").iter().map(|hv|std::str::from_utf8(hv.as_ref()).unwrap()).collect::<Vec<_>>();
                     assert_eq!(prefix_header, vec!["😹"])
-                """
+                """,
             )
 
             writer.unitTest(
@@ -247,7 +249,7 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header out of a cat emoji");
                     assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `😹` cannot be used as a header name: invalid HTTP header name)");
-                """
+                """,
             )
 
             writer.unitTest(
@@ -262,7 +264,7 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
                     assert_eq!(format!("{}", err), "Invalid field in input: prefix (Details: `\n can\'t put a newline in a header value` cannot be used as a header value: failed to parse header value)");
-                """
+                """,
             )
 
             writer.unitTest(
@@ -277,7 +279,7 @@ class RequestBindingGeneratorTest {
                     let err = inp.test_request_builder_base().expect_err("can't make a header with a newline");
                     // make sure we obey the sensitive trait
                     assert_eq!(format!("{}", err), "Invalid field in input: string_header (Details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)");
-                """
+                """,
             )
 
             writer.unitTest(
@@ -291,7 +293,7 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
                     assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
-                """
+                """,
             )
 
             writer.unitTest(
@@ -305,7 +307,7 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
                     assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
-                """
+                """,
             )
 
             writer.unitTest(
@@ -318,7 +320,7 @@ class RequestBindingGeneratorTest {
                         .build().unwrap();
                     let err = inp.test_request_builder_base().expect_err("can't build request with bucket unset");
                     assert!(matches!(err, ${writer.format(TestRuntimeConfig.operationBuildError())}::MissingField { .. }))
-                """
+                """,
             )
         }
 
