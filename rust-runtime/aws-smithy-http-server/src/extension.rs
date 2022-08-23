@@ -58,6 +58,8 @@ use crate::request::RequestParts;
 /// This extension type is set when it has been correctly determined that the request should be
 /// routed to a particular operation. The operation handler might not even get invoked because the
 /// request fails to deserialize into the modeled operation input.
+///
+/// The format given must be the absolute shape ID with `#` replaced with a `.`.
 #[derive(Debug, Clone)]
 pub struct OperationExtension {
     absolute: &'static str,
@@ -67,18 +69,18 @@ pub struct OperationExtension {
 }
 
 /// An error occurred when parsing an absolute operation shape ID.
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseError {
-    #[error("# was not found - missing namespace")]
+    #[error(". was not found - missing namespace")]
     MissingNamespace,
 }
 
 impl OperationExtension {
-    /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation.
+    /// Creates a new [`OperationExtension`] from the absolute shape ID of the operation with `#` symbol replaced with a `.`.
     pub fn new(absolute_operation_id: &'static str) -> Result<Self, ParseError> {
         let (namespace, name) = absolute_operation_id
-            .split_once('#')
+            .rsplit_once('.')
             .ok_or(ParseError::MissingNamespace)?;
         Ok(Self {
             absolute: absolute_operation_id,
@@ -187,4 +189,28 @@ where
         .map(|x| x.clone())?;
 
     Ok(Extension(value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ext_accept() {
+        let value = "com.amazonaws.ebs.CompleteSnapshot";
+        let ext = OperationExtension::new(value).unwrap();
+
+        assert_eq!(ext.absolute(), value);
+        assert_eq!(ext.namespace(), "com.amazonaws.ebs");
+        assert_eq!(ext.name(), "CompleteSnapshot");
+    }
+
+    #[test]
+    fn ext_reject() {
+        let value = "CompleteSnapshot";
+        assert_eq!(
+            OperationExtension::new(value).unwrap_err(),
+            ParseError::MissingNamespace
+        )
+    }
 }
