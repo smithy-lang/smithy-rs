@@ -50,6 +50,42 @@ pub(super) struct HeaderValues<'a> {
     pub(super) signed_headers: SignedHeaders,
 }
 
+#[derive(Debug)]
+pub(crate) enum InvalidHeaderErrorKind {
+    /// Invalid UTF-8 contained in HeaderValue
+    InvalidUtf8,
+}
+
+impl fmt::Display for InvalidHeaderErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            InvalidHeaderErrorKind::InvalidUtf8 => {
+                write!(f, "invalid UTF-8 contained in header value")
+            }
+        }
+    }
+}
+
+/// Error occurred while handling a `HeaderValue` in a `CanonicalRequest`.
+/// Thus the context of this error is specific to `CanonicalRequest`.
+#[derive(Debug)]
+pub(crate) struct InvalidHeaderError {
+    source: Error,
+    kind: InvalidHeaderErrorKind,
+}
+
+impl fmt::Display for InvalidHeaderError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.kind, self.source)
+    }
+}
+
+impl std::error::Error for InvalidHeaderError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.source.as_ref())
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub(super) struct QueryParamValues<'a> {
     pub(super) algorithm: &'static str,
@@ -377,7 +413,11 @@ fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
 /// Will ensure that the underlying bytes are valid UTF-8.
 fn normalize_header_value(header_value: &HeaderValue) -> Result<HeaderValue, Error> {
     let trimmed_value = trim_all(header_value.as_bytes());
-    let trimmed_value_as_utf8_str = std::str::from_utf8(&trimmed_value).map_err(Error::from)?;
+    let trimmed_value_as_utf8_str =
+        std::str::from_utf8(&trimmed_value).map_err(|e| InvalidHeaderError {
+            source: Error::from(e),
+            kind: InvalidHeaderErrorKind::InvalidUtf8,
+        })?;
     HeaderValue::from_str(trimmed_value_as_utf8_str).map_err(Error::from)
 }
 
@@ -499,7 +539,8 @@ impl<'a> fmt::Display for StringToSign<'a> {
 mod tests {
     use crate::date_time::test_parsers::parse_date_time;
     use crate::http_request::canonical_request::{
-        normalize_header_value, trim_all, CanonicalRequest, SigningScope, StringToSign,
+        normalize_header_value, trim_all, CanonicalRequest, InvalidHeaderError, SigningScope,
+        StringToSign,
     };
     use crate::http_request::query_writer::QueryWriter;
     use crate::http_request::test::{test_canonical_request, test_request, test_sts};
@@ -752,8 +793,12 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_header_value_returns_err_on_invalid_utf8() {
+    fn test_normalize_header_value_returns_expected_error_on_invalid_utf8() {
         let header_value = HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap();
-        assert!(normalize_header_value(&header_value).is_err());
+        assert!(normalize_header_value(&header_value)
+            .err()
+            .unwrap()
+            .downcast_ref::<InvalidHeaderError>()
+            .is_some());
     }
 }

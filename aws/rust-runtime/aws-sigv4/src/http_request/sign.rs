@@ -303,6 +303,7 @@ fn build_authorization_header(
 mod tests {
     use super::{sign, SigningInstructions};
     use crate::date_time::test_parsers::parse_date_time;
+    use crate::http_request::canonical_request::InvalidHeaderError;
     use crate::http_request::sign::SignableRequest;
     use crate::http_request::test::{
         make_headers_comparable, test_request, test_signed_request,
@@ -514,6 +515,33 @@ mod tests {
             .body("")
             .unwrap();
         assert_req_eq!(expected, signed);
+    }
+
+    #[test]
+    fn test_sign_headers_returning_expected_error_on_invalid_utf8() {
+        let settings = SigningSettings::default();
+        let params = SigningParams {
+            access_key: "123",
+            secret_key: "asdf",
+            security_token: None,
+            region: "us-east-1",
+            service_name: "foo",
+            time: std::time::SystemTime::now(),
+            settings,
+        };
+
+        let req = http::Request::builder()
+            .uri("https://foo.com/")
+            .header("x-sign-me", HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap())
+            .body(&[])
+            .unwrap();
+
+        let creq = crate::http_request::sign(SignableRequest::from(&req), &params);
+        assert!(creq
+            .err()
+            .unwrap()
+            .downcast_ref::<InvalidHeaderError>()
+            .is_some());
     }
 
     proptest! {
