@@ -141,7 +141,8 @@ impl MapRequest for AwsEndpointStage {
             let (uri, signing_scope_override, signing_service_override) = smithy_to_aws(endpoint)
                 .map_err(|err| AwsEndpointStageError::EndpointResolutionError(err))?;
             tracing::debug!(endpoint = ?endpoint, base_region = ?signing_scope_override, "resolved endpoint");
-            apply_endpoint(http_req.uri_mut(), &uri, props.get::<EndpointPrefix>());
+            apply_endpoint(http_req.uri_mut(), &uri, props.get::<EndpointPrefix>())
+                .map_err(|err|AwsEndpointStageError::EndpointResolutionError(err.into()))?;
             for (header_name, header_values) in endpoint.headers() {
                 http_req.headers_mut().remove(header_name);
                 for value in header_values {

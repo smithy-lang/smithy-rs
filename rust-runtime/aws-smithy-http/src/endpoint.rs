@@ -90,9 +90,44 @@ impl EndpointPrefix {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum InvalidEndpoint {
     EndpointMustHaveAuthority,
+    EndpointMustHaveScheme,
+    FailedToConstructAuthority,
+    FailedToConstructUri,
 }
 
-pub fn apply_endpoint(uri: &mut Uri, endpoint: &Uri, prefix: Option<&EndpointPrefix>) {
+impl Display for InvalidEndpoint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InvalidEndpoint::EndpointMustHaveAuthority => {
+                write!(f, "Endpoint must contain an authority")
+            }
+            InvalidEndpoint::EndpointMustHaveScheme => {
+                write!(f, "Endpoint must contain a valid scheme")
+            }
+            InvalidEndpoint::FailedToConstructAuthority => {
+                write!(
+                    f,
+                    "Endpoint must contain a valid authority when combined with endpoint prefix"
+                )
+            }
+            InvalidEndpoint::FailedToConstructUri => write!(f, "Failed to construct URI"),
+        }
+    }
+}
+
+impl std::error::Error for InvalidEndpoint {}
+
+/// Apply `endpoint` to `uri`
+///
+/// This method mutates `uri` by setting the `endpoint` on it
+///
+/// # Panics
+/// This method panics if `uri` does not have a scheme
+pub fn apply_endpoint(
+    uri: &mut Uri,
+    endpoint: &Uri,
+    prefix: Option<&EndpointPrefix>,
+) -> std::result::Result<(), InvalidEndpoint> {
     let prefix = prefix.map(|p| p.0.as_str()).unwrap_or("");
     let authority = endpoint
         .authority()
@@ -100,18 +135,23 @@ pub fn apply_endpoint(uri: &mut Uri, endpoint: &Uri, prefix: Option<&EndpointPre
         .map(|auth| auth.as_str())
         .unwrap_or("");
     let authority = if !prefix.is_empty() {
-        Authority::from_str(&format!("{}{}", prefix, authority)).expect("parts must be valid")
+        Authority::from_str(&format!("{}{}", prefix, authority))
     } else {
-        Authority::from_str(authority).expect("authority is valid")
-    };
-    let scheme = *endpoint.scheme().as_ref().expect("scheme must be provided");
+        Authority::from_str(authority)
+    }
+    .map_err(|_| InvalidEndpoint::FailedToConstructAuthority)?;
+    let scheme = *endpoint
+        .scheme()
+        .as_ref()
+        .ok_or(InvalidEndpoint::EndpointMustHaveScheme)?;
     let new_uri = Uri::builder()
         .authority(authority)
         .scheme(scheme.clone())
         .path_and_query(Endpoint::merge_paths(endpoint, uri).as_ref())
         .build()
-        .expect("valid uri");
+        .map_err(|_| InvalidEndpoint::FailedToConstructUri)?;
     *uri = new_uri;
+    Ok(())
 }
 
 impl Endpoint {
@@ -157,7 +197,7 @@ impl Endpoint {
             true => None,
             false => prefix,
         };
-        apply_endpoint(uri, &self.uri, prefix);
+        apply_endpoint(uri, &self.uri, prefix).expect("failed to set endpoint");
     }
 
     fn merge_paths<'a>(endpoint: &'a Uri, uri: &'a Uri) -> Cow<'a, str> {

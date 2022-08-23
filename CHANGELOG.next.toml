@@ -10,6 +10,12 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+[[aws-sdk-rust]]
+message = """Refactor endpoint resolution internals to use `aws_smithy_types::Endpoint` internally. The public internal
+functions `aws_endpoint::set_endpoint_resolver` and `aws_endpoint::get_endpoint_resolver were removed."""
+references = ["smithy-rs#1641"]
+meta = { breaking = true, "tada" = false, "bug" = false }
+author = "rcoh"
 
 [[aws-sdk-rust]]
 message = """
