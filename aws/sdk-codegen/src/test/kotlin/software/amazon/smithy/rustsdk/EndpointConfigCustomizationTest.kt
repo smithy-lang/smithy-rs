@@ -27,8 +27,10 @@ import software.amazon.smithy.rust.codegen.testutil.unitTest
 import software.amazon.smithy.rust.codegen.util.runCommand
 
 internal class EndpointConfigCustomizationTest {
+    private val placeholderEndpointParams = AwsTestRuntimeConfig.awsEndpoint().asType().member("Params")
     private val codegenScope = arrayOf(
         "http" to CargoDependency.Http.asType(),
+        "PlaceholderParams" to placeholderEndpointParams,
         "aws_types" to awsTypes(AwsTestRuntimeConfig).asType(),
     )
 
@@ -154,6 +156,7 @@ internal class EndpointConfigCustomizationTest {
         }
         val customization = CombinedCodegenDecorator(listOf(RequiredCustomizations(), codegenDecorator))
         CodegenVisitor(context, customization).execute()
+        println("file:///$testDir")
         "cargo test".runCommand(testDir)
     }
 
@@ -176,10 +179,8 @@ internal class EndpointConfigCustomizationTest {
                         """
                         let conf = crate::config::Config::builder().build();
                         let endpoint = conf.endpoint_resolver
-                            .resolve_endpoint(&#{aws_types}::region::Region::new("fips-ca-central-1")).expect("default resolver produces a valid endpoint");
-                        let mut uri = #{http}::Uri::from_static("/?k=v");
-                        endpoint.set_endpoint(&mut uri, None);
-                        assert_eq!(uri, #{http}::Uri::from_static("https://access-analyzer-fips.ca-central-1.amazonaws.com/?k=v"));
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("fips-ca-central-1")))).expect("default resolver produces a valid endpoint");
+                        assert_eq!(endpoint.url(), "https://access-analyzer-fips.ca-central-1.amazonaws.com/");
                         """,
                         *codegenScope,
                     )
@@ -197,16 +198,12 @@ internal class EndpointConfigCustomizationTest {
                         """
                         let conf = crate::config::Config::builder().build();
                         let endpoint = conf.endpoint_resolver
-                            .resolve_endpoint(&#{aws_types}::region::Region::new("us-east-1")).expect("default resolver produces a valid endpoint");
-                        let mut uri = #{http}::Uri::from_static("/?k=v");
-                        endpoint.set_endpoint(&mut uri, None);
-                        assert_eq!(uri, #{http}::Uri::from_static("https://iam.amazonaws.com/?k=v"));
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("us-east-1")))).expect("default resolver produces a valid endpoint");
+                        assert_eq!(endpoint.url(), "https://iam.amazonaws.com/");
 
                         let endpoint = conf.endpoint_resolver
-                            .resolve_endpoint(&#{aws_types}::region::Region::new("iam-fips")).expect("default resolver produces a valid endpoint");
-                        let mut uri = #{http}::Uri::from_static("/?k=v");
-                        endpoint.set_endpoint(&mut uri, None);
-                        assert_eq!(uri, #{http}::Uri::from_static("https://iam-fips.amazonaws.com/?k=v"));
+                            .resolve_endpoint(&::#{PlaceholderParams}::new(Some(#{aws_types}::region::Region::new("iam-fips")))).expect("default resolver produces a valid endpoint");
+                        assert_eq!(endpoint.url(), "https://iam-fips.amazonaws.com/");
                         """,
                         *codegenScope,
                     )
