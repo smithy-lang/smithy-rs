@@ -128,23 +128,23 @@ impl Visitor {
             } => {
                 path.push(ComponentType::AssocType, item);
                 if let Some(typ) = default {
-                    self.visit_type(&path, &ErrorLocation::AssocType, typ)?;
+                    self.visit_type(&path, &ErrorLocation::AssocType, typ).context(here!())?;
                 }
-                self.visit_generic_bounds(&path, bounds)?;
-                self.visit_generics(&path, generics)?;
+                self.visit_generic_bounds(&path, bounds).context(here!())?;
+                self.visit_generics(&path, generics).context(here!())?;
             }
             ItemEnum::Constant(constant) => {
                 path.push(ComponentType::Constant, item);
-                self.visit_type(&path, &ErrorLocation::Constant, &constant.type_)?;
+                self.visit_type(&path, &ErrorLocation::Constant, &constant.type_).context(here!())?;
             }
             ItemEnum::Enum(enm) => {
                 path.push(ComponentType::Enum, item);
-                self.visit_generics(&path, &enm.generics)?;
+                self.visit_generics(&path, &enm.generics).context(here!())?;
                 for id in &enm.impls {
-                    self.visit_impl(&path, self.item(id)?)?;
+                    self.visit_impl(&path, self.item(id).context(here!())?)?;
                 }
                 for id in &enm.variants {
-                    self.visit_item(&path, self.item(id)?, VisibilityCheck::Default)?;
+                    self.visit_item(&path, self.item(id).context(here!())?, VisibilityCheck::Default).context(here!())?;
                 }
             }
             ItemEnum::ForeignType => unstable_rust_feature!(
@@ -153,15 +153,18 @@ impl Visitor {
             ),
             ItemEnum::Function(function) => {
                 path.push(ComponentType::Function, item);
-                self.visit_fn_decl(&path, &function.decl)?;
-                self.visit_generics(&path, &function.generics)?;
+                self.visit_fn_decl(&path, &function.decl).context(here!())?;
+                self.visit_generics(&path, &function.generics).context(here!())?;
             }
             ItemEnum::Import(import) => {
                 if let Some(target_id) = &import.id {
-                    if let Ok(target_item) = self.item(target_id) {
+                    if self.in_root_crate(target_id) {
                         // Override the visibility check for re-exported items
-                        self.visit_item(&path, target_item, VisibilityCheck::AssumePublic)
-                            .context(here!())?;
+                        self.visit_item(
+                            &path,
+                            self.item(target_id).context(here!())?,
+                            VisibilityCheck::AssumePublic
+                        ).context(here!())?;
                     }
                     path.push_raw(ComponentType::ReExport, &import.name, item.span.as_ref());
                     self.check_external(&path, &ErrorLocation::ReExport, target_id)
@@ -170,33 +173,33 @@ impl Visitor {
             }
             ItemEnum::Method(method) => {
                 path.push(ComponentType::Method, item);
-                self.visit_fn_decl(&path, &method.decl)?;
-                self.visit_generics(&path, &method.generics)?;
+                self.visit_fn_decl(&path, &method.decl).context(here!())?;
+                self.visit_generics(&path, &method.generics).context(here!())?;
             }
             ItemEnum::Module(module) => {
                 if !module.is_crate {
                     path.push(ComponentType::Module, item);
                 }
                 for id in &module.items {
-                    let module_item = self.item(id)?;
+                    let module_item = self.item(id).context(here!())?;
                     // Re-exports show up twice in the doc json: once as an `ItemEnum::Import`,
                     // and once as the type as if it were originating from the root crate (but
                     // with a different crate ID). We only want to examine the `ItemEnum::Import`
                     // for re-exports since it includes the correct span where the re-export occurs,
                     // and we don't want to examine the innards of the re-export.
                     if module_item.crate_id == self.root_crate_id {
-                        self.visit_item(&path, module_item, VisibilityCheck::Default)?;
+                        self.visit_item(&path, module_item, VisibilityCheck::Default).context(here!())?;
                     }
                 }
             }
             ItemEnum::OpaqueTy(_) => unstable_rust_feature!("type_alias_impl_trait", "https://doc.rust-lang.org/beta/unstable-book/language-features/type-alias-impl-trait.html"),
             ItemEnum::Static(sttc) => {
                 path.push(ComponentType::Static, item);
-                self.visit_type(&path, &ErrorLocation::Static, &sttc.type_)?;
+                self.visit_type(&path, &ErrorLocation::Static, &sttc.type_).context(here!())?;
             }
             ItemEnum::Struct(strct) => {
                 path.push(ComponentType::Struct, item);
-                self.visit_struct(&path, strct)?;
+                self.visit_struct(&path, strct).context(here!())?;
             }
             ItemEnum::StructField(typ) => {
                 path.push(ComponentType::StructField, item);
@@ -205,13 +208,13 @@ impl Visitor {
             }
             ItemEnum::Trait(trt) => {
                 path.push(ComponentType::Trait, item);
-                self.visit_trait(&path, trt)?;
+                self.visit_trait(&path, trt).context(here!())?;
             }
             ItemEnum::Typedef(typedef) => {
                 path.push(ComponentType::TypeDef, item);
                 self.visit_type(&path, &ErrorLocation::TypeDef, &typedef.type_)
                     .context(here!())?;
-                self.visit_generics(&path, &typedef.generics)?;
+                self.visit_generics(&path, &typedef.generics).context(here!())?;
             }
             ItemEnum::TraitAlias(_) => unstable_rust_feature!(
                 "trait_alias",
@@ -219,11 +222,11 @@ impl Visitor {
             ),
             ItemEnum::Union(unn) => {
                 path.push(ComponentType::Union, item);
-                self.visit_union(&path, unn)?;
+                self.visit_union(&path, unn).context(here!())?;
             }
             ItemEnum::Variant(variant) => {
                 path.push(ComponentType::EnumVariant, item);
-                self.visit_variant(&path, variant)?;
+                self.visit_variant(&path, variant).context(here!())?;
             }
             ItemEnum::ExternCrate { .. }
             | ItemEnum::Impl(_)
@@ -238,11 +241,11 @@ impl Visitor {
     fn visit_struct(&self, path: &Path, strct: &Struct) -> Result<()> {
         self.visit_generics(path, &strct.generics)?;
         for id in &strct.fields {
-            let field = self.item(id)?;
+            let field = self.item(id).context(here!())?;
             self.visit_item(path, field, VisibilityCheck::Default)?;
         }
         for id in &strct.impls {
-            self.visit_impl(path, self.item(id)?)?;
+            self.visit_impl(path, self.item(id).context(here!())?)?;
         }
         Ok(())
     }
@@ -251,11 +254,11 @@ impl Visitor {
     fn visit_union(&self, path: &Path, unn: &Union) -> Result<()> {
         self.visit_generics(path, &unn.generics)?;
         for id in &unn.fields {
-            let field = self.item(id)?;
+            let field = self.item(id).context(here!())?;
             self.visit_item(path, field, VisibilityCheck::Default)?;
         }
         for id in &unn.impls {
-            self.visit_impl(path, self.item(id)?)?;
+            self.visit_impl(path, self.item(id).context(here!())?)?;
         }
         Ok(())
     }
@@ -265,7 +268,7 @@ impl Visitor {
         self.visit_generics(path, &trt.generics)?;
         self.visit_generic_bounds(path, &trt.bounds)?;
         for id in &trt.items {
-            let item = self.item(id)?;
+            let item = self.item(id).context(here!())?;
             self.visit_item(path, item, VisibilityCheck::Default)?;
         }
         Ok(())
@@ -280,7 +283,11 @@ impl Visitor {
             }
             self.visit_generics(path, &imp.generics)?;
             for id in &imp.items {
-                self.visit_item(path, self.item(id)?, VisibilityCheck::Default)?;
+                self.visit_item(
+                    path,
+                    self.item(id).context(here!())?,
+                    VisibilityCheck::Default,
+                )?;
             }
             if let Some(trait_) = &imp.trait_ {
                 self.visit_type(path, &ErrorLocation::ImplementedTrait, trait_)
@@ -495,7 +502,11 @@ impl Visitor {
             }
             Variant::Struct(ids) => {
                 for id in ids {
-                    self.visit_item(path, self.item(id)?, VisibilityCheck::Default)?;
+                    self.visit_item(
+                        path,
+                        self.item(id).context(here!())?,
+                        VisibilityCheck::Default,
+                    )?;
                 }
             }
         }
@@ -543,6 +554,11 @@ impl Visitor {
 
     fn root_crate_id(package: &Crate) -> Result<u32> {
         Ok(Self::root(package)?.crate_id)
+    }
+
+    /// Returns true if the given `id` belongs to the root crate
+    fn in_root_crate(&self, id: &Id) -> bool {
+        id.0.starts_with(&format!("{}:", self.root_crate_id))
     }
 
     fn root_crate_name(package: &Crate) -> Result<String> {
