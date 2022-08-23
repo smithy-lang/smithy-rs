@@ -101,10 +101,12 @@ class RequestBindingGeneratorTest {
             @httpPrefixHeaders("X-Prefix-")
             prefix: StringMap,
 
-            @sensitive
             @httpHeader("stringHeader")
-            stringHeader: String
+            stringHeader: SensitiveStringHeader
         }
+
+        @sensitive
+        string SensitiveStringHeader
     """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val symbolProvider = testSymbolProvider(model)

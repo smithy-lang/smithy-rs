@@ -1,4 +1,4 @@
-$version: "1.0"
+$version: "2.0"
 namespace aws.protocoltests.restxml
 
 use aws.protocols#restXml
@@ -43,13 +43,12 @@ structure CreateFooInput {}
     method: "POST",
    body: """
         <PrimitiveIntDocument>
-            <requiredValue>0</requiredValue>
         </PrimitiveIntDocument>
     """,
     bodyMediaType: "application/xml",
-    params: {}
+    params: { }
 }, {
-       id: "RestXmlSerPrimitiveIntSet",
+       id: "RestXmlSerPrimitiveIntSetToDefault",
        protocol: "aws.protocols#restXml",
        documentation: "Primitive ints should not be serialized when they are unset",
        uri: "/primitive-document",
@@ -57,8 +56,7 @@ structure CreateFooInput {}
        body: """
        <PrimitiveIntDocument>
             <value>1</value>
-            <requiredValue>0</requiredValue>
-        </PrimitiveIntDocument>
+       </PrimitiveIntDocument>
        """,
        bodyMediaType: "application/xml",
        params: { value: 1 }
@@ -70,9 +68,9 @@ operation PrimitiveIntOpXml {
 }
 
 structure PrimitiveIntDocument {
-    value: PrimitiveInt,
-    @required
-    requiredValue: PrimitiveInt
+    value: PrimitiveInt
+    @default(0)
+    defaultedValue: PrimitiveInt
 }
 
 @enum([{"value": "enumvalue", "name": "V"}])

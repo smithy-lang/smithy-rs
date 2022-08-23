@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.TypeConversionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.renderUnknownVariant
@@ -65,7 +66,7 @@ class JsonParserGenerator(
     private val target = coreCodegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).asType()
     private val jsonDeserModule = RustModule.private("json_deser")
-    private val typeConversionGenerator = TypeConversionGenerator(symbolProvider, runtimeConfig)
+    private val typeConversionGenerator = TypeConversionGenerator(model, symbolProvider, runtimeConfig)
     private val codegenScope = arrayOf(
         "Error" to smithyJson.member("deserialize::Error"),
         "ErrorReason" to smithyJson.member("deserialize::ErrorReason"),
