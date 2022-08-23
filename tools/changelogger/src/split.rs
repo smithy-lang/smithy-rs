@@ -8,8 +8,9 @@ use clap::Parser;
 use smithy_rs_tool_common::changelog::Changelog;
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use std::path::{Path, PathBuf};
-use std::{env, fs};
+use std::{env, fs, mem};
 
+const MAX_ENTRY_AGE: usize = 5;
 const INTERMEDIATE_SOURCE_HEADER: &str =
     "# This is an intermediate file that will be replaced after automation is complete.\n\
      # It will be used to generate a changelog entry for smithy-rs.\n\
@@ -38,20 +39,32 @@ pub struct SplitArgs {
 }
 
 pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
-    let changelog = Changelog::load_from_file(&args.source).map_err(|errs| {
+    let combined_changelog = Changelog::load_from_file(&args.source).map_err(|errs| {
         anyhow::Error::msg(format!(
             "cannot split changelogs with changelog errors: {:#?}",
             errs
         ))
     })?;
+    let current_sdk_changelog = if args.destination.exists() {
+        Changelog::load_from_file(&args.destination).map_err(|errs| {
+            anyhow::Error::msg(format!(
+                "failed to load existing SDK changelog entries: {:#?}",
+                errs
+            ))
+        })?
+    } else {
+        Changelog::new()
+    };
 
-    let (source_log, dest_log) = (
-        smithy_rs_entries(changelog.clone()),
-        sdk_entries(args, changelog).context("failed to filter SDK entries")?,
+    let (smithy_rs_entries, new_sdk_entries) = (
+        smithy_rs_entries(combined_changelog.clone()),
+        sdk_entries(args, combined_changelog).context("failed to filter SDK entries")?,
     );
-    write_entries(&args.source, INTERMEDIATE_SOURCE_HEADER, &source_log)
+    let sdk_changelog = merge_sdk_entries(current_sdk_changelog, new_sdk_entries);
+
+    write_entries(&args.source, INTERMEDIATE_SOURCE_HEADER, &smithy_rs_entries)
         .context("failed to write source")?;
-    write_entries(&args.destination, DEST_HEADER, &dest_log)
+    write_entries(&args.destination, DEST_HEADER, &sdk_changelog)
         .context("failed to write destination")?;
     Ok(())
 }
@@ -86,8 +99,72 @@ fn smithy_rs_entries(mut changelog: Changelog) -> Changelog {
     changelog
 }
 
+fn merge_sdk_entries(old_changelog: Changelog, new_changelog: Changelog) -> Changelog {
+    let mut merged = old_changelog;
+    merged.merge(new_changelog);
+
+    for entry in &mut merged.aws_sdk_rust {
+        *entry.age.get_or_insert(0) += 1;
+    }
+
+    let mut to_filter = Vec::new();
+    mem::swap(&mut merged.aws_sdk_rust, &mut to_filter);
+    merged.aws_sdk_rust = to_filter
+        .into_iter()
+        .filter(|entry| entry.age.expect("set above") <= MAX_ENTRY_AGE)
+        .collect();
+
+    merged
+}
+
 fn write_entries(into_path: &Path, header: &str, changelog: &Changelog) -> Result<()> {
     let json_changelog = changelog.to_json_string()?;
     fs::write(into_path, format!("{header}\n{json_changelog}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{merge_sdk_entries, MAX_ENTRY_AGE};
+    use smithy_rs_tool_common::changelog::{Changelog, HandAuthoredEntry};
+
+    #[test]
+    fn test_merge_sdk_entries() {
+        let mut old_entries = Changelog::new();
+        old_entries.aws_sdk_rust.push(HandAuthoredEntry {
+            message: "old-1".into(),
+            age: None,
+            ..Default::default()
+        });
+        old_entries.aws_sdk_rust.push(HandAuthoredEntry {
+            message: "old-2".into(),
+            age: Some(MAX_ENTRY_AGE),
+            ..Default::default()
+        });
+        old_entries.aws_sdk_rust.push(HandAuthoredEntry {
+            message: "old-3".into(),
+            age: Some(1),
+            ..Default::default()
+        });
+
+        let mut new_entries = Changelog::new();
+        new_entries.aws_sdk_rust.push(HandAuthoredEntry {
+            message: "new-1".into(),
+            ..Default::default()
+        });
+        new_entries.aws_sdk_rust.push(HandAuthoredEntry {
+            message: "new-2".into(),
+            ..Default::default()
+        });
+
+        let combined = merge_sdk_entries(old_entries, new_entries);
+        assert_eq!("old-1", combined.aws_sdk_rust[0].message);
+        assert_eq!(Some(1), combined.aws_sdk_rust[0].age);
+        assert_eq!("old-3", combined.aws_sdk_rust[1].message);
+        assert_eq!(Some(2), combined.aws_sdk_rust[1].age);
+        assert_eq!("new-1", combined.aws_sdk_rust[2].message);
+        assert_eq!(Some(1), combined.aws_sdk_rust[2].age);
+        assert_eq!("new-2", combined.aws_sdk_rust[3].message);
+        assert_eq!(Some(1), combined.aws_sdk_rust[3].age);
+    }
 }
