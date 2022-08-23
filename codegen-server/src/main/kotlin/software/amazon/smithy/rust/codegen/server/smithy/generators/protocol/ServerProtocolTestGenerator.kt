@@ -533,7 +533,7 @@ class ServerProtocolTestGenerator(
         )
         rustWriter.writeWithNoFormatting(
             """
-            assert_eq!(operation_extension.operation(), format!("{}#{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
+            assert_eq!(operation_extension.absolute(), format!("{}.{}", "${operationShape.id.namespace}", "${operationSymbol.name}"));
             """.trimIndent(),
         )
     }
