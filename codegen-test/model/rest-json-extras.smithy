@@ -308,10 +308,9 @@ operation CaseInsensitiveErrorOperation {
     errors: [CaseInsensitiveError]
 }
 
-// See: https://github.com/awslabs/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51
 @httpResponseTests([
     {
-        documentation: "Upper case error modeled lower case",
+        documentation: "Upper case error modeled lower case. See: https://github.com/awslabs/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51",
         id: "UpperErrorModeledLower",
         protocol: "aws.protocols#restJson1",
         code: 500,
