@@ -756,27 +756,4 @@ mod tests {
         let header_value = HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap();
         assert!(normalize_header_value(&header_value).is_err());
     }
-
-    #[test]
-    fn test_signing_utf8_headers() {
-        let req = http::Request::builder()
-            .uri("https://foo.com/")
-            .header("x-sign-me", HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap())
-            .body(&[])
-            .unwrap();
-
-        // The test considered a pass if the creation of `creq` does not panic.
-        let _creq = crate::http_request::sign(
-            SignableRequest::from(&req),
-            &SigningParams::builder()
-                .region("us-east-1")
-                .access_key("123")
-                .service_name("foo")
-                .secret_key("asdf")
-                .time(std::time::SystemTime::now())
-                .settings(SigningSettings::default())
-                .build()
-                .unwrap(),
-        );
-    }
 }
