@@ -9,6 +9,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RustCrate
@@ -38,6 +39,8 @@ open class ServerServiceGenerator(
      */
     fun render() {
         rustCrate.withModule(RustModule.public("operation")) { writer ->
+            // TODO(weihanglo): remove #![allow(dead_code)]
+            writer.rust("##![allow(dead_code)]")
             ServerProtocolTestGenerator(coreCodegenContext, protocolSupport, protocolGenerator).render(writer)
         }
 
