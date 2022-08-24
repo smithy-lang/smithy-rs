@@ -10,6 +10,9 @@ use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use std::path::{Path, PathBuf};
 use std::{env, fs, mem};
 
+// Value chosen arbitrarily. It is large enough that we're unlikely to lose
+// SDK changelog entries, but small enough that the SDK changelog file
+// doesn't get too long.
 const MAX_ENTRY_AGE: usize = 5;
 const INTERMEDIATE_SOURCE_HEADER: &str =
     "# This is an intermediate file that will be replaced after automation is complete.\n\
