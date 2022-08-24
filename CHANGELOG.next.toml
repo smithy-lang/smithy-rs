@@ -243,8 +243,8 @@ then you shouldn't notice this change at all.
 
 Otherwise, if using something other than Tokio as the async runtime, the `AsyncSleep` trait must be implemented,
 and that implementation given to the config builder via the `sleep_impl` method. Alternatively, retry can be
-explicitly turned off by setting `max_attempts` to 1, which will result in successful client creation without an
-async sleep implementation.
+explicitly turned off by setting the retry config to `RetryConfig::disabled()`, which will result in successful
+client creation without an async sleep implementation.
 """
 references = ["smithy-rs#1603", "aws-sdk-rust#586"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
