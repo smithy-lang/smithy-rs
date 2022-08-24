@@ -362,7 +362,7 @@ let api_routes = Router::new()
 let app = Router::new().nest("/api", api_routes);
 ```
 
-Note that, in `axum` handlers are eagerly converted to a `tower::Service` (via `IntoService`) before they are passed into the `Router`. In contrast, in `smithy-rs` handlers are passed into a builder and then the conversion to `tower::Service` is performed (via `OperationHandler`).
+Note that, in `axum` handlers are eagerly converted to a `tower::Service` (via `IntoService`) before they are passed into the `Router`. In contrast, in `smithy-rs`, handlers are passed into a builder and then the conversion to `tower::Service` is performed (via `OperationHandler`).
 
 Introducing state to handlers in `axum` is done in the same way as `smithy-rs`, described briefly in [Handlers](#handlers) - a layer is used to insert state into incoming `http::Request`s and the `Handler` implementation pops it out of the type map layer. In `axum`, if a customer wanted to scope state to all routes within `/users/` they are able to do the following:
 
@@ -374,11 +374,11 @@ let api_routes = Router::new()
     .nest("/teams", team_routes);
 ```
 
-In `smithy-rs` a customer is only able to apply a layer to either the `aws_smithy_http::routing::Router` or every route via the [layer method](#router) described above.
+In `smithy-rs` a customer is only able to apply a layer around the `aws_smithy_http::routing::Router` or around every route via the [layer method](#router) described above.
 
 ## Proposal
 
-The proposal is presented as a series of compatible transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, but in the case where there exists an interdependency it is stated.
+The proposal is presented as a series of compatible transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, and it is stated in the cases where an interdependency exists.
 
 Although presented as a mutation to the existing service builder, the actual implementation should exist as an entirely separate builder, living in a separate namespace, reusing code generation from the old builder, while exposing a new Rust API. Preserving the old API surface will prevent breakage and make it easier to perform comparative benchmarks and testing.
 
@@ -851,7 +851,7 @@ let service_0 = Service0::builder()
     .build();
 ```
 
-A toy implementation of the combined proposal presented in the [this PR](https://github.com/hlbarber/service-builder/pull/1).
+A toy implementation of the combined proposal is presented in [this PR](https://github.com/hlbarber/service-builder/pull/1).
 
 ## Changes Checklist
 
