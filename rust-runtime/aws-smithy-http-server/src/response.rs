@@ -36,3 +36,7 @@ use crate::body::BoxBody;
 
 #[doc(hidden)]
 pub type Response<T = BoxBody> = http::Response<T>;
+
+pub trait IntoResponse<Protocol> {
+    fn into_response(self) -> http::Response<BoxBody>;
+}

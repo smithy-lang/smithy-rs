@@ -7,6 +7,18 @@
 use crate::rejection::MissingContentTypeReason;
 use crate::request::RequestParts;
 
+/// Rest JSON 1.0 Protocol.
+pub struct RestJson1;
+
+/// Rest XML Protocol.
+pub struct RestXml1;
+
+/// AWS JSON 1.0 Protocol.
+pub struct AwsJson10;
+
+/// AWS JSON 1.1 Protocol.
+pub struct AwsJson11;
+
 /// Supported protocols.
 #[derive(Debug, Clone, Copy)]
 pub enum Protocol {
