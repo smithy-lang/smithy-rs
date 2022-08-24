@@ -9,6 +9,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types"}
 aws-types = { path = "../aws-types" }
 http = "0.2.3"
 regex = { version = "1.5.5", default-features = false, features = ["std"] }
