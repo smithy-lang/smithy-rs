@@ -18,6 +18,7 @@ service MiscService {
         ResponseCodeRequiredOperation,
         ResponseCodeHttpFallbackOperation,
         ResponseCodeDefaultOperation,
+        AcceptHeaderStarService,
     ],
 }
 
@@ -199,3 +200,33 @@ structure ResponseCodeRequiredOutput {
     @httpResponseCode
     responseCode: Integer,
 }
+
+// TODO(https://github.com/awslabs/smithy/pull/1365): remove when these tests are in smithy
+@http(method: "GET", uri: "/test-accept-header")
+@httpRequestTests([
+    {
+        id: "AcceptHeaderStarRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/test-accept-header",
+        headers: {
+            "Accept": "application/*",
+        },
+        params: {},
+        body: "{}",
+        method: "GET",
+        appliesTo: "server",
+    },
+    {
+        id: "AcceptHeaderStarStarRequestTest",
+        protocol: "aws.protocols#restJson1",
+        uri: "/test-accept-header",
+        headers: {
+            "Accept": "*/*",
+        },
+        params: {},
+        body: "{}",
+        method: "GET",
+        appliesTo: "server",
+    }
+])
+operation AcceptHeaderStarService {}
