@@ -32,7 +32,7 @@ pub enum RuntimeErrorKind {
     /// As of writing, this variant can only occur upon failure to extract an
     /// [`crate::extension::Extension`] from the request.
     InternalFailure(crate::Error),
-    //TODO(https://github.com/awslabs/smithy-rs/issues/1663)
+    // TODO(https://github.com/awslabs/smithy-rs/issues/1663)
     // UnsupportedMediaType,
     NotAcceptable,
 }
