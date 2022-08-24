@@ -7,11 +7,13 @@ package software.amazon.smithy.rust.codegen.smithy.protocols.parse
 
 import software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
@@ -20,7 +22,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -64,6 +65,7 @@ data class OperationWrapperContext(
     val shape: OperationShape,
     val outputShapeName: String,
     val xmlErrorType: RuntimeType,
+    val model: Model,
 )
 
 class XmlBindingTraitParserGenerator(
@@ -198,7 +200,7 @@ class XmlBindingTraitParserGenerator(
                     """,
                     *codegenScope,
                 )
-                val context = OperationWrapperContext(operationShape, shapeName, xmlError)
+                val context = OperationWrapperContext(operationShape, shapeName, xmlError, model)
                 if (operationShape.hasTrait<S3UnwrappedXmlOutputTrait>()) {
                     unwrappedResponseParser("builder", "decoder", "start_el", outputShape.members())
                 } else {
@@ -264,7 +266,7 @@ class XmlBindingTraitParserGenerator(
                     """,
                     *codegenScope,
                 )
-                val context = OperationWrapperContext(operationShape, shapeName, xmlError)
+                val context = OperationWrapperContext(operationShape, shapeName, xmlError, model)
                 writeOperationWrapper(context) { tagName ->
                     parseStructureInner(members, builder = "builder", Ctx(tag = tagName, accum = null))
                 }
@@ -655,7 +657,7 @@ class XmlBindingTraitParserGenerator(
 
     private fun RustWriter.parseStringInner(shape: StringShape, provider: RustWriter.() -> Unit) {
         withBlock("Result::<#T, #T>::Ok(", ")", symbolProvider.toSymbol(shape), xmlError) {
-            if (shape.hasTrait<EnumTrait>()) {
+            if (shape is EnumShape) {
                 val enumSymbol = symbolProvider.toSymbol(shape)
                 if (convertsToEnumInServer(shape)) {
                     withBlock("#T::try_from(", ")", enumSymbol) {
@@ -675,7 +677,7 @@ class XmlBindingTraitParserGenerator(
         }
     }
 
-    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
+    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape is EnumShape
 
     private fun MemberShape.xmlName(): XmlName {
         return XmlName(xmlIndex.memberName(this))
