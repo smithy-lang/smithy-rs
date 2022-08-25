@@ -63,3 +63,15 @@ fn with_output_format_markdown_table() {
     );
     assert_str_eq!(expected_output, actual_output);
 }
+
+// Make sure that the visitor doesn't attempt to visit the inner items of re-exported external types.
+// Rustdoc doesn't include these inner items in its JSON output, which leads to obtuse crashes if they're
+// referenced. It's also just the wrong behavior to look into the type being re-exported, since if it's
+// approved, then it doesn't matter what it referenced. If it's not approved, then the re-export itself
+// is the violation.
+#[test]
+fn test_reexports() {
+    let expected_output = fs::read_to_string("tests/test-reexports-expected-output.md").unwrap();
+    let actual_output = run_with_args("test-workspace/test-reexports-crate", &[]);
+    assert_str_eq!(expected_output, actual_output);
+}

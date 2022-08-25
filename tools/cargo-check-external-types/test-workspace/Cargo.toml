@@ -1,2 +1,2 @@
 [workspace]
-members = ["external-lib", "test-crate"]
+members = ["external-lib", "test-crate", "test-reexports-crate"]
