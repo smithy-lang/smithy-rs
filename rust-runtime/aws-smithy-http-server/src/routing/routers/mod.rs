@@ -4,6 +4,7 @@
  */
 
 use std::{
+    error::Error,
     fmt,
     future::{ready, Future, Ready},
     marker::PhantomData,
@@ -14,6 +15,7 @@ use std::{
 use futures_util::future::Either;
 use http::Response;
 use tower::{util::Oneshot, Service, ServiceExt};
+use tracing::debug;
 
 use crate::{
     body::{empty, BoxBody},
@@ -140,7 +142,7 @@ impl<R, P, B> Service<http::Request<B>> for RoutingService<R, P>
 where
     R: Router<B>,
     R::Service: Service<http::Request<B>, Response = http::Response<BoxBody>> + Clone,
-    R::Error: IntoResponse<P>,
+    R::Error: IntoResponse<P> + Error,
 {
     type Response = Response<BoxBody>;
     type Error = <R::Service as Service<http::Request<B>>>::Error;
@@ -155,7 +157,10 @@ where
             // Successfully routed, use the routes `Service::call`.
             Ok(ok) => RoutingFuture::from_oneshot(ok.oneshot(req)),
             // Failed to route, use the `R::Error`s `IntoResponse<P>`.
-            Err(err) => RoutingFuture::from_response(err.into_response()),
+            Err(error) => {
+                debug!(%error, "failed to route");
+                RoutingFuture::from_response(error.into_response())
+            }
         }
     }
 }

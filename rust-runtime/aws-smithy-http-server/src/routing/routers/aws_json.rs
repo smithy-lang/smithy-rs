@@ -6,6 +6,7 @@
 use std::convert::Infallible;
 
 use http::header::ToStrError;
+use thiserror::Error;
 use tower::{Layer, Service};
 
 use crate::{
@@ -19,16 +20,22 @@ use crate::{
 use super::Router;
 
 /// An AWS JSON routing error.
+#[derive(Debug, Error)]
 pub enum Error {
     /// Relative URI was not "/".
+    #[error("relative URI is not \"/\"")]
     NotRootUrl,
     /// Method was not `POST`.
+    #[error("method not POST")]
     MethodNotAllowed,
     /// Missing the `x-amz-target` header.
+    #[error("missing the \"x-amz-target\" header")]
     MissingHeader,
     /// Unable to parse header into UTF-8.
+    #[error("failed to parse header: {0}")]
     InvalidHeader(ToStrError),
     /// Operation not found.
+    #[error("operation not found")]
     NotFound,
 }
 

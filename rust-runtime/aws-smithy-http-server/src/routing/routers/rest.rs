@@ -5,6 +5,7 @@
 
 use std::convert::Infallible;
 
+use thiserror::Error;
 use tower::{Layer, Service};
 
 use crate::{
@@ -21,10 +22,13 @@ use crate::{
 use super::Router;
 
 /// An AWS REST routing error.
+#[derive(Debug, Error)]
 pub enum Error {
     /// Operation not found.
+    #[error("operation not found")]
     NotFound,
     /// Method was not allowed.
+    #[error("method was not allowed")]
     MethodNotAllowed,
 }
 
