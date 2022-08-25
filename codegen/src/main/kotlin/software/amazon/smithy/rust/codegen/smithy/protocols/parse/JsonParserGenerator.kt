@@ -101,14 +101,14 @@ class JsonParserGenerator(
      */
     private fun structureParser(
         fnName: String,
-        structureShape: StructureShape,
+        builderSymbol: Symbol,
         includedMembers: List<MemberShape>,
     ): RuntimeType {
         return RuntimeType.forInlineFun(fnName, jsonDeserModule) {
             val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
             it.rustBlockTemplate(
                 "pub(crate) fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
-                "Builder" to structureShape.builderSymbol(symbolProvider),
+                "Builder" to builderSymbol,
                 *codegenScope,
             ) {
                 rustTemplate(
@@ -166,7 +166,7 @@ class JsonParserGenerator(
         }
         val outputShape = operationShape.outputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        return structureParser(fnName, outputShape, httpDocumentMembers)
+        return structureParser(fnName, builderSymbol(outputShape), httpDocumentMembers)
     }
 
     override fun errorParser(errorShape: StructureShape): RuntimeType? {
@@ -174,7 +174,7 @@ class JsonParserGenerator(
             return null
         }
         val fnName = symbolProvider.deserializeFunctionName(errorShape) + "_json_err"
-        return structureParser(fnName, errorShape, errorShape.members().toList())
+        return structureParser(fnName, builderSymbol(errorShape), errorShape.members().toList())
     }
 
     private fun orEmptyJson(): RuntimeType = RuntimeType.forInlineFun("or_empty_doc", jsonDeserModule) {
@@ -198,7 +198,7 @@ class JsonParserGenerator(
         }
         val inputShape = operationShape.inputShape(model)
         val fnName = symbolProvider.deserializeFunctionName(operationShape)
-        return structureParser(fnName, inputShape, includedMembers)
+        return structureParser(fnName, builderSymbol(inputShape), includedMembers)
     }
 
     private fun RustWriter.expectEndOfTokenStream() {
@@ -219,7 +219,7 @@ class JsonParserGenerator(
                             CodegenTarget.CLIENT -> {
                                 withBlock(
                                     "builder = builder.${
-                                        member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)
+                                        member.deserializerBuilderSetterName(codegenTarget)
                                     }(", ");"
                                 ) {
                                     deserializeMember(member)
@@ -229,7 +229,7 @@ class JsonParserGenerator(
                                 if (symbolProvider.toSymbol(member).isOptional()) {
                                     withBlock(
                                         "builder = builder.${
-                                            member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)
+                                            member.deserializerBuilderSetterName(codegenTarget)
                                         }(", ");"
                                     ) {
                                         deserializeMember(member)
@@ -241,7 +241,7 @@ class JsonParserGenerator(
                                         """
                                         {
                                             builder = builder.${
-                                                member.deserializerBuilderSetterName(model, symbolProvider, codegenTarget)
+                                                member.deserializerBuilderSetterName(codegenTarget)
                                             }(v);
                                         }
                                         """
@@ -439,7 +439,7 @@ class JsonParserGenerator(
             ) {
                 startObjectOrNull {
                     Attribute.AllowUnusedMut.render(this)
-                    rustTemplate("let mut builder = #{Shape}::builder();", *codegenScope, "Shape" to symbol)
+                    rustTemplate("let mut builder = #{Builder}::default();", *codegenScope, "Builder" to builderSymbol(shape))
                     deserializeStructInner(shape.members())
                     // Only call `build()` if the builder is not fallible. Otherwise, return the builder.
                     if (returnBuilder) {
@@ -597,4 +597,6 @@ class JsonParserGenerator(
         } else {
             false to symbolProvider.toSymbol(shape)
         }
+
+    private fun builderSymbol(shape: StructureShape) = shape.builderSymbol(coreCodegenContext, symbolProvider)
 }

@@ -47,6 +47,24 @@ fun StructureShape.builderSymbol(symbolProvider: RustSymbolProvider): Symbol {
         .build()
 }
 
+// TODO Place in a server file.
+fun StructureShape.serverBuilderSymbol(symbolProvider: RustSymbolProvider, pubCrate: Boolean): Symbol {
+    val structureSymbol = symbolProvider.toSymbol(this)
+    val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase()) +
+        if (pubCrate) {
+            "_internal"
+        } else {
+            ""
+        }
+    val rustType = RustType.Opaque("Builder", "${structureSymbol.namespace}::$builderNamespace")
+    return Symbol.builder()
+        .rustType(rustType)
+        .name(rustType.name)
+        .namespace(rustType.namespace, "::")
+        .definitionFile(structureSymbol.definitionFile)
+        .build()
+}
+
 fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).member("BuildError")
 fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).member("SerializationError")
 

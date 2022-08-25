@@ -5,23 +5,32 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.util.hasTrait
 
 class MapConstraintViolationGenerator(
-    val model: Model,
-    val symbolProvider: RustSymbolProvider,
-    private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+    codegenContext: ServerCodegenContext,
     private val modelsModuleWriter: RustWriter,
     val shape: MapShape
 ) {
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+    private val constraintViolationSymbolProvider =
+        with (codegenContext.constraintViolationSymbolProvider) {
+            if (publicConstrainedTypes) {
+                this
+            } else {
+                PubCrateConstraintViolationSymbolProvider(this)
+            }
+        }
+
     fun render() {
         val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
         val valueShape = model.expectShape(shape.value.target)
@@ -44,6 +53,9 @@ class MapConstraintViolationGenerator(
         modelsModuleWriter.withModule(
             constraintViolationSymbol.namespace.split(constraintViolationSymbol.namespaceDelimiter).last()
         ) {
+            // TODO We should really have two `ConstraintViolation` types here. One will just have variants for each
+            //  constraint trait on the map shape, for use by the user. The other one will have variants if the shape's
+            //  key or value is directly or transitively constrained, and is for use by the framework.
             rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]

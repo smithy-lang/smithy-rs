@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.MapConstrain
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGeneratorWithoutPublicConstrainedTypes
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
@@ -36,6 +37,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.Unconstraine
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.smithy.Constrained
+import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.DefaultPublicModules
 import software.amazon.smithy.rust.codegen.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
@@ -135,7 +137,7 @@ open class ServerCodegenVisitor(
                 symbolVisitorConfig,
                 publicConstrainedTypes = false,
             ),
-            model, service,
+            model, service, settings.codegenConfig.publicConstrainedTypes,
         )
         pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, service)
         constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, service)
@@ -148,6 +150,7 @@ open class ServerCodegenVisitor(
             settings,
             unconstrainedShapeSymbolProvider,
             constrainedShapeSymbolProvider,
+            constraintViolationSymbolProvider,
         )
 
         rustCrate = RustCrate(context.fileManifest, symbolProvider, DefaultPublicModules, settings.codegenConfig)
@@ -230,18 +233,35 @@ open class ServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) { writer ->
             StructureGenerator(model, symbolProvider, writer, shape).render(CodegenTarget.SERVER)
-            val builderGenerator = ServerBuilderGenerator(
+            val serverBuilderGenerator = ServerBuilderGenerator(
                 codegenContext,
                 shape,
                 if (shapesReachableFromOperationInputs.contains(shape)) pubCrateConstrainedShapeSymbolProvider else null
             )
-            builderGenerator.render(writer)
-            writer.implBlock(shape, symbolProvider) {
-                builderGenerator.renderConvenienceMethod(this)
+            serverBuilderGenerator.render(writer)
+            if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
+                writer.implBlock(shape, symbolProvider) {
+                    serverBuilderGenerator.renderConvenienceMethod(this)
+                }
             }
 
             if (shapesReachableFromOperationInputs.contains(shape)) {
-                ServerStructureConstrainedTraitImpl(symbolProvider, shape, writer).render()
+                ServerStructureConstrainedTraitImpl(
+                    symbolProvider,
+                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                    shape,
+                    writer,
+                ).render()
+            }
+
+            if (!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
+                val serverBuilderGeneratorWithoutPublicConstrainedTypes =
+                    ServerBuilderGeneratorWithoutPublicConstrainedTypes(codegenContext, shape)
+                serverBuilderGeneratorWithoutPublicConstrainedTypes.render(writer)
+
+                writer.implBlock(shape, symbolProvider) {
+                    serverBuilderGeneratorWithoutPublicConstrainedTypes.renderConvenienceMethod(this)
+                }
             }
         }
     }
@@ -259,11 +279,8 @@ open class ServerCodegenVisitor(
             rustCrate.withModule(unconstrainedModule) { unconstrainedModuleWriter ->
                 rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
                     UnconstrainedCollectionGenerator(
-                        model,
-                        symbolProvider,
-                        unconstrainedShapeSymbolProvider,
+                        codegenContext,
                         pubCrateConstrainedShapeSymbolProvider,
-                        constraintViolationSymbolProvider,
                         unconstrainedModuleWriter,
                         modelsModuleWriter,
                         shape
@@ -295,11 +312,9 @@ open class ServerCodegenVisitor(
             logger.info("[rust-server-codegen] Generating an unconstrained type for map $shape")
             rustCrate.withModule(unconstrainedModule) { unconstrainedModuleWriter ->
                 UnconstrainedMapGenerator(
-                    model,
-                    symbolProvider,
-                    unconstrainedShapeSymbolProvider,
+                    codegenContext,
                     pubCrateConstrainedShapeSymbolProvider,
-                    constraintViolationSymbolProvider,
+                    unconstrainedShapeSymbolProvider,
                     unconstrainedModuleWriter,
                     shape
                 ).render()
@@ -324,10 +339,7 @@ open class ServerCodegenVisitor(
         if (isDirectlyConstrained) {
             rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
                 ConstrainedMapGenerator(
-                    model,
-                    constrainedShapeSymbolProvider,
-                    constraintViolationSymbolProvider,
-                    settings.codegenConfig.publicConstrainedTypes,
+                    codegenContext,
                     modelsModuleWriter,
                     shape,
                     if (renderUnconstrainedMap) unconstrainedShapeSymbolProvider.toSymbol(shape) else null
@@ -338,9 +350,7 @@ open class ServerCodegenVisitor(
         if (isDirectlyConstrained || renderUnconstrainedMap) {
             rustCrate.withModule(ModelsModule) { modelsModuleWriter ->
                 MapConstraintViolationGenerator(
-                    model,
-                    symbolProvider,
-                    constraintViolationSymbolProvider,
+                    codegenContext,
                     modelsModuleWriter,
                     shape
                 ).render()
@@ -387,10 +397,7 @@ open class ServerCodegenVisitor(
             logger.info("[rust-server-codegen] Generating a constrained string $shape")
             rustCrate.withModule(ModelsModule) { writer ->
                 ConstrainedStringGenerator(
-                    model,
-                    symbolProvider,
-                    constraintViolationSymbolProvider,
-                    settings.codegenConfig.publicConstrainedTypes,
+                    codegenContext,
                     writer,
                     shape
                 ).render()

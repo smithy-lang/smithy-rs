@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy
+package software.amazon.smithy.rust.codegen.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
@@ -16,14 +16,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
-import software.amazon.smithy.rust.codegen.smithy.Models
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.Unconstrained
-import software.amazon.smithy.rust.codegen.smithy.WrappingSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.smithy.contextName
 import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.smithy.rustType
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
@@ -101,7 +94,7 @@ class ConstraintViolationSymbolProvider(
                     .rustType(rustType)
                     .name(rustType.name)
                     .namespace(rustType.namespace, "::")
-                    .definitionFile(Unconstrained.filename)
+                    .definitionFile(builderSymbol.definitionFile)
                     .build()
             }
             is StringShape -> {

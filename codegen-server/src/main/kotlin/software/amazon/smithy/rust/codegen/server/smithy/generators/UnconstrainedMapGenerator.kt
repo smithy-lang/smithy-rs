@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.rustlang.RustMetadata
@@ -14,9 +13,9 @@ import software.amazon.smithy.rust.codegen.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.UnconstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.isDirectlyConstrained
@@ -24,24 +23,34 @@ import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 
 // TODO Docs
 class UnconstrainedMapGenerator(
-    val model: Model,
-    val symbolProvider: RustSymbolProvider,
-    private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
+    val codegenContext: ServerCodegenContext,
     private val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
-    constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+    private val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
     private val unconstrainedModuleWriter: RustWriter,
     val shape: MapShape
 ) {
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
     private val symbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
     private val name = symbol.name
+    private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+    private val constraintViolationSymbolProvider =
+        with (codegenContext.constraintViolationSymbolProvider) {
+            if (publicConstrainedTypes) {
+                this
+            } else {
+                PubCrateConstraintViolationSymbolProvider(this)
+            }
+        }
     private val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
-    private val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
-    private val valueShape = model.expectShape(shape.value.target)
+    private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val constrainedSymbol = if (shape.isDirectlyConstrained(symbolProvider)) {
-        symbolProvider.toSymbol(shape)
+        constrainedShapeSymbolProvider.toSymbol(shape)
     } else {
         pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
     }
+    private val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
+    private val valueShape = model.expectShape(shape.value.target)
 
     fun render() {
         check(shape.canReachConstrainedShape(model, symbolProvider))
@@ -78,6 +87,7 @@ class UnconstrainedMapGenerator(
 
             rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
                 if (isKeyConstrained(keyShape, symbolProvider) || isValueConstrained(valueShape, model, symbolProvider)) {
+                    // TODO I think this breaks if the value shape is a constrained enum (?) Add protocol test.
                     val resolveToNonPublicConstrainedValueType =
                         isValueConstrained(valueShape, model, symbolProvider) &&
                                 !valueShape.isDirectlyConstrained(symbolProvider) &&
@@ -85,7 +95,7 @@ class UnconstrainedMapGenerator(
                     val constrainedValueSymbol = if (resolveToNonPublicConstrainedValueType) {
                         pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
                     } else {
-                        symbolProvider.toSymbol(valueShape)
+                        constrainedShapeSymbolProvider.toSymbol(valueShape)
                     }
 
                     rustTemplate(

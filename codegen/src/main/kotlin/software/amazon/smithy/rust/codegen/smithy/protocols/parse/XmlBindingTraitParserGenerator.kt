@@ -66,7 +66,7 @@ data class OperationWrapperContext(
 )
 
 class XmlBindingTraitParserGenerator(
-    coreCodegenContext: CoreCodegenContext,
+    private val coreCodegenContext: CoreCodegenContext,
     private val xmlErrors: RuntimeType,
     private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
@@ -184,7 +184,7 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(it)
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                outputShape.builderSymbol(symbolProvider),
+                builderSymbol(outputShape),
                 xmlError,
             ) {
                 rustTemplate(
@@ -216,7 +216,7 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(it)
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                errorShape.builderSymbol(symbolProvider),
+                builderSymbol(errorShape),
                 xmlError,
             ) {
                 val members = errorShape.errorXmlMembers()
@@ -250,7 +250,7 @@ class XmlBindingTraitParserGenerator(
             Attribute.AllowUnusedMut.render(it)
             it.rustBlock(
                 "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
-                inputShape.builderSymbol(symbolProvider),
+                builderSymbol(inputShape),
                 xmlError,
             ) {
                 rustTemplate(
@@ -728,4 +728,6 @@ class XmlBindingTraitParserGenerator(
     private fun StructureShape.xmlMembers(): XmlMemberIndex {
         return XmlMemberIndex.fromMembers(this.members().toList())
     }
+
+    private fun builderSymbol(shape: StructureShape) = shape.builderSymbol(coreCodegenContext, symbolProvider)
 }

@@ -13,6 +13,8 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.server.smithy.RustCodegenServerPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
+import software.amazon.smithy.rust.codegen.smithy.ConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.PubCrateConstrainedShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.ServerCodegenConfig
@@ -82,8 +84,10 @@ fun serverTestCodegenContext(
             ?: model.serviceShapes.firstOrNull()
             ?: ServiceShape.builder().version("test").id("test#Service").build()
     val symbolProvider = serverTestSymbolProvider(model, serviceShape)
-    val unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(symbolProvider, model, service)
+    val unconstrainedShapeSymbolProvider =
+        UnconstrainedShapeSymbolProvider(symbolProvider, model, service, settings.codegenConfig.publicConstrainedTypes)
     val constrainedShapeSymbolProvider = serverTestSymbolProvider(model, publicConstrainedTypesEnabled = true)
+    val constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(symbolProvider, model, service)
     val protocol = protocolShapeId ?: ShapeId.from("test#Protocol")
     return ServerCodegenContext(
         model,
@@ -93,6 +97,7 @@ fun serverTestCodegenContext(
         settings,
         unconstrainedShapeSymbolProvider,
         constrainedShapeSymbolProvider,
+        constraintViolationSymbolProvider
     )
 }
 
@@ -101,7 +106,14 @@ fun serverTestCodegenContext(
  */
 fun StructureShape.serverRenderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter) {
     StructureGenerator(model, symbolProvider, writer, this).render(CodegenTarget.SERVER)
-    val modelBuilder = ServerBuilderGenerator(serverTestCodegenContext(model), this)
+    val serverCodegenContext = serverTestCodegenContext(model)
+    val pubCrateConstrainedShapeSymbolProvider =
+        PubCrateConstrainedShapeSymbolProvider(symbolProvider, model, serverCodegenContext.serviceShape)
+    val modelBuilder = ServerBuilderGenerator(
+        serverCodegenContext,
+        this,
+        pubCrateConstrainedShapeSymbolProvider,
+    )
     modelBuilder.render(writer)
     writer.implBlock(this, symbolProvider) {
         modelBuilder.renderConvenienceMethod(this)

@@ -24,8 +24,10 @@ import software.amazon.smithy.rust.codegen.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.smithy.CoreCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.smithy.expectRustMetadata
@@ -33,7 +35,6 @@ import software.amazon.smithy.rust.codegen.smithy.generators.error.ErrorGenerato
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.smithy.rustType
-import software.amazon.smithy.rust.codegen.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.util.dq
 import software.amazon.smithy.rust.codegen.util.getTrait
@@ -58,17 +59,30 @@ fun redactIfNecessary(member: MemberShape, model: Model, safeToPrint: String): S
  * The name of the builder's setter the deserializer should use.
  * Setter names will never hit a reserved word and therefore never need escaping.
  */
-fun MemberShape.deserializerBuilderSetterName(model: Model, symbolProvider: SymbolProvider, codegenTarget: CodegenTarget): String {
-    if (codegenTarget == CodegenTarget.CLIENT) {
-        return this.setterName()
+fun MemberShape.deserializerBuilderSetterName(codegenTarget: CodegenTarget) =
+    when (codegenTarget) {
+        CodegenTarget.CLIENT -> this.setterName()
+        CodegenTarget.SERVER -> "set_${this.memberName.toSnakeCase()}"
     }
 
-    return if (this.targetCanReachConstrainedShape(model, symbolProvider)) {
-        "set_${this.memberName.toSnakeCase()}"
-    } else {
-        this.memberName.toSnakeCase()
+// TODO Cleanup (old implementation of above extension function).
+//    return if (this.targetCanReachConstrainedShape(model, symbolProvider)) {
+//        "set_${this.memberName.toSnakeCase()}"
+//    } else {
+//        this.memberName.toSnakeCase()
+//    }
+
+fun StructureShape.builderSymbol(
+    coreCodegenContext: CoreCodegenContext,
+    symbolProvider: RustSymbolProvider,
+) =
+    when (coreCodegenContext.target) {
+        CodegenTarget.CLIENT -> this.builderSymbol(symbolProvider)
+        CodegenTarget.SERVER -> {
+            val publicConstrainedTypes = (coreCodegenContext as ServerCodegenContext).settings.codegenConfig.publicConstrainedTypes
+            this.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes)
+        }
     }
-}
 
 open class StructureGenerator(
     val model: Model,
@@ -121,6 +135,21 @@ open class StructureGenerator(
                     .map { symbolProvider.toSymbol(it) }
                     .any { !it.isOptional() }
             }
+
+        /**
+         * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGeneratorWithoutPublicConstrainedTypes],
+         * requires a fallible builder to be constructed.
+         *
+         * This builder only enforces the `required` trait.
+         */
+        fun serverHasFallibleBuilderWithoutPublicConstrainedTypes(
+            structureShape: StructureShape,
+            symbolProvider: SymbolProvider,
+        ) =
+            structureShape
+                .members()
+                .map { symbolProvider.toSymbol(it) }
+                .any { !it.isOptional() }
     }
 
     /**

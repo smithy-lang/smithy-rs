@@ -10,10 +10,11 @@ import software.amazon.smithy.rust.codegen.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.serverBuilderSymbol
 
 class ServerStructureConstrainedTraitImpl(
     private val symbolProvider: RustSymbolProvider,
+    private val publicConstrainedTypes: Boolean,
     private val shape: StructureShape,
     private val writer: RustWriter
 ) {
@@ -26,7 +27,7 @@ class ServerStructureConstrainedTraitImpl(
             """,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "Structure" to symbolProvider.toSymbol(shape),
-            "Builder" to shape.builderSymbol(symbolProvider)
+            "Builder" to shape.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes)
         )
     }
 }

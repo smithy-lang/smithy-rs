@@ -10,20 +10,20 @@ use aws.protocols#restJson1
 service ConstraintsService {
     operations: [
         ConstrainedShapesOperation,
-        ConstrainedHttpBoundShapesOperation,
-        ConstrainedRecursiveShapesOperation,
-        // `httpQueryParams` and `httpPrefixHeaders` are structurually
-        // exclusive, so we need one operation per target shape type
-        // combination.
-        QueryParamsTargetingLengthMapOperation,
-        QueryParamsTargetingMapOfLengthStringOperation,
-        QueryParamsTargetingMapOfEnumStringOperation,
-        QueryParamsTargetingMapOfListOfLengthStringOperation,
-        QueryParamsTargetingMapOfSetOfLengthStringOperation,
-        QueryParamsTargetingMapOfListOfEnumStringOperation,
-        HttpPrefixHeadersTargetingLengthMapOperation,
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
-        // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
+//      ConstrainedHttpBoundShapesOperation,
+//      ConstrainedRecursiveShapesOperation,
+//      // `httpQueryParams` and `httpPrefixHeaders` are structurually
+//      // exclusive, so we need one operation per target shape type
+//      // combination.
+//      QueryParamsTargetingLengthMapOperation,
+//      QueryParamsTargetingMapOfLengthStringOperation,
+//      QueryParamsTargetingMapOfEnumStringOperation,
+//      QueryParamsTargetingMapOfListOfLengthStringOperation,
+//      QueryParamsTargetingMapOfSetOfLengthStringOperation,
+//      QueryParamsTargetingMapOfListOfEnumStringOperation,
+//      HttpPrefixHeadersTargetingLengthMapOperation,
+//      // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+//      // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
     ],
 }
 
@@ -206,14 +206,14 @@ structure ConA {
 
     conBMap: ConBMap,
 
-    mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
+//  mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
 
-    constrainedUnion: ConstrainedUnion,
-    enumString: EnumString,
+//  constrainedUnion: ConstrainedUnion,
+//  enumString: EnumString,
 
-    listOfLengthString: ListOfLengthString,
+//  listOfLengthString: ListOfLengthString,
 
-    setOfLengthString: SetOfLengthString,
+//  setOfLengthString: SetOfLengthString,
 }
 
 map MapOfLengthString {

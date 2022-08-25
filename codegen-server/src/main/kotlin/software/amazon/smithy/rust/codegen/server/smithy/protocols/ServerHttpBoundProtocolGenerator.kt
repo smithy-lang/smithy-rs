@@ -49,13 +49,13 @@ import software.amazon.smithy.rust.codegen.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.smithy.generators.CodegenTarget
 import software.amazon.smithy.rust.codegen.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.deserializerBuilderSetterName
 import software.amazon.smithy.rust.codegen.smithy.generators.error.errorSymbol
 import software.amazon.smithy.rust.codegen.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolGenerator
 import software.amazon.smithy.rust.codegen.smithy.generators.protocol.ProtocolTraitImplGenerator
+import software.amazon.smithy.rust.codegen.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.smithy.isOptional
 import software.amazon.smithy.rust.codegen.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.smithy.protocols.HttpBindingDescriptor
@@ -675,7 +675,13 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
         )
         val structuredDataParser = protocol.structuredDataParser(operationShape)
         Attribute.AllowUnusedMut.render(this)
-        rust("let mut input = #T::default();", inputShape.builderSymbol(symbolProvider))
+        rust(
+            "let mut input = #T::default();",
+            inputShape.serverBuilderSymbol(
+                symbolProvider,
+                !codegenContext.settings.codegenConfig.publicConstrainedTypes,
+            ),
+        )
         val parser = structuredDataParser.serverInputParser(operationShape)
         if (parser != null) {
             val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)
@@ -703,7 +709,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rust(
                     """
                     {
-                        input = input.${member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.target)}(${
+                        input = input.${member.deserializerBuilderSetterName(codegenContext.target)}(${
                     if (symbolProvider.toSymbol(binding.member).isOptional()) {
                         "Some(value)"
                     } else {
@@ -855,13 +861,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                         val deserializer = generateParseStrFn(binding, true)
                         rustTemplate(
                             """
-                            input = input.${
-                            binding.member.deserializerBuilderSetterName(
-                                model,
-                                symbolProvider,
-                                codegenContext.target
-                            )
-                            }(
+                            input = input.${binding.member.deserializerBuilderSetterName(codegenContext.target)}(
                                 #{deserializer}(m$index)?
                             );
                             """,
@@ -954,7 +954,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                     rustTemplate(
                         """
                         if !seen_$memberName && k == "${it.locationName}" {
-                            input = input.${it.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.target)}(
+                            input = input.${it.member.deserializerBuilderSetterName(codegenContext.target)}(
                                 #{deserializer}(&v)?
                             );
                             seen_$memberName = true;
@@ -1044,7 +1044,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
             }
             if (queryParamsBinding != null) {
                 val isOptional = unconstrainedShapeSymbolProvider.toSymbol(queryParamsBinding.member).isOptional()
-                withBlock("input = input.${queryParamsBinding.member.deserializerBuilderSetterName(model, symbolProvider, codegenContext.target)}(", ");") {
+                withBlock("input = input.${queryParamsBinding.member.deserializerBuilderSetterName(codegenContext.target)}(", ");") {
                     conditionalBlock("Some(", ")", conditional = isOptional) {
                         write("query_params")
                     }
@@ -1060,11 +1060,7 @@ private class ServerHttpBoundProtocolTraitImplGenerator(
                 rustBlock("if !$memberName.is_empty()") {
                     withBlock(
                         "input = input.${
-                            binding.member.deserializerBuilderSetterName(
-                                model,
-                                unconstrainedShapeSymbolProvider,
-                                codegenContext.target
-                            )
+                            binding.member.deserializerBuilderSetterName(codegenContext.target)
                         }(", ");"
                     ) {
                         conditionalBlock("Some(", ")", conditional = isOptional) {

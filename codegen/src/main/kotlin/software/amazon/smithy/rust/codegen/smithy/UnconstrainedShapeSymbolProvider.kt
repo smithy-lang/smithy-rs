@@ -18,7 +18,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.rustlang.RustType
-import software.amazon.smithy.rust.codegen.smithy.generators.builderSymbol
+import software.amazon.smithy.rust.codegen.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.util.toPascalCase
 import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
@@ -71,6 +71,7 @@ class UnconstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
     private val model: Model,
     private val serviceShape: ServiceShape,
+    private val publicConstrainedTypes: Boolean,
 ) : WrappingSymbolProvider(base) {
     private val nullableIndex = NullableIndex.of(model)
 
@@ -106,7 +107,7 @@ class UnconstrainedShapeSymbolProvider(
             }
             is StructureShape -> {
                 if (shape.canReachConstrainedShape(model, base)) {
-                    shape.builderSymbol(base)
+                    shape.serverBuilderSymbol(base, !publicConstrainedTypes)
                 } else {
                     base.toSymbol(shape)
                 }

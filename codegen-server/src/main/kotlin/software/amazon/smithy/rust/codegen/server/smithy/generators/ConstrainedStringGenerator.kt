@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.rustlang.Attribute
@@ -17,12 +16,11 @@ import software.amazon.smithy.rust.codegen.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.rustlang.render
 import software.amazon.smithy.rust.codegen.rustlang.rust
 import software.amazon.smithy.rust.codegen.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.server.smithy.ConstraintViolationSymbolProvider
+import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.util.expectTrait
-import software.amazon.smithy.rust.codegen.util.toSnakeCase
 
 /**
  * [ConstrainedStringGenerator] generates a wrapper tuple newtype holding a constrained `String`.
@@ -30,17 +28,26 @@ import software.amazon.smithy.rust.codegen.util.toSnakeCase
  * the constraints.
  */
 class ConstrainedStringGenerator(
-    val model: Model,
-    private val constrainedSymbolProvider: RustSymbolProvider,
-    private val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
-    private val publicConstrainedTypes: Boolean,
+    val codegenContext: ServerCodegenContext,
     val writer: RustWriter,
     val shape: StringShape
 ) {
+    val model = codegenContext.model
+    val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
+    val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+    private val constraintViolationSymbolProvider =
+        with (codegenContext.constraintViolationSymbolProvider) {
+            if (publicConstrainedTypes) {
+                this
+            } else {
+                PubCrateConstraintViolationSymbolProvider(this)
+            }
+        }
+
     fun render() {
         val lengthTrait = shape.expectTrait<LengthTrait>()
 
-        val symbol = constrainedSymbolProvider.toSymbol(shape)
+        val symbol = constrainedShapeSymbolProvider.toSymbol(shape)
         val name = symbol.name
         val inner = RustType.String.render()
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
@@ -108,13 +115,6 @@ class ConstrainedStringGenerator(
                 }
             }
             
-            pub mod ${name.toSnakeCase()} {
-                ##[derive(Debug, PartialEq)]
-                pub enum ConstraintViolation {
-                    Length(usize),
-                }
-            }
-            
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
                 
@@ -127,12 +127,31 @@ class ConstrainedStringGenerator(
                     }
                 }
             }
+            
+            impl #{From}<$name> for $inner {
+                fn from(value: $name) -> Self {
+                    value.into_inner()
+                }
+            }
             """,
             "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
             "ConstraintViolation" to constraintViolation,
             "MaybeConstrained" to symbol.makeMaybeConstrained(),
             "Display" to RuntimeType.Display,
+            "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
         )
+
+        val constraintViolationModule = constraintViolation.namespace.split(constraintViolation.namespaceDelimiter).last()
+        writer.withModule(constraintViolationModule, RustMetadata(visibility = constrainedTypeVisibility)) {
+            rust(
+                """
+                ##[derive(Debug, PartialEq)]
+                pub enum ${constraintViolation.name} {
+                    Length(usize),
+                }
+                """
+            )
+        }
     }
 }
