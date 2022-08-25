@@ -123,12 +123,10 @@ where
         L::Service:
             Service<Request<NewReqBody>, Response = Response<NewResBody>, Error = Infallible> + Clone + Send + 'static,
         <L::Service as Service<Request<NewReqBody>>>::Future: Send + 'static,
-        NewReqBody: Send + 'static,
         NewResBody: HttpBody<Data = bytes::Bytes> + Send + 'static,
         NewResBody::Error: Into<BoxError>,
     {
         let layer = ServiceBuilder::new()
-            .layer_fn(Route::new)
             .layer(MapResponseBodyLayer::new(boxed))
             .layer(layer);
         match self.routes {
