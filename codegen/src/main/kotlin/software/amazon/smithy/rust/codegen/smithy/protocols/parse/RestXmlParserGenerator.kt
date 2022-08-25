@@ -49,7 +49,9 @@ class RestXmlParserGenerator(
                         """
                         // Zelda B
                         return Err(
-                            #{XmlError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el))
+                            #{XmlError}::custom(format!("encountered invalid XML root: \
+                                expected $shapeName but got {:?}. \
+                                This is likely a bug in the SDK.", start_el))
                         )""",
                         "XmlError" to context.xmlErrorType,
                     )
