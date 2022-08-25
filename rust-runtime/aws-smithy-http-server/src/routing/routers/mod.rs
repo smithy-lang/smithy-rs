@@ -17,21 +17,18 @@ use http::Response;
 use tower::{util::Oneshot, Service, ServiceExt};
 use tracing::debug;
 
-use crate::{
-    body::{empty, BoxBody},
-    response::IntoResponse,
-};
+use crate::{body::BoxBody, response::IntoResponse};
 
 pub mod aws_json;
 pub mod rest;
 
 const UNKNOWN_OPERATION_EXCEPTION: &str = "UnknownOperationException";
 
+/// Constructs common response to method disallowed.
 fn method_disallowed() -> http::Response<BoxBody> {
-    http::Response::builder()
-        .status(http::StatusCode::METHOD_NOT_ALLOWED)
-        .body(empty())
-        .expect("invalid HTTP response")
+    let mut responses = http::Response::default();
+    *responses.status_mut() = http::StatusCode::METHOD_NOT_ALLOWED;
+    responses
 }
 
 /// An interface for retrieving an inner [`Service`] given a [`http::Request`].

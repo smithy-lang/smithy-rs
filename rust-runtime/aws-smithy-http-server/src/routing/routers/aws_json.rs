@@ -10,7 +10,7 @@ use thiserror::Error;
 use tower::{Layer, Service};
 
 use crate::{
-    body::BoxBody,
+    body::{empty, BoxBody},
     extension::RuntimeErrorExtension,
     protocols::{AwsJson10, AwsJson11},
     response::IntoResponse,
@@ -49,8 +49,8 @@ impl IntoResponse<AwsJson10> for Error {
                 .extension(RuntimeErrorExtension::new(
                     super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
-                .body(crate::body::to_boxed(""))
-                .expect("invalid HTTP response"),
+                .body(empty())
+                .expect("invalid HTTP response for AWS JSON routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
         }
     }
 }
@@ -65,8 +65,8 @@ impl IntoResponse<AwsJson11> for Error {
                 .extension(RuntimeErrorExtension::new(
                     super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
-                .body(crate::body::to_boxed(""))
-                .expect("invalid HTTP response"),
+                .body(empty())
+                .expect("invalid HTTP response for AWS JSON routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
         }
     }
 }

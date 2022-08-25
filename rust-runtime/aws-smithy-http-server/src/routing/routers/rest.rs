@@ -9,7 +9,7 @@ use thiserror::Error;
 use tower::{Layer, Service};
 
 use crate::{
-    body::BoxBody,
+    body::{empty, BoxBody},
     extension::RuntimeErrorExtension,
     protocols::{AwsRestJson1, AwsRestXml},
     response::IntoResponse,
@@ -43,7 +43,7 @@ impl IntoResponse<AwsRestJson1> for Error {
                     super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
                 .body(crate::body::to_boxed("{}"))
-                .expect("invalid HTTP response"),
+                .expect("invalid HTTP response for REST JSON routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
             Error::MethodNotAllowed => super::method_disallowed(),
         }
     }
@@ -58,8 +58,8 @@ impl IntoResponse<AwsRestXml> for Error {
                 .extension(RuntimeErrorExtension::new(
                     super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
-                .body(crate::body::to_boxed(""))
-                .expect("invalid HTTP response"),
+                .body(empty())
+                .expect("invalid HTTP response for REST JSON routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
             Error::MethodNotAllowed => super::method_disallowed(),
         }
     }
