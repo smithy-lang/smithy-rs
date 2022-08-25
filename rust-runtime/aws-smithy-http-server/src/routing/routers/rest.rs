@@ -71,7 +71,7 @@ impl IntoResponse<AwsRestXml> for Error {
 /// [AWS REST XML]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restxml-protocol.html
 #[derive(Debug, Clone)]
 pub struct RestRouter<S> {
-    routes: Vec<(S, RequestSpec)>,
+    routes: Vec<(RequestSpec, S)>,
 }
 
 impl<S> RestRouter<S> {
@@ -84,7 +84,7 @@ impl<S> RestRouter<S> {
             routes: self
                 .routes
                 .into_iter()
-                .map(|(route, request_spec)| (layer.layer(route), request_spec))
+                .map(|(request_spec, route)| (request_spec, layer.layer(route)))
                 .collect(),
         }
     }
@@ -97,7 +97,7 @@ impl<S> RestRouter<S> {
         S::Future: Send + 'static,
     {
         RestRouter {
-            routes: self.routes.into_iter().map(|(s, spec)| (Route::new(s), spec)).collect(),
+            routes: self.routes.into_iter().map(|(spec, s)| (spec, Route::new(s))).collect(),
         }
     }
 }
@@ -112,7 +112,7 @@ where
     fn match_route(&self, request: &http::Request<B>) -> Result<S, Self::Error> {
         let mut method_allowed = true;
 
-        for (route, request_spec) in &self.routes {
+        for (request_spec, route) in &self.routes {
             match request_spec.matches(request) {
                 // Match found.
                 Match::Yes => return Ok(route.clone()),
@@ -131,18 +131,18 @@ where
     }
 }
 
-impl<S> FromIterator<(S, RequestSpec)> for RestRouter<S> {
+impl<S> FromIterator<(RequestSpec, S)> for RestRouter<S> {
     #[inline]
-    fn from_iter<T: IntoIterator<Item = (S, RequestSpec)>>(iter: T) -> Self {
-        let mut routes: Vec<(S, RequestSpec)> = iter
+    fn from_iter<T: IntoIterator<Item = (RequestSpec, S)>>(iter: T) -> Self {
+        let mut routes: Vec<(RequestSpec, S)> = iter
             .into_iter()
-            .map(|(svc, request_spec)| (svc, request_spec))
+            .map(|(request_spec, svc)| (request_spec, svc))
             .collect();
 
         // Sort them once by specificity, with the more specific routes sorted before the less
         // specific ones, so that when routing a request we can simply iterate through the routes
         // and pick the first one that matches.
-        routes.sort_by_key(|(_route, request_spec)| std::cmp::Reverse(request_spec.rank()));
+        routes.sort_by_key(|(request_spec, _route)| std::cmp::Reverse(request_spec.rank()));
 
         Self { routes }
     }

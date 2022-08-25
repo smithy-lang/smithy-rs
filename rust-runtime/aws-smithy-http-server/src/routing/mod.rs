@@ -161,7 +161,7 @@ where
         let svc = RoutingService::new(
             routes
                 .into_iter()
-                .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
+                .map(|(svc, request_spec)| (request_spec, Route::from_box_clone_service(svc)))
                 .collect(),
         );
         Self {
@@ -185,7 +185,7 @@ where
         let svc = RoutingService::new(
             routes
                 .into_iter()
-                .map(|(svc, request_spec)| (Route::from_box_clone_service(svc), request_spec))
+                .map(|(svc, request_spec)| (request_spec, Route::from_box_clone_service(svc)))
                 .collect(),
         );
         Self {
