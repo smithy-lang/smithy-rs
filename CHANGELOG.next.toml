@@ -214,3 +214,15 @@ fn f1(n: aws_smithy_types::Number) {
 references = ["smithy-rs#1274"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "david-perez"
+
+[[aws-sdk-rust]]
+message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy."
+references = ["smithy-rs#1699"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Bump [MSRV](https://github.com/awslabs/aws-sdk-rust#supported-rust-versions-msrv) from 1.58.1 to 1.61.0 per our policy."
+references = ["smithy-rs#1699"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "Velfi"
