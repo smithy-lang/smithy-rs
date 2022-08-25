@@ -7,16 +7,16 @@
 use crate::rejection::MissingContentTypeReason;
 use crate::request::RequestParts;
 
-/// Rest JSON 1.0 Protocol.
-pub struct RestJson1;
+/// [AWS REST JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html).
+pub struct AwsRestJson1;
 
-/// Rest XML Protocol.
-pub struct RestXml1;
+/// [AWS REST XML Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restxml-protocol.html).
+pub struct AwsRestXml;
 
-/// AWS JSON 1.0 Protocol.
+/// [AWS JSON 1.0 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html).
 pub struct AwsJson10;
 
-/// AWS JSON 1.1 Protocol.
+/// [AWS JSON 1.1 Protocol](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_1-protocol.html).
 pub struct AwsJson11;
 
 /// Supported protocols.

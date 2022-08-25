@@ -11,7 +11,7 @@ use self::request_spec::RequestSpec;
 use self::routers::{aws_json::AwsJsonRouter, rest::RestRouter, RoutingService};
 use crate::body::{boxed, Body, BoxBody, HttpBody};
 use crate::error::BoxError;
-use crate::protocols::{AwsJson10, AwsJson11, RestJson1, RestXml1};
+use crate::protocols::{AwsJson10, AwsJson11, AwsRestJson1, AwsRestXml};
 
 use http::{Request, Response};
 use std::{
@@ -70,8 +70,8 @@ pub struct Router<B = Body> {
 /// directly found in the `X-Amz-Target` HTTP header.
 #[derive(Debug)]
 enum Routes<B = Body> {
-    RestXml(RoutingService<RestRouter<Route<B>>, RestXml1>),
-    RestJson1(RoutingService<RestRouter<Route<B>>, RestJson1>),
+    RestXml(RoutingService<RestRouter<Route<B>>, AwsRestXml>),
+    RestJson1(RoutingService<RestRouter<Route<B>>, AwsRestJson1>),
     AwsJson10(RoutingService<AwsJsonRouter<Route<B>>, AwsJson10>),
     AwsJson11(RoutingService<AwsJsonRouter<Route<B>>, AwsJson11>),
 }

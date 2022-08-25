@@ -10,7 +10,7 @@ use tower::{Layer, Service};
 use crate::{
     body::BoxBody,
     extension::RuntimeErrorExtension,
-    protocols::{RestJson1, RestXml1},
+    protocols::{AwsRestJson1, AwsRestXml},
     response::IntoResponse,
     routing::{
         request_spec::{Match, RequestSpec},
@@ -20,12 +20,15 @@ use crate::{
 
 use super::Router;
 
+/// An AWS REST routing error.
 pub enum Error {
+    /// Operation not found.
     NotFound,
+    /// Method was not allowed.
     MethodDisallowed,
 }
 
-impl IntoResponse<RestJson1> for Error {
+impl IntoResponse<AwsRestJson1> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
             Error::NotFound => http::Response::builder()
@@ -42,7 +45,7 @@ impl IntoResponse<RestJson1> for Error {
     }
 }
 
-impl IntoResponse<RestXml1> for Error {
+impl IntoResponse<AwsRestXml> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
             Error::NotFound => http::Response::builder()
@@ -58,12 +61,17 @@ impl IntoResponse<RestXml1> for Error {
     }
 }
 
+/// A [`Router`] supporting [`AWS REST JSON 1.0`] and [`AWS REST XML`] protocols.
+///
+/// [AWS REST JSON 1.0]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html
+/// [AWS REST XML]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restxml-protocol.html
 #[derive(Debug, Clone)]
 pub struct RestRouter<S> {
     routes: Vec<(S, RequestSpec)>,
 }
 
 impl<S> RestRouter<S> {
+    /// Applies a [`Layer`] uniformly to all routes.
     pub fn layer<L>(self, layer: L) -> RestRouter<L::Service>
     where
         L: Layer<S>,
@@ -77,6 +85,7 @@ impl<S> RestRouter<S> {
         }
     }
 
+    /// Applies type erasure to the inner route using [`Route::new`].
     pub fn boxed<B>(self) -> RestRouter<Route<B>>
     where
         S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
@@ -101,7 +110,9 @@ where
 
         for (route, request_spec) in &self.routes {
             match request_spec.matches(request) {
+                // Match found.
                 Match::Yes => return Ok(route.clone()),
+                // Match found, but method disallowed.
                 Match::MethodNotAllowed => method_allowed = false,
                 // Continue looping to see if another route matches.
                 Match::No => continue,

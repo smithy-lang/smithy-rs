@@ -18,11 +18,17 @@ use crate::{
 
 use super::Router;
 
+/// An AWS JSON routing error.
 pub enum Error {
+    /// Relative URI was not "/".
     NotRootUrl,
+    /// Method was not `POST`.
     MethodDisallowed,
+    /// Missing the `x-amz-target` header.
     MissingHeader,
+    /// Unable to parse header into UTF-8.
     InvalidHeader(ToStrError),
+    /// Operation not found.
     NotFound,
 }
 
@@ -63,12 +69,17 @@ impl IntoResponse<AwsJson11> for Error {
 // https://github.com/awslabs/smithy-rs/pull/1429#issuecomment-1147516546
 const ROUTE_CUTOFF: usize = 15;
 
+/// A [`Router`] supporting [`AWS JSON 1.0`] and [`AWS JSON 1.1`] protocols.
+///
+/// [AWS JSON 1.0]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html
+/// [AWS JSON 1.1]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_1-protocol.html
 #[derive(Debug, Clone)]
 pub struct AwsJsonRouter<S> {
     routes: TinyMap<String, S, ROUTE_CUTOFF>,
 }
 
 impl<S> AwsJsonRouter<S> {
+    /// Applies a [`Layer`] uniformly to all routes.
     pub fn layer<L>(self, layer: L) -> AwsJsonRouter<L::Service>
     where
         L: Layer<S>,
@@ -82,6 +93,7 @@ impl<S> AwsJsonRouter<S> {
         }
     }
 
+    /// Applies type erasure to the inner route using [`Route::new`].
     pub fn boxed<B>(self) -> AwsJsonRouter<Route<B>>
     where
         S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
@@ -102,10 +114,12 @@ where
     type Error = Error;
 
     fn match_route(&self, request: &http::Request<B>) -> Result<S, Self::Error> {
+        // The URI must be root,
         if request.uri() != "/" {
             return Err(Error::NotRootUrl);
         }
 
+        // Only `Method::POST` is allowed.
         if request.method() != http::Method::POST {
             return Err(Error::MethodDisallowed);
         }

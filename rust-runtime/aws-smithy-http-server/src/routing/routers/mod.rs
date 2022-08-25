@@ -4,7 +4,7 @@
  */
 
 use std::{
-    fmt::Debug,
+    fmt,
     future::{ready, Future, Ready},
     marker::PhantomData,
     pin::Pin,
@@ -15,14 +15,13 @@ use futures_util::future::Either;
 use http::Response;
 use tower::{util::Oneshot, Service, ServiceExt};
 
-pub mod aws_json;
-// pub mod merged;
-pub mod rest;
-
 use crate::{
     body::{empty, BoxBody},
     response::IntoResponse,
 };
+
+pub mod aws_json;
+pub mod rest;
 
 const UNKNOWN_OPERATION_EXCEPTION: &str = "UnknownOperationException";
 
@@ -33,23 +32,28 @@ fn method_disallowed() -> http::Response<BoxBody> {
         .expect("valid HTTP response")
 }
 
+/// An interface for retrieving an inner [`Service`] given a [`http::Request`].
 pub trait Router<B> {
     type Service;
     type Error;
 
+    /// Matches a [`http::Request`] to a target [`Service`].
     fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error>;
 }
 
-pub struct RoutingService<R, P> {
+/// A [`Service`] using the a [`Router`] `R` to redirect messages to specific routes.
+///
+/// The `Protocol` parameter is used to determine
+pub struct RoutingService<R, Protocol> {
     router: R,
-    _protocol: PhantomData<P>,
+    _protocol: PhantomData<Protocol>,
 }
 
-impl<R, P> Debug for RoutingService<R, P>
+impl<R, P> fmt::Debug for RoutingService<R, P>
 where
-    R: Debug,
+    R: fmt::Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RoutingService")
             .field("router", &self.router)
             .field("_protocol", &self._protocol)
@@ -70,6 +74,7 @@ where
 }
 
 impl<R, P> RoutingService<R, P> {
+    /// Creates a [`RoutingService`] from a [`Router`].
     pub fn new(router: R) -> Self {
         Self {
             router,
@@ -77,7 +82,11 @@ impl<R, P> RoutingService<R, P> {
         }
     }
 
-    pub fn map<RNew, F: FnOnce(R) -> RNew>(self, f: F) -> RoutingService<RNew, P> {
+    /// Maps a [`Router`] using a closure.
+    pub fn map<RNew, F>(self, f: F) -> RoutingService<RNew, P>
+    where
+        F: FnOnce(R) -> RNew,
+    {
         RoutingService {
             router: f(self.router),
             _protocol: PhantomData,
@@ -101,12 +110,14 @@ impl<S, B> RoutingFuture<S, B>
 where
     S: Service<http::Request<B>>,
 {
+    /// Creates a [`RoutingFuture`] from [`ServiceExt::oneshot`].
     pub(super) fn from_oneshot(future: Oneshot<S, http::Request<B>>) -> Self {
         Self {
             inner: Either::Left(future),
         }
     }
 
+    /// Creates a [`RoutingFuture`] from [`Service::Response`].
     pub(super) fn from_response(response: S::Response) -> Self {
         Self {
             inner: Either::Right(ready(Ok(response))),
@@ -140,9 +151,10 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
-        let result = self.router.match_route(&req);
-        match result {
+        match self.router.match_route(&req) {
+            // Successfully routed, use the routes `Service::call`.
             Ok(ok) => RoutingFuture::from_oneshot(ok.oneshot(req)),
+            // Failed to route, use the `R::Error`s `IntoResponse<P>`.
             Err(err) => RoutingFuture::from_response(err.into_response()),
         }
     }
