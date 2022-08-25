@@ -37,7 +37,7 @@ impl IntoResponse<AwsRestJson1> for Error {
         match self {
             Error::NotFound => http::Response::builder()
                 .status(http::StatusCode::NOT_FOUND)
-                .header("Content-Type", "application/json")
+                .header(http::header::CONTENT_TYPE, "application/json")
                 .header("X-Amzn-Errortype", super::UNKNOWN_OPERATION_EXCEPTION)
                 .extension(RuntimeErrorExtension::new(
                     super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
@@ -54,7 +54,7 @@ impl IntoResponse<AwsRestXml> for Error {
         match self {
             Error::NotFound => http::Response::builder()
                 .status(http::StatusCode::NOT_FOUND)
-                .header("Content-Type", "application/xml")
+                .header(http::header::CONTENT_TYPE, "application/xml")
                 .extension(RuntimeErrorExtension::new(
                     super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))

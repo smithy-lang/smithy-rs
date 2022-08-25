@@ -45,7 +45,7 @@ impl IntoResponse<AwsJson10> for Error {
             Error::MethodNotAllowed => super::method_disallowed(),
             _ => http::Response::builder()
                 .status(http::StatusCode::NOT_FOUND)
-                .header("Content-Type", "application/x-amz-json-1.0")
+                .header(http::header::CONTENT_TYPE, "application/x-amz-json-1.0")
                 .extension(RuntimeErrorExtension::new(
                     super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
@@ -61,7 +61,7 @@ impl IntoResponse<AwsJson11> for Error {
             Error::MethodNotAllowed => super::method_disallowed(),
             _ => http::Response::builder()
                 .status(http::StatusCode::NOT_FOUND)
-                .header("Content-Type", "application/x-amz-json-1.1")
+                .header(http::header::CONTENT_TYPE, "application/x-amz-json-1.1")
                 .extension(RuntimeErrorExtension::new(
                     super::UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
