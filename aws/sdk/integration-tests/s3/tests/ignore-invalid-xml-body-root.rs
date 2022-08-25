@@ -14,10 +14,6 @@ use std::time::{Duration, UNIX_EPOCH};
 
 pub type Client<C> = CoreClient<C, DefaultMiddleware>;
 
-// ---- ignore_invalid_xml_body_root stdout ----
-// thread 'ignore_invalid_xml_body_root' panicked at 'called `Result::unwrap()` on an `Err` value: ServiceError { err: GetObjectAttributesError { kind: Unhandled(Custom("invalid root, expected GetObjectAttributesOutput got StartEl { name: Name { prefix: \"\", local: \"GetObjectAttributesResponse\" }, attributes: [Attr { name: Name { prefix: \"\", local: \"xmlns\" }, value: \"http://s3.amazonaws.com/doc/2006-03-01/\" }], closed: false, depth: 0 }")), meta: Error { code: None, message: None, request_id: None, extras: {} } }, raw: Response { inner: Response { status: 200, version: HTTP/1.1, headers: {"x-amz-id-2": "sOlLnhHVXvis03pbAizg5SuUEgGN9GpTqztFLDKcTjzMcGjLahc+xGmK81RfU+YIo28DjHS967c=", "x-amz-request-id": "KH5W7YV84JEXWAKT", "date": "Tue, 23 Aug 2022 18:16:28 GMT", "last-modified": "Tue, 21 Jun 2022 16:30:01 GMT", "server": "AmazonS3", "content-length": "224"}, body: SdkBody { inner: Once(Some(b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<GetObjectAttributesResponse xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Checksum><ChecksumSHA1>e1AsOh9IyGCa4hLN+2Od7jlnP14=</ChecksumSHA1></Checksum></GetObjectAttributesResponse>")), retryable: true } }, properties: SharedPropertyBag(Mutex { data: PropertyBag, poisoned: false, .. }) } }', s3/tests/ignore-invalid-xml-body-root.rs:39:10
-// note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-
 const RESPONSE_BODY_XML: &[u8] = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<GetObjectAttributesResponse xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Checksum><ChecksumSHA1>e1AsOh9IyGCa4hLN+2Od7jlnP14=</ChecksumSHA1></Checksum></GetObjectAttributesResponse>";
 
 #[tokio::test]

@@ -33,39 +33,22 @@ class RestXmlParserGenerator(
                 }
             }
 
-            val invalidRootCheck = if (allowInvalidRoot) {
-                writable {
-                    rustTemplate(
-                        """
-                        // Zelda A
-                        #{tracing}::trace!("legacy API returned invalid root, expected $shapeName but got {:?}", start_el)
-                        """,
-                        "tracing" to CargoDependency.Tracing.asType(),
-                    )
-                }
-            } else {
-                writable {
-                    rustTemplate(
-                        """
-                        // Zelda B
+            // If we DON'T allow the XML root to be invalid, insert code to check for and report a mismatch
+            if (!allowInvalidRoot) {
+                rustTemplate(
+                    """
+                    if !(${XmlBindingTraitParserGenerator.XmlName(shapeName).matchExpression("start_el")}) {
                         return Err(
                             #{XmlError}::custom(format!("encountered invalid XML root: \
                                 expected $shapeName but got {:?}. \
-                                This is likely a bug in the SDK.", start_el))
-                        )""",
-                        "XmlError" to context.xmlErrorType,
-                    )
-                }
+                                This is likely a bug in the SDK.", start_el)
+                        )
+                    }
+                    """,
+                    "XmlError" to context.xmlErrorType,
+                )
             }
 
-            rustTemplate(
-                """
-                if !(${XmlBindingTraitParserGenerator.XmlName(shapeName).matchExpression("start_el")}) {
-                    #{invalidRootCheck:W}
-                }
-                """,
-                "invalidRootCheck" to invalidRootCheck,
-            )
             inner("decoder")
         },
 ) : StructuredDataParserGenerator by xmlBindingTraitParserGenerator
