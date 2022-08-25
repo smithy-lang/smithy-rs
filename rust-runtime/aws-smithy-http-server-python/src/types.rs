@@ -298,13 +298,15 @@ impl futures::stream::Stream for ByteStream {
 }
 
 /// Return a new data chunk from the stream.
+// TODO(https://github.com/awslabs/smithy-rs/issues/1674) lock held across an await point needs to be removed
+#[allow(clippy::await_holding_lock)]
 async fn yield_data_chunk(
     body: Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>,
 ) -> PyResult<Bytes> {
     let mut stream = body.lock();
     match stream.next().await {
         Some(bytes) => bytes.map_err(|e| PyRuntimeError::new_err(e.to_string())),
-        None => Err(PyStopIteration::new_err("stream exausted")),
+        None => Err(PyStopIteration::new_err("stream exhausted")),
     }
 }
 
